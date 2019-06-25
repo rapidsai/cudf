@@ -679,7 +679,6 @@ def test_groupby_sort():
         gdf.groupby('a', sort=False).sum().sort_index()
     )
 
-
     pdf = pd.DataFrame({
         'c': [-1, 2, 1, 4],
         'b': [1, 2, 3, 4],
@@ -691,4 +690,3 @@ def test_groupby_sort():
         pdf.groupby(['c', 'b'], sort=False).sum().sort_index(),
         gdf.groupby(['c', 'b'], sort=False).sum().to_pandas().sort_index()
     )
-

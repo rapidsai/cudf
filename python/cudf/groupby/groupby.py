@@ -118,7 +118,8 @@ class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
 
-    def __init__(self, df, by, method="hash", as_index=True, level=None, sort=True):
+    def __init__(self, df, by, method="hash", as_index=True, level=None,
+                 sort=True):
         """
         Parameters
         ----------
