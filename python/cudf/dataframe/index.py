@@ -210,6 +210,8 @@ class Index(object):
         return self._apply_op('__ge__', other)
 
     def equals(self, other):
+        if self is other:
+            return True
         if len(self) != len(other):
             return False
         elif len(self) == 1:
