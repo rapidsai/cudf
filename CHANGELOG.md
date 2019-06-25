@@ -158,6 +158,7 @@
 - PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
 - PR #2089 Configure Sphinx to render params correctly
 - PR #2091 Fix another bug with unfound transitive dependencies for `cudftestutils` in Ubuntu 18.04
+- PR #2106 Fix errors in JitCache tests caused by sharing of device memory between processes
 
 
 # cudf 0.7.2 (16 May 2019)
