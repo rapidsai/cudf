@@ -1473,26 +1473,20 @@ class Series(object):
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
         """
 
-        if self.null_count != 0:
-            mesg = 'series contains NULL values'
-            raise ValueError(mesg)
+        from cudf import DataFrame
 
-        if self.dtype.kind not in 'iuf':
-            raise TypeError('expecting integer or float dtype')
+        cats = Series(cats, dtype=self.dtype)
+        codes = Series(cudautils.arange(len(cats)))
 
-        gpuarr = self.to_gpu_array()
-        sr_cats = Series(cats)
-        if dtype is None:
-            # Get smallest type to represent the category size
-            min_dtype = np.min_scalar_type(len(cats))
-            # Normalize the size to at least 32-bit
-            normalized_sizeof = max(4, min_dtype.itemsize)
-            dtype = getattr(np, "int{}".format(normalized_sizeof * 8))
-        dtype = np.dtype(dtype)
-        labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype,
-                                        na_sentinel)
+        if dtype != None:
+            codes = codes.astype(dtype)
 
-        return Series(labeled)
+        cats = DataFrame({ 0: cats, 'codes': codes })
+        codes = DataFrame({ 0: self, 'order': cudautils.arange(len(self)) })
+        codes = codes.merge(cats, on=0, how='left').sort_values('order')
+
+        return codes['codes'].fillna(na_sentinel) \
+            ._copy_construct(index=self.index, name=None)
 
     def factorize(self, na_sentinel=-1):
         """Encode the input values as integer labels
@@ -1509,7 +1503,7 @@ class Series(object):
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
         """
-        cats = self.unique()
+        cats = self.unique().astype(self.dtype)
         labels = self.label_encoding(cats=cats)
         return labels, cats
 
