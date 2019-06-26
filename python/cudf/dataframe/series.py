@@ -1663,7 +1663,8 @@ class Series(object):
             msg = 'not sorted unique not implemented yet.'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return np.empty(0, dtype=self.dtype)
+            res = columnops.column_empty_like(self._column, newsize=0)
+            return self._copy_construct(data=res)
         res = self._column.unique(method=method)
         return Series(res, name=self.name)
 
