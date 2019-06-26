@@ -49,7 +49,7 @@ TEST_F(JitCacheTest, MemoryCacheKernelTest) {
                                          program,
                                          {"3", "int"});
 
-    (*std::get<1>(kernel)).configure_1d_max_occupancy()
+    (*std::get<1>(kernel)).configure(grid, block)
                 .launch(column.get()->data);
 
     ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
@@ -73,7 +73,7 @@ TEST_F(JitCacheTest, MemoryCacheProgramTest) {
                                          program,
                                          {"4", "int"});
 
-    (*std::get<1>(kernel)).configure_1d_max_occupancy()
+    (*std::get<1>(kernel)).configure(grid, block)
                 .launch(column.get()->data);
 
     ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
@@ -91,12 +91,12 @@ TEST_F(JitCacheTest, FileCacheProgramTest) {
     auto expect = cudf::test::column_wrapper<int>{{625,0}};
 
     // make program
-    auto program = cache.getProgram("MemoryCacheTestProg", program_source);
+    auto program = cache.getProgram("FileCacheTestProg", program_source);
     // make kernel that HAS to be compiled
     auto kernel = cache.getKernelInstantiation("my_kernel",
                                                 program,
                                                 {"4", "int"});
-    (*std::get<1>(kernel)).configure_1d_max_occupancy()
+    (*std::get<1>(kernel)).configure(grid, block)
                 .launch(column.get()->data);
 
     ASSERT_EQ(expect, column) << "Expected col: " << expect.to_str()
@@ -112,12 +112,12 @@ TEST_F(JitCacheTest, FileCacheKernelTest) {
     auto expect = cudf::test::column_wrapper<int>{{125,0}};
 
     // make program
-    auto program = cache.getProgram("MemoryCacheTestProg", program_source);
+    auto program = cache.getProgram("FileCacheTestProg", program_source);
     // make kernel that should NOT need to be compiled
     auto kernel = cache.getKernelInstantiation("my_kernel",
                                                 program,
                                                 {"3", "int"});
-    (*std::get<1>(kernel)).configure_1d_max_occupancy()
+    (*std::get<1>(kernel)).configure(grid, block)
                 .launch(column.get()->data);
 
     ASSERT_EQ(expect, column) << "Expected col: " << expect.to_str()
