@@ -31,6 +31,8 @@ requirements:
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
   run:
+    - librmm {{ minor_version }}.*
+    - libnvstrings {{ minor_version }}.*
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
