@@ -37,12 +37,12 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
         output[idx] = 1;
 
         // make program
-        auto program = cache.getProgram("MemoryCacheTestProg", program3_source);
+        auto program = cache.getProgram("FileCacheTestProg3", program3_source);
         // make kernel
         auto kernel = cache.getKernelInstantiation("my_kernel",
                                                     program,
                                                     {"3", "int"});
-        (*std::get<1>(kernel)).configure_1d_max_occupancy()
+        (*std::get<1>(kernel)).configure(grid, block)
             .launch(input, &output[idx]);
         cudaDeviceSynchronize();
 
