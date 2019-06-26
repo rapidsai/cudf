@@ -17,6 +17,7 @@
 #include <benchmark/benchmark.h>
 #include <vector>
 #include <cudf/cudf.h>
+#include <utilities/error_utils.hpp>
 
 #include "generate_input_tables.cuh"
 
@@ -52,24 +53,24 @@ static void join_benchmark(benchmark::State& state)
         col_ptr = new gdf_column;
     }
 
-    CUDA_RT_CALL(cudaDeviceSynchronize());
+    CUDA_TRY(cudaDeviceSynchronize());
 
     for (auto _ : state) {
-        GDF_CALL(gdf_inner_join(
+        CUDF_TRY(gdf_inner_join(
             probe_table.data(), probe_table.size(), columns_to_join,
             build_table.data(), build_table.size(), columns_to_join,
             1, build_table.size() + probe_table.size() - 1, join_result.data(),
             nullptr, nullptr, &ctxt)
         );
 
-        CUDA_RT_CALL(cudaDeviceSynchronize());
+        CUDA_TRY(cudaDeviceSynchronize());
     }
 
     free_table(build_table);
     free_table(probe_table);
     free_table(join_result);
 
-    CUDA_RT_CALL(cudaDeviceReset());
+    CUDA_TRY(cudaDeviceReset());
 }
 
 BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMillisecond)
