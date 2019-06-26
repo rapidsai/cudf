@@ -700,6 +700,9 @@ def as_index(arbitrary, name=None):
         - GenericIndex for all other inputs.
     """
     # This function should probably be moved to Index.__new__
+    if hasattr(arbitrary, 'name') and name is None:
+        name = arbitrary.name
+
     if isinstance(arbitrary, Index):
         return arbitrary
     elif isinstance(arbitrary, NumericalColumn):
@@ -711,8 +714,6 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        if hasattr(arbitrary, 'name') and name is None:
-            name = arbitrary.name
         return as_index(columnops.as_column(arbitrary), name=name)
 
 

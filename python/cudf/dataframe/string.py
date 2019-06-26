@@ -249,7 +249,8 @@ class StringMethods(object):
         if len(out) == 1 and expand is False:
             return Series(
                 out[0],
-                index=self._index
+                index=self._index,
+                name=self._parent._name
             )
         else:
             out_df = DataFrame(index=self._index)

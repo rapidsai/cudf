@@ -96,7 +96,7 @@ class Series(object):
 
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
-        self.name = name
+        self._name = name
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
@@ -136,6 +136,19 @@ class Series(object):
         """Dimension of the data. Series ndim is always 1.
         """
         return 1
+
+    @property
+    def name(self):
+        """Returns name of the Series.
+        """
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        self._name = name
+        from cudf.dataframe.string import StringColumn
+        if isinstance(self._column, StringColumn):
+            self._column._name = name
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
