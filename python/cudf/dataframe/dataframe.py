@@ -2024,9 +2024,9 @@ class DataFrame(object):
             result = Groupby(self, by=by)
             return result
         else:
-            from cudf.groupby.groupby import DataFrameGroupby
+            from cudf.groupby.groupby import DataFrameGroupBy
 
-            result = DataFrameGroupby(
+            result = DataFrameGroupBy(
                 self, by=by, method=method, as_index=as_index,
                 sort=sort, level=level
             )

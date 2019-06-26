@@ -389,7 +389,7 @@ def test_groupby_external_series(series):
 
 
 @pytest.mark.xfail(raises=NotImplementedError,
-                   reason="CUDF doesn't support arbitrary series index lengths"
+                   reason="cuDF does not support arbitrary series index lengths "
                           "for groupby")
 @pytest.mark.parametrize('series', [[0, 1], [1, 1, 1, 1]])
 def test_groupby_external_series_incorrect_length(series):
