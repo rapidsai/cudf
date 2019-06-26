@@ -1478,11 +1478,11 @@ class Series(object):
         cats = Series(cats, dtype=self.dtype)
         codes = Series(cudautils.arange(len(cats)))
 
-        if dtype != None:
+        if dtype is not None:
             codes = codes.astype(dtype)
 
-        cats = DataFrame({ 0: cats, 'codes': codes })
-        codes = DataFrame({ 0: self, 'order': cudautils.arange(len(self)) })
+        cats = DataFrame({0: cats, 'codes': codes})
+        codes = DataFrame({0: self, 'order': cudautils.arange(len(self))})
         codes = codes.merge(cats, on=0, how='left').sort_values('order')
 
         return codes['codes'].fillna(na_sentinel) \
