@@ -18,6 +18,7 @@
 #include <vector>
 #include <cudf/cudf.h>
 #include <utilities/error_utils.hpp>
+#include <tests/utilities/column_wrapper.cuh>
 
 #include "generate_input_tables.cuh"
 
@@ -31,14 +32,34 @@ static void join_benchmark(benchmark::State& state)
     const double selectivity = 0.3;
     const bool is_build_table_key_unique = true;
 
-    std::vector<gdf_column *> build_table;
-    std::vector<gdf_column *> probe_table;
-    std::vector<gdf_column *> join_result;
+    // Generate build and probe table data
 
-    generate_build_probe_tables<key_type, payload_type>(
-        build_table, build_table_size, probe_table, probe_table_size,
+    auto build_key_column     = new cudf::test::column_wrapper<key_type>(build_table_size);
+    auto build_payload_column = new cudf::test::column_wrapper<payload_type>(build_table_size);
+    auto probe_key_column     = new cudf::test::column_wrapper<key_type>(probe_table_size);
+    auto probe_payload_column = new cudf::test::column_wrapper<payload_type>(probe_table_size);
+
+    generate_input_tables<key_type, gdf_size_type>(
+        (key_type *)build_key_column->get()->data, build_table_size,
+        (key_type *)probe_key_column->get()->data, probe_table_size,
         selectivity, rand_max_val, is_build_table_key_unique
     );
+
+    linear_sequence<payload_type, gdf_size_type><<<(build_table_size+127)/128,128>>>(
+        (payload_type *)build_payload_column->get()->data, build_table_size
+    );
+
+    linear_sequence<payload_type, gdf_size_type><<<(probe_table_size+127)/128,128>>>(
+        (payload_type *)probe_payload_column->get()->data, probe_table_size
+    );
+
+    CUDA_TRY(cudaGetLastError());
+    CUDA_TRY(cudaDeviceSynchronize());
+
+    gdf_column* build_table[] = {build_key_column->get(), build_payload_column->get()};
+    gdf_column* probe_table[] = {probe_key_column->get(), probe_payload_column->get()};
+
+    // Setup join parameters and result table
 
     gdf_context ctxt = {
         0,                     // input data is not sorted
@@ -47,28 +68,36 @@ static void join_benchmark(benchmark::State& state)
 
     int columns_to_join[] = {0};
 
-    join_result.resize(build_table.size() + probe_table.size() - 1, nullptr);
-
-    for (auto & col_ptr : join_result) {
-        col_ptr = new gdf_column;
+    gdf_column* result_table[3];
+    for (int icol = 0; icol < 3; icol++) {
+        result_table[icol] = new gdf_column;
     }
+
+    // Benchmark the inner join operation
 
     CUDA_TRY(cudaDeviceSynchronize());
 
     for (auto _ : state) {
         CUDF_TRY(gdf_inner_join(
-            probe_table.data(), probe_table.size(), columns_to_join,
-            build_table.data(), build_table.size(), columns_to_join,
-            1, build_table.size() + probe_table.size() - 1, join_result.data(),
-            nullptr, nullptr, &ctxt)
+            probe_table, 2, columns_to_join,
+            build_table, 2, columns_to_join,
+            1, 3, result_table, nullptr, nullptr, &ctxt)
         );
 
         CUDA_TRY(cudaDeviceSynchronize());
     }
 
-    free_table(build_table);
-    free_table(probe_table);
-    free_table(join_result);
+    // Cleanup
+
+    delete build_key_column;
+    delete build_payload_column;
+    delete probe_key_column;
+    delete probe_payload_column;
+
+    for (int icol = 0; icol < 3; icol++) {
+        CUDF_TRY(gdf_column_free(result_table[icol]));
+        delete result_table[icol];
+    }
 
     CUDA_TRY(cudaDeviceReset());
 }

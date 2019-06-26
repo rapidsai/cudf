@@ -31,23 +31,6 @@
 #include <utilities/device_atomics.cuh>
 
 
-template <typename col_type>
-gdf_dtype gdf_dtype_from_col_type()
-{
-    if(std::is_same<col_type,int8_t>::value) return GDF_INT8;
-    else if(std::is_same<col_type,uint8_t>::value) return GDF_INT8;
-    else if(std::is_same<col_type,int16_t>::value) return GDF_INT16;
-    else if(std::is_same<col_type,uint16_t>::value) return GDF_INT16;
-    else if(std::is_same<col_type,int32_t>::value) return GDF_INT32;
-    else if(std::is_same<col_type,uint32_t>::value) return GDF_INT32;
-    else if(std::is_same<col_type,int64_t>::value) return GDF_INT64;
-    else if(std::is_same<col_type,uint64_t>::value) return GDF_INT64;
-    else if(std::is_same<col_type,float>::value) return GDF_FLOAT32;
-    else if(std::is_same<col_type,double>::value) return GDF_FLOAT64;
-    else return GDF_invalid;
-}
-
-
 __global__ static void init_curand(curandState * state, const int nstates)
 {
     int ithread = threadIdx.x + blockIdx.x * blockDim.x;
@@ -294,107 +277,6 @@ __global__ void linear_sequence(key_type* tbl, const size_type size)
 {
   for (size_type i = threadIdx.x + blockDim.x * blockIdx.x; i < size; i += blockDim.x * gridDim.x)
     tbl[i] = i;
-}
-
-
-/**
- * Generate a build table and a probe table for testing join performance.
- *
- * Both the build table and the probe table have two columns. The first column is the key column,
- * with datatype KEY_T. The second column is the payload column, with datatype PAYLOAD_T. Both the
- * arguments build_table and probe_table do not need to be preallocated. It is the caller's
- * responsibility to free memory of build_table and probe_table allocated by this function.
- *
- * @param[out] build_table         The build table to generate.
- * @param[in] build_table_size     The number of rows in the build table.
- * @param[out] probe_table         The probe table to generate.
- * @param[in] probe_table_size     The number of rows in the probe table.
- * @param[in] selectivity          Propability with which an element of the probe table is present in
- *                                 the build table.
- * @param[in] rand_max             Maximum random number to generate, i.e., random numbers are
- *                                 integers from [0, rand_max].
- * @param[in] uniq_build_tbl_keys  If each key in the build table should appear exactly once.
- */
-template<typename KEY_T, typename PAYLOAD_T>
-void generate_build_probe_tables(std::vector<gdf_column *> &build_table,
-                                 gdf_size_type build_table_size,
-                                 std::vector<gdf_column *> &probe_table,
-                                 gdf_size_type probe_table_size,
-                                 const double selectivity,
-                                 const KEY_T rand_max,
-                                 const bool uniq_build_tbl_keys)
-{
-    // Allocate device memory for generating data
-
-    KEY_T *build_key_data {nullptr};
-    PAYLOAD_T *build_payload_data {nullptr};
-    KEY_T *probe_key_data {nullptr};
-    PAYLOAD_T *probe_payload_data {nullptr};
-
-    RMM_TRY(RMM_ALLOC(&build_key_data, build_table_size * sizeof(KEY_T), 0));
-
-    RMM_TRY(RMM_ALLOC(&build_payload_data, build_table_size * sizeof(PAYLOAD_T), 0));
-
-    RMM_TRY(RMM_ALLOC(&probe_key_data, probe_table_size * sizeof(KEY_T), 0));
-
-    RMM_TRY(RMM_ALLOC(&probe_payload_data, probe_table_size * sizeof(PAYLOAD_T), 0));
-
-    // Generate build and probe table data
-
-    generate_input_tables<KEY_T, gdf_size_type>(
-        build_key_data, build_table_size, probe_key_data, probe_table_size,
-        selectivity, rand_max, uniq_build_tbl_keys
-    );
-
-    linear_sequence<PAYLOAD_T, gdf_size_type><<<(build_table_size+127)/128,128>>>(
-        build_payload_data, build_table_size
-    );
-
-    linear_sequence<PAYLOAD_T, gdf_size_type><<<(probe_table_size+127)/128,128>>>(
-        probe_payload_data, probe_table_size
-    );
-
-    CUDA_TRY(cudaGetLastError());
-    CUDA_TRY(cudaDeviceSynchronize());
-
-    // Generate build and probe table from data
-
-    gdf_dtype gdf_key_t = gdf_dtype_from_col_type<KEY_T>();
-    gdf_dtype gdf_payload_t = gdf_dtype_from_col_type<PAYLOAD_T>();
-
-    build_table.resize(2, nullptr);
-
-    for (auto & column_ptr : build_table) {
-        column_ptr = new gdf_column;
-    }
-
-    CUDF_TRY(gdf_column_view(build_table[0], build_key_data, nullptr, build_table_size, gdf_key_t));
-
-    CUDF_TRY(gdf_column_view(build_table[1], build_payload_data, nullptr, build_table_size, gdf_payload_t));
-
-    probe_table.resize(2, nullptr);
-
-    for (auto & column_ptr : probe_table) {
-        column_ptr = new gdf_column;
-    }
-
-    CUDF_TRY(gdf_column_view(probe_table[0], probe_key_data, nullptr, probe_table_size, gdf_key_t));
-
-    CUDF_TRY(gdf_column_view(probe_table[1], probe_payload_data, nullptr, probe_table_size, gdf_payload_t));
-}
-
-
-/**
- * Free the table as well as the device buffer it contains.
- *
- * @param[in] table    The table to be freed.
- */
-void free_table(std::vector<gdf_column *> & table)
-{
-    for (auto & column_ptr : table) {
-        CUDF_TRY(gdf_column_free(column_ptr));
-        delete column_ptr;
-    }
 }
 
 
