@@ -36,6 +36,7 @@ struct block_desc_s
 
 enum type_kind_e
 {
+    type_not_set = -1,
     // Primitive types
     type_null = 0,
     type_boolean,

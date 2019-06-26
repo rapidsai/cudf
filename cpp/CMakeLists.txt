@@ -307,6 +307,7 @@ add_library(cudf SHARED
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
+            src/io/avro/avro.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp

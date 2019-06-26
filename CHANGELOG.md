@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2097 Add GPU-accelerated AVRO reader
+
 ## Improvements
 
 ## Bug Fixes

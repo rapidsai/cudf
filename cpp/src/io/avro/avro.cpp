@@ -123,6 +123,7 @@ enum json_state_e
     state_attrname = 0,
     state_attrcolon,
     state_attrvalue,
+    state_attrvalue_last,
     state_nextattr,
     state_nextsymbol,
 };
@@ -170,7 +171,7 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
             if (state == state_attrname && cur_attr == attrtype_none && typenames.find(str) != typenames.end())
             {
                 cur_attr = attrtype_type;
-                state = state_attrvalue;
+                state = state_attrvalue_last;
             }
             if (state == state_attrname)
             {
@@ -178,12 +179,12 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
                 cur_attr = (t == attrnames.end()) ? attrtype_none : t->second;
                 state = state_attrcolon;
             }
-            else if (state == state_attrvalue)
+            else if (state == state_attrvalue || state == state_attrvalue_last)
             {
                 if (entry_idx < 0)
                 {
                     entry_idx = static_cast<int>(schema.size());
-                    schema.emplace_back(type_null, parent_idx);
+                    schema.emplace_back(type_not_set, parent_idx);
                     if (parent_idx >= 0)
                     {
                         schema[parent_idx].num_children++;
@@ -201,6 +202,10 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
                     if (entry_idx < 0)
                         return false;
                     schema[entry_idx].name = str;
+                }
+                if (state == state_attrvalue_last)
+                {
+                    entry_idx = -1;
                 }
                 state = state_nextattr;
                 cur_attr = attrtype_none;
@@ -250,8 +255,14 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
             if (depth == 0 || state != state_nextattr || depthbuf[depth - 1] != '{')
                 return false;
             --depth;
-            parent_idx = (parent_idx >= 0) ? schema[parent_idx].parent_idx : -1;
-            entry_idx = -1;
+            if (entry_idx < 0)
+            {
+                parent_idx = (parent_idx >= 0) ? schema[parent_idx].parent_idx : -1;
+            }
+            else
+            {
+                entry_idx = -1;
+            }
             break;
         case '[':
             if (state == state_attrname && cur_attr == attrtype_none)
@@ -271,17 +282,28 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
             }
             else if (cur_attr == attrtype_type)
             {
-                entry_idx = static_cast<int>(schema.size());
-                schema.emplace_back(type_union, parent_idx);
-                if (parent_idx >= 0)
+                if (entry_idx < 0 || schema[entry_idx].kind != type_not_set)
                 {
-                    schema[parent_idx].num_children++;
+                    entry_idx = static_cast<int>(schema.size());
+                    schema.emplace_back(type_union, parent_idx);
+                    if (parent_idx >= 0)
+                    {
+                        schema[parent_idx].num_children++;
+                    }
+                }
+                else
+                {
+                    schema[entry_idx].kind = type_union;
                 }
                 parent_idx = entry_idx;
             }
             else if (cur_attr != attrtype_fields || entry_idx < 0 || schema[entry_idx].kind < type_record)
             {
                 return false;
+            }
+            else
+            {
+                parent_idx = entry_idx;
             }
             entry_idx = -1;
             cur_attr = attrtype_none;

@@ -32,17 +32,33 @@ namespace avro {
 #define AVRO_MAGIC   (('O' << 0) | ('b' << 8) | ('j' << 16) | (0x01 << 24))
 
 
+/**
+ * @Brief AVRO schema entry
+ */
 struct schema_entry
 {
     explicit schema_entry(type_kind_e kind_, int32_t parent_idx_ = -1, int32_t num_children_ = 0):kind(kind_),parent_idx(parent_idx_),num_children(num_children_) {}
     int32_t parent_idx = -1;    // index of parent entry in schema array, negative if no parent
     int32_t num_children = 0;
-    type_kind_e kind = type_null;
+    type_kind_e kind = type_not_set;
     std::string name = "";
     std::vector<std::string> symbols;
 };
 
+/**
+ * @Brief AVRO output column
+ */
+struct column_desc
+{
+    int32_t schema_data_idx = -1;   // schema index of data column
+    int32_t schema_null_idx = -1;   // schema index of corresponding null object
+    int32_t parent_union_idx = -1;  // index of this column in parent union (-1 if not a union member)
+    std::string name = "";
+};
 
+/**
+ * @Brief AVRO file metadata struct
+ */
 struct file_metadata
 {
     std::map<std::string, std::string> user_data;
@@ -55,9 +71,13 @@ struct file_metadata
     uint32_t max_block_size = 0;
     std::vector<schema_entry> schema;
     std::vector<block_desc_s> block_list;
+    std::vector<column_desc> columns;
 };
 
 
+/**
+ * @Brief Extract AVRO schema from JSON string
+ */
 class schema_parser
 {
 protected:
@@ -78,7 +98,9 @@ protected:
 };
 
 
-
+/**
+ * @Brief AVRO file container parsing class
+ */
 class container
 {
 public:
