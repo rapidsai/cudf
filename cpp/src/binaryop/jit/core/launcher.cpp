@@ -19,7 +19,7 @@
 
 #include "../core/launcher.h"
 #include "../code/code.h"
-#include "../core/parser.h"
+#include <jit/parser.h>
 #include <types.h.jit>
 #include <cstdint>
 #include <chrono>

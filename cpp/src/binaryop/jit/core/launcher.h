@@ -20,7 +20,7 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 #define GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 
-#include "cache.h"
+#include <jit/cache.h>
 #include "../util/type.h"
 #include "../util/operator.h"
 #include <jitify.hpp>
