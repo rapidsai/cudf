@@ -162,6 +162,7 @@
 - PR #2091 Fix another bug with unfound transitive dependencies for `cudftestutils` in Ubuntu 18.04
 - PR #2115 Just apply `--disable-new-dtags` instead of trying to define all the transitive dependencies
 - PR #2106 Fix errors in JitCache tests caused by sharing of device memory between processes
+- PR #2120 Fix errors in JitCache tests caused by running multiple threads on the same data
 - PR #2102 Fix memory leak in groupby
 
 
