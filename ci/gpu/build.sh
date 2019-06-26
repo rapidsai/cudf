@@ -72,13 +72,13 @@ logger "GoogleTest for libcudf..."
 cd $WORKSPACE/cpp/build
 GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
 
-# Temporarily install cupy for testing
-logger "pip install cupy"
-pip install cupy-cuda92
+# Install the master version of distributed for serialization testing
+logger "pip install git+https://github.com/dask/distributed.git"
+pip install "git+https://github.com/dask/distributed.git"
 
-# Temporarily install feather for testing
+# Temporarily install feather and cupy for testing
 logger "conda install feather-format"
-conda install -c conda-forge -y feather-format
+conda install "feather-format" "cupy>=6.0.0"
 
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python

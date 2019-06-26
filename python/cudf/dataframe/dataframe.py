@@ -168,6 +168,8 @@ class DataFrame(object):
         columns = [col._column for col in self._cols.values()]
         serialized_columns = zip(*map(serialize, columns))
         header['columns'], column_frames = serialized_columns
+        for h, f in zip(header['columns'], column_frames):
+            h['frame_count'] = len(f)
         header['column_names'] = tuple(self._cols)
         for f in column_frames:
             frames.extend(f)
