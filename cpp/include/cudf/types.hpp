@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "cudf.h"
+
+#include <cstddef>
 
 /**---------------------------------------------------------------------------*
  * @file types.hpp
@@ -26,7 +30,30 @@ namespace bit_mask {
 using bit_mask_t = uint32_t;
 }
 
-// Forward declaration
 namespace cudf {
+
+// Forward declaration
 struct table;
-}
+class column;
+
+using size_type = int32_t;
+using bitmask_type = uint32_t;
+
+enum data_type {
+  INVALID = 0,
+  INT8,
+  INT16,
+  INT32,
+  INT64,
+  FLOAT32,
+  FLOAT64,
+  BOOL8,
+  DATE32,
+  DATE64,
+  TIMESTAMP,
+  CATEGORY,
+  STRING,
+  STRING_CATEGORY
+};
+
+}  // namespace cudf

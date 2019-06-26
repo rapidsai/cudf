@@ -99,6 +99,14 @@ set(LEGACY_COLUMN_TEST_SRC
 ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 
 ###################################################################################################
+# - column tests ----------------------------------------------------------------------------------
+
+set(COLUMN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
+
+ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
+
+###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
 
 set(ERROR_TEST_SRC
