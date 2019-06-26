@@ -4,6 +4,8 @@ from numbers import Number
 import collections
 import itertools
 
+import pandas as pd
+
 import cudf
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
@@ -81,9 +83,9 @@ class DataFrameGroupby(object):
         if self._as_index:
             result = dataframe_from_columns(
                 out_value_columns,
-                index=self._compute_result_index(out_key_columns),
                 columns=self._compute_result_column_index(self._value_names, agg)
             )
+            result.index = self._compute_result_index(out_key_columns, out_value_columns)
         else:
             result = cudf.concat(
                 [
@@ -94,18 +96,21 @@ class DataFrameGroupby(object):
             )
         return result
 
-    def _compute_result_index(self, result_key_columns):
+    def _compute_result_index(self, key_columns, value_columns):
         """
         Computes the index of the result
         """
-        if (len(result_key_columns)) == 1:
-            return cudf.dataframe.index.as_index(result_key_columns[0],
+        if (len(key_columns)) == 1:
+            return cudf.dataframe.index.as_index(key_columns[0],
                                                  name=self._key_names[0])
         else:
-            return MultiIndex(source_data=dataframe_from_columns(result_key_columns,
+            empty_results = all([len(x)==0 for x in key_columns])
+            if len(value_columns) == 0  and empty_results:
+                return cudf.dataframe.index.GenericIndex(cudf.Series([], dtype='object'))
+            return MultiIndex(source_data=dataframe_from_columns(key_columns,
                                                                  columns=self._key_names))
 
-    def _compute_result_column_index(self, result_column_names, aggs):
+    def _compute_result_column_index(self, result_value_names, aggs):
         """
         Computes the column index of the result
         """
@@ -114,7 +119,7 @@ class DataFrameGroupby(object):
         else:
             if (
                     len(aggs) == 1
-                    or len(set(result_column_names)) == len(result_column_names)
+                    or len(set(result_value_names)) == len(result_value_names)
             ):
                 return self._value_names
             else:

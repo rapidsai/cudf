@@ -841,7 +841,7 @@ class DataFrame(object):
                 raise ValueError(msg)
             self._index = _index
             for k in self.columns:
-                self[k].index = _index
+                self[k]._index = _index
             return
 
         new_length = len(_index)
@@ -858,7 +858,8 @@ class DataFrame(object):
         idx = as_index(_index)
         self._index = idx
         for k in self.columns:
-            self[k] = self[k].set_index(idx)
+            #self[k] = self[k].set_index(idx)
+            self[k]._index = idx
 
     def set_index(self, index):
         """Return a new DataFrame with a new index
