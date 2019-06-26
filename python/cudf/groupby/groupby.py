@@ -47,7 +47,6 @@ class DataFrameGroupby(object):
         self._by = by
         self._as_index = as_index
         self._sort = sort
-        self._normalize()
 
     def sum(self):
         return self._apply_aggregation("sum")
@@ -72,36 +71,50 @@ class DataFrameGroupby(object):
         Applies the aggregation function(s) ``agg`` on all columns
         """
         agg = self._normalize_agg(agg)
-        result_index_cols, result_cols = cpp_apply_groupby(self._key_columns,
+        result_key_columns, result_value_columns = cpp_apply_groupby(self._key_columns,
                                                            self._value_columns,
                                                            agg)
 
-        if self._sort or not self._as_index:
+        if self._sort:
             result_key_names = self._key_names
             result_value_names = self._add_prefixes(self._value_names, agg)
-            # concatenate results, sort and then split
+
+            # concatenate
             result = cudf.concat(
                 [
-                    dataframe_from_columns(result_index_cols, columns=result_key_names),
-                    dataframe_from_columns(result_cols, columns=result_value_names)
+                    dataframe_from_columns(result_key_columns, columns=result_key_names),
+                    dataframe_from_columns(result_value_columns, columns=result_value_names)
                 ],
                 axis=1
             )
+
+            print(result_value_names)
+            print(result)
+
+            # sort values
             result = result.sort_values(result_key_names)
 
-            if not self._as_index:
-                return result
+            # split
+            result_key_columns = columns_from_dataframe(result[result_key_names])
+            result_value_columns = columns_from_dataframe(result[result_value_names])
 
-            result_index_cols = columns_from_dataframe(result[result_key_names])
-            result_cols = columns_from_dataframe(result[result_value_names])
+            # unprefix column names
+            result_value_names = self._unprefix(result_value_names)
 
         if self._as_index:
             result = dataframe_from_columns(
-                result_cols,
-                index=self._compute_result_index(result_index_cols),
-                columns=self._compute_result_column_index(agg)
+                result_value_columns,
+                index=self._compute_result_index(result_key_columns),
+                columns=self._compute_result_column_index(result_value_names, agg)
             )
-
+        else:
+            result = cudf.concat(
+                [
+                    dataframe_from_columns(result_key_columns, columns=result_key_names),
+                    dataframe_from_columns(result_value_columns, columns=result_value_names)
+                ],
+                axis=1
+            )
         return result
 
     def _add_prefixes(self, names, prefixes):
@@ -113,55 +126,46 @@ class DataFrameGroupby(object):
             prefix = prefixes
             for i, col_name in enumerate(names):
                 prefixed_names[i] = f"{prefix}_{col_name}"
-        elif isinstance(prefixes, list):
-            for i, col_name in enumerate(names):
-                for prefix in prefixes:
-                    prefixed_names[i] = f"{prefix}_{col_name}"
         else:
-            for key, col_name in names.items():
-                prefixed_names[key] = f"{prefix}_{col_name}"
+            for i, (prefix, col_name) in enumerate(zip(prefixes, names)):
+                prefixed_names[i] = f"{prefix}_{col_name}"
         return prefixed_names
 
-    def _normalize(self):
+    def _unprefix(self, names):
         """
-        Normalizes the groupby object.
-        Sets self._key_columns and self._value_columns.
+        Return a copy of ``names`` with the prefixes removed
         """
-        if isinstance(self._by, str):
-            self._key_names = [self._by]
-        else:
-            self._key_names = self._by
-        self._value_names = list(set(self._df.columns) - set(self._key_names))
-        self._key_columns = columns_from_dataframe(self._df[self._key_names])
-        self._value_columns = columns_from_dataframe(self._df[self._value_names])
+        unprefixed_names = names.copy()
+        for i, col_name in enumerate(names):
+            unprefixed_names[i] = col_name.split('_', maxsplit=1)[1]
+        return unprefixed_names
 
-    def _compute_result_index(self, result_index_cols):
+    def _compute_result_index(self, result_key_columns):
         """
         Computes the index of the result
         """
-        if len(result_index_cols) == 1:
-            return cudf.dataframe.index.as_index(result_index_cols[0],
+        if (len(result_key_columns)) == 1:
+            return cudf.dataframe.index.as_index(result_key_columns[0],
                                                  name=self._key_names[0])
         else:
-            return MultiIndex(source_data=dataframe_from_columns(result_index_cols,
+            return MultiIndex(source_data=dataframe_from_columns(result_key_columns,
                                                                  columns=self._key_names))
 
-    def _compute_result_column_index(self, aggs):
+    def _compute_result_column_index(self, result_column_names, aggs):
         """
         Computes the column index of the result
         """
         if isinstance(aggs, str):
             return self._value_names
-        elif isinstance(aggs, list):
-            if len(aggs) == 1:
-                return self._value_names
-            else:
-                return MultiIndex.from_tuples(zip(self._value_names, aggs))
         else:
-            if all(isinstance(x, str) for x in aggs.values()):
+            if (
+                    len(aggs) == 1
+                    or len(set(result_column_names)) == len(result_column_names)
+            ):
                 return self._value_names
             else:
                 return MultiIndex.from_tuples(zip(self._value_names, aggs))
+
 
     def _normalize_agg(self, agg):
         """
@@ -176,6 +180,16 @@ class DataFrameGroupby(object):
         to ``self._value_columns``.
         """
         unknown_agg_err = lambda agg: "Uknown aggregation function {}".format(agg)
+
+        if isinstance(self._by, str):
+            self._key_names = [self._by]
+        else:
+            self._key_names = self._by
+        self._key_columns = columns_from_dataframe(self._df[self._key_names])
+
+        self._value_names = [col for col in self._df.columns if col not in self._key_names]
+        self._value_columns = columns_from_dataframe(self._df[self._value_names])
+
         if isinstance(agg, str):
             if agg not in self._NAMED_AGGS:
                 raise ValueError(unknown_arg_err(agg))
