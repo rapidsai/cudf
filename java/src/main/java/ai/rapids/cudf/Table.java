@@ -181,7 +181,8 @@ public final class Table implements AutoCloseable {
                                               String filePath, long address, long length) throws CudfException;
 
 
-  private static native long[] gdfGroupByCount(long inputTable, int[] indices) throws CudfException;
+  private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int aggColumn, 
+                                                   int aggType) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -346,6 +347,22 @@ public final class Table implements AutoCloseable {
     return Aggregate.count();
   }
 
+  public static Aggregate max(int index) {
+    return Aggregate.max(index);
+  }
+
+  public static Aggregate min(int index) {
+    return Aggregate.min(index);
+  }
+
+  public static Aggregate sum(int index) {
+    return Aggregate.sum(index);
+  }
+
+  public static Aggregate avg(int index) {
+    return Aggregate.avg(index);
+  }
+
   public AggregateOperation groupBy(int... indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
     return new AggregateOperation(this, operationIndicesArray);
@@ -424,19 +441,21 @@ public final class Table implements AutoCloseable {
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
       long[][] aggregateTables = new long[aggregates.length][];
-      for (int i = 0 ; i < aggregates.length ; i++) {
-        if (aggregates[i].isCount()) {
-          aggregateTables[i] = gdfGroupByCount(operation.table.nativeHandle, operation.indices);
-        } else {
-          IntStream.rangeClosed(0, i).forEach(index -> {
-            Arrays.stream(aggregateTables[index]).forEach(e -> {
-              //Being defensive
-              if (e != 0) {
-                ColumnVector.freeCudfColumn(e, true);
+      for (int aggregateIndex = 0 ; aggregateIndex < aggregates.length ; aggregateIndex++) {
+        try {
+          aggregateTables[aggregateIndex] = gdfGroupByAggregate(operation.table.nativeHandle, operation.indices, aggregates[aggregateIndex].getIndex(), aggregates[aggregateIndex].getNativeId());
+        } catch (Throwable t) {
+          for (int cleanupAggregateIndex = 0 ; cleanupAggregateIndex <= cleanupAggregateIndex ; cleanupAggregateIndex++) {
+            if (aggregateTables[cleanupAggregateIndex] != null) {
+              for (int aggregateColumnIndex = 0; aggregateColumnIndex < aggregateTables[cleanupAggregateIndex].length; aggregateColumnIndex++) {
+                long e = aggregateTables[cleanupAggregateIndex][aggregateColumnIndex];
+                if (e != 0) {
+                  ColumnVector.freeCudfColumn(aggregateColumnIndex, true);
+                }
               }
-            });
-          });
-          throw new UnsupportedOperationException("Invalid aggregate function");
+            }
+          }
+          throw t;
         }
       }
 
