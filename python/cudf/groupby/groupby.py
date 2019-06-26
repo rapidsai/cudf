@@ -71,74 +71,28 @@ class DataFrameGroupby(object):
         Applies the aggregation function(s) ``agg`` on all columns
         """
         agg = self._normalize_agg(agg)
-        result_key_columns, result_value_columns = cpp_apply_groupby(self._key_columns,
-                                                           self._value_columns,
-                                                           agg)
-
-        if self._sort:
-            result_key_names = self._key_names
-            result_value_names = self._add_prefixes(self._value_names, agg)
-
-            # concatenate
-            result = cudf.concat(
-                [
-                    dataframe_from_columns(result_key_columns, columns=result_key_names),
-                    dataframe_from_columns(result_value_columns, columns=result_value_names)
-                ],
-                axis=1
-            )
-
-            print(result_value_names)
-            print(result)
-
-            # sort values
-            result = result.sort_values(result_key_names)
-
-            # split
-            result_key_columns = columns_from_dataframe(result[result_key_names])
-            result_value_columns = columns_from_dataframe(result[result_value_names])
-
-            # unprefix column names
-            result_value_names = self._unprefix(result_value_names)
+        out_key_columns, out_value_columns = _groupby_engine(
+            self._key_columns,
+            self._value_columns,
+            agg,
+            self._sort
+        )
 
         if self._as_index:
             result = dataframe_from_columns(
-                result_value_columns,
-                index=self._compute_result_index(result_key_columns),
-                columns=self._compute_result_column_index(result_value_names, agg)
+                out_value_columns,
+                index=self._compute_result_index(out_key_columns),
+                columns=self._compute_result_column_index(self._value_names, agg)
             )
         else:
             result = cudf.concat(
                 [
-                    dataframe_from_columns(result_key_columns, columns=result_key_names),
-                    dataframe_from_columns(result_value_columns, columns=result_value_names)
+                    dataframe_from_columns(out_key_columns, columns=self._key_names),
+                    dataframe_from_columns(out_value_columns, columns=self._value_names)
                 ],
                 axis=1
             )
         return result
-
-    def _add_prefixes(self, names, prefixes):
-        """
-        Return a copy of ``names`` prefixed with ``prefixes``
-        """
-        prefixed_names = names.copy()
-        if isinstance(prefixes, str):
-            prefix = prefixes
-            for i, col_name in enumerate(names):
-                prefixed_names[i] = f"{prefix}_{col_name}"
-        else:
-            for i, (prefix, col_name) in enumerate(zip(prefixes, names)):
-                prefixed_names[i] = f"{prefix}_{col_name}"
-        return prefixed_names
-
-    def _unprefix(self, names):
-        """
-        Return a copy of ``names`` with the prefixes removed
-        """
-        unprefixed_names = names.copy()
-        for i, col_name in enumerate(names):
-            unprefixed_names[i] = col_name.split('_', maxsplit=1)[1]
-        return unprefixed_names
 
     def _compute_result_index(self, result_key_columns):
         """
@@ -230,4 +184,62 @@ class DataFrameGroupby(object):
             return agg_list
         else:
             raise ValueError("Invalid type for agg")
+
+
+def _groupby_engine(key_columns, value_columns, aggs, sort):
+    """
+    Parameters
+    ----------
+    key_columns : list of Columns
+    value_columns : list of Columns
+    aggs : list of str
+    sort : bool
+
+    Returns
+    -------
+    out_key_columns : list of Columns
+    out_value_columns : list of Columns
+    """
+    out_key_columns, out_value_columns = cpp_apply_groupby(
+        key_columns,
+        value_columns,
+        aggs
+    )
+
+    if sort:
+        key_names = ["key_"+str(i) for i in range(len(key_columns))]
+        value_names = ["value_"+str(i) for i in range(len(value_columns))]
+        value_names = _add_prefixes(value_names, aggs)
+
+        # concatenate
+        result = cudf.concat(
+            [
+                dataframe_from_columns(out_key_columns, columns=key_names),
+                dataframe_from_columns(out_value_columns, columns=value_names)
+            ],
+            axis=1
+        )
+
+        # sort values
+        result = result.sort_values(key_names)
+
+        # split
+        out_key_columns = columns_from_dataframe(result[key_names])
+        out_value_columns = columns_from_dataframe(result[value_names])
+
+    return out_key_columns, out_value_columns
+
+def _add_prefixes(names, prefixes):
+    """
+    Return a copy of ``names`` prefixed with ``prefixes``
+    """
+    prefixed_names = names.copy()
+    if isinstance(prefixes, str):
+        prefix = prefixes
+        for i, col_name in enumerate(names):
+            prefixed_names[i] = f"{prefix}_{col_name}"
+    else:
+        for i, (prefix, col_name) in enumerate(zip(prefixes, names)):
+            prefixed_names[i] = f"{prefix}_{col_name}"
+    return prefixed_names
 
