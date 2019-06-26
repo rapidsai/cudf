@@ -5,7 +5,7 @@
 ## Improvements
 
 - PR #1947 Cleanup serialization code
-- PR #2125 More aggergeate in java API
+- PR #2125 More aggregate in java API
 
 ## Bug Fixes
 
