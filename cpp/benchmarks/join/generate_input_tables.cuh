@@ -28,13 +28,7 @@
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
-
-
-__device__ __inline__
-int64_t atomicCAS(int64_t* address, int64_t compare, int64_t val)
-{
-    return (int64_t)atomicCAS((unsigned long long int*)address, (unsigned long long int)compare, (unsigned long long int)val);
-}
+#include <utilities/device_atomics.cuh>
 
 
 template <typename col_type>
@@ -94,7 +88,7 @@ __global__ static void init_build_tbl(
                 lottery_val = lottery[lottery_idx];
 
                 if (-1 != lottery_val) {
-                    lottery_val = atomicCAS(lottery + lottery_idx, lottery_val, -1);
+                    lottery_val = atomicCAS<key_type>(lottery + lottery_idx, lottery_val, -1);
                 }
 
                 lottery_idx = (lottery_idx + 1) % lottery_size;
