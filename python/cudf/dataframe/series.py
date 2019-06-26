@@ -1850,11 +1850,47 @@ class Series(object):
         DataFrame
 
         """
+        def invalid_quantile(q):
+            if 0 <= q <= 1:
+                return False
+            else:
+                return True
+
+        if isinstance(q, Number) and invalid_quantile(q):
+            raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        if utils.is_list_like(q):
+            invalid_q_vector = np.vectorize(invalid_quantile,
+                                            otypes=[np.bool8])
+            if any(invalid_q_vector(q)):
+                raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+
+        if isinstance(q, Number):
+            res = self._column.quantile(q, interpolation, exact)
+            if len(res) == 0:
+                return np.nan
+            else:
+                # if q is an int/float, we shouldn't be constructing series
+                return res.pop()
+
         if not quant_index:
             return Series(self._column.quantile(q, interpolation, exact))
         else:
-            return Series(self._column.quantile(q, interpolation, exact),
-                          index=as_index(np.asarray(q)))
+            from cudf.dataframe.columnops import column_empty_like
+            np_array_q = np.asarray(q)
+            if len(self) == 0:
+                result = column_empty_like(np_array_q, dtype=self.dtype,
+                                           masked=True,
+                                           newsize=len(np_array_q))
+            else:
+                result = self._column.quantile(q, interpolation, exact)
+            return Series(result,
+                          index=as_index(np_array_q))
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric

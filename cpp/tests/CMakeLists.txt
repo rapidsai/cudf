@@ -14,7 +14,12 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
-target_link_libraries(cudftestutil cudf)
+target_link_libraries(cudftestutil cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory
+                      NVStrings nvrtc)
+
+if(USE_NVTX)
+    target_link_libraries(cudftestutil ${NVTX_LIBRARY})
+endif(USE_NVTX)
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
@@ -26,6 +31,9 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf
                           cudftestutil rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory
                           NVStrings nvrtc)
+    if(USE_NVTX)
+        target_link_libraries(${CMAKE_TEST_NAME} ${NVTX_LIBRARY})
+    endif(USE_NVTX)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
