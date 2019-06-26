@@ -164,6 +164,7 @@
 - PR #2106 Fix errors in JitCache tests caused by sharing of device memory between processes
 - PR #2120 Fix errors in JitCache tests caused by running multiple threads on the same data
 - PR #2102 Fix memory leak in groupby
+- PR #2113 fixed typo in to_csv code example
 
 
 # cudf 0.7.2 (16 May 2019)
