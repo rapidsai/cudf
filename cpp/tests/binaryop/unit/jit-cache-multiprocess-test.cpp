@@ -20,6 +20,23 @@
 
 
 #if defined(JITIFY_USE_CACHE)
+/**---------------------------------------------------------------------------*
+ * @brief This test runs two processes that try to access the same kernel
+ * 
+ * This is a stress test.
+ * 
+ * A single test process is forked before invocation of CUDA and then both the 
+ * parent and child processes try to get and run a kernel. The child process
+ * clears the cache before each iteration of the test so that the cache has to
+ * be re-written by it. The parent process runs on a changing time offset so 
+ * that it sometimes gets the kernel from cache and sometimes it doesn't.
+ * 
+ * The aim of this test is to check that the file cache doesn't get corrupted
+ * when multiple processes are reading/writing to it at the same time. Since 
+ * the public API of JitCache doesn't return the serialized string of the
+ * cached kernel, the way to test its validity is to run it on test data.
+ * 
+ *---------------------------------------------------------------------------**/
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
 
     int num_tests = 20;
@@ -37,12 +54,12 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
         output[idx] = 1;
 
         // make program
-        auto program = cache.getProgram("MemoryCacheTestProg", program3_source);
+        auto program = cache.getProgram("FileCacheTestProg3", program3_source);
         // make kernel
         auto kernel = cache.getKernelInstantiation("my_kernel",
                                                     program,
                                                     {"3", "int"});
-        (*std::get<1>(kernel)).configure_1d_max_occupancy()
+        (*std::get<1>(kernel)).configure(grid, block)
             .launch(input, &output[idx]);
         cudaDeviceSynchronize();
 
