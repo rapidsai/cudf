@@ -21,7 +21,7 @@
 #include <gtest/gtest.h>
 
 struct ColumnTest : public ::testing::Test{
-    cudf::column col;
+    std::unique_ptr<cudf::column> col;
 };
 
 TEST_F(ColumnTest, First){

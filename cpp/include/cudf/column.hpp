@@ -1,19 +1,30 @@
+/*
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+#pragma once
+
 #include "bitmask.hpp"
+#include "column_view.hpp"
 #include "types.hpp"
 
 #include <rmm/device_buffer.hpp>
 
-namespace rmm {
-// forward decl
-class device_buffer;
-}  // namespace rmm
-
 namespace cudf {
 
-// forward decl
-class column_view;
-
 class column {
+ public:
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a size, type, and option to
    * allocate bitmask.
@@ -25,7 +36,7 @@ class column {
    * @param[in] allocate_bitmask Optionally allocate an appropriate sized
    * bitmask
    *---------------------------------------------------------------------------**/
-  column(data_type type, int size, bool allocate_bitmask = false);
+  column(data_type type, size_type size, bool allocate_bitmask = false);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, and a device_buffer for
@@ -35,7 +46,7 @@ class column {
    * @param[in] size The number of elements in the column
    * @param[in] data device_buffer whose data will be *deep* copied
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, int size, rmm::device_buffer data);
+  column(data_type dtype, size_type size, rmm::device_buffer data);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, and a device_buffer for
@@ -45,7 +56,7 @@ class column {
    * @param[in] size The number of elements in the column
    * @param[in] data device_buffer whose data will be moved into this column
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, int size, rmm::device_buffer&& data);
+  column(data_type dtype, size_type size, rmm::device_buffer&& data);
 
   /**---------------------------------------------------------------------------*
    * @brief Column constructor that deep copies a `device_buffer` and `bitmask`.
@@ -55,7 +66,8 @@ class column {
    * @param[in] data The device buffer to copy
    * @param[in] mask The bitmask to copy
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, int size, rmm::device_buffer data, bitmask mask);
+  column(data_type dtype, size_type size, rmm::device_buffer data,
+         bitmask mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, and device_buffers for data and
@@ -72,7 +84,8 @@ class column {
    * @param data device_buffer whose data will be moved from into this column
    * @param mask bitmask whose data will be moved into this column
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, int size, rmm::device_buffer&& data, bitmask&& mask);
+  column(data_type dtype, size_type size, rmm::device_buffer&& data,
+         bitmask&& mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, size, and deep copied device
@@ -83,7 +96,8 @@ class column {
    * @param data device_buffer whose data will be *deep* copied
    * @param mask bitmask whose data will be moved into this column
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, int size, rmm::device_buffer data, bitmask&& mask);
+  column(data_type dtype, size_type size, rmm::device_buffer data,
+         bitmask&& mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, size, and moved device
@@ -94,7 +108,8 @@ class column {
    * @param data device_buffer whose data will be moved into this column
    * @param mask bitmask whose data will be deep copied into this column
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, int size, rmm::device_buffer&& data, bitmask mask);
+  column(data_type dtype, size_type size, rmm::device_buffer&& data,
+         bitmask mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying the device memory of another
@@ -103,7 +118,7 @@ class column {
    * @param other The other column to copy
    *---------------------------------------------------------------------------**/
   // This won't work because of the unique_ptr member
-  // column(column const& other) = default;
+  column(column const& other) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column object by moving the device memory from
@@ -115,17 +130,21 @@ class column {
   column(column&& other) = default;
 
   ~column() = default;
+
   column& operator=(column const& other) = delete;
   column& operator=(column&& other) = delete;
 
-  column_view view() noexcept {}
+  column_view view() const noexcept { return this->operator column_view(); }
 
-  column_view const view() const noexcept {}
+  operator column_view() const noexcept {
+    return column_view{_data.data(), _type, _size, _mask};
+  }
 
  private:
   rmm::device_buffer _data{};  ///< Dense, contiguous, type erased device memory
                                ///< buffer containing the column elements
   bitmask _mask{};             ///< Validity bitmask for columne elements
+  cudf::size_type _size;       ///< The number of elements in the column
   data_type _type{INVALID};    ///< Logical type of elements in the column
   std::unique_ptr<column> _other{
       nullptr};  ///< Depending on column's type, may point to
