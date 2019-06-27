@@ -451,11 +451,11 @@ def test_multiindex_equals():
                           names=['x', 'y'])
     assert_eq(mi1.equals(mi2), True)
 
-     # mi made from two groupbys, are they equal?
+    # mi made from two groupbys, are they equal?
     mi2 = gdf.groupby(['x', 'y']).max().index
     assert_eq(mi1.equals(mi2), True)
 
-     # mi made manually twice are they equal?
+    # mi made manually twice are they equal?
     mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
                           codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                           names=['x', 'y'])
@@ -464,12 +464,12 @@ def test_multiindex_equals():
                           names=['x', 'y'])
     assert_eq(mi1.equals(mi2), True)
 
-     # mi made from different groupbys are they not equal?
+    # mi made from different groupbys are they not equal?
     mi1 = gdf.groupby(['x', 'y']).mean().index
     mi2 = gdf.groupby(['x', 'z']).mean().index
     assert_eq(mi1.equals(mi2), False)
 
-     # mi made from different manuals are they not equal?
+    # mi made from different manuals are they not equal?
     mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
                           codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                           names=['x', 'y'])
