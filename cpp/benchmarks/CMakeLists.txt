@@ -68,3 +68,11 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
+###################################################################################################
+# - apply_boolean_mask benchmark ------------------------------------------------------------------------------
+
+set(APPLY_BOOLEAN_MASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
+
+ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
+
