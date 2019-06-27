@@ -388,17 +388,15 @@ class MultiIndex(Index):
 
     @classmethod
     def _concat(cls, objs):
-        from cudf import DataFrame
-        from cudf import MultiIndex
-        _need_codes = not all([hasattr(o, '_source_data') for o in objs])
-        if _need_codes:
-            raise NotImplementedError(
-                    'MultiIndex._concat is only supported '
-                    'for groupby generated MultiIndexes at this time.')
-        else:
-            _source_data = DataFrame._concat([o._source_data for o in objs])
-            index = MultiIndex(source_data=_source_data)
-        return index
+        from cudf import DataFrame, MultiIndex
+        source_data = [o._source_data for o in objs]
+        source_data = DataFrame._concat(source_data)
+        names = [None for x in source_data.columns]
+        objs = list(filter(lambda o: o.names is not None, objs))
+        for o in range(len(objs)):
+            for i, name in enumerate(objs[o].names):
+                names[i] = names[i] or name
+        return MultiIndex(names=names, source_data=source_data)
 
     @classmethod
     def from_tuples(cls, tuples, names=None):
