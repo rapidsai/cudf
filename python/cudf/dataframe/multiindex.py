@@ -127,7 +127,8 @@ class MultiIndex(Index):
         for idx in self.codes.columns[n:]:
             codes.add_column(idx, self.codes[idx])
         result = MultiIndex(self.levels[n:], codes)
-        result.names = self.names[n:]
+        if self.names:
+            result.names = self.names[n:]
         return result
 
     def __repr__(self):
@@ -185,6 +186,11 @@ class MultiIndex(Index):
         """ Computes the valid set of indices of values in the lookup
         """
         validity_mask = []
+        # if tuple, get first and last elements of tuple
+        # if open beginning tuple, get 0 to highest valid_index
+        # if open ending tuple, get highest valid_index to len()
+        # if not open end or beginning, get range lowest beginning index
+        # to highest ending index
         for i, element in enumerate(row_tuple):
             index_of_code_at_level = None
             for level_index in range(len(self.levels[i])):
@@ -229,6 +235,8 @@ class MultiIndex(Index):
         size = 0
         if not isinstance(row_tuple[0], (numbers.Number, slice)):
             size = len(row_tuple)
+        if df.index.names is None:
+            df.index.names = range(len(df.index.levels))
         for k in range(size, len(df.index.levels)):
             out_index.add_column(df.index.names[k],
                                  df.index.codes[df.index.codes.columns[k]])
@@ -265,6 +273,7 @@ class MultiIndex(Index):
         return result
 
     def _get_column_major(self, df, row_tuple):
+        breakpoint()
         valid_indices = self._compute_validity_mask(df, row_tuple)
         from cudf import DataFrame
         result = DataFrame()
