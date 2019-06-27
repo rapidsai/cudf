@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2012 Add `reindex()` to DataFrame and Series
+
 ## Improvements
 
 - PR #1947 Cleanup serialization code
