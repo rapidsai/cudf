@@ -1833,20 +1833,10 @@ class Series(object):
         DataFrame
 
         """
-        def invalid_quantile(q):
-            if 0 <= q <= 1:
-                return False
-            else:
-                return True
 
-        if isinstance(q, Number) and invalid_quantile(q):
-            raise ValueError("percentiles should all \
-                             be in the interval [0, 1]")
-
-        if utils.is_list_like(q):
-            invalid_q_vector = np.vectorize(invalid_quantile,
-                                            otypes=[np.bool8])
-            if any(invalid_q_vector(q)):
+        if isinstance(q, Number) or utils.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
                 raise ValueError("percentiles should all \
                              be in the interval [0, 1]")
 
