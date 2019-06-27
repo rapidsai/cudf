@@ -30,7 +30,9 @@ class MultiIndex(Index):
 
     def __init__(self, levels=None, codes=None, labels=None, names=None,
                  **kwargs):
+        self.name = None
         self.names = names
+        self._source_data = None
         column_names = []
         if labels:
             warnings.warn("the 'labels' keyword is deprecated, use 'codes' "
@@ -40,7 +42,7 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if 'source_data' in kwargs:
-            self._source_data = kwargs['source_data']
+            self._source_data = kwargs['source_data'].reset_index(drop=True)
             self._codes = codes
             self._levels = levels
             self.names = self._source_data.columns
@@ -62,26 +64,36 @@ class MultiIndex(Index):
         if len(levels) == 0:
             raise ValueError('Must pass non-zero number of levels/codes')
 
-        import cudf
-        if not isinstance(codes, cudf.dataframe.dataframe.DataFrame) and\
+        from cudf import DataFrame
+
+        if not isinstance(codes, DataFrame) and\
                 not isinstance(codes[0], (Sequence,
                                pd.core.indexes.frozen.FrozenNDArray)):
             raise TypeError('Codes is not a Sequence of sequences')
-        if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
-            self._codes = cudf.dataframe.dataframe.DataFrame()
-            for idx, code in enumerate(codes):
-                code = np.array(code)
-                self._codes.add_column(column_names[idx],
-                                       columnops.as_column(code))
-        else:
+
+        if isinstance(codes, DataFrame):
             self._codes = codes
+        elif len(levels) == len(codes):
+            self._codes = DataFrame()
+            for i, codes in enumerate(codes):
+                name = column_names[i] or i
+                codes = columnops.as_column(codes)
+                self._codes[name] = codes.astype(np.int64)
+        else:
+            raise ValueError('MultiIndex has unequal number of levels and '
+                             'codes and is inconsistent!')
 
         # converting levels to numpy array will produce a Float64Index
         # (on empty levels)for levels mimicking the behavior of Pandas
-        self._levels = np.array([Series(level).to_array() for level in levels])
+        self._levels = np.array([Series(level) for level in levels])
         self._validate_levels_and_codes(self._levels, self._codes)
-        self.name = None
-        self.names = names
+
+        self._source_data = DataFrame()
+        for i, name in enumerate(self._codes.columns):
+            codes = as_index(self._codes[name]._column)
+            level = DataFrame({name: self._levels[i]})
+            level = DataFrame(index=codes).join(level)
+            self._source_data[name] = level[name].reset_index(drop=True)
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
