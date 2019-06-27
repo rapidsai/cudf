@@ -110,14 +110,11 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        if hasattr(self, '_source_data'):
-            mi = MultiIndex(source_data=self._source_data)
-            if self._levels is not None:
-                mi._levels = self._levels.copy()
-            if self._codes is not None:
-                mi._codes = self._codes.copy(deep)
-        else:
-            mi = MultiIndex(self.levels.copy(), self.codes.copy(deep))
+        mi = MultiIndex(source_data=self._source_data)
+        if self._levels is not None:
+            mi._levels = self._levels.copy()
+        if self._codes is not None:
+            mi._codes = self._codes.copy(deep)
         if self.names is not None:
             mi.names = self.names.copy()
         return mi
@@ -148,19 +145,15 @@ class MultiIndex(Index):
 
     @property
     def codes(self):
-        if self._codes is not None:
-            return self._codes
-        else:
+        if self._codes is None:
             self._compute_levels_and_codes()
-            return self._codes
+        return self._codes
 
     @property
     def levels(self):
-        if self._levels is not None:
-            return self._levels
-        else:
+        if self._levels is None:
             self._compute_levels_and_codes()
-            return self._levels
+        return self._levels
 
     @property
     def labels(self):
@@ -299,10 +292,7 @@ class MultiIndex(Index):
         return result
 
     def __len__(self):
-        if hasattr(self, '_source_data'):
-            return len(self._source_data)
-        else:
-            return len(self.codes[self.codes.columns[0]])
+        return len(self._source_data)
 
     def __eq__(self, other):
         if not hasattr(other, '_levels'):
@@ -332,10 +322,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        if hasattr(self, '_source_data'):
-            return len(self._source_data)
-        else:
-            return len(self.codes[0])
+        return len(self._source_data)
 
     def take(self, indices):
         from collections.abc import Sequence
@@ -349,11 +336,7 @@ class MultiIndex(Index):
             start, stop, step, sln = utils.standard_python_slice(len(self),
                                                                  indices)
             indices = cudautils.arange(start, stop, step)
-        if hasattr(self, '_source_data'):
-            result = MultiIndex(source_data=self._source_data.take(indices))
-        else:
-            codes = self.codes.take(indices)
-            result = MultiIndex(self.levels, codes)
+        result = MultiIndex(source_data=self._source_data.take(indices))
         result.names = self.names
         return result
 
@@ -379,8 +362,7 @@ class MultiIndex(Index):
         return tuple(result)
 
     def to_frame(self, index=True, name=None):
-        df = self._source_data if hasattr(
-                self, '_source_data') else self._to_frame()
+        df = self._source_data
         if index:
             df = df.set_index(self)
         if name:
