@@ -294,17 +294,19 @@ class MultiIndex(Index):
     def __len__(self):
         return len(self._source_data)
 
+    def equals(self, other):
+        if self is other:
+            return True
+        if len(self) != len(other):
+            return False
+        return self == other
+
     def __eq__(self, other):
         if not hasattr(other, '_levels'):
             return False
         # Lazy comparison
-        if hasattr(other, '_source_data'):
-            for col in self._source_data.columns:
-                if col not in other._source_data.columns:
-                    return False
-                if not self._source_data[col].equals(other._source_data[col]):
-                    return False
-            return True
+        if isinstance(other, MultiIndex) or hasattr(other, '_source_data'):
+            return self._source_data.equals(other._source_data)
         else:
             # Lazy comparison isn't possible - MI was created manually.
             # Actually compare the MI, not its source data (it doesn't have
