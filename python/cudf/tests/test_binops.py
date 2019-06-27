@@ -439,8 +439,15 @@ def test_different_shapes_and_columns_with_unaligned_indices(binop):
     if binop is operator.pow:
         return
 
-    pdf1 = pd.DataFrame({ 'x': [1, 2, 3, 7], 'y': [4, 5, 6, 7] }, index=[0, 1, 3, 4])
-    pdf2 = pd.DataFrame({ 'x': [4, 5, 6, 7], 'y': [1, 2, 3, 7], 'z': [0, 5, 3, 7] }, index=[0, 3, 5, 3])
+    pdf1 = pd.DataFrame({
+        'x': [1, 2, 3, 7],
+        'y': [4, 5, 6, 7]
+    }, index=[0, 1, 3, 4])
+    pdf2 = pd.DataFrame({
+        'x': [4, 5, 6, 7],
+        'y': [1, 2, 3, 7],
+        'z': [0, 5, 3, 7]
+    }, index=[0, 3, 5, 3])
     gdf1 = cudf.DataFrame.from_pandas(pdf1)
     gdf2 = cudf.DataFrame.from_pandas(pdf2)
 
