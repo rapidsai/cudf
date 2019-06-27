@@ -1869,15 +1869,15 @@ def test_quantile(pdf, gdf):
     assert_eq(pdf['x'].quantile(), gdf['x'].quantile())
     assert_eq(pdf.quantile(), gdf.quantile())
 
-# TODO:  This has to be un-commented once 2077 is fixed from libcudf side.
-# def test_empty_quantile():
-#     pdf = pd.DataFrame({'x': []})
-#     df = gd.DataFrame({'x': []})
 
-#     actual = df.quantile().to_pandas()['x']
-#     expected = pdf.quantile()
+def test_empty_quantile():
+    pdf = pd.DataFrame({'x': []})
+    df = gd.DataFrame({'x': []})
 
-#     assert_eq(actual.values, expected.values)
+    actual = df.quantile().to_pandas()['x']
+    expected = pdf.quantile()
+
+    assert_eq(actual.values, expected.values)
 
 
 def test_from_pandas_function(pdf):

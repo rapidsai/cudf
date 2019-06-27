@@ -193,8 +193,7 @@ def test_approx_quantiles_int():
 
 
 @pytest.mark.parametrize('data', [
-    # [], <- This has to be un-commented once
-    #       2077 is fixed from libcudf side.
+    [],
     [1, 2, 3, 10, 326497]
 ])
 @pytest.mark.parametrize('q', [
