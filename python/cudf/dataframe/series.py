@@ -1472,21 +1472,21 @@ class Series(object):
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
         """
-
         from cudf import DataFrame
 
-        cats = Series(cats, dtype=self.dtype)
-        codes = Series(cudautils.arange(len(cats)))
+        value = Series(cats, dtype=self.dtype)
+        order = Series(cudautils.arange(len(self)))
+        codes = Series(cudautils.arange(len(value)))
 
         if dtype is not None:
             codes = codes.astype(dtype)
 
-        cats = DataFrame({0: cats, 'codes': codes})
-        codes = DataFrame({0: self, 'order': cudautils.arange(len(self))})
-        codes = codes.merge(cats, on=0, how='left').sort_values('order')
+        value = DataFrame({'value': value, 'code': codes})
+        codes = DataFrame({'value': self, 'order': order})
+        codes = codes.merge(value, on='value', how='left')
+        codes = codes.sort_values('order')['code'].fillna(na_sentinel)
 
-        return codes['codes'].fillna(na_sentinel) \
-            ._copy_construct(index=self.index, name=None)
+        return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
         """Encode the input values as integer labels
