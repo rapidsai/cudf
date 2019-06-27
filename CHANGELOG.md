@@ -8,6 +8,7 @@
 
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
+- PR #2130 Java serialization and deserialization of tables.
 
 ## Bug Fixes
 
