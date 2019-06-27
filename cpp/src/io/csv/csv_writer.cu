@@ -55,13 +55,13 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
             break;
         case GDF_BOOL8:
             {
-            auto d_src = static_cast<const cudf::bool8*>(column->data);
+            auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
             device_buffer<bool> bool_buffer(rows);
             thrust::transform(
                 rmm::exec_policy()->on(0), d_src, d_src + rows,
                 bool_buffer.data(),
                 [] __device__(const cudf::bool8 value) { return bool{value}; });
-            rtn = NVStrings::create_from_bools(bool_buffer.data() + row_offset, rows,
+            rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
                                                true_string, false_string, valid);
             }
             break;
@@ -149,7 +149,9 @@ gdf_error write_csv(csv_write_arg* args)
     const char* terminator = "\n";
     if( args->line_terminator )
         terminator = args->line_terminator;
-    const char* narep = args->na_rep;
+    const char* narep = "";
+    if( args->na_rep )
+        narep = args->na_rep;
     const char* true_value = (args->true_value ? args->true_value : "true");
     const char* false_value = (args->false_value ? args->false_value : "false");
     bool include_header = args->include_header;
@@ -182,8 +184,8 @@ gdf_error write_csv(csv_write_arg* args)
     // instead of an arbitrary chunk count.
     // The entire CSV chunk must fit in CPU memory before writing it out.
     //
-    gdf_size_type rows_chunk = ((args->chunk_rows + 7)/8)*8; // must be divisible by 8
-    CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows" );
+    gdf_size_type rows_chunk = (args->chunk_rows/8)*8; // must be divisible by 8
+    CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
     gdf_size_type row_offset = 0;
     gdf_size_type rows = total_rows;
