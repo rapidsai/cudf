@@ -16,6 +16,7 @@ import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
+from cudf.comm.serialize import register_distributed_serializer
 
 
 _str_to_numeric_typecast_functions = {
@@ -590,6 +591,50 @@ class StringColumn(columnops.TypedColumnBase):
 
         return self.to_arrow().to_pandas()
 
+    def serialize(self, serialize):
+        header = {
+            'null_count': self._null_count,
+        }
+        frames = []
+        sub_headers = []
+
+        sbuf = rmm.device_array(self._data.byte_count(), dtype='int8')
+        obuf = rmm.device_array(len(self._data) + 1, dtype='int32')
+        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
+        nbuf = rmm.device_array(mask_size, dtype='int8')
+        self.data.to_offsets(get_ctype_ptr(sbuf), get_ctype_ptr(obuf),
+                             nbuf=get_ctype_ptr(nbuf), bdevmem=True)
+
+        for item in [nbuf, sbuf, obuf]:
+            sheader, [frame] = serialize(item)
+            sub_headers.append(sheader)
+            frames.append(frame)
+
+        header["nvstrings"] = len(self._data)
+        header["subheaders"] = sub_headers
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, deserialize, header, frames):
+        # Deserialize the mask, value, and offset frames
+        arrays = []
+        for i, frame in enumerate(frames):
+            subheader = header["subheaders"][i]
+            arrays.append(get_ctype_ptr(deserialize(subheader, [frame])))
+
+        # Use from_offsets to get nvstring data.
+        # Note: array items = [nbuf, sbuf, obuf]
+        scount = header["nvstrings"]
+        data = nvstrings.from_offsets(
+            arrays[1],
+            arrays[2],
+            scount,
+            nbuf=arrays[0],
+            ncount=header["null_count"],
+            bdevmem=True,
+        )
+        return data
+
     def sort_by_values(self, ascending=True, na_position="last"):
         if na_position == "last":
             nullfirst = False
@@ -625,6 +670,26 @@ class StringColumn(columnops.TypedColumnBase):
 
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
+
+    def find_and_replace(self, to_replace, replacement, all_nan):
+        """
+        Return col with *to_replace* replaced with *value*
+        """
+        to_replace = columnops.as_column(to_replace)
+        replacement = columnops.as_column(replacement)
+        if (
+                len(to_replace) == 1
+                and len(replacement) == 1
+        ):
+            to_replace = to_replace.data.to_host()[0]
+            replacement = replacement.data.to_host()[0]
+            result = self.data.replace(to_replace, replacement)
+            return self.replace(data=result)
+        else:
+            raise NotImplementedError(
+                "StringColumn currently only supports replacing"
+                " single values"
+            )
 
     def fillna(self, fill_value, inplace=False):
         """
@@ -714,3 +779,6 @@ def string_column_binop(lhs, rhs, op):
     result = out.replace(null_count=null_count)
     nvtx_range_pop()
     return result
+
+
+register_distributed_serializer(StringColumn)

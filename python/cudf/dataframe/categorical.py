@@ -101,12 +101,20 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        data, mask = cls._deserialize_data_mask(deserialize, header, frames)
-        dtype = deserialize(*header['dtype'])
-        categories = header['categories']
-        ordered = header['ordered']
-        col = cls(data=data, mask=mask, null_count=header['null_count'],
-                  dtype=dtype, categories=categories, ordered=ordered)
+        data, mask = super(CategoricalColumn, cls).deserialize(
+            deserialize, header, frames
+        )
+        dtype = deserialize(*header["dtype"])
+        categories = header["categories"]
+        ordered = header["ordered"]
+        col = cls(
+            data=data,
+            mask=mask,
+            null_count=header["null_count"],
+            dtype=dtype,
+            categories=categories,
+            ordered=ordered,
+        )
         return col
 
     def _replace_defaults(self):

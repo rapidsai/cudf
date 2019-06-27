@@ -168,6 +168,8 @@ class DataFrame(object):
         columns = [col._column for col in self._cols.values()]
         serialized_columns = zip(*map(serialize, columns))
         header['columns'], column_frames = serialized_columns
+        for h, f in zip(header['columns'], column_frames):
+            h['frame_count'] = len(f)
         header['column_names'] = tuple(self._cols)
         for f in column_frames:
             frames.extend(f)
@@ -1977,7 +1979,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by=None, sort=False, as_index=True, method="hash",
+    def groupby(self, by=None, sort=True, as_index=True, method="hash",
                 level=None, group_keys=True):
         """Groupby
 
@@ -1985,12 +1987,11 @@ class DataFrame(object):
         ----------
         by : list-of-str or str
             Column name(s) to form that groups by.
-        sort : bool
+        sort : bool, default True
             Force sorting group keys.
-            Depends on the underlying algorithm.
-        as_index : bool; defaults to False
-            Must be False.  Provided to be API compatible with pandas.
-            The keys are always left as regular columns in the result.
+        as_index : bool, default True
+            Indicates whether the grouped by columns become the index
+            of the returned DataFrame
         method : str, optional
             A string indicating the method to use to perform the group by.
             Valid values are "hash" or "cudf".
@@ -2003,15 +2004,8 @@ class DataFrame(object):
 
         Notes
         -----
-        Unlike pandas, this groupby operation behaves like a SQL groupby.
         No empty rows are returned.  (For categorical keys, pandas returns
         rows for all categories even if they are no corresponding values.)
-
-        Only a minimal number of operations is implemented so far.
-
-        - Only *by* argument is supported.
-        - Since we don't support multiindex, the *by* columns are stored
-          as regular columns.
         """
         if group_keys is not True:
             raise NotImplementedError(
@@ -2037,7 +2031,7 @@ class DataFrame(object):
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
-                             level=level)
+                             sort=sort, level=level)
             return result
 
     @copy_docstring(Rolling)
