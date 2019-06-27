@@ -11,6 +11,7 @@
 
 ## Bug Fixes
 
+- PR #2128 Add offset param to host buffer readers in java API.
 
 # cuDF 0.8.0 (27 June 2019)
 
