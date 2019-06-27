@@ -131,7 +131,7 @@ class _GroupbyHelper(object):
         by_list = []
         if isinstance(self.obj.index, cudf.MultiIndex):
             for lev in level:
-                by_list.append(self.obj.index.get_level_value(lev))
+                by_list.append(self.obj.index.get_level_values(lev))
             return by_list
         else:
             if len(level) > 1 or level[0] != 0:
@@ -304,7 +304,10 @@ class _GroupbyHelper(object):
 
         if isinstance(self.obj, cudf.Series):
             if len(aggs_as_list) == 1:
-                return self.obj.name
+                if self.obj.name is None:
+                    return self.obj.name
+                else:
+                    return [self.obj.name]
             else:
                 return aggs_as_list
         else:
