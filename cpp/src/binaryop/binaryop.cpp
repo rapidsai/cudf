@@ -162,7 +162,7 @@ namespace jit {
     
     void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx)  {
 
-        Launcher(ptx).setKernelInst("kernel_v_v", GDF_GENERIC_OP, Operator::Type::Direct, out, lhs, rhs)
+        Launcher(ptx).setKernelInst("kernel_v_v", GDF_GENERIC_BINARY, Operator::Type::Direct, out, lhs, rhs)
                      .launch(out, lhs, rhs);
 
     }

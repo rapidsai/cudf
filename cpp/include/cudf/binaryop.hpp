@@ -44,7 +44,7 @@ typedef enum {
   GDF_LOGICAL_AND,    ///< operator &&
   GDF_LOGICAL_OR,     ///< operator ||
   GDF_COALESCE,       ///< operator x,y  x is null ? y : x
-  GDF_GENERIC_OP,     ///< generic binary operator to be generated with input ptx code
+  GDF_GENERIC_BINARY, ///< generic binary operator to be generated with input ptx code
   GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
 
