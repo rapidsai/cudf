@@ -234,3 +234,9 @@ def is_list_like(obj):
         return True
     else:
         return False
+
+
+def get_min_width_integer_dtype(row_count):
+    from math import ceil, log
+    byte_width = ceil(log(max(2, row_count), 256)) * 8
+    return np.dtype('int' + str(byte_width))

@@ -665,3 +665,28 @@ def test_groupby_all_nulls_index():
         pdf.groupby('a').sum(),
         gdf.groupby('a').sum()
     )
+
+
+def test_groupby_sort():
+    pdf = pd.DataFrame({
+        'a': [2, 2, 1, 1],
+        'b': [1, 2, 3, 4]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby('a', sort=False).sum().sort_index(),
+        gdf.groupby('a', sort=False).sum().sort_index()
+    )
+
+    pdf = pd.DataFrame({
+        'c': [-1, 2, 1, 4],
+        'b': [1, 2, 3, 4],
+        'a': [2, 2, 1, 1]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby(['c', 'b'], sort=False).sum().sort_index(),
+        gdf.groupby(['c', 'b'], sort=False).sum().to_pandas().sort_index()
+    )

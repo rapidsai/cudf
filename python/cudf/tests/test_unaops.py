@@ -97,7 +97,9 @@ def test_series_pandas_methods(mth):
     np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
 
 
-@pytest.mark.parametrize('mth', ['min', 'max', 'sum', 'product'])
+@pytest.mark.parametrize('mth', [
+    'min', 'max', 'sum', 'product', 'quantile'
+])
 def test_series_pandas_methods_empty(mth):
     arr = np.array([])
     sr = Series(arr)

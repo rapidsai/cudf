@@ -20,27 +20,51 @@
 
 
 #if defined(JITIFY_USE_CACHE)
+/**---------------------------------------------------------------------------*
+ * @brief This test runs two processes that try to access the same kernel
+ * 
+ * This is a stress test.
+ * 
+ * A single test process is forked before invocation of CUDA and then both the 
+ * parent and child processes try to get and run a kernel. The child process
+ * clears the cache before each iteration of the test so that the cache has to
+ * be re-written by it. The parent process runs on a changing time offset so 
+ * that it sometimes gets the kernel from cache and sometimes it doesn't.
+ * 
+ * The aim of this test is to check that the file cache doesn't get corrupted
+ * when multiple processes are reading/writing to it at the same time. Since 
+ * the public API of JitCache doesn't return the serialized string of the
+ * cached kernel, the way to test its validity is to run it on test data.
+ * 
+ *---------------------------------------------------------------------------**/
 TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
 
-    auto tester = [&] () {
+    int num_tests = 20;
+    int *input, *output;
+    int expect = 64;
+
+    auto tester = [&] (int pid, int test_no) {
         // Brand new cache object that has nothing in in-memory cache
         cudf::jit::cudfJitCache cache;
         
-        // Single value column
-        auto column = cudf::test::column_wrapper<int>{{4,0}};
-        auto expect = cudf::test::column_wrapper<int>{{64,0}};
+        // Parent writes to output[0], child writes to output[1]
+        size_t idx = 2 * test_no + (pid == 0);
+
+        *input = 4;
+        output[idx] = 1;
 
         // make program
-        auto program = cache.getProgram("MemoryCacheTestProg", program_source);
+        auto program = cache.getProgram("FileCacheTestProg3", program3_source);
         // make kernel
         auto kernel = cache.getKernelInstantiation("my_kernel",
                                                     program,
                                                     {"3", "int"});
-        (*std::get<1>(kernel)).configure_1d_max_occupancy()
-                 .launch(column.get()->data);
+        (*std::get<1>(kernel)).configure(grid, block)
+            .launch(input, &output[idx]);
+        cudaDeviceSynchronize();
 
-        ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
-                                      << "  Actual col: " << column.to_str();
+        ASSERT_TRUE(expect == output[idx]) << "Expected val: " << expect << '\n'
+                                           << "  Actual val: " << output[idx];
 
     };
 
@@ -60,12 +84,15 @@ TEST_F(JitCacheMultiProcessTest, MultiProcessTest) {
         dup2(pipefd[1], STDOUT_FILENO); // redirect stdout to pipe
     }
 
-    for (size_t i = 0; i < 20; i++)
+    cudaMallocManaged(&input, sizeof(input));
+    cudaMallocManaged(&output, sizeof(output) * num_tests * 2);
+
+    for (size_t i = 0; i < num_tests; i++)
     {
         if (cpid > 0) usleep(10000);
         else purgeFileCache();
 
-        tester();
+        tester(cpid, i);
     }
 
     // Child ends here --------------------------------------------------------
