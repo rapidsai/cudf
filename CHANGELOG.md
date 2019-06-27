@@ -11,6 +11,8 @@
 
 ## Bug Fixes
 
+- PR #2086 Fixed quantile api behavior mismatch in series & dataframe
+
 
 # cuDF 0.8.0 (27 June 2019)
 

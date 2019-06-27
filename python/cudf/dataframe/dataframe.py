@@ -2876,6 +2876,8 @@ class DataFrame(object):
         """
     def quantile(self,
                  q=0.5,
+                 axis=0,
+                 numeric_only=True,
                  interpolation='linear',
                  columns=None,
                  exact=True):
@@ -2887,6 +2889,10 @@ class DataFrame(object):
 
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
+        axis : int
+            axis is a NON-FUNCTIONAL parameter
+        numeric_only : boolean
+            numeric_only is a NON-FUNCTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This  parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -2902,6 +2908,11 @@ class DataFrame(object):
         DataFrame
 
         """
+        if axis not in (0, None):
+            raise NotImplementedError("axis is not implemented yet")
+
+        if not numeric_only:
+            raise NotImplementedError("numeric_only is not implemented yet")
         if columns is None:
             columns = self.columns
 
@@ -2909,9 +2920,15 @@ class DataFrame(object):
         result['Quantile'] = q
         for k, col in self._cols.items():
             if k in columns:
-                result[k] = col.quantile(q, interpolation=interpolation,
-                                         exact=exact,
-                                         quant_index=False)
+                res = col.quantile(q, interpolation=interpolation,
+                                   exact=exact,
+                                   quant_index=False)
+                if not isinstance(res, numbers.Number) and len(res) == 0:
+                    res = columnops.column_empty_like(q,
+                                                      dtype=col.dtype,
+                                                      masked=True,
+                                                      newsize=len(q))
+                result[k] = res
         return result
 
     #
