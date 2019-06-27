@@ -416,14 +416,39 @@ def test_different_shapes_and_columns(binop):
 
 @pytest.mark.parametrize('binop', _binops)
 def test_different_shapes_and_same_columns(binop):
+
+    # TODO: support `pow()` on NaN values. Particularly, the cases:
+    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
     if binop is operator.pow:
         return
+
     pd_frame = binop(pd.DataFrame({'x': [1, 2]}),
                      pd.DataFrame({'x': [1, 2, 3]}))
     cd_frame = binop(cudf.DataFrame({'x': [1, 2]}),
                      cudf.DataFrame({'x': [1, 2, 3]}))
-    # cast X as float64 so it matches pandas dtype
+    # cast x as float64 so it matches pandas dtype
     cd_frame['x'] = cd_frame['x'].astype(np.float64)
+    pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
+
+
+@pytest.mark.parametrize('binop', _binops)
+def test_different_shapes_and_columns_with_unaligned_indices(binop):
+
+    # TODO: support `pow()` on NaN values. Particularly, the cases:
+    #       `pow(1, NaN) == 1` and `pow(NaN, 0) == 1`
+    if binop is operator.pow:
+        return
+
+    pdf1 = pd.DataFrame({ 'x': [1, 2, 3, 7], 'y': [4, 5, 6, 7] }, index=[0, 1, 3, 4])
+    pdf2 = pd.DataFrame({ 'x': [4, 5, 6, 7], 'y': [1, 2, 3, 7], 'z': [0, 5, 3, 7] }, index=[0, 3, 5, 3])
+    gdf1 = cudf.DataFrame.from_pandas(pdf1)
+    gdf2 = cudf.DataFrame.from_pandas(pdf2)
+
+    pd_frame = binop(pdf1, pdf2)
+    cd_frame = binop(gdf1, gdf2)
+    # cast x and y as float64 so it matches pandas dtype
+    cd_frame['x'] = cd_frame['x'].astype(np.float64)
+    cd_frame['y'] = cd_frame['y'].astype(np.float64)
     pd.testing.assert_frame_equal(cd_frame.to_pandas(), pd_frame)
 
 
