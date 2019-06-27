@@ -45,7 +45,8 @@ class MultiIndex(Index):
             self._source_data = kwargs['source_data'].reset_index(drop=True)
             self._codes = codes
             self._levels = levels
-            self.names = self._source_data.columns
+            if names is None:
+                self.names = self._source_data.columns
             return
 
         # name setup
@@ -136,7 +137,8 @@ class MultiIndex(Index):
         for idx in self.codes.columns[n:]:
             codes.add_column(idx, self.codes[idx])
         result = MultiIndex(self.levels[n:], codes)
-        result.names = self.names[n:]
+        if self.names is not None:
+            result.names = self.names[n:]
         return result
 
     def __repr__(self):
@@ -165,26 +167,17 @@ class MultiIndex(Index):
         levels = []
         from cudf import DataFrame
         codes = DataFrame()
-        names = []
         # Note: This is an O(N^2) solution using gpu masking
         # to compute new codes for the MultiIndex. There may be
         # a faster solution that could be executed on gpu at the same
         # time the groupby is calculated.
-        for by in self._source_data.columns:
-            if len(self._source_data[by]) > 0:
-                level = self._source_data[by].unique()
-                replaced = self._source_data[by].replace(
-                        level, Series(cudautils.arange(len(level))))
-            else:
-                level = np.array([])
-                replaced = np.array([])
-            levels.append(level)
-            codes[by] = Series(replaced, dtype="int32")
-            names.append(by)
+        for name in self._source_data.columns:
+            code, cats = self._source_data[name].factorize()
+            codes[name] = code.reset_index(drop=True)
+            levels.append(cats.reset_index(drop=True))
 
         self._levels = levels
         self._codes = codes
-        self.names = names
 
     def _compute_validity_mask(self, df, row_tuple):
         """ Computes the valid set of indices of values in the lookup
