@@ -21,7 +21,7 @@
 #define GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 namespace jit {
 namespace code {
 

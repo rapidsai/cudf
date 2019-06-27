@@ -19,7 +19,7 @@
  */
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 namespace jit {
 namespace code {
 
@@ -48,5 +48,5 @@ R"***(
 
 } // namespace code
 } // namespace jit
-} // namespace transform
+} // namespace transformation
 } // namespace cudf

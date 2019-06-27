@@ -21,7 +21,7 @@
 #include <utilities/type_dispatcher.hpp>
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 namespace jit {
 
     /**---------------------------------------------------------------------------*
@@ -89,5 +89,5 @@ namespace jit {
     }
 
 } // namespace jit
-} // namespace transform
+} // namespace transformation
 } // namespace cudf

@@ -28,7 +28,7 @@
 
 namespace cudf {
 namespace test {
-namespace transform {
+namespace transformation {
 
 struct UnaryOperationIntegrationTest : public GdfTest {};
 
@@ -85,8 +85,8 @@ R"***(
 
     gdf_column cpp_output_col;
 
-    CUDF_EXPECT_NO_THROW(cudf::unary_transform(out.get(), in.get(), ptx));
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::unary_transform(*in.get(), ptx));
+    CUDF_EXPECT_NO_THROW(cudf::transform(out.get(), in.get(), ptx));
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx));
     
     auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
 
@@ -149,8 +149,8 @@ R"***(
   
     gdf_column cpp_output_col;
 
-    CUDF_EXPECT_NO_THROW(cudf::unary_transform(out.get(), in.get(), ptx));
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::unary_transform(*in.get(), ptx));
+    CUDF_EXPECT_NO_THROW(cudf::transform(out.get(), in.get(), ptx));
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx));
 
     auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
 
@@ -158,6 +158,6 @@ R"***(
     ASSERT_UNARY(cpp_out, in, Cube);
 }
 
-} // namespace transform
+} // namespace transformation
 } // namespace test
 } // namespace cudf

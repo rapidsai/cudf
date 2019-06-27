@@ -33,7 +33,7 @@ namespace cudf{
  * @return gdf_column The column resulting from applying the unary function to
  * every element of the input
  *---------------------------------------------------------------------------**/
-gdf_column unary_transform(const gdf_column& input,
+gdf_column transform(const gdf_column& input,
                            const std::string& ptx_unary_function);
 
 /**
@@ -49,7 +49,7 @@ gdf_column unary_transform(const gdf_column& input,
  * @param in (gdf_column) Input operand of the operation.
  * @param ptx String containing the PTX of a binary function to apply on `in`
  */
-void unary_transform(gdf_column*           out,
+void transform(gdf_column*           out,
                      gdf_column*           in,
                      const std::string&    ptx);
 

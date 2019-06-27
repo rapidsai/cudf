@@ -25,7 +25,7 @@
 #include <chrono>
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 namespace jit {
 
     constexpr char prog_name[] = "unary_transform";
@@ -71,7 +71,7 @@ namespace jit {
                                            combined_kernel.c_str(),
                                            headersName,
                                            compilerFlags,
-                                           cudf::transform::jit::headersCode);
+                                           headersCode);
     }
    
     Launcher::Launcher()
@@ -103,5 +103,5 @@ namespace jit {
     }
 
 } // namespace jit
-} // namespace transform
+} // namespace transformation
 } // namespace cudf

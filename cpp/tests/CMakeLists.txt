@@ -237,10 +237,10 @@ ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
 ###################################################################################################
 # - unary transform tests -------------------------------------------------------------------------
 
-set(UNARY_TRANSFORM_TEST_SRC 
+set(TRANSFORM_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-operation-integration-test.cu")
 
-ConfigureTest(UNARY_TRANSFORM_TEST "${UNARY_TRANSFORM_TEST_SRC}")
+ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
 # - jit cache tests -------------------------------------------------------------------------------

@@ -24,7 +24,7 @@
 #include <string>
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 namespace jit {
 
     std::string getTypeName(gdf_dtype type);

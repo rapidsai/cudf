@@ -25,7 +25,7 @@
 
 namespace cudf {
 namespace test {
-namespace transform {
+namespace transformation {
 
 template <typename TypeOut, typename TypeIn, typename TypeOpe>
 void ASSERT_UNARY(cudf::test::column_wrapper<TypeOut>& out,

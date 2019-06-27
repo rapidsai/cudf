@@ -31,7 +31,7 @@
 #include <utilities/column_utils.hpp>
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 
     /**---------------------------------------------------------------------------*
      * @brief Computes output valid mask for op between a column and a scalar
@@ -82,9 +82,9 @@ namespace jit {
     }
 
 } // namespace jit
-} // namespace transform
+} // namespace transformation
 
-void unary_transform(gdf_column* out, gdf_column* in, const std::string& ptx) {
+void transform(gdf_column* out, gdf_column* in, const std::string& ptx) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (in != nullptr),
         "Input pointers are null");
@@ -105,17 +105,17 @@ void unary_transform(gdf_column* out, gdf_column* in, const std::string& ptx) {
                   out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ),
         "Invalid/Unsupported datatype");
     
-    transform::col_valid_mask_and(out->null_count, out->valid, in->valid, in->size);
+    transformation::col_valid_mask_and(out->null_count, out->valid, in->valid, in->size);
 
-    transform::jit::unary_operation(out, in, ptx);
+    transformation::jit::unary_operation(out, in, ptx);
 }
 
-gdf_column unary_transform(const gdf_column& input,
+gdf_column transform(const gdf_column& input,
                            const std::string& ptx_unary_function){
   // First create a gdf_column and then call the above function
   gdf_column output_col = copy(input);
  
-  unary_transform(&output_col, const_cast<gdf_column*>(&input), ptx_unary_function);
+  transform(&output_col, const_cast<gdf_column*>(&input), ptx_unary_function);
 
   return output_col;
 }

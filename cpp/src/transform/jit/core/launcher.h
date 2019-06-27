@@ -30,7 +30,7 @@
 #include <chrono>
 
 namespace cudf {
-namespace transform {
+namespace transformation {
 namespace jit {
 
     std::istream* headersCode(std::string filename, std::iostream& stream);
@@ -123,7 +123,7 @@ namespace jit {
     };
 
 } // namespace jit
-} // namespace transform 
+} // namespace transformation 
 } // namespace cudf
 
 #endif
