@@ -2457,9 +2457,9 @@ class DataFrame(object):
         def _create_output_frame(data, percentiles=None):
             # hack because we don't support strings in indexes
             columns = data.columns
-            out_df = data[columns[0]].describe(percentiles=percentiles)
-            for col in columns[1:]:
-                out_df[col] = data[col].describe(percentiles=percentiles)[col]
+            out_df = DataFrame()
+            for col in columns:
+                out_df[col] = data[col].describe(percentiles=percentiles)
 
             return out_df
 
