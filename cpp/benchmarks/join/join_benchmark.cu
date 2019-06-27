@@ -32,12 +32,10 @@ static void join_benchmark(benchmark::State& state)
     const double selectivity = 0.3;
     const bool is_build_table_key_unique = true;
 
-    // Generate build and probe table data
+    // Generate build and probe tables
 
     cudf::test::column_wrapper<key_type> build_key_column(build_table_size);
-    cudf::test::column_wrapper<payload_type> build_payload_column(build_table_size);
     cudf::test::column_wrapper<key_type> probe_key_column(probe_table_size);
-    cudf::test::column_wrapper<payload_type> probe_payload_column(probe_table_size);
 
     generate_input_tables<key_type, gdf_size_type>(
         (key_type *)build_key_column.get()->data, build_table_size,
@@ -45,12 +43,18 @@ static void join_benchmark(benchmark::State& state)
         selectivity, rand_max_val, is_build_table_key_unique
     );
 
-    linear_sequence<payload_type, gdf_size_type><<<(build_table_size+127)/128,128>>>(
-        (payload_type *)build_payload_column.get()->data, build_table_size
+    cudf::test::column_wrapper<payload_type> build_payload_column(
+        build_table_size,
+        [] (gdf_index_type row_index) {
+            return row_index;
+        }
     );
 
-    linear_sequence<payload_type, gdf_size_type><<<(probe_table_size+127)/128,128>>>(
-        (payload_type *)probe_payload_column.get()->data, probe_table_size
+    cudf::test::column_wrapper<payload_type> probe_payload_column(
+        probe_table_size,
+        [] (gdf_index_type row_index) {
+            return row_index;
+        }
     );
 
     CUDA_TRY(cudaGetLastError());

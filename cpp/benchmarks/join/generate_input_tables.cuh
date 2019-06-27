@@ -272,12 +272,4 @@ void generate_input_tables(
 }
 
 
-template<typename key_type, typename size_type>
-__global__ void linear_sequence(key_type* tbl, const size_type size)
-{
-  for (size_type i = threadIdx.x + blockDim.x * blockIdx.x; i < size; i += blockDim.x * gridDim.x)
-    tbl[i] = i;
-}
-
-
 #endif  // __GENERATE_INPUT_TABLES_CUH
