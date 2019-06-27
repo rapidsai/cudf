@@ -4,14 +4,17 @@
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
-
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
+from cudf.bindings.GDFError import GDFError
+from cudf.dataframe.column import Column
+from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 
+from libcpp.string cimport string
 
 _MATH_OP = {
     'sin'   : GDF_SIN,
@@ -54,6 +57,28 @@ def apply_math_op(incol, outcol, op):
 
     check_gdf_error(result)
 
+def apply_op_udf(incol, outcol, ptx):
+    """
+    Call user defined ops.
+    """
+
+    check_gdf_compatibility(incol)
+    check_gdf_compatibility(outcol)
+
+    cdef gdf_column* c_incol = column_view_from_column(incol)
+    cdef gdf_column* c_outcol = column_view_from_column(outcol)
+
+    cdef string cpp_str = ptx.encode('UTF-8')
+    
+    with nogil:
+        transform(<gdf_column*>c_outcol, <gdf_column*>c_incol, cpp_str)
+
+    cdef int nullct = c_outcol[0].null_count
+
+    free(c_incol)
+    free(c_outcol)
+
+    return nullct
 
 def apply_dt_extract_op(incol, outcol, op):
     """

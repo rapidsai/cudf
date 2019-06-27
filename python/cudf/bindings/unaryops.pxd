@@ -7,6 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
+from libcpp.string cimport string
 
 cdef extern from "cudf.h" nogil:
 
@@ -35,3 +36,7 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) except +
     cdef gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) except +
     cdef gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) except +
+
+cdef extern from "transform.hpp" namespace "cudf" nogil:
+
+    cdef void transform(gdf_column* out, gdf_column* input, const string& ptx) except +
