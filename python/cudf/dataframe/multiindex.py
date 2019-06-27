@@ -378,6 +378,31 @@ class MultiIndex(Index):
             df.columns = name
         return df
 
+    def get_level_values(self, level):
+        from cudf import DataFrame
+        colnames = list(self.codes.columns)
+        if level not in colnames:
+            if isinstance(level, int):
+                if level < 0:
+                    level = level - len(colnames)
+                if level < 0 or level >= len(colnames):
+                    raise IndexError(f"Invalid level number: '{level}'")
+                level_idx = level
+                level = colnames[level_idx]
+            else:
+                raise KeyError(f"Level not found: '{level}'")
+        else:
+            level_idx = list(self.codes.columns).index(level)
+        col = self.codes[level].copy()
+        rhs = DataFrame({
+            'idx': Series(cudautils.arange(len(
+                self.levels[level_idx]),
+                dtype=col.dtype)),
+            'level': self.levels[level_idx]
+        })
+        lhs = DataFrame({'idx': col})
+        return lhs.merge(rhs).level
+
     def _to_frame(self):
         from cudf import DataFrame
         # for each column of codes

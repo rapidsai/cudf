@@ -48,18 +48,16 @@ class _Groupby(object):
 
 class SeriesGroupBy(_Groupby):
 
-    def __init__(self, sr, by, method="hash", level=None, sort=True):
+    def __init__(self, sr, by=None, level=None, method="hash", sort=True):
         self._sr = sr
-        self._by = by
-        self._sort = sort
-        self._groupby = _GroupbyHelper(sr, by, level=level, sort=sort)
+        self._groupby = _GroupbyHelper(sr, by=by, level=level, sort=sort)
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
 
 class DataFrameGroupBy(_Groupby):
 
-    def __init__(self, df, by, method="hash", as_index=True, level=None, sort=True):
+    def __init__(self, df, by=None, method="hash", as_index=True, level=None, sort=True):
         """
         Parameters
         ----------
@@ -74,10 +72,8 @@ class DataFrameGroupBy(_Groupby):
             group by. Valid values are "hash".
         """
         self._df = df
-        self._by = by
-        self._as_index = as_index
-        self._sort = sort
-        self._groupby = _GroupbyHelper(df, by, as_index=as_index, level=level, sort=sort)
+        self._groupby = _GroupbyHelper(df, by=by, as_index=as_index, level=level, sort=sort)
+
 
     def _apply_aggregation(self, agg):
         """
@@ -91,36 +87,57 @@ class DataFrameGroupBy(_Groupby):
         else:
             arg = list(arg)
             by_list = []
-            for by_name, by in zip(self._groupby.key_names, self._groupby.key_columns):
+            for by_name, by in zip(self._groupby.key_names,
+                                   self._groupby.key_columns):
                 by_list.append(cudf.Series(by, name=by_name))
             return self._df[arg].groupby(by_list,
-                                         sort=self._sort)
+                                         sort=self._groupby.sort)
 
     def __getattr__(self, key):
         if key not in self._df.columns:
             raise AttributeError("'DataFrameGroupBy' object has no attribute "
                                  "'{}'".format(key))
         by_list = []
-        for by_name, by in zip(self._groupby.key_names, self._groupby.key_columns):
+        for by_name, by in zip(self._groupby.key_names,
+                               self._groupby.key_columns):
             by_list.append(cudf.Series(by, name=by_name))
         return self._df[key].groupby(by_list,
-                                     sort=self._sort)
+                                     sort=self._groupby.sort)
 
 
 class _GroupbyHelper(object):
 
     NAMED_AGGS = ('sum', 'mean', 'min', 'max', 'count')
 
-    def __init__(self, obj, by, as_index=True, level=None, sort=None):
+    def __init__(self, obj, by=None, level=None, as_index=True, sort=None):
         """
         Helper class for both SeriesGroupBy and DataFrameGroupBy classes.
         """
         self.obj = obj
+        if by is None and level is None:
+            raise TypeError("Either 'by' or 'level' must be provided")
+        if level is not None:
+            if by is not None:
+                raise TypeError("Cannot use both 'by' and 'level'")
+            by = self.get_by_from_level(level)
         self.by = by
         self.as_index = as_index
-        self.level = level
         self.sort = sort
         self.normalize_keys()
+
+    def get_by_from_level(self, level):
+        if not isinstance(level, list):
+            level = [level]
+        by_list = []
+        if isinstance(self.obj.index, cudf.MultiIndex):
+            for lev in level:
+                by_list.append(self.obj.index.get_level_value(lev))
+            return by_list
+        else:
+            if len(level) > 1 or level[0] != 0:
+                raise ValueError("level != 0 only valid with MultiIndex")
+            by_list.append(cudf.Series(self.obj.index))
+        return by_list
 
     def normalize_keys(self):
         """

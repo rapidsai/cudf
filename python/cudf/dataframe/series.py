@@ -1999,7 +1999,7 @@ class Series(object):
                                                     periods)
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, by, group_series=None, level=None, sort=False,
+    def groupby(self, by=None, group_series=None, level=None, sort=False,
                 group_keys=True):
         if group_keys is not True:
             raise NotImplementedError(
@@ -2007,7 +2007,7 @@ class Series(object):
             )
 
         from cudf.groupby.groupby import SeriesGroupBy
-        return SeriesGroupBy(self, by, group_series, level, sort)
+        return SeriesGroupBy(self, by=by, level=level, sort=sort)
 
     @copy_docstring(Rolling)
     def rolling(self, window, min_periods=None, center=False):
