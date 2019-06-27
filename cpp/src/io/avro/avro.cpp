@@ -111,6 +111,61 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
     }
     md->max_block_size = max_block_size;
     md->num_rows = total_object_count;
+    // Extract columns
+    for (size_t i = 0; i < md->schema.size(); i++)
+    {
+        type_kind_e kind = md->schema[i].kind;
+        if (kind > type_null && kind < type_record)
+        {
+            // Primitive type column
+            column_desc col;
+            int parent_idx = md->schema[i].parent_idx;
+            col.schema_data_idx = (int32_t)i;
+            col.schema_null_idx = -1;
+            col.parent_union_idx = -1;
+            col.name = md->schema[i].name;
+            if (parent_idx >= 0)
+            {
+                while (parent_idx >= 0)
+                {
+                    if (md->schema[parent_idx].kind == type_union)
+                    {
+                        int pos = parent_idx + 1;
+                        for (int num_children = md->schema[parent_idx].num_children; num_children > 0; --num_children)
+                        {
+                            int skip = 1;
+                            if (pos == i)
+                            {
+                                col.parent_union_idx = md->schema[parent_idx].num_children - num_children;
+                            }
+                            else if (md->schema[pos].kind == type_null)
+                            {
+                                col.schema_null_idx = pos;
+                                break;
+                            }
+                            do
+                            {
+                                skip = skip + md->schema[pos].num_children - 1;
+                                pos++;
+                            } while (skip != 0);
+                        }
+                    }
+                    if (parent_idx != 0 || col.name.length() == 0) // Ignore the root entry
+                    {
+                        if (col.name.length() > 0)
+                        {
+                            col.name.insert(0, 1, '.');
+                        }
+                        col.name.insert(0, md->schema[parent_idx].name);
+                    }
+                    parent_idx = md->schema[parent_idx].parent_idx;
+                }
+            }
+            md->columns.push_back(col);
+        }
+    }
+
+
     return true;
 }
 
