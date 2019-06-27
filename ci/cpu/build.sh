@@ -23,6 +23,7 @@ cd $WORKSPACE
 # Get latest tag and number of commits since tag
 export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
 export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
+export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
 ################################################################################
 # SETUP - Check environment
@@ -34,10 +35,18 @@ env
 logger "Activate conda env..."
 source activate gdf
 
+logger "Install Openjdk"
+conda install -c anaconda openjdk
+
+logger "Install maven"
+conda install --no-deps -c conda-forge maven
+
 logger "Check versions..."
 python --version
 gcc --version
 g++ --version
+java -version
+mvn -version
 conda list
 
 # FIX Added to deal with Anancoda SSL verification issues during conda builds
@@ -69,8 +78,20 @@ logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
 
 ################################################################################
-# UPLOAD - Conda packages
+# BUILD - libcudfjni
 ################################################################################
 
+logger "Build cudfjni"
+conda create -n java-cudf --clone gdf
+conda activate java-cudf
+conda install -c /conda/envs/gdf/conda-bld -y cudf=$MINOR_VERSION
+cd $WORKSPACE/java
+mvn -Dmaven.repo.local=$WORKSPACE/.m2 clean install -DskipTests
+conda deactivate
+
+################################################################################
+# UPLOAD - Conda packages
+################################################################################
+cd $WORKSPACE
 logger "Upload conda pkgs..."
 source ci/cpu/upload_anaconda.sh

@@ -43,10 +43,18 @@ logger "Activate conda env..."
 source activate gdf
 conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL"
 
+logger "Install Openjdk"
+conda install -c anaconda openjdk
+
+logger "Install maven"
+conda install --no-deps -c conda-forge maven
+
 logger "Check versions..."
 python --version
 $CC --version
 $CXX --version
+java -version
+mvn -version
 conda list
 
 ################################################################################
@@ -83,3 +91,11 @@ conda install "feather-format" "cupy>=6.0.0"
 logger "Python py.test for cuDF..."
 cd $WORKSPACE/python
 py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term
+
+################################################################################
+# TEST libcudfjni
+################################################################################
+
+logger "Test cudfjni"
+cd $WORKSPACE/java
+mvn -Dmaven.repo.local=$WORKSPACE/.m2 clean test
