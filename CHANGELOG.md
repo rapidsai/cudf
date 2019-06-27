@@ -8,6 +8,7 @@
 
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
+- PR #2129 Add functions in the Java API to support nullable column filtering
 
 ## Bug Fixes
 
