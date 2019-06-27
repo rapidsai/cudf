@@ -3198,19 +3198,17 @@ def _align_indices(lhs, rhs):
         df = df.sort_index()
         lhs_out = DataFrame()
         rhs_out = DataFrame()
+        common = set(lhs.columns) & set(rhs.columns)
+        common_x = set(['{}_x'.format(x) for x in common])
+        common_y = set(['{}_y'.format(x) for x in common])
         for col in df.columns:
-            if isinstance(col, str):
-                if col.endswith('_x'):
-                    lhs_out[col[:-2]] = df[col]
-                    continue
-                if col.endswith('_y'):
-                    rhs_out[col[:-2]] = df[col]
-                    continue
-            if col in lhs:
+            if col in common_x:
+                lhs_out[col[:-2]] = df[col]
+            elif col in common_y:
+                rhs_out[col[:-2]] = df[col]
+            elif col in lhs:
                 lhs_out[col] = df[col]
-                continue
-            if col in rhs:
+            elif col in rhs:
                 rhs_out[col] = df[col]
-                continue
 
     return lhs_out, rhs_out
