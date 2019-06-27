@@ -30,6 +30,9 @@ _REDUCTION_OP = {
   'sum': GDF_REDUCTION_SUM,
   'product': GDF_REDUCTION_PRODUCT,
   'sum_of_squares': GDF_REDUCTION_SUMOFSQUARES,
+  'mean': GDF_REDUCTION_MEAN,
+  'var':  GDF_REDUCTION_VAR,
+  'std': GDF_REDUCTION_STD,
 }
 
 _SCAN_OP = {
@@ -40,7 +43,7 @@ _SCAN_OP = {
 }
 
 
-def apply_reduce(reduction_op, col, dtype=None):
+def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     """
       Call gdf reductions.
     """
@@ -61,12 +64,14 @@ def apply_reduce(reduction_op, col, dtype=None):
     cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
     cdef gdf_dtype c_out_dtype = get_dtype(col_dtype.type if dtype is None else col_dtype)
     cdef gdf_scalar c_result
+    cdef gdf_size_type c_ddof = ddof
 
     with nogil:    
         c_result = reduction(
             <gdf_column*>c_col,
             c_op,
-            c_out_dtype
+            c_out_dtype,
+            c_ddof
             )
 
     free(c_col)

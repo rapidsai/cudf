@@ -65,13 +65,15 @@ namespace cudf {
  *     For `mean`, `var` and `std` ops, floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (date32, timestamp, category...), the same type must be specified.
+ * @param[in] ddof Delta Degrees of Freedom used for `std`, `var`
  *
  * @returns  gdf_scalar the result value
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
 gdf_scalar reduction(const gdf_column *col, gdf_reduction_op op,
-                        gdf_dtype output_dtype);
+                        gdf_dtype output_dtype,
+                        gdf_size_type ddof = 1);
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.

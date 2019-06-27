@@ -86,7 +86,8 @@ struct ReductionTest : public GdfTest
     template <typename T_out>
     void reduction_test(cudf::test::column_wrapper<T> &col,
         T_out expected_value, bool succeeded_condition,
-        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES)
+        gdf_reduction_op op, gdf_dtype output_dtype = N_GDF_TYPES,
+        gdf_size_type ddof = 1)
     {
         const gdf_column * underlying_column = col.get();
         thrust::device_vector<T_out> dev_result(1);
@@ -95,7 +96,7 @@ struct ReductionTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T_out> result
-                = cudf::reduction(underlying_column, op, output_dtype);
+                = cudf::reduction(underlying_column, op, output_dtype, ddof);
             EXPECT_EQ(expected_value, result.value());
         };
 
@@ -543,3 +544,55 @@ TEST(ReductionErrorTest, empty_column)
 }
 
 
+// ----------------------------------------------------------------------------
+
+struct ReductionParamTest : public ReductionTest<double>,
+                            public ::testing::WithParamInterface<gdf_size_type>
+{
+    ReductionParamTest(){}
+    ~ReductionParamTest(){}
+};
+
+INSTANTIATE_TEST_CASE_P(ddofParam,
+    ReductionParamTest,
+    ::testing::Range(1,5));
+
+TEST_P(ReductionParamTest, std_var)
+{
+    int ddof = GetParam();
+    std::vector<double> int_values({-3, 2,  1, 0, 5, -3, -2, 28});
+    std::vector<bool> host_bools({1, 1, 0, 1, 1, 1, 0, 1});
+
+    auto calc_var = [ddof](std::vector<double>& v, gdf_size_type valid_count){
+        double mean = std::accumulate(v.begin(), v.end(), double{0});
+        mean /= valid_count ;
+
+        double sum_of_sq = std::accumulate(v.begin(), v.end(), double{0},
+            [](double acc, double i) { return acc + i * i; });
+
+        gdf_size_type div = valid_count - ddof;
+
+        double var = sum_of_sq / div - ((mean * mean) * valid_count) /div;
+        return var;
+    };
+
+    // test without nulls
+    cudf::test::column_wrapper<double> col(int_values);
+
+    double var = calc_var(int_values, int_values.size());
+    double std = std::sqrt(var);
+
+    this->reduction_test(col, var, true, GDF_REDUCTION_VAR, GDF_FLOAT64, ddof);
+    this->reduction_test(col, std, true, GDF_REDUCTION_STD, GDF_FLOAT64, ddof);
+
+    // test with nulls
+    cudf::test::column_wrapper<double> col_nulls = construct_null_column(int_values, host_bools);
+    gdf_size_type valid_count = col_nulls.size() - col_nulls.null_count();
+    auto replaced_array = replace_nulls<double>(int_values, host_bools, int{0});
+
+    double var_nulls = calc_var(replaced_array, valid_count);
+    double std_nulls = std::sqrt(var_nulls);
+
+    this->reduction_test(col_nulls, var_nulls, true, GDF_REDUCTION_VAR, GDF_FLOAT64, ddof);
+    this->reduction_test(col_nulls, std_nulls, true, GDF_REDUCTION_STD, GDF_FLOAT64, ddof);
+}

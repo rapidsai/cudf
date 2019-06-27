@@ -19,12 +19,12 @@
 namespace cudf{
 
 gdf_scalar reduction(const gdf_column *col,
-                  gdf_reduction_op op, gdf_dtype output_dtype)
+                  gdf_reduction_op op, gdf_dtype output_dtype,
+                  gdf_size_type ddof)
 {
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
     scalar.is_valid = false; // the scalar is not valid for error case
-    gdf_size_type ddof = 1;  // Delta Degrees of Freedom used for `std`, `var`
 
     CUDF_EXPECTS(col != nullptr, "Input column is null");
     // check if input column is empty
