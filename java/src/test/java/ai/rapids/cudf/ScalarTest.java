@@ -19,16 +19,10 @@
 package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
-
-import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.spy;
 
 public class ScalarTest {
 
@@ -57,12 +51,12 @@ public class ScalarTest {
     assertEquals(0.0f, s.getFloat());
     assertEquals(0.0, s.getDouble());
     assertEquals("0", s.getJavaString());
-    assertArrayEquals(new byte[] {'0'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'0'}, s.getUTF8());
   }
 
   @Test
   public void testByte() {
-    Scalar s = Scalar.fromByte((byte)1);
+    Scalar s = Scalar.fromByte((byte) 1);
     assertEquals(DType.INT8, s.getType());
     assert s.isValid();
 
@@ -75,12 +69,12 @@ public class ScalarTest {
     assertEquals(1.0f, s.getFloat());
     assertEquals(1.0, s.getDouble());
     assertEquals("1", s.getJavaString());
-    assertArrayEquals(new byte[] {'1'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'1'}, s.getUTF8());
   }
 
   @Test
   public void testShort() {
-    Scalar s = Scalar.fromShort((short)2);
+    Scalar s = Scalar.fromShort((short) 2);
     assertEquals(DType.INT16, s.getType());
     assert s.isValid();
 
@@ -93,7 +87,7 @@ public class ScalarTest {
     assertEquals(2.0f, s.getFloat());
     assertEquals(2.0, s.getDouble());
     assertEquals("2", s.getJavaString());
-    assertArrayEquals(new byte[] {'2'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'2'}, s.getUTF8());
   }
 
   @Test
@@ -111,7 +105,7 @@ public class ScalarTest {
     assertEquals(3.0f, s.getFloat());
     assertEquals(3.0, s.getDouble());
     assertEquals("3", s.getJavaString());
-    assertArrayEquals(new byte[] {'3'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'3'}, s.getUTF8());
   }
 
   @Test
@@ -129,7 +123,7 @@ public class ScalarTest {
     assertEquals(4.0f, s.getFloat());
     assertEquals(4.0, s.getDouble());
     assertEquals("4", s.getJavaString());
-    assertArrayEquals(new byte[] {'4'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'4'}, s.getUTF8());
   }
 
   @Test
@@ -147,7 +141,7 @@ public class ScalarTest {
     assertEquals(5.1f, s.getFloat());
     assertEquals(5.1, s.getDouble(), 0.000001);
     assertEquals("5.1", s.getJavaString());
-    assertArrayEquals(new byte[] {'5', '.', '1'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'5', '.', '1'}, s.getUTF8());
   }
 
   @Test
@@ -165,7 +159,7 @@ public class ScalarTest {
     assertEquals(6.2f, s.getFloat());
     assertEquals(6.2, s.getDouble());
     assertEquals("6.2", s.getJavaString());
-    assertArrayEquals(new byte[] {'6', '.', '2'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'6', '.', '2'}, s.getUTF8());
   }
 
   @Test
@@ -183,7 +177,7 @@ public class ScalarTest {
     assertEquals(7.0f, s.getFloat());
     assertEquals(7.0, s.getDouble());
     assertEquals("7", s.getJavaString());
-    assertArrayEquals(new byte[] {'7'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'7'}, s.getUTF8());
   }
 
   @Test
@@ -201,7 +195,7 @@ public class ScalarTest {
     assertEquals(8.0f, s.getFloat());
     assertEquals(8.0, s.getDouble());
     assertEquals("8", s.getJavaString());
-    assertArrayEquals(new byte[] {'8'}, s.getUTF8());
+    assertArrayEquals(new byte[]{'8'}, s.getUTF8());
   }
 
   @Test
