@@ -5,7 +5,7 @@
 ## Improvements
 
 ## Bug Fixes
-
+- PR #2139 matching to pandas describe behavior & fixing nan values issue
 
 # cuDF 0.8.0 (Date TBD)
 
