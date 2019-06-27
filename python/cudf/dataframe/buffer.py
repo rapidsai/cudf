@@ -51,7 +51,6 @@ class Buffer(object):
 
         Parameters
         ----------
-
         serialize : callable
              Used to serialize data that needs serialization .
         context : dict; optional
@@ -62,31 +61,7 @@ class Buffer(object):
         (header, frames)
             See custom serialization documentation in dask.distributed.
         """
-
-        from cudf.comm.serialize import should_use_ipc
-
-        # Use destination info to determine if we should do IPC.
-        use_ipc = should_use_ipc(context)
-        header = {}
-        # Should use IPC transfer
-        if use_ipc:
-            # Reuse IPC handle from previous call?
-            if self._cached_ipch is not None:
-                ipch = self._cached_ipch
-            else:
-                # Get new IPC handle
-                ipch = rmm.get_ipc_handle(self.to_gpu_array())
-
-            header['kind'] = 'ipc'
-            header['mem'], frames = serialize(ipch)
-            # Keep IPC handle alive
-            self._cached_ipch = ipch
-        # Not using IPC transfer
-        else:
-            header['kind'] = 'normal'
-            # Serialize the buffer as a numpy array
-            header['mem'], frames = serialize(self.to_array())
-        return header, frames
+        return {}, [self.mem]
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -108,20 +83,7 @@ class Buffer(object):
         obj : Buffer
             Returns an instance of Buffer.
         """
-        # Using IPC?
-        if header['kind'] == 'ipc':
-            ipch = deserialize(header['mem'], frames)
-            # Open IPC handle
-            with ipch as data:
-                # Copy remote data over
-                mem = rmm.device_array_like(data)
-                mem.copy_to_device(data)
-        # Not using IPC
-        else:
-            # Deserialize the numpy array
-            mem = deserialize(header['mem'], frames)
-            mem.flags['WRITEABLE'] = True  # XXX: hack for numba to work
-        return Buffer(mem)
+        return Buffer(frames[0])
 
     def __reduce__(self):
         cpumem = self.to_array()

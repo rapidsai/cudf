@@ -80,6 +80,7 @@ public class NativeDepsLoader {
     }
     loc.deleteOnExit();
     System.load(loc.getAbsolutePath());
+    loc.delete();
   }
 
   public static boolean libraryLoaded() {

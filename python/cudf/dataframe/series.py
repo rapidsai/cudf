@@ -188,6 +188,22 @@ class Series(object):
 
         return Series._concat([this, other], index=index)
 
+    def reindex(self, index=None, copy=True):
+        """Return a Series that conforms to a new index
+
+        Parameters
+        ----------
+        index : Index, Series-convertible, default None
+        copy : boolean, default True
+
+        Returns
+        -------
+        A new Series that conforms to the supplied index
+        """
+        name = self.name or 0
+        idx = self._index if index is None else index
+        return self.to_frame(name).reindex(idx, copy=copy)[name]
+
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
         if not drop:
@@ -1999,7 +2015,7 @@ class Series(object):
                                                     periods)
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, group_series=None, level=None, sort=False,
+    def groupby(self, group_series=None, level=None, sort=True,
                 group_keys=True):
         if group_keys is not True:
             raise NotImplementedError(
