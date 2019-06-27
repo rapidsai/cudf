@@ -280,7 +280,6 @@ add_library(cudf SHARED
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/transform/transform.cpp
-            # src/transform/compiled/binary_ops.cu
             src/transform/jit/code/kernel.cpp
             src/transform/jit/code/operation.cpp
             src/transform/jit/code/traits.cpp
