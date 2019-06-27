@@ -21,6 +21,7 @@
  */
 
 #include "unary_ops.cuh"
+#include <cudf/unary.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/wrapper_types.hpp>

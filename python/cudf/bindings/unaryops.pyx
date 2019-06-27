@@ -8,12 +8,13 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
+from cudf.dataframe.column import Column
 from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 
 
-_MATH_OP = {
+_UNARY_OP = {
     'sin'   : GDF_SIN,
     'cos'   : GDF_COS,
     'tan'   : GDF_TAN,
@@ -30,29 +31,23 @@ _MATH_OP = {
     'not'   : GDF_NOT,
 }
 
-def apply_math_op(incol, outcol, op):
+def apply_unary_op(incol, op):
     """
-    Call Unary math ops.
+    Call Unary ops.
     """
 
     check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
     
     cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
-    cdef gdf_error result
-    cdef gdf_unary_math_op c_op = _MATH_OP[op]
+    cdef gdf_column result
+    cdef unary_op c_op = _UNARY_OP[op]
     with nogil:    
-        result = gdf_unary_math(
-            <gdf_column*>c_incol,
-            <gdf_column*>c_outcol,
-            c_op)
+        result = gdf_unaryop(c_incol[0], c_op)
     
     free(c_incol)
-    free(c_outcol)
-
-    check_gdf_error(result)
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)
 
 
 def apply_dt_extract_op(incol, outcol, op):

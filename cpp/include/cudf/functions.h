@@ -559,34 +559,6 @@ gdf_error gdf_hash(int num_cols,
 
 
 /**
- * @brief  Performs unary math op on all values in column
- *
- * The following math operations are supported:
- * sin - Computes trigonometric sine function
- * cos - Computes trigonometric cosine function
- * tan - Computes trigonometric tangent function
- * asin - Computes trigonometric arcsin function
- * acos - Computes trigonometric arccos function
- * atan - Computes trigonometric arctan function
- * exp - Computes e (Euler's number, 2.7182818...) raised to the given power arg
- * log - Computes the natural (base e) logarithm of arg
- * sqrt - Computes the square root
- * ceil - Computes the smallest integer value not less than arg
- * floor - Computes the largest integer value not greater than arg
- * 
- * All operations only supported on floating point types
- * 
- * @param[in] gdf_column of the input
- * @param[out] output gdf_column. The output memory needs to be preallocated
- * @param[in] gdf_unary_math_op operation to perform
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op);
-
-/* casting */
-
-/**
  * @brief  Casts data from dtype specified in input to dtype specified in output
  * 
  * The desired dtype for output should be set in output->dtype.
@@ -594,9 +566,8 @@ gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_o
  * the time unit for output should be set in output->dtype_info.time_unit
  *
  * @param[in] gdf_column of the input
- * @param[out] output gdf_column. The output memory needs to be preallocated
  *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ * @returns gdf_column Result of the cast operation
  */
 gdf_error gdf_cast(gdf_column *input, gdf_column *output);
 

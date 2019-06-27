@@ -20,6 +20,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/wrapper_types.hpp>
 #include <cudf/cudf.h>
+#include <cudf/unary.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/random.h>
@@ -2455,7 +2456,6 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 	initialize_vector(h_input_v, colSize, 10, false);
 
 	auto inputCol = cudf::test::column_wrapper<TypeParam>{h_input_v}; 
-	auto outputCol = cudf::test::column_wrapper<cudf::bool8>{colSize};
 
 	std::vector<cudf::bool8> h_expect_v{colSize};
 
@@ -2466,8 +2466,9 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 	// Use vector to build expected output
 	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
 
-	auto error = gdf_unary_math(inputCol, outputCol, GDF_NOT);
-	EXPECT_EQ(error, GDF_SUCCESS);
+	auto output = cudf::gdf_unaryop(inputCol, cudf::GDF_NOT);
+
+	auto outputCol = cudf::test::column_wrapper<cudf::bool8>(output);
 
 	EXPECT_EQ(expectCol, outputCol);
 }
