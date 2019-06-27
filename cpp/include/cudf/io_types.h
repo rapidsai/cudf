@@ -43,4 +43,6 @@ typedef struct
     const char* na_rep;           // string to use for null entries
     bool include_header;          // Indicates whether to write headers to csv
 
+    int chunk_rows;               // maximum number of rows to process for each file write
+
 } csv_write_arg;
