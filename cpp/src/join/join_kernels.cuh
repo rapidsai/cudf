@@ -24,11 +24,12 @@ enum class JoinType {
   FULL_JOIN
 };
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 #include <table/device_table.cuh>
-#include "hash/concurrent_unordered_multimap.cuh"
-#include "hash/hash_functions.cuh"
-#include "utilities/bit_util.cuh"
+#include <table/device_table_row_operators.cuh>
+#include <hash/concurrent_unordered_multimap.cuh>
+#include <hash/hash_functions.cuh>
+#include <utilities/bit_util.cuh>
 
 #include <cub/cub.cuh>
 

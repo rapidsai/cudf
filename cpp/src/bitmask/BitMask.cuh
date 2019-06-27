@@ -19,7 +19,7 @@
 
 #include "bit_mask.cuh"
 #include <utilities/error_utils.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <rmm/rmm.h>
 
 using bit_mask_t = bit_mask::bit_mask_t;

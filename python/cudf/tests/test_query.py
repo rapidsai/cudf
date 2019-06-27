@@ -12,6 +12,7 @@ from itertools import product
 
 import cudf
 from cudf.utils import queryutils
+from cudf.tests.utils import assert_eq
 from cudf.dataframe import DataFrame
 
 
@@ -36,25 +37,22 @@ params_query_fn = [
     (lambda a, b: a * 2 >= b, 'a * 2 >= b'),
     (lambda a, b: 2 * (a + b) > (a + b) / 2, '2 * (a + b) > (a + b) / 2'),
 ]
+nulls = [True, False]
 
-
-@pytest.mark.parametrize('data,fn',
-                         product(params_query_data, params_query_fn))
-def test_query(data, fn):
+@pytest.mark.parametrize('data,fn,nulls',
+                         product(params_query_data, params_query_fn, nulls))
+def test_query(data, fn, nulls):
     # prepare
     nelem, seed = data
     expect_fn, query_expr = fn
     np.random.seed(seed)
-    df = DataFrame()
-    df['a'] = aa = np.arange(nelem)
-    df['b'] = bb = np.random.random(nelem) * nelem
-    # udt
-    expect_mask = expect_fn(aa, bb)
-    df2 = df.query(query_expr)
-    # check
-    assert len(df2) == np.count_nonzero(expect_mask)
-    np.testing.assert_array_almost_equal(df2['a'].to_array(), aa[expect_mask])
-    np.testing.assert_array_almost_equal(df2['b'].to_array(), bb[expect_mask])
+    pdf = pd.DataFrame()
+    pdf['a'] = np.arange(nelem)
+    pdf['b'] = np.random.random(nelem) * nelem
+    if nulls:
+        pdf['a'][::2] = None
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.query(query_expr), gdf.query(query_expr))
 
 
 params_query_env_fn = [
@@ -63,7 +61,6 @@ params_query_env_fn = [
     (lambda a, b, c, d: ((a / c) < d) | ((b ** c) > d),
      '((a / @c) < @d) | ((b ** @c) > @d)')
 ]
-
 
 @pytest.mark.parametrize('data,fn',
                          product(params_query_data, params_query_env_fn))
@@ -139,4 +136,16 @@ def test_query_splitted_combine():
 
     # Should equal to just querying the original GDF
     expect = gdf.query(expr).to_pandas()
+    assert_frame_equal(got, expect)
+
+
+def test_query_empty_frames():
+    empty_pdf = pd.DataFrame({'a': [], 'b': []})
+    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    # Do the query
+    expr = 'a > 2'
+    got = empty_gdf.query(expr).to_pandas()
+    expect = empty_pdf.query(expr)
+
+    # assert euqal results
     assert_frame_equal(got, expect)

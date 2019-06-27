@@ -14,37 +14,45 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <bitmask/legacy_bitmask.hpp>
 #include <cassert>
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/table.hpp>
+#include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 
 #include <algorithm>
 
 namespace cudf {
 
-table::table(gdf_column* cols[], gdf_size_type num_cols)
-    : _columns(cols, cols + num_cols) {
+table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
   CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-  this->_num_rows = cols[0]->size;
+  gdf_size_type num_rows = cols[0]->size;
 
-  std::for_each(_columns.begin(), _columns.end(), [this](gdf_column* col) {
-    CUDF_EXPECTS(nullptr != col, "Null input column");
-    CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
-  });
+  std::for_each(_columns.begin(), _columns.end(),
+                [this, num_rows](gdf_column* col) {
+                  CUDF_EXPECTS(nullptr != col, "Null input column");
+                  CUDF_EXPECTS(num_rows == col->size, "Column size mismatch");
+                });
 }
+
+table::table(std::initializer_list<gdf_column*> list)
+    : table{std::vector<gdf_column*>(list)} {}
+
+table::table(gdf_column* cols[], gdf_size_type num_cols)
+    : table{std::vector<gdf_column*>(cols, cols + num_cols)} {}
 
 table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
              bool allocate_bitmasks, bool all_valid, cudaStream_t stream)
-    : _columns(dtypes.size()), _num_rows{num_rows} {
+    : _columns(dtypes.size()) {
   std::transform(
       _columns.begin(), _columns.end(), dtypes.begin(), _columns.begin(),
       [num_rows, allocate_bitmasks, all_valid, stream](gdf_column*& col,
                                                        gdf_dtype dtype) {
         CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
         CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
-        col = new gdf_column;
+        col = new gdf_column{};
         col->size = num_rows;
         col->dtype = dtype;
         col->null_count = 0;
@@ -56,7 +64,7 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         extra_info.time_unit = TIME_UNIT_NONE;
         col->dtype_info = extra_info;
 
-        RMM_ALLOC(&col->data, gdf_dtype_size(dtype) * num_rows, stream);
+        RMM_ALLOC(&col->data, cudf::size_of(dtype) * num_rows, stream);
         if (allocate_bitmasks) {
           int fill_value = (all_valid) ? 0xff : 0;
 
@@ -72,6 +80,13 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         }
         return col;
       });
+}
+
+void table::destroy(void) {
+  for (auto& col : _columns) {
+    gdf_column_free(col);
+    delete col;
+  }
 }
 
 std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {

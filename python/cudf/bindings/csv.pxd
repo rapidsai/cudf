@@ -8,88 +8,75 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
 
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
 
-    # See cpp/include/cudf/io_types.h:33
-    ctypedef gdf_input_type gdf_csv_input_form
-
-    # See cpp/include/cudf/io_types.h:38
-    ctypedef enum gdf_csv_quote_style:
+    ctypedef enum quote_style:
         QUOTE_MINIMAL = 0,
         QUOTE_ALL,
         QUOTE_NONNUMERIC,
         QUOTE_NONE,
 
-    # See cpp/include/cudf/io_types.h:62
-    ctypedef struct csv_read_arg:
-        # Output Arguments - Allocated in reader
-        int                 num_cols_out
-        int                 num_rows_out
-        gdf_column          **data
+    cdef struct reader_options:
+        gdf_input_type      input_data_form
+        string              filepath_or_buffer
+        string              compression
 
-        # Input Arguments - All data is in the host memory
-        gdf_csv_input_form  input_data_form
-        const char          *filepath_or_buffer
-        size_t              buffer_size
-
-        bool                windowslinetermination
         char                lineterminator
         char                delimiter
+        char                decimal
+        char                thousands
+        char                comment
+        bool                dayfirst
         bool                delim_whitespace
         bool                skipinitialspace
-
-        gdf_size_type       nrows
+        bool                skip_blank_lines
         gdf_size_type       header
 
-        int                 num_cols
-        const char          **names
-        const char          **dtype
+        vector[string]      names
+        vector[string]      dtype
 
-        int                 *index_col
-        int                 *use_cols_int
-        int                 use_cols_int_len
-        const char          **use_cols_char
-        int                 use_cols_char_len
+        vector[int]         use_cols_indexes
+        vector[string]      use_cols_names
 
-        gdf_size_type       skiprows
-        gdf_size_type       skipfooter
-
-        bool                skip_blank_lines
-
-        const char          **true_values
-        int                 num_true_values
-        const char          **false_values
-        int                 num_false_values
-
-        const char          **na_values
-        int                 num_na_values
+        vector[string]      true_values
+        vector[string]      false_values
+        vector[string]      na_values
         bool                keep_default_na
         bool                na_filter
 
-        char                *prefix
+        string              prefix
         bool                mangle_dupe_cols
 
-        bool                parse_dates
-        bool                infer_datetime_format
-        bool                dayfirst
-
-        char                *compression
-        char                thousands
-
-        char                decimal
-
         char                quotechar
-        gdf_csv_quote_style quoting
+        quote_style         quoting
         bool                doublequote
 
-        char                escapechar
+    cdef cppclass reader:
+        reader(const reader_options &args) except +
 
-        char                comment
+        cudf_table read() except +
+        
+        cudf_table read_byte_range(size_t offset, size_t size) except +
 
-        char                *encoding
+        cudf_table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows) except +
 
-        size_t              byte_range_offset
-        size_t              byte_range_size
+cdef extern from "cudf.h"  nogil:
+    # See cpp/include/cudf/io_types.h:146
+    ctypedef struct csv_write_arg:
+        # Arguments to csv writer function
+        gdf_column**        columns
+        int                 num_cols
 
-    cdef gdf_error read_csv(csv_read_arg *args) except +
+        const char*         filepath
+        const char*         line_terminator
+        char                delimiter
+
+        const char*         true_value
+        const char*         false_value
+        const char*         na_rep
+        bool                include_header
+
+    cdef gdf_error write_csv(csv_write_arg* args) except +

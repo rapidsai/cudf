@@ -8,7 +8,7 @@ from numbers import Number
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
 
-from cudf.dataframe import columnops, numerical, series
+from cudf.dataframe import column, columnops, numerical, series
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils, cudautils
 
@@ -16,6 +16,25 @@ import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
+
+
+_str_to_numeric_typecast_functions = {
+    np.dtype("int32"): nvstrings.nvstrings.stoi,
+    np.dtype("int64"): nvstrings.nvstrings.stol,
+    np.dtype("float32"): nvstrings.nvstrings.stof,
+    np.dtype("float64"): nvstrings.nvstrings.stod,
+    np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int
+}
+
+_numeric_to_str_typecast_functions = {
+    np.dtype("int32"): nvstrings.itos,
+    np.dtype("int64"): nvstrings.ltos,
+    np.dtype("float32"): nvstrings.ftos,
+    np.dtype("float64"): nvstrings.dtos,
+    np.dtype("bool"): nvstrings.from_booleans,
+    np.dtype("datetime64[ms]"): nvstrings.int2timestamp
+}
 
 
 class StringMethods(object):
@@ -32,12 +51,13 @@ class StringMethods(object):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
                 def wrapper(*args, **kwargs):
-                    return getattr(self._parent._data, attr)(*args, **kwargs)
-                if isinstance(wrapper, nvstrings.nvstrings):
-                    wrapper = Series(
-                        columnops.as_column(wrapper),
-                        index=self._index
-                    )
+                    ret = getattr(self._parent._data, attr)(*args, **kwargs)
+                    if isinstance(ret, nvstrings.nvstrings):
+                        ret = Series(
+                            columnops.as_column(ret),
+                            index=self._index
+                        )
+                    return ret
                 return wrapper
             else:
                 return passed_attr
@@ -107,9 +127,74 @@ class StringMethods(object):
             (same type as caller) of str dtype is returned.
         """
         from cudf.dataframe import Series, Index
+
         if isinstance(others, (Series, Index)):
+            '''
+            If others is just another Series/Index,
+            great go ahead with concatenation
+            '''
             assert others.dtype == np.dtype('object')
             others = others.data
+        elif utils.is_list_like(others) and others:
+            '''
+            If others is a list-like object (in our case lists & tuples)
+            just another Series/Index, great go ahead with concatenation.
+            '''
+
+            '''
+            Picking first element and checking if it really adheres to
+            list like conditions, if not we switch to next case
+
+            Note: We have made a call not to iterate over the entire list as
+            it could be more expensive if it was of very large size.
+            Thus only doing a sanity check on just the first element of list.
+            '''
+            first = others[0]
+
+            if utils.is_list_like(first) or \
+                    isinstance(first, (Series, Index, pd.Series, pd.Index)):
+                '''
+                Internal elements in others list should also be
+                list-like and not a regular string/byte
+                '''
+                first = None
+                for frame in others:
+                    if not isinstance(frame, (Series, Index)):
+                        '''
+                        Make sure all inputs to .cat function call
+                        are of type nvstrings so creating a Series object.
+                        '''
+                        frame = Series(frame, dtype='str')
+
+                    if (first is None):
+                        '''
+                        extracting nvstrings pointer since
+                        `frame` is of type Series/Index and
+                        first isn't yet initialized.
+                        '''
+                        first = frame.data
+                    else:
+                        assert frame.dtype == np.dtype('object')
+                        frame = frame.data
+                        first = first.cat(frame, sep=sep, na_rep=na_rep)
+
+                others = first
+            elif not utils.is_list_like(first):
+                '''
+                Picking first element and checking if it really adheres to
+                non-list like conditions.
+
+                Note: We have made a call not to iterate over the entire
+                list as it could be more expensive if it was of very
+                large size. Thus only doing a sanity check on just the
+                first element of list.
+                '''
+                others = Series(others)
+                others = others.data
+        elif isinstance(others, (pd.Series, pd.Index)):
+            others = Series(others)
+            others = others.data
+
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
             index=self._index
@@ -409,7 +494,9 @@ class StringColumn(columnops.TypedColumnBase):
     def element_indexing(self, arg):
         if isinstance(arg, Number):
             arg = int(arg)
-            if arg > (len(self) - 1) or arg < 0:
+            if arg < 0:
+                arg = len(self) + arg
+            if arg > (len(self) - 1):
                 raise IndexError
             out = self._data[arg]
         elif isinstance(arg, slice):
@@ -441,17 +528,25 @@ class StringColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
-        elif dtype in (np.dtype('int8'), np.dtype('int16'), np.dtype('int32'),
-                       np.dtype('int64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='int32')
-            out_ptr = get_ctype_ptr(out_arr)
-            self.str().stoi(devptr=out_ptr)
-        elif dtype in (np.dtype('float32'), np.dtype('float64')):
-            out_arr = rmm.device_array(shape=len(self), dtype='float32')
-            out_ptr = get_ctype_ptr(out_arr)
-            self.str().stof(devptr=out_ptr)
+        elif dtype in (np.dtype('int8'), np.dtype('int16')):
+            out_dtype = np.dtype(dtype)
+            dtype = np.dtype('int32')
+        else:
+            out_dtype = np.dtype(dtype)
+
+        out_arr = rmm.device_array(shape=len(self), dtype=dtype)
+        out_ptr = get_ctype_ptr(out_arr)
+        kwargs = {
+            'devptr': out_ptr
+        }
+        if dtype == np.dtype('datetime64[ms]'):
+            kwargs['units'] = 'ms'
+        _str_to_numeric_typecast_functions[
+            np.dtype(dtype)
+        ](self.str(), **kwargs)
+
         out_col = columnops.as_column(out_arr)
-        return out_col.astype(dtype)
+        return out_col.astype(out_dtype)
 
     def to_arrow(self):
         sbuf = np.empty(self._data.byte_count(), dtype='int8')
@@ -519,6 +614,7 @@ class StringColumn(columnops.TypedColumnBase):
     def _replace_defaults(self):
         params = {
             'data': self.data,
+            'mask': self.mask,
             'null_count': self.null_count,
         }
         return params
@@ -529,6 +625,26 @@ class StringColumn(columnops.TypedColumnBase):
 
     def unordered_compare(self, cmpop, rhs):
         return string_column_binop(self, rhs, op=cmpop)
+
+    def find_and_replace(self, to_replace, replacement, all_nan):
+        """
+        Return col with *to_replace* replaced with *value*
+        """
+        to_replace = columnops.as_column(to_replace)
+        replacement = columnops.as_column(replacement)
+        if (
+                len(to_replace) == 1
+                and len(replacement) == 1
+        ):
+            to_replace = to_replace.data.to_host()[0]
+            replacement = replacement.data.to_host()[0]
+            result = self.data.replace(to_replace, replacement)
+            return self.replace(data=result)
+        else:
+            raise NotImplementedError(
+                "StringColumn currently only supports replacing"
+                " single values"
+            )
 
     def fillna(self, fill_value, inplace=False):
         """
@@ -556,6 +672,55 @@ class StringColumn(columnops.TypedColumnBase):
         result = StringColumn(filled_data)
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
+
+    def _find_first_and_last(self, value):
+        found_indices = self.str().contains(f"^{value}$").data.mem
+        found_indices = cudautils.astype(found_indices, "int32")
+        first = columnops.as_column(found_indices).find_first_value(1)
+        last = columnops.as_column(found_indices).find_last_value(1)
+        return first, last
+
+    def find_first_value(self, value):
+        return self._find_first_and_last(value)[0]
+
+    def find_last_value(self, value):
+        return self._find_first_and_last(value)[1]
+
+    def unique(self, method='sort'):
+        """
+        Get unique strings in the data
+        """
+        result = StringColumn(self.nvcategory.keys())
+        return result
+
+    def normalize_binop_value(self, other):
+        if isinstance(other, column.Column):
+            return other.astype(self.dtype)
+        elif isinstance(other, str) or other is None:
+            col = utils.scalar_broadcast_to(other,
+                                            shape=len(self),
+                                            dtype="object")
+            return self.replace(data=col.data)
+        else:
+            raise TypeError('cannot broadcast {}'.format(type(other)))
+
+    def default_na_value(self):
+        return None
+
+    def take(self, indices):
+        return self.element_indexing(indices)
+
+    def binary_operator(self, binop, rhs, reflect=False):
+        lhs = self
+        if reflect:
+            lhs, rhs = rhs, lhs
+        if isinstance(rhs, StringColumn) and binop == 'add':
+            return lhs.data.cat(
+                others=rhs.data,
+            )
+        else:
+            msg = "{!r} operator not supported between {} and {}"
+            raise TypeError(msg.format(binop, type(self), type(rhs)))
 
 
 def string_column_binop(lhs, rhs, op):

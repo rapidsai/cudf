@@ -21,7 +21,7 @@
 #include <table/device_table.cuh>
 #include <hash/hash_functions.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>
@@ -51,7 +51,7 @@ struct row_partition_mapper
   __device__
   hash_value_type operator()(gdf_size_type row_index) const
   {
-    return hash_row<hash_function>(the_table, row_index) % num_partitions;
+    return hash_row<true, hash_function>(the_table, row_index) % num_partitions;
   }
 
   device_table the_table;

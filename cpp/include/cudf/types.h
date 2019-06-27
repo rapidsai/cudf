@@ -107,7 +107,7 @@ typedef struct {
  */
 // TODO: #1119 Use traits to set `gdf_data` elements
 typedef union {
-  char          si08;  /**< GDF_INT8      */
+  signed char   si08;  /**< GDF_INT8      */
   short         si16;  /**< GDF_INT16     */
   int           si32;  /**< GDF_INT32     */
   long          si64;  /**< GDF_INT64     */
@@ -203,32 +203,6 @@ typedef enum {
 
 
 /**
- * @brief Types of binary operations that can be performed on data.
- */
-typedef enum {
-  GDF_ADD,            ///< operator +
-  GDF_SUB,            ///< operator -
-  GDF_MUL,            ///< operator *
-  GDF_DIV,            ///< operator / using common type of lhs and rhs
-  GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
-  GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
-  GDF_MOD,            ///< operator %
-  GDF_POW,            ///< lhs ^ rhs
-  GDF_EQUAL,          ///< operator ==
-  GDF_NOT_EQUAL,      ///< operator !=
-  GDF_LESS,           ///< operator <
-  GDF_GREATER,        ///< operator >
-  GDF_LESS_EQUAL,     ///< operator <=
-  GDF_GREATER_EQUAL,  ///< operator >=
-  GDF_BITWISE_AND,    ///< operator &
-  GDF_BITWISE_OR,     ///< operator |
-  GDF_BITWISE_XOR,    ///< operator ^
-  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
-  GDF_INVALID_BINARY  ///< invalid operation
-} gdf_binary_operator;
-
-
-/**
  * @brief Types of unary math operations that can be performed on data.
  */
 typedef enum {
@@ -245,6 +219,8 @@ typedef enum {
   GDF_FLOOR,        ///< largest integer value not greater than arg
   GDF_ABS,          ///< Absolute value
   GDF_BIT_INVERT,   ///< Bitwise Not (~)
+  GDF_NOT,          ///< Logical Not (!)
+  GDF_INVALID_UNARY ///< invalid operation
 } gdf_unary_math_op;
 
 
@@ -253,9 +229,7 @@ typedef enum {
  */
 typedef enum {
   GDF_NULL_AS_LARGEST = 0,           ///< NULLS are treated as the largest number in comparisons
-  GDF_NULL_AS_SMALLEST,              ///< NULLS are treated as the smallest number in comparisons
-  GDF_NULL_AS_LARGEST_FOR_MULTISORT  /**< In multicolumn sorting, a row with NULL in any column is
-                                          treated as the largest number in comparisons */
+  GDF_NULL_AS_SMALLEST               ///< NULLS are treated as the smallest number in comparisons  
 } gdf_null_sort_behavior;
 
 
@@ -281,32 +255,10 @@ struct _OpaqueIpcParser;
 typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
 
 
-struct _OpaqueRadixsortPlan;
-typedef struct _OpaqueRadixsortPlan gdf_radixsort_plan_type;
-
-
 struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
-
-
-
 typedef enum{
-  GDF_ORDER_ASC,
+  GDF_ORDER_ASC=0,
   GDF_ORDER_DESC
 } order_by_type;
-
-typedef enum{
-  GDF_WINDOW_RANGE,
-  GDF_WINDOW_ROW
-} window_function_type;
-
-typedef enum{
-  GDF_WINDOW_AVG,
-  GDF_WINDOW_SUM,
-  GDF_WINDOW_MAX,
-  GDF_WINDOW_MIN,
-  GDF_WINDOW_COUNT,
-  GDF_WINDOW_STDDEV,
-  GDF_WINDOW_VAR ///< Window Variance
-} window_reduction_type;

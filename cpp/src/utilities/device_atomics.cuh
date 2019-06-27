@@ -32,7 +32,7 @@
  * with the given binary operator.
  * ---------------------------------------------------------------------------**/
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/error_utils.hpp>
@@ -667,5 +667,6 @@ T atomicXor(T* address, T val)
 {
     return cudf::genericAtomicOperation(address, val, cudf::DeviceXor{});
 }
+
 
 #endif

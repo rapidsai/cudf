@@ -9,6 +9,7 @@ from cudf.bindings.dlpack cimport DLManagedTensor
 
 from libcpp cimport bool
 from libc.stdint cimport uint8_t, uint32_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
+from libcpp.vector cimport vector
 
 # Utility functions to build gdf_columns, gdf_context and error handling
 
@@ -20,10 +21,14 @@ cdef gdf_dtype get_dtype(dtype)
 
 cdef get_scalar_value(gdf_scalar scalar)
 
-cdef gdf_column* column_view_from_column(col)
+cdef gdf_column* column_view_from_column(col, col_name=*)
 cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count)
+cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
+cdef gdf_column* column_view_from_string_column(col, col_name=*)
+cdef gdf_column** cols_view_from_cols(cols)
+cdef free_table(cudf_table* table0, gdf_column** cols)
 
 cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
                                       flag_sort_result, flag_sort_inplace,
@@ -114,10 +119,9 @@ cdef extern from "cudf.h" nogil:
         char *col_name
 
     ctypedef enum gdf_null_sort_behavior:
-      GDF_NULL_AS_LARGEST = 0, 
+      GDF_NULL_AS_LARGEST = 0,
       GDF_NULL_AS_SMALLEST,
-      GDF_NULL_AS_LARGEST_FOR_MULTISORT,
-
+   
     ctypedef enum gdf_method:
       GDF_SORT = 0,
       GDF_HASH,
@@ -173,7 +177,7 @@ cdef extern from "cudf.h" nogil:
         GDF_WINDOW_VA
 
     ctypedef union gdf_data:
-        char          si08
+        signed char   si08
         short         si16
         int           si32
         long          si64
@@ -221,21 +225,6 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output) except +
 
     cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    
-    cdef gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output) except +
-
-    cdef gdf_size_type gdf_dtype_size(gdf_dtype dtype) except +
-
-    cdef gdf_error get_column_byte_width(gdf_column * col, int * width) except +
-
-    cdef gdf_error gdf_filter(size_t nrows,
-                 gdf_column* cols,
-                 size_t ncols,
-                 void** d_cols,
-                 int* d_types,
-                 void** d_vals,
-                 size_t* d_indx,
-                 size_t* new_sz) except +
 
     cdef gdf_error gdf_group_by_sum(int ncols,
                                gdf_column** cols,
@@ -298,15 +287,6 @@ cdef extern from "cudf.h" nogil:
                                     gdf_context* ctxt) except +
 
 
-    cdef gdf_error gdf_find_and_replace_all(gdf_column*       col,
-                                   gdf_column* old_values,
-                                   gdf_column* new_values) except +
-
-
-    cdef gdf_error gdf_replace_nulls(gdf_column* col_out,
-                                     const gdf_column* col_in) except +
-
-
     cdef gdf_error gdf_digitize(gdf_column* col,
                                 gdf_column* bins,
                                 bool right,
@@ -330,3 +310,29 @@ cdef extern from "cudf.h" nogil:
 cdef extern from "bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count) except +
+
+
+cdef extern from "table.hpp" namespace "cudf" nogil:
+
+    cdef cppclass cudf_table "cudf::table":
+
+        cudf_table(gdf_column* cols[], gdf_size_type num_cols) except +
+
+        cudf_table(const vector[gdf_column*] cols) except +
+
+        cudf_table() except +
+
+        gdf_column** begin() except +
+
+        gdf_column** end() except +
+
+        gdf_column* get_column(gdf_index_type index) except +
+ 
+        gdf_size_type num_columns() except +
+
+        gdf_size_type num_rows() except +
+
+# Todo? add const overloads 
+#        const gdf_column* const* begin() const except +
+#        gdf_column const* const* end() const
+#        gdf_column const* get_column(gdf_index_type index) const except +

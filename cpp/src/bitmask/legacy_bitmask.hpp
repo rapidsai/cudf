@@ -17,7 +17,7 @@
 #ifndef LEGACY_BITMASK_HPP
 #define LEGACY_BITMASK_HPP
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
 /**---------------------------------------------------------------------------*

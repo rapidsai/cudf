@@ -4,6 +4,7 @@ import pytest
 
 import numpy as np
 import pandas as pd
+import cudf
 
 from cudf.dataframe import Series
 
@@ -19,10 +20,25 @@ def test_series_abs(dtype):
 
 
 @pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
-def test_series_not(dtype):
+def test_series_invert(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
     np.testing.assert_equal((~sr).to_array(), np.invert(arr))
+    np.testing.assert_equal((~sr).to_array(), ~arr)
+
+
+@pytest.mark.parametrize('dtype',
+                         [np.int8, np.int16, np.int32, np.int64, np.bool_])
+def test_series_not(dtype):
+    import pandas as pd
+    arr = pd.Series(np.random.choice([True, False], 1000)).astype(dtype)
+    if dtype is not np.bool_:
+        arr = arr * (np.random.random(1000) * 100).astype(dtype)
+    sr = Series(arr)
+
+    result = cudf.logical_not(sr).to_array()
+    expect = np.logical_not(arr)
+    np.testing.assert_equal(result, expect)
     np.testing.assert_equal((~sr).to_array(), ~arr)
 
 

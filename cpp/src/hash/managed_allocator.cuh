@@ -19,7 +19,7 @@
 
 #include <new>
 
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 
 template <class T>
 struct managed_allocator {

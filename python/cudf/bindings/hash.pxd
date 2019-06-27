@@ -32,11 +32,3 @@ cdef extern from "cudf.h" nogil:
         uint32_t *initial_hash_values,
         gdf_column *output
     ) except +
-
-    cdef gdf_error gdf_hash_columns(
-        gdf_column **columns_to_hash,
-        int num_columns,
-        gdf_column *output_column,
-        void *stream
-    ) except +
-

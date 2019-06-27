@@ -16,11 +16,11 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <bitmask/bit_mask.cuh>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_utils.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -297,9 +297,9 @@ struct all_null {
 
 TEST_F(RowBitmaskTest, NoBitmasks) {
   gdf_size_type const size{1000};
-  cudf::test::column_wrapper<int> col0{size};
-  cudf::test::column_wrapper<float> col1{size};
-  cudf::test::column_wrapper<double> col2{size};
+  cudf::test::column_wrapper<int> col0(size);
+  cudf::test::column_wrapper<float> col1(size);
+  cudf::test::column_wrapper<double> col2(size);
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
                     static_cast<gdf_size_type>(gdf_cols.size())};
@@ -316,9 +316,9 @@ TEST_F(RowBitmaskTest, NoBitmasks) {
 
 TEST_F(RowBitmaskTest, BitmasksAllNull) {
   gdf_size_type const size{1000};
-  cudf::test::column_wrapper<int> col0{size, true};
-  cudf::test::column_wrapper<float> col1{size, true};
-  cudf::test::column_wrapper<double> col2{size, true};
+  cudf::test::column_wrapper<int> col0(size, true);
+  cudf::test::column_wrapper<float> col1(size, true);
+  cudf::test::column_wrapper<double> col2(size, true);
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
                     static_cast<gdf_size_type>(gdf_cols.size())};
@@ -335,12 +335,12 @@ TEST_F(RowBitmaskTest, BitmasksAllNull) {
 
 TEST_F(RowBitmaskTest, BitmasksAllValid) {
   gdf_size_type const size{1000};
-  cudf::test::column_wrapper<int> col0{size, [](gdf_size_type i) { return i; },
-                                       all_valid{}};
-  cudf::test::column_wrapper<int> col1{size, [](gdf_size_type i) { return i; },
-                                       all_valid{}};
-  cudf::test::column_wrapper<int> col2{size, [](gdf_size_type i) { return i; },
-                                       all_valid{}};
+  cudf::test::column_wrapper<int> col0(size, [](gdf_size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col1(size, [](gdf_size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col2(size, [](gdf_size_type i) { return i; },
+                                       all_valid{});
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
                     static_cast<gdf_size_type>(gdf_cols.size())};
@@ -357,10 +357,10 @@ TEST_F(RowBitmaskTest, BitmasksAllValid) {
 
 TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskAllValid) {
   gdf_size_type const size{1000};
-  cudf::test::column_wrapper<int> col0{size};
-  cudf::test::column_wrapper<int> col1{size, [](gdf_size_type i) { return i; },
-                                       all_valid{}};
-  cudf::test::column_wrapper<int> col2{size};
+  cudf::test::column_wrapper<int> col0(size);
+  cudf::test::column_wrapper<int> col1(size, [](gdf_size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col2(size);
 
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),
@@ -382,11 +382,11 @@ struct odds_are_null {
 
 TEST_F(RowBitmaskTest, MixedBitmaskNoBitmaskOddsNull) {
   gdf_size_type const size{1000};
-  cudf::test::column_wrapper<int> col0{size};
-  cudf::test::column_wrapper<int> col1{size, [](gdf_size_type i) { return i; },
-                                       all_valid{}};
-  cudf::test::column_wrapper<int> col2{size, [](gdf_size_type i) { return i; },
-                                       [](gdf_size_type i) { return i % 2; }};
+  cudf::test::column_wrapper<int> col0(size);
+  cudf::test::column_wrapper<int> col1(size, [](gdf_size_type i) { return i; },
+                                       all_valid{});
+  cudf::test::column_wrapper<int> col2(size, [](gdf_size_type i) { return i; },
+                                       [](gdf_size_type i) { return i % 2; });
 
   std::vector<gdf_column*> gdf_cols{col0.get(), col1.get(), col2.get()};
   cudf::table table{gdf_cols.data(),

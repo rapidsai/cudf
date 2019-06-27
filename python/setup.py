@@ -13,19 +13,21 @@ install_requires = [
     'cython'
 ]
 
-cython_files = ['cudf/bindings/*.pyx']
+cython_files = [
+    'cudf/bindings/**/*.pyx',
+]
 
 extensions = [
     Extension("*",
               sources=cython_files,
               include_dirs=[
-                '../cpp/include/',
-                '../cpp/thirdparty/dlpack/include/dlpack/'
+                '../cpp/include/cudf',
+                '../cpp/thirdparty/dlpack/include/dlpack/',
               ],
               library_dirs=[get_python_lib()],
               libraries=['cudf'],
               language='c++',
-              extra_compile_args=['-std=c++11'])
+              extra_compile_args=['-std=c++14'])
 ]
 
 setup(name='cudf',
@@ -44,9 +46,6 @@ setup(name='cudf',
       setup_requires=['cython'],
       ext_modules=cythonize(extensions),
       packages=find_packages(include=['cudf', 'cudf.*']),
-      package_data={
-        'cudf.tests': ['data/*.pickle'],
-      },
       install_requires=install_requires,
       license="Apache",
       cmdclass=versioneer.get_cmdclass(),

@@ -1,16 +1,16 @@
-#include "cudf.h"
-#include "rmm/rmm.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "bitmask/legacy_bitmask.hpp"
+#include <cudf/cudf.h>
+#include <rmm/rmm.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <bitmask/legacy_bitmask.hpp>
 
 #include <cub/block/block_reduce.cuh>
 
 #include <limits>
 #include <type_traits>
 
-#include <reduction.hpp>
+#include <cudf/reduction.hpp>
 #include "reduction_operators.cuh"
 
 namespace { // anonymous namespace

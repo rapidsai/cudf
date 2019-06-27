@@ -17,6 +17,8 @@
 #ifndef SCATTER_HPP
 #define SCATTER_HPP
 
+#include <cudf/types.h>
+
 namespace cudf {
 
 // Forward declaration

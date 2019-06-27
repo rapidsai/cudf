@@ -1,8 +1,10 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA_VERSION', '9.2').split('.')[:2]) %}
+
 package:
   name: libcudf
   version: {{ version }}
@@ -25,22 +27,32 @@ requirements:
   build:
     - cmake >=3.12.4
   host:
-    - librmm 0.7.*
-    - libnvstrings 0.7.*
+    - librmm {{ minor_version }}.*
+    - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
 test:
   commands:
-    - test -f $PREFIX/include/cudf.h
-    - test -f $PREFIX/include/cudf/convert_types.h
-    - test -f $PREFIX/include/cudf/functions.h
-    - test -f $PREFIX/include/cudf/io_functions.h
-    - test -f $PREFIX/include/cudf/io_types.h
-    - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/lib/libcudf.so
-    - test -f $PREFIX/lib/librmm.so
+    - test -f $PREFIX/include/cudf/bitmask.hpp
+    - test -f $PREFIX/include/cudf/groupby.hpp
+    - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/convert_types.h
+    - test -f $PREFIX/include/cudf/io_functions.h
+    - test -f $PREFIX/include/cudf/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/copying.hpp
+    - test -f $PREFIX/include/cudf/io_functions.hpp
+    - test -f $PREFIX/include/cudf/table.hpp
+    - test -f $PREFIX/include/cudf/cudf.h
+    - test -f $PREFIX/include/cudf/io_readers.hpp
+    - test -f $PREFIX/include/cudf/types.h
+    - test -f $PREFIX/include/cudf/functions.h
+    - test -f $PREFIX/include/cudf/io_types.h
+    - test -f $PREFIX/include/cudf/types.hpp
+    - test -f $PREFIX/include/cudf/gis.hpp
+    - test -f $PREFIX/include/cudf/reduction.hpp
 
 
 about:

@@ -1,7 +1,8 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 
 #include <utilities/cudf_utils.h>
-#include <cudf.h>
+#include <utilities/column_utils.hpp>
+#include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
 
@@ -78,7 +79,7 @@ struct ColumnConcatTest : public testing::Test
     std::vector<gdf_valid_type> ref_valid(gdf_valid_allocation_size(total_size));
     for (gdf_size_type index = 0, col = 0, row = 0; index < total_size; ++index)
     {
-      if (null_init(row, col)) gdf::util::turn_bit_on(ref_valid.data(), index);
+      if (null_init(row, col)) cudf::util::turn_bit_on(ref_valid.data(), index);
       else ref_null_count++;
       
       if (++row >= column_sizes[col]) { row = 0; col++; }
@@ -87,7 +88,7 @@ struct ColumnConcatTest : public testing::Test
 
     EXPECT_EQ(ref_null_count, ref_gdf_col->null_count);
 
-    EXPECT_TRUE(gdf_equal_columns<ColumnType>(ref_gdf_col.get(), output_gdf_col.get()));
+    EXPECT_TRUE(gdf_equal_columns(*ref_gdf_col.get(), *output_gdf_col.get()));
 
   }
 
@@ -152,18 +153,18 @@ TYPED_TEST(ColumnConcatTest, NegativeColumns){
 }
 
 TYPED_TEST(ColumnConcatTest, NullOutput){
-  gdf_column input;
+  gdf_column input{};
   gdf_column * input_p = &input;
   EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(nullptr, &input_p, 1));
 }
 
 TYPED_TEST(ColumnConcatTest, NullInput){
-  gdf_column output;
+  gdf_column output{};
   EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(&output, nullptr, 1));
 }
 
 TYPED_TEST(ColumnConcatTest, NullFirstInputColumn){
-  gdf_column output;
+  gdf_column output{};
   gdf_column * input_p = nullptr;
   EXPECT_EQ(GDF_DATASET_EMPTY, gdf_column_concat(&output, &input_p, 1));
 }
@@ -339,9 +340,9 @@ TEST(ColumnByteWidth, TestByteWidth)
   for(auto const& pair : enum_to_type_size)
   {
     int byte_width{0};
-    gdf_column col;
+    gdf_column col{};
     col.dtype = pair.first;
-    ASSERT_EQ(GDF_SUCCESS, get_column_byte_width(&col, &byte_width));
+    ASSERT_NO_THROW(byte_width = cudf::byte_width(col));
     EXPECT_EQ(pair.second, byte_width);
   }
 }
@@ -362,6 +363,6 @@ TEST(ColumnByteWidth, TestGdfTypeSize)
                                                 };
   for(auto const& pair : enum_to_type_size)
   {
-    EXPECT_EQ(pair.second, gdf_dtype_size(pair.first));
+    EXPECT_EQ(pair.second, (int) cudf::size_of(pair.first));
   }
 }

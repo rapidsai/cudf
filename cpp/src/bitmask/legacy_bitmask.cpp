@@ -15,7 +15,7 @@
  */
 
 #include "legacy_bitmask.hpp"
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
 namespace {

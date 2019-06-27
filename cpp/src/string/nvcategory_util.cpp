@@ -1,11 +1,14 @@
-
+#include <utility>
+#include <utilities/column_utils.hpp>
 #include "nvcategory_util.hpp"
-#include <types.hpp>
-#include <table.hpp>
+#include <cudf/replace.hpp>
+#include <cudf/types.hpp>
+#include <cudf/table.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
+#include <cudf/binaryop.hpp>
 
 namespace {
   NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
@@ -78,7 +81,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
       rhs.data.si32 = 1;
       rhs.is_valid = true;
       rhs.dtype = GDF_STRING_CATEGORY;
-      gdf_binary_operation_v_s(column, column,  &rhs, GDF_ADD);
+      cudf::binary_operation(column, column,  &rhs, GDF_ADD);
       destroy_category = true;
       null_index = nv_category->get_value(nullptr);
 
@@ -86,20 +89,23 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category){
 
     }
     GDF_REQUIRE(null_index == 0, GDF_INVALID_API_CALL);
-    gdf_column null_index_column;
 
-    //this GDF_INT32 could change if this changes in nvcategory
-    gdf_column_view(&null_index_column, nullptr, nullptr, 1, GDF_STRING_CATEGORY);
-    int col_width;
-    get_column_byte_width(&null_index_column, &col_width);
-    RMM_TRY( RMM_ALLOC(&(null_index_column.data), col_width, 0) ); // TODO: non-default stream?
-    CUDA_TRY(cudaMemcpy(null_index_column.data,&null_index,col_width,cudaMemcpyHostToDevice));
-    null_index_column.valid = nullptr;
-    null_index_column.null_count = 0;
+    gdf_scalar null_index_scalar;
 
-    gdf_error err = gdf_replace_nulls(column, &null_index_column);
-    CUDF_EXPECTS(err == GDF_SUCCESS,"couldnn replace");
-    gdf_column_free(&null_index_column);
+    null_index_scalar.data.si32 = null_index;
+    null_index_scalar.is_valid = true;
+    null_index_scalar.dtype = GDF_STRING_CATEGORY;
+
+    const auto byte_width = cudf::size_of(column->dtype);
+    gdf_column column_nulls_replaced = cudf::replace_nulls(*column, null_index_scalar);
+    CUDA_TRY(cudaMemcpyAsync(
+                             column->data,
+                             column_nulls_replaced.data,
+                             column->size * byte_width,
+                             cudaMemcpyDefault,
+                             0));
+
+    gdf_column_free(&column_nulls_replaced);
   }
 
   CUDF_EXPECTS(column->data != nullptr, "Trying to gather nullptr data in nvcategory_gather");
@@ -188,6 +194,7 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
     //this has an overhead of having to store more than is necessary. remove when gather preserving dictionary is available for nvcategory
     output_columns[column_index]->dtype_info.category = combined_category->copy();
 
+
     current_column_start_position += column_size;
   }
 
@@ -195,4 +202,3 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
 
   return GDF_SUCCESS;
 }
-

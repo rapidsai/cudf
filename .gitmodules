@@ -13,4 +13,4 @@
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
-	branch = cudf
+	branch = feature/api_v2

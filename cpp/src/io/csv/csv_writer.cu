@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include <fstream>
-#include <algorithm>
+#include <cudf/cudf.h>
+#include <io/utilities/wrapper_utils.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/wrapper_types.hpp>
+
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf.h>
-#include <utilities/error_utils.hpp>
 
+#include <fstream>
+#include <algorithm>
 
 //
 // This is called by the write_csv method below.
@@ -35,7 +38,7 @@
 // - false_string: String to use for 'false' values in boolean columns
 // Return: NVStrings instance formated for CSV column output.
 //
-NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, const char* null_representation, const char* true_string, const char* false_string )
+NVStrings* column_to_strings_csv(const gdf_column* column, const char* delimiter, const char* null_representation, const char* true_string, const char* false_string )
 {
     NVStrings* rtn = nullptr;
     gdf_size_type rows = column->size;
@@ -45,9 +48,18 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
         case GDF_STRING:
             rtn = (static_cast<NVStrings*>(column->data))->copy();
             break;
-        //case GDF_BOOL:
-        //    rtn = NVStrings::create_from_bools((const bool*)col->data,rows,true_string,false_string,valid);
-        //   break;
+        case GDF_BOOL8:
+            {
+            auto d_src = static_cast<const cudf::bool8*>(column->data);
+            device_buffer<bool> bool_buffer(rows);
+            thrust::transform(
+                rmm::exec_policy()->on(0), d_src, d_src + rows,
+                bool_buffer.data(),
+                [] __device__(const cudf::bool8 value) { return bool{value}; });
+            rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
+                                               true_string, false_string, valid);
+            }
+            break;
         case GDF_INT32:
             rtn = NVStrings::itos(static_cast<const int32_t*>(column->data),rows,valid);
             break;
@@ -61,7 +73,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
             rtn = NVStrings::dtos(static_cast<const double*>(column->data),rows,valid);
             break;
         case GDF_DATE64:
-            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::seconds,nullptr,valid);
+            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::ms,nullptr,valid);
             break;
         default:
             break;
@@ -77,7 +89,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
     }
 
     // probably could collapse this more
-    bool bquoted = (column->dtype==GDF_STRING);
+    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64);
     // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
@@ -121,7 +133,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
 gdf_error write_csv(csv_write_arg* args)
 {
     // when args becomes a struct/class these can be modified
-    gdf_column** columns = args->columns;
+    auto columns = args->columns;
     unsigned int count = (unsigned int)args->num_cols;
     gdf_size_type rows = columns[0]->size;
     const char* filepath = args->filepath;
@@ -134,6 +146,7 @@ gdf_error write_csv(csv_write_arg* args)
     const char* narep = args->na_rep;
     const char* true_value = (args->true_value ? args->true_value : "true");
     const char* false_value = (args->false_value ? args->false_value : "false");
+    bool include_header = args->include_header;
 
     // check for issues here
     CUDF_EXPECTS( filepath!=nullptr, "write_csv: filepath not specified" );
@@ -142,7 +155,7 @@ gdf_error write_csv(csv_write_arg* args)
 
     // check all columns are the same size
     const bool all_sizes_match = std::all_of( columns, columns+count,
-        [rows] (gdf_column* col) {
+        [rows] (auto col) {
             if( col->dtype==GDF_STRING )
             {
                 NVStrings* strs = (NVStrings*)col->data;
@@ -169,9 +182,9 @@ gdf_error write_csv(csv_write_arg* args)
     size_t memsize = 0;
     for( unsigned int idx=0; idx < count; ++idx )
     {
-        gdf_column* col = columns[idx];
+        const gdf_column* col = columns[idx];
         const char* delim = ((idx+1)<count ? delimiter : terminator);
-        NVStrings* strs = column_to_strings_csv(col,delim,true_value,narep,false_value);
+        NVStrings* strs = column_to_strings_csv(col,delim,narep,true_value,false_value);
         memsize += strs->byte_count(string_lengths + (idx*rows),false);
         NVStrings::destroy(strs);
     }
@@ -223,9 +236,9 @@ gdf_error write_csv(csv_write_arg* args)
     // now fill in the memory one column at a time
     for( unsigned int idx=0; idx < count; ++idx )
     {
-        gdf_column* col = columns[idx];
+        const gdf_column* col = columns[idx];
         const char* delim = ((idx+1)<count ? delimiter : terminator);
-        NVStrings* strs = column_to_strings_csv(col,delim,true_value,narep,false_value);
+        NVStrings* strs = column_to_strings_csv(col,delim,narep,true_value,false_value);
         size_t* colptrs = string_locations.data() + (idx*rows);
         // to_host places all the strings into their correct positions in host memory
         strs->to_host((char**)colptrs,0,rows);
@@ -234,13 +247,16 @@ gdf_error write_csv(csv_write_arg* args)
     //buffer[memsize] = 0; // just so we can printf if needed
     // now write buffer to file
     // first write the header
-    for( unsigned int idx=0; idx < count; ++idx )
+    if(include_header)
     {
-        gdf_column* col = columns[idx];
-        const char* delim = ((idx+1)<count ? delimiter : terminator);
-        if( col->col_name )
-            filecsv << "\"" << col->col_name << "\"";
-        filecsv << delim;
+        for( unsigned int idx=0; idx < count; ++idx )
+        {
+            const gdf_column* col = columns[idx];
+            const char* delim = ((idx+1)<count ? delimiter : terminator);
+            if( col->col_name )
+                filecsv << "\"" << col->col_name << "\"";
+            filecsv << delim;
+        }
     }
     // now write the data
     filecsv.write(buffer.data(),memsize);

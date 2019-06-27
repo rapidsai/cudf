@@ -55,3 +55,13 @@ def docfmt(**kwargs):
 
 def docfmt_partial(**kwargs):
     return functools.partial(docfmt, **kwargs)
+
+
+def copy_docstring(other):
+    """
+    Decorator that sets ``__doc__`` to ``other.__doc___``.
+    """
+    def wrapper(func):
+        func.__doc__ = other.__doc__
+        return func
+    return wrapper

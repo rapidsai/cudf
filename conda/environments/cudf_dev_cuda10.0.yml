@@ -5,8 +5,8 @@ channels:
 - rapidsai-nightly/label/cuda10.0
 - conda-forge
 dependencies:
-- nvstrings=0.7.*
-- rmm=0.7.*
+- nvstrings=0.8.*
+- rmm=0.8.*
 - cmake>=3.12
 - python>=3.6,<3.8
 - numba>=0.41
@@ -26,5 +26,6 @@ dependencies:
 - recommonmark
 - pandoc=<2.0.0
 - cudatoolkit=10.0
+- pip
 - pip:
   - sphinx-markdown-tables

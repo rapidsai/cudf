@@ -18,7 +18,7 @@
 
 //Quantile (percentile) functionality
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 namespace cudf {
 namespace interpolate {

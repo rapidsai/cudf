@@ -11,7 +11,6 @@ from numba import cuda
 from cudf import concat
 from cudf.dataframe import DataFrame, Series
 from cudf.dataframe.index import StringIndex, StringColumn
-from cudf.bindings.GDFError import GDFError
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
 
@@ -171,23 +170,39 @@ def test_string_repr(ps_gs, item):
 
 
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
+                                   'float32', 'float64', 'bool',
+                                   'datetime64[ms]'])
 def test_string_astype(dtype):
     if dtype.startswith('int'):
         data = ["1", "2", "3", "4", "5"]
     elif dtype.startswith('float'):
         data = ["1.0", "2.0", "3.0", "4.0", "5.0"]
+    elif dtype.startswith('bool'):
+        data = ["True", "False", "True", "False", "False"]
+    elif dtype.startswith('datetime64'):
+        data = [
+            "2019-06-04T00:00:00Z",
+            "2019-06-04T12:12:12Z",
+            "2019-06-03T00:00:00Z",
+            "2019-05-04T00:00:00Z",
+            "2018-06-04T00:00:00Z"
+        ]
     ps = pd.Series(data)
     gs = Series(data)
 
-    expect = ps.astype(dtype)
+    # Pandas str --> bool typecasting always returns True if there's a string
+    if dtype.startswith('bool'):
+        expect = (ps == 'True')
+    else:
+        expect = ps.astype(dtype)
     got = gs.astype(dtype)
 
     assert_eq(expect, got)
 
 
 @pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
+                                   'float32', 'float64', 'bool',
+                                   'datetime64[ms]'])
 def test_string_empty_astype(dtype):
     data = []
     ps = pd.Series(data, dtype="str")
@@ -199,38 +214,53 @@ def test_string_empty_astype(dtype):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64', 'bool',
+                                   'datetime64[ms]'])
 def test_string_numeric_astype(dtype):
     if dtype.startswith('bool'):
-        pytest.xfail("booleans not yet supported")
         data = [1, 0, 1, 0, 1]
     elif dtype.startswith('int'):
         data = [1, 2, 3, 4, 5]
     elif dtype.startswith('float'):
-        pytest.xfail("floats not yet supported")
         data = [1.0, 2.0, 3.0, 4.0, 5.0]
+    elif dtype.startswith('datetime64'):
+        data = [
+            1000000000,
+            2000000000,
+            3000000000,
+            4000000000,
+            5000000000
+        ]
+    if dtype.startswith('datetime64'):
+        ps = pd.Series(data, dtype='datetime64[ns]')
+        gs = Series.from_pandas(ps)
+    else:
+        ps = pd.Series(data, dtype=dtype)
+        gs = Series(data, dtype=dtype)
 
-    ps = pd.Series(data, dtype=dtype)
-    gs = Series(data, dtype=dtype)
-
-    expect = ps.astype('str')
+    # Pandas datetime64 --> str typecasting returns arbitrary format depending
+    # on the data, so making it consistent unless we choose to match the
+    # behavior
+    if dtype.startswith('datetime64'):
+        expect = ps.dt.strftime('%Y-%m-%dT%H:%M:%SZ')
+    else:
+        expect = ps.astype('str')
     got = gs.astype('str')
 
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('dtype', ['bool', 'int8', 'int16', 'int32', 'int64',
-                                   'float32', 'float64'])
+@pytest.mark.parametrize('dtype', ['int8', 'int16', 'int32', 'int64',
+                                   'float32', 'float64', 'bool',
+                                   'datetime64[ms]'])
 def test_string_empty_numeric_astype(dtype):
-    if dtype.startswith('bool'):
-        pytest.xfail("booleans not yet supported")
-    elif dtype.startswith('float'):
-        pytest.xfail("floats not yet supported")
-
     data = []
 
-    ps = pd.Series(data, dtype=dtype)
+    if dtype.startswith('datetime64'):
+        ps = pd.Series(data, dtype='datetime64[ns]')
+    else:
+        ps = pd.Series(data, dtype=dtype)
     gs = Series(data, dtype=dtype)
 
     expect = ps.astype('str')
@@ -280,20 +310,69 @@ def test_string_len(ps_gs):
 @pytest.mark.parametrize('others', [
     None,
     ['f', 'g', 'h', 'i', 'j'],
-    pd.Series(['f', 'g', 'h', 'i', 'j'])
+    ('f', 'g', 'h', 'i', 'j'),
+    pd.Series(['f', 'g', 'h', 'i', 'j']),
+    pd.Index(['f', 'g', 'h', 'i', 'j']),
+    (['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']),
+    [['f', 'g', 'h', 'i', 'j'], ['f', 'g', 'h', 'i', 'j']],
+    (
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['1', '2', '3', '4', '5']),
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['f', 'g', 'h', 'i', 'j'])
+    ),
+    [
+        pd.Index(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Series(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['f', 'g', 'h', 'i', 'j']),
+        ['f', 'a', 'b', 'f', 'a'],
+        pd.Index(['f', 'g', 'h', 'i', 'j'])
+    ]
 ])
 @pytest.mark.parametrize('sep', [None, '', ' ', '|', ',', '|||'])
 @pytest.mark.parametrize('na_rep', [None, '', 'null', 'a'])
-def test_string_cat(ps_gs, others, sep, na_rep):
+@pytest.mark.parametrize('index', [
+    ['1', '2', '3', '4', '5'],
+    pd.Series(['1', '2', '3', '4', '5']),
+    pd.Index(['1', '2', '3', '4', '5'])
+])
+def test_string_cat(ps_gs, others, sep, na_rep, index):
     ps, gs = ps_gs
 
     pd_others = others
     if isinstance(pd_others, pd.Series):
         pd_others = pd_others.values
     expect = ps.str.cat(others=pd_others, sep=sep, na_rep=na_rep)
-    if isinstance(others, pd.Series):
-        others = Series(others)
     got = gs.str.cat(others=others, sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+    ps.index = index
+    gs.index = index
+
+    expect = ps.str.cat(others=ps.index, sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=gs.index, sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+    expect = ps.str.cat(others=[ps.index] + [ps.index],
+                        sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=[gs.index] + [gs.index],
+                     sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+    expect = ps.str.cat(others=(ps.index, ps.index),
+                        sep=sep, na_rep=na_rep)
+    got = gs.str.cat(others=(gs.index, gs.index),
+                     sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
@@ -654,13 +733,13 @@ def test_string_join_values_nulls():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('str_data,str_data_raise', [
-    ([], 0),
-    (['a', 'b', 'c', 'd', 'e'], 0),
-    ([None, None, None, None, None], 1)
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
 ])
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
-def test_string_groupby_key(str_data, str_data_raise, num_keys):
+def test_string_groupby_key(str_data, num_keys):
     other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
@@ -671,28 +750,22 @@ def test_string_groupby_key(str_data, str_data_raise, num_keys):
     pdf['a'] = other_data
     gdf['a'] = other_data
 
-    expectation = raise_builder(
-        [str_data_raise],
-        GDFError
-    )
+    expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
+    got = gdf.groupby(list(range(num_keys)), as_index=False).count()
 
-    with expectation:
-        expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
-        got = gdf.groupby(list(range(num_keys)), as_index=False).count()
+    expect = expect.sort_values([0]).reset_index(drop=True)
+    got = got.sort_values([0]).reset_index(drop=True)
 
-        expect = expect.sort_values([0]).reset_index(drop=True)
-        got = got.sort_values([0]).reset_index(drop=True)
-
-        assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize('str_data,str_data_raise', [
-    ([], 0),
-    (['a', 'b', 'c', 'd', 'e'], 0),
-    ([None, None, None, None, None], 1)
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
 ])
 @pytest.mark.parametrize('num_cols', [1, 2, 3])
-def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
+def test_string_groupby_non_key(str_data, num_cols):
     other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
@@ -703,43 +776,37 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
     pdf['a'] = other_data
     gdf['a'] = other_data
 
-    expectation = raise_builder(
-        [str_data_raise],
-        GDFError
-    )
+    expect = pdf.groupby('a', as_index=False).count()
+    got = gdf.groupby('a', as_index=False).count()
 
-    with expectation:
-        expect = pdf.groupby('a', as_index=False).count()
-        got = gdf.groupby('a', as_index=False).count()
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
 
-        expect = expect.sort_values(['a']).reset_index(drop=True)
-        got = got.sort_values(['a']).reset_index(drop=True)
+    assert_eq(expect, got, check_dtype=False)
 
-        assert_eq(expect, got, check_dtype=False)
+    expect = pdf.groupby('a', as_index=False).max()
+    got = gdf.groupby('a', as_index=False).max()
 
-        expect = pdf.groupby('a', as_index=False).max()
-        got = gdf.groupby('a', as_index=False).max()
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
 
-        expect = expect.sort_values(['a']).reset_index(drop=True)
-        got = got.sort_values(['a']).reset_index(drop=True)
+    if len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype('str')
 
-        if len(expect) == 0 and len(got) == 0:
-            for i in range(num_cols):
-                expect[i] = expect[i].astype('str')
+    assert_eq(expect, got, check_dtype=False)
 
-        assert_eq(expect, got)
+    expect = pdf.groupby('a', as_index=False).min()
+    got = gdf.groupby('a', as_index=False).min()
 
-        expect = pdf.groupby('a', as_index=False).min()
-        got = gdf.groupby('a', as_index=False).min()
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
 
-        expect = expect.sort_values(['a']).reset_index(drop=True)
-        got = got.sort_values(['a']).reset_index(drop=True)
+    if len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype('str')
 
-        if len(expect) == 0 and len(got) == 0:
-            for i in range(num_cols):
-                expect[i] = expect[i].astype('str')
-
-        assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_groupby_key_index():
@@ -794,3 +861,66 @@ def test_string_index():
     pdf.index = stringIndex
     gdf.index = stringIndex
     assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    'item',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['a', 'a', 'a', 'a', 'A'],
+        ['A'],
+        ['abc', 'xyz', None, 'ab', '123'],
+        [None, None, 'abc', None, 'abc'],
+    ]
+)
+def test_string_unique(item):
+    ps = pd.Series(item)
+    gs = Series(item)
+    # Pandas `unique` returns a numpy array
+    pres = pd.Series(ps.unique())
+    # Nvstrings returns sorted unique with `None` placed before other strings
+    pres = pres.sort_values(na_position='first').reset_index(drop=True)
+    gres = gs.unique()
+    assert_eq(pres, gres)
+
+
+def test_string_slice():
+    df = DataFrame({'a': ['hello', 'world']})
+    a_slice = df.a.str.slice(0, 2)
+    assert isinstance(a_slice, Series)
+
+
+def test_string_equality():
+    data1 = ['b', 'c',  'd', 'a', 'c']
+    data2 = ['a', None, 'c', 'a', 'c']
+
+    ps1 = pd.Series(data1)
+    ps2 = pd.Series(data2)
+    gs1 = Series(data1)
+    gs2 = Series(data2)
+
+    expect = (ps1 == ps2)
+    got = (gs1 == gs2)
+
+    assert_eq(expect, got.fillna(False))
+
+
+@pytest.mark.parametrize(
+    'lhs',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['abc', 'xyz', 'a', 'ab', '123', '097']
+    ]
+)
+@pytest.mark.parametrize(
+    'rhs',
+    [
+        ['Cbe', 'cbe', 'CbeD', 'Cb', 'ghi', 'Cb'],
+        ['a', 'a', 'a', 'a', 'A', 'z']
+    ]
+)
+def test_string_binary_op_add(lhs, rhs):
+    pds = pd.Series(lhs) + pd.Series(rhs)
+    gds = Series(lhs) + Series(rhs)
+
+    assert_eq(pds, gds)

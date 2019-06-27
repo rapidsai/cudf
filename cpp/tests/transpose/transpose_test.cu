@@ -17,7 +17,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
 
@@ -199,7 +199,7 @@ protected:
         for(size_t i = 0; i < _nrows; i++)
         {
             ASSERT_TRUE(
-                gdf_equal_columns<T>(ref_gdf_columns[i].get(), out_gdf_columns[i].get())
+                gdf_equal_columns(*ref_gdf_columns[i].get(), *out_gdf_columns[i].get())
             );
         }
     }

@@ -3,7 +3,7 @@
 import numpy as np
 
 from numba import cuda, int32, numpy_support
-from math import isnan
+from math import fmod, isnan
 
 from librmm_cffi import librmm as rmm
 
@@ -57,7 +57,7 @@ def gpu_arange_reversed(size, out):
         out[i] = size - i - 1
 
 
-def arange_reversed(size, dtype=np.int64):
+def arange_reversed(size, dtype=np.int32):
     out = rmm.device_array(size, dtype=dtype)
     if size > 0:
         gpu_arange_reversed.forall(size)(size, out)
@@ -373,60 +373,6 @@ def make_empty_mask(size):
         gpu_fill_value.forall(bits.size)(bits, 0)
     return bits
 
-#
-# Gather
-#
-
-
-@cuda.jit
-def gpu_gather(data, index, out):
-    i = cuda.grid(1)
-    if i < index.size:
-        idx = index[i]
-        # Only do it if the index is in range
-        if 0 <= idx < data.size:
-            out[i] = data[idx]
-
-
-def gather(data, index, out=None):
-    """Perform ``out = data[index]`` on the GPU
-    """
-    if out is None:
-        out = rmm.device_array(shape=index.size, dtype=data.dtype)
-    if out.size > 0:
-        gpu_gather.forall(index.size)(data, index, out)
-    return out
-
-
-@cuda.jit
-def gpu_gather_joined_index(lkeys, rkeys, lidx, ridx, out):
-    gid = cuda.grid(1)
-    if gid < lidx.size:
-        # Try getting from the left side first
-        pos = lidx[gid]
-        if pos != -1:
-            # Get from left
-            out[gid] = lkeys[pos]
-        else:
-            # Get from right
-            pos = ridx[gid]
-            out[gid] = rkeys[pos]
-
-
-def gather_joined_index(lkeys, rkeys, lidx, ridx):
-    assert lidx.size == ridx.size
-    out = rmm.device_array(lidx.size, dtype=lkeys.dtype)
-    if out.size > 0:
-        gpu_gather_joined_index.forall(lidx.size)(lkeys, rkeys, lidx, ridx,
-                                                  out)
-    return out
-
-
-def reverse_array(data, out=None):
-    rinds = arange_reversed(data.size)
-    out = gather(data=data, index=rinds, out=out)
-    return out
-
 
 #
 # Null handling
@@ -664,6 +610,39 @@ def gpu_diff(in_col, out_col, N):
             out_col[i] = -1
 
 
+@cuda.jit
+def gpu_round(in_col, out_col, decimal):
+    i = cuda.grid(1)
+    round_val = 10 ** (-1.0 * decimal)
+
+    if i < in_col.size:
+        if not in_col[i]:
+            out_col[i] = np.nan
+            return
+
+        newval = in_col[i] // round_val * round_val
+        remainder = fmod(in_col[i], round_val)
+
+        if remainder != 0 and remainder > (.5 * round_val) and in_col[i] > 0:
+            newval = newval + round_val
+            out_col[i] = newval
+
+        elif remainder != 0 and abs(remainder) < (.5 * round_val) and \
+                in_col[i] < 0:
+            newval = newval + round_val
+            out_col[i] = newval
+
+        else:
+            out_col[i] = newval
+
+
+def apply_round(data, decimal):
+    output_dary = rmm.device_array_like(data)
+    if output_dary.size > 0:
+        gpu_round.forall(output_dary.size)(data, output_dary, decimal)
+    return output_dary
+
+
 MAX_FAST_UNIQUE_K = 2 * 1024
 
 
@@ -795,6 +774,73 @@ def gpu_mark_seg_segments(begins, markers):
         markers[begins[i]] = 1
 
 
+@cuda.jit
+def gpu_mark_found_int(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_equals_int(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+@cuda.jit
+def gpu_mark_found_float(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_equals_float(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+def find_first(arr, val):
+    """
+    Returns the index of the first occurrence of *val* in *arr*.
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    """
+    found = rmm.device_array_like(arr)
+    if found.size > 0:
+        if arr.dtype in ('float32', 'float64'):
+            gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
+        else:
+            gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
+    from cudf.dataframe.columnops import as_column
+    found_col = as_column(found)
+    min_index = found_col.min()
+    if min_index == arr.size:
+        return - 1
+    else:
+        return min_index
+
+
+def find_last(arr, val):
+    """
+    Returns the index of the last occurrence of *val* in *arr*.
+    Otherwise, returns -1.
+
+    Parameters
+    ----------
+    arr : device array
+    val : scalar
+    """
+    found = rmm.device_array_like(arr)
+    if found.size > 0:
+        if arr.dtype in ('float32', 'float64'):
+            gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+        else:
+            gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
+    from cudf.dataframe.columnops import as_column
+    found_col = as_column(found)
+    max_index = found_col.max()
+    return max_index
+
+
 def find_segments(arr, segs=None, markers=None):
     """Find beginning indices of runs of equal values.
 
@@ -833,7 +879,7 @@ def find_segments(arr, segs=None, markers=None):
     ct = slots[slots.size - 1]
     scanned = slots[:-1]
     # Compact segments
-    begins = rmm.device_array(shape=int(ct), dtype=np.intp)
+    begins = rmm.device_array(shape=int(ct), dtype=np.int32)
     if markers.size > 0:
         gpu_scatter_segment_begins.forall(markers.size)(markers, scanned,
                                                         begins)
@@ -918,3 +964,24 @@ def boolean_array_to_index_array(bool_array):
     indices = arange(len(bool_array))
     _, selinds = copy_to_dense(indices, mask=boolbits)
     return selinds
+
+
+@cuda.jit
+def gpu_window_sizes_from_offset(arr, window_sizes, offset):
+    i = cuda.grid(1)
+    j = i
+    if i < arr.size:
+        while j > -1:
+            if (arr[i] - arr[j]) >= offset:
+                break
+            j -= 1
+        window_sizes[i] = i - j
+
+
+def window_sizes_from_offset(arr, offset):
+    window_sizes = rmm.device_array(shape=(arr.shape), dtype="int32")
+    if arr.size > 0:
+        gpu_window_sizes_from_offset.forall(arr.size)(
+            arr, window_sizes, offset
+        )
+    return window_sizes

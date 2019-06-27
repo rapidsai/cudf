@@ -7,8 +7,9 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
+from libcpp.string cimport string
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "binaryop.hpp" nogil:
 
     ctypedef enum gdf_binary_operator:
         GDF_ADD,
@@ -18,6 +19,7 @@ cdef extern from "cudf.h" nogil:
         GDF_TRUE_DIV,
         GDF_FLOOR_DIV,
         GDF_MOD,
+        GDF_PYMOD,
         GDF_POW,
         GDF_EQUAL,
         GDF_NOT_EQUAL,
@@ -28,22 +30,13 @@ cdef extern from "cudf.h" nogil:
         GDF_BITWISE_AND,
         GDF_BITWISE_OR,
         GDF_BITWISE_XOR,
+        GDF_LOGICAL_AND,
+        GDF_LOGICAL_OR,
+        GDF_INVALID_BINARY
 
-    cdef gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
-    cdef gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) except +
-    cdef gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
+cdef extern from "binaryop.hpp" namespace "cudf" nogil:
 
-    cdef gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_sub_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_mul_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_floordiv_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_div_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_gt_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_ge_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_lt_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_le_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_eq_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_ne_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_bitwise_and_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_bitwise_or_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
-    cdef gdf_error gdf_bitwise_xor_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
+    cdef void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
+    cdef void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) except +
+    cdef void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
+    cdef void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const string&       ptx) except +

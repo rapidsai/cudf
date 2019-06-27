@@ -17,11 +17,6 @@
 #pragma once
 
 /*
- * @brief Interface to parse CSV data to GDF columns
- */
-gdf_error read_csv(csv_read_arg *args);
-
-/*
  * @brief Interface to output GDF columns to CSV format
  *
  * This function accepts an array of gdf_columns and creates a CSV
@@ -33,30 +28,6 @@ gdf_error read_csv(csv_read_arg *args);
  * @returns GDF_SUCCESS if the CSV format was created successfully.
  */
 gdf_error write_csv(csv_write_arg *args);
-
-/*
- * @brief Interface to parse ORC data to GDF columns
- *
- * This function accepts an input source for an Apache ORC dataset and outputs
- * an array of gdf_columns.
- *
- * @param[in,out] args Structure containing input and output args
- *
- * @return gdf_error GDF_SUCCESS if successful
- **/
-gdf_error read_orc(orc_read_arg *args);
-
-/**
- * @brief Interface to parse Parquet data to GDF columns
- *
- * This function accepts an input source for an Apache Parquet dataset and
- * outputs an array of gdf_columns.
- *
- * @param[in,out] args Structure containing input and output args
- *
- * @return gdf_error GDF_SUCCESS if successful
- **/
-gdf_error read_parquet(pq_read_arg *args);
 
 /*
  * @brief Interface to convert GDF Columns to Compressed Sparse Row

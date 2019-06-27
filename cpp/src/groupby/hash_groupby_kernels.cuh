@@ -17,10 +17,10 @@
 #ifndef GROUPBY_KERNELS_H
 #define GROUPBY_KERNELS_H
 
-#include "hash/concurrent_unordered_map.cuh"
-#include <table/device_table.cuh>
-
 #include "aggregation_operations.hpp"
+
+#include <hash/concurrent_unordered_map.cuh>
+#include <table/device_table.cuh>
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -132,8 +132,7 @@ __global__ void extract_groupby_result(const map_type * const __restrict__ the_m
 {
   size_t i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  constexpr typename map_type::key_type unused_key{map_type::get_unused_key()};
-
+  const typename map_type::key_type unused_key{the_map->get_unused_key()};
   const typename map_type::value_type * const __restrict__ hashtabl_values = the_map->data();
 
   // TODO: Use _shared_ thread block cache for writing temporary ouputs and then

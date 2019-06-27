@@ -115,7 +115,7 @@ namespace cudf {
 #pragma hd_warning_disable 
 #pragma nv_exec_check_disable
 template <class functor_t, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE decltype(auto) type_dispatcher(gdf_dtype dtype,
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dtype,
                                                          functor_t f,
                                                          Ts&&... args) {
   switch(dtype)

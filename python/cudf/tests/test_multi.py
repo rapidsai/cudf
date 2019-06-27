@@ -6,6 +6,8 @@ import pandas as pd
 import numpy as np
 import cudf as gd
 
+from cudf.tests.utils import assert_eq
+
 
 def make_frames(index=None, nulls='none'):
     df = pd.DataFrame({'x': range(10),
@@ -45,6 +47,7 @@ def test_concat(index, nulls):
     gdf_empty1 = gdf2[:0]
     assert len(gdf_empty1) == 0
     df_empty1 = gdf_empty1.to_pandas()
+
     # DataFrame
     res = gd.concat([gdf, gdf2, gdf, gdf_empty1]).to_pandas()
     sol = pd.concat([df, df2, df, df_empty1])
@@ -63,6 +66,23 @@ def test_concat(index, nulls):
     sol = df.index.append(df2.index)
     pd.util.testing.assert_index_equal(res, sol, check_names=False,
                                        check_categorical=False)
+
+
+@pytest.mark.parametrize('values', [
+    ['foo', 'bar'],
+    [1.0, 2.0],
+    pd.Series(['one', 'two'], dtype='category')
+])
+def test_concat_all_nulls(values):
+    pa = pd.Series(values)
+    pb = pd.Series([None])
+    ps = pd.concat([pa, pb])
+
+    ga = gd.Series(values)
+    gb = gd.Series([None])
+    gs = gd.concat([ga, gb])
+
+    assert_eq(ps, gs, check_dtype=False, check_categorical=False)
 
 
 def test_concat_errors():

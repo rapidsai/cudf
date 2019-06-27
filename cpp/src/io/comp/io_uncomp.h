@@ -17,8 +17,9 @@
 #pragma once
 
 #include <vector>
+#include <string>
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 enum {
     IO_UNCOMP_STREAM_TYPE_INFER     = 0,
@@ -35,6 +36,9 @@ enum {
 };
 
 gdf_error io_uncompress_single_h2d(const void *src, gdf_size_type src_size, int strm_type, std::vector<char>& dst);
+
+gdf_error getUncompressedHostData(const char* h_data, size_t num_bytes,
+    const std::string& compression, std::vector<char>& h_uncomp_data);
 
 class HostDecompressor
 {

@@ -214,7 +214,7 @@ def query_execute(df, expr, callenv):
         else:
             envargs.append(val)
     # prepare col args
-    colarrays = [df[col].to_gpu_array() for col in compiled['colnames']]
+    colarrays = [df[col].data.mem for col in compiled['colnames']]
     # allocate output buffer
     nrows = len(df)
     out = rmm.device_array(nrows, dtype=np.bool_)

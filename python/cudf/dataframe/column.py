@@ -13,6 +13,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from librmm_cffi import librmm as rmm
 import nvstrings
 import cudf.bindings.quantile as cpp_quantile
+import cudf.bindings.copying as cpp_copying
 
 from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
@@ -61,10 +62,23 @@ class Column(object):
                 dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
 
-        # Handle strings separately
-        if all(isinstance(o, StringColumn) for o in objs):
-            objs = [o._data for o in objs]
-            return StringColumn(data=nvstrings.from_strings(*objs))
+        # Find the first non-null column:
+        head = objs[0]
+        for i, obj in enumerate(objs):
+            if len(obj) != obj.null_count:
+                head = obj
+                break
+
+        for i, obj in enumerate(objs):
+            # Check that all columns are the same type:
+            if not objs[i].is_type_equivalent(head):
+                # if all null, cast to appropriate dtype
+                if len(obj) == obj.null_count:
+                    from cudf.dataframe.columnops import column_empty_like
+                    objs[i] = column_empty_like(head,
+                                                dtype=head.dtype,
+                                                masked=True,
+                                                newsize=len(obj))
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
@@ -74,9 +88,15 @@ class Column(object):
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
-        for o in objs:
-            if not o.is_type_equivalent(head):
+        for obj in objs:
+            if not(obj.is_type_equivalent(head)):
                 raise ValueError("All series must be of same type")
+
+        # Handle strings separately
+        if all(isinstance(o, StringColumn) for o in objs):
+            objs = [o._data for o in objs]
+            return StringColumn(data=nvstrings.from_strings(*objs))
+
         # Filter out inputs that have 0 length
         objs = [o for o in objs if len(o) > 0]
         nulls = sum(o.null_count for o in objs)
@@ -384,6 +404,11 @@ class Column(object):
         ------
         ``IndexError`` if out-of-bound
         """
+        index = int(index)
+        if index < 0:
+            index = len(self) + index
+        if index > len(self) - 1:
+            raise IndexError
         val = self.data[index]  # this can raise IndexError
         valid = (cudautils.mask_get.py_func(self.nullmask, index)
                  if self.has_null_mask else True)
@@ -517,7 +542,7 @@ class Column(object):
         indices = np.argwhere(arr == value)
         if not len(indices):
             raise ValueError('value not found')
-        return indices[0, 0]
+        return indices[-1, 0]
 
     def find_last_value(self, value):
         """
@@ -530,21 +555,8 @@ class Column(object):
         return indices[-1, 0]
 
     def append(self, other):
-        """Append another column
-        """
-        if self.null_count > 0 or other.null_count > 0:
-            raise NotImplementedError("Appending columns with nulls is not "
-                                      "yet supported")
-        newsize = len(self) + len(other)
-        # allocate memory
-        data_dtype = np.result_type(self.data.dtype, other.data.dtype)
-        mem = rmm.device_array(shape=newsize, dtype=data_dtype)
-        newbuf = Buffer.from_empty(mem)
-        # copy into new memory
-        for buf in [self.data, other.data]:
-            newbuf.extend(buf.to_gpu_array())
-        # return new column
-        return self.replace(data=newbuf)
+        from cudf.dataframe.columnops import as_column
+        return Column._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):
@@ -564,15 +576,8 @@ class Column(object):
         if indices.size == 0:
             return self.copy()
 
-        data = cudautils.gather(data=self._data.to_gpu_array(), index=indices)
-
-        if self._mask:
-            mask = self._get_mask_as_column().take(indices).as_mask()
-            mask = Buffer(mask)
-        else:
-            mask = None
-
-        return self.replace(data=Buffer(data), mask=mask)
+        # Returns a new column
+        return cpp_copying.apply_gather_column(self, indices)
 
     def as_mask(self):
         """Convert booleans to bitmask

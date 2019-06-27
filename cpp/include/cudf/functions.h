@@ -161,7 +161,6 @@ gdf_error gdf_column_concat(gdf_column *output, gdf_column *columns_to_concat[],
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
  *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                                    GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multi-sort case any row with null is largest
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
@@ -305,61 +304,6 @@ const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle);
 const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle);
 
 
-/* sorting */
-
-/**
- * @brief  Constructor for the gdf_radixsort_plan_type object
- *
- * @param[in] Number of items to sort
- * @param[in] Indicates if sort should be ascending or descending. 1 = Descending, 0 = Ascending
- * @param[in] The least-significant bit index (inclusive) needed for key comparison
- * @param[in] The most-significant bit index (exclusive) needed for key comparison (e.g., sizeof(unsigned int) * 8)
- *
- * @returns  gdf_radixsort_plan_type object pointer
- */
-gdf_radixsort_plan_type* gdf_radixsort_plan(size_t num_items, int descending,
-                                        unsigned begin_bit, unsigned end_bit);
-
-/**
- * @brief  Allocates device memory for the radixsort
- *
- * @param[in] Radix sort plan
- * @param[in] sizeof data type of key
- * @param[in] sizeof data type of val
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_plan_setup(gdf_radixsort_plan_type *hdl,
-                                   size_t sizeof_key, size_t sizeof_val);
-
-/**
- * @brief  Frees device memory used for the radixsort
- *
- * @param[in] Radix sort plan
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort_plan_free(gdf_radixsort_plan_type *hdl);
-
-
-/**
- * @brief  Performs a radixsort on the key and value columns
- * 
- * The null_count of the keycol and valcol columns are expected to be 0
- * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_radixsort(gdf_radixsort_plan_type *hdl,
-                        gdf_column *keycol,
-                        gdf_column *valcol);
-
-
-
 /* segmented sorting */
 
 /**
@@ -420,8 +364,6 @@ gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
                                   unsigned num_segments,
                                   unsigned *d_begin_offsets,
                                   unsigned *d_end_offsets);
-
-
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
@@ -722,214 +664,9 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
 
-/* binary operators */
-
-/**
- * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
- *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid mask of rhs gdf_column and is_valid
- * bool of lhs gdf_scalar
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_scalar) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param ope (enum) The binary operator to use
- * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
- *            error code
- */
-gdf_error gdf_binary_operation_s_v(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope);
-
-/**
- * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
- *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid mask of lhs gdf_column and is_valid
- * bool of rhs gdf_scalar
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_scalar) Second operand of the operation.
- * @param ope (enum) The binary operator to use
- * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
- *            error code
- */
-gdf_error gdf_binary_operation_v_s(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope);
-
-/**
- * @brief Performs a binary operation between two gdf_columns.
- *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
- *
- * @param out (gdf_column) Output of the operation.
- * @param lhs (gdf_column) First operand of the operation.
- * @param rhs (gdf_column) Second operand of the operation.
- * @param ope (enum) The binary operator to use
- * @return    GDF_SUCCESS if the operation was successful, otherwise an appropriate
- *            error code
- */
-gdf_error gdf_binary_operation_v_v(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope);
-
-
-/* arith */
-
-gdf_error gdf_add_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_add_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_add_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_add_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_add_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_sub_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_sub_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_sub_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_sub_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_sub_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_mul_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_mul_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_mul_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_mul_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_mul_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_floordiv_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_floordiv_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_floordiv_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_floordiv_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_floordiv_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_div_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_div_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_div_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-/* logical */
-
-gdf_error gdf_gt_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_gt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_gt_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_gt_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_gt_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_gt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_ge_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ge_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ge_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ge_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ge_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ge_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_lt_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_lt_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_lt_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_lt_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_lt_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_lt_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_le_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_le_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_le_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_le_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_le_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_le_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_eq_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_eq_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_eq_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_eq_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_eq_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_eq_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_ne_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ne_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ne_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ne_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ne_f32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_ne_f64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-/* bitwise */
-
-gdf_error gdf_bitwise_and_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_and_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_and_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_and_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-gdf_error gdf_bitwise_or_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_or_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_or_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_or_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-
-/*
- * Filtering and comparison operators
- */
-
-gdf_error gdf_bitwise_xor_generic(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_xor_i8(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_xor_i32(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-gdf_error gdf_bitwise_xor_i64(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-/* validity */
-
-gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output);
-
-
-/**
- * @brief  takes a stencil and uses it to compact a colum e.g. remove all values for which the stencil = 0
- *
- * @param[in] gdf_column of input of any type
- * @param[in] gdf_column holding the stencil
- * @param[out] output gdf_column of same type as input. The output memory needs to be preallocated to be the same size as input
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_apply_stencil(gdf_column *lhs, gdf_column * stencil, gdf_column * output);
-
-
-/*
- * Hashing
- */
-
-/**
- * @brief  Creates a hash of multiple gdf_columns
- *
- * @param[in] an array of gdf_columns to be hashes together
- * @param[in] the number of columns in the array of gdf_columns to be hashes together
- * @param[out] output gdf_column of type GDF_INT64. The output memory needs to be preallocated
- * @param[in] A pointer to a cudaStream_t. If nullptr, the function will create a stream to use.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_hash_columns(gdf_column ** columns_to_hash, int num_columns, gdf_column * output_column, void * stream);
-
-
 /*
  * gdf introspection utlities
  */
-
-/**
- * @brief returns the size in bytes of the specified gdf_dtype
- * 
- * @param dtype the data type for which to return the size
- * @return gdf_size_type size in bytes
- */
-gdf_size_type gdf_dtype_size(gdf_dtype dtype);
-
-/**
- *
- * @param[in] gdf_column whose data type's byte width will be determined
- * @param[out] the byte width of the data type
- *
- * @return gdf_error GDF_SUCCESS, or GDF_UNSUPPORTED_DTYPE if col has an invalid
- *         datatype
- */
-gdf_error get_column_byte_width(gdf_column * col, int * width);
-
 
 /* 
  Multi-Column SQL ops:
@@ -937,29 +674,6 @@ gdf_error get_column_byte_width(gdf_column * col, int * width);
    ORDER-BY
    GROUP-BY
  */
-
-/**
- * @brief  Performs SQL like WHERE (Filtering)
- *
- * @param[in] # rows
- * @param[in] host-side array of gdf_columns with 0 null_count otherwise GDF_VALIDITY_UNSUPPORTED is returned
- * @param[in] # cols
- * @param[out] pre-allocated device-side array to be filled with gdf_column::data for each column; slicing of gdf_column array (host)
- * @param[out] pre-allocated device-side array to be filled with gdf_colum::dtype for each column; slicing of gdf_column array (host)
- * @param[in] device-side array of values to filter against (type-erased)
- * @param[out] device-side array of row indices that remain after filtering
- * @param[out] host-side # rows that remain after filtering
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_filter(size_t nrows,
-                    gdf_column* cols,
-                    size_t ncols,
-                    void** d_cols,
-                    int* d_types, 
-                    void** d_vals,
-                    size_t* d_indx,
-                    size_t* new_sz);
 
 /**
  * @brief  Performs SQL like GROUP BY with SUM aggregation
@@ -1101,21 +815,6 @@ gdf_error gdf_quantile_approx(gdf_column* col_in,
                               gdf_scalar*  result,
                               gdf_context* ctxt);
 
-/** 
- * @brief Replace elements from `col` according to the mapping `old_values` to
- *        `new_values`, that is, replace all `old_values[i]` present in `col` 
- *        with `new_values[i]`.
- * 
- * @param[in,out] col gdf_column with the data to be modified
- * @param[in] old_values gdf_column with the old values to be replaced
- * @param[in] new_values gdf_column with the new values
- * 
- * @returns GDF_SUCCESS upon successful completion
- *
- */
-gdf_error gdf_find_and_replace_all(gdf_column*       col,
-                                   const gdf_column* old_values,
-                                   const gdf_column* new_values);
 
 /** 
  * @brief Sorts an array of gdf_column.
@@ -1130,41 +829,15 @@ gdf_error gdf_find_and_replace_all(gdf_column*       col,
  *             context->flag_null_sort_behavior
  *                        GDF_NULL_AS_LARGEST = Nulls are treated as largest, 
  *                        GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
- *                        GDF_NULL_AS_LARGEST_FOR_MULTISORT = Special multicolumn-sort case: A row with null in any column is largest
  * 
  * @returns GDF_SUCCESS upon successful completion
  */
-gdf_error gdf_order_by(gdf_column** input_columns,
+gdf_error gdf_order_by(gdf_column const* const* input_columns,
                        int8_t*      asc_desc,
                        size_t       num_inputs,
                        gdf_column*  output_indices,
                        gdf_context * context);
 
-
-/**
- * @brief Replaces all null values in a column with either a specific value or corresponding values of another column
- *
- * This function is a binary function. It will take in two gdf_columns.
-
- * The first one is expected to be a regular gdf_column, the second one
- * has to be a column of the same type as the first, and it has to be of
- * size one or of the same size as the other column.
- * 
- * case 1: If the second column contains only one value, then this funciton will
- * replace all nulls in the first column with the value in the second
- * column.
- *  
- * case 2: If the second column is of the same size as the first, then the function will
- * replace all nulls of the first column with the corresponding elemetns of the
- * second column
- * 
- * @param[in,out] col_out A gdf_column that is the output of this function with null values replaced
- * @param[in] col_in A gdf_column that is of size 1 or same size as col_out, contains value / values to be placed in col_out
- * 
- * @returns GDF_SUCCESS upon successful completion
- */
-gdf_error gdf_replace_nulls(gdf_column*       col_out,
-                                   const gdf_column* col_in);
 /**
  * @brief Finds the indices of the bins in which each value of the column
  * belongs.

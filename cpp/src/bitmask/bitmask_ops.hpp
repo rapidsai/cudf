@@ -17,7 +17,7 @@
 #ifndef BITMASK_OPS_HPP
 #define BITMASK_OPS_HPP
 
-#include <types.hpp>
+#include <cudf/types.hpp>
 #include <cuda_runtime.h>
 
 #include <rmm/thrust_rmm_allocator.h>

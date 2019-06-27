@@ -19,8 +19,8 @@
 #include <cuda_runtime.h>
 #include <utilities/error_utils.hpp>
 #include <table/device_table.cuh>
-#include <types.hpp>
-#include <cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/cudf.h>
 
 #include "groupby_compute_api.h"
 #include "aggregation_operations.hpp"
@@ -207,7 +207,7 @@ gdf_error gdf_group_by_hash(gdf_size_type ncols,
 template<typename col_type>
 gdf_column create_gdf_column(const size_t size)
 {
-  gdf_column the_column;
+  gdf_column the_column{};
 
   // Deduce the type and set the gdf_dtype accordingly
   gdf_dtype gdf_col_type;

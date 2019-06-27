@@ -24,7 +24,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <quantiles/quantiles.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/device_vector.h>

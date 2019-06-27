@@ -63,6 +63,27 @@ public:
     grid_config_1d (grid_config_1d&&) = default;
 };
 
+/**
+ * A RAII gadget for top-level CUDF API function implementations, which may
+ * create their own streams. This will ensure the stream is destroyed when the API function returns,
+ * without you having to explicitly destroy it - and also when you exit due to an error.
+ */
+struct scoped_stream {
+    cudaStream_t stream_ { nullptr };
+
+    scoped_stream() {
+        CUDA_TRY( cudaStreamCreate(&stream_) );
+    }
+    operator cudaStream_t() { return stream_; }
+    ~scoped_stream() {
+        if (not std::uncaught_exception()) {
+            auto synch_result = cudaStreamSynchronize(stream_);
+            if (synch_result == cudaSuccess) {
+                 cudaStreamDestroy(stream_);
+            }
+        }
+    }
+};
 } // namespace cuda
 
 } // namespace util

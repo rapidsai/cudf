@@ -2,9 +2,9 @@
 #define GDF_UTILS_H
 
 #include <utilities/error_utils.hpp>
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <bitmask/bitmask_ops.hpp>
-#include <bitmask.hpp>
+#include <cudf/bitmask.hpp>
 
 #include <cuda_runtime_api.h>
 

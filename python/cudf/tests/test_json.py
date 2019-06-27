@@ -5,8 +5,20 @@ from cudf.tests.utils import assert_eq
 
 import pytest
 import os
+import numpy as np
 import pandas as pd
 import itertools
+import copy
+
+from io import StringIO
+from io import BytesIO
+
+
+def make_numeric_dataframe(nrows, dtype):
+    df = pd.DataFrame()
+    df['col1'] = np.arange(nrows, dtype=dtype)
+    df['col2'] = np.arange(1, 1 + nrows, dtype=dtype)
+    return df
 
 
 @pytest.fixture(params=[0, 1, 10, 100])
@@ -132,3 +144,144 @@ def test_json_writer(tmpdir, pdf, gdf):
         got_series = pd.read_json(gdf_series_fname, typ='series')
 
         assert_eq(expect_series, got_series)
+
+
+@pytest.fixture(params=['file_path', 'string', 'bytes_io', 'string_io'])
+def json_input(request, tmp_path_factory):
+    input_type = request.param
+    buffer = '[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n'
+
+    if input_type == 'string':
+        return buffer
+    if input_type == 'file_path':
+        fname = tmp_path_factory.mktemp("json") / "test_df.json"
+        with open(str(fname), 'w') as fp:
+            fp.write(buffer)
+        return str(fname)
+    if input_type == 'bytes_io':
+        return BytesIO(buffer.encode())
+    if input_type == 'string_io':
+        return StringIO(buffer)
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+@pytest.mark.parametrize('engine', ['auto', 'cudf', 'pandas'])
+def test_json_lines_basic(json_input, engine):
+    cu_df = cudf.read_json(json_input, engine=engine, lines=True)
+    pd_df = pd.read_json(json_input, lines=True)
+
+    assert(all(cu_df.dtypes == ['int64', 'int64', 'int64']))
+    for cu_col, pd_col in zip(cu_df.columns, pd_df.columns):
+        assert (str(cu_col) == str(pd_col))
+        np.testing.assert_array_equal(pd_df[pd_col], cu_df[cu_col])
+
+
+def test_json_lines_byte_range(json_input):
+    # include the first row and half of the second row
+    # should parse the first two rows
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(0, 15))
+    assert(df.shape == (2, 3))
+
+    # include half of the second row and half of the third row
+    # should parse only the third row
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(15, 10))
+    assert(df.shape == (1, 3))
+
+    # include half of the second row and entire third row
+    # should parse only the third row
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(15, 0))
+    assert(df.shape == (1, 3))
+
+    # include half of the second row till past the end of the file
+    # should parse only the third row
+    df = cudf.read_json(copy.deepcopy(json_input),
+                        lines=True, byte_range=(10, 50))
+    assert(df.shape == (1, 3))
+
+
+@pytest.mark.parametrize('dtype', [
+        ["float", "int", "short"],
+        {1: "int", 2: "short", 0: "float"}
+    ])
+def test_json_lines_dtypes(json_input, dtype):
+    df = cudf.read_json(json_input, lines=True, dtype=dtype)
+    assert(all(df.dtypes == ['float32', 'int32', 'int16']))
+
+
+@pytest.mark.parametrize('ext, out_comp, in_comp', [('.geez', 'gzip', 'gzip'),
+                                                    ('.beez', 'bz2', 'bz2'),
+                                                    ('.gz', 'gzip', 'infer'),
+                                                    ('.bz2', 'bz2', 'infer'),
+                                                    ('.data', None, 'infer'),
+                                                    ('.txt', None, None),
+                                                    ('', None, None)])
+def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
+    fname = tmpdir.mkdir("gdf_json").join('tmp_json_compression' + ext)
+
+    nrows = 20
+    pd_df = make_numeric_dataframe(nrows, np.int32)
+    pd_df.to_json(fname, compression=out_comp, lines=True, orient='records')
+
+    cu_df = cudf.read_json(str(fname), compression=in_comp, lines=True,
+                           dtype=['int', 'int'])
+
+    pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())
+
+
+@pytest.mark.filterwarnings("ignore:Using CPU")
+def test_json_engine_selection():
+    json = '[1, 2, 3]'
+
+    # should use the cudf engine
+    df = cudf.read_json(json, lines=True)
+    # column names are strings when parsing with cudf
+    for col_name in df.columns:
+        assert(isinstance(col_name, str))
+
+    # should use the pandas engine
+    df = cudf.read_json(json, lines=False)
+    # column names are ints when parsing with pandas
+    for col_name in df.columns:
+        assert(isinstance(col_name, int))
+
+    # should use the pandas engine
+    df = cudf.read_json(json, lines=True, engine='pandas')
+    # column names are ints when parsing with pandas
+    for col_name in df.columns:
+        assert(isinstance(col_name, int))
+
+    # should raise an exception
+    with pytest.raises(ValueError):
+        df = cudf.read_json(json, lines=False, engine='cudf')
+
+
+def test_json_bool_values():
+    buffer = '[true,1]\n[false,false]\n[true,true]'
+    cu_df = cudf.read_json(buffer, lines=True)
+    pd_df = pd.read_json(buffer, lines=True)
+
+    # types should be ['bool', 'int64']
+    np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
+    np.testing.assert_array_equal(pd_df[0], cu_df['0'])
+    # boolean values should be converted to 0/1
+    np.testing.assert_array_equal(pd_df[1], cu_df['1'])
+
+    cu_df = cudf.read_json(buffer, lines=True, dtype=['bool', 'long'])
+    np.testing.assert_array_equal(pd_df.dtypes, cu_df.dtypes)
+
+
+@pytest.mark.parametrize('buffer', [
+        '[null,]\n[1.0, ]',
+        '{"0":null,"1":}\n{"0":1.0,"1": }'
+    ])
+def test_json_null_literal(buffer):
+    df = cudf.read_json(buffer, lines=True)
+
+    # first column contains a null field, type sould be set to float
+    # second column contains only empty fields, type should be set to int8
+    np.testing.assert_array_equal(df.dtypes, ['float64', 'int8'])
+    np.testing.assert_array_equal(df['0'], [None, 1.0])
+    np.testing.assert_array_equal(df['1'], [None, None])

@@ -17,13 +17,14 @@
 #ifndef DEVICE_TABLE_H
 #define DEVICE_TABLE_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
+#include <bitmask/bit_mask.cuh>
 #include <bitmask/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -124,10 +125,12 @@ class device_table {
 
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
+  __host__ __device__ bool has_nulls() const { return _has_nulls; }
 
  private:
   gdf_size_type _num_columns;  ///< The number of columns in the table
   gdf_size_type _num_rows{0};  ///< The number of rows in the table
+  bool _has_nulls;
   gdf_column* device_columns{
       nullptr};  ///< Array of `gdf_column`s in device memory
   cudaStream_t
@@ -150,6 +153,7 @@ class device_table {
     CUDF_EXPECTS(nullptr != columns,
                  "Attempt to create table with a null column.");
     _num_rows = columns[0]->size;
+    _has_nulls = false;
 
     std::vector<gdf_column> temp_columns(num_cols);
 
@@ -158,6 +162,9 @@ class device_table {
       CUDF_EXPECTS(_num_rows == columns[i]->size, "Column size mismatch");
       if (_num_rows > 0) {
         CUDF_EXPECTS(nullptr != columns[i]->data, "Column missing data.");
+        if (columns[i]->null_count > 0) {
+          _has_nulls = true;
+        }
       }
       temp_columns[i] = *columns[i];
     }
@@ -172,76 +179,68 @@ class device_table {
 };
 
 namespace {
-struct elements_are_equal {
-  template <typename ColumnType>
-  __device__ __forceinline__ bool operator()(gdf_column const& lhs,
-                                             gdf_size_type lhs_index,
-                                             gdf_column const& rhs,
-                                             gdf_size_type rhs_index,
-                                             bool nulls_are_equal = false) {
-    bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
-    bool const rhs_is_valid{gdf_is_valid(rhs.valid, rhs_index)};
 
-    // If both values are non-null, compare them
-    if (lhs_is_valid and rhs_is_valid) {
-      return static_cast<ColumnType const*>(lhs.data)[lhs_index] ==
-             static_cast<ColumnType const*>(rhs.data)[rhs_index];
-    }
-
-    // If both values are null
-    if (not lhs_is_valid and not rhs_is_valid) {
-      return nulls_are_equal;
-    }
-
-    // If only one value is null, they can never be equal
-    return false;
-  }
-};
-}  // namespace
-
-/**
- * @brief  Checks for equality between two rows between two tables.
- *
- * @param lhs The left table
- * @param lhs_index The index of the row in the rhs table to compare
- * @param rhs The right table
- * @param rhs_index The index of the row within rhs table to compare
- * @param nulls_are_equal Flag indicating whether two null values are considered
- * equal
- *
- * @returns true If the two rows are element-wise equal
- * @returns false If any element differs between the two rows
- */
-__device__ inline bool rows_equal(device_table const& lhs,
-                                  const gdf_size_type lhs_index,
-                                  device_table const& rhs,
-                                  const gdf_size_type rhs_index,
-                                  bool nulls_are_equal = false) {
-  auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
-                            gdf_column const& l, gdf_column const& r) {
-    return cudf::type_dispatcher(l.dtype, elements_are_equal{}, l, lhs_index, r,
-                                 rhs_index, nulls_are_equal);
-  };
-
-  return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
-                       equal_elements);
-}
-
-namespace {
-template <template <typename> typename hash_function>
+template <bool nullable, template <typename> typename hash_function>
 struct hash_element {
   template <typename col_type>
   __device__ inline hash_value_type operator()(gdf_column const& col,
                                                gdf_size_type row_index) {
     hash_function<col_type> hasher;
 
-    // treat null values as the lowest possible value of the type
-    col_type const value_to_hash =
-        gdf_is_valid(col.valid, row_index)
-            ? static_cast<col_type*>(col.data)[row_index]
-            : std::numeric_limits<col_type>::lowest();
+    col_type value_to_hash{};
+
+    if (nullable) {
+      // treat null values as the lowest possible value of the type
+      value_to_hash = gdf_is_valid(col.valid, row_index)
+                          ? static_cast<col_type const*>(col.data)[row_index]
+                          : std::numeric_limits<col_type>::lowest();
+    } else {
+      value_to_hash = static_cast<col_type const*>(col.data)[row_index];
+    }
 
     return hasher(value_to_hash);
+  }
+};
+
+template <bool update_target_bitmask>
+struct copy_element {
+  template <typename T>
+  __device__ inline void operator()(gdf_column const& target,
+                                    gdf_size_type target_index,
+                                    gdf_column const& source,
+                                    gdf_size_type source_index) {
+    // FIXME: This will copy garbage data if the source element is null
+    static_cast<T*>(target.data)[target_index] =
+        static_cast<T const*>(source.data)[source_index];
+
+    // This is very inefficient, setting the target bitmask should be done
+    // separately when possible
+    if (update_target_bitmask) {
+      using namespace bit_mask;
+
+      bit_mask_t const* const source_mask{
+          reinterpret_cast<bit_mask_t const*>(source.valid)};
+      bit_mask_t* const target_mask{
+          reinterpret_cast<bit_mask_t*>(target.valid)};
+
+      if (nullptr != target_mask) {
+        bool const target_is_valid{is_valid(target_mask, target_index)};
+        if (nullptr != source_mask) {
+          bool const source_is_valid{is_valid(source_mask, source_index)};
+          if (source_is_valid and not target_is_valid) {
+            set_bit_safe(target_mask, target_index);
+          } else if (not source_is_valid and target_is_valid) {
+            clear_bit_safe(target_mask, target_index);
+          }
+        } else {
+          // If the source mask doesn't exist, it's assumed the source element
+          // is valid
+          if (not target_is_valid) {
+            set_bit_safe(target_mask, target_index);
+          }
+        }
+      }
+    }
   }
 };
 }  // namespace
@@ -261,10 +260,12 @@ struct hash_element {
  * column
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash>
+template <bool nullable = true,
+          template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(
     device_table const& t, gdf_size_type row_index,
     hash_value_type const* __restrict__ initial_hash_values) {
@@ -276,9 +277,10 @@ __device__ inline hash_value_type hash_row(
   // hash value
   auto hasher = [row_index, &t, initial_hash_values,
                  hash_combiner](gdf_size_type column_index) {
-    hash_value_type hash_value = cudf::type_dispatcher(
-        t.get_column(column_index)->dtype, hash_element<hash_function>{},
-        *t.get_column(column_index), row_index);
+    hash_value_type hash_value =
+        cudf::type_dispatcher(t.get_column(column_index)->dtype,
+                              hash_element<nullable, hash_function>{},
+                              *t.get_column(column_index), row_index);
 
     hash_value = hash_combiner(initial_hash_values[column_index], hash_value);
 
@@ -304,10 +306,12 @@ __device__ inline hash_value_type hash_row(
  * @param[in] row_index The row of the table to compute the hash value for
  * @tparam hash_function The hash function that is used for each element in
  * the row, as well as combine hash values
+ * @tparam nullable Flag indicating the possibility of null values
  *
  * @return The hash value of the row
  * ----------------------------------------------------------------------------**/
-template <template <typename> class hash_function = default_hash>
+template <bool nullable = true,
+          template <typename> class hash_function = default_hash>
 __device__ inline hash_value_type hash_row(device_table const& t,
                                            gdf_size_type row_index) {
   auto hash_combiner = [](hash_value_type lhs, hash_value_type rhs) {
@@ -317,7 +321,7 @@ __device__ inline hash_value_type hash_row(device_table const& t,
   // Hashes an element in a column
   auto hasher = [row_index, &t, hash_combiner](gdf_size_type column_index) {
     return cudf::type_dispatcher(t.get_column(column_index)->dtype,
-                                 hash_element<hash_function>{},
+                                 hash_element<nullable, hash_function>{},
                                  *t.get_column(column_index), row_index);
   };
 
@@ -328,38 +332,33 @@ __device__ inline hash_value_type hash_row(device_table const& t,
       hash_value_type{0}, hash_combiner);
 }
 
-namespace {
-struct copy_element {
-  template <typename T>
-  __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
-                                    gdf_column const& source,
-                                    gdf_size_type source_index) {
-    static_cast<T*>(target.data)[target_index] =
-        static_cast<T const*>(source.data)[source_index];
-  }
-};
-}  // namespace
-
 /**
  * @brief  Copies a row from a source table to a target table.
  *
  * This device function should be called by a single thread and the thread
  * will copy all of the elements in the row from one table to the other.
  *
- * FIXME: Does NOT set null bitmask for the target row.
+ * @note If the `update_target_bitmask` template argument is `true`, then this
+ * function will update the target bitmask (if it exists) to match the bitmask
+ * for the source element. A non-existant source bitmask is assumed to mean the
+ * source element is non-null. However, this operation is very inefficient and
+ * should be done outside of this function when possible.
  *
  * @param[in,out] The table whose row will be updated
  * @param[in] The index of the row to update in the target table
  * @param[in] source The table whose row will be copied
  * @param source_row_index The index of the row to copy in the source table
+ * @tparam update_target_bitmask Flag indicating if the target bitmask should be
+ * updated
  */
+template <bool update_target_bitmask = true>
 __device__ inline void copy_row(device_table const& target,
                                 gdf_size_type target_index,
                                 device_table const& source,
                                 gdf_size_type source_index) {
   for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    cudf::type_dispatcher(target.get_column(i)->dtype, copy_element{},
+    cudf::type_dispatcher(target.get_column(i)->dtype,
+                          copy_element<update_target_bitmask>{},
                           *target.get_column(i), target_index,
                           *source.get_column(i), source_index);
   }
