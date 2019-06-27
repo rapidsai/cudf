@@ -1490,12 +1490,12 @@ class Series(object):
         """
         from cudf import DataFrame
 
-        value = Series(cats, dtype=self.dtype)
-        order = Series(cudautils.arange(len(self)))
-        codes = Series(cudautils.arange(len(value)))
+        if dtype is None:
+            dtype = utils.min_scalar_type(len(cats), 32)
 
-        if dtype is not None:
-            codes = codes.astype(dtype)
+        value = Series(cats).astype(self.dtype)
+        order = Series(cudautils.arange(len(self)))
+        codes = Series(cudautils.arange(len(value), dtype=dtype))
 
         value = DataFrame({'value': value, 'code': codes})
         codes = DataFrame({'value': self, 'order': order})

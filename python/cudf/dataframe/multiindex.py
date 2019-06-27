@@ -173,7 +173,7 @@ class MultiIndex(Index):
         # time the groupby is calculated.
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
-            codes[name] = code.reset_index(drop=True)
+            codes[name] = code.reset_index(drop=True).astype(np.int64)
             levels.append(cats.reset_index(drop=True))
 
         self._levels = levels
