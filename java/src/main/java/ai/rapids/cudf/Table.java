@@ -358,7 +358,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.length - offset;
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
-      newBuf.setBytes(0, buffer, 0, len);
+      newBuf.setBytes(0, buffer, offset, len);
       return readParquet(opts, newBuf, 0, len);
     }
   }
