@@ -111,9 +111,9 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        mi = MultiIndex(source_data=self._source_data)
+        mi = MultiIndex(source_data=self._source_data.copy(deep))
         if self._levels is not None:
-            mi._levels = self._levels.copy()
+            mi._levels = np.array([s.copy(deep) for s in self._levels])
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if self.names is not None:
