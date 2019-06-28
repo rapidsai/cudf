@@ -76,10 +76,18 @@ class Series(object):
         if isinstance(data, pd.Series):
             name = data.name
             index = as_index(data.index)
+        elif isinstance(data, pd.Index):
+            name = data.name
+            data = data.values
+        elif isinstance(data, Index):
+            name = data.name
+            data = data.as_column()
+
         if isinstance(data, Series):
             index = data._index if index is None else index
             name = data.name
             data = data._column
+
         if data is None:
             data = {}
 

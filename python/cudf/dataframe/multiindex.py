@@ -401,7 +401,9 @@ class MultiIndex(Index):
             'level': self.levels[level_idx]
         })
         lhs = DataFrame({'idx': col})
-        return lhs.merge(rhs).level
+        level_values = lhs.merge(rhs).level
+        level_values.name = self.codes[level].name
+        return level_values
 
     def _to_frame(self):
         from cudf import DataFrame

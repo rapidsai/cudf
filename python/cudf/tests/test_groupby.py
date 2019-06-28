@@ -461,7 +461,8 @@ def test_advanced_groupby_levels():
     raises.match("Too many levels")
     with pytest.raises(IndexError) as raises:
         gdh = gdg.groupby(level=2).sum()
-    raises.match("Too many levels")
+    # we use a different error message
+    raises.match("Invalid level number")
     assert_eq(pdh, gdh)
 
 
