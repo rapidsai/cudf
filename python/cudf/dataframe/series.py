@@ -188,6 +188,22 @@ class Series(object):
 
         return Series._concat([this, other], index=index)
 
+    def reindex(self, index=None, copy=True):
+        """Return a Series that conforms to a new index
+
+        Parameters
+        ----------
+        index : Index, Series-convertible, default None
+        copy : boolean, default True
+
+        Returns
+        -------
+        A new Series that conforms to the supplied index
+        """
+        name = self.name or 0
+        idx = self._index if index is None else index
+        return self.to_frame(name).reindex(idx, copy=copy)[name]
+
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
         if not drop:
@@ -1020,6 +1036,69 @@ class Series(object):
         if not inplace:
             return self._copy_construct(data=data)
 
+    def where(self, cond, other=None, axis=None):
+        """
+        Replace values with other where the condition is False.
+
+        :param cond: boolean
+            Where cond is True, keep the original value. Where False,
+            replace with corresponding value from other.
+        :param other: scalar, default None
+            Entries where cond is False are replaced with
+            corresponding value from other.
+        :param axis:
+        :return: Series
+
+        Examples:
+        ---------
+        >>> import cudf
+        >>> ser = cudf.Series([4, 3, 2, 1, 0])
+        >>> print(ser.where(ser > 2, 10))
+        0     4
+        1     3
+        2    10
+        3    10
+        4    10
+        >>> print(ser.where(ser > 2))
+        0    4
+        1    3
+        2
+        3
+        4
+
+        """
+
+        to_replace = self._column.apply_boolean_mask(~cond & self.notna())
+        if is_scalar(other):
+            all_nan = other is None
+            if all_nan:
+                new_value = [other] * len(to_replace)
+            else:
+                # pre-determining the dtype to match the pandas's output
+                typ = to_replace.dtype
+                if np.dtype(type(other)).kind in 'f' and typ.kind in 'i':
+                    typ = np.int64 if other == int(other) else np.float64
+
+                new_value = utils.scalar_broadcast_to(
+                    other, (len(to_replace),), np.dtype(typ)
+                )
+        else:
+            raise NotImplementedError(
+                "Replacement arg of {} is not supported.".format(type(other))
+            )
+
+        result = self._column.find_and_replace(to_replace, new_value,
+                                               all_nan=all_nan)
+
+        # To replace nulls:: If there are nulls in `cond` series, then we will
+        # fill them with `False`, which means, by default, elements containing
+        # nulls, are failing the given condition.
+        # But, if condition is deliberately setting the `True` for nulls (i.e.
+        # `s.isnulls()`), then there are no nulls in `cond`
+        if not all_nan and (~cond.fillna(False) & self.isnull()).any():
+            result = result.fillna(other)
+        return self._copy_construct(data=result)
+
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.
 
@@ -1286,9 +1365,9 @@ class Series(object):
         sr_inds = self._copy_construct(data=col_inds)
         return sr_keys, sr_inds
 
-    def replace(self, to_replace, value):
+    def replace(self, to_replace, replacement):
         """
-        Replace values given in *to_replace* with *value*.
+        Replace values given in *to_replace* with *replacement*.
 
         Parameters
         ----------
@@ -1301,9 +1380,9 @@ class Series(object):
 
             * list of numeric or str:
 
-                - If *value* is also list-like, *to_replace* and *value* must
-                be of same length.
-        value : numeric, str, list-like, or dict
+                - If *replacement* is also list-like, *to_replace* and
+                *replacement* must be of same length.
+        replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
 
         See also
@@ -1315,33 +1394,45 @@ class Series(object):
         result : Series
             Series after replacement. The mask and index are preserved.
         """
+        # if all the elements of replacement column are None then propagate the
+        # same dtype as self.dtype in columnops.as_column() for replacement
+        all_nan = False
         if not is_scalar(to_replace):
-            if is_scalar(value):
-                value = utils.scalar_broadcast_to(
-                    value, (len(to_replace),), np.dtype(type(value))
-                )
+            if is_scalar(replacement):
+                all_nan = replacement is None
+                if all_nan:
+                    replacement = [replacement] * len(to_replace)
+                else:
+                    replacement = utils.scalar_broadcast_to(
+                        replacement, (len(to_replace),),
+                        np.dtype(type(replacement))
+                    )
         else:
-            if not is_scalar(value):
+            if not is_scalar(replacement):
                 raise TypeError(
                     "Incompatible types '{}' and '{}' "
-                    "for *to_replace* and *value*.".format(
-                        type(to_replace).__name__, type(value).__name__
+                    "for *to_replace* and *replacement*.".format(
+                        type(to_replace).__name__, type(replacement).__name__
                     )
                 )
             to_replace = [to_replace]
-            value = [value]
+            replacement = [replacement]
 
-        if len(to_replace) != len(value):
+        if len(to_replace) != len(replacement):
             raise ValueError(
                 "Replacement lists must be"
                 "of same length."
-                "Expected {}, got {}.".format(len(to_replace), len(value))
+                "Expected {}, got {}.".format(len(to_replace),
+                                              len(replacement))
             )
 
-        if is_dict_like(to_replace) or is_dict_like(value):
+        if is_dict_like(to_replace) or is_dict_like(replacement):
             raise TypeError("Dict-like args not supported in Series.replace()")
 
-        result = self._column.find_and_replace(to_replace, value)
+        if isinstance(replacement, list):
+            all_nan = replacement.count(None) == len(replacement)
+        result = self._column.find_and_replace(to_replace,
+                                               replacement, all_nan)
 
         return self._copy_construct(data=result)
 
@@ -1751,11 +1842,37 @@ class Series(object):
         DataFrame
 
         """
+
+        if isinstance(q, Number) or utils.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+
+        if isinstance(q, Number):
+            res = self._column.quantile(q, interpolation, exact)
+            if len(res) == 0:
+                return np.nan
+            else:
+                # if q is an int/float, we shouldn't be constructing series
+                return res.pop()
+
         if not quant_index:
             return Series(self._column.quantile(q, interpolation, exact))
         else:
-            return Series(self._column.quantile(q, interpolation, exact),
-                          index=as_index(np.asarray(q)))
+            from cudf.dataframe.columnops import column_empty_like
+            np_array_q = np.asarray(q)
+            if len(self) == 0:
+                result = column_empty_like(np_array_q, dtype=self.dtype,
+                                           masked=True,
+                                           newsize=len(np_array_q))
+            else:
+                result = self._column.quantile(q, interpolation, exact)
+            return Series(result,
+                          index=as_index(np_array_q))
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
@@ -1917,7 +2034,7 @@ class Series(object):
                                                     periods)
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, group_series=None, level=None, sort=False,
+    def groupby(self, group_series=None, level=None, sort=True,
                 group_keys=True):
         if group_keys is not True:
             raise NotImplementedError(

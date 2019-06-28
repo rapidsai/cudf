@@ -37,6 +37,55 @@ def test_series_replace():
     sr8 = sr1.replace(sr1[:3], 5)
     np.testing.assert_equal(sr8.to_array(), a8)
 
+    # large input containing null
+    sr9 = Series(list(range(400)) + [None])
+    sr10 = sr9.replace([22, 323, 27, 0], None)
+    assert sr10.null_count == 5
+    assert len(sr10.to_array()) == (401-5)
+
+    sr11 = sr9.replace([22, 323, 27, 0], -1)
+    assert sr11.null_count == 1
+    assert len(sr11.to_array()) == (401 - 1)
+
+    # large input not containing nulls
+    sr9 = sr9.fillna(-11)
+    sr12 = sr9.replace([22, 323, 27, 0], None)
+    assert sr12.null_count == 4
+    assert len(sr12.to_array()) == (401 - 4)
+
+    sr13 = sr9.replace([22, 323, 27, 0], -1)
+    assert sr13.null_count == 0
+    assert len(sr13.to_array()) == 401
+
+
+def test_series_replace_with_nulls():
+    a1 = np.array([0, 1, 2, 3, 4])
+
+    # Numerical
+    a2 = np.array([-10, 1, 2, 3, 4])
+    sr1 = Series(a1)
+    sr2 = sr1.replace(0, None).fillna(-10)
+    np.testing.assert_equal(sr2.to_array(), a2)
+
+    # List input
+    a6 = np.array([-10, 6, 2, 3, 4])
+    sr6 = sr1.replace([0, 1], [None, 6]).fillna(-10)
+    np.testing.assert_equal(sr6.to_array(), a6)
+
+    a7 = np.array([5.5, 6.5, 2, 3, 4, -10])
+    sr1 = Series([0, 1, 2, 3, 4, None])
+    sr7 = sr1.replace([0, 1], [5.5, 6.5]).fillna(-10)
+    np.testing.assert_equal(sr7.to_array(), a7)
+
+    # Series input
+    a8 = np.array([-10, -10, -10, 3, 4, -10])
+    sr8 = sr1.replace(sr1[:3], None).fillna(-10)
+    np.testing.assert_equal(sr8.to_array(), a8)
+
+    a9 = np.array([-10, 6.5, 2, 3, 4, -10])
+    sr9 = sr1.replace([0, 1], [None, 6.5]).fillna(-10)
+    np.testing.assert_equal(sr9.to_array(), a9)
+
 
 def test_dataframe_replace():
     # numerical
@@ -71,6 +120,42 @@ def test_dataframe_replace():
     pdf9 = pdf1.replace({'a': 0}, {'a': 4})
     gdf9 = gdf1.replace({'a': 0}, {'a': 4})
     pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
+
+
+def test_dataframe_replace_with_nulls():
+    # numerical
+    pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
+    gdf1 = DataFrame.from_pandas(pdf1)
+    pdf2 = pdf1.replace(0, 4)
+    gdf2 = gdf1.replace(0, None).fillna(4)
+    pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
+
+    # list input
+    pdf6 = pdf1.replace([0, 1], [4, 5])
+    gdf6 = gdf1.replace([0, 1], [4, None]).fillna(5)
+    pd.testing.assert_frame_equal(gdf6.to_pandas(), pdf6)
+
+    pdf7 = pdf1.replace([0, 1], 4)
+    gdf7 = gdf1.replace([0, 1], None).fillna(4)
+    pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
+
+    # dict input:
+    pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
+    gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': None, 'b': 5}).fillna(4)
+    pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
+
+    gdf1 = DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, None]})
+    gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
+    pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf6)
+
+
+def test_replace_strings():
+    pdf = pd.Series(['a', 'b', 'c', 'd'])
+    gdf = Series(['a', 'b', 'c', 'd'])
+    assert_eq(
+        pdf.replace('a', 'e'),
+        gdf.replace('a', 'e')
+    )
 
 
 @pytest.mark.parametrize('data_dtype', ['int8', 'int16', 'int32', 'int64',
@@ -236,3 +321,46 @@ def test_series_fillna_invalid_dtype(data_dtype):
         type(fill_value).__name__,
         gdf.dtype.type.__name__
     ))
+
+
+@pytest.mark.parametrize(
+    'data_dtype',
+    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64'])
+@pytest.mark.parametrize(
+    'fill_value',
+    [100, 100.0, 100.5])
+def test_series_where(data_dtype, fill_value):
+    psr = pd.Series(list(range(10)), dtype=data_dtype)
+    sr = Series.from_pandas(psr)
+
+    expect = psr.where(psr > 0, fill_value)
+    got = sr.where(sr > 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr < 0, fill_value)
+    got = sr.where(sr < 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr == 0, fill_value)
+    got = sr.where(sr == 0, fill_value)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    'fill_value',
+    [100, 100.0, 100.5])
+def test_series_with_nulls_where(fill_value):
+    psr = pd.Series([None] * 3 + list(range(5)))
+    sr = Series.from_pandas(psr)
+
+    expect = psr.where(psr > 0, fill_value)
+    got = sr.where(sr > 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr < 0, fill_value)
+    got = sr.where(sr < 0, fill_value)
+    assert_eq(expect, got)
+
+    expect = psr.where(psr == 0, fill_value)
+    got = sr.where(sr == 0, fill_value)
+    assert_eq(expect, got)

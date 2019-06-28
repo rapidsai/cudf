@@ -39,6 +39,9 @@ from cudf.window import Rolling
 
 import cudf.bindings.join as cpp_join
 import cudf.bindings.hash as cpp_hash
+from cudf.bindings.stream_compaction import (
+        apply_drop_duplicates as cpp_drop_duplicates
+        )
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -165,6 +168,8 @@ class DataFrame(object):
         columns = [col._column for col in self._cols.values()]
         serialized_columns = zip(*map(serialize, columns))
         header['columns'], column_frames = serialized_columns
+        for h, f in zip(header['columns'], column_frames):
+            h['frame_count'] = len(f)
         header['column_names'] = tuple(self._cols)
         for f in column_frames:
             frames.extend(f)
@@ -857,6 +862,87 @@ class DataFrame(object):
         for k in self.columns:
             self[k] = self[k].set_index(idx)
 
+    def reindex(self, labels=None, axis=0, index=None, columns=None,
+                copy=True):
+        """Return a new DataFrame whose axes conform to a new index
+
+        ``DataFrame.reindex`` supports two calling conventions
+        * ``(index=index_labels, columns=column_names)``
+        * ``(labels, axis={0 or 'index', 1 or 'columns'})``
+
+        Parameters
+        ----------
+        labels : Index, Series-convertible, optional, default None
+        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
+        index : Index, Series-convertible, optional, default None
+            Shorthand for ``df.reindex(labels=index_labels, axis=0)``
+        columns : array-like, optional, default None
+            Shorthand for ``df.reindex(labels=column_names, axis=1)``
+        copy : boolean, optional, default True
+
+        Returns
+        -------
+        A DataFrame whose axes conform to the new index(es)
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]
+        >>> df_new = df.reindex(index=[0, 3, 4, 5],
+                                columns=['key', 'val', 'sum'])
+        >>> print(df)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        2    2  12.0
+        3    3  13.0
+        4    4  14.0
+        >>> print(df_new)
+           key   val  sum
+        0    0  10.0  NaN
+        3    3  13.0  NaN
+        4    4  14.0  NaN
+        5   -1   NaN  NaN
+        """
+
+        if labels is None and index is None and columns is None:
+            return self.copy(deep=copy)
+
+        df = self
+        cols = columns
+        dtypes = OrderedDict(df.dtypes)
+        idx = labels if index is None and axis in (0, 'index') else index
+        cols = labels if cols is None and axis in (1, 'columns') else cols
+        df = df if cols is None else df[list(set(df.columns) & set(cols))]
+
+        if idx is not None:
+            idx = idx if isinstance(idx, Index) else as_index(idx)
+            if df.index.dtype != idx.dtype:
+                cols = cols if cols is not None else list(df.columns)
+                df = DataFrame()
+            else:
+                df = DataFrame(None, idx).join(df, how='left', sort=True)
+                # double-argsort to map back from sorted to unsorted positions
+                df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
+
+        idx = idx if idx is not None else df.index
+        names = cols if cols is not None else list(df.columns)
+
+        length = len(idx)
+        cols = OrderedDict()
+
+        for name in names:
+            if name in df:
+                cols[name] = df[name].copy(deep=copy)
+            else:
+                dtype = dtypes.get(name, np.float64)
+                col = columnops.column_empty(length, dtype, True)
+                cols[name] = Series(data=col, index=idx)
+
+        return DataFrame(cols, idx)
+
     def set_index(self, index):
         """Return a new DataFrame with a new index
 
@@ -906,7 +992,6 @@ class DataFrame(object):
 
         result_cols = cpp_copying.apply_gather(cols, positions)
 
-        out = DataFrame()
         for i, col_name in enumerate(self._cols):
             out[col_name] = result_cols[i]
 
@@ -1155,6 +1240,45 @@ class DataFrame(object):
         if name not in self._cols:
             raise NameError('column {!r} does not exist'.format(name))
         del self._cols[name]
+
+    def drop_duplicates(self, subset=None, keep='first', inplace=False):
+        """
+        Return DataFrame with duplicate rows removed, optionally only
+        considering certain subset of columns.
+        """
+        in_cols = [series._column for series in self._cols.values()]
+        if subset is None:
+            subset = self._cols
+        elif (not np.iterable(subset) or
+                isinstance(subset, pd.compat.string_types) or
+                isinstance(subset, tuple) and subset in self.columns):
+            subset = subset,
+        diff = set(subset)-set(self._cols)
+        if len(diff) != 0:
+            raise KeyError("columns {!r} do not exist".format(diff))
+        subset_cols = [series._column for name, series in self._cols.items()
+                       if name in subset]
+        in_index = self.index
+        if isinstance(in_index, cudf.dataframe.multiindex.MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates([in_index.as_column()],
+                                                  in_cols, subset_cols, keep)
+        new_index = as_index(new_index)
+        if len(self.index) == len(new_index) and self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            new_index = self.index.take(new_index)
+        if inplace:
+            self._index = new_index
+            self._size = len(new_index)
+            for k, new_col in zip(self._cols, out_cols):
+                self[k] = Series(new_col, new_index)
+        else:
+            outdf = DataFrame()
+            for k, new_col in zip(self._cols, out_cols):
+                outdf[k] = new_col
+            outdf = outdf.set_index(new_index)
+            return outdf
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
@@ -1709,9 +1833,11 @@ class DataFrame(object):
 
         # We save the original categories for the reconstruction of the
         # final data frame
+        categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
             if pd.api.types.is_categorical_dtype(col):
+                categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
         # Save the order of the original column names for preservation later
@@ -1783,7 +1909,7 @@ class DataFrame(object):
                     mask = Buffer(valid)
                 df[name] = columnops.build_column(
                     Buffer(col),
-                    dtype=col.dtype,
+                    dtype=categorical_dtypes.get(name, col.dtype),
                     mask=mask,
                     categories=col_with_categories.get(name, None),
                 )
@@ -1935,7 +2061,7 @@ class DataFrame(object):
 
         return df
 
-    def groupby(self, by=None, sort=False, as_index=True, method="hash",
+    def groupby(self, by=None, sort=True, as_index=True, method="hash",
                 level=None, group_keys=True):
         """Groupby
 
@@ -1943,12 +2069,11 @@ class DataFrame(object):
         ----------
         by : list-of-str or str
             Column name(s) to form that groups by.
-        sort : bool
+        sort : bool, default True
             Force sorting group keys.
-            Depends on the underlying algorithm.
-        as_index : bool; defaults to False
-            Must be False.  Provided to be API compatible with pandas.
-            The keys are always left as regular columns in the result.
+        as_index : bool, default True
+            Indicates whether the grouped by columns become the index
+            of the returned DataFrame
         method : str, optional
             A string indicating the method to use to perform the group by.
             Valid values are "hash" or "cudf".
@@ -1961,15 +2086,8 @@ class DataFrame(object):
 
         Notes
         -----
-        Unlike pandas, this groupby operation behaves like a SQL groupby.
         No empty rows are returned.  (For categorical keys, pandas returns
         rows for all categories even if they are no corresponding values.)
-
-        Only a minimal number of operations is implemented so far.
-
-        - Only *by* argument is supported.
-        - Since we don't support multiindex, the *by* columns are stored
-          as regular columns.
         """
         if group_keys is not True:
             raise NotImplementedError(
@@ -1995,7 +2113,7 @@ class DataFrame(object):
             # The matching `pop` for this range is inside LibGdfGroupby
             # __apply_agg
             result = Groupby(self, by=by, method=method, as_index=as_index,
-                             level=level)
+                             sort=sort, level=level)
             return result
 
     @copy_docstring(Rolling)
@@ -2236,9 +2354,9 @@ class DataFrame(object):
         # Slice into partition
         return [outdf[s:e] for s, e in zip(offsets, offsets[1:] + [None])]
 
-    def replace(self, to_replace, value):
+    def replace(self, to_replace, replacement):
         """
-        Replace values given in *to_replace* with *value*.
+        Replace values given in *to_replace* with *replacement*.
 
         Parameters
         ----------
@@ -2248,20 +2366,20 @@ class DataFrame(object):
             * numeric or str:
 
                 - values equal to *to_replace* will be replaced
-                  with *value*
+                  with *replacement*
 
             * list of numeric or str:
 
-                - If *value* is also list-like,
-                  *to_replace* and *value* must be of same length.
+                - If *replacement* is also list-like,
+                  *to_replace* and *replacement* must be of same length.
 
             * dict:
 
                 - Dicts can be used to replace different values in different
                   columns. For example, `{'a': 1, 'z': 2}` specifies that the
                   value 1 in column `a` and the value 2 in column `z` should be
-                  replaced with value*.
-        value : numeric, str, list-like, or dict
+                  replaced with replacement*.
+        replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with. If a dict is provided, then
             its keys must match the keys in *to_replace*, and correponding
             values must be compatible (e.g., if they are lists, then they must
@@ -2276,11 +2394,11 @@ class DataFrame(object):
 
         if not is_dict_like(to_replace):
             to_replace = dict.fromkeys(self.columns, to_replace)
-        if not is_dict_like(value):
-            value = dict.fromkeys(self.columns, value)
+        if not is_dict_like(replacement):
+            replacement = dict.fromkeys(self.columns, replacement)
 
         for k in to_replace:
-            outdf[k] = self[k].replace(to_replace[k], value[k])
+            outdf[k] = self[k].replace(to_replace[k], replacement[k])
 
         return outdf
 
@@ -2499,8 +2617,6 @@ class DataFrame(object):
             vals = dataframe[colk].values
             # necessary because multi-index can return multiple
             # columns for a single key
-            if isinstance(colk, tuple):
-                colk = str(colk)
             if len(vals.shape) == 1:
                 df[colk] = Series(vals, nan_as_null=nan_as_null)
             else:
@@ -2508,6 +2624,10 @@ class DataFrame(object):
                 if vals.shape[0] == 1:
                     df[colk] = Series(vals.flatten(), nan_as_null=nan_as_null)
                 else:
+                    # TODO fix multiple column with same name with different
+                    # method.
+                    if isinstance(colk, tuple):
+                        colk = str(colk)
                     for idx in range(len(vals.shape)):
                         df[colk+str(idx)] = Series(vals[idx],
                                                    nan_as_null=nan_as_null)
@@ -2756,6 +2876,8 @@ class DataFrame(object):
         """
     def quantile(self,
                  q=0.5,
+                 axis=0,
+                 numeric_only=True,
                  interpolation='linear',
                  columns=None,
                  exact=True):
@@ -2767,6 +2889,10 @@ class DataFrame(object):
 
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
+        axis : int
+            axis is a NON-FUNCTIONAL parameter
+        numeric_only : boolean
+            numeric_only is a NON-FUNCTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This  parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -2782,6 +2908,11 @@ class DataFrame(object):
         DataFrame
 
         """
+        if axis not in (0, None):
+            raise NotImplementedError("axis is not implemented yet")
+
+        if not numeric_only:
+            raise NotImplementedError("numeric_only is not implemented yet")
         if columns is None:
             columns = self.columns
 
@@ -2789,9 +2920,15 @@ class DataFrame(object):
         result['Quantile'] = q
         for k, col in self._cols.items():
             if k in columns:
-                result[k] = col.quantile(q, interpolation=interpolation,
-                                         exact=exact,
-                                         quant_index=False)
+                res = col.quantile(q, interpolation=interpolation,
+                                   exact=exact,
+                                   quant_index=False)
+                if not isinstance(res, numbers.Number) and len(res) == 0:
+                    res = columnops.column_empty_like(q,
+                                                      dtype=col.dtype,
+                                                      masked=True,
+                                                      newsize=len(q))
+                result[k] = res
         return result
 
     #

@@ -20,6 +20,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <tests/utilities/column_wrapper.cuh>
+#include "tests/utilities/compare_column_wrappers.cuh"
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>

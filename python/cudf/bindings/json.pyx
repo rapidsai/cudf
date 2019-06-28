@@ -7,13 +7,13 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.json cimport *
+from cudf.bindings.json cimport reader as json_reader
+from cudf.bindings.json cimport reader_options as json_reader_options
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 
-from cudf.bindings.types cimport table as cudf_table
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.column import Column
 from cudf.utils import ioutils
@@ -59,7 +59,7 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
                 arr_dtypes.append(dt.encode())
 
     # Setup arguments
-    cdef json_reader_args args = json_reader_args()
+    cdef json_reader_options args = json_reader_options()
 
     if is_file_like(path_or_buf):
         source = path_or_buf.read()
@@ -89,9 +89,9 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     if dtype is not None:
         args.dtype = arr_dtypes
 
-    cdef unique_ptr[JsonReader] reader
+    cdef unique_ptr[json_reader] reader
     with nogil:
-        reader = unique_ptr[JsonReader](new JsonReader(args))
+        reader = unique_ptr[json_reader](new json_reader(args))
     
     cdef cudf_table table
     if byte_range is None:

@@ -51,6 +51,24 @@ def test_series_binop(binop, obj_class):
     utils.assert_eq(result, expect)
 
 
+@pytest.mark.parametrize('binop', _binops)
+def test_series_binop_concurrent(binop):
+    def func(index):
+        arr = np.random.random(100) * 10
+        sr = Series(arr)
+
+        result = binop(sr.astype('int32'), sr)
+        expect = binop(arr.astype('int32'), arr)
+
+        np.testing.assert_almost_equal(result.to_array(), expect, decimal=5)
+
+    from concurrent.futures import ThreadPoolExecutor
+
+    indices = range(10)
+    with ThreadPoolExecutor(4) as e:  # four processes
+        list(e.map(func, indices))
+
+
 @pytest.mark.parametrize('obj_class', ['Series', 'Index'])
 @pytest.mark.parametrize('nelem,binop', list(product([1, 2, 100], _binops)))
 def test_series_binop_scalar(nelem, binop, obj_class):

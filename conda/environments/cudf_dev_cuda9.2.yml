@@ -26,5 +26,6 @@ dependencies:
 - recommonmark
 - pandoc=<2.0.0
 - cudatoolkit=9.2
+- pip
 - pip:
   - sphinx-markdown-tables

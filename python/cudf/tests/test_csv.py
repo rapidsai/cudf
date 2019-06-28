@@ -464,18 +464,25 @@ def test_csv_reader_buffer_strings():
     assert(df2['text'][3] == 'd')
 
 
-def test_csv_reader_gzip_compression(tmpdir):
+@pytest.mark.parametrize('ext, out_comp, in_comp', [('.geez', 'gzip', 'gzip'),
+                                                    ('.beez', 'bz2', 'bz2'),
+                                                    ('.gz', 'gzip', 'infer'),
+                                                    ('.bz2', 'bz2', 'infer'),
+                                                    ('.data', None, 'infer'),
+                                                    ('.txt', None, None),
+                                                    ('', None, None)])
+def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
 
-    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file10.csv.gz')
+    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_compression' + ext)
 
     df = make_datetime_dataframe()
-    df.to_csv(fname, index=False, header=False, compression='gzip')
+    df.to_csv(fname, index=False, header=False, compression=out_comp)
 
     df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
-                         dayfirst=True, compression='gzip')
-    dtypes = ['date', 'date']
-    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
-                   dayfirst=True, compression='gzip')
+                         dayfirst=True, compression=in_comp)
+    out = read_csv(str(fname), names=list(df.columns.values),
+                   dtype=['date', 'date'], dayfirst=True,
+                   compression=in_comp)
 
     assert len(out.columns) == len(df_out.columns)
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
@@ -724,22 +731,6 @@ def test_csv_reader_carriage_return(tmpdir):
     for row in range(0, rows):
         assert(df[names[0]][row] == row)
         assert(df[names[1]][row] == 2 * row)
-
-
-def test_csv_reader_bzip2_compression(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join('tmp_csvreader_file16.csv.bz2')
-
-    df = make_datetime_dataframe()
-    df.to_csv(fname, index=False, header=False, compression='bz2')
-
-    df_out = pd.read_csv(fname, names=['col1', 'col2'], parse_dates=[0, 1],
-                         dayfirst=True, compression='bz2')
-    dtypes = ['date', 'date']
-    out = read_csv(str(fname), names=list(df.columns.values), dtype=dtypes,
-                   dayfirst=True, compression='bz2')
-
-    assert len(out.columns) == len(df_out.columns)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
 
 def test_csv_reader_tabs():

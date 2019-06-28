@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.7.2 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.9.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -82,6 +82,10 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
+
+# To apply RUNPATH to transitive dependencies (this is a temporary solution)
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
@@ -179,6 +183,15 @@ if (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 endif (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 
 ###################################################################################################
+# - jitify ----------------------------------------------------------------------------------------
+
+option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
+if(JITIFY_USE_CACHE)
+    message(STATUS "Using file cache for JIT compiled kernels")
+    add_definitions("-DJITIFY_USE_CACHE -DCUDF_VERSION=${CMAKE_PROJECT_VERSION}")
+endif(JITIFY_USE_CACHE)
+
+###################################################################################################
 # - add gtest -------------------------------------------------------------------------------------
 
 if(BUILD_TESTS)
@@ -257,6 +270,8 @@ add_library(cudf SHARED
             src/sort/segmented_sorting.cu
             src/groupby/groupby.cu
             src/groupby/new_groupby.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
@@ -264,6 +279,8 @@ add_library(cudf SHARED
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
+            src/binaryop/jit/core/parser.cpp
+            src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
@@ -286,7 +303,6 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
-            src/io/io_readers.cu
             src/io/convert/csr/cudf_to_csr.cu
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
@@ -294,14 +310,14 @@ add_library(cudf SHARED
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
-            src/io/orc/orc_reader.cu
+            src/io/orc/orc_reader_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
             src/io/orc/stripe_init.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
-            src/io/parquet/parquet_reader.cu
+            src/io/parquet/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
@@ -309,6 +325,7 @@ add_library(cudf SHARED
             src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
+            src/io/io_functions.cpp
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
@@ -319,7 +336,9 @@ add_library(cudf SHARED
             src/copying/slice.cu
             src/copying/split.cu
             src/bitmask/legacy_bitmask.cpp
-            src/gis/point_in_polygon.cu)
+            src/gis/point_in_polygon.cu
+            src/copying/copy_range.cu
+            src/filling/fill.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
@@ -342,12 +361,6 @@ add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
 add_custom_target(stringify_run DEPENDS ${CMAKE_BINARY_DIR}/include/types.h.jit)
 
 add_dependencies(cudf stringify_run)
-
-option(JITIFY_PROCESS_CACHE "Use a process level (instead of thread level) cache for JIT compiled kernels" ON)
-if(JITIFY_PROCESS_CACHE)
-    message(STATUS "Using process level cache for JIT compiled kernels")
-    set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro JITIFY_THREAD_SAFE")
-endif(JITIFY_PROCESS_CACHE)
 
 ###################################################################################################
 # - build options ---------------------------------------------------------------------------------

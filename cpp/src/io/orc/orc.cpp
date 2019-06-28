@@ -17,6 +17,8 @@
 #include <string.h>
 #include "orc.h"
 
+namespace cudf {
+namespace io {
 namespace orc {
 
 void ProtobufReader::skip_struct_field(int t)
@@ -361,5 +363,6 @@ const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLe
     return nullptr;
 }
 
-
-}; // namespace orc
+} // namespace orc
+} // namespace io
+} // namespace cudf

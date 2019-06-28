@@ -74,10 +74,12 @@ std::string inferCompressionType(const std::string &compression_arg, gdf_input_t
     std::transform(begin, end, std::back_inserter(out), ::tolower);
     return out;
   };
+
   const std::string comp_arg_lower = str_tolower(compression_arg.begin(), compression_arg.end());
   if (comp_arg_lower != "infer")
     return comp_arg_lower;
-  // Cannot infer compression type from a buffer, assume the input is uncompressed
+
+  // Cannot infer compression type from a buffer, treat as uncompressed
   if (source_type == gdf_input_type::HOST_BUFFER)
     return "none";
 
@@ -86,8 +88,9 @@ std::string inferCompressionType(const std::string &compression_arg, gdf_input_t
   const std::string file_ext = str_tolower(ext_start, source.end());
   if (ext_to_compression.find(file_ext) != ext_to_compression.end())
     return ext_to_compression.find(file_ext)->second;
-  // None of the supported compression types match
-  CUDF_FAIL("Invalid compression argument");
+
+  // None of the supported compression types match, treat as uncompressed
+  return "none";
 }
 
 } // namespace cudf

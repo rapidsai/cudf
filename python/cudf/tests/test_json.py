@@ -211,15 +211,21 @@ def test_json_lines_dtypes(json_input, dtype):
     assert(all(df.dtypes == ['float32', 'int32', 'int16']))
 
 
-@pytest.mark.parametrize('compression_arg', ['gzip', 'infer'])
-def test_json_lines_compression(tmpdir, compression_arg):
-    fname = tmpdir.mkdir("gdf_json").join('tmp_json_file2.json.gz')
+@pytest.mark.parametrize('ext, out_comp, in_comp', [('.geez', 'gzip', 'gzip'),
+                                                    ('.beez', 'bz2', 'bz2'),
+                                                    ('.gz', 'gzip', 'infer'),
+                                                    ('.bz2', 'bz2', 'infer'),
+                                                    ('.data', None, 'infer'),
+                                                    ('.txt', None, None),
+                                                    ('', None, None)])
+def test_json_lines_compression(tmpdir, ext, out_comp, in_comp):
+    fname = tmpdir.mkdir("gdf_json").join('tmp_json_compression' + ext)
 
     nrows = 20
     pd_df = make_numeric_dataframe(nrows, np.int32)
-    pd_df.to_json(fname, compression='gzip', lines=True, orient='records')
+    pd_df.to_json(fname, compression=out_comp, lines=True, orient='records')
 
-    cu_df = cudf.read_json(str(fname), compression=compression_arg, lines=True,
+    cu_df = cudf.read_json(str(fname), compression=in_comp, lines=True,
                            dtype=['int', 'int'])
 
     pd.util.testing.assert_frame_equal(pd_df, cu_df.to_pandas())

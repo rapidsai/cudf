@@ -325,9 +325,12 @@ cdef gdf_column_to_column_mem(gdf_column* input_col):
             dtype='int32',
             finalizer=rmm._make_finalizer(data_ptr, 0)
         )
-        nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
-        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-        data = nvcat_obj.to_strings()
+        if input_col.size == 0:
+            data = nvstrings.to_device([])
+        else:
+            nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
+            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+            data = nvcat_obj.to_strings()
     else:
         data = rmm.device_array_from_ptr(
             data_ptr,
@@ -397,6 +400,30 @@ cdef gdf_column* column_view_from_string_column(col, col_name=None):
                                 c_extra_dtype_info)
 
     return c_col
+
+
+cdef gdf_column** cols_view_from_cols(cols):
+    col_count=len(cols)
+    cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
+
+    cdef i
+    for i in range(col_count):
+        check_gdf_compatibility(cols[i])
+        c_cols[i] = column_view_from_column(cols[i])
+
+    return c_cols
+
+
+cdef free_table(cudf_table* table0, gdf_column** cols):
+    cdef i
+    cdef gdf_column *c_col
+    for i in range(table0[0].num_columns()) :
+        c_col = table0[0].get_column(i)
+        free(c_col)
+
+    del table0
+    free(cols)
+
 
 # gdf_context functions
 

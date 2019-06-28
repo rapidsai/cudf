@@ -7,22 +7,19 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.io cimport *
-from cudf.bindings.types cimport table as cudf_table
 
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cdef extern from "cudf.h" namespace "cudf" nogil:
+cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
 
-    # See cpp/include/cudf/io_types.h:38
-    ctypedef enum gdf_csv_quote_style:
+    ctypedef enum quote_style:
         QUOTE_MINIMAL = 0,
         QUOTE_ALL,
         QUOTE_NONNUMERIC,
         QUOTE_NONE,
 
-    # See cpp/include/cudf/io_types.h:62
-    cdef struct csv_reader_args:
+    cdef struct reader_options:
         gdf_input_type      input_data_form
         string              filepath_or_buffer
         string              compression
@@ -54,11 +51,11 @@ cdef extern from "cudf.h" namespace "cudf" nogil:
         bool                mangle_dupe_cols
 
         char                quotechar
-        gdf_csv_quote_style quoting
+        quote_style         quoting
         bool                doublequote
 
-    cdef cppclass CsvReader:
-        CsvReader(const csv_reader_args &args) except +
+    cdef cppclass reader:
+        reader(const reader_options &args) except +
 
         cudf_table read() except +
         

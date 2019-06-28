@@ -18,6 +18,8 @@
 #define STREAM_COMPACTION_HPP
 
 #include "cudf.h"
+#include "types.hpp"
+
 
 namespace cudf {
 
@@ -71,6 +73,41 @@ gdf_column apply_boolean_mask(gdf_column const &input,
  * @return gdf_column Column containing copy of all non-null elements of @p input.
  */
 gdf_column drop_nulls(gdf_column const &input);
+
+/**
+ * @brief Choices for drop_duplicates API for retainment of duplicate rows
+ */
+enum duplicate_keep_option {
+  KEEP_FIRST = 0,   ///< Keeps first duplicate row and unique rows
+  KEEP_LAST,        ///< Keeps last  duplicate row and unique rows
+  KEEP_NONE         ///< Don't keep any duplicate rows, Keeps only unique rows
+};
+
+/**
+ * @brief Create a new table without duplicate rows 
+ *
+ * Given an input table, each row is copied to output table if the corresponding
+ * row of key column table is unique, where the definition of unique depends on the value of @p keep:
+ * - KEEP_FIRST: only the first of a sequence of duplicate rows is copied
+ * - KEEP_LAST: only the last of a sequence of duplicate rows is copied
+ * - KEEP_NONE: no duplicate rows are copied 
+ *
+ * The input table and key columns table should have same number of rows.
+ * Note that the memory for the output table columns is allocated by this function, so 
+ * it must be freed by the caller when finished. 
+ *
+ * @param[in] input_table input table to copy only unique rows
+ * @param[in] key_columns columns to consider to identify duplicate rows
+ * @param[in] keep keep first entry, last entry, or no entries if duplicates found
+ * @param[in] nulls_are_equal flag to denote nulls are equal if true,
+ * nulls are not equal if false
+ *
+ * @return out_table with only unique rows
+ */
+cudf::table drop_duplicates(const cudf::table& input_table,
+                            const cudf::table& key_columns,
+                            const duplicate_keep_option keep,
+                            const bool nulls_are_equal = true);
 }  // namespace cudf
 
 #endif

@@ -20,9 +20,15 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 #define GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 
+#include "cache.h"
 #include "../util/type.h"
 #include "../util/operator.h"
 #include <jitify.hpp>
+#include <unordered_map>
+#include <string>
+#include <fstream>
+#include <memory>
+#include <chrono>
 
 namespace cudf {
 namespace binops {
@@ -36,12 +42,9 @@ namespace jit {
      *---------------------------------------------------------------------------**/
     class Launcher {
     public:
-        static Launcher launch() {
-            return Launcher();
-        }
-
-    public:
         Launcher();
+        
+        Launcher(const std::string& ptx);
 
         Launcher(Launcher&&);
 
@@ -54,15 +57,11 @@ namespace jit {
 
     public:
         /**---------------------------------------------------------------------------*
-         * @brief  Set the kernel name that this launcher will compile and launch
+         * @brief Sets the kernel to launch using this launcher
          * 
-         * @param value  kernel name
-         *---------------------------------------------------------------------------**/
-        Launcher& kernel(std::string&& value);
-
-        /**---------------------------------------------------------------------------*
-         * @brief Method to generate vector containing all template types for a JIT
-         *  kernel. This vector is used to instantiate the kernel code for one set of types
+         * Method to generate vector containing all template types for a JIT kernel.
+         *  This vector is used to get the compiled kernel for one set of types and set
+         *  it as the kernel to launch using this launcher.
          * 
          * @tparam Args  Output dtype, LHS dtype, RHS dtype
          * @param type   Operator type (direct (lhs op rhs) or reverse (rhs op lhs))
@@ -70,11 +69,37 @@ namespace jit {
          * @return Launcher& ref to this launcehr object
          *---------------------------------------------------------------------------**/
         template <typename ... Args>
-        Launcher& instantiate(gdf_binary_operator ope, Operator::Type type, Args&& ... args) {
+        Launcher& setKernelInst(
+            std::string&& kernName,
+            gdf_binary_operator ope,
+            Operator::Type type,
+            Args&& ... args)
+        {
             Operator operatorSelector;
+            std::vector<std::string> arguments;
             arguments.assign({getTypeName(args->dtype)..., operatorSelector.getOperatorName(ope, type)});
+            kernel_inst = cacheInstance.getKernelInstantiation(kernName, program, arguments);
             return *this;
         }
+
+        /**---------------------------------------------------------------------------*
+         * @brief Set the Program for this launcher
+         * 
+         * @param prog_file_name Name to give to the program held by this Launcher.
+         * @return Launcher& ref to this launcher object
+         *---------------------------------------------------------------------------**/
+        Launcher& setProgram(std::string prog_file_name);
+ 
+        /**---------------------------------------------------------------------------*
+         * @brief Set the Program for this launcher
+         * 
+         * @param prog_file_name Name to give to the program held by this Launcher.
+         * 
+         * @param ptx Additional ptx code that contains a user defined function to be used.
+         * 
+         * @return Launcher& ref to this launcher object
+         *---------------------------------------------------------------------------**/
+        Launcher& setProgram(std::string prog_file_name, std::string ptx);
 
         /**---------------------------------------------------------------------------*
          * @brief Handle the Jitify API to instantiate and launch using information 
@@ -103,11 +128,12 @@ namespace jit {
         static const std::vector<std::string> headersName;
 
     private:
-        jitify::Program program;
+        cudf::jit::cudfJitCache& cacheInstance;
+        cudf::jit::named_prog<jitify_v2::Program> program;
+        cudf::jit::named_prog<jitify_v2::KernelInstantiation> kernel_inst;
 
     private:
-        std::string kernelName;
-        std::vector<std::string> arguments;
+        jitify_v2::KernelInstantiation& getKernel() { return *std::get<1>(kernel_inst); }
     };
 
 } // namespace jit

@@ -182,7 +182,8 @@ inline void print_typed_column(const gdf_column& column, unsigned min_element_pr
  *
  * @note See the @ref gdf_column variant
  */
-void print_gdf_column(gdf_column const *column, unsigned min_element_print_width = 1);
+void print_gdf_column(gdf_column const *column, unsigned min_element_print_width = 1,
+                      std::ostream& stream = std::cout);
 
 
 /** ---------------------------------------------------------------------------*

@@ -578,3 +578,115 @@ def test_groupby_multi_agg_multi_groupby():
 def test_groupby_empty_dataframe():
     gdf = cudf.DataFrame({'x': [], 'y': [], 'z': []})
     gdf.groupby(level=[0, 1])  # it doesn't crash
+
+
+@pytest.mark.parametrize(
+    'agg',
+    [
+        'min',
+        'max',
+        'sum',
+        'count',
+        'mean'
+    ]
+)
+def test_groupby_nulls_basic(agg):
+    check_dtype = False if agg == 'count' else True
+
+    pdf = pd.DataFrame({
+        'a': [0, 0, 1, 1, 2, 2],
+        'b': [1, 2, 1, 2, 1, None]
+    })
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        getattr(pdf.groupby('a'), agg)(),
+        getattr(gdf.groupby('a'), agg)(),
+        check_dtype=check_dtype
+    )
+
+    pdf = pd.DataFrame({
+        'a': [0, 0, 1, 1, 2, 2],
+        'b': [1, 2, 1, 2, 1, None],
+        'c': [1, 2, 1, None, 1, 2]
+    })
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        getattr(pdf.groupby('a'), agg)(),
+        getattr(gdf.groupby('a'), agg)(),
+        check_dtype=check_dtype
+    )
+
+    pdf = pd.DataFrame({
+        'a': [0, 0, 1, 1, 2, 2],
+        'b': [1, 2, 1, 2, 1, None],
+        'c': [1, 2, None, None, 1, 2]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    # TODO: fillna() used here since we don't follow
+    # Pandas' null semantics. Should we change it?
+    assert_eq(
+        getattr(pdf.groupby('a'), agg)().fillna(0),
+        getattr(gdf.groupby('a'), agg)().fillna(0),
+        check_dtype=check_dtype
+    )
+
+
+def test_groupby_nulls_in_index():
+    pdf = pd.DataFrame({
+        'a': [None, 2, 1, 1],
+        'b': [1, 2, 3, 4]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby('a').sum(),
+        gdf.groupby('a').sum()
+    )
+
+
+def test_groupby_all_nulls_index():
+    gdf = cudf.DataFrame({
+        'a': cudf.Series([None, None, None, None], dtype='object'),
+        'b': [1, 2, 3, 4]
+    })
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.groupby('a').sum(),
+        gdf.groupby('a').sum()
+    )
+
+    gdf = cudf.DataFrame({
+        'a': cudf.Series([np.nan, np.nan, np.nan, np.nan]),
+        'b': [1, 2, 3, 4]
+    })
+    pdf = gdf.to_pandas()
+    assert_eq(
+        pdf.groupby('a').sum(),
+        gdf.groupby('a').sum()
+    )
+
+
+def test_groupby_sort():
+    pdf = pd.DataFrame({
+        'a': [2, 2, 1, 1],
+        'b': [1, 2, 3, 4]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby('a', sort=False).sum().sort_index(),
+        gdf.groupby('a', sort=False).sum().sort_index()
+    )
+
+    pdf = pd.DataFrame({
+        'c': [-1, 2, 1, 4],
+        'b': [1, 2, 3, 4],
+        'a': [2, 2, 1, 1]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby(['c', 'b'], sort=False).sum().sort_index(),
+        gdf.groupby(['c', 'b'], sort=False).sum().to_pandas().sort_index()
+    )

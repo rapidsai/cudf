@@ -19,24 +19,14 @@
 
 #include "../core/launcher.h"
 #include "../code/code.h"
+#include "../core/parser.h"
 #include <types.h.jit>
 #include <cstdint>
+#include <chrono>
 
 namespace cudf {
 namespace binops {
 namespace jit {
-
-/**---------------------------------------------------------------------------*
- * @brief Cache to hold previously compiled code. If JITIFY_THREAD_SAFE is
- *  defined, then the cache is held globally in the process, otherwise it is
- *  held locally in each thread
- * 
- *---------------------------------------------------------------------------**/
-#ifdef JITIFY_THREAD_SAFE
-    static jitify::JitCache JitCache;
-#else
-    static thread_local jitify::JitCache JitCache;
-#endif
 
     const std::vector<std::string> Launcher::compilerFlags { "-std=c++14" };
     const std::vector<std::string> Launcher::headersName 
@@ -62,35 +52,59 @@ namespace jit {
         return nullptr;
     }
 
+    Launcher& Launcher::setProgram(std::string prog_file_name)
+    {
+        program = cacheInstance.getProgram(prog_file_name,
+                                           code::kernel,
+                                           headersName,
+                                           compilerFlags,
+                                           headersCode);
+    }
+    
+    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx)
+    {
+        std::string combined_kernel = 
+          parse_single_function_ptx(ptx, "GENERIC_BINARY_OP") + code::kernel;
+        program = cacheInstance.getProgram(prog_file_name,
+                                           combined_kernel.c_str(),
+                                           headersName,
+                                           compilerFlags,
+                                           headersCode);
+    }
+   
     Launcher::Launcher()
-     : program {JitCache.program(code::kernel, headersName, compilerFlags, headersCode)}
-    { }
-
-    Launcher::Launcher(Launcher&& launcher)
-     : program {std::move(launcher.program)}
-    { }
-
-    Launcher& Launcher::kernel(std::string&& value) {
-        kernelName = value;
-        return *this;
+     : cacheInstance{cudf::jit::cudfJitCache::Instance()}
+    { 
+        this->setProgram("prog_binop");
     }
 
+    Launcher::Launcher(const std::string& ptx)
+     : cacheInstance{cudf::jit::cudfJitCache::Instance()}
+    {
+        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx) ); 
+        this->setProgram("prog_binop." + ptx_hash_str, ptx);
+    }
+ 
+    Launcher::Launcher(Launcher&& launcher)
+     : program {std::move(launcher.program)}
+     , cacheInstance {cudf::jit::cudfJitCache::Instance()}
+     , kernel_inst {std::move(launcher.kernel_inst)}
+    { }
+
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs) {
-        program.kernel(kernelName.c_str())
-               .instantiate(arguments)
-               .configure_1d_max_occupancy()
-               .launch(out->size,
-                       out->data, lhs->data, rhs->data);
+
+        getKernel().configure_1d_max_occupancy()
+                      .launch(out->size,
+                              out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }
 
     gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
-        program.kernel(kernelName.c_str())
-               .instantiate(arguments)
-               .configure_1d_max_occupancy()
-               .launch(out->size,
-                       out->data, lhs->data, rhs->data);
+
+        getKernel().configure_1d_max_occupancy()
+                      .launch(out->size,
+                              out->data, lhs->data, rhs->data);
 
         return GDF_SUCCESS;
     }
