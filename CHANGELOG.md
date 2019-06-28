@@ -76,6 +76,7 @@
 - PR #1964 Added support for list-like types in Series.str.cat
 - PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
 - PR #1944 Groupby design improvements
+- PR #1993 Add iterator driven reduction for mean, var, std 
 
 
 ## Bug Fixes
