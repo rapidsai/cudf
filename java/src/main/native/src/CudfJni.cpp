@@ -278,7 +278,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfUnaryMath(JNIEnv *env, jclas
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
     gdf_unary_math_op op = static_cast<gdf_unary_math_op>(int_op);
-    cudf::jni::gdf_column_wrapper ret(input->size, out_type, input->null_count > 0);
+    cudf::jni::gdf_column_wrapper ret(input->size, out_type, 
+                                      input->valid != nullptr);
+    // TODO should null count         input->null_count > 0);
 
     JNI_GDF_TRY(env, 0, gdf_unary_math(input, ret.get(), op));
     return reinterpret_cast<jlong>(ret.release());
