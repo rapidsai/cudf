@@ -74,10 +74,11 @@ static void join_benchmark(benchmark::State& state)
 
     const int nresult_cols = build_table.size() + probe_table.size() - 1;
 
-    std::vector<gdf_column*> result_table(nresult_cols);
+    std::vector<gdf_column> result_table(nresult_cols);
+    std::vector<gdf_column *> col_ptrs(nresult_cols);
 
-    for (auto & col_ptr : result_table) {
-        col_ptr = new gdf_column;
+    for (size_t icol = 0; icol < result_table.size(); icol++) {
+        col_ptrs[icol] = &result_table[icol];
     }
 
     // Benchmark the inner join operation
@@ -88,7 +89,7 @@ static void join_benchmark(benchmark::State& state)
         CUDF_TRY(gdf_inner_join(
             probe_table.data(), 2, columns_to_join,
             build_table.data(), 2, columns_to_join,
-            1, nresult_cols, result_table.data(),
+            1, nresult_cols, col_ptrs.data(),
             nullptr, nullptr, &ctxt
         ));
 
@@ -97,9 +98,8 @@ static void join_benchmark(benchmark::State& state)
 
     // Cleanup
 
-    for (auto & col_ptr : result_table) {
+    for (auto & col_ptr : col_ptrs) {
         CUDF_TRY(gdf_column_free(col_ptr));
-        delete col_ptr;
     }
 
     CUDA_TRY(cudaDeviceSynchronize());
