@@ -362,7 +362,7 @@ class DataFrame(object):
         columns = [c for c, dt in self.dtypes.items()
                    if dt != object and
                    not pd.api.types.is_categorical_dtype(dt)]
-        return self[columns]
+        return self._columns_view(columns)
 
     def assign(self, **kwargs):
         """
@@ -835,7 +835,7 @@ class DataFrame(object):
     @index.setter
     def index(self, _index):
         if isinstance(_index, cudf.dataframe.multiindex.MultiIndex):
-            if len(self) > 0 and len(_index) != len(self):
+            if len(_index) != len(self):
                 msg = f"Length mismatch: Expected axis has "\
                        "%d elements, new values "\
                        "have %d elements"\
@@ -2113,7 +2113,6 @@ class DataFrame(object):
                 self, by=by, method=method, as_index=as_index,
                 sort=sort, level=level
             )
-                             sort=sort, level=level)
             return result
 
     @copy_docstring(Rolling)
@@ -2631,6 +2630,7 @@ class DataFrame(object):
                     for idx in range(len(vals.shape)):
                         df[colk+str(idx)] = Series(vals[idx],
                                                    nan_as_null=nan_as_null)
+        df.columns = dataframe.columns
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
             import cudf
@@ -3029,7 +3029,7 @@ class DataFrame(object):
         result_columns = OrderedDict({})
         for col in columns:
             result_columns[col] = self[col]
-        return DataFrame(result_columns)
+        return DataFrame(result_columns, index=self.index)
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.

@@ -10,6 +10,7 @@ from numpy.testing import assert_array_equal
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
 from cudf.tests.utils import assert_eq
+from cudf.bindings.GDFError import GDFError
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -387,15 +388,6 @@ def test_groupby_column_numeral():
     assert_eq(pxx, gxx)
 
 
-def test_groupby_column_datetime():
-    pdf = pd.DataFrame({pd.Timestamp("2001-01-01"): [1, 1, 3],
-                        pd.Timestamp("2001-01-02"): [1, 2, 3]})
-    gdf = DataFrame.from_pandas(pdf)
-    assert_eq(
-        pdf.groupby(pd.Timestamp("2001-01-01")).sum(),
-        gdf.groupby(pd.Timestamp("2001-01-01")).sum(),
-    )
-
 @pytest.mark.parametrize('series', [[0, 1, 0], [1, 1, 1], [0, 1, 1], [1, 2, 3], [4, 3, 2], [0, 2, 0]])  # noqa: E501
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({'x': [1., 2., 3.], 'y': [1, 2, 1]})
@@ -591,11 +583,6 @@ def test_groupby_multi_agg_multi_groupby():
     pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
     gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
     assert_eq(pdg, gdg)
-
-
-def test_groupby_empty_dataframe():
-    gdf = cudf.DataFrame({'x': [], 'y': [], 'z': []})
-    gdf.groupby(level=[0, 1])  # it doesn't crash
 
 
 @pytest.mark.parametrize(

@@ -47,14 +47,16 @@ class _Groupby(object):
     def agg(self, func):
         return self._apply_aggregation(func)
 
+
 class SeriesGroupBy(_Groupby):
 
     def __init__(self, sr, by=None, level=None, method="hash", sort=True):
         self._sr = sr
-        self._groupby = _GroupbyHelper(sr, by=by, level=level, sort=sort)
+        self._groupby = _GroupbyHelper(obj=self._sr, by=by, level=level, sort=sort)
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
+
 
 class DataFrameGroupBy(_Groupby):
 
@@ -70,8 +72,7 @@ class DataFrameGroupBy(_Groupby):
                 List of labels to group on.
         """
         self._df = df
-        self._groupby = _GroupbyHelper(df, by=by, as_index=as_index, level=level, sort=sort)
-
+        self._groupby = _GroupbyHelper(obj=self._df, by=by, as_index=as_index, level=level, sort=sort)
 
     def _apply_aggregation(self, agg):
         """
@@ -92,15 +93,18 @@ class DataFrameGroupBy(_Groupby):
                                          sort=self._groupby.sort)
 
     def __getattr__(self, key):
-        if key not in self._df.columns:
-            raise AttributeError("'DataFrameGroupBy' object has no attribute "
-                                 "'{}'".format(key))
-        by_list = []
-        for by_name, by in zip(self._groupby.key_names,
-                               self._groupby.key_columns):
-            by_list.append(cudf.Series(by, name=by_name))
-        return self._df[key].groupby(by_list,
-                                     sort=self._groupby.sort)
+        if key == "_df":
+            # this guards against RecursionError during pickling/copying
+            raise AttributeError()
+        if key in self._df.columns:
+            by_list = []
+            for by_name, by in zip(self._groupby.key_names,
+                                self._groupby.key_columns):
+                by_list.append(cudf.Series(by, name=by_name))
+            return self._df[key].groupby(by_list,
+                                        sort=self._groupby.sort)
+        raise AttributeError("'DataFrameGroupBy' object has no attribute "
+                                "'{}'".format(key))
 
 
 class _GroupbyHelper(object):
@@ -244,6 +248,12 @@ class _GroupbyHelper(object):
             self.value_names = []
             for col_name, agg_list in self.aggs.items():
                 col = self.obj[col_name]._column
+                # drop nuisance columns
+                if isinstance(col,
+                              (cudf.dataframe.StringColumn,
+                               cudf.dataframe.CategoricalColumn)
+                ):
+                    continue
                 if len(agg_list) == 1:
                     agg_name = agg_list[0]
                     self.value_columns.append(col)
@@ -251,6 +261,7 @@ class _GroupbyHelper(object):
                 else:
                     self.value_columns.extend([col]*len(agg_list))
                     self.value_names.extend([col_name]*len(agg_list))
+
 
     def construct_result(self, out_key_columns, out_value_columns):
         if not self.as_index:
@@ -267,7 +278,11 @@ class _GroupbyHelper(object):
                 out_value_columns,
                 columns=self.compute_result_column_index()
             )
-        result.index = self.compute_result_index(out_key_columns, out_value_columns)
+
+        index = self.compute_result_index(out_key_columns, out_value_columns)
+        if len(result) == 0 and len(index) != 0:
+            result._size = len(index)
+        result.index = index
 
         if isinstance(self.obj, cudf.Series):
             # May need to downcast from DataFrame to Series:
