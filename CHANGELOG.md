@@ -13,6 +13,7 @@
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2145 Work around binops validity checks for java
+- PR #2146 Work around unary_math validity checks for java
 
 
 # cuDF 0.8.0 (27 June 2019)
