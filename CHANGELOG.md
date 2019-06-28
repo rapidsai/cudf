@@ -11,6 +11,7 @@
 
 ## Bug Fixes
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
+- PR #2145 Work around binops validity checks for java
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
 
 
