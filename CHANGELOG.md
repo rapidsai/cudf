@@ -2,12 +2,19 @@
 
 ## New Features
 
+- PR #2012 Add `reindex()` to DataFrame and Series
+
 ## Improvements
+
+- PR #1947 Cleanup serialization code
+- PR #2125 More aggregate in java API
 
 ## Bug Fixes
 
+- PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 
-# cuDF 0.8.0 (Date TBD)
+
+# cuDF 0.8.0 (27 June 2019)
 
 ## New Features
 
@@ -81,7 +88,8 @@
 - PR #1915 Improve iloc performance for non-contiguous row selection
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
-- PR #1850 Support left_on and right_on for DataFrame merge operator  
+- PR #1850 Support left_on and right_on for DataFrame merge operator
+- PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1938 Add default constructor for `column_wrapper`
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1952 consolidate libcudf public API headers in include/cudf
@@ -102,6 +110,8 @@
 - PR #2036 Make library of common test utils to speed up tests compilation
 - PR #2022 Facilitating get_dummies to be a high level api too
 - PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
+- PR #2104 Add a functional ``sort=`` keyword argument to groupby
+- PR #2108 Add `find_and_replace` for StringColumn for replacing single values
 
 ## Bug Fixes
 
@@ -165,6 +175,13 @@
 - PR #2066 exclude `IteratorTest.mean_var_output` test from debug build
 - PR #2069 Fix JNI code to use read_csv and read_parquet APIs
 - PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
+- PR #2089 Configure Sphinx to render params correctly
+- PR #2091 Fix another bug with unfound transitive dependencies for `cudftestutils` in Ubuntu 18.04
+- PR #2115 Just apply `--disable-new-dtags` instead of trying to define all the transitive dependencies
+- PR #2106 Fix errors in JitCache tests caused by sharing of device memory between processes
+- PR #2120 Fix errors in JitCache tests caused by running multiple threads on the same data
+- PR #2102 Fix memory leak in groupby
+- PR #2113 fixed typo in to_csv code example
 
 
 # cudf 0.7.2 (16 May 2019)

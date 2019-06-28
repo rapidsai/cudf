@@ -235,6 +235,12 @@ gdf_error gdf_quantile_exact( gdf_column*         col_in,       // input column
                               gdf_context*        ctxt)         // context info
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+
+  if (col_in->size == 0) {
+     result->is_valid = false;
+     return GDF_SUCCESS;
+  }
+
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
@@ -257,6 +263,12 @@ gdf_error gdf_quantile_approx(	gdf_column*  col_in,       // input column
                                 gdf_context* ctxt)         // context info
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+  
+  if (col_in->size == 0) {
+     result->is_valid = false;
+     return GDF_SUCCESS;
+  }
+
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);

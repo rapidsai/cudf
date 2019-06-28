@@ -40,7 +40,18 @@ agg_names = {
 }
 
 
-def apply_groupby(keys, values, ops, method='hash'):
+def columns_from_dataframe(df):
+    return [sr._column for sr in df._cols.values()]
+
+
+def dataframe_from_columns(cols, index=None, columns=None):
+    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
+    if columns is not None:
+        df.columns = columns
+    return df
+
+
+def apply_groupby(keys, values, ops, method='hash', sort_results=True):
     """
     Apply aggregations *ops* on *values*, grouping by *keys*.
 

@@ -196,6 +196,22 @@ class Series(object):
 
         return Series._concat([this, other], index=index)
 
+    def reindex(self, index=None, copy=True):
+        """Return a Series that conforms to a new index
+
+        Parameters
+        ----------
+        index : Index, Series-convertible, default None
+        copy : boolean, default True
+
+        Returns
+        -------
+        A new Series that conforms to the supplied index
+        """
+        name = self.name or 0
+        idx = self._index if index is None else index
+        return self.to_frame(name).reindex(idx, copy=copy)[name]
+
     def reset_index(self, drop=False):
         """ Reset index to RangeIndex """
         if not drop:
@@ -1841,11 +1857,37 @@ class Series(object):
         DataFrame
 
         """
+
+        if isinstance(q, Number) or utils.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+
+        if isinstance(q, Number):
+            res = self._column.quantile(q, interpolation, exact)
+            if len(res) == 0:
+                return np.nan
+            else:
+                # if q is an int/float, we shouldn't be constructing series
+                return res.pop()
+
         if not quant_index:
             return Series(self._column.quantile(q, interpolation, exact))
         else:
-            return Series(self._column.quantile(q, interpolation, exact),
-                          index=as_index(np.asarray(q)))
+            from cudf.dataframe.columnops import column_empty_like
+            np_array_q = np.asarray(q)
+            if len(self) == 0:
+                result = column_empty_like(np_array_q, dtype=self.dtype,
+                                           masked=True,
+                                           newsize=len(np_array_q))
+            else:
+                result = self._column.quantile(q, interpolation, exact)
+            return Series(result,
+                          index=as_index(np_array_q))
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
@@ -2007,7 +2049,7 @@ class Series(object):
                                                     periods)
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, by=None, group_series=None, level=None, sort=False,
+    def groupby(self, by=None, group_series=None, level=None, sort=True,
                 group_keys=True):
         if group_keys is not True:
             raise NotImplementedError(
