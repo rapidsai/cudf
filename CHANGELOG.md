@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2012 Add `reindex()` to DataFrame and Series
+- PR #2098 Align DataFrame and Series indices before executing binary ops
 
 ## Improvements
 

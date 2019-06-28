@@ -255,8 +255,7 @@ class Groupby(object):
                 index.name = name
                 final_result.index = index
             else:
-                mi = MultiIndex(source_data=result[self._by])
-                mi.names = self._by
+                mi = MultiIndex(names=self._by, source_data=result[self._by])
                 final_result.index = mi
             return final_result
         if len(self._by) == 1:
@@ -298,15 +297,15 @@ class Groupby(object):
                 else:
                     new_by.append(by)
             self._by = new_by
-            multi_index = MultiIndex(source_data=result[self._by])
+            mi = MultiIndex(names=self._by, source_data=result[self._by])
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
             if len(final_result.columns) > 0:
-                return final_result.set_index(multi_index)
+                return final_result.set_index(mi)
             else:
-                return result.set_index(multi_index)
+                return result.set_index(mi)
 
     def apply_multicolumn(self, result, aggs):
         # multicolumn only applies with multiple aggs and multiple groupby keys

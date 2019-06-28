@@ -236,7 +236,9 @@ def is_list_like(obj):
         return False
 
 
-def get_min_width_integer_dtype(row_count):
-    from math import ceil, log
-    byte_width = ceil(log(max(2, row_count), 256)) * 8
-    return np.dtype('int' + str(byte_width))
+def min_scalar_type(a, min_size=8):
+    # Get smallest type to represent the category size
+    sizeof = np.min_scalar_type(a).itemsize
+    # Normalize the size to at least `min_size` bytes
+    sizeof = max(max(min_size, 8) // 8, sizeof)
+    return getattr(np, 'int' + str(sizeof * 8))
