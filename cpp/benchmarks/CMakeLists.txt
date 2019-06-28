@@ -33,7 +33,8 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}")
+                    "${NVSTRINGS_INCLUDE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
