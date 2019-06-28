@@ -12,6 +12,7 @@
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
+- PR #2128 Add offset param to host buffer readers in java API.
 - PR #2145 Work around binops validity checks for java
 
 
