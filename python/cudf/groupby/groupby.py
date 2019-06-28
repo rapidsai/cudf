@@ -11,6 +11,7 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf import MultiIndex
 from cudf.bindings.nvtx import nvtx_range_pop
+from cudf.utils.utils import is_single_value
 
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 
@@ -57,19 +58,16 @@ class SeriesGroupBy(_Groupby):
 
 class DataFrameGroupBy(_Groupby):
 
-    def __init__(self, df, by=None, method="hash", as_index=True, level=None, sort=True):
+    def __init__(self, df, by=None, as_index=True, level=None, sort=True, method="hash"):
         """
         Parameters
         ----------
         df : DataFrame
-        by : str, list
-            - str
-                The column name to group on.
+        by : label, list
+            - label
+                The column label to group on.
             - list
-                List of *str* of the column names to group on.
-        method : str, optional
-            A string indicating the libgdf method to use to perform the
-            group by. Valid values are "hash".
+                List of labels to group on.
         """
         self._df = df
         self._groupby = _GroupbyHelper(df, by=by, as_index=as_index, level=level, sort=sort)
@@ -82,7 +80,7 @@ class DataFrameGroupBy(_Groupby):
         return self._groupby.compute_result(agg)
 
     def __getitem__(self, arg):
-        if isinstance(arg, str):
+        if is_single_value(arg):
             return self.__getattr__(arg)
         else:
             arg = list(arg)
@@ -160,7 +158,7 @@ class _GroupbyHelper(object):
         """
         Get (key_name, key_column) pair from a single *by* argument
         """
-        if isinstance(by, str):
+        if is_single_value(by):
             key_name = by
             key_column = self.obj[by]._column
         else:

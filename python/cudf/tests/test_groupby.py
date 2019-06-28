@@ -378,6 +378,23 @@ def test_groupby_column_numeral():
     gxx = g[0].sum()
     assert_eq(pxx, gxx)
 
+    pdf = pd.DataFrame({0.5: [1., 2., 3.], 1.5: [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    p = pdf.groupby(1.5)
+    g = gdf.groupby(1.5)
+    pxx = p[0.5].sum()
+    gxx = g[0.5].sum()
+    assert_eq(pxx, gxx)
+
+
+def test_groupby_column_datetime():
+    pdf = pd.DataFrame({pd.Timestamp("2001-01-01"): [1, 1, 3],
+                        pd.Timestamp("2001-01-02"): [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby(pd.Timestamp("2001-01-01")).sum(),
+        gdf.groupby(pd.Timestamp("2001-01-01")).sum(),
+    )
 
 @pytest.mark.parametrize('series', [[0, 1, 0], [1, 1, 1], [0, 1, 1], [1, 2, 3], [4, 3, 2], [0, 2, 0]])  # noqa: E501
 def test_groupby_external_series(series):
