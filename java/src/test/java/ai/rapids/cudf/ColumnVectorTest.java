@@ -225,4 +225,80 @@ public class ColumnVectorTest {
     assertThrows(IllegalArgumentException.class, () ->
       ColumnVector.fromScalar(Scalar.fromString("test"), 1));
   }
+
+  @Test
+  void testReplaceEmptyColumn() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans();
+         ColumnVector expected = ColumnVector.fromBoxedBooleans();
+         ColumnVector result = input.replaceNulls(Scalar.fromBool(false))) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testReplaceNullBoolsWithAllNulls() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans(null, null, null, null);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false);
+         ColumnVector result = input.replaceNulls(Scalar.fromBool(false))) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testReplaceSomeNullBools() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedBooleans(false, null, null, false);
+         ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false);
+         ColumnVector result = input.replaceNulls(Scalar.fromBool(true))) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testReplaceNullIntegersWithAllNulls() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedInts(null, null, null, null);
+         ColumnVector expected = ColumnVector.fromBoxedInts(0, 0, 0, 0);
+         ColumnVector result = input.replaceNulls(Scalar.fromInt(0))) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testReplaceSomeNullIntegers() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null);
+         ColumnVector expected = ColumnVector.fromBoxedInts(1, 2, 999, 4, 999);
+         ColumnVector result = input.replaceNulls(Scalar.fromInt(999))) {
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testReplaceNullsFailsOnTypeMismatch() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null)) {
+      assertThrows(CudfException.class, () -> {
+        long nativePtr = Cudf.replaceNulls(input, Scalar.fromBool(true));
+        if (nativePtr != 0) {
+          new ColumnVector(nativePtr).close();
+        }
+      });
+    }
+  }
+
+  @Test
+  void testReplaceNullsFailsOnNullScalar() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromBoxedInts(1, 2, null, 4, null)) {
+      assertThrows(CudfException.class, () -> {
+        long nativePtr = Cudf.replaceNulls(input, Scalar.fromNull(input.getType()));
+        if (nativePtr != 0) {
+          new ColumnVector(nativePtr).close();
+        }
+      });
+    }
+  }
 }

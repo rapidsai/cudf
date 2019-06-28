@@ -460,6 +460,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a ColumnVector with any null values replaced with a scalar.
+   *
+   * @param scalar - Scalar value to use as replacement
+   * @return - ColumnVector with nulls replaced by scalar
+   */
+  public ColumnVector replaceNulls(Scalar scalar) {
+    return new ColumnVector(Cudf.replaceNulls(this, scalar));
+  }
+
+  /*
    * Returns the validity mask as a boolean vector with FALSE for nulls, 
    * and TRUE otherwise.
    */
@@ -482,7 +492,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       // we are in the device 
       checkHasDeviceData();
 
-      // apply the validity mask to cv's native column vector
+      // Apply the validity mask to cv's native column vector
+      // Warning: This is sharing the validity vector from the current column
+      // with the new column created with fromScalar temporarily.
       cudfColumnViewAugmented(
           cv.offHeap.nativeCudfColumnHandle,
           cv.offHeap.deviceData.data.address,
@@ -496,7 +508,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       cv.nullCount = getNullCount();
 
       // replace nulls with FALSE
-      result = new ColumnVector(Cudf.replaceNulls(cv, Scalar.fromBool(false)));
+      result = cv.replaceNulls(Scalar.fromBool(false));
 
     } finally {
       // cleanup
@@ -1758,19 +1770,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars");
     }
     DeviceMemoryBuffer dataBuffer = null;
+    DeviceMemoryBuffer validityBuffer = null;
     ColumnVector cv = null;
     boolean needsCleanup = true;
 
     try {
       dataBuffer = DeviceMemoryBuffer.allocate(scalar.type.sizeInBytes * rows);
 
+      if (!scalar.isValid()) {
+        validityBuffer = DeviceMemoryBuffer.allocate(
+            BitVectorHelper.getValidityAllocationSizeInBytes(rows));
+      }
+
       cv = new ColumnVector(
           scalar.getType(),
           scalar.getTimeUnit(),
           rows,
-          0,
+          0, 
           dataBuffer,
-          null);
+          validityBuffer);
 
       cv.fill(scalar);
 
@@ -1780,6 +1798,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       if (needsCleanup) {
         if (dataBuffer != null) {
           dataBuffer.close();
+        }
+        if (validityBuffer != null) {
+          validityBuffer.close();
         }
         if (cv != null) {
           cv.close();
