@@ -10,7 +10,6 @@ from numpy.testing import assert_array_equal
 from cudf.dataframe import DataFrame
 from cudf.dataframe import Series
 from cudf.tests.utils import assert_eq
-from cudf.bindings.GDFError import GDFError
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
@@ -398,8 +397,8 @@ def test_groupby_external_series(series):
 
 
 @pytest.mark.xfail(raises=NotImplementedError,
-                   reason="cuDF does not support arbitrary series index lengths "
-                          "for groupby")
+                   reason="cuDF does not support arbitrary series "
+                          "index lengths for groupby")
 @pytest.mark.parametrize('series', [[0, 1], [1, 1, 1, 1]])
 def test_groupby_external_series_incorrect_length(series):
     pdf = pd.DataFrame({'x': [1., 2., 3.], 'y': [1, 2, 1]})

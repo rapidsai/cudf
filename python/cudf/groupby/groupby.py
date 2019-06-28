@@ -1,16 +1,10 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from numbers import Number
 import collections
 import itertools
 
-import pandas as pd
-
 import cudf
-from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.series import Series
 from cudf import MultiIndex
-from cudf.bindings.nvtx import nvtx_range_pop
 from cudf.utils.utils import is_single_value
 
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
@@ -52,7 +46,8 @@ class SeriesGroupBy(_Groupby):
 
     def __init__(self, sr, by=None, level=None, method="hash", sort=True):
         self._sr = sr
-        self._groupby = _GroupbyHelper(obj=self._sr, by=by, level=level, sort=sort)
+        self._groupby = _GroupbyHelper(obj=self._sr, by=by,
+                                       level=level, sort=sort)
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
@@ -60,7 +55,8 @@ class SeriesGroupBy(_Groupby):
 
 class DataFrameGroupBy(_Groupby):
 
-    def __init__(self, df, by=None, as_index=True, level=None, sort=True, method="hash"):
+    def __init__(self, df, by=None, as_index=True, level=None,
+                 sort=True, method="hash"):
         """
         Parameters
         ----------
@@ -72,7 +68,8 @@ class DataFrameGroupBy(_Groupby):
                 List of labels to group on.
         """
         self._df = df
-        self._groupby = _GroupbyHelper(obj=self._df, by=by, as_index=as_index, level=level, sort=sort)
+        self._groupby = _GroupbyHelper(obj=self._df, by=by, as_index=as_index,
+                                       level=level, sort=sort)
 
     def _apply_aggregation(self, agg):
         """
@@ -99,12 +96,12 @@ class DataFrameGroupBy(_Groupby):
         if key in self._df.columns:
             by_list = []
             for by_name, by in zip(self._groupby.key_names,
-                                self._groupby.key_columns):
+                                   self._groupby.key_columns):
                 by_list.append(cudf.Series(by, name=by_name))
             return self._df[key].groupby(by_list,
-                                        sort=self._groupby.sort)
+                                         sort=self._groupby.sort)
         raise AttributeError("'DataFrameGroupBy' object has no attribute "
-                                "'{}'".format(key))
+                             "'{}'".format(key))
 
 
 class _GroupbyHelper(object):
@@ -166,13 +163,11 @@ class _GroupbyHelper(object):
             key_name = by
             key_column = self.obj[by]._column
         else:
-            try:
-                by = cudf.Series(by)
-            except:
-                raise ValueError("Cannot convert by argument to a Series")
+            by = cudf.Series(by)
             if len(by) != len(self.obj):
-                raise NotImplementedError("cuDF does not support arbitrary series index lengths "
-                                        "for groupby")
+                raise NotImplementedError(
+                    "cuDF does not support arbitrary series index lengths "
+                    "for groupby")
             key_name = by.name
             key_column = by._column
         return key_name, key_column
@@ -249,26 +244,27 @@ class _GroupbyHelper(object):
             for col_name, agg_list in self.aggs.items():
                 col = self.obj[col_name]._column
                 # drop nuisance columns
-                if isinstance(col,
-                              (cudf.dataframe.StringColumn,
-                               cudf.dataframe.CategoricalColumn)
+                if isinstance(
+                    col,
+                    (cudf.dataframe.StringColumn,
+                     cudf.dataframe.CategoricalColumn)
                 ):
                     continue
                 if len(agg_list) == 1:
-                    agg_name = agg_list[0]
                     self.value_columns.append(col)
                     self.value_names.append(col_name)
                 else:
                     self.value_columns.extend([col]*len(agg_list))
                     self.value_names.extend([col_name]*len(agg_list))
 
-
     def construct_result(self, out_key_columns, out_value_columns):
         if not self.as_index:
             result = cudf.concat(
                 [
-                    dataframe_from_columns(out_key_columns, columns=self.key_names),
-                    dataframe_from_columns(out_value_columns, columns=self.value_names)
+                    dataframe_from_columns(out_key_columns,
+                                           columns=self.key_names),
+                    dataframe_from_columns(out_value_columns,
+                                           columns=self.value_names)
                 ],
                 axis=1
             )
@@ -292,7 +288,6 @@ class _GroupbyHelper(object):
 
         return result
 
-
     def compute_result_index(self, key_columns, value_columns):
         """
         Computes the index of the result
@@ -302,11 +297,15 @@ class _GroupbyHelper(object):
             return cudf.dataframe.index.as_index(key_columns[0],
                                                  name=key_names[0])
         else:
-            empty_keys = all([len(x)==0 for x in key_columns])
-            if len(value_columns) == 0  and empty_keys:
-                return cudf.dataframe.index.GenericIndex(cudf.Series([], dtype='object'))
-            return MultiIndex(source_data=dataframe_from_columns(key_columns,
-                                                                 columns=key_names))
+            empty_keys = all([len(x) == 0 for x in key_columns])
+            if len(value_columns) == 0 and empty_keys:
+                return cudf.dataframe.index.GenericIndex(
+                    cudf.Series([], dtype='object')
+                )
+            return MultiIndex(
+                source_data=dataframe_from_columns(key_columns,
+                                                   columns=key_names)
+            )
 
     def compute_result_column_index(self):
         """
@@ -379,6 +378,7 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
         out_value_columns = columns_from_dataframe(result[value_names])
 
     return out_key_columns, out_value_columns
+
 
 def _add_prefixes(names, prefixes):
     """
