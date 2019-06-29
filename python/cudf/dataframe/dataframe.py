@@ -2535,7 +2535,6 @@ class DataFrame(object):
             return DataFrame({col: data[col].describe(percentiles=percentiles)
                               for col in data.columns})
 
-
         if not include and not exclude:
             numeric_data = self.select_dtypes(np.number)
             output_frame = _create_output_frame(numeric_data, percentiles)
