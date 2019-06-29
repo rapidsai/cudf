@@ -160,9 +160,9 @@ namespace jit {
 
     }
     
-    void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx)  {
+    void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx, const std::string& output_type)  {
 
-        Launcher(ptx).setKernelInst("kernel_v_v", GDF_GENERIC_BINARY, Operator::Type::Direct, out, lhs, rhs)
+        Launcher(ptx, output_type).setKernelInst("kernel_v_v", GDF_GENERIC_BINARY, Operator::Type::Direct, out, lhs, rhs)
                      .launch(out, lhs, rhs);
 
     }
@@ -279,7 +279,7 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_bin
         binops::jit::binary_operation(out, lhs, rhs, ope);
 }
 
-void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx) {
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx, const std::string& output_type) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr),
         "Input pointers are null");
@@ -296,14 +296,30 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const s
         "Column data pointers are null");
 
     // Check for datatype
-    CUDF_EXPECTS((out->dtype == lhs->dtype) && (lhs->dtype == rhs->dtype) &&
+    CUDF_EXPECTS((lhs->dtype == GDF_FLOAT32 || lhs->dtype == GDF_FLOAT64 || 
+                  lhs->dtype == GDF_INT64   || lhs->dtype == GDF_INT32     ) &&
+                 (rhs->dtype == GDF_FLOAT32 || rhs->dtype == GDF_FLOAT64 || 
+                  rhs->dtype == GDF_INT64   || rhs->dtype == GDF_INT32     ) &&
                  (out->dtype == GDF_FLOAT32 || out->dtype == GDF_FLOAT64 || 
-                  out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ),
+                  out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ) ,
         "Invalid/Unsupported datatype");
     
     binops::binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
 
-    binops::jit::binary_operation(out, lhs, rhs, ptx);
+    binops::jit::binary_operation(out, lhs, rhs, ptx, output_type);
+}
+
+gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs, const std::string& ptx, gdf_dtype output_type) {
+    // Check for 0 sized data
+    CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
+
+    gdf_column output = allocate_dtype(lhs, output_type);
+    
+    if((lhs.size == 0) && (rhs.size == 0)) return output;
+
+    binops::binary_valid_mask_and(output.null_count, output.valid, lhs.valid, rhs.valid, rhs.size);
+
+    binops::jit::binary_operation(&output, const_cast<gdf_column*>(&lhs), const_cast<gdf_column*>(&rhs), ptx, cudf::jit::getTypeName(output_type));
 }
 
 } // namespace cudf

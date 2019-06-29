@@ -95,7 +95,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
     ASSERT_TRUE(out_data.size() == lhs_data.size());
     ASSERT_TRUE(out_data.size() == rhs_data.size());
-    for (int index = 0; index < out_data.size(); ++index) {
+    for (int index = 0; index < (int)out_data.size(); ++index) {
         ASSERT_TRUE(out_data[index] == (TypeOut)(ope(lhs_data[index], rhs_data[index])));
     }
 
@@ -105,7 +105,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
     ASSERT_TRUE(out_valid.size() == lhs_valid.size());
     ASSERT_TRUE(out_valid.size() == rhs_valid.size());
-    for (int index = 0; index < out_valid.size(); ++index) {
+    for (int index = 0; index < (int)out_valid.size(); ++index) {
         ASSERT_TRUE(out_valid[index] == lhs_valid[index] | rhs_valid[index]);
     }
 }

@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
- * Copyright 2018-2019 BlazingDB, Inc.
- *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -18,7 +15,7 @@
  */
 
 #include "jit/core/launcher.h"
-// #include "compiled/binary_ops.hpp"
+#include <jit/type.h>
 #include <bitmask/bitmask_ops.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
@@ -75,8 +72,8 @@ namespace transformation {
 
 namespace jit {
 
-    void unary_operation(gdf_column* out, gdf_column* in, const std::string& ptx)  {
-        Launcher(ptx).setKernelInst("kernel_v", GDF_GENERIC_UNARY, out, in)
+    void unary_operation(gdf_column* out, gdf_column* in, const std::string& ptx, const std::string& output_type)  {
+        Launcher(ptx, output_type).setKernelInst("kernel", out, in)
                      .launch(out, in);
 
     }
@@ -84,7 +81,7 @@ namespace jit {
 } // namespace jit
 } // namespace transformation
 
-void transform(gdf_column* out, gdf_column* in, const std::string& ptx) {
+void transform(gdf_column* out, gdf_column* in, const std::string& ptx, const std::string& output_type) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (in != nullptr),
         "Input pointers are null");
@@ -100,22 +97,27 @@ void transform(gdf_column* out, gdf_column* in, const std::string& ptx) {
         "Column data pointers are null");
 
     // Check for datatype
-    CUDF_EXPECTS((out->dtype == in->dtype) &&
+    // Input and output data types can be different but they have to be one of the following four.
+    CUDF_EXPECTS(( in->dtype == GDF_FLOAT32 ||  in->dtype == GDF_FLOAT64 || 
+                   in->dtype == GDF_INT64   ||  in->dtype == GDF_INT32     ) &&
                  (out->dtype == GDF_FLOAT32 || out->dtype == GDF_FLOAT64 || 
-                  out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ),
+                  out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ) ,
         "Invalid/Unsupported datatype");
     
     transformation::col_valid_mask_and(out->null_count, out->valid, in->valid, in->size);
 
-    transformation::jit::unary_operation(out, in, ptx);
+    transformation::jit::unary_operation(out, in, ptx, output_type);
 }
 
-gdf_column transform(const gdf_column& input,
-                           const std::string& ptx_unary_function){
+gdf_column transform(
+    const gdf_column& input,
+    const std::string& ptx_unary_function,
+    gdf_dtype output_type
+  ){
   // First create a gdf_column and then call the above function
-  gdf_column output_col = copy(input);
+  gdf_column output_col = allocate_dtype(input, output_type);
  
-  transform(&output_col, const_cast<gdf_column*>(&input), ptx_unary_function);
+  transform(&output_col, const_cast<gdf_column*>(&input), ptx_unary_function, cudf::jit::getTypeName(output_type));
 
   return output_col;
 }

@@ -85,8 +85,8 @@ R"***(
 
     gdf_column cpp_output_col;
 
-    CUDF_EXPECT_NO_THROW(cudf::transform(out.get(), in.get(), ptx));
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx));
+    CUDF_EXPECT_NO_THROW(cudf::transform(out.get(), in.get(), ptx, "float"));
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_FLOAT32));
     
     auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
 
@@ -94,7 +94,8 @@ R"***(
     ASSERT_UNARY(cpp_out, in, Cube);
 }
 
-TEST_F(UnaryOperationIntegrationTest, Cube_Vector_INT32_INT32) {
+
+TEST_F(UnaryOperationIntegrationTest, Cube_Vector_INT32_INT64) {
 
 using dtype = int;
 
@@ -145,14 +146,14 @@ R"***(
     auto in = cudf::test::column_wrapper<dtype>(500,
         [](gdf_size_type row) {return row % 3;},
         [](gdf_size_type row) {return row % 4;});
-    auto out = cudf::test::column_wrapper<dtype>(in.get()->size, true);
+    auto out = cudf::test::column_wrapper<int64_t>(in.get()->size, true);
   
     gdf_column cpp_output_col;
 
-    CUDF_EXPECT_NO_THROW(cudf::transform(out.get(), in.get(), ptx));
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx));
+    CUDF_EXPECT_NO_THROW(cudf::transform(out.get(), in.get(), ptx, "long"));
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_INT64));
 
-    auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
+    auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
 
     ASSERT_UNARY(out, in, Cube);
     ASSERT_UNARY(cpp_out, in, Cube);

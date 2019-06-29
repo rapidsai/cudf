@@ -18,6 +18,7 @@
 #define CUDF_TRANSFORM_HPP
 
 #include "cudf.h"
+#include <cudf/types.h>
 
 namespace cudf{
 
@@ -34,7 +35,8 @@ namespace cudf{
  * every element of the input
  *---------------------------------------------------------------------------**/
 gdf_column transform(const gdf_column& input,
-                           const std::string& ptx_unary_function);
+                           const std::string& ptx_unary_function,
+                           gdf_dtype output_type);
 
 /**
  * @brief Performs a unary operation on every element of the input 
@@ -51,7 +53,8 @@ gdf_column transform(const gdf_column& input,
  */
 void transform(gdf_column*           out,
                      gdf_column*           in,
-                     const std::string&    ptx);
+                     const std::string&    ptx,const std::string& output_type
+                     );
 
 } // namespace cudf
 

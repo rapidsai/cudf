@@ -276,15 +276,13 @@ add_library(cudf SHARED
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
             src/binaryop/jit/util/operator.cpp
-            src/binaryop/jit/util/type.cpp
+            src/jit/type.cpp
+            src/jit/types_h_jit.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
-            src/transform/jit/code/operation.cpp
-            src/transform/jit/code/traits.cpp
             src/transform/jit/core/launcher.cpp
-            src/transform/jit/util/type.cpp
             src/bitmask/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
@@ -347,7 +345,6 @@ execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 
 add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND echo "static" > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h >> ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
                    DEPENDS stringify

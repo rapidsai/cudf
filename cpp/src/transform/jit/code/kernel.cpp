@@ -25,12 +25,11 @@ namespace code {
 
 const char* kernel =
 R"***(
-    #include "operation.h"
     #include <cudf/types.h>
 
-    template <typename TypeOut, typename TypeIn, typename TypeOpe>
+    template <typename TypeOut, typename TypeIn>
     __global__
-    void kernel_v(gdf_size_type size,
+    void kernel(gdf_size_type size,
                     TypeOut* out_data, TypeIn* in_data) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
@@ -41,7 +40,7 @@ R"***(
         int step = blksz * gridsz;
 
         for (gdf_size_type i=start; i<size; i+=step) {
-            out_data[i] = TypeOpe::template operate<TypeOut, TypeIn>(in_data[i]);
+          GENERIC_UNARY_OP(&out_data[i], in_data[i]);  
         }
     }
 )***";

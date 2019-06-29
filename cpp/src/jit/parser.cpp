@@ -87,9 +87,9 @@ std::string parse_register_type(const std::string& src) {
 
 std::string register_type_to_cppname(const std::string& register_type) {
   if (register_type == ".u16")
-    return "short";
+    return "short int";
   else if (register_type == ".s16")
-    return "short";
+    return "short int";
   else if (register_type == ".f16")
     return "half";
   else if (register_type == ".u32")
@@ -99,9 +99,9 @@ std::string register_type_to_cppname(const std::string& register_type) {
   else if (register_type == ".f16x2")
     return "half2";
   else if (register_type == ".u64")
-    return "long";
+    return "long int";
   else if (register_type == ".s64")
-    return "long";
+    return "long int";
   else if (register_type == ".f32")
     return "float";
   else if (register_type == ".f64")
@@ -142,11 +142,14 @@ std::string parse_instruction(const std::string& src) {
   std::string output;
   std::string suffix;
 
-  std::string original_code = "\n  /** Input ptx: \n    " + src + "\n  */\n";
+  std::string original_code = "\n   /**   " + src + "  */\n";
+
+  int piece_count = 0;
 
   size_t start = 0;
   size_t stop = 0;
   bool is_instruction = true;
+  bool is_loading_param = false;
   std::string constraint;
   std::string register_type;
   bool blank = true;
@@ -179,6 +182,7 @@ std::string parse_instruction(const std::string& src) {
     }
     std::string piece = std::string(src, start, stop - start);
     if (is_instruction) {
+      is_loading_param = true;
       if (piece.find("ld.param") != std::string::npos) {
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
@@ -200,6 +204,7 @@ std::string parse_instruction(const std::string& src) {
     } else {
       // Here it should be the registers.
       if (piece.find("_param_") != std::string::npos) {
+        // This is the source of the parameter loading instruction
         output += " %0";
         suffix = ": : \"" + constraint + "\"(" +
                  get_rid_of_nonalnum_sqrbra(piece) + ")";
@@ -211,6 +216,7 @@ std::string parse_instruction(const std::string& src) {
       }
     }
     start = stop;
+    piece_count++;
   }
   if (!blank) output += ";";
   return "asm volatile (\"" + output + "\"" + suffix + ");" + original_code;
@@ -281,7 +287,7 @@ std::string parse_param(const std::string& src, bool first = false) {
   return name;
 }
 
-std::string parse_param_list(const std::string& src) {
+std::string parse_param_list(const std::string& src, const std::string& output_arg_type) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -295,8 +301,7 @@ std::string parse_param_list(const std::string& src) {
     while (stop < length && src[stop] != ',') {
       stop++;
     }
-    item_count++;
-    if (item_count == 1) {  // The first input argument is always a pointer.
+    if (item_count == 0) {  // The first input argument is always a pointer.
       first_name = parse_param(std::string(src, start, stop - start));
     } else {
       std::string name = parse_param(std::string(src, start, stop - start));
@@ -305,13 +310,15 @@ std::string parse_param_list(const std::string& src) {
     }
     stop++;
     start = stop;
+    item_count++;
   }
 
-  return "\n  " + arg_type + "* " + first_name + output + "\n";
+  return "\n  " + output_arg_type + "* " + first_name + output + "\n";
 }
 
 std::string parse_function_header(const std::string& src,
-                                  const std::string& function_name) {
+                                  const std::string& function_name,
+                                  const std::string& output_arg_type) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -358,7 +365,7 @@ std::string parse_function_header(const std::string& src,
     stop++;
   }
   std::string input_arg =
-      parse_param_list(std::string(src, start, stop - start));
+      parse_param_list(std::string(src, start, stop - start), output_arg_type);
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg +
          "){" + "\n";
 }
@@ -400,7 +407,8 @@ std::string remove_comments(const std::string& src) {
 
 // The interface
 std::string parse_single_function_ptx(const std::string& src,
-                                      const std::string& function_name) {
+                                      const std::string& function_name,
+                                      const std::string& output_arg_type) {
   std::string no_comments = remove_comments(src);
 
   get_input_arg_list().clear();
@@ -438,7 +446,7 @@ std::string parse_single_function_ptx(const std::string& src,
       parse_function_body(std::string(no_comments, start, stop - start));
 
   std::string function_header_output =
-      parse_function_header(function_header, function_name);
+      parse_function_header(function_header, function_name, output_arg_type);
 
   std::string final_output = function_header_output + "\n";
   for (int i = 0; i < function_body_output.size(); i++) {

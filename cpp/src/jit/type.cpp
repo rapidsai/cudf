@@ -19,10 +19,12 @@
 
 #include "type.h"
 #include <utilities/type_dispatcher.hpp>
+#include <string>
 
 namespace cudf {
-namespace binops {
 namespace jit {
+
+    // extern const char* const cudf_types_h_str = cudf_types_h;
 
     /**---------------------------------------------------------------------------*
      * @brief Functor to get type name in string
@@ -129,5 +131,4 @@ namespace jit {
     }
 
 } // namespace jit
-} // namespace binops
 } // namespace cudf

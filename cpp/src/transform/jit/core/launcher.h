@@ -21,7 +21,7 @@
 #define GDF_UNARY_TRANSFORM_JIT_CORE_LAUNCHER_H
 
 #include <jit/cache.h>
-#include "../util/type.h"
+#include <jit/type.h>
 #include <jitify.hpp>
 #include <unordered_map>
 #include <string>
@@ -43,7 +43,7 @@ namespace jit {
     public:
         Launcher();
         
-        Launcher(const std::string& ptx);
+        Launcher(const std::string& ptx, const std::string& output_type);
 
         Launcher(Launcher&&);
 
@@ -70,11 +70,10 @@ namespace jit {
         template <typename ... Args>
         Launcher& setKernelInst(
             std::string&& kernName,
-            gdf_unary_math_op ope,
             Args&& ... args)
         {
             std::vector<std::string> arguments;
-            arguments.assign({getTypeName(args->dtype)..., jit::getOperatorName(ope).c_str()});
+            arguments.assign({cudf::jit::getTypeName(args->dtype)...});
             kernel_inst = cacheInstance.getKernelInstantiation(kernName, program, arguments);
             return *this;
         }
@@ -96,7 +95,7 @@ namespace jit {
          * 
          * @return Launcher& ref to this launcher object
          *---------------------------------------------------------------------------**/
-        Launcher& setProgram(std::string prog_file_name, std::string ptx);
+        Launcher& setProgram(std::string prog_file_name, std::string ptx, std::string output_type);
 
         /**---------------------------------------------------------------------------*
          * @brief Handle the Jitify API to instantiate and launch using information 

@@ -20,9 +20,12 @@
 #include "../core/launcher.h"
 #include "../code/code.h"
 #include <jit/parser.h>
-#include <types.h.jit>
+// #include <jit/types_h_jit.h>
+// #include <types.h.jit>
 #include <cstdint>
 #include <chrono>
+
+extern const char cudf_types_h[];
 
 namespace cudf {
 namespace transformation {
@@ -32,7 +35,7 @@ namespace jit {
 
     const std::vector<std::string> Launcher::compilerFlags { "-std=c++14" };
     const std::vector<std::string> Launcher::headersName 
-        { "operation.h" , "traits.h" , cudf_types_h };
+        { cudf_types_h };
 
     /**---------------------------------------------------------------------------*
      * @brief  Used to provide Jitify with strings that should be used as headers
@@ -43,14 +46,6 @@ namespace jit {
      * @return std::istream* 
      *---------------------------------------------------------------------------**/
     std::istream* headersCode(std::string filename, std::iostream& stream) {
-        if (filename == "operation.h") {
-            stream << code::operation;
-            return &stream;
-        }
-        if (filename == "traits.h") {
-            stream << code::traits;
-            return &stream;
-        }
         return nullptr;
     }
 
@@ -63,10 +58,10 @@ namespace jit {
                                            headersCode);
     }
     
-    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx)
+    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx, std::string output_type)
     {
         std::string combined_kernel = 
-          parse_single_function_ptx(ptx, "GENERIC_UNARY_OP") + code::kernel;
+          parse_single_function_ptx(ptx, "GENERIC_UNARY_OP", output_type) + code::kernel;
         program = cacheInstance.getProgram(prog_file_name,
                                            combined_kernel.c_str(),
                                            headersName,
@@ -80,11 +75,11 @@ namespace jit {
         this->setProgram(prog_name);
     }
 
-    Launcher::Launcher(const std::string& ptx)
+    Launcher::Launcher(const std::string& ptx, const std::string& output_type)
      : cacheInstance{cudf::jit::cudfJitCache::Instance()}
     {
-        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx) ); 
-        this->setProgram(prog_name + ptx_hash_str, ptx);
+        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx + output_type) ); 
+        this->setProgram(prog_name + ("." + ptx_hash_str), ptx, output_type);
     }
  
     Launcher::Launcher(Launcher&& launcher)
