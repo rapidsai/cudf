@@ -109,7 +109,7 @@ def test_orc_reader_filenotfound(tmpdir):
 
 
 def test_orc_reader_local_filepath():
-    path = '~/TestOrcFile.test1.orc'
+    path = '~/TestLocalFile.orc'
     if not os.path.isfile(path):
         pytest.skip('Local .orc file is not found')
 

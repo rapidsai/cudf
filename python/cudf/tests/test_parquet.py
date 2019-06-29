@@ -291,7 +291,7 @@ def test_parquet_reader_filenotfound(tmpdir):
 
 
 def test_parquet_reader_local_filepath():
-    fname = '~/spark_timestamp.snappy.parquet'
+    fname = '~/TestLocalFile.parquet'
     if not os.path.isfile(fname):
         pytest.skip('Local .parquet file is not found')
 
