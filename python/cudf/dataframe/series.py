@@ -28,6 +28,9 @@ from cudf.window import Rolling
 
 import cudf.bindings.copying as cpp_copying
 
+from cudf.dataframe.numerical import NumericalColumn
+from cudf import dataframe
+import cupy
 
 class Series(object):
     """
@@ -284,6 +287,67 @@ class Series(object):
         if (method == '__call__' and hasattr(cudf, ufunc.__name__)):
             func = getattr(cudf, ufunc.__name__)
             return func(self)
+        else:
+            return NotImplemented
+
+    def __array_function__(self, func, types, args, kwargs):
+        cudf_module = Series
+        cupy_module = cupy
+        from numba import cuda
+
+        for submodule in func.__module__.split(".")[1:]:
+            # point both cudf and cupy to the correct submodule
+            if hasattr(cupy_module, submodule) or hasattr(cupy_module, submodule):
+                if hasattr(cudf_module, submodule):
+                    cudf_module = getattr(cudf_module, submodule)
+
+                if hasattr(cupy, submodule):
+                    cupy_module = getattr(cupy_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        # TODO: Check if all types can be handled
+        # if not all(issubclass(t, my_series) for t in types):
+        #     return NotImplemented
+
+        if hasattr(cudf_module, fname):
+            # Note: this allows subclasses that don't override
+            # __array_function__ to handle MyArray objects
+
+            cudf_func = getattr(cudf_module, fname)
+
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                print('array function')
+                return cudf_func(*args, **kwargs)
+
+        elif hasattr(cupy_module, fname):
+            # cast args and kwargs to cupy array
+            cupy_func = getattr(cupy_module, fname)
+            cupy_compatible_args = get_cupy_compatible_args(args)
+
+            cupy_output = cupy_func(*cupy_compatible_args, **kwargs)
+
+            if is_device_object_default(cupy_output):
+
+                # cupy some times returns zero dimensional arrays
+                # https://docs-cupy.chainer.org/en/stable/reference/difference.html#zero-dimensional-array
+                # casting zero dimensional arrays to scalar to make it consistent to numpy
+                # TODO: Ask on github
+                if cupy_output.ndim == 0:
+                    return cupy.asnumpy(cupy_output).item()
+                elif cupy_output.ndim == 1:
+                    return Series(cupy_output)
+                else:
+                    # TODO: Handle multi dimensional  arrays
+                    # TODO: Modify from gpu matrix to support both cupy and numba array
+                    numba_ar = cuda.as_cuda_array(cupy_output)
+                    return dataframe.DataFrame.from_gpu_matrix(numba_ar)
+            else:
+                return cupy_output
         else:
             return NotImplemented
 
@@ -2275,3 +2339,38 @@ def _align_indices(lhs, rhs):
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
         lhs, rhs = lhs.join(rhs, how='outer', sort=True)._cols.values()
     return lhs, rhs
+
+
+def cast_cudf_series_to_cupy(ser):
+    if isinstance(ser._column, NumericalColumn):
+        if ser.null_count == 0:
+            return cupy.asarray(ser)
+        else:
+            raise ValueError("Objects with null mask are not supported")
+    else:
+        raise ValueError("Non numerical columns are not supported by cupy")
+
+
+def get_cupy_compatible_args(args):
+    casted_ls = []
+
+    for arg in args:
+        if isinstance(arg, Series):
+            casted_arg = cast_cudf_series_to_cupy(arg)
+            casted_ls.append(casted_arg)
+
+        # handle list of arguments
+        elif is_sequence(arg):
+            casted_arg = get_cupy_compatible_args(arg)
+            casted_ls.append(casted_arg)
+        else:
+            casted_ls.append(arg)
+    return casted_ls
+
+
+def is_sequence(obj):
+    return type(obj) in [list, tuple]
+
+
+def is_device_object_default(o):
+    return hasattr(o, "__cuda_array_interface__")
