@@ -46,9 +46,15 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        data, mask = cls._deserialize_data_mask(deserialize, header, frames)
-        col = cls(data=data, mask=mask, null_count=header['null_count'],
-                  dtype=deserialize(*header['dtype']))
+        data, mask = super(DatetimeColumn, cls).deserialize(
+            deserialize, header, frames
+        )
+        col = cls(
+            data=data,
+            mask=mask,
+            null_count=header['null_count'],
+            dtype=deserialize(*header['dtype']),
+        )
         return col
 
     @classmethod

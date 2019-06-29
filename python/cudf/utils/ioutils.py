@@ -704,7 +704,7 @@ Write a dataframe to csv.
                          'y': [1.0, 3.3, 2.2, 4.4],
                          'z': ['a', 'b', 'c', 'd']})
 >>> df = df.set_index([3, 2, 1, 0])
->>> cudf.to_csv(filename)
+>>> df.to_csv(filename)
 
 See Also
 --------
