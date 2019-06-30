@@ -14,25 +14,19 @@
  * limitations under the License.
  */
 
-#include "parquet.h"
-#include "parquet_gpu.h"
+#include "parquet_reader_impl.hpp"
 
-#include <cudf/cudf.h>
 #include <io/comp/gpuinflate.h>
-#include <io/utilities/datasource.hpp>
-#include <io/utilities/wrapper_utils.hpp>
-#include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
-
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <array>
-#include <iostream>
-#include <numeric>
-#include <vector>
+
+namespace cudf {
+namespace io {
+namespace parquet {
 
 #if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
@@ -108,14 +102,14 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(const DataSource& input) {
+  explicit ParquetMetadata(DataSource *source) {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
 
-    const auto len = input.size();
-    const auto header_buffer = input.get_buffer(0, header_len);
+    const auto len = source->size();
+    const auto header_buffer = source->get_buffer(0, header_len);
     const auto header = (const parquet::file_header_s *)header_buffer->data();
-    const auto ender_buffer = input.get_buffer(len - ender_len, ender_len);
+    const auto ender_buffer = source->get_buffer(len - ender_len, ender_len);
     const auto ender = (const parquet::file_ender_s *)ender_buffer->data();
     CUDF_EXPECTS(len > header_len + ender_len, "Incorrect data source");
     CUDF_EXPECTS(
@@ -125,7 +119,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
                      ender->footer_len <= (len - header_len - ender_len),
                  "Incorrect footer length");
 
-    const auto buffer = input.get_buffer(len - ender->footer_len - ender_len, ender->footer_len);
+    const auto buffer = source->get_buffer(len - ender->footer_len - ender_len, ender->footer_len);
     parquet::CompactProtocolReader cp(buffer->data(), ender->footer_len);
     CUDF_EXPECTS(cp.read(this), "Cannot parse metadata");
     CUDF_EXPECTS(cp.InitSchema(this), "Cannot initialize schema");
@@ -223,18 +217,16 @@ struct ParquetMetadata : public parquet::FileMetaData {
   /**
    * @brief Filters and reduces down to a selection of columns
    *
-   * @param[in] use_cols Array of column names to select
-   * @param[in] use_cols_len Length of the column name array
+   * @param[in] use_names List of column names to select
    * @param[in] use_index_col Name of the index column
    *
    * @return List of column names & Parquet column indexes
    **/
-  auto select_columns(
-      const char **use_cols, int use_cols_len, const char *use_index_col) {
+  auto select_columns(std::vector<std::string> use_names,
+                      const char *use_index_col) {
     std::vector<std::pair<int, std::string>> selection;
 
-    if (use_cols) {
-      std::vector<std::string> use_names(use_cols, use_cols + use_cols_len);
+    if (not use_names.empty()) {
       if (get_total_rows() > 0) {
         if (std::find(use_names.begin(), use_names.end(), use_index_col) == use_names.end()) {
           use_names.push_back(use_index_col);
@@ -242,7 +234,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
       }
       for (const auto &use_name : use_names) {
         size_t index = 0;
-        for (const auto name : get_column_names()) {
+        for (const auto &name : get_column_names()) {
           if (name == use_name) {
             selection.emplace_back(index, name);
             break;
@@ -281,14 +273,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
   }
 };
 
-/**
- * @brief Returns the number of total pages from the given column chunks
- * 
- * @param[in] chunks List of column chunk descriptors
- *
- * @return size_t The total number of pages
- **/
-size_t count_page_headers(
+size_t reader::Impl::count_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
 
   size_t total_pages = 0;
@@ -319,13 +304,7 @@ size_t count_page_headers(
   return total_pages;
 }
 
-/**
- * @brief Returns the page information from the given column chunks
- *
- * @param[in] chunks List of column chunk descriptors
- * @param[in] pages List of page information
- **/
-void decode_page_headers(
+void reader::Impl::decode_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -356,15 +335,8 @@ void decode_page_headers(
   }
 }
 
-/**
- * @brief Decompresses the page data, at page granularity
- *
- * @param[in] chunks List of column chunk descriptors
- * @param[in] pages List of page information
- *
- * @return device_buffer<uint8_t> Device buffer to decompressed page data
- **/
-device_buffer<uint8_t> decompress_page_data(
+
+device_buffer<uint8_t> reader::Impl::decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
 
@@ -481,16 +453,7 @@ device_buffer<uint8_t> decompress_page_data(
   return decomp_pages;
 }
 
-/**
- * @brief Converts the page data and outputs to gdf_columns
- *
- * @param[in] chunks List of column chunk descriptors
- * @param[in] pages List of page information
- * @param[in] chunk_map Mapping between column chunk and gdf_column
- * @param[in] min_row Minimum number of rows to read from start
- * @param[in] total_rows Total number of rows to output
- **/
-void decode_page_data(
+void reader::Impl::decode_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages,
     const std::vector<gdf_column *> &chunk_map, size_t min_row,
@@ -553,48 +516,40 @@ void decode_page_data(
   }
 }
 
-//
-// Implementation for reading Apache ORC data and outputting to cuDF columns.
-//
-gdf_error read_parquet_arrow(
-    pq_read_arg *args,
-    std::shared_ptr<arrow::io::RandomAccessFile> rd_file) {
+reader::Impl::Impl(std::unique_ptr<DataSource> source,
+                   reader_options const &options)
+    : source_(std::move(source)) {
 
-  DataSource input = [&] {
-    if (args->source_type == FILE_PATH) {
-      return DataSource(args->source);
-    } else if (args->source_type == ARROW_RANDOM_ACCESS_FILE) {
-      CUDF_EXPECTS(rd_file, "Invalid Arrow file handle");
-      return DataSource(rd_file);
-    } else {
-      return DataSource(args->source, args->buffer_size);
-    }
-  }();
-  ParquetMetadata md(input);
+  // Open and parse the source Parquet dataset metadata
+  md_ = std::make_unique<ParquetMetadata>(source_.get());
+
+  // Store the index column (PANDAS-specific)
+  index_col_ = md_->get_index_column_name();
+
+  // Select only columns required by the options
+  selected_cols_ = md_->select_columns(options.columns, index_col_.c_str());
+
+  // Strings may be returned as either GDF_STRING or GDF_CATEGORY columns
+  strings_to_categorical_ = options.strings_to_categorical;
+}
+
+table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
 
   // Select only row groups required
-  int skip_rows = args->skip_rows;
-  int num_rows = args->num_rows;
   const auto selected_row_groups =
-      md.select_row_groups(args->row_group, skip_rows, num_rows);
-
-  // Select only columns required
-  const auto use_index_col = md.get_index_column_name();
-  const auto selected_cols = md.select_columns(
-      args->use_cols, args->use_cols_len, use_index_col.c_str());
-  int num_columns = selected_cols.size();
+      md_->select_row_groups(row_group, skip_rows, num_rows);
+  const auto num_columns = selected_cols_.size();
 
   // Initialize gdf_columns, but hold off on allocating storage space
   LOG_PRINTF("[+] Selected row groups: %d\n", (int)selected_row_groups.size());
-  LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
+  LOG_PRINTF("[+] Selected columns: %d\n", (int)num_columns);
   LOG_PRINTF("[+] Selected skip_rows: %d num_rows: %d\n", skip_rows, num_rows);
-  int index_col = -1;
   std::vector<gdf_column_wrapper> columns;
-  for (const auto &col : selected_cols) {
-    auto row_group_0 = md.row_groups[selected_row_groups[0].first];
-    auto &col_schema = md.schema[row_group_0.columns[col.first].schema_idx];
+  for (const auto &col : selected_cols_) {
+    auto row_group_0 = md_->row_groups[selected_row_groups[0].first];
+    auto &col_schema = md_->schema[row_group_0.columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
-                               args->strings_to_categorical);
+                               strings_to_categorical_);
 
     columns.emplace_back(static_cast<gdf_size_type>(num_rows),
                          dtype_info.first, dtype_info.second, col.second);
@@ -603,10 +558,6 @@ gdf_error read_parquet_arrow(
                columns.size() - 1, columns.back()->col_name,
                (size_t)columns.back()->size, columns.back()->dtype,
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
-
-    if (col.second == use_index_col) {
-      index_col = columns.size() - 1;
-    }
   }
 
   // Descriptors for all the chunks that make up the selected columns
@@ -624,19 +575,19 @@ gdf_error read_parquet_arrow(
   size_t total_decompressed_size = 0;
   auto remaining_rows = num_rows;
   for (const auto &rg : selected_row_groups) {
-    const auto row_group = md.row_groups[rg.first];
+    const auto row_group = md_->row_groups[rg.first];
     const auto row_group_start = rg.second;
     const auto row_group_rows = std::min(remaining_rows, (int)row_group.num_rows);
 
-    for (size_t i = 0; i < selected_cols.size(); i++) {
-      auto col = selected_cols[i];
+    for (size_t i = 0; i < num_columns; ++i) {
+      auto col = selected_cols_[i];
       auto &col_meta = row_group.columns[col.first].meta_data;
-      auto &col_schema = md.schema[row_group.columns[col.first].schema_idx];
+      auto &col_schema = md_->schema[row_group.columns[col.first].schema_idx];
       auto &gdf_column = columns[i];
 
       // Spec requires each row group to contain exactly one chunk for every
       // column. If there are too many or too few, continue with best effort
-      if (col.second != md.get_column_name(col_meta.path_in_schema)) {
+      if (col.second != md_->get_column_name(col_meta.path_in_schema)) {
         std::cerr << "Detected mismatched column chunk" << std::endl;
         continue;
       }
@@ -663,7 +614,7 @@ gdf_error read_parquet_arrow(
                                 : col_meta.data_page_offset;
         page_data.emplace_back(col_meta.total_compressed_size);
         d_compdata = page_data.back().data();
-        const auto buffer = input.get_buffer(offset, col_meta.total_compressed_size);
+        const auto buffer = source_->get_buffer(offset, col_meta.total_compressed_size);
         CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
                                  col_meta.total_compressed_size,
                                  cudaMemcpyHostToDevice));
@@ -742,22 +693,45 @@ gdf_error read_parquet_arrow(
   }
 
   // Transfer ownership to raw pointer output arguments
-  args->data = (gdf_column **)malloc(sizeof(gdf_column *) * num_columns);
-  for (int i = 0; i < num_columns; ++i) {
-    args->data[i] = columns[i].release();
-  }
-  args->num_cols_out = num_columns;
-  args->num_rows_out = num_rows;
-  if (index_col != -1) {
-    args->index_col = (int *)malloc(sizeof(int));
-    *args->index_col = index_col;
-  } else {
-    args->index_col = nullptr;
+  std::vector<gdf_column *> out_cols(columns.size());
+  for (size_t i = 0; i < columns.size(); ++i) {
+    out_cols[i] = columns[i].release();
   }
 
-  return GDF_SUCCESS;
+  return table(out_cols.data(), out_cols.size());
 }
 
-gdf_error read_parquet(pq_read_arg *args) {
-  return read_parquet_arrow(args, nullptr);
+reader::reader(std::string filepath, reader_options const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(filepath.c_str()), options)) {}
+
+reader::reader(const char *buffer, size_t length, reader_options const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(buffer, length), options)) {}
+
+reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               reader_options const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(file), options)) {}
+
+std::string reader::get_index_column() {
+  return impl_->get_index_column();
 }
+
+table reader::read_all() {
+  return impl_->read(0, -1, -1);
+}
+
+table reader::read_rows(size_t skip_rows, size_t num_rows) {
+  return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1, -1);
+}
+
+table reader::read_row_group(size_t row_group) {
+  return impl_->read(0, -1, row_group);
+}
+
+reader::~reader() = default;
+
+} // namespace parquet
+} // namespace io
+} // namespace cudf

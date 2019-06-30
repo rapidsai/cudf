@@ -5,7 +5,7 @@ import pytest
 
 from cudf.dataframe import DataFrame, Series, GenericIndex
 from cudf.tests import utils
-from cudf.utils.utils import get_dummies
+from cudf.reshape import get_dummies
 
 
 def test_onehot_simple():

@@ -19,7 +19,10 @@
 
 #include <io/comp/gpuinflate.h>
 
-namespace orc { namespace gpu {
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 
 #define DECIMALS_AS_FLOAT64     1     // 0: store decimals as INT64, 1: store decimals as FLOAT64
 
@@ -188,7 +191,9 @@ cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dict
                                 size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0,
                                 RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
 
-
-};}; // orc::gpu namespace
+} // namespace gpu
+} // namespace orc
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_ORC_GPU_H__

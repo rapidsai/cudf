@@ -7,7 +7,8 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.orc cimport *
+from cudf.bindings.orc cimport reader as orc_reader
+from cudf.bindings.orc cimport reader_options as orc_reader_options
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 
@@ -16,20 +17,13 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
+from io import BytesIO
 import errno
 import os
 
 
-def is_file_like(obj):
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
-        return False
-    if not hasattr(obj, "__iter__"):
-        return False
-    return True
-
-
-cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
-                   num_rows=None, use_index=True):
+cpdef cpp_read_orc(filepath_or_buffer, columns=None, stripe=None,
+                   skip_rows=None, num_rows=None, use_index=True):
     """
     Cython function to call into libcudf API, see `read_orc`.
 
@@ -39,18 +33,31 @@ cpdef cpp_read_orc(path, columns=None, stripe=None, skip_rows=None,
     """
 
     # Setup reader options
-    cdef OrcReaderOptions options = OrcReaderOptions()
+    cdef orc_reader_options options = orc_reader_options()
     for col in columns or []:
         options.columns.push_back(str(col).encode())
     options.use_index = use_index
 
     # Create reader from source
-    if not os.path.isfile(path) or not os.path.exists(path):
-        raise FileNotFoundError(
-            errno.ENOENT, os.strerror(errno.ENOENT), path
+    cdef unique_ptr[orc_reader] reader
+    cdef const unsigned char[:] buffer = None
+    if isinstance(filepath_or_buffer, BytesIO):
+        buffer = filepath_or_buffer.getbuffer()
+    elif isinstance(filepath_or_buffer, bytes):
+        buffer = filepath_or_buffer
+
+    if buffer is not None:
+        reader = unique_ptr[orc_reader](
+            new orc_reader(<char *>&buffer[0], buffer.shape[0], options)
         )
-    cdef unique_ptr[OrcReader] reader
-    reader = unique_ptr[OrcReader](new OrcReader(str(path).encode(), options))
+    else:
+        if not os.path.isfile(filepath_or_buffer):
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+            )
+        reader = unique_ptr[orc_reader](
+            new orc_reader(str(filepath_or_buffer).encode(), options)
+        )
 
     # Read data into columns
     cdef cudf_table table

@@ -7,7 +7,8 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-from cudf.bindings.csv cimport *
+from cudf.bindings.csv cimport reader as csv_reader
+from cudf.bindings.csv cimport reader_options as csv_reader_options
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
@@ -20,6 +21,7 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import numpy as np
 import collections.abc
+import errno
 import os
 
 
@@ -51,7 +53,6 @@ cpdef cpp_read_csv(
     nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
     na_values=None, keep_default_na=True, na_filter=True,
     prefix=None, index_col=None):
-
     """
     Cython function to call into libcudf API, see `read_csv`.
 
@@ -72,7 +73,7 @@ cpdef cpp_read_csv(
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
-    cdef csv_reader_args args = csv_reader_args()
+    cdef csv_reader_options args = csv_reader_options()
 
     # Populate args struct
     if is_file_like(filepath_or_buffer):
@@ -84,11 +85,11 @@ cpdef cpp_read_csv(
             args.filepath_or_buffer = buffer
         args.input_data_form = HOST_BUFFER
     else:
-        if (not os.path.isfile(filepath_or_buffer)):
-            raise(FileNotFoundError)
-        if (not os.path.exists(filepath_or_buffer)):
-            raise(FileNotFoundError)
-        args.filepath_or_buffer = filepath_or_buffer.encode()
+        if not os.path.isfile(filepath_or_buffer):
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+            )
+        args.filepath_or_buffer = str(filepath_or_buffer).encode()
         args.input_data_form = FILE_PATH
 
     if header == 'infer':
@@ -172,10 +173,10 @@ cpdef cpp_read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    cdef unique_ptr[CsvReader] reader
+    cdef unique_ptr[csv_reader] reader
     with nogil:
-        reader = unique_ptr[CsvReader](new CsvReader(args))
-    
+        reader = unique_ptr[csv_reader](new csv_reader(args))
+
     cdef cudf_table table
     if byte_range is not None:
         table = reader.get().read_byte_range(byte_range[0], byte_range[1])

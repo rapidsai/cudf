@@ -29,6 +29,8 @@
 #include "orc_gpu.h"
 
 namespace cudf {
+namespace io {
+namespace orc {
 
 // Forward internal classes
 class OrcMetadata;
@@ -37,19 +39,13 @@ class OrcStreamInfo;
 /**
  * @brief Implementation for ORC reader
  **/
-class OrcReader::Impl {
+class reader::Impl {
  public:
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
   explicit Impl(std::unique_ptr<DataSource> source,
-                OrcReaderOptions const &options);
-
-  /**
-   * @brief Convenience constructor from an Arrow dataset source.
-   **/
-  explicit Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                OrcReaderOptions const &options);
+                reader_options const &options);
 
   /**
    * @brief Read an entire set or a subset of data from the source and returns
@@ -138,4 +134,6 @@ class OrcReader::Impl {
   bool use_index_ = true;
 };
 
-}  // namespace cudf
+} // namespace orc
+} // namespace io
+} // namespace cudf

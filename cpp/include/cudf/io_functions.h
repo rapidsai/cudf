@@ -29,18 +29,6 @@
  */
 gdf_error write_csv(csv_write_arg *args);
 
-/**
- * @brief Interface to parse Parquet data to GDF columns
- *
- * This function accepts an input source for an Apache Parquet dataset and
- * outputs an array of gdf_columns.
- *
- * @param[in,out] args Structure containing input and output args
- *
- * @return gdf_error GDF_SUCCESS if successful
- **/
-gdf_error read_parquet(pq_read_arg *args);
-
 /*
  * @brief Interface to convert GDF Columns to Compressed Sparse Row
  */

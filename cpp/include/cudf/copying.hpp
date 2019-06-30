@@ -53,7 +53,7 @@ gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists =
  */
 gdf_column copy(gdf_column const& input, cudaStream_t stream = 0);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Creates a table of empty columns with the same types as the inputs
  *
  * Creates the `gdf_column` objects, but does not allocate any underlying device
@@ -64,10 +64,10 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream = 0);
  *
  * @param t The input table to emulate
  * @return table A table of empty columns of same type as input
- *---------------------------------------------------------------------------**/
+ */
 table empty_like(table const& t);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Creates a table of columns with the same type and allocation size as
  * the input.
  *
@@ -82,10 +82,10 @@ table empty_like(table const& t);
  * @param allocate_mask_if_exists Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type and allocation size as input
- *---------------------------------------------------------------------------**/
+ */
 table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Creates a table of columns and deep copies the data from an input
  * table.
  *
@@ -93,11 +93,35 @@ table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStr
  * allocation in addition to deleting the `gdf_column` object for every column
  * in the new table.
  *
- * @param t
- * @param stream
- * @return table
- *---------------------------------------------------------------------------**/
+ * @param t The table to copy
+ * @param stream Optional stream in which to perform allocations and copies
+ * @return table A table that is an exact copy of @p t
+ */
 table copy(table const& t, cudaStream_t stream = 0);
+
+/**
+ * @brief Copies a range of elements from one column to another.
+ * 
+ * Copies N elements of @p in_column starting at @p in_begin to the N
+ * elements of @p out_column starting at @p out_begin, where
+ * N = (@p out_end - @p out_begin)
+ * 
+ * The datatypes of in_column and out_column must be the same.
+ *
+ * If the input and output columns are the same and ranges overlap, the
+ * behavior is undefined.
+ *
+ * @param[out] out_column The preallocated column to copy into
+ * @param[in] in_column The column to copy from
+ * @param[in] out_begin The starting index of the output range
+ * @param[in] out_end The index one past the end of the output range
+ * @param[in] in_begin The starting index of the input range
+ * 
+ * @return void
+ */
+void copy_range(gdf_column *out_column, gdf_column const &in_column,
+                gdf_index_type out_begin, gdf_index_type out_end, 
+                gdf_index_type in_begin);
 
 /**
  * @brief Scatters the rows (including null values) of a set of source columns
@@ -127,7 +151,7 @@ table copy(table const& t, cudaStream_t stream = 0);
  * @Param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the maximum index contained in scatter_map
  *
- * @Returns GDF_SUCCESS upon successful completion
+ * @return GDF_SUCCESS upon successful completion
  */
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
                   table* destination_table);
@@ -162,7 +186,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
  *
- * @Returns GDF_SUCCESS upon successful completion
+ * @return GDF_SUCCESS upon successful completion
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);

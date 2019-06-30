@@ -18,7 +18,7 @@ htmlcov
 dist/
 cudf.egg-info/
 python/build
-python/cudf/bindings/*.cpp
+python/cudf/bindings/**/*.cpp
 python/cudf/bindings/.nfs*
 python/*.ipynb
 python/.ipynb_checkpoints
@@ -41,5 +41,15 @@ cpp/thirdparty/googletest/
 .cproject
 .settings
 
+## IntelliJ IDE
+.idea/
+.idea_modules/
+*.iml
+*.ipr
+*.iws
+
 ## Doxygen
 cpp/doxygen/html
+
+#Java
+target

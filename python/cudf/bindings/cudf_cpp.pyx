@@ -325,12 +325,12 @@ cdef gdf_column_to_column_mem(gdf_column* input_col):
             dtype='int32',
             finalizer=rmm._make_finalizer(data_ptr, 0)
         )
-        nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
-        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-        if nvcat_obj:
-            data = nvcat_obj.to_strings()
-        else:
+        if input_col.size == 0:
             data = nvstrings.to_device([])
+        else:
+            nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
+            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+            data = nvcat_obj.to_strings()
     else:
         data = rmm.device_array_from_ptr(
             data_ptr,

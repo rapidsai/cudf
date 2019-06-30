@@ -43,6 +43,8 @@ namespace jit {
     class Launcher {
     public:
         Launcher();
+        
+        Launcher(const std::string& ptx);
 
         Launcher(Launcher&&);
 
@@ -87,6 +89,17 @@ namespace jit {
          * @return Launcher& ref to this launcher object
          *---------------------------------------------------------------------------**/
         Launcher& setProgram(std::string prog_file_name);
+ 
+        /**---------------------------------------------------------------------------*
+         * @brief Set the Program for this launcher
+         * 
+         * @param prog_file_name Name to give to the program held by this Launcher.
+         * 
+         * @param ptx Additional ptx code that contains a user defined function to be used.
+         * 
+         * @return Launcher& ref to this launcher object
+         *---------------------------------------------------------------------------**/
+        Launcher& setProgram(std::string prog_file_name, std::string ptx);
 
         /**---------------------------------------------------------------------------*
          * @brief Handle the Jitify API to instantiate and launch using information 

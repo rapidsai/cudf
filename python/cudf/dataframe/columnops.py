@@ -15,7 +15,7 @@ import nvstrings
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import utils, cudautils
-from cudf.utils.utils import buffers_from_pyarrow
+from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf.bindings.stream_compaction import (cpp_drop_nulls,
                                              cpp_apply_boolean_mask)
@@ -123,15 +123,15 @@ def column_empty(row_count, dtype, masked, categories=None):
     dtype = pd.api.types.pandas_dtype(dtype)
 
     if masked:
-        mask = cudautils.make_mask(row_count)
-        cudautils.fill_value(mask, 0)
+        mask = cudautils.make_empty_mask(row_count)
     else:
         mask = None
 
-    if (
-        categories is not None
-        or pd.api.types.is_categorical_dtype(dtype)
-    ):
+    if categories is None and pd.api.types.is_categorical_dtype(dtype):
+        categories = [] if dtype.categories is None else dtype.categories
+
+    if categories is not None:
+        dtype = min_scalar_type(len(categories))
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
         dtype = 'category'

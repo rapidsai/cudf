@@ -17,6 +17,8 @@
 #ifndef __IO_PARQUET_COMMON_H__
 #define __IO_PARQUET_COMMON_H__
 
+namespace cudf {
+namespace io {
 namespace parquet {
 
 /**
@@ -109,6 +111,8 @@ enum PageType {
   DATA_PAGE_V2 = 3,
 };
 
-}; // namespace parquet
+} // namespace parquet
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_PARQUET_COMMON_H__

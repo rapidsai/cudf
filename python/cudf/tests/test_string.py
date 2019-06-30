@@ -11,7 +11,6 @@ from numba import cuda
 from cudf import concat
 from cudf.dataframe import DataFrame, Series
 from cudf.dataframe.index import StringIndex, StringColumn
-from cudf.bindings.GDFError import GDFError
 from cudf.tests.utils import assert_eq
 from librmm_cffi import librmm as rmm
 
@@ -734,13 +733,13 @@ def test_string_join_values_nulls():
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('str_data,str_data_raise', [
-    ([], 0),
-    (['a', 'b', 'c', 'd', 'e'], 0),
-    ([None, None, None, None, None], 1)
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
 ])
 @pytest.mark.parametrize('num_keys', [1, 2, 3])
-def test_string_groupby_key(str_data, str_data_raise, num_keys):
+def test_string_groupby_key(str_data, num_keys):
     other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
@@ -751,28 +750,22 @@ def test_string_groupby_key(str_data, str_data_raise, num_keys):
     pdf['a'] = other_data
     gdf['a'] = other_data
 
-    expectation = raise_builder(
-        [str_data_raise],
-        GDFError
-    )
+    expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
+    got = gdf.groupby(list(range(num_keys)), as_index=False).count()
 
-    with expectation:
-        expect = pdf.groupby(list(range(num_keys)), as_index=False).count()
-        got = gdf.groupby(list(range(num_keys)), as_index=False).count()
+    expect = expect.sort_values([0]).reset_index(drop=True)
+    got = got.sort_values([0]).reset_index(drop=True)
 
-        expect = expect.sort_values([0]).reset_index(drop=True)
-        got = got.sort_values([0]).reset_index(drop=True)
-
-        assert_eq(expect, got, check_dtype=False)
+    assert_eq(expect, got, check_dtype=False)
 
 
-@pytest.mark.parametrize('str_data,str_data_raise', [
-    ([], 0),
-    (['a', 'b', 'c', 'd', 'e'], 0),
-    ([None, None, None, None, None], 1)
+@pytest.mark.parametrize('str_data', [
+    [],
+    ['a', 'b', 'c', 'd', 'e'],
+    [None, None, None, None, None]
 ])
 @pytest.mark.parametrize('num_cols', [1, 2, 3])
-def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
+def test_string_groupby_non_key(str_data, num_cols):
     other_data = [1, 2, 3, 4, 5][:len(str_data)]
 
     pdf = pd.DataFrame()
@@ -783,43 +776,37 @@ def test_string_groupby_non_key(str_data, str_data_raise, num_cols):
     pdf['a'] = other_data
     gdf['a'] = other_data
 
-    expectation = raise_builder(
-        [str_data_raise],
-        GDFError
-    )
+    expect = pdf.groupby('a', as_index=False).count()
+    got = gdf.groupby('a', as_index=False).count()
 
-    with expectation:
-        expect = pdf.groupby('a', as_index=False).count()
-        got = gdf.groupby('a', as_index=False).count()
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
 
-        expect = expect.sort_values(['a']).reset_index(drop=True)
-        got = got.sort_values(['a']).reset_index(drop=True)
+    assert_eq(expect, got, check_dtype=False)
 
-        assert_eq(expect, got, check_dtype=False)
+    expect = pdf.groupby('a', as_index=False).max()
+    got = gdf.groupby('a', as_index=False).max()
 
-        expect = pdf.groupby('a', as_index=False).max()
-        got = gdf.groupby('a', as_index=False).max()
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
 
-        expect = expect.sort_values(['a']).reset_index(drop=True)
-        got = got.sort_values(['a']).reset_index(drop=True)
+    if len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype('str')
 
-        if len(expect) == 0 and len(got) == 0:
-            for i in range(num_cols):
-                expect[i] = expect[i].astype('str')
+    assert_eq(expect, got, check_dtype=False)
 
-        assert_eq(expect, got)
+    expect = pdf.groupby('a', as_index=False).min()
+    got = gdf.groupby('a', as_index=False).min()
 
-        expect = pdf.groupby('a', as_index=False).min()
-        got = gdf.groupby('a', as_index=False).min()
+    expect = expect.sort_values(['a']).reset_index(drop=True)
+    got = got.sort_values(['a']).reset_index(drop=True)
 
-        expect = expect.sort_values(['a']).reset_index(drop=True)
-        got = got.sort_values(['a']).reset_index(drop=True)
+    if len(expect) == 0 and len(got) == 0:
+        for i in range(num_cols):
+            expect[i] = expect[i].astype('str')
 
-        if len(expect) == 0 and len(got) == 0:
-            for i in range(num_cols):
-                expect[i] = expect[i].astype('str')
-
-        assert_eq(expect, got)
+    assert_eq(expect, got, check_dtype=False)
 
 
 def test_string_groupby_key_index():

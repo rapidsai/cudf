@@ -16,6 +16,8 @@
 
 #include "parquet.h"
 
+namespace cudf {
+namespace io {
 namespace parquet {
 
 const uint8_t CompactProtocolReader::g_list2struct[16] =
@@ -318,4 +320,6 @@ int CompactProtocolReader::WalkSchema(std::vector<SchemaElement> &schema,
     }
 }
 
-}; // namespace parquet
+} // namespace parquet
+} // namespace io
+} // namespace cudf

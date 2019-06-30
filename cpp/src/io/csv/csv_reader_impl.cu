@@ -71,6 +71,8 @@ using std::vector;
 using std::string;
 
 namespace cudf {
+namespace io {
+namespace csv {
 
 using string_pair = std::pair<const char*,size_t>;
 
@@ -134,7 +136,7 @@ string removeQuotes(string str, char quotechar) {
  *
  * @return void
 */
-void CsvReader::Impl::setColumnNamesFromCsv() {
+void reader::Impl::setColumnNamesFromCsv() {
 	vector<char> first_row = header;
 	// No header, read the first data row
 	if (first_row.empty()) {
@@ -218,7 +220,7 @@ void CsvReader::Impl::setColumnNamesFromCsv() {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-void CsvReader::Impl::countRecordsAndQuotes(const char *h_data, size_t h_size) {
+void reader::Impl::countRecordsAndQuotes(const char *h_data, size_t h_size) {
 	vector<char> chars_to_count{opts.terminator};
 	if (opts.quotechar != '\0') {
 		chars_to_count.push_back(opts.quotechar);
@@ -243,7 +245,7 @@ void CsvReader::Impl::countRecordsAndQuotes(const char *h_data, size_t h_size) {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-void CsvReader::Impl::setRecordStarts(const char *h_data, size_t h_size) {
+void reader::Impl::setRecordStarts(const char *h_data, size_t h_size) {
 	// Allocate space to hold the record starting points
 	const bool last_line_terminated = (h_data[h_size - 1] == opts.terminator);
 	// If the last line is not terminated, allocate space for the EOF entry (added later)
@@ -270,7 +272,7 @@ void CsvReader::Impl::setRecordStarts(const char *h_data, size_t h_size) {
 	// Currently, ignoring lineterminations within quotes is handled by recording
 	// the records of both, and then filtering out the records that is a quotechar
 	// or a linetermination within a quotechar pair. The future major refactoring
-	// of csv_reader and its kernels will probably use a different tactic.
+	// of reader and its kernels will probably use a different tactic.
 	if (opts.quotechar != '\0') {
 		vector<uint64_t> h_rec_starts(num_records);
 		const size_t rec_start_size = sizeof(uint64_t) * (h_rec_starts.size());
@@ -310,7 +312,7 @@ void CsvReader::Impl::setRecordStarts(const char *h_data, size_t h_size) {
  *
  * @return void
  *---------------------------------------------------------------------------**/
-table CsvReader::Impl::read()
+table reader::Impl::read()
 {
 	// TODO move initialization to constructor
 	num_actual_cols = args_.names.size();
@@ -699,7 +701,7 @@ table CsvReader::Impl::read()
  * 
  * @return void
  *---------------------------------------------------------------------------**/
-void CsvReader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size) {
+void reader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size) {
 
   // Exclude the rows that are to be skipped from the start
   CUDF_EXPECTS(num_records > skiprows, "Skipping too many rows");
@@ -809,7 +811,7 @@ void CsvReader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_unc
  *
  * @return void
  *---------------------------------------------------------------------------**/
- void CsvReader::Impl::launch_dataConvertColumns(void **gdf,
+ void reader::Impl::launch_dataConvertColumns(void **gdf,
                                     gdf_valid_type **valid, gdf_dtype *d_dtypes,
                                     gdf_size_type *num_valid) {
   int blockSize;    // suggested thread count to use
@@ -976,7 +978,7 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
  *
  * @return void
  *---------------------------------------------------------------------------**/
- void CsvReader::Impl::launch_dataTypeDetection(column_data_t *d_columnData) {
+ void reader::Impl::launch_dataTypeDetection(column_data_t *d_columnData) {
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
@@ -1171,16 +1173,19 @@ void dataTypeDetection(char *raw_csv,
 	}
 }
 
-CsvReader::Impl::Impl(csv_reader_args const &args) : args_(args) {}
+reader::Impl::Impl(reader_options const &args) : args_(args) {}
 
-table CsvReader::Impl::read_byte_range(size_t offset, size_t size) {
+table reader::Impl::read_byte_range(size_t offset, size_t size) {
   byte_range_offset = offset;
   byte_range_size = size;
   return read();
 }
 
-table CsvReader::Impl::read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows) {
-  CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0, "cannot use both num_rows and num_skip_footer parameters");
+table reader::Impl::read_rows(gdf_size_type num_skip_header,
+                              gdf_size_type num_skip_footer,
+                              gdf_size_type num_rows) {
+  CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
+               "cannot use both num_rows and num_skip_footer parameters");
 
   skiprows = num_skip_header;
   nrows = num_rows;
@@ -1188,4 +1193,21 @@ table CsvReader::Impl::read_rows(gdf_size_type num_skip_header, gdf_size_type nu
   return read();
 }
 
+reader::reader(reader_options const &args)
+    : impl_(std::make_unique<Impl>(args)) {}
+
+table reader::read() { return impl_->read(); }
+
+table reader::read_byte_range(size_t offset, size_t size) {
+  return impl_->read_byte_range(offset, size);
+}
+table reader::read_rows(gdf_size_type num_skip_header,
+                        gdf_size_type num_skip_footer, gdf_size_type num_rows) {
+  return impl_->read_rows(num_skip_header, num_skip_footer, num_rows);
+}
+
+reader::~reader() = default;
+
+} // namespace csv
+} // namespace io
 } // namespace cudf

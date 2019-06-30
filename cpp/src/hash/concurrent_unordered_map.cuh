@@ -295,7 +295,6 @@ public:
     template<typename aggregation_type,
              class comparison_type = key_equal,
              typename hash_value_type = typename Hasher::result_type>
-    
     __device__ iterator insert(const value_type& x, 
                                aggregation_type op,
                                comparison_type keys_equal = key_equal(),

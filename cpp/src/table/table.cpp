@@ -19,8 +19,8 @@
 #include <cassert>
 #include <cudf/copying.hpp>
 #include <cudf/table.hpp>
-#include <utilities/error_utils.hpp>
 #include <utilities/column_utils.hpp>
+#include <utilities/error_utils.hpp>
 
 #include <algorithm>
 
@@ -28,12 +28,13 @@ namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
   CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-  this->_num_rows = cols[0]->size;
+  gdf_size_type num_rows = cols[0]->size;
 
-  std::for_each(_columns.begin(), _columns.end(), [this](gdf_column* col) {
-    CUDF_EXPECTS(nullptr != col, "Null input column");
-    CUDF_EXPECTS(_num_rows == col->size, "Column size mismatch");
-  });
+  std::for_each(_columns.begin(), _columns.end(),
+                [this, num_rows](gdf_column* col) {
+                  CUDF_EXPECTS(nullptr != col, "Null input column");
+                  CUDF_EXPECTS(num_rows == col->size, "Column size mismatch");
+                });
 }
 
 table::table(std::initializer_list<gdf_column*> list)
@@ -44,7 +45,7 @@ table::table(gdf_column* cols[], gdf_size_type num_cols)
 
 table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
              bool allocate_bitmasks, bool all_valid, cudaStream_t stream)
-    : _columns(dtypes.size()), _num_rows{num_rows} {
+    : _columns(dtypes.size()) {
   std::transform(
       _columns.begin(), _columns.end(), dtypes.begin(), _columns.begin(),
       [num_rows, allocate_bitmasks, all_valid, stream](gdf_column*& col,
@@ -79,6 +80,13 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         }
         return col;
       });
+}
+
+void table::destroy(void) {
+  for (auto& col : _columns) {
+    gdf_column_free(col);
+    delete col;
+  }
 }
 
 std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
