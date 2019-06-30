@@ -21,6 +21,7 @@ np_dtypes = {
   types.float64: np.float64
 }
 
+
 @pytest.mark.skipif(
     Version(numba.__version__) < Version('0.44.0a'),
     reason="Numba 0.44.0a or newer required"
@@ -53,7 +54,7 @@ def test_generic_ptx(dtype):
     ptx = add.inspect_ptx(type_signature)
 
     ptx_code = ptx.decode('utf-8')
-    
+
     # numpy type
     output_type = np_dtypes[result.signature.return_type]
 
