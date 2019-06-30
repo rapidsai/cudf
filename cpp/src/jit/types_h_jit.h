@@ -3,6 +3,6 @@
 
 #include <string>
 
-extern const char cudf_types_h[];
+extern const char* const cudf_types_h;
 
 #endif

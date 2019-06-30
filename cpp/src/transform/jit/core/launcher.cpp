@@ -20,12 +20,9 @@
 #include "../core/launcher.h"
 #include "../code/code.h"
 #include <jit/parser.h>
-// #include <jit/types_h_jit.h>
-// #include <types.h.jit>
+#include <jit/types_h_jit.h>
 #include <cstdint>
 #include <chrono>
-
-extern const char cudf_types_h[];
 
 namespace cudf {
 namespace transformation {
