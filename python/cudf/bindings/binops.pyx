@@ -56,18 +56,27 @@ cdef apply_op_v_v(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, op):
 
     return nullct
 
-cdef apply_op_v_v_udf(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, ptx):
+cpp_dtype = {
+  np.int32: "int",
+  np.int64: "long int",
+  np.float32: "float",
+  np.float64: "double"
+}
+ 
+cdef apply_op_v_v_udf(gdf_column* c_lhs, gdf_column* c_rhs, gdf_column* c_out, ptx, dtype):
     """
     Call gdf binary ops between two columns using user-defined function (UDF) defined in "ptx".
     """
 
     cdef string cpp_str = ptx.encode('UTF-8')
+    cdef string cpp_type_str = cpp_dtype[dtype].encode('UTF-8')
+    
     with nogil:
         binary_operation(
             <gdf_column*>c_out,
             <gdf_column*>c_lhs,
             <gdf_column*>c_rhs,
-            cpp_str)
+            cpp_str, cpp_type_str)
 
     cdef int nullct = c_out[0].null_count
 
@@ -161,8 +170,8 @@ def apply_op(lhs, rhs, out, op):
     free(c_out)
 
     return nullct
-  
-def apply_op_udf(lhs, rhs, out, ptx):
+ 
+def apply_op_udf(lhs, rhs, out, ptx, dtype):
     """
     Dispatches a binary op call to the appropriate libcudf function:
     """
@@ -180,7 +189,8 @@ def apply_op_udf(lhs, rhs, out, ptx):
         <gdf_column*>c_lhs,
         <gdf_column*>c_rhs,
         <gdf_column*>c_out,
-        ptx
+        ptx,
+        dtype
     )
 
     free(c_lhs)

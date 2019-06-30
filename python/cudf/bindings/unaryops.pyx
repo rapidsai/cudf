@@ -16,6 +16,8 @@ from librmm_cffi import librmm as rmm
 
 from libcpp.string cimport string
 
+import numpy as np
+
 _MATH_OP = {
     'sin'   : GDF_SIN,
     'cos'   : GDF_COS,
@@ -57,7 +59,14 @@ def apply_math_op(incol, outcol, op):
 
     check_gdf_error(result)
 
-def apply_op_udf(incol, outcol, ptx):
+cpp_dtype = {
+  np.int32: "int",
+  np.int64: "long int",
+  np.float32: "float",
+  np.float64: "double"
+}
+
+def apply_op_udf(incol, outcol, ptx, dtype):
     """
     Call user defined ops.
     """
@@ -69,9 +78,10 @@ def apply_op_udf(incol, outcol, ptx):
     cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
     cdef string cpp_str = ptx.encode('UTF-8')
+    cdef string cpp_type_str = cpp_dtype[dtype].encode('UTF-8')
     
     with nogil:
-        transform(<gdf_column*>c_outcol, <gdf_column*>c_incol, cpp_str)
+        transform(<gdf_column*>c_outcol, <gdf_column*>c_incol, cpp_str, cpp_type_str)
 
     cdef int nullct = c_outcol[0].null_count
 

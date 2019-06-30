@@ -13,6 +13,13 @@ from numba import cuda
 from numba import types
 from packaging.version import Version
 
+# convert numba types to numpy types
+np_dtypes = {
+  types.int32: np.int32,
+  types.int64: np.int64,
+  types.float32: np.float32,
+  types.float64: np.float64
+}
 
 @pytest.mark.skipif(
     Version(numba.__version__) < Version('0.44.0a'),
@@ -42,12 +49,18 @@ def test_generic_ptx(dtype):
     elif dtype == 'int64':
         type_signature = (types.int64,)
 
-    generic_function.compile(type_signature)
+    result = generic_function.compile(type_signature)
     ptx = generic_function.inspect_ptx(type_signature)
 
     ptx_code = ptx.decode('utf-8')
+  
+    # numpy type
+    output_type = np_dtypes[result.signature.return_type]
 
-    unaryops.apply_op_udf(lhs_col, out_col, ptx_code)
+    out_arr = np.random.random(size).astype(output_type)
+    out_col = Series(out_arr)._column
+
+    unaryops.apply_op_udf(lhs_col, out_col, ptx_code, output_type)
 
     result = lhs_arr**3
 
