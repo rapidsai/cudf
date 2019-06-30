@@ -11,6 +11,7 @@
 
 ## Bug Fixes
 
+- PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 
 # cuDF 0.8.0 (27 June 2019)
 
