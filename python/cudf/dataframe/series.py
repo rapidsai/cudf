@@ -90,10 +90,8 @@ class Series(object):
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
         assert isinstance(data, columnops.TypedColumnBase)
-        from cudf.dataframe.string import StringColumn
-        if isinstance(data, StringColumn):
-            data._name = name
 
+        data._name = name
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
@@ -146,9 +144,7 @@ class Series(object):
     @name.setter
     def name(self, name):
         self._name = name
-        from cudf.dataframe.string import StringColumn
-        if isinstance(self._column, StringColumn):
-            self._column._name = name
+        self._column._name = name
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -449,10 +445,11 @@ class Series(object):
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
         nvtx_range_push("CUDF_BINARY_OP", "orange")
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.binary_operator(fn, other, reflect=reflect)
         result = self._copy_construct(data=outcol)
-        result.name = None
+        result._name = result_name
         nvtx_range_pop()
         return result
 

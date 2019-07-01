@@ -398,7 +398,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
-    result = out.view(NumericalColumn, dtype=out_dtype)
+    result = out.view(NumericalColumn, dtype=out_dtype, name=lhs.name)
     nvtx_range_pop()
     return result
 

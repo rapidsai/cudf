@@ -134,7 +134,7 @@ class Index(object):
 
     def _apply_op(self, fn, other=None):
         from cudf.dataframe.series import Series
-        idx_series = Series(self)
+        idx_series = Series(self, name=self.name)
         op = getattr(idx_series, fn)
         if other is not None:
             return as_index(op(other))
@@ -339,8 +339,10 @@ class RangeIndex(Index):
         return result
 
     def __repr__(self):
-        return "{}(start={}, stop={})".format(self.__class__.__name__,
-                                              self._start, self._stop)
+        return "{}(start={}, stop={}".format(self.__class__.__name__,
+                                             self._start, self._stop)\
+                + (", name='{}'".format(str(self.name))
+                   if self.name is not None else "") + ")"
 
     def __len__(self):
         return max(0, self._stop - self._start)
@@ -497,8 +499,10 @@ class GenericIndex(Index):
 
     def __repr__(self):
         vals = [self._values[i] for i in range(min(len(self), 10))]
-        return "{}({}, dtype={})".format(self.__class__.__name__,
-                                         vals, self._values.dtype)
+        return "{}({}, dtype={}".format(self.__class__.__name__,
+                                        vals, self._values.dtype)\
+            + (", name='{}'".format(self.name)
+                if self.name is not None else "") + ")"
 
     def __getitem__(self, index):
         res = self._values[index]
@@ -674,8 +678,10 @@ class StringIndex(GenericIndex):
         return columnops.as_column(self._values).element_indexing(indices)
 
     def __repr__(self):
-        return "{}({}, dtype='object', name={})".format(
-                self.__class__.__name__, self._values.to_array(), self.name)
+        return "{}({}, dtype='object'".format(
+                self.__class__.__name__, self._values.to_array()
+        ) + (", name='{}'".format(
+            self.name) if self.name is not None else "") + ")"
 
 
 def as_index(arbitrary, name=None):

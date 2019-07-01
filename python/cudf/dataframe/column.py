@@ -132,7 +132,7 @@ class Column(object):
                 mask = Buffer(mask_mem)
             return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
 
-    def __init__(self, data, mask=None, null_count=None):
+    def __init__(self, data, mask=None, null_count=None, name=None):
         """
         Parameters
         ----------
@@ -150,6 +150,7 @@ class Column(object):
         assert mask is None or mask.is_contiguous()
         self._data = data
         self._mask = mask
+        self._name = name
 
         if mask is None:
             null_count = 0
@@ -179,6 +180,10 @@ class Column(object):
             self._mask = None
 
         self._null_count = null_count
+
+    @property
+    def name(self):
+        return self._name
 
     def serialize(self, serialize):
         header = {
