@@ -861,30 +861,36 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     boolean needsCleanup = true;
 
     try {
-      if (!scalar.isValid && this.offHeap.deviceData.valid == null) {
+      if (!scalar.isValid() && this.offHeap.deviceData.valid == null) {
         // scalar is null, we allow filling with nulls
         // create validity mask, since we didn't have one before
+        long validitySizeInBytes = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
         newDeviceData = new BufferEncapsulator<DeviceMemoryBuffer>(
             this.offHeap.deviceData.data,
-            DeviceMemoryBuffer.allocate(BitVectorHelper.getValidityAllocationSizeInBytes(rows)),
+            DeviceMemoryBuffer.allocate(validitySizeInBytes),
             null);
-
-        // set the validity pointer
-        cudfColumnViewAugmented(
-            this.getNativeCudfColumnAddress(),
-            newDeviceData.data.address,
-            newDeviceData.valid.address,
-            (int) this.getRowCount(),
-            this.getType().nativeId,
-            (int) this.getNullCount(),
-            this.getTimeUnit().getNativeId());
-
-        this.offHeap.deviceData = newDeviceData;
-
-        // the column vector has the reference the BufferEncapsulator
-        // and can close later in case of failure
-        needsCleanup = false;
+        Cuda.memset(newDeviceData.valid.getAddress(), (byte) 0x00, validitySizeInBytes);
+      } else if (this.offHeap.deviceData != null) {
+        newDeviceData = this.offHeap.deviceData;
+        needsCleanup = false; // the data came from upstream
       }
+
+      // set the validity pointer
+      cudfColumnViewAugmented(
+          this.getNativeCudfColumnAddress(),
+          newDeviceData.data.address,
+          newDeviceData.valid != null ?
+              newDeviceData.valid.address : 0,
+          (int) this.getRowCount(),
+          this.getType().nativeId,
+          (int) this.getNullCount(),
+          this.getTimeUnit().getNativeId());
+
+      this.offHeap.deviceData = newDeviceData;
+
+      // the column vector has the reference the BufferEncapsulator
+      // and can close later in case of failure
+      needsCleanup = false;
 
       Cudf.fill(this, scalar);
 
@@ -1767,8 +1773,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public static ColumnVector fromScalar(Scalar scalar, int rows) {
     if (scalar.getType() == DType.STRING || scalar.getType() == DType.STRING_CATEGORY){
-      throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars");
-    }
+      throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars"); }
     DeviceMemoryBuffer dataBuffer = null;
     DeviceMemoryBuffer validityBuffer = null;
     ColumnVector cv = null;
@@ -1777,11 +1782,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     try {
       dataBuffer = DeviceMemoryBuffer.allocate(scalar.type.sizeInBytes * rows);
 
+      long validitySizeInBytes = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
+
       if (!scalar.isValid()) {
-        validityBuffer = DeviceMemoryBuffer.allocate(
-            BitVectorHelper.getValidityAllocationSizeInBytes(rows));
-        Cuda.memset(validityBuffer.getAddress(),0xFFFF,
-            BitVectorHelper.getValidityAllocationSizeInBytes(rows));
+        validityBuffer = DeviceMemoryBuffer.allocate(validitySizeInBytes);
+        // ensure this is all valid before calling cudf::fill, as before that
+        // the column is all valid
+        Cuda.memset(validityBuffer.getAddress(), (byte)0xFF, validitySizeInBytes);
       }
 
       cv = new ColumnVector(
