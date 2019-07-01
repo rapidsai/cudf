@@ -90,6 +90,18 @@ def apply_op_udf(incol, outcol, ptx, dtype):
 
     return nullct
 
+def applymap(self, udf_ptx, np_dtype):
+    
+    cdef gdf_column* c_incol = column_view_from_column(self)
+
+    cdef string cpp_str = ptx.encode('UTF-8')
+    cdef gdf_column* c_outcol
+
+    cdef gdf_dtype g_type = dtypes[np_dtype]
+
+    with nogil:
+        c_outcol[0] = transform(<gdf_column>c_incol[0], cpp_str, g_type)
+
 def apply_dt_extract_op(incol, outcol, op):
     """
     Call a datetime extraction op

@@ -308,7 +308,7 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const s
 
     binops::jit::binary_operation(out, lhs, rhs, ptx, output_type);
 }
-
+/**
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs, const std::string& ptx, gdf_dtype output_type) {
     // Check for 0 sized data
     CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
@@ -321,5 +321,5 @@ gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs, const 
 
     binops::jit::binary_operation(&output, const_cast<gdf_column*>(&lhs), const_cast<gdf_column*>(&rhs), ptx, cudf::jit::getTypeName(output_type));
 }
-
+*/
 } // namespace cudf

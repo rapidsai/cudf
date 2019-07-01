@@ -85,7 +85,7 @@ namespace jit {
      , kernel_inst {std::move(launcher.kernel_inst)}
     { }
 
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* in) {
+    gdf_error Launcher::launch(gdf_column* out, const gdf_column* in) {
 
         getKernel().configure_1d_max_occupancy()
                       .launch(out->size,

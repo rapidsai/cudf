@@ -106,7 +106,7 @@ namespace jit {
          * @param rhs[in]  RHS scalar (single value)
          * @return gdf_error 
          *---------------------------------------------------------------------------**/
-        gdf_error launch(gdf_column* out, gdf_column* in);
+        gdf_error launch(gdf_column* out, const gdf_column* in);
 
     private:
         static const std::vector<std::string> compilerFlags;

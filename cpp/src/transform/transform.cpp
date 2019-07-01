@@ -72,7 +72,7 @@ namespace transformation {
 
 namespace jit {
 
-    void unary_operation(gdf_column* out, gdf_column* in, const std::string& ptx, const std::string& output_type)  {
+    void unary_operation(gdf_column* out, const gdf_column* in, const std::string& ptx, const std::string& output_type)  {
         Launcher(ptx, output_type).setKernelInst("kernel", out, in)
                      .launch(out, in);
 
@@ -81,7 +81,7 @@ namespace jit {
 } // namespace jit
 } // namespace transformation
 
-void transform(gdf_column* out, gdf_column* in, const std::string& ptx, const std::string& output_type) {
+void transform(gdf_column* out, const gdf_column* in, const std::string& ptx, const std::string& output_type) {
     // Check for null pointers in input
     CUDF_EXPECTS((out != nullptr) && (in != nullptr),
         "Input pointers are null");
@@ -117,7 +117,7 @@ gdf_column transform(
   // First create a gdf_column and then call the above function
   gdf_column output_col = allocate_dtype(input, output_type);
  
-  transform(&output_col, const_cast<gdf_column*>(&input), ptx_unary_function, cudf::jit::getTypeName(output_type));
+  transform(&output_col, &input, ptx_unary_function, cudf::jit::getTypeName(output_type));
 
   return output_col;
 }

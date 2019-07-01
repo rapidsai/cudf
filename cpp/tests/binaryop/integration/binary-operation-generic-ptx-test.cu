@@ -207,12 +207,12 @@ R"***(
 
     CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), ptx, "long int"));
     
-    gdf_column cpp_output_col;
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
-    auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
+    // gdf_column cpp_output_col;
+    // CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
+    // auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
 
     ASSERT_BINOP(out, lhs, rhs, CADD);
-    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
+    // ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
 
 }
 

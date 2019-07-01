@@ -52,7 +52,7 @@ gdf_column transform(const gdf_column& input,
  * @param ptx String containing the PTX of a binary function to apply on `in`
  */
 void transform(gdf_column*           out,
-                     gdf_column*           in,
+                     const gdf_column*           in,
                      const std::string&    ptx,const std::string& output_type
                      );
 

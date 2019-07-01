@@ -128,9 +128,9 @@ void binary_operation(gdf_column*           out,
                       gdf_column*           rhs,
                       const std::string&    ptx,
                       const std::string& output_type);
-
+/**
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs, const std::string& ptx, gdf_dtype output_type);
-
+*/
 } // namespace cudf
 
 
