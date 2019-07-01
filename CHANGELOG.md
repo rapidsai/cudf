@@ -115,7 +115,6 @@
 - PR #2104 Add a functional ``sort=`` keyword argument to groupby
 - PR #2108 Add `find_and_replace` for StringColumn for replacing single values
 
-
 ## Bug Fixes
 
 - PR #1465 Fix for test_orc.py and test_sparse_df.py test failures
