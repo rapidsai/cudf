@@ -297,7 +297,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfBinaryOpVV(JNIEnv *env, jcla
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
     gdf_binary_operator op = static_cast<gdf_binary_operator>(int_op);
     cudf::jni::gdf_column_wrapper ret(lhs->size, out_type,
-                                      lhs->null_count > 0 || rhs->null_count > 0);
+                                      lhs->valid != nullptr || rhs->valid != nullptr);
+    // Should be null count           lhs->null_count > 0 || rhs->null_count > 0);
 
     cudf::binary_operation(ret.get(), lhs, rhs, op);
     return reinterpret_cast<jlong>(ret.release());
@@ -316,7 +317,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfBinaryOpSV(
     gdf_column *rhs = reinterpret_cast<gdf_column *>(rhs_ptr);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
     gdf_binary_operator op = static_cast<gdf_binary_operator>(int_op);
-    cudf::jni::gdf_column_wrapper ret(rhs->size, out_type, !lhs.is_valid || rhs->null_count > 0);
+    cudf::jni::gdf_column_wrapper ret(rhs->size, out_type, 
+                                      !lhs.is_valid || rhs->valid != nullptr);
+    // Should be null count           !lhs.is_valid || rhs->null_count > 0);
 
     cudf::binary_operation(ret.get(), &lhs, rhs, op);
     return reinterpret_cast<jlong>(ret.release());
@@ -335,7 +338,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfBinaryOpVS(
                                rhs_dtype);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
     gdf_binary_operator op = static_cast<gdf_binary_operator>(int_op);
-    cudf::jni::gdf_column_wrapper ret(lhs->size, out_type, !rhs.is_valid || lhs->null_count > 0);
+    cudf::jni::gdf_column_wrapper ret(lhs->size, out_type,
+                                      !rhs.is_valid || lhs->valid != nullptr);
+    // Should be null count           !rhs.is_valid || lhs->null_count > 0);
 
     cudf::binary_operation(ret.get(), lhs, &rhs, op);
     return reinterpret_cast<jlong>(ret.release());
