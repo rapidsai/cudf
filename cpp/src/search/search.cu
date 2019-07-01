@@ -62,9 +62,13 @@ public:
                             it_val, it_val + values.size,
                             static_cast<gdf_index_type*>(result.data));
       }
-      
-      // result.data = thrust::raw_pointer_cast(&result1[0]);
-
+      else
+      {
+        thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                            it_col, it_col + column.size,
+                            it_val, it_val + values.size,
+                            static_cast<gdf_index_type*>(result.data));
+      }
     // }
 
   }
