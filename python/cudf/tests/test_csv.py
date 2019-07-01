@@ -507,8 +507,8 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
                          dtype=(dtypes[0] if dtypes else None),
                          true_values=trues, false_values=falses)
 
-    out = read_csv(str(fname), names=names, dtype=(dtypes if dtypes else None),
-                   skiprows=1, true_values=trues, false_values=falses)
+    out = read_csv(fname, names=names, dtype=dtypes, skiprows=1,
+                   true_values=trues, false_values=falses)
 
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
 
