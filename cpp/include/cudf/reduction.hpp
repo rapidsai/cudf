@@ -61,7 +61,7 @@ namespace cudf {
  * @param[in] output_dtype  The computation and output precision.
  *     `dtype` must be a data type that is convertible from the input dtype.
  *     If the input column has arithmetic type and bool8 type,
- *     any arithmetic type and bool8 type can be specified.
+ *     output_dtype can be any arithmetic type or cudf::bool8 type.
  *     For `mean`, `var` and `std` ops, a floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (date32, timestamp, category...), the same type must be specified.
