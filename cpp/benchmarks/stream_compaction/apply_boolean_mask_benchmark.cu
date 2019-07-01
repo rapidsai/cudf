@@ -23,6 +23,25 @@
 #include <random>
 #include <chrono>
 
+namespace {
+
+constexpr gdf_size_type hundredM = 1e8;
+constexpr gdf_size_type tenM = 1e7;
+constexpr gdf_size_type tenK = 1e4;
+constexpr gdf_size_type fifty_percent = 50;
+
+static void percent_range(benchmark::internal::Benchmark* b) {
+  b->Unit(benchmark::kMillisecond);
+  for (int percent = 0; percent <= 100; percent += 10)
+    b->Args({hundredM, percent});
+}
+
+static void size_range(benchmark::internal::Benchmark* b) {
+  b->Unit(benchmark::kMillisecond);
+  for (int size = tenK; size <= hundredM; size *= 10)
+    b->Args({size, fifty_percent});
+}
+
 template <typename T>
 T random_int(T min, T max)
 {
@@ -39,20 +58,45 @@ public:
   using TypeParam = T;
 };
 
+template <typename T>
+void calculate_bandwidth(benchmark::State& state, gdf_size_type num_columns) {
+  const gdf_size_type column_size{static_cast<gdf_size_type>(state.range(0))}; 
+  const gdf_size_type percent_true{static_cast<gdf_size_type>(state.range(1))}; 
 
-template <class TypeParam>
+  float fraction = percent_true / 100.f;
+  gdf_size_type column_size_out = fraction * column_size;
+  int64_t mask_size = sizeof(cudf::bool8) * column_size + gdf_valid_allocation_size(column_size);
+  int64_t validity_bytes_in  = (fraction >= 1.0f/32) ? 
+    gdf_valid_allocation_size(column_size) :
+    4 * column_size_out;
+  int64_t validity_bytes_out = gdf_valid_allocation_size(column_size_out);
+  int64_t column_bytes_out = sizeof(T) * column_size_out;
+  int64_t column_bytes_in = column_bytes_out;
+
+  int64_t bytes_read = (column_bytes_in + validity_bytes_in) * num_columns + // reading columns
+    mask_size; // reading boolean mask
+  int64_t bytes_written = (column_bytes_out + validity_bytes_out) * num_columns; // writing columns
+
+  state.SetItemsProcessed(state.iterations() * column_size * num_columns);
+  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * 
+                          bytes_read + bytes_written);
+}
+
+} // namespace anonymous
+
+template <class T>
 void BM_apply_boolean_mask(benchmark::State& state, gdf_size_type num_columns) {
-  using wrapper = cudf::test::column_wrapper<TypeParam>;
+  using wrapper = cudf::test::column_wrapper<T>;
   using mask_wrapper = cudf::test::column_wrapper<cudf::bool8>;
 
   const gdf_size_type column_size{static_cast<gdf_size_type>(state.range(0))}; 
   const gdf_size_type percent_true{static_cast<gdf_size_type>(state.range(1))}; 
 
-  std::vector<cudf::test::column_wrapper<TypeParam> > columns;
+  std::vector<cudf::test::column_wrapper<T> > columns;
 
   for (int i = 0; i < num_columns; i++) {
     columns.emplace_back(column_size,
-      [](gdf_index_type row) { return TypeParam(row); },
+      [](gdf_index_type row) { return static_cast<T>(row); },
       [](gdf_index_type row) { return true; });
   }
 
@@ -74,43 +118,7 @@ void BM_apply_boolean_mask(benchmark::State& state, gdf_size_type num_columns) {
     result.destroy();
   }
 
-  float fraction = percent_true / 100.f;
-  gdf_size_type column_size_out = fraction * column_size;
-  int64_t mask_size = sizeof(cudf::bool8) * column_size + gdf_valid_allocation_size(column_size);
-  int64_t validity_bytes_in  = (fraction >= 1.0f/32) ? 
-    gdf_valid_allocation_size(column_size) :
-    4 * column_size_out;
-  int64_t validity_bytes_out = gdf_valid_allocation_size(column_size_out);
-  int64_t column_bytes_out = sizeof(TypeParam) * column_size_out;
-  int64_t column_bytes_in = column_bytes_out;
-
-  int64_t bytes_read = (column_bytes_in + validity_bytes_in) * num_columns + // reading columns
-    mask_size; // reading boolean mask
-  int64_t bytes_written = (column_bytes_out + validity_bytes_out) * num_columns; // writing columns
-
-  state.SetItemsProcessed(state.iterations() * column_size * num_columns);
-  state.SetBytesProcessed(static_cast<int64_t>(state.iterations()) * 
-                          bytes_read + bytes_written);
-}
-
-
-
-constexpr gdf_size_type hundredM = 1e8;
-constexpr gdf_size_type tenM = 1e7;
-constexpr gdf_size_type tenK = 1e4;
-
-static void percent_range(benchmark::internal::Benchmark* b) {
-  b->Unit(benchmark::kMillisecond);
-  for (int percent = 0; percent <= 100; percent += 10)
-    b->Args({hundredM, percent});
-}
-
-constexpr gdf_size_type fifty_percent = 50;
-
-static void size_range(benchmark::internal::Benchmark* b) {
-  b->Unit(benchmark::kMillisecond);
-  for (int size = tenK; size <= hundredM; size *= 10)
-    b->Args({size, fifty_percent});
+  calculate_bandwidth<T>(state, num_columns);
 }
 
 #define ABM_BENCHMARK_DEFINE(name, type, n_columns)       \
