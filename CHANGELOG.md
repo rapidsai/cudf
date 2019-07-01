@@ -3,6 +3,8 @@
 ## New Features
 
 ## Improvements
+- PR #2109 added name support for string column
+
 
 ## Bug Fixes
 
