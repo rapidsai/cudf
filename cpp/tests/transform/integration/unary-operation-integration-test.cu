@@ -92,6 +92,8 @@ R"***(
 
     ASSERT_UNARY(out, in, Cube);
     ASSERT_UNARY(cpp_out, in, Cube);
+
+    gdf_column_free(&cpp_output_col);
 }
 
 
@@ -157,6 +159,8 @@ R"***(
 
     ASSERT_UNARY(out, in, Cube);
     ASSERT_UNARY(cpp_out, in, Cube);
+    
+    gdf_column_free(&cpp_output_col);
 }
 
 } // namespace transformation
