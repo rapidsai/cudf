@@ -199,10 +199,23 @@ public final class Table implements AutoCloseable {
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Read a CSV file using the default CSVOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, File path) {
     return readCSV(schema, CSVOptions.DEFAULT, path);
   }
 
+  /**
+   * Read a CSV file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
     return new Table(
         gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
@@ -217,14 +230,36 @@ public final class Table implements AutoCloseable {
             opts.getFalseValues()));
   }
 
+  /**
+   * Read CSV formatted data using the default CSVOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, byte[] buffer) {
     return readCSV(schema, CSVOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
-  public static Table readCSV(Schema schema, CSVOptions options, byte[] buffer) {
-    return readCSV(schema, options, buffer, 0, buffer.length);
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer) {
+    return readCSV(schema, opts, buffer, 0, buffer.length);
   }
 
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
                               long len) {
     if (len <= 0) {
@@ -235,16 +270,30 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
-      return readCSV(schema, opts, newBuf, len);
+      return readCSV(schema, opts, newBuf, 0, len);
     }
   }
 
-  public static Table readCSV(Schema schema, CSVOptions opts, HostMemoryBuffer buffer, long len) {
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readCSV(Schema schema, CSVOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
     assert len > 0;
-    assert len <= buffer.getLength();
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
         opts.getIncludeColumnNames(), null,
-        buffer.getAddress(), len,
+        buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
         opts.getQuote(),
@@ -254,38 +303,84 @@ public final class Table implements AutoCloseable {
         opts.getFalseValues()));
   }
 
+  /**
+   * Read a Parquet file using the default ParquetOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readParquet(File path) {
     return readParquet(ParquetOptions.DEFAULT, path);
   }
 
+  /**
+   * Read a Parquet file.
+   * @param opts various parquet parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0));
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(byte[] buffer) {
-    return readParquet(ParquetOptions.DEFAULT, buffer, buffer.length);
+    return readParquet(ParquetOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, byte[] buffer) {
-    return readParquet(opts, buffer, buffer.length);
+    return readParquet(opts, buffer, 0, buffer.length);
   }
 
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long len) {
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
     if (len <= 0) {
-      len = buffer.length;
+      len = buffer.length - offset;
     }
     assert len > 0;
-    assert len <= buffer.length;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
-      newBuf.setBytes(0, buffer, 0, len);
-      return readParquet(opts, newBuf, len);
+      newBuf.setBytes(0, buffer, offset, len);
+      return readParquet(opts, newBuf, 0, len);
     }
   }
 
-  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer, long len) {
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer,
+                                  long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress(), len));
+        null, buffer.getAddress() + offset, len));
   }
 
   /**

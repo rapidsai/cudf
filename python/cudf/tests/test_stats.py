@@ -190,3 +190,25 @@ def test_approx_quantiles_int():
     q1 = gdf_series.quantile(quant_values, exact=False)
 
     assert approx_results == q1.to_pandas().values
+
+
+@pytest.mark.parametrize('data', [
+    [],
+    [1, 2, 3, 10, 326497]
+])
+@pytest.mark.parametrize('q', [
+    [],
+    0.5,
+    1,
+    0.234,
+    [0.345],
+    [0.243, 0.5, 1]
+])
+def test_misc_quantiles(data, q):
+    from cudf.tests import utils
+    pdf_series = pd.Series(data)
+    gdf_series = Series(data)
+
+    expected = pdf_series.quantile(q)
+    actual = gdf_series.quantile(q)
+    utils.assert_eq(expected, actual)
