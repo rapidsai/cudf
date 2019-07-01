@@ -214,7 +214,7 @@ public class ColumnVectorTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT32), 6);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
-      assertEquals(input.getNullCount(), 6);
+      assertEquals(input.getNullCount(), expected.getNullCount());
       assertColumnsAreEqual(input, expected);
     }
   }

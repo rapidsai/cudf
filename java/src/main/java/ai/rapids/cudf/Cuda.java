@@ -49,6 +49,8 @@ public class Cuda {
 
   private static native void memcpy(long dst, long src, long count, int kind) throws CudaException;
 
+  public static native void memset(long dst, int value, long count) throws CudaException;
+
   /**
    * Get the id of the current device.
    * @return the id of the current device

@@ -1780,15 +1780,28 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       if (!scalar.isValid()) {
         validityBuffer = DeviceMemoryBuffer.allocate(
             BitVectorHelper.getValidityAllocationSizeInBytes(rows));
+        Cuda.memset(validityBuffer.getAddress(),0xFFFF,
+            BitVectorHelper.getValidityAllocationSizeInBytes(rows));
       }
 
       cv = new ColumnVector(
           scalar.getType(),
           scalar.getTimeUnit(),
           rows,
-          0, 
+          0,
           dataBuffer,
           validityBuffer);
+
+      cudfColumnViewAugmented(
+          cv.getNativeCudfColumnAddress(),
+          cv.offHeap.deviceData.data.address,
+          cv.offHeap.deviceData.valid != null  ?
+              cv.offHeap.deviceData.valid.address :
+              0,
+          (int) cv.getRowCount(),
+          cv.getType().nativeId,
+          (int) cv.getNullCount(),
+          cv.getTimeUnit().getNativeId());
 
       cv.fill(scalar);
 
