@@ -35,18 +35,16 @@ TYPED_TEST_CASE(FillingTest, test_types);
 
 constexpr gdf_size_type column_size{1000};
 
-using column_validity_fn_t = std::function<bool(gdf_index_type)>;
+auto all_valid = [](gdf_index_type row) { return true; };
 
-column_validity_fn_t all_valid = [](gdf_index_type row) { return true; };
-
-template <typename T>
+template <typename T, typename BitInitializerType = decltype(all_valid)>
 void FillTest(gdf_index_type begin, gdf_index_type end,
               T value, bool value_is_valid = true, 
-              column_validity_fn_t column_validity_fn = all_valid)
+              BitInitializerType source_validity = all_valid)
 {
   column_wrapper<T> source(column_size, 
     [](gdf_index_type row) { return static_cast<T>(row); },
-    [&](gdf_index_type row) { return column_validity_fn(row); });
+    [&](gdf_index_type row) { return source_validity(row); });
 
   scalar_wrapper<T> val(value, value_is_valid);
 
@@ -57,7 +55,7 @@ void FillTest(gdf_index_type begin, gdf_index_type end,
     },
     [&](gdf_index_type row) { 
       return (row >= begin && row < end) ? 
-        value_is_valid : column_validity_fn(row); 
+        value_is_valid : source_validity(row); 
     });
 
   EXPECT_NO_THROW(cudf::fill(source.get(), *val.get(), begin, end));
@@ -113,11 +111,11 @@ TYPED_TEST(FillingTest, SetRangeNullCount)
   gdf_index_type end = 50;
   TypeParam val = TypeParam{1};
 
-  column_validity_fn_t some_valid = [](gdf_index_type row) { 
-    return row > 500 ? false : true;
+  auto some_valid = [](gdf_index_type row) { 
+    return row % 2 == 0 ? false : true;
   };
 
-  column_validity_fn_t all_invalid = [](gdf_index_type row) { 
+  auto all_invalid = [](gdf_index_type row) { 
     return false;
   };
 
