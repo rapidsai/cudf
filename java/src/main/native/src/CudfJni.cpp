@@ -505,10 +505,6 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_fill(JNIEnv *env, jclass, jlong 
                                s_dtype);
 
     cudf::fill(input, fill_value, 0, input->size);
-
-    // If scalar is valid, we replaced all rows with non-null, null_count = 0
-    // else scalar is null, all rows become null, null_count == row_count
-    input->null_count = s_is_valid ? 0 : input->size;
   }
   CATCH_STD(env, );
 }
