@@ -90,17 +90,21 @@ def apply_op_udf(incol, outcol, ptx, dtype):
 
     return nullct
 
-def applymap(self, udf_ptx, np_dtype):
+def column_applymap(incol, udf_ptx, np_dtype):
     
-    cdef gdf_column* c_incol = column_view_from_column(self)
+    cdef gdf_column* c_incol = column_view_from_column(incol)
 
-    cdef string cpp_str = ptx.encode('UTF-8')
-    cdef gdf_column* c_outcol
+    cdef string cpp_str = udf_ptx.encode('UTF-8')
+    cdef gdf_column c_outcol
 
-    cdef gdf_dtype g_type = dtypes[np_dtype]
+    cdef gdf_dtype g_type = dtypes[np_dtype] # get the gdf_type related to the input np type
 
     with nogil:
-        c_outcol[0] = transform(<gdf_column>c_incol[0], cpp_str, g_type)
+        c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type)
+    
+    (data, mask) = gdf_column_to_column_mem(&c_outcol)
+
+    return Column.from_mem_views(data, mask) 
 
 def apply_dt_extract_op(incol, outcol, op):
     """

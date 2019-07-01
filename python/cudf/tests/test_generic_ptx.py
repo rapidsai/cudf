@@ -9,17 +9,7 @@ import numpy as np
 from cudf.bindings import binops
 from cudf.dataframe import Series
 
-from numba import cuda
-from numba import types
 from packaging.version import Version
-
-# convert numba types to numpy types
-np_dtypes = {
-  types.int32: np.int32,
-  types.int64: np.int64,
-  types.float32: np.float32,
-  types.float64: np.float64
-}
 
 
 @pytest.mark.skipif(
@@ -37,31 +27,23 @@ def test_generic_ptx(dtype):
     rhs_arr = np.random.random(size).astype(dtype)
     rhs_col = Series(rhs_arr)._column
 
-    @cuda.jit(device=True)
-    def add(a, b):
+    @numba.cuda.jit(device=True)
+    def generic_function(a, b):
         return a**3 + b
 
-    if dtype == 'float32':
-        type_signature = (types.float32, types.float32)
-    elif dtype == 'float64':
-        type_signature = (types.float64, types.float64)
-    elif dtype == 'int32':
-        type_signature = (types.int32, types.int32)
-    elif dtype == 'int64':
-        type_signature = (types.int64, types.int64)
+    nb_type = numba.numpy_support.from_dtype(np.dtype(dtype))
+    type_signature = (nb_type, nb_type)
 
-    result = add.compile(type_signature)
-    ptx = add.inspect_ptx(type_signature)
-
+    result = generic_function.compile(type_signature)
+    ptx = generic_function.inspect_ptx(type_signature)
     ptx_code = ptx.decode('utf-8')
 
-    # numpy type
-    output_type = np_dtypes[result.signature.return_type]
+    output_type = numba.numpy_support.as_dtype(result.signature.return_type)
 
     out_arr = np.random.random(size).astype(output_type)
     out_col = Series(out_arr)._column
 
-    binops.apply_op_udf(lhs_col, rhs_col, out_col, ptx_code, output_type)
+    binops.apply_op_udf(lhs_col, rhs_col, out_col, ptx_code, output_type.type)
 
     result = lhs_arr**3 + rhs_arr
 
