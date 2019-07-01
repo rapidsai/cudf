@@ -297,7 +297,9 @@ class Series(object):
 
         for submodule in func.__module__.split(".")[1:]:
             # point both cudf and cupy to the correct submodule
-            if hasattr(cupy_module, submodule) or hasattr(cupy_module, submodule):
+            if hasattr(cupy_module, submodule) or \
+               hasattr(cupy_module, submodule):
+
                 if hasattr(cudf_module, submodule):
                     cudf_module = getattr(cudf_module, submodule)
 
@@ -311,11 +313,10 @@ class Series(object):
         # TODO: Check if all types can be handled
         # if not all(issubclass(t, my_series) for t in types):
         #     return NotImplemented
+        # Note: this allows subclasses that don't override
+        # __array_function__ to handle MyArray objects
 
         if hasattr(cudf_module, fname):
-            # Note: this allows subclasses that don't override
-            # __array_function__ to handle MyArray objects
-
             cudf_func = getattr(cudf_module, fname)
 
             if cudf_func is func:
