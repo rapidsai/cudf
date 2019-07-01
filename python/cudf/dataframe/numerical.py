@@ -269,6 +269,9 @@ class NumericalColumn(columnops.TypedColumnBase):
     def var(self, ddof=1, dtype=np.float64):
         return cpp_reduce.apply_reduce('var', self, dtype=dtype, ddof=ddof)
 
+    def std(self, ddof=1, dtype=np.float64):
+        return cpp_reduce.apply_reduce('std', self, dtype=dtype, ddof=ddof)
+
     def sum_of_squares(self, dtype=None):
         return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
 

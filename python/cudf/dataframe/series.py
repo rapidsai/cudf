@@ -1641,7 +1641,7 @@ class Series(object):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return np.sqrt(self.var(ddof=ddof))
+        return self._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
