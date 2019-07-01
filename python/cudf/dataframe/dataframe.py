@@ -2532,12 +2532,8 @@ class DataFrame(object):
 
         def _create_output_frame(data, percentiles=None):
             # hack because we don't support strings in indexes
-            columns = data.columns
-            out_df = data[columns[0]].describe(percentiles=percentiles)
-            for col in columns[1:]:
-                out_df[col] = data[col].describe(percentiles=percentiles)[col]
-
-            return out_df
+            return DataFrame({col: data[col].describe(percentiles=percentiles)
+                              for col in data.columns})
 
         if not include and not exclude:
             numeric_data = self.select_dtypes(np.number)

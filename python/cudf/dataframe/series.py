@@ -1917,8 +1917,6 @@ class Series(object):
         7    max     10.0
         """
 
-        from cudf import DataFrame
-
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
 
@@ -1944,14 +1942,12 @@ class Series(object):
             names = ['count', 'mean', 'std', 'min'] + \
                     _format_percentile_names(percentiles) + ['max']
             data = [self.count(), self.mean(), self.std(), self.min()] + \
-                self.quantile(percentiles).to_array().tolist() + [self.max()]
+                self.quantile(percentiles)\
+                    .to_array(fillna='pandas').tolist() + [self.max()]
             data = _format_stats_values(data)
 
-            values_name = 'values'
-            if self.name:
-                values_name = self.name
-
-            return DataFrame({'stats': names, values_name: data})
+            return Series(data=data, index=names,
+                          nan_as_null=False, name=self.name)
 
         def describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
