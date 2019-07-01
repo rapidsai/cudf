@@ -2526,7 +2526,7 @@ def test_series_describe_numeric(dtype):
     gdf_results = gdf.describe().to_pandas()
     pdf_results = gdf.to_pandas().describe()
 
-    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+    np.testing.assert_array_almost_equal(gdf_results.values,
                                          pdf_results.values,
                                          decimal=4)
 
@@ -2540,7 +2540,7 @@ def test_series_describe_datetime():
     gdf_results = gdf.describe()
     pdf_results = pdf.describe()
 
-    np.testing.assert_array_almost_equal(gdf_results['values'].values,
+    np.testing.assert_array_almost_equal(gdf_results.values,
                                          pdf_results.values,
                                          decimal=4)
 
@@ -2558,7 +2558,7 @@ def test_dataframe_describe_exclude():
     pdf_results = pdf.describe(exclude=['float'])
 
     np.testing.assert_array_almost_equal(
-        gdf_results.drop(['stats'], axis=1).values,
+        gdf_results.values,
         pdf_results.values,
         decimal=4)
 
@@ -2576,7 +2576,7 @@ def test_dataframe_describe_include():
     pdf_results = pdf.describe(include=['int'])
 
     np.testing.assert_array_almost_equal(
-        gdf_results.drop(['stats'], axis=1).values,
+        gdf_results.values,
         pdf_results.values,
         decimal=4)
 
@@ -2596,7 +2596,7 @@ def test_dataframe_describe_default():
     pdf_results = pdf.describe()
 
     np.testing.assert_array_almost_equal(
-        gdf_results.drop(['stats'], axis=1).values,
+        gdf_results.values,
         pdf_results.values,
         decimal=4)
 
@@ -2619,7 +2619,7 @@ def test_series_describe_include_all():
     pdf_results = pdf.describe(include='all')
 
     np.testing.assert_array_almost_equal(
-        gdf_results.drop(['stats'], axis=1).values,
+        gdf_results.values,
         pdf_results.values,
         decimal=4)
 
@@ -2640,7 +2640,7 @@ def test_dataframe_describe_percentiles():
     pdf_results = pdf.describe(percentiles=sample_percentiles)
 
     np.testing.assert_array_almost_equal(
-        gdf_results.drop(['stats'], axis=1).values,
+        gdf_results.values,
         pdf_results.values,
         decimal=4)
 
@@ -2956,3 +2956,13 @@ def test_create_dataframe_cols_empty_data(a, b, misc_data, non_list_data):
     expected['b'] = non_list_data
     actual['b'] = non_list_data
     assert_eq(actual, expected)
+
+
+def test_empty_dataframe_describe():
+    pdf = pd.DataFrame({'a': [], 'b': []})
+    gdf = DataFrame.from_pandas(pdf)
+
+    expected = pdf.describe()
+    actual = gdf.describe()
+
+    assert_eq(expected, actual)

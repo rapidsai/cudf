@@ -12,11 +12,11 @@
 - PR #2125 More aggregate in java API
 
 ## Bug Fixes
-
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2128 Add offset param to host buffer readers in java API.
 - PR #2145 Work around binops validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
+- PR #2139 matching to pandas describe behavior & fixing nan values issue
 
 # cuDF 0.8.0 (27 June 2019)
 
