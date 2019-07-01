@@ -140,13 +140,12 @@ public class ColumnVectorTest {
     }
   }
 
-
   @Test
   void isNotNullTestEmptyColumn() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts();
          ColumnVector expected = ColumnVector.fromBoxedBooleans(); 
-         ColumnVector result = v.isNotNull()){
+         ColumnVector result = v.isNotNull()) {
       assertColumnsAreEqual(result, expected);
     }
   }

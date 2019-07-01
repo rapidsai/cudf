@@ -474,7 +474,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * and TRUE otherwise.
    */
   private ColumnVector validityAsBooleanVector() {
-    if (getRowCount() == 0){
+    if (getRowCount() == 0) {
       return ColumnVector.fromBoxedBooleans();
     }
 
@@ -509,7 +509,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
       // replace nulls with FALSE
       result = cv.replaceNulls(Scalar.fromBool(false));
-
     } finally {
       // cleanup
       if (cv != null) {
@@ -1772,8 +1771,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return - new ColumnVector
    */
   public static ColumnVector fromScalar(Scalar scalar, int rows) {
-    if (scalar.getType() == DType.STRING || scalar.getType() == DType.STRING_CATEGORY){
-      throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars"); }
+    if (scalar.getType() == DType.STRING || scalar.getType() == DType.STRING_CATEGORY) {
+      throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars");
+    }
     DeviceMemoryBuffer dataBuffer = null;
     DeviceMemoryBuffer validityBuffer = null;
     ColumnVector cv = null;

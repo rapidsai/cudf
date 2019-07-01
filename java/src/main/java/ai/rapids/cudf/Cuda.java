@@ -49,8 +49,6 @@ public class Cuda {
 
   private static native void memcpy(long dst, long src, long count, int kind) throws CudaException;
 
-  public static native void memset(long dst, int value, long count) throws CudaException;
-
   /**
    * Sets count bytes starting at the memory area pointed to by dst, with value.
    * @param dst   - Destination memory address

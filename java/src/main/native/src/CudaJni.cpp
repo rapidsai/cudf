@@ -57,4 +57,4 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDevice(JNIEnv *env, jclass) {
   return dev;
 }
 
-}
+} // extern "C"
