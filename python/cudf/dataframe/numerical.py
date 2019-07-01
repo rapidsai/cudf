@@ -302,7 +302,7 @@ class NumericalColumn(columnops.TypedColumnBase):
                                         out_dtype=out_dtype)
         return self.replace(data=out, dtype=out_dtype)
 
-    def applymap(self, udf_ptx, np_dtype):
+    def applymap_ptx(self, udf_ptx, np_dtype):
         return cpp_unaryops.column_applymap(self, udf_ptx, np_dtype)
 
     def default_na_value(self):

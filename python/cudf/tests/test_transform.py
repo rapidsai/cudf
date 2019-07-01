@@ -35,7 +35,7 @@ def test_applymap(dtype):
 
     output_type = numba.numpy_support.as_dtype(result.signature.return_type)
 
-    out_col = lhs_col.applymap(ptx_code, output_type.type)
+    out_col = lhs_col.applymap_ptx(ptx_code, output_type.type)
 
     result = lhs_arr**3
 
