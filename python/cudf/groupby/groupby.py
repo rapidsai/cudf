@@ -19,7 +19,7 @@ _LEVEL_0_DATA_NAME = 'cudf_groupby_data_name'
 class SeriesGroupBy(object):
     """Wraps DataFrameGroupby with special attr methods
     """
-    def __init__(self, source_series, group_keys, level=None, sort=False,
+    def __init__(self, source_series, group_keys, level=None, sort=True,
                  by=None):
         self._by = by
         self.source_series = source_series
@@ -118,7 +118,8 @@ class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
 
-    def __init__(self, df, by, method="hash", as_index=True, level=None):
+    def __init__(self, df, by, method="hash", as_index=True, level=None,
+                 sort=True):
         """
         Parameters
         ----------
@@ -137,6 +138,7 @@ class Groupby(object):
         self._val_columns = []
         self._df = df.copy(deep=False)
         self._as_index = as_index
+        self.sort = sort
         if len(df) == 0:  # empty case
             if by is None or isinstance(by, str):
                 self._by = [by]
@@ -211,7 +213,7 @@ class Groupby(object):
             msg = "Method {!r} is not a supported group by method"
             raise NotImplementedError(msg.format(method))
 
-    def _apply_basic_agg(self, agg_type, sort_results=False):
+    def _apply_basic_agg(self, agg_type):
         """
         Parameters
         ----------
@@ -234,7 +236,7 @@ class Groupby(object):
                 for by in self._by:
                     agg_groupby._df._cols[by] = self._df._cols[by]
         return cpp_apply_basic_agg(agg_groupby, agg_type,
-                                   sort_results=sort_results)
+                                   sort_results=self.sort)
 
     def apply_multiindex_or_single_index(self, result):
         if len(result) == 0:
@@ -253,8 +255,7 @@ class Groupby(object):
                 index.name = name
                 final_result.index = index
             else:
-                mi = MultiIndex(source_data=result[self._by])
-                mi.names = self._by
+                mi = MultiIndex(names=self._by, source_data=result[self._by])
                 final_result.index = mi
             return final_result
         if len(self._by) == 1:
@@ -296,15 +297,15 @@ class Groupby(object):
                 else:
                     new_by.append(by)
             self._by = new_by
-            multi_index = MultiIndex(source_data=result[self._by])
+            mi = MultiIndex(names=self._by, source_data=result[self._by])
             final_result = DataFrame()
             for col in result.columns:
                 if col not in self._by:
                     final_result[col] = result[col]
             if len(final_result.columns) > 0:
-                return final_result.set_index(multi_index)
+                return final_result.set_index(mi)
             else:
-                return result.set_index(multi_index)
+                return result.set_index(mi)
 
     def apply_multicolumn(self, result, aggs):
         # multicolumn only applies with multiple aggs and multiple groupby keys
@@ -425,20 +426,20 @@ class Groupby(object):
             return self[key]
         raise AttributeError("'Groupby' object has no attribute %r" % key)
 
-    def min(self, sort=True):
-        return self._apply_basic_agg("min", sort)
+    def min(self):
+        return self._apply_basic_agg("min")
 
-    def max(self, sort=True):
-        return self._apply_basic_agg("max", sort)
+    def max(self):
+        return self._apply_basic_agg("max")
 
-    def count(self, sort=True):
-        return self._apply_basic_agg("count", sort)
+    def count(self):
+        return self._apply_basic_agg("count")
 
-    def sum(self, sort=True):
-        return self._apply_basic_agg("sum", sort)
+    def sum(self):
+        return self._apply_basic_agg("sum")
 
-    def mean(self, sort=True):
-        return self._apply_basic_agg("mean", sort)
+    def mean(self):
+        return self._apply_basic_agg("mean")
 
     def agg(self, args):
         """ Invoke aggregation functions on the groups.
@@ -459,4 +460,4 @@ class Groupby(object):
         result : DataFrame
         """
         agg_groupby = self.copy(deep=False)
-        return cpp_agg(agg_groupby, args)
+        return cpp_agg(agg_groupby, args, sort_results=self.sort)

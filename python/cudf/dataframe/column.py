@@ -19,6 +19,7 @@ from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.cudf_cpp import count_nonzero_mask, column_view_pointer
 from cudf.bindings.concat import _column_concat
+from cudf.comm.serialize import register_distributed_serializer
 
 
 class Column(object):
@@ -201,7 +202,7 @@ class Column(object):
         return header, frames
 
     @classmethod
-    def _deserialize_data_mask(cls, deserialize, header, frames):
+    def deserialize(cls, deserialize, header, frames):
         data_nframe = header['data_frame_count']
         mask_nframe = header['mask_frame_count']
         data = deserialize(header['data_buffer'], frames[:data_nframe])
@@ -605,3 +606,6 @@ class Column(object):
         Return pointer to a view of the underlying data structure
         """
         return column_view_pointer(self)
+
+
+register_distributed_serializer(Column)

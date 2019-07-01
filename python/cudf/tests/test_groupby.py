@@ -462,7 +462,7 @@ def test_advanced_groupby_levels():
 def test_empty_groupby(func):
     pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
     gdf = cudf.from_pandas(pdf)
-    assert_eq(func(pdf), func(gdf))
+    assert_eq(func(pdf), func(gdf), check_index_type=False)
 
 
 def test_groupby_unsupported_columns():
@@ -664,4 +664,29 @@ def test_groupby_all_nulls_index():
     assert_eq(
         pdf.groupby('a').sum(),
         gdf.groupby('a').sum()
+    )
+
+
+def test_groupby_sort():
+    pdf = pd.DataFrame({
+        'a': [2, 2, 1, 1],
+        'b': [1, 2, 3, 4]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby('a', sort=False).sum().sort_index(),
+        gdf.groupby('a', sort=False).sum().sort_index()
+    )
+
+    pdf = pd.DataFrame({
+        'c': [-1, 2, 1, 4],
+        'b': [1, 2, 3, 4],
+        'a': [2, 2, 1, 1]
+    })
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby(['c', 'b'], sort=False).sum().sort_index(),
+        gdf.groupby(['c', 'b'], sort=False).sum().to_pandas().sort_index()
     )
