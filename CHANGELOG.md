@@ -10,7 +10,6 @@
 - PR #2125 More aggregate in java API
 - PR #1993 Add iterator driven reduction for mean, var, std 
 
-
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
