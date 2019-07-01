@@ -39,7 +39,7 @@ def test_generic_ptx(dtype):
     ptx_code = ptx.decode('utf-8')
 
     output_type = numba.numpy_support.as_dtype(result.signature.return_type)
-    
+
     out_col = binops.apply_op_udf(lhs_col, rhs_col, ptx_code, output_type.type)
 
     result = lhs_arr**3 + rhs_arr
