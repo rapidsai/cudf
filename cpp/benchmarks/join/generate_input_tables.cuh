@@ -199,31 +199,19 @@ void generate_input_tables(
 
     const int num_states = num_sms * std::max(num_blocks_init_build_tbl, num_blocks_init_probe_tbl) * block_size;
     curandState *devStates;
-    CUDA_TRY(cudaMalloc(&devStates, num_states * sizeof(curandState)));
+    RMM_TRY(RMM_ALLOC(&devStates, num_states * sizeof(curandState), 0));
 
     init_curand<<<(num_states - 1) / block_size + 1, block_size>>>(devStates, num_states);
 
-    CUDA_TRY(cudaGetLastError());
-    CUDA_TRY(cudaDeviceSynchronize());
+    CHECK_STREAM(0);
 
     key_type* build_tbl_sorted;
-    CUDA_TRY(cudaMalloc(&build_tbl_sorted, build_tbl_size * sizeof(key_type)));
+    RMM_TRY(RMM_ALLOC(&build_tbl_sorted, build_tbl_size * sizeof(key_type), 0));
 
     size_type lottery_size = rand_max < std::numeric_limits<key_type>::max() - 1 ? rand_max + 1 : rand_max;
     key_type* lottery;
-    bool lottery_in_device_memory = true;
 
-    size_t free_gpu_mem {0};
-    size_t total_gpu_mem {0};
-
-    CUDA_TRY(cudaMemGetInfo(&free_gpu_mem, &total_gpu_mem));
-
-    if (free_gpu_mem > lottery_size * sizeof(key_type)) {
-        CUDA_TRY(cudaMalloc(&lottery, lottery_size * sizeof(key_type)));
-    } else {
-        CUDA_TRY(cudaMallocHost(&lottery, lottery_size * sizeof(key_type)));
-        lottery_in_device_memory = false;
-    }
+    RMM_TRY(RMM_ALLOC(&lottery, lottery_size * sizeof(key_type), 0));
 
     if (uniq_build_tbl_keys) {
         thrust::sequence(thrust::device, lottery, lottery + lottery_size, 0);
@@ -234,8 +222,7 @@ void generate_input_tables(
         lottery, lottery_size, devStates, num_states
     );
 
-    CUDA_TRY(cudaGetLastError());
-    CUDA_TRY(cudaDeviceSynchronize());
+    CHECK_STREAM(0);
 
     CUDA_TRY(cudaMemcpy(
         build_tbl_sorted, build_tbl, build_tbl_size * sizeof(key_type), cudaMemcpyDeviceToDevice
@@ -258,17 +245,11 @@ void generate_input_tables(
         lottery, lottery_size, selectivity, devStates, num_states
     );
 
-    CUDA_TRY(cudaGetLastError());
-    CUDA_TRY(cudaDeviceSynchronize());
+    CHECK_STREAM(0);
 
-    if (lottery_in_device_memory) {
-        CUDA_TRY(cudaFree(lottery));
-    } else {
-        CUDA_TRY(cudaFreeHost(lottery));
-    }
-
-    CUDA_TRY(cudaFree(build_tbl_sorted));
-    CUDA_TRY(cudaFree(devStates));
+    RMM_TRY(RMM_FREE(lottery, 0));
+    RMM_TRY(RMM_FREE(build_tbl_sorted, 0));
+    RMM_TRY(RMM_FREE(devStates, 0));
 }
 
 
