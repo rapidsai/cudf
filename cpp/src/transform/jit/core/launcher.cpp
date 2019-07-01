@@ -18,82 +18,70 @@
  */
 
 #include "../core/launcher.h"
-#include "../code/code.h"
 #include <jit/parser.h>
 #include <jit/types_h_jit.h>
-#include <cstdint>
 #include <chrono>
+#include <cstdint>
+#include "../code/code.h"
 
 namespace cudf {
 namespace transformation {
 namespace jit {
 
-    constexpr char prog_name[] = "unary_transform";
+constexpr char prog_name[] = "unary_transform";
 
-    const std::vector<std::string> Launcher::compilerFlags { "-std=c++14" };
-    const std::vector<std::string> Launcher::headersName 
-        { cudf_types_h };
+const std::vector<std::string> Launcher::compilerFlags{"-std=c++14"};
+const std::vector<std::string> Launcher::headersName{cudf_types_h};
 
-    /**---------------------------------------------------------------------------*
-     * @brief  Used to provide Jitify with strings that should be used as headers
-     *  during JIT compilation.
-     * 
-     * @param filename  file which was requested to include in source
-     * @param stream    stream to pass string of the requested header to
-     * @return std::istream* 
-     *---------------------------------------------------------------------------**/
-    std::istream* headersCode(std::string filename, std::iostream& stream) {
-        return nullptr;
-    }
+/**---------------------------------------------------------------------------*
+ * @brief  Used to provide Jitify with strings that should be used as headers
+ *  during JIT compilation.
+ *
+ * @param filename  file which was requested to include in source
+ * @param stream    stream to pass string of the requested header to
+ * @return std::istream*
+ *---------------------------------------------------------------------------**/
+std::istream* headersCode(std::string filename, std::iostream& stream) {
+  return nullptr;
+}
 
-    Launcher& Launcher::setProgram(std::string prog_file_name)
-    {
-        program = cacheInstance.getProgram(prog_file_name,
-                                           code::kernel,
-                                           headersName,
-                                           compilerFlags,
-                                           headersCode);
-    }
-    
-    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx, std::string output_type)
-    {
-        std::string combined_kernel = 
-          parse_single_function_ptx(ptx, "GENERIC_UNARY_OP", output_type) + code::kernel;
-        program = cacheInstance.getProgram(prog_file_name,
-                                           combined_kernel.c_str(),
-                                           headersName,
-                                           compilerFlags,
-                                           headersCode);
-    }
-   
-    Launcher::Launcher()
-     : cacheInstance{cudf::jit::cudfJitCache::Instance()}
-    { 
-        this->setProgram(prog_name);
-    }
+Launcher& Launcher::setProgram(std::string prog_file_name) {
+  program = cacheInstance.getProgram(prog_file_name, code::kernel, headersName,
+                                     compilerFlags, headersCode);
+}
 
-    Launcher::Launcher(const std::string& ptx, const std::string& output_type)
-     : cacheInstance{cudf::jit::cudfJitCache::Instance()}
-    {
-        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx + output_type) ); 
-        this->setProgram(prog_name + ("." + ptx_hash_str), ptx, output_type);
-    }
- 
-    Launcher::Launcher(Launcher&& launcher)
-     : program {std::move(launcher.program)}
-     , cacheInstance {cudf::jit::cudfJitCache::Instance()}
-     , kernel_inst {std::move(launcher.kernel_inst)}
-    { }
+Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx,
+                               std::string output_type) {
+  std::string combined_kernel =
+      parse_single_function_ptx(ptx, "GENERIC_UNARY_OP", output_type) +
+      code::kernel;
+  program = cacheInstance.getProgram(prog_file_name, combined_kernel.c_str(),
+                                     headersName, compilerFlags, headersCode);
+}
 
-    gdf_error Launcher::launch(gdf_column* out, const gdf_column* in) {
+Launcher::Launcher() : cacheInstance{cudf::jit::cudfJitCache::Instance()} {
+  this->setProgram(prog_name);
+}
 
-        getKernel().configure_1d_max_occupancy()
-                      .launch(out->size,
-                              out->data, in->data);
+Launcher::Launcher(const std::string& ptx, const std::string& output_type)
+    : cacheInstance{cudf::jit::cudfJitCache::Instance()} {
+  std::string ptx_hash_str =
+      std::to_string(std::hash<std::string>{}(ptx + output_type));
+  this->setProgram(prog_name + ("." + ptx_hash_str), ptx, output_type);
+}
 
-        return GDF_SUCCESS;
-    }
+Launcher::Launcher(Launcher&& launcher)
+    : program{std::move(launcher.program)},
+      cacheInstance{cudf::jit::cudfJitCache::Instance()},
+      kernel_inst{std::move(launcher.kernel_inst)} {}
 
-} // namespace jit
-} // namespace transformation
-} // namespace cudf
+gdf_error Launcher::launch(gdf_column* out, const gdf_column* in) {
+  getKernel().configure_1d_max_occupancy().launch(out->size, out->data,
+                                                  in->data);
+
+  return GDF_SUCCESS;
+}
+
+}  // namespace jit
+}  // namespace transformation
+}  // namespace cudf

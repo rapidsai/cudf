@@ -39,4 +39,6 @@ cdef extern from "binaryop.hpp" namespace "cudf" nogil:
     cdef void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
     cdef void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs, gdf_binary_operator ope) except +
     cdef void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_binary_operator ope) except +
-    cdef void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const string&       ptx, const string& output_type) except +
+    
+    cdef gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs, const string& ptx, gdf_dtype output_type) except +
+

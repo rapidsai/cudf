@@ -24,7 +24,7 @@ namespace jit {
 namespace code {
 
 const char* kernel =
-R"***(
+    R"***(
     #include <cudf/types.h>
 
     template <typename TypeOut, typename TypeIn>
@@ -45,7 +45,7 @@ R"***(
     }
 )***";
 
-} // namespace code
-} // namespace jit
-} // namespace transformation
-} // namespace cudf
+}  // namespace code
+}  // namespace jit
+}  // namespace transformation
+}  // namespace cudf

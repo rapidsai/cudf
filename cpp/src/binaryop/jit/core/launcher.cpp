@@ -100,7 +100,7 @@ namespace jit {
         return GDF_SUCCESS;
     }
 
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
+    gdf_error Launcher::launch(gdf_column* out, const gdf_column* lhs, const gdf_column* rhs) {
 
         getKernel().configure_1d_max_occupancy()
                       .launch(out->size,

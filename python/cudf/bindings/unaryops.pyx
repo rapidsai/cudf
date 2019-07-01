@@ -59,37 +59,6 @@ def apply_math_op(incol, outcol, op):
 
     check_gdf_error(result)
 
-cpp_dtype = {
-  np.int32: "int",
-  np.int64: "long int",
-  np.float32: "float",
-  np.float64: "double"
-}
-
-def apply_op_udf(incol, outcol, ptx, dtype):
-    """
-    Call user defined ops.
-    """
-
-    check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
-
-    cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef gdf_column* c_outcol = column_view_from_column(outcol)
-
-    cdef string cpp_str = ptx.encode('UTF-8')
-    cdef string cpp_type_str = cpp_dtype[dtype].encode('UTF-8')
-    
-    with nogil:
-        transform(<gdf_column*>c_outcol, <gdf_column*>c_incol, cpp_str, cpp_type_str)
-
-    cdef int nullct = c_outcol[0].null_count
-
-    free(c_incol)
-    free(c_outcol)
-
-    return nullct
-
 def column_applymap(incol, udf_ptx, np_dtype):
     
     cdef gdf_column* c_incol = column_view_from_column(incol)
@@ -103,6 +72,8 @@ def column_applymap(incol, udf_ptx, np_dtype):
         c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type)
     
     (data, mask) = gdf_column_to_column_mem(&c_outcol)
+
+    free(c_incol)
 
     return Column.from_mem_views(data, mask) 
 

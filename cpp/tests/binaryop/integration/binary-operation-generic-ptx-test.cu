@@ -79,11 +79,15 @@ R"***(
     auto rhs = cudf::test::column_wrapper<float>(500,
         [](gdf_size_type row) {return (row % 3 > 0);},
         [](gdf_size_type row) {return (row % 4 > 0);});
-    auto out = cudf::test::column_wrapper<float>(rhs.get()->size, true);
+    
+    gdf_column cpp_output_col;
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_FLOAT32));
+    auto cpp_out = cudf::test::column_wrapper<float>(cpp_output_col);
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), ptx, "float"));
+    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
 
-    ASSERT_BINOP(out, lhs, rhs, CADD);
+    gdf_column_free(&cpp_output_col);
+
 }
 
 TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT32) {
@@ -141,11 +145,15 @@ R"***(
     auto rhs = cudf::test::column_wrapper<dtype>(500,
         [](gdf_size_type row) {return (row % 3 > 0);},
         [](gdf_size_type row) {return (row % 4 > 0);});
-    auto out = cudf::test::column_wrapper<int64_t>(rhs.get()->size, true);
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), ptx, "long"));
+    gdf_column cpp_output_col;
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
+    auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
 
-    ASSERT_BINOP(out, lhs, rhs, CADD);
+    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
+
+    gdf_column_free(&cpp_output_col);
+
 }
 
 TEST_F(BinaryOperationGenericPTXTest, CAdd_Vector_Vector_INT64_INT32_INT64) {
@@ -203,17 +211,14 @@ R"***(
     auto rhs = cudf::test::column_wrapper<int64_t>(500,
         [](gdf_size_type row) {return (row % 3 > 0);},
         [](gdf_size_type row) {return (row % 4 > 0);});
-    auto out = cudf::test::column_wrapper<int64_t>(rhs.get()->size, true);
 
-    CUDF_EXPECT_NO_THROW(cudf::binary_operation(out.get(), lhs.get(), rhs.get(), ptx, "long int"));
-    
-    // gdf_column cpp_output_col;
-    // CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
-    // auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
+    gdf_column cpp_output_col;
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::binary_operation(*lhs.get(), *rhs.get(), ptx, GDF_INT64));
+    auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
 
-    ASSERT_BINOP(out, lhs, rhs, CADD);
-    // ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
+    ASSERT_BINOP(cpp_out, lhs, rhs, CADD);
 
+    gdf_column_free(&cpp_output_col);
 }
 
 

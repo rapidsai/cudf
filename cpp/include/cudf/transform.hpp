@@ -20,7 +20,7 @@
 #include "cudf.h"
 #include "types.h"
 
-namespace cudf{
+namespace cudf {
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a new column by applying a unary function against every
@@ -34,31 +34,10 @@ namespace cudf{
  * @return gdf_column The column resulting from applying the unary function to
  * every element of the input
  *---------------------------------------------------------------------------**/
-gdf_column transform(const gdf_column& input,
-                           const std::string& ptx_unary_function,
-                           gdf_dtype output_type);
+gdf_column transform(const gdf_column &input,
+                     const std::string &ptx_unary_function,
+                     gdf_dtype output_type);
 
-/**
- * @brief Performs a unary operation on every element of the input 
- * gdf_columns using a user-defined PTX function.
- *
- * The desired output type must be specified in out->dtype.
- *
- * If the valid field in the gdf_column output is not nullptr, then it will be
- * filled with the valid masks of input gdf_columns
- *
- * @param out (gdf_column) Output of the operation.
- * @param in (gdf_column) Input operand of the operation.
- * @param ptx String containing the PTX of a binary function to apply on `in`
- */
-void transform(gdf_column*           out,
-                     const gdf_column*           in,
-                     const std::string&    ptx,const std::string& output_type
-                     );
-
-} // namespace cudf
-
+}  // namespace cudf
 
 #endif
-
-

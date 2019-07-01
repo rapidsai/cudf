@@ -121,7 +121,7 @@ namespace jit {
          * @param rhs[in]  RHS column
          * @return gdf_error 
          *---------------------------------------------------------------------------**/
-        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs);
+        gdf_error launch(gdf_column* out, const gdf_column* lhs, const gdf_column* rhs);
 
     private:
         static const std::vector<std::string> compilerFlags;
