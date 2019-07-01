@@ -20,7 +20,7 @@
 #include "reduction.cuh"
 
 namespace cudf {
-namespace reductions {
+namespace reduction {
 
 void sum(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
 void min(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
@@ -32,6 +32,6 @@ void mean(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
 void variance(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream=0);
 void standard_deviation(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream=0);
 
-} // namespace reductions
+} // namespace reduction
 } // namespace cudf
 #endif

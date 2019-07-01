@@ -28,7 +28,7 @@
 #include <cmath>
 
 namespace cudf {
-namespace reductions {
+namespace reduction {
 
 // intermediate data structure to compute `var`, `std`
 template<typename ResultType>
@@ -42,7 +42,7 @@ struct var_std
     : value(_value), value_squared(_value_squared)
     {};
 
-    using this_t = cudf::reductions::var_std<ResultType>;
+    using this_t = cudf::reduction::var_std<ResultType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     this_t operator+(this_t const &rhs) const
@@ -67,7 +67,7 @@ struct var_std
 template<typename ResultType>
 struct transformer_var_std
 {
-    using OutputType = cudf::reductions::var_std<ResultType>;
+    using OutputType = cudf::reduction::var_std<ResultType>;
 
     CUDA_HOST_DEVICE_CALLABLE
     OutputType operator() (ResultType const & value)
@@ -176,7 +176,7 @@ struct variance {
     template<bool has_nulls, typename ElementType, typename ResultType>
     static auto make_iterator(gdf_column const& column, ResultType identity)
     {
-        auto transformer = cudf::reductions::transformer_var_std<ResultType>{};
+        auto transformer = cudf::reduction::transformer_var_std<ResultType>{};
         auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
         return thrust::make_transform_iterator(it_raw, transformer);
     }
@@ -205,7 +205,7 @@ struct standard_deviation {
     template<bool has_nulls, typename ElementType, typename ResultType>
     static auto make_iterator(gdf_column const& column, ResultType identity)
     {
-        auto transformer = cudf::reductions::transformer_var_std<ResultType>{};
+        auto transformer = cudf::reduction::transformer_var_std<ResultType>{};
         auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
         return thrust::make_transform_iterator(it_raw, transformer);
     }
@@ -216,7 +216,7 @@ struct standard_deviation {
         // compute `standard deviation` from intermediate type `IntermediateType`
         static ResultType compute_result(const IntermediateType& input, gdf_size_type count, gdf_size_type ddof)
         {
-            using intermediateOp = typename cudf::reductions::op::variance::template intermediate<ResultType>;
+            using intermediateOp = typename cudf::reduction::op::variance::template intermediate<ResultType>;
             ResultType var = intermediateOp::compute_result(input, count, ddof);
 
             return static_cast<ResultType>(std::sqrt(var));
@@ -226,7 +226,7 @@ struct standard_deviation {
 } // namespace op
 
 
-} // namespace reductions
+} // namespace reduction
 } // namespace cudf
 
 #endif

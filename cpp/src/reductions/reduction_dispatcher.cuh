@@ -20,7 +20,7 @@
 #include "reduction_functions.cuh"
 
 namespace cudf {
-namespace reductions {
+namespace reduction {
 namespace detail {
 
 /** --------------------------------------------------------------------------*    
@@ -113,8 +113,8 @@ private:
     {
         return std::is_arithmetic<ElementType>::value ||
                std::is_same<ElementType, cudf::bool8>::value ||
-               std::is_same<Op, cudf::reductions::op::min>::value ||
-               std::is_same<Op, cudf::reductions::op::max>::value ;
+               std::is_same<Op, cudf::reduction::op::min>::value ||
+               std::is_same<Op, cudf::reduction::op::max>::value ;
     }
 
 public:
@@ -134,6 +134,6 @@ public:
 };
 
 } // namespace detail
-} // namespace reductions
+} // namespace reduction
 } // namespace cudf
 #endif

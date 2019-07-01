@@ -20,7 +20,7 @@
 #include "reduction_functions.cuh"
 
 namespace cudf {
-namespace reductions {
+namespace reduction {
 namespace detail {
 
 /** --------------------------------------------------------------------------*
@@ -140,6 +140,6 @@ public:
 };
 
 } // namespace detail
-} // namespace reductions
+} // namespace reduction
 } // namespace cudf
 #endif

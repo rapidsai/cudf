@@ -30,7 +30,7 @@
 #include <cub/device/device_reduce.cuh>
 
 namespace cudf {
-namespace reductions {
+namespace reduction {
 namespace detail {
 
 /** --------------------------------------------------------------------------*
@@ -68,6 +68,6 @@ void reduce(OutputType* dev_result, InputIterator d_in, gdf_size_type num_items,
 }
 
 } // namespace detail
-} // namespace reductions
+} // namespace reduction
 } // namespace cudf
 #endif
