@@ -2,7 +2,6 @@
 
 namespace cudf {
 
-
 /**
  * @brief Google Benchmark fixture for libcudf benchmarks
  * 
