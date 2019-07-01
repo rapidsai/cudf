@@ -242,3 +242,18 @@ def min_scalar_type(a, min_size=8):
     # Normalize the size to at least `min_size` bytes
     sizeof = max(max(min_size, 8) // 8, sizeof)
     return getattr(np, 'int' + str(sizeof * 8))
+
+
+# taken from dask array
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
+def _is_nep18_active():
+    class A:
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+IS_NEP18_ACTIVE = _is_nep18_active()

@@ -1,19 +1,18 @@
 # # Copyright (c) 2018, NVIDIA CORPORATION.
-import os
-os.environ['NUMPY_EXPERIMENTAL_ARRAY_FUNCTION']='1'
 import numpy as np
 import cudf
 import pandas as pd
 import pytest
+from cudf.utils.utils import IS_NEP18_ACTIVE
+
+missing_arrfunc_cond = not IS_NEP18_ACTIVE
+missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
+
+# Test implementation based on dask array test
+# https://github.com/dask/dask/blob/master/dask/array/tests/test_array_function.py
 
 
-# from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
-#
-# missing_arrfunc_cond = not IS_NEP18_ACTIVE
-# missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
-
-#
-
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "python_ls",
     [
@@ -37,6 +36,8 @@ def test_array_func_cudf(python_ls, func):
     got = func(cudf_ser)
     np.testing.assert_approx_equal(expect, got)
 
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "python_ls",
     [
