@@ -112,7 +112,7 @@ TYPED_TEST(FillingTest, SetRangeNullCount)
   TypeParam val = TypeParam{1};
 
   auto some_valid = [](gdf_index_type row) { 
-    return row % 2 == 0 ? false : true;
+    return row % 2 != 0;
   };
 
   auto all_invalid = [](gdf_index_type row) { 
