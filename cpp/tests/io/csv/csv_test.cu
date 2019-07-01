@@ -469,7 +469,7 @@ TEST(gdf_csv_test, Writer)
     wargs.na_rep = "";
     wargs.line_terminator = "\n";
     wargs.include_header = true;
-    wargs.chunk_rows = 8;
+    wargs.rows_per_chunk = 8;
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 

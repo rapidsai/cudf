@@ -79,6 +79,6 @@ cdef extern from "cudf.h"  nogil:
         const char*         na_rep
         bool                include_header
 
-        int                 chunk_rows
+        int                 rows_per_chunk
 
     cdef gdf_error write_csv(csv_write_arg* args) except +

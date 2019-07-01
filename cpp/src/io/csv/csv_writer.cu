@@ -18,6 +18,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/wrapper_types.hpp>
+#include <utilities/bit_util.cuh>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
@@ -32,8 +33,8 @@
 //
 // Parameters:
 // - column: The column to be converted.
-// - row_offset: Number entries to from the beginning to skip; must be multiple of 8.
-// - rows:  How many rows from the offset that should be converted for this column.
+// - row_offset: Number entries from the beginning to skip; must be multiple of 8.
+// - rows: Number of rows from the offset that should be converted for this column.
 // - delimiter: Separator to append to the column strings
 // - null_representation: String to use for null entries
 // - true_string: String to use for 'true' values in boolean columns
@@ -45,9 +46,9 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
                                  const char* true_string, const char* false_string )
 {
     NVStrings* rtn = nullptr;
-    gdf_valid_type* valid = column->valid;
+    auto valid = column->valid;
     if( valid )
-        valid += ((row_offset+7)/8);
+        valid += cudf::util::packed_bit_sequence_size_in_bytes<gdf_size_type>(row_offset);
     switch( column->dtype )
     {
         case GDF_STRING:
@@ -184,7 +185,7 @@ gdf_error write_csv(csv_write_arg* args)
     // instead of an arbitrary chunk count.
     // The entire CSV chunk must fit in CPU memory before writing it out.
     //
-    gdf_size_type rows_chunk = (args->chunk_rows/8)*8; // must be divisible by 8
+    gdf_size_type rows_chunk = (args->rows_per_chunk/8)*8; // must be divisible by 8
     CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
     gdf_size_type row_offset = 0;
