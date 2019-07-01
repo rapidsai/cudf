@@ -35,3 +35,4 @@ void standard_deviation(gdf_column const& col, gdf_scalar& scalar, gdf_size_type
 } // namespace reduction
 } // namespace cudf
 #endif
+

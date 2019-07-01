@@ -71,3 +71,4 @@ void reduce(OutputType* dev_result, InputIterator d_in, gdf_size_type num_items,
 } // namespace reduction
 } // namespace cudf
 #endif
+
