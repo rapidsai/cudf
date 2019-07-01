@@ -25,9 +25,10 @@ namespace avro {
 struct block_desc_s
 {
     block_desc_s() {}
-    explicit constexpr block_desc_s(size_t offset_, uint32_t first_row_, uint32_t num_rows_):offset(offset_),first_row(first_row_),num_rows(num_rows_) {}
+    explicit constexpr block_desc_s(size_t offset_, uint32_t size_, uint32_t first_row_, uint32_t num_rows_):offset(offset_),first_row(first_row_),num_rows(num_rows_),size(size_) {}
 
     size_t offset;
+    uint32_t size;
     uint32_t first_row;
     uint32_t num_rows;
 };
@@ -47,9 +48,9 @@ enum type_kind_e
     type_bytes,
     type_string,
     // Complex types
+    type_enum,
     type_record,
     type_union,
-    type_enum,
 };
 
 
