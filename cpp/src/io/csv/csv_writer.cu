@@ -46,9 +46,10 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
                                  const char* true_string, const char* false_string )
 {
     NVStrings* rtn = nullptr;
+    // point the null bitmask to the next set of bits associated with this chunk of rows
     auto valid = column->valid;
-    if( valid )
-        valid += (row_offset / GDF_VALID_BITSIZE);
+    if( valid )                                    // normalize row_offset (number of bits here)
+        valid += (row_offset / GDF_VALID_BITSIZE); // to appropriate pointer for the bitmask
     switch( column->dtype )
     {
         case GDF_STRING:
