@@ -11,6 +11,7 @@
 
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
+- PR #2129 Add functions in the Java API to support nullable column filtering
 
 ## Bug Fixes
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
@@ -18,6 +19,8 @@
 - PR #2145 Work around binops validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
+- PR #2154 CSV Reader: Fix bools misdetected as strings dtype
+
 
 # cuDF 0.8.0 (27 June 2019)
 

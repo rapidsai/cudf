@@ -1038,150 +1038,151 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
                                   uint64_t *recStart,
                                   column_data_t *d_columnData) {
 
-	// thread IDs range per block, so also need the block id
-	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
+  // ThreadIds range per block, so also need the blockId
+  // This is entry into the fields; threadId is an element within `num_records`
+  long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
 
-	// we can have more threads than data, make sure we are not past the end of the data
-	if ( rec_id >= num_records)
-		return;
+  // we can have more threads than data, make sure we are not past the end of the data
+  if (rec_id >= num_records) {
+    return;
+  }
 
-	long start 		= recStart[rec_id];
-	long stop 		= recStart[rec_id + 1];
+  long start = recStart[rec_id];
+  long stop = recStart[rec_id + 1];
 
-	long pos 		= start;
-	int  col 		= 0;
-	int  actual_col = 0;
+  long pos = start;
+  int col = 0;
+  int actual_col = 0;
 
-	// Going through all the columns of a given record
-	while(col<num_columns){
+  // Going through all the columns of a given record
+  while (col < num_columns) {
+    if (start > stop) {
+      break;
+    }
 
-		if(start>stop)
-			break;
+    pos = seekFieldEnd(raw_csv, opts, pos, stop);
 
-		pos = seekFieldEnd(raw_csv, opts, pos, stop);
+    // Checking if this is a column that the user wants --- user can filter columns
+    if (flags[col] & column_parse::enabled) {
+      long tempPos = pos - 1;
+      long field_len = pos - start;
 
-		// Checking if this is a column that the user wants --- user can filter columns
-		if (flags[col] & column_parse::enabled) {
+      if (field_len <= 0 ||
+          serializedTrieContains(opts.naValuesTrie, raw_csv + start,
+                                 field_len)) {
+        atomicAdd(&d_columnData[actual_col].countNULL, 1);
+      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start,
+                                        field_len) ||
+                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start,
+                                        field_len)) {
+        atomicAdd(&d_columnData[actual_col].countBool, 1);
+      } else {
+        long countNumber = 0;
+        long countDecimal = 0;
+        long countSlash = 0;
+        long countDash = 0;
+        long countPlus = 0;
+        long countColon = 0;
+        long countString = 0;
+        long countExponent = 0;
 
-			long tempPos=pos-1;
+        // Modify start & end to ignore whitespace and quotechars
+        // This could possibly result in additional empty fields
+        adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
+        field_len = tempPos - start + 1;
 
-			// Checking if the record is NULL
-			if(start > tempPos ||
-				serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start)){
-				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
-				pos++;
-				start=pos;
-				col++;
-				actual_col++;
-				continue;	
-			}
+        for (long startPos = start; startPos <= tempPos; startPos++) {
+          if (isDigit(raw_csv[startPos])) {
+            countNumber++;
+            continue;
+          }
+          // Looking for unique characters that will help identify column types.
+          switch (raw_csv[startPos]) {
+            case '.':
+              countDecimal++;
+              break;
+            case '-':
+              countDash++;
+              break;
+            case '+':
+              countPlus++;
+              break;
+            case '/':
+              countSlash++;
+              break;
+            case ':':
+              countColon++;
+              break;
+            case 'e':
+            case 'E':
+              if (startPos > start && startPos < tempPos)
+                countExponent++;
+              break;
+            default:
+              countString++;
+              break;
+          }
+        }
+        const int countSign = countDash + countPlus;
 
-			long countNumber=0;
-			long countDecimal=0;
-			long countSlash=0;
-			long countDash=0;
-			long countPlus=0;
-			long countColon=0;
-			long countString=0;
-			long countExponent=0;
+        // Integers have to have the length of the string
+        long int_req_number_cnt = field_len;
+        // Off by one if they start with a minus sign
+        if ((raw_csv[start] == '-' || raw_csv[start] == '+') && field_len > 1) {
+          --int_req_number_cnt;
+        }
 
-			// Modify start & end to ignore whitespace and quotechars
-			// This could possibly result in additional empty fields
-			adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
-
-			const long strLen = tempPos - start + 1;
-
-			for(long startPos=start; startPos<=tempPos; startPos++){
-				if (isDigit(raw_csv[startPos])) {
-					countNumber++;
-					continue;
-				}
-				// Looking for unique characters that will help identify column types.
-				switch (raw_csv[startPos]){
-					case '.':
-						countDecimal++;break;
-					case '-':
-						countDash++; break;
-					case '+':
-						countPlus++; break;
-					case '/':
-						countSlash++;break;
-					case ':':
-						countColon++;break;
-					case 'e':
-					case 'E':
-						if (startPos > start && startPos < tempPos) 
-							countExponent++;break;
-					default:
-						countString++;
-						break;	
-				}
-			}
-			const int countSign = countDash + countPlus;
-
-			// Integers have to have the length of the string
-			long int_req_number_cnt = strLen;
-			// Off by one if they start with a minus sign
-			if((raw_csv[start]=='-' || raw_csv[start]=='+') && strLen > 1){
-				--int_req_number_cnt;
-			}
-
-			if(strLen==0){ // Removed spaces ' ' in the pre-processing and thus we can have an empty string.
-				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
-			}
-			else if(countNumber==int_req_number_cnt){
-				// Checking to see if we the integer value requires 8,16,32,64 bits.
-				// This will allow us to allocate the exact amount of memory.
-				const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
-				const size_t field_len = tempPos - start + 1;
-				if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
-						serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
-					atomicAdd(& d_columnData[actual_col].countBool, 1);
-				}
-				else if(value >= (1L<<31)){
-					atomicAdd(& d_columnData[actual_col].countInt64, 1);
-				}
-				else if(value >= (1L<<15)){
-					atomicAdd(& d_columnData[actual_col].countInt32, 1);
-				}
-				else if(value >= (1L<<7)){
-					atomicAdd(& d_columnData[actual_col].countInt16, 1);
-				}
-				else{
-					atomicAdd(& d_columnData[actual_col].countInt8, 1);
-				}
-			}
-			else if(isLikeFloat(strLen, countNumber, countDecimal, countSign, countExponent)){
-					atomicAdd(& d_columnData[actual_col].countFloat, 1);
-			}
-			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 
-			// a data-time field. Also, if a string has multiple decimals, then is not a legit number.
-			else if(countString > 3 || countDecimal > 1){
-				atomicAdd(& d_columnData[actual_col].countString, 1);
-			}
-			else {
-				// A date field can have either one or two '-' or '\'. A legal combination will only have one of them.
-				// To simplify the process of auto column detection, we are not covering all the date-time formation permutations.
-				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && countSlash<=2) ){
-					if((countColon<=2)){
-						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1);
-					}
-					else{
-						atomicAdd(& d_columnData[actual_col].countString, 1);
-					}
-				}
-				// Default field is string type.
-				else{
-					atomicAdd(& d_columnData[actual_col].countString, 1);
-				}
-			}
-			actual_col++;
-		}
-		pos++;
-		start=pos;
-		col++;	
-
-	}
+        if (field_len == 0) {
+          // Ignoring whitespace and quotes can result in empty fields
+          atomicAdd(&d_columnData[actual_col].countNULL, 1);
+        } else if (countNumber == int_req_number_cnt) {
+          // Checking to see if we the integer value requires 8,16,32,64 bits.
+          // This will allow us to allocate the exact amount of memory.
+          const auto value =
+              convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
+          if (value >= (1L << 31)) {
+            atomicAdd(&d_columnData[actual_col].countInt64, 1);
+          } else if (value >= (1L << 15)) {
+            atomicAdd(&d_columnData[actual_col].countInt32, 1);
+          } else if (value >= (1L << 7)) {
+            atomicAdd(&d_columnData[actual_col].countInt16, 1);
+          } else {
+            atomicAdd(&d_columnData[actual_col].countInt8, 1);
+          }
+        } else if (isLikeFloat(field_len, countNumber, countDecimal, countSign,
+                               countExponent)) {
+          atomicAdd(&d_columnData[actual_col].countFloat, 1);
+        }
+        // The date-time field cannot have more than 3 strings. As such if an
+        // entry has more than 3 string characters, it is not a data-time field.
+        // Also, if a string has multiple decimals, then is not a legit number.
+        else if (countString > 3 || countDecimal > 1) {
+          atomicAdd(&d_columnData[actual_col].countString, 1);
+        } else {
+          // A date field can have either one or two '-' or '\'. A legal
+          // combination will only have one of them. To simplify the process of
+          // auto column detection, we are not covering all the date-time
+          // formation permutations.
+          if ((countDash > 0 && countDash <= 2 && countSlash == 0) ||
+              (countDash == 0 && countSlash > 0 && countSlash <= 2)) {
+            if ((countColon <= 2)) {
+              atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
+            } else {
+              atomicAdd(&d_columnData[actual_col].countString, 1);
+            }
+          }
+          // Default field is string type.
+          else {
+            atomicAdd(&d_columnData[actual_col].countString, 1);
+          }
+        }
+      }
+      actual_col++;
+    }
+    pos++;
+    start = pos;
+    col++;
+  }
 }
 
 reader::Impl::Impl(reader_options const &args) : args_(args) {}
