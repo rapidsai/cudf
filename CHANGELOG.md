@@ -2,9 +2,9 @@
 
 ## New Features
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
-
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 
 ## Improvements
 
