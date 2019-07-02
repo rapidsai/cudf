@@ -446,7 +446,7 @@ public class TableTest {
     try (FileInputStream in = new FileInputStream(TEST_PARQUET_FILE)) {
       bufferLen = in.read(buffer);
     }
-    try (Table table = Table.readParquet(opts, buffer, bufferLen)) {
+    try (Table table = Table.readParquet(opts, buffer, 0, bufferLen)) {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
       assertTableTypes(new DType[]{DType.INT64, DType.FLOAT64, DType.FLOAT64}, table);

@@ -510,6 +510,7 @@ class StringColumn(columnops.TypedColumnBase):
         elif isinstance(arg, DeviceNDArray):
             # NVStrings gather call expects an array of int32s
             arg = cudautils.astype(arg, np.dtype('int32'))
+            arg = cudautils.modulo(arg, len(self))
             if len(arg) > 0:
                 gpu_ptr = get_ctype_ptr(arg)
                 out = self._data.gather(gpu_ptr, len(arg))
@@ -735,8 +736,8 @@ class StringColumn(columnops.TypedColumnBase):
         """
         Get unique strings in the data
         """
-        result = StringColumn(self.nvcategory.keys())
-        return result
+        import nvcategory as nvc
+        return StringColumn(nvc.from_strings(self.data).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):

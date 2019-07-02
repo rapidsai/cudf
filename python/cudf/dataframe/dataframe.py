@@ -517,28 +517,28 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
-            max_num_rows = max(self.shape[0], other.shape[0])
+
+            lhs, rhs = _align_indices(self, other)
+
+            max_num_rows = max(lhs.shape[0], rhs.shape[0])
 
             def fallback(col, fn):
                 if fill_value is None:
                     return Series.from_masked_array(
                         data=rmm.device_array(max_num_rows, dtype='float64'),
-                        mask=cudautils.make_empty_mask(max_num_rows))
+                        mask=cudautils.make_empty_mask(max_num_rows)
+                    ).set_index(col.index)
                 else:
                     return getattr(col, fn)(fill_value)
 
-            for col in self._cols:
-                if col not in other._cols:
-                    result[col] = fallback(self._cols[col], fn)
-            for col in other._cols:
-                if col in self._cols:
-                    if self.shape[0] != other.shape[0]:
-                        raise NotImplementedError(
-                                "%s on columns with different "
-                                "length is not supported", fn)
-                    result[col] = op(self._cols[col], other._cols[col])
+            for col in lhs._cols:
+                if col not in rhs._cols:
+                    result[col] = fallback(lhs._cols[col], fn)
+            for col in rhs._cols:
+                if col in lhs._cols:
+                    result[col] = op(lhs._cols[col], rhs._cols[col])
                 else:
-                    result[col] = fallback(other._cols[col], _reverse_op(fn))
+                    result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             raise NotImplementedError(
                     "Series to DataFrame arithmetic not supported "
@@ -862,6 +862,87 @@ class DataFrame(object):
         for k in self.columns:
             self[k] = self[k].set_index(idx)
 
+    def reindex(self, labels=None, axis=0, index=None, columns=None,
+                copy=True):
+        """Return a new DataFrame whose axes conform to a new index
+
+        ``DataFrame.reindex`` supports two calling conventions
+        * ``(index=index_labels, columns=column_names)``
+        * ``(labels, axis={0 or 'index', 1 or 'columns'})``
+
+        Parameters
+        ----------
+        labels : Index, Series-convertible, optional, default None
+        axis : {0 or 'index', 1 or 'columns'}, optional, default 0
+        index : Index, Series-convertible, optional, default None
+            Shorthand for ``df.reindex(labels=index_labels, axis=0)``
+        columns : array-like, optional, default None
+            Shorthand for ``df.reindex(labels=column_names, axis=1)``
+        copy : boolean, optional, default True
+
+        Returns
+        -------
+        A DataFrame whose axes conform to the new index(es)
+
+        Examples
+        --------
+        >>> import cudf
+        >>> df = cudf.DataFrame()
+        >>> df['key'] = [0, 1, 2, 3, 4]
+        >>> df['val'] = [float(i + 10) for i in range(5)]
+        >>> df_new = df.reindex(index=[0, 3, 4, 5],
+                                columns=['key', 'val', 'sum'])
+        >>> print(df)
+           key   val
+        0    0  10.0
+        1    1  11.0
+        2    2  12.0
+        3    3  13.0
+        4    4  14.0
+        >>> print(df_new)
+           key   val  sum
+        0    0  10.0  NaN
+        3    3  13.0  NaN
+        4    4  14.0  NaN
+        5   -1   NaN  NaN
+        """
+
+        if labels is None and index is None and columns is None:
+            return self.copy(deep=copy)
+
+        df = self
+        cols = columns
+        dtypes = OrderedDict(df.dtypes)
+        idx = labels if index is None and axis in (0, 'index') else index
+        cols = labels if cols is None and axis in (1, 'columns') else cols
+        df = df if cols is None else df[list(set(df.columns) & set(cols))]
+
+        if idx is not None:
+            idx = idx if isinstance(idx, Index) else as_index(idx)
+            if df.index.dtype != idx.dtype:
+                cols = cols if cols is not None else list(df.columns)
+                df = DataFrame()
+            else:
+                df = DataFrame(None, idx).join(df, how='left', sort=True)
+                # double-argsort to map back from sorted to unsorted positions
+                df = df.take(idx.argsort(True).argsort(True).to_gpu_array())
+
+        idx = idx if idx is not None else df.index
+        names = cols if cols is not None else list(df.columns)
+
+        length = len(idx)
+        cols = OrderedDict()
+
+        for name in names:
+            if name in df:
+                cols[name] = df[name].copy(deep=copy)
+            else:
+                dtype = dtypes.get(name, np.float64)
+                col = columnops.column_empty(length, dtype, True)
+                cols[name] = Series(data=col, index=idx)
+
+        return DataFrame(cols, idx)
+
     def set_index(self, index):
         """Return a new DataFrame with a new index
 
@@ -911,7 +992,6 @@ class DataFrame(object):
 
         result_cols = cpp_copying.apply_gather(cols, positions)
 
-        out = DataFrame()
         for i, col_name in enumerate(self._cols):
             out[col_name] = result_cols[i]
 
@@ -1753,9 +1833,11 @@ class DataFrame(object):
 
         # We save the original categories for the reconstruction of the
         # final data frame
+        categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
             if pd.api.types.is_categorical_dtype(col):
+                categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
         # Save the order of the original column names for preservation later
@@ -1827,7 +1909,7 @@ class DataFrame(object):
                     mask = Buffer(valid)
                 df[name] = columnops.build_column(
                     Buffer(col),
-                    dtype=col.dtype,
+                    dtype=categorical_dtypes.get(name, col.dtype),
                     mask=mask,
                     categories=col_with_categories.get(name, None),
                 )
@@ -2450,12 +2532,8 @@ class DataFrame(object):
 
         def _create_output_frame(data, percentiles=None):
             # hack because we don't support strings in indexes
-            columns = data.columns
-            out_df = data[columns[0]].describe(percentiles=percentiles)
-            for col in columns[1:]:
-                out_df[col] = data[col].describe(percentiles=percentiles)[col]
-
-            return out_df
+            return DataFrame({col: data[col].describe(percentiles=percentiles)
+                              for col in data.columns})
 
         if not include and not exclude:
             numeric_data = self.select_dtypes(np.number)
@@ -2794,6 +2872,8 @@ class DataFrame(object):
         """
     def quantile(self,
                  q=0.5,
+                 axis=0,
+                 numeric_only=True,
                  interpolation='linear',
                  columns=None,
                  exact=True):
@@ -2805,6 +2885,10 @@ class DataFrame(object):
 
         q : float or array-like
             0 <= q <= 1, the quantile(s) to compute
+        axis : int
+            axis is a NON-FUNCTIONAL parameter
+        numeric_only : boolean
+            numeric_only is a NON-FUNCTIONAL parameter
         interpolation : {`linear`, `lower`, `higher`, `midpoint`, `nearest`}
             This  parameter specifies the interpolation method to use,
             when the desired quantile lies between two data points i and j.
@@ -2820,6 +2904,11 @@ class DataFrame(object):
         DataFrame
 
         """
+        if axis not in (0, None):
+            raise NotImplementedError("axis is not implemented yet")
+
+        if not numeric_only:
+            raise NotImplementedError("numeric_only is not implemented yet")
         if columns is None:
             columns = self.columns
 
@@ -2827,9 +2916,15 @@ class DataFrame(object):
         result['Quantile'] = q
         for k, col in self._cols.items():
             if k in columns:
-                result[k] = col.quantile(q, interpolation=interpolation,
-                                         exact=exact,
-                                         quant_index=False)
+                res = col.quantile(q, interpolation=interpolation,
+                                   exact=exact,
+                                   quant_index=False)
+                if not isinstance(res, numbers.Number) and len(res) == 0:
+                    res = columnops.column_empty_like(q,
+                                                      dtype=col.dtype,
+                                                      masked=True,
+                                                      newsize=len(q))
+                result[k] = res
         return result
 
     #
@@ -3097,3 +3192,36 @@ merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
                         merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)
+
+
+def _align_indices(lhs, rhs):
+    """
+    Internal util to align the indices of two DataFrames. Returns a tuple of
+    the aligned dataframes, or the original arguments if the indices are the
+    same, or if rhs isn't a DataFrame.
+    """
+    lhs_out, rhs_out = lhs, rhs
+    if isinstance(rhs, DataFrame) and not lhs.index.equals(rhs.index):
+        df = lhs.merge(rhs,
+                       sort=True,
+                       how='outer',
+                       left_index=True,
+                       right_index=True,
+                       suffixes=('_x', '_y'))
+        df = df.sort_index()
+        lhs_out = DataFrame()
+        rhs_out = DataFrame()
+        common = set(lhs.columns) & set(rhs.columns)
+        common_x = set(['{}_x'.format(x) for x in common])
+        common_y = set(['{}_y'.format(x) for x in common])
+        for col in df.columns:
+            if col in common_x:
+                lhs_out[col[:-2]] = df[col]
+            elif col in common_y:
+                rhs_out[col[:-2]] = df[col]
+            elif col in lhs:
+                lhs_out[col] = df[col]
+            elif col in rhs:
+                rhs_out[col] = df[col]
+
+    return lhs_out, rhs_out
