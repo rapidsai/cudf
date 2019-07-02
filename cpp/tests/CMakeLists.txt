@@ -353,6 +353,7 @@ ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 set(STREAM_COMPACTION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
@@ -395,14 +396,6 @@ enable_testing()
 ###################################################################################################
 
 # only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - stream compaction benchmarks-------------------------------------------------------------------
-
-set(STREAM_COMPACTION_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
-
-ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 
 ###################################################################################################
 # - iterator benchmarks-------------------------------------------------------------------
