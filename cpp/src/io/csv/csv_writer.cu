@@ -48,7 +48,7 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
     NVStrings* rtn = nullptr;
     auto valid = column->valid;
     if( valid )
-        valid += cudf::util::packed_bit_sequence_size_in_bytes<gdf_size_type>(row_offset);
+        valid += (row_offset / GDF_VALID_BITSIZE);
     switch( column->dtype )
     {
         case GDF_STRING:
