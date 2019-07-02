@@ -252,7 +252,7 @@ class _GroupbyHelper(object):
                 self.value_columns = [col] * len(agg_list)
                 self.value_names = agg_list
         else:
-            # DataFraneGroupBy
+            # DataFrameGroupBy
             self.value_columns = []
             self.value_names = []
             for col_name, agg_list in self.aggs.items():
