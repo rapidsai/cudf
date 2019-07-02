@@ -368,7 +368,6 @@ class MultiIndex(Index):
         return df
 
     def get_level_values(self, level):
-        from cudf import DataFrame
         colnames = list(self._source_data.columns)
         if level not in colnames:
             if isinstance(level, int):

@@ -57,16 +57,6 @@ class DataFrameGroupBy(_Groupby):
 
     def __init__(self, df, by=None, as_index=True, level=None,
                  sort=True, method="hash"):
-        """
-        Parameters
-        ----------
-        df : DataFrame
-        by : label, list
-            - label
-                The column label to group on.
-            - list
-                List of labels to group on.
-        """
         self._df = df
         self._groupby = _GroupbyHelper(obj=self._df, by=by, as_index=as_index,
                                        level=level, sort=sort)
@@ -125,6 +115,9 @@ class _GroupbyHelper(object):
         self.normalize_keys()
 
     def get_by_from_level(self, level):
+        """
+        Converts the ``level`` argument to a ``by`` argument.
+        """
         if not isinstance(level, list):
             level = [level]
         by_list = []
@@ -284,6 +277,8 @@ class _GroupbyHelper(object):
 
         index = self.compute_result_index(out_key_columns, out_value_columns)
         if len(result) == 0 and len(index) != 0:
+            # len(result) must be len(index) for
+            # ``result.index = index`` to work:
             result._size = len(index)
         result.index = index
 
