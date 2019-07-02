@@ -195,8 +195,8 @@ def test_multiindex_loc(pdf, gdf, pdfIndex):
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     # return 2 rows, 0 remaining keys = dataframe with entire index
-    assert_eq(pdf.loc[('a', 'store', 'clouds', 'fire')],
-              gdf.loc[('a', 'store', 'clouds', 'fire')])
+    assert_eq(pdf.loc[('a', 'store', 'clouds', 'fire'), :],
+              gdf.loc[('a', 'store', 'clouds', 'fire'), :])
     # return 2 rows, 1 remaining key = dataframe with n-k index columns
     assert_eq(pdf.loc[('a', 'store', 'storm')],
               gdf.loc[('a', 'store', 'storm')])
@@ -566,3 +566,23 @@ def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):
     gdf.index = gdfIndex
     assert_eq(gdf, pdf)
     assert_eq(gdf.T, pdf.T)
+
+
+def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    assert_eq(pdf.loc[('a',), :],
+              gdf.loc[('a',), :])
+    assert_eq(pdf.loc[(('a'), ('store')), :],
+              gdf.loc[(('a'), ('store')), :])
+    assert_eq(pdf.loc[(('a'), ('store'), ('storm')), :],
+              gdf.loc[(('a'), ('store'), ('storm')), :])
+    assert_eq(pdf.loc[(('a'), ('store'), ('storm'), ('smoke')), :],
+              gdf.loc[(('a'), ('store'), ('storm'), ('smoke')), :])
+    assert_eq(pdf.loc[(slice(None), 'store'), :],
+              gdf.loc[(slice(None), 'store'), :])
+    assert_eq(pdf.loc[(slice(None), slice(None), 'storm'), :],
+              gdf.loc[(slice(None), slice(None), 'storm'), :])
+    assert_eq(pdf.loc[(slice(None), slice(None), slice(None), 'smoke'), :],
+              gdf.loc[(slice(None), slice(None), slice(None), 'smoke'), :])

@@ -179,31 +179,40 @@ class MultiIndex(Index):
         self._levels = levels
         self._codes = codes
 
-    def _compute_validity_mask(self, df, row_tuple):
+    def _compute_validity_mask(self, index, row_tuple):
         """ Computes the valid set of indices of values in the lookup
         """
-        validity_mask = []
-        for i, element in enumerate(row_tuple):
-            index_of_code_at_level = None
-            for level_index in range(len(self.levels[i])):
-                if self.levels[i][level_index] == element:
-                    index_of_code_at_level = level_index
-                    break
-            if index_of_code_at_level is None:
-                raise KeyError(element)
-            matches = []
-            for k, code in enumerate(self.codes[self.codes.columns[i]]):
-                if k in validity_mask or len(validity_mask) == 0:
-                    if code == index_of_code_at_level:
-                        matches.append(k)
-            if len(matches) != 0:
-                validity_mask = matches
-        return validity_mask
+        # Instructions for Slicing
+        # if tuple, get first and last elements of tuple
+        # if open beginning tuple, get 0 to highest valid_index
+        # if open ending tuple, get highest valid_index to len()
+        # if not open end or beginning, get range lowest beginning index
+        # to highest ending index
+        from cudf import DataFrame
+        from cudf import Series
+        from cudf import concat
+        from cudf.utils.cudautils import arange
+        lookup = DataFrame()
+        if isinstance(row_tuple, slice):
+            start, stop, step, sln = utils.standard_python_slice(len(self),
+                                                                 indices)
+            return Series(arange(start, stop, step))
+        for idx, row in enumerate(row_tuple):
+            if row == slice(None):
+                continue
+            try:
+                lookup[index.names[idx]] = Series(
+                        list(index.levels[idx]).index(row)
+                ).astype(index.codes.dtypes[0])
+            except ValueError:
+                raise KeyError(row)
+            codes_table = concat([
+                    index.codes,
+                    DataFrame({'idx': Series(arange(len(index.codes)))})
+            ], axis=1)
+        return lookup.merge(codes_table)['idx']
 
-    def _get_row_major(self, df, row_tuple):
-        slice_access = False
-        if isinstance(row_tuple[0], numbers.Number):
-            valid_indices = row_tuple[0]
+        """
         elif isinstance(row_tuple[0], slice):
             # 1. empty slice compute
             if row_tuple[0].stop == 0:
@@ -214,8 +223,25 @@ class MultiIndex(Index):
                 stop = row_tuple[0].stop or len(df)
                 step = row_tuple[0].step or 1
                 valid_indices = cudautils.arange(start, stop, step)
+        """
+    def _get_row_major(self, df, row_tuple):
+        from cudf.utils.cudautils import arange
+        slice_access = False
+        if isinstance(row_tuple, slice):
+            slice_access = True
+            if row_tuple.stop is None:
+                stop = len(df)
+            else:
+                stop = row_tuple.stop
+            valid_indices = arange(row_tuple.start,
+                                   stop,
+                                   row_tuple.step
+                            )
+            row_tuple = [row_tuple]
+        elif isinstance(row_tuple[0], numbers.Number):
+            valid_indices = row_tuple[0]
         else:
-            valid_indices = self._compute_validity_mask(df, row_tuple)
+            valid_indices = self._compute_validity_mask(df.index, row_tuple)
         from cudf import Series
         result = df.take(Series(valid_indices))
         # Build new index - INDEX based MultiIndex
@@ -263,7 +289,7 @@ class MultiIndex(Index):
         return result
 
     def _get_column_major(self, df, row_tuple):
-        valid_indices = self._compute_validity_mask(df, row_tuple)
+        valid_indices = self._compute_validity_mask(df.columns, row_tuple)
         from cudf import DataFrame
         result = DataFrame()
         for ix, col in enumerate(df.columns):
@@ -283,6 +309,21 @@ class MultiIndex(Index):
             name = result.columns.names[0]
             result.columns = StringIndex(columns, name=name)
         return result
+
+    def _split_tuples(self, tuples):
+        if len(tuples) == 1:
+            return tuples, slice(None)
+        elif isinstance(tuples[0], tuple):
+            row = tuples[0]
+            if len(tuples) == 1:
+                column = slice(None)
+            else:
+                column = tuples[1]
+            return row, column
+        elif isinstance(tuples[0], slice):
+            return tuples
+        else:
+            return tuples, slice(None)
 
     def __len__(self):
         return len(self._source_data)

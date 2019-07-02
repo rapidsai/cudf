@@ -183,10 +183,17 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return df
 
     def _getitem_multiindex_arg(self, arg):
-        # Explicitly ONLY support tuple indexes into MultiIndex.
-        # Pandas allows non tuple indices and warns "results may be
-        # undefined."
-        return self._df._index._get_row_major(self._df, arg)
+        from cudf.dataframe.dataframe import DataFrame
+        row_tuple, column_tuple = self._df._index._split_tuples(arg)
+        columns = self._get_column_selection(column_tuple)
+        df = DataFrame()
+        try:
+            for col in columns:
+                df.add_column(name=col, data=self._df[col])
+        except KeyError:
+            df = self._df.copy(deep=False)
+        df._index = self._df._index
+        return df._index._get_row_major(df, row_tuple)
 
     def _get_column_selection(self, arg):
         if is_single_value(arg):
@@ -233,7 +240,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
                 df.index = as_index(self._df.index[arg[0].start])
-            else:
+            elif not hasattr(df.index, 'labels'):
                 df.index = as_index(self._df.index[arg[0]])
         return df
 
@@ -242,10 +249,14 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         return self._df[col].iloc[arg[0]]
 
     def _getitem_multiindex_arg(self, arg):
-        # Explicitly ONLY support tuple indexes into MultiIndex.
-        # Pandas allows non tuple indices and warns "results may be
-        # undefined."
-        return self._df._index._get_row_major(self._df, arg)
+        from cudf.dataframe.dataframe import DataFrame
+        from cudf.dataframe.index import as_index
+        row_tuple, column_tuple = self._df._index._split_tuples(arg)
+        columns = self._get_column_selection(column_tuple)
+
+        result_df = self._df[columns]
+        df = result_df.index._get_row_major(result_df, row_tuple)
+        return df
 
     def _get_column_selection(self, arg):
         cols = self._df.columns
