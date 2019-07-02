@@ -1,15 +1,12 @@
-from collections import namedtuple
 import numbers
+from collections import namedtuple
+from math import ceil, isinf, isnan
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from math import isnan, isinf, ceil
-
-from numba import njit
-
 from librmm_cffi import librmm as rmm
-
+from numba import njit
 
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -17,19 +14,20 @@ mask_byte_padding = 64
 
 
 def calc_chunk_size(size, chunksize):
-    return mask_byte_padding * \
-           ceil(((size + chunksize - 1) // chunksize) / mask_byte_padding)
+    return mask_byte_padding * ceil(
+        ((size + chunksize - 1) // chunksize) / mask_byte_padding
+    )
 
 
-_TypeMinMax = namedtuple('_TypeMinMax', 'min,max')
+_TypeMinMax = namedtuple("_TypeMinMax", "min,max")
 
 
 def get_numeric_type_info(dtype):
-    if dtype.kind in 'iu':
+    if dtype.kind in "iu":
         info = np.iinfo(dtype)
         return _TypeMinMax(info.min, info.max)
-    elif dtype.kind in 'f':
-        return _TypeMinMax(dtype.type('-inf'), dtype.type('+inf'))
+    elif dtype.kind in "f":
+        return _TypeMinMax(dtype.type("-inf"), dtype.type("+inf"))
     else:
         raise TypeError(dtype)
 
@@ -46,14 +44,17 @@ def mask_set(mask, pos):
 
 @njit
 def check_equals_float(a, b):
-    return (a == b or (isnan(a) and isnan(b)) or
-            ((isinf(a) and a < 0) and (isinf(b) and b < 0)) or
-            ((isinf(a) and a > 0) and (isinf(b) and b > 0)))
+    return (
+        a == b
+        or (isnan(a) and isnan(b))
+        or ((isinf(a) and a < 0) and (isinf(b) and b < 0))
+        or ((isinf(a) and a > 0) and (isinf(b) and b > 0))
+    )
 
 
 @njit
 def check_equals_int(a, b):
-    return (a == b)
+    return a == b
 
 
 def make_mask(size):
@@ -65,7 +66,7 @@ def make_mask(size):
 
 def require_writeable_array(arr):
     # This should be fixed in numba (numba issue #2521)
-    return np.require(arr, requirements='W')
+    return np.require(arr, requirements="W")
 
 
 def scalar_broadcast_to(scalar, shape, dtype):
@@ -78,7 +79,8 @@ def scalar_broadcast_to(scalar, shape, dtype):
         import nvstrings
         from cudf.dataframe.string import StringColumn
         from cudf.utils.cudautils import zeros
-        gather_map = zeros(shape[0], dtype='int32')
+
+        gather_map = zeros(shape[0], dtype="int32")
         scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
         return scalar_str_col[gather_map]
     else:
@@ -94,7 +96,7 @@ def normalize_index(index, size, doraise=True):
     if index < 0:
         index = size + index
     if doraise and not (0 <= index < size):
-        raise IndexError('out-of-bound')
+        raise IndexError("out-of-bound")
     return min(index, size)
 
 
@@ -135,9 +137,9 @@ def standard_python_slice(len_idx, arg):
     if (step < 0 and stop >= start) or (step > 0 and start >= stop):
         slice_length = 0
     elif step < 0:
-        slice_length = (stop - start + 1)//step + 1
+        slice_length = (stop - start + 1) // step + 1
     else:
-        slice_length = (stop - start - 1)//step + 1
+        slice_length = (stop - start - 1) // step + 1
 
     return start, stop, step, slice_length
 
@@ -153,11 +155,9 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
 
     if buffers[0]:
         mask_dev_array = make_mask(len(pa_arr))
-        arrow_dev_array = rmm.to_device(np.array(buffers[0]).view('int8'))
+        arrow_dev_array = rmm.to_device(np.array(buffers[0]).view("int8"))
         copy_array(arrow_dev_array, mask_dev_array)
-        pamask = Buffer(
-            mask_dev_array
-        )
+        pamask = Buffer(mask_dev_array)
     else:
         pamask = None
 
@@ -172,13 +172,11 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
     if buffers[1]:
         padata = Buffer(
             np.array(buffers[1]).view(new_dtype)[
-                pa_arr.offset:pa_arr.offset + len(pa_arr)
+                pa_arr.offset : pa_arr.offset + len(pa_arr)
             ]
         )
     else:
-        padata = Buffer(
-            np.empty(0, dtype=new_dtype)
-        )
+        padata = Buffer(np.empty(0, dtype=new_dtype))
     return (pamask, padata)
 
 
@@ -188,12 +186,12 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """
     try:
         # pd 0.24.X
-        from pandas.core.dtypes.common import \
-            infer_dtype_from_object
+        from pandas.core.dtypes.common import infer_dtype_from_object
     except ImportError:
         # pd 0.23.X
-        from pandas.core.dtypes.common import \
-            _get_dtype_from_object as infer_dtype_from_object
+        from pandas.core.dtypes.common import (
+            _get_dtype_from_object as infer_dtype_from_object,
+        )
 
     if pd.api.types.is_categorical_dtype(dtype):
         pass
@@ -205,16 +203,16 @@ def cudf_dtype_from_pydata_dtype(dtype):
 
 def is_single_value(val):
     return (
-            isinstance(val, str)
-            or isinstance(val, numbers.Number)
-            or np.isscalar(val)
-            or isinstance(val, pd.Timestamp)
-            or isinstance(val, pd.Categorical)
+        isinstance(val, str)
+        or isinstance(val, numbers.Number)
+        or np.isscalar(val)
+        or isinstance(val, pd.Timestamp)
+        or isinstance(val, pd.Categorical)
     )
 
 
 def is_list_like(obj):
-    '''
+    """
     This function checks if the given `obj`
     is a list-like (list, tuple, Series...)
     type or not.
@@ -227,10 +225,10 @@ def is_list_like(obj):
     -------
     Boolean: True or False depending on whether the
     input `obj` is like-like or not.
-    '''
+    """
     from collections.abc import Sequence
-    if isinstance(obj, (Sequence,)) and \
-            not isinstance(obj, (str, bytes)):
+
+    if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes)):
         return True
     else:
         return False
@@ -241,4 +239,4 @@ def min_scalar_type(a, min_size=8):
     sizeof = np.min_scalar_type(a).itemsize
     # Normalize the size to at least `min_size` bytes
     sizeof = max(max(min_size, 8) // 8, sizeof)
-    return getattr(np, 'int' + str(sizeof * 8))
+    return getattr(np, "int" + str(sizeof * 8))

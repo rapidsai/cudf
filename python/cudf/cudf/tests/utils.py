@@ -1,9 +1,7 @@
-
 import numpy as np
 import pandas as pd
-from cudf.utils import utils
-
 import pandas.util.testing as tm
+from cudf.utils import utils
 
 
 def random_bitmask(size):
@@ -22,10 +20,10 @@ def expand_bits_to_bytes(arr):
     def fix_binary(bstr):
         bstr = bstr[2:]
         diff = 8 - len(bstr)
-        return ('0' * diff + bstr)[::-1]
+        return ("0" * diff + bstr)[::-1]
 
     ba = bytearray(arr.data)
-    return list(map(int, ''.join(map(fix_binary, map(bin, ba)))))
+    return list(map(int, "".join(map(fix_binary, map(bin, ba)))))
 
 
 def count_zero(arr):
@@ -42,9 +40,9 @@ def assert_eq(a, b, **kwargs):
     functions.
     """
     __tracebackhide__ = True
-    if hasattr(a, 'to_pandas'):
+    if hasattr(a, "to_pandas"):
         a = a.to_pandas()
-    if hasattr(b, 'to_pandas'):
+    if hasattr(b, "to_pandas"):
         b = b.to_pandas()
     if isinstance(a, pd.DataFrame):
         tm.assert_frame_equal(a, b, **kwargs)
@@ -77,22 +75,22 @@ def assert_neq(a, b, **kwargs):
 
 def gen_rand(dtype, size, **kwargs):
     dtype = np.dtype(dtype)
-    if dtype.kind == 'f':
+    if dtype.kind == "f":
         res = np.random.random(size=size).astype(dtype)
-        if kwargs.get('positive_only', False):
+        if kwargs.get("positive_only", False):
             return res
         else:
-            return (res * 2 - 1)
+            return res * 2 - 1
     elif dtype == np.int8 or np.int16:
-        low = kwargs.get('low', -32)
-        high = kwargs.get('high', 32)
+        low = kwargs.get("low", -32)
+        high = kwargs.get("high", 32)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'i':
-        low = kwargs.get('low', -10000)
-        high = kwargs.get('high', 10000)
+    elif dtype.kind == "i":
+        low = kwargs.get("low", -10000)
+        high = kwargs.get("high", 10000)
         return np.random.randint(low=low, high=high, size=size).astype(dtype)
-    elif dtype.kind == 'b':
-        low = kwargs.get('low', 0)
-        high = kwargs.get('high', 1)
+    elif dtype.kind == "b":
+        low = kwargs.get("low", 0)
+        high = kwargs.get("high", 1)
         return np.random.randint(low=low, high=high, size=size).astype(np.bool)
-    raise NotImplementedError('dtype.kind={}'.format(dtype.kind))
+    raise NotImplementedError("dtype.kind={}".format(dtype.kind))

@@ -6,8 +6,16 @@ Define how data are formatted
 import numpy as np
 
 
-def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
-           min_width=4, series_spacing=False):
+def format(
+    index,
+    cols,
+    dtypes,
+    show_headers=True,
+    more_cols=0,
+    more_rows=0,
+    min_width=4,
+    series_spacing=False,
+):
     """
     Format columnar data.
 
@@ -33,14 +41,12 @@ def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
     """
     if not cols:
         return "Empty DataFrame\nColumns: {}\nIndex: {}".format(
-            list(cols.keys()),
-            list(index)
-          )
+            list(cols.keys()), list(index)
+        )
 
     if len(list(cols.values())[0]) == 0:
         return "Empty DataFrame\nColumns: {}\nIndex: {}".format(
-            list(cols.keys()),
-            list(index)
+            list(cols.keys()), list(index)
         )
     # get number of rows from the first column
     nrows = len(next(iter(cols.values())))
@@ -53,14 +59,19 @@ def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
     # compute column widths
     widths = {}
     for k_idx, (k, vs) in enumerate(cols.items()):
-        widths[k] = max(len(str(k))+1,
-                        max(map(len, vs), default=0)+col0_offset,
-                        min_width)
+        widths[k] = max(
+            len(str(k)) + 1,
+            max(map(len, vs), default=0) + col0_offset,
+            min_width,
+        )
 
         for v_idx, v in enumerate(vs):
-            if len(str(v)) == max(map(len, vs), default=0) and '-' in v and\
-                    len(str(v)) > len(str(k)):
-                if dtypes[k] == np.dtype('object'):
+            if (
+                len(str(v)) == max(map(len, vs), default=0)
+                and "-" in v
+                and len(str(v)) > len(str(k))
+            ):
+                if dtypes[k] == np.dtype("object"):
                     widths[k] = max(min_width, widths[k])
                 else:
                     if v_idx == 0:
@@ -73,13 +84,13 @@ def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
 
     cell_template = "{:>{}}"
     #   format headers
-    if show_headers and headers[0] != '':
-        header = [' ' * widthkey]
+    if show_headers and headers[0] != "":
+        header = [" " * widthkey]
         header += [cell_template.format(k, widths[k]) for k in headers[:-1]]
         if lastcol is not None:
-            header += ['...']
+            header += ["..."]
         header += [cell_template.format(k, widths[k]) for k in headers[-1:]]
-        out.append(' '.join(header))
+        out.append(" ".join(header))
     #   format rows
     if index.name:
         out.append(cell_template.format(str(index.name), 0))
@@ -87,9 +98,9 @@ def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
         row = [cell_template.format(str(index[i]), 0)]
         for k, vs in cols.items():
             if k == lastcol:
-                row.append('...')
+                row.append("...")
             row.append(cell_template.format(vs[i], widths[k]))
-        out.append(' '.join(row))
+        out.append(" ".join(row))
 
     # show number of remaining rows
     if more_rows > 0:
@@ -98,4 +109,4 @@ def format(index, cols, dtypes, show_headers=True, more_cols=0, more_rows=0,
     if more_cols > 0:
         out.append("[{} more columns]".format(more_cols))
 
-    return '\n'.join(out)
+    return "\n".join(out)

@@ -1,16 +1,14 @@
 import os
-import pytest
 from contextlib import contextmanager
 
-
 import dask_cudf
+import pytest
+from dask.bytes.s3 import DaskS3FileSystem
 
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto")
 httpretty = pytest.importorskip("httpretty")
-
-from dask.bytes.s3 import DaskS3FileSystem
 
 
 @contextmanager

@@ -1,17 +1,14 @@
-
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import ast
 import datetime as dt
-import six
-import numpy as np
 
+import numpy as np
+import six
+from librmm_cffi import librmm as rmm
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
-
-
-ENVREF_PREFIX = '__CUDF_ENVREF__'
+ENVREF_PREFIX = "__CUDF_ENVREF__"
 
 
 class QuerySyntaxError(ValueError):
@@ -25,12 +22,12 @@ class _NameExtractor(ast.NodeVisitor):
 
     def visit_Name(self, node):
         if not isinstance(node.ctx, ast.Load):
-            raise QuerySyntaxError('assignment is not allowed')
+            raise QuerySyntaxError("assignment is not allowed")
 
         name = node.id
-        chosen = (self.refnames
-                  if name.startswith(ENVREF_PREFIX)
-                  else self.colnames)
+        chosen = (
+            self.refnames if name.startswith(ENVREF_PREFIX) else self.colnames
+        )
         chosen.add(name)
 
 
@@ -52,7 +49,7 @@ def query_parser(text):
     info: a `dict` of the parsed info
     """  # noqa
     # convert any '@' to
-    text = text.replace('@', ENVREF_PREFIX)
+    text = text.replace("@", ENVREF_PREFIX)
     tree = ast.parse(text)
     _check_error(tree)
     [expr] = tree.body
@@ -61,10 +58,10 @@ def query_parser(text):
     colnames = sorted(extractor.colnames)
     refnames = sorted(extractor.refnames)
     info = {
-        'source': text,
-        'args': colnames + refnames,
-        'colnames': colnames,
-        'refnames': refnames,
+        "source": text,
+        "args": colnames + refnames,
+        "colnames": colnames,
+        "refnames": refnames,
     }
     return info
 
@@ -83,11 +80,12 @@ def query_builder(info, funcid):
     -------
     func: a python function of the query
     """
-    args = info['args']
-    def_line = 'def {funcid}({args}):'.format(funcid=funcid,
-                                              args=', '.join(args))
-    lines = [def_line, '    return {}'.format(info['source'])]
-    source = '\n'.join(lines)
+    args = info["args"]
+    def_line = "def {funcid}({args}):".format(
+        funcid=funcid, args=", ".join(args)
+    )
+    lines = [def_line, "    return {}".format(info["source"])]
+    source = "\n".join(lines)
     glbs = {}
     six.exec_(source, glbs)
     return glbs[funcid]
@@ -95,9 +93,9 @@ def query_builder(info, funcid):
 
 def _check_error(tree):
     if not isinstance(tree, ast.Module):
-        raise QuerySyntaxError('top level should be of ast.Module')
+        raise QuerySyntaxError("top level should be of ast.Module")
     if len(tree.body) != 1:
-        raise QuerySyntaxError('too many expressions')
+        raise QuerySyntaxError("too many expressions")
 
 
 _cache = {}
@@ -124,57 +122,57 @@ def query_compile(expr):
         key "args" is a sequence of name of the arguments.
     """
 
-    funcid = 'queryexpr_{:x}'.format(np.uintp(hash(expr)))
+    funcid = "queryexpr_{:x}".format(np.uintp(hash(expr)))
     # Load cache
     compiled = _cache.get(funcid)
     # Cache not found
     if compiled is None:
         info = query_parser(expr)
         fn = query_builder(info, funcid)
-        args = info['args']
+        args = info["args"]
         # compile
         devicefn = cuda.jit(device=True)(fn)
 
-        kernelid = 'kernel_{}'.format(funcid)
+        kernelid = "kernel_{}".format(funcid)
         kernel = _wrap_query_expr(kernelid, devicefn, args)
 
         compiled = info.copy()
-        compiled['kernel'] = kernel
+        compiled["kernel"] = kernel
         # Store cache
         _cache[funcid] = compiled
     return compiled
 
 
-_kernel_source = '''
+_kernel_source = """
 @cuda.jit
 def {kernelname}(out, {args}):
     idx = cuda.grid(1)
     if idx < out.size:
         out[idx] = queryfn({indiced_args})
-'''
+"""
 
 
 def _wrap_query_expr(name, fn, args):
     """Wrap the query expression in a cuda kernel.
     """
+
     def _add_idx(arg):
         if arg.startswith(ENVREF_PREFIX):
             return arg
         else:
-            return '{}[idx]'.format(arg)
+            return "{}[idx]".format(arg)
 
     def _add_prefix(arg):
-        return '_args_{}'.format(arg)
+        return "_args_{}".format(arg)
 
-    glbls = {
-        'queryfn': fn,
-        'cuda': cuda,
-    }
+    glbls = {"queryfn": fn, "cuda": cuda}
     kernargs = map(_add_prefix, args)
     indiced_args = map(_add_prefix, map(_add_idx, args))
-    src = _kernel_source.format(kernelname=name,
-                                args=', '.join(kernargs),
-                                indiced_args=', '.join(indiced_args))
+    src = _kernel_source.format(
+        kernelname=name,
+        args=", ".join(kernargs),
+        indiced_args=", ".join(indiced_args),
+    )
     six.exec_(src, glbls)
     kernel = glbls[name]
     return kernel
@@ -196,25 +194,25 @@ def query_execute(df, expr, callenv):
     """
     # compile
     compiled = query_compile(expr)
-    kernel = compiled['kernel']
+    kernel = compiled["kernel"]
     # process env args
     envargs = []
-    envdict = callenv['globals'].copy()
-    envdict.update(callenv['locals'])
-    envdict.update(callenv['local_dict'])
-    for name in compiled['refnames']:
-        name = name[len(ENVREF_PREFIX):]
+    envdict = callenv["globals"].copy()
+    envdict.update(callenv["locals"])
+    envdict.update(callenv["local_dict"])
+    for name in compiled["refnames"]:
+        name = name[len(ENVREF_PREFIX) :]
         try:
             val = envdict[name]
             if isinstance(val, dt.datetime):
                 val = np.datetime64(val)
         except KeyError:
-            msg = '{!r} not defined in the calling environment'
+            msg = "{!r} not defined in the calling environment"
             raise NameError(msg.format(name))
         else:
             envargs.append(val)
     # prepare col args
-    colarrays = [df[col].data.mem for col in compiled['colnames']]
+    colarrays = [df[col].data.mem for col in compiled["colnames"]]
     # allocate output buffer
     nrows = len(df)
     out = rmm.device_array(nrows, dtype=np.bool_)

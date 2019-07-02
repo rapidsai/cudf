@@ -1,18 +1,18 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import pickle
-import multiprocessing
-import logging
 import collections
+import logging
+import multiprocessing
+import pickle
 import socket
 import threading
 
-from numba import cuda
 from librmm_cffi import librmm as rmm
-
+from numba import cuda
 
 try:
     import zmq
+
     _HAVE_ZMQ = True
 except ImportError:
     _HAVE_ZMQ = False
@@ -96,7 +96,7 @@ def server_loop(devnum):
     socket = context.socket(zmq.REP)
     selected_port = socket.bind_to_random_port("tcp://*")
     _global_port[0] = selected_port
-    logger.info('bind to port: %s', selected_port)
+    logger.info("bind to port: %s", selected_port)
 
     with cuda.gpus[devnum]:
         while True:
@@ -113,11 +113,7 @@ def serialize_gpu_data(gpu_data):
     logger.debug("cache key: %s", key)
     _out_cache.set(key, gpu_data)
 
-    header = {
-        'key': key,
-        'context': context,
-        'remoteinfo': remoteinfo,
-    }
+    header = {"key": key, "context": context, "remoteinfo": remoteinfo}
     frames = []
     return header, frames
 
@@ -150,17 +146,17 @@ def _get_key(gpudata):
 def _handle_request(req):
     method, key = pickle.loads(req)
     data = _out_cache.get(key)
-    if method == 'NET':
+    if method == "NET":
         # NET
         return pickle.dumps(data.copy_to_host())
-    elif method == 'IPC':
+    elif method == "IPC":
         # IPC
         out = pickle.dumps(_out_cache.get_ipc(key))
         return out
-    elif method == 'DROP':
+    elif method == "DROP":
         # DROP
         _out_cache.drop(key)
-        return pickle.dumps('OK')
+        return pickle.dumps("OK")
     else:
         raise NotImplementedError("unknown method {!r}".format(method))
 
@@ -177,7 +173,7 @@ def _request_transfer(key, remoteinfo):
     if myaddr == theiraddr:
         # Same machine go by IPC
         logger.info("request by IPC")
-        socket.send(pickle.dumps(('IPC', key)))
+        socket.send(pickle.dumps(("IPC", key)))
         rcv = socket.recv()
         ipch = pickle.loads(rcv)
         # Open IPC and copy to local context
@@ -192,7 +188,7 @@ def _request_transfer(key, remoteinfo):
     else:
         # Different machine go by NET
         logger.info("request by NET: %s->%s", theiraddr, myaddr)
-        socket.send(pickle.dumps(('NET', key)))
+        socket.send(pickle.dumps(("NET", key)))
         rcv = socket.recv()
         output = rmm.to_device(pickle.loads(rcv))
         # Release
@@ -201,7 +197,7 @@ def _request_transfer(key, remoteinfo):
 
 
 def _request_drop(socket, key):
-    socket.send(pickle.dumps(('DROP', key)))
+    socket.send(pickle.dumps(("DROP", key)))
     socket.recv()
 
 

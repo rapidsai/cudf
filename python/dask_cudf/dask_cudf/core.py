@@ -2,11 +2,12 @@
 import warnings
 from collections import OrderedDict
 
-import pandas as pd
-
+import cudf
+import cudf.bindings.reduce as cpp_reduce
 import dask
 import dask.dataframe as dd
 import numpy as np
+import pandas as pd
 from dask import compute
 from dask.base import normalize_token, tokenize
 from dask.compatibility import apply
@@ -17,13 +18,14 @@ from dask.dataframe.core import Scalar, handle_out, map_partitions
 from dask.dataframe.utils import raise_on_meta_error
 from dask.delayed import delayed
 from dask.optimization import cull, fuse
-from dask.utils import M, OperatorMethodMixin, funcname, derived_from
-from toolz import partition_all
-
-import cudf
-import cudf.bindings.reduce as cpp_reduce
+from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 from dask_cudf import batcher_sortnet, join_impl
-from dask_cudf.accessor import CachedAccessor, CategoricalAccessor, DatetimeAccessor
+from dask_cudf.accessor import (
+    CachedAccessor,
+    CategoricalAccessor,
+    DatetimeAccessor,
+)
+from toolz import partition_all
 
 
 def optimize(dsk, keys, **kwargs):
@@ -76,7 +78,9 @@ class _Frame(dd.core._Frame, OperatorMethodMixin):
         if not isinstance(meta, self._partition_type):
             raise TypeError(
                 "Expected meta to specify type {0}, got type "
-                "{1}".format(self._partition_type.__name__, type(meta).__name__)
+                "{1}".format(
+                    self._partition_type.__name__, type(meta).__name__
+                )
             )
         self._meta = dd.core.make_meta(meta)
         self.divisions = tuple(divisions)
@@ -121,7 +125,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
             cache_key = uuid.uuid4()
 
         def do_apply_rows(df, func, incols, outcols, kwargs):
-            return df.apply_rows(func, incols, outcols, kwargs, cache_key=cache_key)
+            return df.apply_rows(
+                func, incols, outcols, kwargs, cache_key=cache_key
+            )
 
         meta = do_apply_rows(self._meta, func, incols, outcols, kwargs)
         return self.map_partitions(
@@ -177,7 +183,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
         *on* is not supported.
         """
         if how == "right":
-            return other.join(other=self, how="left", lsuffix=rsuffix, rsuffix=lsuffix)
+            return other.join(
+                other=self, how="left", lsuffix=rsuffix, rsuffix=lsuffix
+            )
 
         same_names = set(self.columns) & set(other.columns)
         if same_names and not (lsuffix or rsuffix):
@@ -243,11 +251,17 @@ class DataFrame(_Frame, dd.core.DataFrame):
             return df
 
         joinedparts = [
-            (part_join(lhs, rhs, how=how) if rhs is not None else fix_column(lhs))
+            (
+                part_join(lhs, rhs, how=how)
+                if rhs is not None
+                else fix_column(lhs)
+            )
             for lhs, rhs in selector()
         ]
 
-        meta = self._meta.join(other._meta, how=how, lsuffix=lsuffix, rsuffix=rsuffix)
+        meta = self._meta.join(
+            other._meta, how=how, lsuffix=lsuffix, rsuffix=rsuffix
+        )
         return from_delayed(joinedparts, meta=meta)
 
     def _align_divisions(self):
@@ -272,7 +286,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
         # Fix empty partitions
         uniques = list(filter(bool, uniques))
 
-        return self._align_to_indices(uniques, originals=originals, parts=parts)
+        return self._align_to_indices(
+            uniques, originals=originals, parts=parts
+        )
 
     def _get_unique_indices(self, parts=None):
         if parts is None:
@@ -428,7 +444,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
                     cudf.dataframe.RangeIndex(start=startpos, stop=stoppos)
                 )
 
-            outdfs = [fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)]
+            outdfs = [
+                fix_index(df, startpos) for df, startpos in zip(dfs, prefixes)
+            ]
             return from_delayed(outdfs, meta=self._meta.reset_index(drop=True))
         else:
             return self.map_partitions(M.reset_index, drop=drop)
@@ -475,7 +493,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         @delayed
         def join(df, other, keys):
-            others = [other.query("{by}==@k".format(by=by)) for k in sorted(keys)]
+            others = [
+                other.query("{by}==@k".format(by=by)) for k in sorted(keys)
+            ]
             return cudf.concat([df] + others)
 
         @delayed
@@ -484,7 +504,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
             for i, k in enumerate(keep_keys):
                 locvars["k{}".format(i)] = k
 
-            conds = ["{by}==@k{i}".format(by=by, i=i) for i in range(len(keep_keys))]
+            conds = [
+                "{by}==@k{i}".format(by=by, i=i) for i in range(len(keep_keys))
+            ]
             expr = " or ".join(conds)
             return df.query(expr)
 
@@ -508,14 +530,27 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return self.take(shufidx)
 
     @derived_from(pd.DataFrame)
-    def var(self, axis=None, skipna=True, ddof=1, split_every=False,
-            dtype=None, out=None):
+    def var(
+        self,
+        axis=None,
+        skipna=True,
+        ddof=1,
+        split_every=False,
+        dtype=None,
+        out=None,
+    ):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
         if axis == 1:
-            result = map_partitions(M.var, self, meta=meta,
-                                    token=self._token_prefix + 'var',
-                                    axis=axis, skipna=skipna, ddof=ddof)
+            result = map_partitions(
+                M.var,
+                self,
+                meta=meta,
+                token=self._token_prefix + "var",
+                axis=axis,
+                skipna=skipna,
+                ddof=ddof,
+            )
             return handle_out(out, result)
 
         else:
@@ -523,9 +558,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
             x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
             x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var'
-            result = map_partitions(var_aggregate, x2, x, n,
-                                    token=name, meta=meta, ddof=ddof)
+            name = self._token_prefix + "var"
+            result = map_partitions(
+                var_aggregate, x2, x, n, token=name, meta=meta, ddof=ddof
+            )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
@@ -540,8 +576,8 @@ def sum_of_squares(x):
 def var_aggregate(x2, x, n, ddof):
     try:
         with warnings.catch_warnings(record=True):
-            warnings.simplefilter('always')
-            result = (x2 / n) - (x / n)**2
+            warnings.simplefilter("always")
+            result = (x2 / n) - (x / n) ** 2
         if ddof != 0:
             result = result * n / (n - ddof)
         return result
@@ -566,7 +602,11 @@ class Series(_Frame, dd.core.Series):
 
     def count(self, split_every=False):
         return reduction(
-            self, chunk=M.count, aggregate=np.sum, split_every=split_every, meta="i8"
+            self,
+            chunk=M.count,
+            aggregate=np.sum,
+            split_every=split_every,
+            meta="i8",
         )
 
     def mean(self, split_every=False):
@@ -586,13 +626,27 @@ class Series(_Frame, dd.core.Series):
         )
 
     @derived_from(pd.DataFrame)
-    def var(self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None):
+    def var(
+        self,
+        axis=None,
+        skipna=True,
+        ddof=1,
+        split_every=False,
+        dtype=None,
+        out=None,
+    ):
         axis = self._validate_axis(axis)
         meta = self._meta_nonempty.var(axis=axis, skipna=skipna)
         if axis == 1:
-            result = map_partitions(M.var, self, meta=meta,
-                                    token=self._token_prefix + 'var',
-                                    axis=axis, skipna=skipna, ddof=ddof)
+            result = map_partitions(
+                M.var,
+                self,
+                meta=meta,
+                token=self._token_prefix + "var",
+                axis=axis,
+                skipna=skipna,
+                ddof=ddof,
+            )
             return handle_out(out, result)
 
         else:
@@ -600,13 +654,13 @@ class Series(_Frame, dd.core.Series):
             x = 1.0 * num.sum(skipna=skipna, split_every=split_every)
             x2 = 1.0 * (num ** 2).sum(skipna=skipna, split_every=split_every)
             n = num.count(split_every=split_every)
-            name = self._token_prefix + 'var'
-            result = map_partitions(var_aggregate, x2, x, n,
-                                    token=name, meta=meta, ddof=ddof)
+            name = self._token_prefix + "var"
+            result = map_partitions(
+                var_aggregate, x2, x, n, token=name, meta=meta, ddof=ddof
+            )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
             return handle_out(out, result)
-
 
     # ----------------------------------------------------------------------
     # Accessor Methods
@@ -691,7 +745,7 @@ def reduction(
     aggregate_kwargs=None,
     combine_kwargs=None,
     split_every=None,
-    **kwargs
+    **kwargs,
 ):
     """Generic tree reduction operation.
 
@@ -745,7 +799,9 @@ def reduction(
     if not isinstance(args, (tuple, list)):
         args = [args]
 
-    npartitions = set(arg.npartitions for arg in args if isinstance(arg, _Frame))
+    npartitions = set(
+        arg.npartitions for arg in args if isinstance(arg, _Frame)
+    )
     if len(npartitions) > 1:
         raise ValueError("All arguments must have same number of partitions")
     npartitions = npartitions.pop()
@@ -770,7 +826,10 @@ def reduction(
     # Chunk
     a = "{0}-chunk-{1}".format(token or funcname(chunk), token_key)
     if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {(a, 0, i): (chunk, key) for i, key in enumerate(args[0].__dask_keys__())}
+        dsk = {
+            (a, 0, i): (chunk, key)
+            for i, key in enumerate(args[0].__dask_keys__())
+        }
     else:
         dsk = {
             (a, 0, i): (

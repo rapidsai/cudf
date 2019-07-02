@@ -1,6 +1,6 @@
 from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.series import Series
 from cudf.dataframe.index import Index
+from cudf.dataframe.series import Series
 
 
 def concat(objs, axis=0, ignore_index=False):
@@ -44,8 +44,10 @@ def concat(objs, axis=0, ignore_index=False):
         return df
 
     if len(typs) > 1:
-        raise ValueError("`concat` expects all objects to be of the same "
-                         "type. Got mix of %r." % [t.__name__ for t in typs])
+        raise ValueError(
+            "`concat` expects all objects to be of the same "
+            "type. Got mix of %r." % [t.__name__ for t in typs]
+        )
     typ = list(typs)[0]
 
     if typ is DataFrame:

@@ -1,15 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import sys
 import pickle
+import sys
 
 import numpy as np
 import pandas as pd
-
-from librmm_cffi import librmm as rmm
-
 from cudf.dataframe import DataFrame, GenericIndex
 from cudf.dataframe.buffer import Buffer
+from librmm_cffi import librmm as rmm
 
 
 def check_serialization(df):
@@ -20,7 +18,7 @@ def check_serialization(df):
     assert_frame_picklable(df[1:])
     assert_frame_picklable(df[2:-2])
     # sorted
-    sortvaldf = df.sort_values('vals')
+    sortvaldf = df.sort_values("vals")
     assert isinstance(sortvaldf.index, GenericIndex)
     assert_frame_picklable(sortvaldf)
 
@@ -35,8 +33,8 @@ def test_pickle_dataframe_numeric():
     np.random.seed(0)
     df = DataFrame()
     nelem = 10
-    df['keys'] = np.arange(nelem, dtype=np.float64)
-    df['vals'] = np.random.random(nelem)
+    df["keys"] = np.arange(nelem, dtype=np.float64)
+    df["vals"] = np.random.random(nelem)
 
     check_serialization(df)
 
@@ -45,8 +43,8 @@ def test_pickle_dataframe_categorical():
     np.random.seed(0)
 
     df = DataFrame()
-    df['keys'] = pd.Categorical("aaabababac")
-    df['vals'] = np.random.random(len(df))
+    df["keys"] = pd.Categorical("aaabababac")
+    df["vals"] = np.random.random(len(df))
 
     check_serialization(df)
 
@@ -55,8 +53,8 @@ def test_sizeof_dataframe():
     np.random.seed(0)
     df = DataFrame()
     nelem = 1000
-    df['keys'] = hkeys = np.arange(nelem, dtype=np.float64)
-    df['vals'] = hvals = np.random.random(nelem)
+    df["keys"] = hkeys = np.arange(nelem, dtype=np.float64)
+    df["vals"] = hvals = np.random.random(nelem)
 
     nbytes = hkeys.nbytes + hvals.nbytes
     sizeof = sys.getsizeof(df)
@@ -86,4 +84,4 @@ def test_pickle_buffer():
     assert unpacked.size == 4
     assert unpacked.capacity == 4
     assert unpacked.mem.size == unpacked.capacity
-    np.testing.assert_equal(unpacked.to_array(), arr[:unpacked.size])
+    np.testing.assert_equal(unpacked.to_array(), arr[: unpacked.size])

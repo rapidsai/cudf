@@ -1,39 +1,34 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from setuptools import setup, find_packages
-from setuptools.extension import Extension
-from Cython.Build import cythonize
-
-import versioneer
 from distutils.sysconfig import get_python_lib
 
+from setuptools import find_packages, setup
+from setuptools.extension import Extension
 
-install_requires = [
-    'numba',
-    'cython'
-]
+import versioneer
+from Cython.Build import cythonize
 
-cython_files = [
-    'cudf/bindings/**/*.pyx',
-]
+install_requires = ["numba", "cython"]
+
+cython_files = ["cudf/bindings/**/*.pyx"]
 
 extensions = [
     Extension(
         "*",
         sources=cython_files,
         include_dirs=[
-            '../../cpp/include/cudf',
-            '../../cpp/thirdparty/dlpack/include/dlpack/',
+            "../../cpp/include/cudf",
+            "../../cpp/thirdparty/dlpack/include/dlpack/",
         ],
         library_dirs=[get_python_lib()],
-        libraries=['cudf'],
-        language='c++',
-        extra_compile_args=['-std=c++14']
+        libraries=["cudf"],
+        language="c++",
+        extra_compile_args=["-std=c++14"],
     )
 ]
 
 setup(
-    name='cudf',
+    name="cudf",
     version=versioneer.get_version(),
     description="cuDF - GPU Dataframe",
     url="https://github.com/rapidsai/cudf",
@@ -49,10 +44,10 @@ setup(
         "Programming Language :: Python :: 3.7",
     ],
     # Include the separately-compiled shared library
-    setup_requires=['cython'],
+    setup_requires=["cython"],
     ext_modules=cythonize(extensions),
-    packages=find_packages(include=['cudf', 'cudf.*']),
+    packages=find_packages(include=["cudf", "cudf.*"]),
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
-    zip_safe=False
+    zip_safe=False,
 )

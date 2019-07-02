@@ -1,6 +1,6 @@
-import pytest
 import pathlib
 
+import pytest
 from librmm_cffi import librmm
 
 
@@ -13,6 +13,6 @@ def rmm():
     librmm.finalize()
 
 
-@pytest.fixture(scope='session')
+@pytest.fixture(scope="session")
 def datadir():
-    return pathlib.Path(__file__).parent / 'data'
+    return pathlib.Path(__file__).parent / "data"

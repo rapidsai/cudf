@@ -1,8 +1,7 @@
-import pandas as pd
-import numpy as np
-import pytest
-
 import cudf
+import numpy as np
+import pandas as pd
+import pytest
 from cudf.tests.utils import assert_eq
 
 
@@ -12,20 +11,12 @@ from cudf.tests.utils import assert_eq
         ([], []),
         ([1, 1, 1, 1], None),
         ([1, 2, 3, 4], pd.date_range("2001-01-01", "2001-01-04")),
-        ([1, 2, 4, 9, 9, 4], ["a", "b", "c", "d", "e", "f"])
-    ]
+        ([1, 2, 4, 9, 9, 4], ["a", "b", "c", "d", "e", "f"]),
+    ],
 )
-@pytest.mark.parametrize(
-    "agg",
-    ["sum", "min", "max", "mean", "count"]
-)
-@pytest.mark.parametrize(
-    "nulls",
-    ["none", "one", "some", "all"]
-)
-@pytest.mark.parametrize(
-    "center",
-    [True, False])
+@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
+@pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_basic(data, index, agg, nulls, center):
     if len(data) > 0:
         if nulls == "one":
@@ -36,23 +27,21 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
             data[p1] = None
             data[p2] = None
         elif nulls == "all":
-            data = [None]*len(data)
+            data = [None] * len(data)
 
     psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
-    for window_size in range(1, len(data)+1):
-        for min_periods in range(1, window_size+1):
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
             assert_eq(
                 getattr(
-                    psr.rolling(window_size, min_periods, center),
-                    agg
+                    psr.rolling(window_size, min_periods, center), agg
                 )().fillna(-1),
                 getattr(
-                    gsr.rolling(window_size, min_periods, center),
-                    agg
+                    gsr.rolling(window_size, min_periods, center), agg
                 )().fillna(-1),
-                check_dtype=False
+                check_dtype=False,
             )
 
 
@@ -64,21 +53,13 @@ def test_rollling_series_basic(data, index, agg, nulls, center):
         {"a": [1, 2, 4, 9, 9, 4], "b": [1, 2, 4, 9, 9, 4]},
         {
             "a": np.array([1, 2, 4, 9, 9, 4]),
-            "b": np.array([1.5, 2.2, 2.2, 8.0, 9.1, 4.2])
-        }
-    ]
+            "b": np.array([1.5, 2.2, 2.2, 8.0, 9.1, 4.2]),
+        },
+    ],
 )
-@pytest.mark.parametrize(
-    "agg",
-    ["sum", "min", "max", "mean", "count"]
-)
-@pytest.mark.parametrize(
-    "nulls",
-    ["none", "one", "some", "all"]
-)
-@pytest.mark.parametrize(
-    "center",
-    [True, False])
+@pytest.mark.parametrize("agg", ["sum", "min", "max", "mean", "count"])
+@pytest.mark.parametrize("nulls", ["none", "one", "some", "all"])
+@pytest.mark.parametrize("center", [True, False])
 def test_rolling_dataframe_basic(data, agg, nulls, center):
     pdf = pd.DataFrame(data)
 
@@ -96,18 +77,16 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
 
     gdf = cudf.from_pandas(pdf)
 
-    for window_size in range(1, len(data)+1):
-        for min_periods in range(1, window_size+1):
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
             assert_eq(
                 getattr(
-                    pdf.rolling(window_size, min_periods, center),
-                    agg
+                    pdf.rolling(window_size, min_periods, center), agg
                 )().fillna(-1),
                 getattr(
-                    gdf.rolling(window_size, min_periods, center),
-                    agg
+                    gdf.rolling(window_size, min_periods, center), agg
                 )().fillna(-1),
-                check_dtype=False
+                check_dtype=False,
             )
 
 
@@ -115,15 +94,15 @@ def test_rolling_dataframe_basic(data, agg, nulls, center):
     "agg",
     [
         "sum",
-        pytest.param("min", marks=pytest.mark.xfail(
-            reason="Pandas bug fixed in 0.24.2")
+        pytest.param(
+            "min", marks=pytest.mark.xfail(reason="Pandas bug fixed in 0.24.2")
         ),
-        pytest.param("max", marks=pytest.mark.xfail(
-            reason="Pandas bug fixed in 0.24.2")
+        pytest.param(
+            "max", marks=pytest.mark.xfail(reason="Pandas bug fixed in 0.24.2")
         ),
         "mean",
-        "count"
-    ]
+        "count",
+    ],
 )
 def test_rolling_with_offset(agg):
     psr = pd.Series(
@@ -134,12 +113,12 @@ def test_rolling_with_offset(agg):
             pd.Timestamp("20190101 09:00:02"),
             pd.Timestamp("20190101 09:00:04"),
             pd.Timestamp("20190101 09:00:07"),
-            pd.Timestamp("20190101 09:00:08")
-        ]
+            pd.Timestamp("20190101 09:00:08"),
+        ],
     )
     gsr = cudf.from_pandas(psr)
     assert_eq(
         getattr(psr.rolling("2s"), agg)().fillna(-1),
         getattr(gsr.rolling("2s"), agg)().fillna(-1),
-        check_dtype=False
+        check_dtype=False,
     )

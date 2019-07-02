@@ -2,16 +2,19 @@
 
 import numpy as np
 import pandas as pd
-
-from cudf.dataframe import Series
-from cudf.dataframe import Buffer
-from cudf.dataframe import DataFrame
-from cudf.utils import cudautils
+from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
+from cudf.utils import cudautils
 
 
-def melt(frame, id_vars=None, value_vars=None, var_name=None,
-         value_name='value', col_level=None):
+def melt(
+    frame,
+    id_vars=None,
+    value_vars=None,
+    var_name=None,
+    value_name="value",
+    col_level=None,
+):
     """Unpivots a DataFrame from wide format to long format,
     optionally leaving identifier variables set.
 
@@ -60,6 +63,7 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
 
     # Arg cleaning
     import collections
+
     # id_vars
     if id_vars is not None:
         if not isinstance(id_vars, collections.abc.Sequence):
@@ -70,7 +74,8 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
             raise KeyError(
                 "The following 'id_vars' are not present"
                 " in the DataFrame: {missing}"
-                "".format(missing=list(missing)))
+                "".format(missing=list(missing))
+            )
     else:
         id_vars = []
 
@@ -84,7 +89,8 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
             raise KeyError(
                 "The following 'value_vars' are not present"
                 " in the DataFrame: {missing}"
-                "".format(missing=list(missing)))
+                "".format(missing=list(missing))
+            )
     else:
         # then all remaining columns in frame
         value_vars = frame.columns.drop(id_vars)
@@ -93,8 +99,9 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
     if any(pd.api.types.is_categorical_dtype(t) for t in dtypes):
-        raise NotImplementedError('Categorical columns are not yet '
-                                  'supported for function')
+        raise NotImplementedError(
+            "Categorical columns are not yet " "supported for function"
+        )
 
     # Check dtype homogeneity in value_var
     # Because heterogeneous concat is unimplemented
@@ -102,7 +109,7 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
     if len(dtypes) > 0:
         dtype = dtypes[0]
         if any(t != dtype for t in dtypes):
-            raise ValueError('all cols in value_vars must have the same dtype')
+            raise ValueError("all cols in value_vars must have the same dtype")
 
     # overlap
     overlap = set(id_vars).intersection(set(value_vars))
@@ -111,7 +118,8 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
             "'value_vars' and 'id_vars' cannot have overlap."
             " The following 'value_vars' are ALSO present"
             " in 'id_vars': {overlap}"
-            "".format(overlap=list(overlap)))
+            "".format(overlap=list(overlap))
+        )
 
     N = len(frame)
     K = len(value_vars)
@@ -131,26 +139,39 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
     # Step 2: add variable
     var_cols = []
     for i, var in enumerate(value_vars):
-        var_cols.append(Series(Buffer(
-            cudautils.full(size=N, value=i, dtype=np.int8))))
+        var_cols.append(
+            Series(Buffer(cudautils.full(size=N, value=i, dtype=np.int8)))
+        )
     temp = Series._concat(objs=var_cols, index=None)
 
     if not var_name:
-        var_name = 'variable'
+        var_name = "variable"
 
-    mdata[var_name] = Series(CategoricalColumn(
-        categories=tuple(value_vars), data=temp._column.data, ordered=False))
+    mdata[var_name] = Series(
+        CategoricalColumn(
+            categories=tuple(value_vars), data=temp._column.data, ordered=False
+        )
+    )
 
     # Step 3: add values
     mdata[value_name] = Series._concat(
-        objs=[frame[val] for val in value_vars],
-        index=None)
+        objs=[frame[val] for val in value_vars], index=None
+    )
 
     return DataFrame(mdata)
 
 
-def get_dummies(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
-                cats={}, sparse=False, drop_first=False, dtype='float64'):
+def get_dummies(
+    df,
+    prefix="",
+    prefix_sep="_",
+    dummy_na=False,
+    columns=None,
+    cats={},
+    sparse=False,
+    drop_first=False,
+    dtype="float64",
+):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
 
@@ -192,6 +213,7 @@ def get_dummies(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
         raise NotImplementedError("drop_first is not supported yet")
 
     from cudf.multi import concat
+
     if columns is None:
         columns = df.columns
 
@@ -202,14 +224,18 @@ def get_dummies(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
     else:
         prefix_map = dict(zip(columns, prefix))
 
-    return concat([
-        df.one_hot_encoding(
-            name,
-            prefix=name
-            + (prefix_sep if prefix else '')
-            + prefix_map.get(name, prefix),
-            cats=cats.get(name, df[name].unique()),
-            prefix_sep=prefix_sep,
-            dtype=dtype)
-        for name in columns
-    ], axis=1)
+    return concat(
+        [
+            df.one_hot_encoding(
+                name,
+                prefix=name
+                + (prefix_sep if prefix else "")
+                + prefix_map.get(name, prefix),
+                cats=cats.get(name, df[name].unique()),
+                prefix_sep=prefix_sep,
+                dtype=dtype,
+            )
+            for name in columns
+        ],
+        axis=1,
+    )

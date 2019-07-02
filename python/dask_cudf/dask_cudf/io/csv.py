@@ -2,14 +2,13 @@ import os
 from glob import glob
 from warnings import warn
 
+import cudf
+import dask.dataframe as dd
+from cudf.bindings.GDFError import GDFError
 from dask.base import tokenize
 from dask.compatibility import apply
-import dask.dataframe as dd
-from dask.utils import parse_bytes
 from dask.dataframe.io.csv import make_reader
-
-import cudf
-from cudf.bindings.GDFError import GDFError
+from dask.utils import parse_bytes
 
 
 def read_csv(path, chunksize="256 MiB", **kwargs):
@@ -47,7 +46,7 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
 
     if chunksize is None:
         return read_csv_without_chunksize(path, **kwargs)
-    
+
     dask_reader = make_reader(cudf.read_csv, "read_csv", "CSV")
     meta = dask_reader(filenames[0], **kwargs)._meta
 
@@ -64,7 +63,9 @@ def _internal_read_csv(path, chunksize="256 MiB", **kwargs):
                 chunksize,
             )  # specify which chunk of the file we care about
             if start != 0:
-                kwargs2["names"] = meta.columns  # no header in the middle of the file
+                kwargs2[
+                    "names"
+                ] = meta.columns  # no header in the middle of the file
                 kwargs2["header"] = None
             dsk[(name, i)] = (apply, _read_csv, [fn, dtypes], kwargs2)
 

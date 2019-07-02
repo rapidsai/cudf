@@ -8,16 +8,17 @@ Available keys:
     - ncols : max number of columns to show
 
 """
-from copy import deepcopy
 import threading
-from contextlib import contextmanager
 from collections import defaultdict
+from contextlib import contextmanager
+from copy import deepcopy
 
 
 class _settings(object):
     """Wraps and manages the thread-local stack of configurations.
     Inner context inherit the settings from the parent.
     """
+
     tls = threading.local()
 
     def _make_stack_item(self):

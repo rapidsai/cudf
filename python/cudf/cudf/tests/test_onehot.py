@@ -2,32 +2,31 @@
 
 import numpy as np
 import pytest
-
-from cudf.dataframe import DataFrame, Series, GenericIndex
-from cudf.tests import utils
+from cudf.dataframe import DataFrame, GenericIndex, Series
 from cudf.reshape import get_dummies
+from cudf.tests import utils
 
 
 def test_onehot_simple():
     np.random.seed(0)
     df = DataFrame()
     # Populate with data [0, 10)
-    df['vals'] = np.arange(10, dtype=np.int32)
+    df["vals"] = np.arange(10, dtype=np.int32)
     # One Hot (Series)
-    for i, col in enumerate(df['vals'].one_hot_encoding(list(range(10)))):
+    for i, col in enumerate(df["vals"].one_hot_encoding(list(range(10)))):
         arr = col.to_array()
         # Verify 1 in the right position
         np.testing.assert_equal(arr[i], 1)
         # Every other slots are 0s
         np.testing.assert_equal(arr[:i], 0)
-        np.testing.assert_equal(arr[i + 1:], 0)
+        np.testing.assert_equal(arr[i + 1 :], 0)
     # One Hot (DataFrame)
-    df2 = df.one_hot_encoding(column='vals',
-                              prefix='vals',
-                              cats=list(range(10)))
-    assert df2.columns[0] == 'vals'
+    df2 = df.one_hot_encoding(
+        column="vals", prefix="vals", cats=list(range(10))
+    )
+    assert df2.columns[0] == "vals"
     for i in range(1, len(df2.columns)):
-        assert df2.columns[i] == 'vals_%s' % (i - 1)
+        assert df2.columns[i] == "vals_%s" % (i - 1)
     got = df2.as_matrix(columns=df2.columns[1:])
     expect = np.identity(got.shape[0])
     np.testing.assert_equal(got, expect)
@@ -38,9 +37,10 @@ def test_onehot_random():
     low = 10
     high = 17
     size = 10
-    df['src'] = src = np.random.randint(low=low, high=high, size=size)
-    df2 = df.one_hot_encoding(column='src', prefix='out_',
-                              cats=tuple(range(10, 17)))
+    df["src"] = src = np.random.randint(low=low, high=high, size=size)
+    df2 = df.one_hot_encoding(
+        column="src", prefix="out_", cats=tuple(range(10, 17))
+    )
     mat = df2.as_matrix(columns=df2.columns[1:])
 
     for val in range(low, high):
@@ -56,22 +56,24 @@ def test_onehot_masked():
     size = 100
     arr = np.random.randint(low=0, high=high, size=size)
     bitmask = utils.random_bitmask(size)
-    bytemask = np.asarray(utils.expand_bits_to_bytes(bitmask)[:size],
-                          dtype=np.bool_)
+    bytemask = np.asarray(
+        utils.expand_bits_to_bytes(bitmask)[:size], dtype=np.bool_
+    )
     arr[~bytemask] = -1
 
     df = DataFrame()
-    df['a'] = Series(arr).set_mask(bitmask)
+    df["a"] = Series(arr).set_mask(bitmask)
 
-    out = df.one_hot_encoding('a', cats=list(range(high)),
-                              prefix='a', dtype=np.int32)
+    out = df.one_hot_encoding(
+        "a", cats=list(range(high)), prefix="a", dtype=np.int32
+    )
 
-    assert tuple(out.columns) == ('a', 'a_0', 'a_1', 'a_2', 'a_3', 'a_4')
-    np.testing.assert_array_equal(out['a_0'] == 1, arr == 0)
-    np.testing.assert_array_equal(out['a_1'] == 1, arr == 1)
-    np.testing.assert_array_equal(out['a_2'] == 1, arr == 2)
-    np.testing.assert_array_equal(out['a_3'] == 1, arr == 3)
-    np.testing.assert_array_equal(out['a_4'] == 1, arr == 4)
+    assert tuple(out.columns) == ("a", "a_0", "a_1", "a_2", "a_3", "a_4")
+    np.testing.assert_array_equal(out["a_0"] == 1, arr == 0)
+    np.testing.assert_array_equal(out["a_1"] == 1, arr == 1)
+    np.testing.assert_array_equal(out["a_2"] == 1, arr == 2)
+    np.testing.assert_array_equal(out["a_3"] == 1, arr == 3)
+    np.testing.assert_array_equal(out["a_4"] == 1, arr == 4)
 
 
 def test_onehot_generic_index():
@@ -80,10 +82,11 @@ def test_onehot_generic_index():
     indices = np.random.randint(low=0, high=100, size=size)
     df = DataFrame()
     values = np.random.randint(low=0, high=4, size=size)
-    df['fo'] = Series(values, index=GenericIndex(indices))
-    out = df.one_hot_encoding('fo', cats=df.fo.unique(), prefix='fo',
-                              dtype=np.int32)
-    assert set(out.columns) == {'fo', 'fo_0', 'fo_1', 'fo_2', 'fo_3'}
+    df["fo"] = Series(values, index=GenericIndex(indices))
+    out = df.one_hot_encoding(
+        "fo", cats=df.fo.unique(), prefix="fo", dtype=np.int32
+    )
+    assert set(out.columns) == {"fo", "fo_0", "fo_1", "fo_2", "fo_3"}
     np.testing.assert_array_equal(values == 0, out.fo_0.to_array())
     np.testing.assert_array_equal(values == 1, out.fo_1.to_array())
     np.testing.assert_array_equal(values == 2, out.fo_2.to_array())
@@ -91,9 +94,9 @@ def test_onehot_generic_index():
 
 
 def test_onehot_get_dummies_simple():
-    df = DataFrame({'x': np.arange(10)})
+    df = DataFrame({"x": np.arange(10)})
     original = df.copy()
-    encoded = get_dummies(df, prefix='test')
+    encoded = get_dummies(df, prefix="test")
 
     assert df == original  # the original df should be unchanged
     cols = list(encoded.columns)[1:]
@@ -101,29 +104,37 @@ def test_onehot_get_dummies_simple():
     assert (encoded.loc[:, cols] == actual).all().all()
 
 
-@pytest.mark.parametrize('n_cols', [5, 10, 20])
+@pytest.mark.parametrize("n_cols", [5, 10, 20])
 def test_onehot_get_dummies_multicol(n_cols):
     from string import ascii_lowercase
+
     n_categories = 5
     df = DataFrame(
-        dict(zip(ascii_lowercase,
-                 (np.arange(n_categories) for _ in range(n_cols))))
+        dict(
+            zip(
+                ascii_lowercase,
+                (np.arange(n_categories) for _ in range(n_cols)),
+            )
+        )
     )
     original = df.copy()
-    encoded = get_dummies(df, prefix='test')
+    encoded = get_dummies(df, prefix="test")
 
     assert df == original
 
     cols = list(encoded.columns)[n_cols:]
     actual = DataFrame(
         dict(
-            zip(cols,
-                np.concatenate(list(np.eye(n_categories)
-                                    for _ in range(n_cols))))
+            zip(
+                cols,
+                np.concatenate(
+                    list(np.eye(n_categories) for _ in range(n_cols))
+                ),
+            )
         )
     )
     assert (encoded.loc[:, cols] == actual).all().all()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     test_onehot_random()

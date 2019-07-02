@@ -1,14 +1,14 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.series import Series
-from cudf.dataframe.index import Index
-from cudf.dataframe.column import Column
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe import columnops
-from cudf.utils import ioutils
 from cudf.bindings import dlpack as cpp_dlpack
 from cudf.bindings.GDFError import GDFError
+from cudf.dataframe import columnops
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.column import Column
+from cudf.dataframe.dataframe import DataFrame
+from cudf.dataframe.index import Index
+from cudf.dataframe.series import Series
+from cudf.utils import ioutils
 
 
 def from_dlpack(pycapsule_obj):
@@ -48,9 +48,7 @@ def from_dlpack(pycapsule_obj):
             mask = Buffer(valids[idx])
         cols.append(
             columnops.build_column(
-                Buffer(res[idx]),
-                dtype=res[idx].dtype,
-                mask=mask
+                Buffer(res[idx]), dtype=res[idx].dtype, mask=mask
             )
         )
     if len(cols) == 1:
@@ -77,7 +75,9 @@ def to_dlpack(cudf_obj):
     elif isinstance(cudf_obj, Column):
         gdf_cols = [cudf_obj]
     else:
-        raise TypeError(f"Input of type {type(cudf_obj)} cannot be converted "
-                        "to DLPack tensor")
+        raise TypeError(
+            f"Input of type {type(cudf_obj)} cannot be converted "
+            "to DLPack tensor"
+        )
 
     return cpp_dlpack.to_dlpack(gdf_cols)

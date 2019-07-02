@@ -4,20 +4,17 @@
 Helper functions for parameterized docstring
 """
 import functools
-import string
 import re
+import string
 
-_regex_whitespaces = re.compile(r'^\s+$')
+_regex_whitespaces = re.compile(r"^\s+$")
 
 
 def _only_spaces(s):
     return bool(_regex_whitespaces.match(s))
 
 
-_wrapopts = {
-    'width': 78,
-    'replace_whitespace': False,
-}
+_wrapopts = {"width": 78, "replace_whitespace": False}
 
 
 def docfmt(**kwargs):
@@ -37,9 +34,9 @@ def docfmt(**kwargs):
             buf.append(literal)
             if field is not None:
                 # get indentation
-                lines = literal.rsplit('\n', 1)
+                lines = literal.rsplit("\n", 1)
                 if _only_spaces(lines[-1]):
-                    indent = ' ' * len(lines[-1])
+                    indent = " " * len(lines[-1])
                     valuelines = kwargs[field].splitlines(True)
                     # first line
                     buf.append(valuelines[0])
@@ -48,8 +45,9 @@ def docfmt(**kwargs):
                 else:
                     buf.append(kwargs[field])
 
-        fn.__doc__ = ''.join(buf)
+        fn.__doc__ = "".join(buf)
         return fn
+
     return outer
 
 
@@ -61,7 +59,9 @@ def copy_docstring(other):
     """
     Decorator that sets ``__doc__`` to ``other.__doc___``.
     """
+
     def wrapper(func):
         func.__doc__ = other.__doc__
         return func
+
     return wrapper

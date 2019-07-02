@@ -2,16 +2,12 @@
 
 import functools
 
-from numba.utils import pysignature, exec_
-from numba import six
-from numba import cuda
-
-from librmm_cffi import librmm as rmm
-
-from cudf.utils.docutils import docfmt_partial
-from cudf.utils import cudautils
 from cudf.dataframe.series import Series
-
+from cudf.utils import cudautils
+from cudf.utils.docutils import docfmt_partial
+from librmm_cffi import librmm as rmm
+from numba import cuda, six
+from numba.utils import exec_, pysignature
 
 _doc_applyparams = """
 func : function
@@ -42,8 +38,9 @@ tpb : int; optional
 """
 
 doc_apply = docfmt_partial(params=_doc_applyparams)
-doc_applychunks = docfmt_partial(params=_doc_applyparams,
-                                 params_chunks=_doc_applychunkparams)
+doc_applychunks = docfmt_partial(
+    params=_doc_applyparams, params_chunks=_doc_applychunkparams
+)
 
 
 @doc_apply()
@@ -57,8 +54,9 @@ def apply_rows(df, func, incols, outcols, kwargs, cache_key):
     {params}
 
     """
-    applyrows = ApplyRowsCompiler(func, incols, outcols, kwargs,
-                                  cache_key=cache_key)
+    applyrows = ApplyRowsCompiler(
+        func, incols, outcols, kwargs, cache_key=cache_key
+    )
     return applyrows.run(df)
 
 
@@ -73,8 +71,9 @@ def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     {params}
     {params_chunks}
     """
-    applyrows = ApplyChunksCompiler(func, incols, outcols, kwargs,
-                                    cache_key=None)
+    applyrows = ApplyChunksCompiler(
+        func, incols, outcols, kwargs, cache_key=None
+    )
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
 
@@ -111,11 +110,11 @@ class ApplyKernelCompilerBase(object):
 
 
 class ApplyRowsCompiler(ApplyKernelCompilerBase):
-
     def compile(self, func, argnames, extra_argnames):
         # Compile kernel
-        kernel = _load_cache_or_make_row_wise_kernel(self.cache_key, func,
-                                                     argnames, extra_argnames)
+        kernel = _load_cache_or_make_row_wise_kernel(
+            self.cache_key, func, argnames, extra_argnames
+        )
         return kernel
 
     def launch_kernel(self, df, args):
@@ -125,11 +124,11 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
 
 
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
-
     def compile(self, func, argnames, extra_argnames):
         # Compile kernel
-        kernel = _load_cache_or_make_chunk_wise_kernel(func, argnames,
-                                                       extra_argnames)
+        kernel = _load_cache_or_make_chunk_wise_kernel(
+            func, argnames, extra_argnames
+        )
         return kernel
 
     def launch_kernel(self, df, args, chunks, tpb):
@@ -164,32 +163,32 @@ def row_wise_kernel({args}):
 {body}
 """
 
-    args = ', '.join(argnames)
+    args = ", ".join(argnames)
     body = []
 
-    body.append('tid = cuda.grid(1)')
-    body.append('ntid = cuda.gridsize(1)')
+    body.append("tid = cuda.grid(1)")
+    body.append("ntid = cuda.gridsize(1)")
 
     for a in argnames:
         if a not in extras:
-            start = 'tid'
-            stop = ''
-            stride = 'ntid'
-            srcidx = '{a} = {a}[{start}:{stop}:{stride}]'
-            body.append(srcidx.format(a=a, start=start, stop=stop,
-                                      stride=stride))
+            start = "tid"
+            stop = ""
+            stride = "ntid"
+            srcidx = "{a} = {a}[{start}:{stop}:{stride}]"
+            body.append(
+                srcidx.format(a=a, start=start, stop=stop, stride=stride)
+            )
 
     body.append("inner({})".format(args))
 
-    indented = ['{}{}'.format(' ' * 4, ln) for ln in body]
+    indented = ["{}{}".format(" " * 4, ln) for ln in body]
     # Finalize source
-    concrete = source.format(args=args, body='\n'.join(indented))
+    concrete = source.format(args=args, body="\n".join(indented))
     # Get bytecode
-    glbs = {'inner': cuda.jit(device=True)(func),
-            'cuda': cuda}
+    glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
     exec_(concrete, glbs)
     # Compile as CUDA kernel
-    kernel = cuda.jit(glbs['row_wise_kernel'])
+    kernel = cuda.jit(glbs["row_wise_kernel"])
     return kernel
 
 
@@ -214,22 +213,24 @@ def chunk_wise_kernel(nrows, chunks, {args}):
 {body}
 """
 
-    args = ', '.join(argnames)
+    args = ", ".join(argnames)
     body = []
 
-    body.append('blkid = cuda.blockIdx.x')
-    body.append('nblkid = cuda.gridDim.x')
-    body.append('tid = cuda.threadIdx.x')
-    body.append('ntid = cuda.blockDim.x')
+    body.append("blkid = cuda.blockIdx.x")
+    body.append("nblkid = cuda.gridDim.x")
+    body.append("tid = cuda.threadIdx.x")
+    body.append("ntid = cuda.blockDim.x")
 
     # Stride loop over the block
-    body.append('for curblk in range(blkid, chunks.size, nblkid):')
-    indent = ' ' * 4
+    body.append("for curblk in range(blkid, chunks.size, nblkid):")
+    indent = " " * 4
 
-    body.append(indent + 'start = chunks[curblk]')
-    body.append(indent
-                + 'stop = chunks[curblk + 1]'
-                + ' if curblk + 1 < chunks.size else nrows')
+    body.append(indent + "start = chunks[curblk]")
+    body.append(
+        indent
+        + "stop = chunks[curblk + 1]"
+        + " if curblk + 1 < chunks.size else nrows"
+    )
 
     slicedargs = {}
     for a in argnames:
@@ -237,18 +238,20 @@ def chunk_wise_kernel(nrows, chunks, {args}):
             slicedargs[a] = "{}[start:stop]".format(a)
         else:
             slicedargs[a] = str(a)
-    body.append("{}inner({})".format(
-                    indent, ', '.join(slicedargs[k] for k in argnames)))
+    body.append(
+        "{}inner({})".format(
+            indent, ", ".join(slicedargs[k] for k in argnames)
+        )
+    )
 
-    indented = ['{}{}'.format(' ' * 4, ln) for ln in body]
+    indented = ["{}{}".format(" " * 4, ln) for ln in body]
     # Finalize source
-    concrete = source.format(args=args, body='\n'.join(indented))
+    concrete = source.format(args=args, body="\n".join(indented))
     # Get bytecode
-    glbs = {'inner': cuda.jit(device=True)(func),
-            'cuda': cuda}
+    glbs = {"inner": cuda.jit(device=True)(func), "cuda": cuda}
     exec_(concrete, glbs)
     # Compile as CUDA kernel
-    kernel = cuda.jit(glbs['chunk_wise_kernel'])
+    kernel = cuda.jit(glbs["chunk_wise_kernel"])
     return kernel
 
 

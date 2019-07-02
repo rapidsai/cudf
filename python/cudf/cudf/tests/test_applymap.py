@@ -1,18 +1,17 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from itertools import product
-
-import pytest
-import numpy as np
-
-from cudf.tests import utils
-from cudf import Series
 from math import floor
 
+import numpy as np
+import pytest
+from cudf import Series
+from cudf.tests import utils
 
-@pytest.mark.parametrize('nelem,masked',
-                         list(product([2, 10, 100, 1000],
-                                      [True, False])))
+
+@pytest.mark.parametrize(
+    "nelem,masked", list(product([2, 10, 100, 1000], [True, False]))
+)
 def test_applymap_round(nelem, masked):
     # Generate data
     np.random.seed(0)
@@ -21,8 +20,9 @@ def test_applymap_round(nelem, masked):
     if masked:
         # Make mask
         bitmask = utils.random_bitmask(nelem)
-        boolmask = np.asarray(utils.expand_bits_to_bytes(bitmask),
-                              dtype=np.bool)[:nelem]
+        boolmask = np.asarray(
+            utils.expand_bits_to_bytes(bitmask), dtype=np.bool
+        )[:nelem]
         data[~boolmask] = np.nan
 
     sr = Series(data)
@@ -32,8 +32,9 @@ def test_applymap_round(nelem, masked):
         sr = sr.set_mask(bitmask)
 
     # Call applymap
-    out = sr.applymap(lambda x: (floor(x) + 1 if x - floor(x) >= 0.5
-                                 else floor(x)))
+    out = sr.applymap(
+        lambda x: (floor(x) + 1 if x - floor(x) >= 0.5 else floor(x))
+    )
 
     if masked:
         # Fill masked values

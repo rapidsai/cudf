@@ -1,34 +1,33 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from __future__ import print_function, division
+from __future__ import division, print_function
 
-import pandas as pd
-import numpy as np
 import pickle
-from copy import deepcopy, copy
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
-from librmm_cffi import librmm as rmm
-import nvstrings
+from copy import copy, deepcopy
 
 import cudf
+import cudf.bindings.copying as cpp_copying
+import numpy as np
+import nvstrings
+import pandas as pd
+from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
-from cudf.utils import cudautils, utils, ioutils
 from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.numerical import NumericalColumn
+from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
-from cudf.dataframe.categorical import CategoricalColumn
+from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.indexing import _IndexLocIndexer
-
-import cudf.bindings.copying as cpp_copying
+from cudf.utils import cudautils, ioutils, utils
+from librmm_cffi import librmm as rmm
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 
 class Index(object):
     """The root interface for all Series indexes.
     """
+
     is_monotonic = None
     is_monotonic_increasing = None
     is_monotonic_decreasing = None
@@ -43,8 +42,8 @@ class Index(object):
         middleware.
         """
         header = {}
-        header['payload'], frames = serialize(pickle.dumps(self))
-        header['frame_count'] = len(frames)
+        header["payload"], frames = serialize(pickle.dumps(self))
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
@@ -58,8 +57,9 @@ class Index(object):
         header: The data header produced by the serialize function.
         frames: The serialized data
         """
-        payload = deserialize(header['payload'],
-                              frames[:header['frame_count']])
+        payload = deserialize(
+            header["payload"], frames[: header["frame_count"]]
+        )
         return pickle.loads(payload)
 
     def take(self, indices):
@@ -69,7 +69,7 @@ class Index(object):
         ---
         indices: An array-like that maps to values contained in this Index.
         """
-        assert indices.dtype.kind in 'iu'
+        assert indices.dtype.kind in "iu"
         if indices.size == 0:
             # Empty indices
             return RangeIndex(indices.size)
@@ -98,6 +98,7 @@ class Index(object):
     def to_dlpack(self):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
+
         return dlpack.to_dlpack(self)
 
     @property
@@ -134,6 +135,7 @@ class Index(object):
 
     def _apply_op(self, fn, other=None):
         from cudf.dataframe.series import Series
+
         idx_series = Series(self)
         op = getattr(idx_series, fn)
         if other is not None:
@@ -142,72 +144,72 @@ class Index(object):
             return as_index(op())
 
     def __add__(self, other):
-        return self._apply_op('__add__', other)
+        return self._apply_op("__add__", other)
 
     def __radd__(self, other):
-        return self._apply_op('__radd__', other)
+        return self._apply_op("__radd__", other)
 
     def __sub__(self, other):
-        return self._apply_op('__sub__', other)
+        return self._apply_op("__sub__", other)
 
     def __rsub__(self, other):
-        return self._apply_op('__rsub__', other)
+        return self._apply_op("__rsub__", other)
 
     def __mul__(self, other):
-        return self._apply_op('__mul__', other)
+        return self._apply_op("__mul__", other)
 
     def __rmul__(self, other):
-        return self._apply_op('__rmul__', other)
+        return self._apply_op("__rmul__", other)
 
     def __mod__(self, other):
-        return self._apply_op('__mod__', other)
+        return self._apply_op("__mod__", other)
 
     def __rmod__(self, other):
-        return self._apply_op('__rmod__', other)
+        return self._apply_op("__rmod__", other)
 
     def __pow__(self, other):
-        return self._apply_op('__pow__', other)
+        return self._apply_op("__pow__", other)
 
     def __floordiv__(self, other):
-        return self._apply_op('__floordiv__', other)
+        return self._apply_op("__floordiv__", other)
 
     def __rfloordiv__(self, other):
-        return self._apply_op('__rfloordiv__', other)
+        return self._apply_op("__rfloordiv__", other)
 
     def __truediv__(self, other):
-        return self._apply_op('__truediv__', other)
+        return self._apply_op("__truediv__", other)
 
     def __rtruediv__(self, other):
-        return self._apply_op('__rtruediv__', other)
+        return self._apply_op("__rtruediv__", other)
 
     __div__ = __truediv__
 
     def __and__(self, other):
-        return self._apply_op('__and__', other)
+        return self._apply_op("__and__", other)
 
     def __or__(self, other):
-        return self._apply_op('__or__', other)
+        return self._apply_op("__or__", other)
 
     def __xor__(self, other):
-        return self._apply_op('__xor__', other)
+        return self._apply_op("__xor__", other)
 
     def __eq__(self, other):
-        return self._apply_op('__eq__', other)
+        return self._apply_op("__eq__", other)
 
     def __ne__(self, other):
-        return self._apply_op('__ne__', other)
+        return self._apply_op("__ne__", other)
 
     def __lt__(self, other):
-        return self._apply_op('__lt__', other)
+        return self._apply_op("__lt__", other)
 
     def __le__(self, other):
-        return self._apply_op('__le__', other)
+        return self._apply_op("__le__", other)
 
     def __gt__(self, other):
-        return self._apply_op('__gt__', other)
+        return self._apply_op("__gt__", other)
 
     def __ge__(self, other):
-        return self._apply_op('__ge__', other)
+        return self._apply_op("__ge__", other)
 
     def equals(self, other):
         if self is other:
@@ -221,16 +223,19 @@ class Index(object):
                 return val.all()
             return bool(val)
         else:
-            result = (self == other)
+            result = self == other
             if isinstance(result, bool):
                 return result
             else:
                 return result._values.all()
 
-    def join(self, other, method, how='left', return_indexers=False):
+    def join(self, other, method, how="left", return_indexers=False):
         column_join_res = self.as_column().join(
-            other.as_column(), how=how, return_indexers=return_indexers,
-            method=method)
+            other.as_column(),
+            how=how,
+            return_indexers=return_indexers,
+            method=method,
+        )
         if return_indexers:
             joined_col, indexers = column_join_res
             joined_index = as_index(joined_col)
@@ -295,6 +300,7 @@ class Index(object):
 
     def to_series(self):
         from cudf.dataframe.series import Series
+
         return Series(self._values)
 
     @property
@@ -333,7 +339,7 @@ class RangeIndex(Index):
         self.name = name
 
     def copy(self, deep=True):
-        if(deep):
+        if deep:
             result = deepcopy(self)
         else:
             result = copy(self)
@@ -341,16 +347,18 @@ class RangeIndex(Index):
         return result
 
     def __repr__(self):
-        return "{}(start={}, stop={})".format(self.__class__.__name__,
-                                              self._start, self._stop)
+        return "{}(start={}, stop={})".format(
+            self.__class__.__name__, self._start, self._stop
+        )
 
     def __len__(self):
         return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step, sln = utils.standard_python_slice(len(self),
-                                                                 index)
+            start, stop, step, sln = utils.standard_python_slice(
+                len(self), index
+            )
             start += self._start
             stop += self._start
             if sln == 0:
@@ -376,7 +384,7 @@ class RangeIndex(Index):
 
     def equals(self, other):
         if isinstance(other, cudf.dataframe.index.RangeIndex):
-            return (self._start == other._start and self._stop == other._stop)
+            return self._start == other._start and self._stop == other._stop
         else:
             return (self == other)._values.all()
 
@@ -427,8 +435,12 @@ class RangeIndex(Index):
         return self.as_column().to_gpu_array()
 
     def to_pandas(self):
-        return pd.RangeIndex(start=self._start, stop=self._stop,
-                             dtype=self.dtype, name=self.name)
+        return pd.RangeIndex(
+            start=self._start,
+            stop=self._stop,
+            dtype=self.dtype,
+            name=self.name,
+        )
 
 
 def index_from_range(start, stop=None, step=None):
@@ -447,6 +459,7 @@ class GenericIndex(Index):
 
     def __init__(self, values, name=None):
         from cudf.dataframe.series import Series
+
         # normalize the input
         if isinstance(values, Series):
             name = values.name
@@ -468,7 +481,7 @@ class GenericIndex(Index):
         self.name = name
 
     def copy(self, deep=True):
-        if (deep):
+        if deep:
             result = deepcopy(self)
         else:
             result = copy(self)
@@ -478,14 +491,15 @@ class GenericIndex(Index):
 
     def serialize(self, serialize):
         header = {}
-        header['payload'], frames = serialize(self._values)
-        header['frame_count'] = len(frames)
+        header["payload"], frames = serialize(self._values)
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        payload = deserialize(header['payload'],
-                              frames[:header['frame_count']])
+        payload = deserialize(
+            header["payload"], frames[: header["frame_count"]]
+        )
         return cls(payload)
 
     def __sizeof__(self):
@@ -499,8 +513,9 @@ class GenericIndex(Index):
 
     def __repr__(self):
         vals = [self._values[i] for i in range(min(len(self), 10))]
-        return "{}({}, dtype={})".format(self.__class__.__name__,
-                                         vals, self._values.dtype)
+        return "{}({}, dtype={})".format(
+            self.__class__.__name__, vals, self._values.dtype
+        )
 
     def __getitem__(self, index):
         res = self._values[index]
@@ -547,13 +562,13 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        if isinstance(values, np.ndarray) and values.dtype.kind == 'M':
+        if isinstance(values, np.ndarray) and values.dtype.kind == "M":
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
             values = DatetimeColumn.from_numpy(values.values)
         elif isinstance(values, (list, tuple)):
             values = DatetimeColumn.from_numpy(
-                np.array(values, dtype='<M8[ms]')
+                np.array(values, dtype="<M8[ms]")
             )
         assert values.null_count == 0
         self._values = values
@@ -561,37 +576,39 @@ class DatetimeIndex(GenericIndex):
 
     @property
     def year(self):
-        return self.get_dt_field('year')
+        return self.get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field('month')
+        return self.get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field('day')
+        return self.get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field('hour')
+        return self.get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field('minute')
+        return self.get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field('second')
+        return self.get_dt_field("second")
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
         # columnops.column_empty_like always returns a Column object
         # but we need a NumericalColumn for GenericIndex..
         # how should this be handled?
-        out_column = NumericalColumn(data=out_column.data,
-                                     mask=out_column.mask,
-                                     null_count=out_column.null_count,
-                                     dtype=out_column.dtype)
+        out_column = NumericalColumn(
+            data=out_column.data,
+            mask=out_column.mask,
+            null_count=out_column.null_count,
+            dtype=out_column.dtype,
+        )
         return as_index(out_column)
 
 
@@ -606,18 +623,19 @@ class CategoricalIndex(GenericIndex):
     """
 
     def __init__(self, values, name=None):
-        if isinstance(values, pd.Series) and \
-                pd.api.types.is_categorical_dtype(values.dtype):
+        if isinstance(values, pd.Series) and pd.api.types.is_categorical_dtype(
+            values.dtype
+        ):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
                 categories=values.cat.categories.tolist(),
-                ordered=values.cat.ordered
+                ordered=values.cat.ordered,
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             values = CategoricalColumn(
                 data=Buffer(values.codes),
                 categories=values.categories.tolist(),
-                ordered=values.ordered
+                ordered=values.ordered,
             )
         elif isinstance(values, (list, tuple)):
             values = columnops.as_column(
@@ -655,8 +673,9 @@ class StringIndex(GenericIndex):
                 name = values.name
             self._values = values.values.copy()
         else:
-            self._values = columnops.build_column(nvstrings.to_device(values),
-                                                  dtype='object')
+            self._values = columnops.build_column(
+                nvstrings.to_device(values), dtype="object"
+            )
         assert self._values.null_count == 0
         self.name = name
 
@@ -677,7 +696,8 @@ class StringIndex(GenericIndex):
 
     def __repr__(self):
         return "{}({}, dtype='object', name={})".format(
-                self.__class__.__name__, self._values.to_array(), self.name)
+            self.__class__.__name__, self._values.to_array(), self.name
+        )
 
 
 def as_index(arbitrary, name=None):
@@ -713,7 +733,7 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        if hasattr(arbitrary, 'name') and name is None:
+        if hasattr(arbitrary, "name") and name is None:
             name = arbitrary.name
         return as_index(columnops.as_column(arbitrary), name=name)
 

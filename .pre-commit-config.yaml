@@ -1,4 +1,8 @@
 repos:
+-   repo: https://github.com/timothycrosley/isort
+    rev: 4.3.21
+    hooks:
+    - id: isort
 -   repo: https://github.com/ambv/black
     rev: stable
     hooks:
@@ -8,4 +12,4 @@ repos:
     hooks:
     - id: flake8
 default_language_version:
-    python: python3.6
+    python: python3

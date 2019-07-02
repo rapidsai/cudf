@@ -1,21 +1,21 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import cudf
-import pytest
 import itertools
-
-import numpy as np
-
-from cudf.tests.utils import assert_eq
 from contextlib import ExitStack as does_not_raise
+
+import cudf
+import numpy as np
+import pytest
+from cudf.tests.utils import assert_eq
 
 try:
     import cupy
+
     _have_cupy = True
 except ImportError:
     _have_cupy = False
 
-require_cupy = pytest.mark.skipif(not _have_cupy, reason='no cupy')
+require_cupy = pytest.mark.skipif(not _have_cupy, reason="no cupy")
 
 nelems = [0, 3, 10]
 data = [np.nan, 10, 10.0]
@@ -39,8 +39,9 @@ def data_1d(request):
 
 @pytest.fixture(params=params_2d)
 def data_2d(request):
-    a = np.ascontiguousarray(np.array([[request.param[2]] * request.param[0]] *
-                             request.param[1]))
+    a = np.ascontiguousarray(
+        np.array([[request.param[2]] * request.param[0]] * request.param[1])
+    )
     return a
 
 
@@ -96,7 +97,7 @@ def test_to_dlpack_cupy_1d(data_1d):
 
     with expectation:
         gs = cudf.Series(data_1d)
-        cudf_host_array = gs.to_array(fillna='pandas')
+        cudf_host_array = gs.to_array(fillna="pandas")
         dlt = gs._column.to_dlpack()
 
         cupy_array = cupy.fromDlpack(dlt)
@@ -130,7 +131,7 @@ def test_from_dlpack_cupy_1d(data_1d):
         dlt = cupy_array.toDlpack()
 
         gs = cudf.from_dlpack(dlt)
-        cudf_host_array = gs.to_array(fillna='pandas')
+        cudf_host_array = gs.to_array(fillna="pandas")
 
         assert_eq(cudf_host_array, cupy_host_array)
 
@@ -140,7 +141,7 @@ def test_from_dlpack_cupy_2d(data_2d):
     expectation = data_size_expectation_builder(data_2d)
 
     with expectation:
-        cupy_array = cupy.array(data_2d, order='F')
+        cupy_array = cupy.array(data_2d, order="F")
         cupy_host_array = cupy_array.get()
         dlt = cupy_array.toDlpack()
 

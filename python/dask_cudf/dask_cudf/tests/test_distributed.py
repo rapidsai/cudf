@@ -1,9 +1,8 @@
-import pytest
-
 import cudf
 import dask
-from dask.distributed import Client
 import dask.dataframe as dd
+import pytest
+from dask.distributed import Client
 from distributed.utils_test import loop  # noqa: F401
 
 dask_cuda = pytest.importorskip("dask_cuda")

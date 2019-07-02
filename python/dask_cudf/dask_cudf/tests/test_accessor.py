@@ -1,10 +1,9 @@
+import dask_cudf as dgd
 import numpy as np
 import pandas as pd
 import pytest
-from pandas.util.testing import assert_series_equal
-
-import dask_cudf as dgd
 from cudf.dataframe import Series
+from pandas.util.testing import assert_series_equal
 
 #############################################################################
 #                        Datetime Accessor                                  #

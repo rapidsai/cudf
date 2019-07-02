@@ -3,25 +3,28 @@
 """
 Test related to Index
 """
-import pytest
-
 import numpy as np
 import pandas as pd
-
+import pytest
 from cudf.dataframe import DataFrame
-from cudf.dataframe.index import (GenericIndex, RangeIndex, DatetimeIndex,
-                                  CategoricalIndex, as_index)
+from cudf.dataframe.index import (
+    CategoricalIndex,
+    DatetimeIndex,
+    GenericIndex,
+    RangeIndex,
+    as_index,
+)
 from cudf.tests.utils import assert_eq
 
 
 def test_df_set_index_from_series():
     df = DataFrame()
-    df['a'] = list(range(10))
-    df['b'] = list(range(0, 20, 2))
+    df["a"] = list(range(10))
+    df["b"] = list(range(0, 20, 2))
 
     # Check set_index(Series)
-    df2 = df.set_index(df['b'])
-    assert list(df2.columns) == ['a', 'b']
+    df2 = df.set_index(df["b"])
+    assert list(df2.columns) == ["a", "b"]
     sliced_strided = df2.loc[2:6]
     print(sliced_strided)
     assert len(sliced_strided) == 3
@@ -30,14 +33,14 @@ def test_df_set_index_from_series():
 
 def test_df_set_index_from_name():
     df = DataFrame()
-    df['a'] = list(range(10))
-    df['b'] = list(range(0, 20, 2))
+    df["a"] = list(range(10))
+    df["b"] = list(range(0, 20, 2))
 
     # Check set_index(column_name)
-    df2 = df.set_index('b')
+    df2 = df.set_index("b")
     print(df2)
     # 1 less column because 'b' is used as index
-    assert list(df2.columns) == ['a']
+    assert list(df2.columns) == ["a"]
     sliced_strided = df2.loc[2:6]
     print(sliced_strided)
     assert len(sliced_strided) == 3
@@ -76,11 +79,9 @@ def test_index_comparision():
     assert rg[:-1].equals(gi[:-1])
 
 
-@pytest.mark.parametrize('func', [
-    lambda x: x.min(),
-    lambda x: x.max(),
-    lambda x: x.sum(),
-])
+@pytest.mark.parametrize(
+    "func", [lambda x: x.min(), lambda x: x.max(), lambda x: x.sum()]
+)
 def test_reductions(func):
     x = np.asarray([4, 5, 6, 10])
     idx = GenericIndex(np.asarray([4, 5, 6, 10]))
@@ -89,8 +90,8 @@ def test_reductions(func):
 
 
 def test_name():
-    idx = GenericIndex(np.asarray([4, 5, 6, 10]), name='foo')
-    assert idx.name == 'foo'
+    idx = GenericIndex(np.asarray([4, 5, 6, 10]), name="foo")
+    assert idx.name == "foo"
 
 
 def test_index_immutable():
@@ -105,14 +106,14 @@ def test_index_immutable():
 
 def test_categorical_index():
     pdf = pd.DataFrame()
-    pdf['a'] = [1, 2, 3]
-    pdf['index'] = pd.Categorical(['a', 'b', 'c'])
-    pdf = pdf.set_index('index')
+    pdf["a"] = [1, 2, 3]
+    pdf["index"] = pd.Categorical(["a", "b", "c"])
+    pdf = pdf.set_index("index")
     gdf1 = DataFrame.from_pandas(pdf)
     gdf2 = DataFrame()
-    gdf2['a'] = [1, 2, 3]
-    gdf2['index'] = pd.Categorical(['a', 'b', 'c'])
-    gdf2 = gdf2.set_index('index')
+    gdf2["a"] = [1, 2, 3]
+    gdf2["index"] = pd.Categorical(["a", "b", "c"])
+    gdf2 = gdf2.set_index("index")
 
     assert isinstance(gdf1.index, CategoricalIndex)
     assert_eq(pdf, gdf1)
@@ -126,10 +127,11 @@ def test_categorical_index():
 def test_pandas_as_index():
     # Define Pandas Indexes
     pdf_int_index = pd.Int64Index([1, 2, 3, 4, 5])
-    pdf_float_index = pd.Float64Index([1., 2., 3., 4., 5.])
+    pdf_float_index = pd.Float64Index([1.0, 2.0, 3.0, 4.0, 5.0])
     pdf_datetime_index = pd.DatetimeIndex(
-        [1000000, 2000000, 3000000, 4000000, 5000000])
-    pdf_category_index = pd.CategoricalIndex(['a', 'b', 'c', 'b', 'a'])
+        [1000000, 2000000, 3000000, 4000000, 5000000]
+    )
+    pdf_category_index = pd.CategoricalIndex(["a", "b", "c", "b", "a"])
 
     # Define cudf Indexes
     gdf_int_index = as_index(pdf_int_index)
@@ -151,11 +153,11 @@ def test_pandas_as_index():
 
 
 def test_index_rename():
-    pds = pd.Index([1, 2, 3], name='asdf')
+    pds = pd.Index([1, 2, 3], name="asdf")
     gds = as_index(pds)
 
-    expect = pds.rename('new_name')
-    got = gds.rename('new_name')
+    expect = pds.rename("new_name")
+    got = gds.rename("new_name")
 
     assert_eq(expect, got)
 
@@ -164,11 +166,11 @@ def test_set_index_as_property():
     cdf = DataFrame()
     col1 = np.arange(10)
     col2 = np.arange(0, 20, 2)
-    cdf['a'] = col1
-    cdf['b'] = col2
+    cdf["a"] = col1
+    cdf["b"] = col2
 
     # Check set_index(Series)
-    cdf.index = cdf['b']
+    cdf.index = cdf["b"]
 
     np.testing.assert_array_equal(cdf.index.values, col2)
 

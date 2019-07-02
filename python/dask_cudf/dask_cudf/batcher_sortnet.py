@@ -4,9 +4,8 @@ Adapted from https://en.wikipedia.org/wiki/Batcher_odd%E2%80%93even_mergesort
 """
 import math
 
-from dask import compute, delayed
-
 import cudf as gd
+from dask import compute, delayed
 
 
 def get_oversized(length):
@@ -85,7 +84,9 @@ def _compare_frame(a, b, max_part_size, by):
 
 
 def _compare_and_swap_frame(parts, a, b, max_part_size, by):
-    compared = delayed(_compare_frame)(parts[a], parts[b], max_part_size, by=by)
+    compared = delayed(_compare_frame)(
+        parts[a], parts[b], max_part_size, by=by
+    )
     parts[a] = compared[0]
     parts[b] = compared[1]
 

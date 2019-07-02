@@ -1,12 +1,10 @@
-import os
 from glob import glob
 
+import cudf
+import dask.dataframe as dd
 from dask.base import tokenize
 from dask.compatibility import apply
-import dask.dataframe as dd
 from dask.utils import natural_sort_key
-
-import cudf
 
 
 def read_parquet(path, **kwargs):
@@ -25,18 +23,16 @@ def read_parquet(path, **kwargs):
     cudf.read_parquet
     """
 
-    name = "read-parquet-" + tokenize(
-        path,
-        **kwargs
-    )
+    name = "read-parquet-" + tokenize(path, **kwargs)
 
     paths = path
     if isinstance(path, str):
         paths = sorted(glob(str(path)))
 
     # Ignore *_metadata files for now
-    paths = sorted([f for f in paths if not f.endswith('_metadata')],
-                   key=natural_sort_key)
+    paths = sorted(
+        [f for f in paths if not f.endswith("_metadata")], key=natural_sort_key
+    )
 
     # Use 0th file to create meta
     meta = cudf.read_parquet(paths[0], **kwargs)

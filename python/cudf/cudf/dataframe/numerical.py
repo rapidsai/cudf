@@ -1,30 +1,26 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-from __future__ import print_function, division
+from __future__ import division, print_function
 
+import cudf.bindings.binops as cpp_binops
+import cudf.bindings.copying as cpp_copying
+import cudf.bindings.hash as cpp_hash
+import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.replace as cpp_replace
+import cudf.bindings.sort as cpp_sort
+import cudf.bindings.unaryops as cpp_unaryops
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api.types import is_integer_dtype
-
-from librmm_cffi import librmm as rmm
-
-from cudf.dataframe import columnops, datetime, string
-from cudf.utils import cudautils, utils
-from cudf.dataframe.buffer import Buffer
-from cudf.comm.serialize import register_distributed_serializer
-from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
-from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf._sort import get_sorted_inds
-
-import cudf.bindings.reduce as cpp_reduce
-import cudf.bindings.replace as cpp_replace
-import cudf.bindings.binops as cpp_binops
-import cudf.bindings.sort as cpp_sort
-import cudf.bindings.unaryops as cpp_unaryops
-import cudf.bindings.copying as cpp_copying
-import cudf.bindings.hash as cpp_hash
-from cudf.bindings.cudf_cpp import get_ctype_ptr
+from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
+from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf.comm.serialize import register_distributed_serializer
+from cudf.dataframe import columnops, datetime, string
+from cudf.dataframe.buffer import Buffer
+from cudf.utils import cudautils, utils
+from librmm_cffi import librmm as rmm
+from pandas.api.types import is_integer_dtype
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -45,14 +41,14 @@ class NumericalColumn(columnops.TypedColumnBase):
         assert self._dtype == self._data.dtype
 
     def replace(self, **kwargs):
-        if 'data' in kwargs and 'dtype' not in kwargs:
-            kwargs['dtype'] = kwargs['data'].dtype
+        if "data" in kwargs and "dtype" not in kwargs:
+            kwargs["dtype"] = kwargs["data"].dtype
         return super(NumericalColumn, self).replace(**kwargs)
 
     def serialize(self, serialize):
         header, frames = super(NumericalColumn, self).serialize(serialize)
-        assert 'dtype' not in header
-        header['dtype'] = serialize(self._dtype)
+        assert "dtype" not in header
+        header["dtype"] = serialize(self._dtype)
         return header, frames
 
     @classmethod
@@ -76,19 +72,17 @@ class NumericalColumn(columnops.TypedColumnBase):
                 rhs=rhs,
                 op=binop,
                 out_dtype=out_dtype,
-                reflect=reflect
+                reflect=reflect,
             )
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=unaryop,
-                                      out_dtype=self.dtype)
+        return numeric_column_unaryop(self, op=unaryop, out_dtype=self.dtype)
 
     def unary_logic_op(self, unaryop):
-        return numeric_column_unaryop(self, op=unaryop,
-                                      out_dtype=np.bool_)
+        return numeric_column_unaryop(self, op=unaryop, out_dtype=np.bool_)
 
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
@@ -103,7 +97,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
-        if other_dtype.kind in 'biuf':
+        if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
 
             if np.isscalar(other):
@@ -111,23 +105,22 @@ class NumericalColumn(columnops.TypedColumnBase):
                 return other
             else:
                 ary = utils.scalar_broadcast_to(
-                    other,
-                    shape=len(self),
-                    dtype=other_dtype
+                    other, shape=len(self), dtype=other_dtype
                 )
                 return self.replace(data=Buffer(ary), dtype=ary.dtype)
         else:
-            raise TypeError('cannot broadcast {}'.format(type(other)))
+            raise TypeError("cannot broadcast {}".format(type(other)))
 
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
 
-        elif (dtype == np.dtype('object') or
-              np.issubdtype(dtype, np.dtype('U').type)):
+        elif dtype == np.dtype("object") or np.issubdtype(
+            dtype, np.dtype("U").type
+        ):
             if len(self) > 0:
-                if self.dtype in (np.dtype('int8'), np.dtype('int16')):
-                    dev_array = self.astype('int32').data.mem
+                if self.dtype in (np.dtype("int8"), np.dtype("int16")):
+                    dev_array = self.astype("int32").data.mem
                 else:
                     dev_array = self.data.mem
                 dev_ptr = get_ctype_ptr(dev_array)
@@ -135,9 +128,9 @@ class NumericalColumn(columnops.TypedColumnBase):
                 if self.mask is not None:
                     null_ptr = get_ctype_ptr(self.mask.mem)
                 kwargs = {
-                    'count': len(self),
-                    'nulls': null_ptr,
-                    'bdevmem': True
+                    "count": len(self),
+                    "nulls": null_ptr,
+                    "bdevmem": True,
                 }
                 data = string._numeric_to_str_typecast_functions[
                     np.dtype(dev_array.dtype)
@@ -149,23 +142,26 @@ class NumericalColumn(columnops.TypedColumnBase):
             return string.StringColumn(data=data)
 
         elif np.issubdtype(dtype, np.datetime64):
-            return self.astype('int64').view(
+            return self.astype("int64").view(
                 datetime.DatetimeColumn,
                 dtype=dtype,
-                data=self.data.astype(dtype)
+                data=self.data.astype(dtype),
             )
 
         else:
-            col = self.replace(data=self.data.astype(dtype),
-                               dtype=np.dtype(dtype))
+            col = self.replace(
+                data=self.data.astype(dtype), dtype=np.dtype(dtype)
+            )
             return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
-        col_inds = self.replace(data=sort_inds.data,
-                                mask=sort_inds.mask,
-                                dtype=sort_inds.data.dtype)
+        col_inds = self.replace(
+            data=sort_inds.data,
+            mask=sort_inds.mask,
+            dtype=sort_inds.data.dtype,
+        )
         return col_keys, col_inds
 
     def to_pandas(self, index=None):
@@ -179,7 +175,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             ret.replace(to_replace=0, value=False, inplace=True)
             return ret
         else:
-            return pd.Series(self.to_array(fillna='pandas'), index=index)
+            return pd.Series(self.to_array(fillna="pandas"), index=index)
 
     def to_arrow(self):
         mask = None
@@ -190,11 +186,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
-            buffers=[
-                mask,
-                data
-            ],
-            null_count=self.null_count
+            buffers=[mask, data],
+            null_count=self.null_count,
         )
         if self.dtype == np.bool:
             return out.cast(pa.bool_())
@@ -212,29 +205,29 @@ class NumericalColumn(columnops.TypedColumnBase):
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
-    def unique(self, method='sort'):
+    def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
-        if method != 'sort':
-            msg = 'non sort based unique() not implemented yet'
+        if method != "sort":
+            msg = "non sort based unique() not implemented yet"
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
 
-    def unique_count(self, method='sort', dropna=True):
-        if method != 'sort':
-            msg = 'non sort based unique_count() not implemented yet'
+    def unique_count(self, method="sort", dropna=True):
+        if method != "sort":
+            msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
         segs, _ = self._unique_segments()
         if dropna is False and self.null_count > 0:
-            return len(segs)+1
+            return len(segs) + 1
         return len(segs)
 
-    def value_counts(self, method='sort'):
-        if method != 'sort':
-            msg = 'non sort based value_count() not implemented yet'
+    def value_counts(self, method="sort"):
+        if method != "sort":
+            msg = "non sort based value_count() not implemented yet"
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
@@ -252,16 +245,16 @@ class NumericalColumn(columnops.TypedColumnBase):
         return bool(self.max(dtype=np.bool_))
 
     def min(self, dtype=None):
-        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return cpp_reduce.apply_reduce('sum', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return cpp_reduce.apply_reduce('product', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
         return np.float64(self.sum(dtype=dtype)) / self.valid_count
@@ -275,7 +268,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         return mu, var
 
     def sum_of_squares(self, dtype=None):
-        return cpp_reduce.apply_reduce('sum_of_squares', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         mask = None
@@ -283,8 +276,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             mask = self.nullmask
 
         rounded = cudautils.apply_round(self.data.mem, decimals)
-        return NumericalColumn(data=Buffer(rounded), mask=mask,
-                               dtype=self.dtype)
+        return NumericalColumn(
+            data=Buffer(rounded), mask=mask, dtype=self.dtype
+        )
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -304,23 +298,25 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         if out_dtype is None:
             out_dtype = self.dtype
-        out = columnops.column_applymap(udf=udf, column=self,
-                                        out_dtype=out_dtype)
+        out = columnops.column_applymap(
+            udf=udf, column=self, out_dtype=out_dtype
+        )
         return self.replace(data=out, dtype=out_dtype)
 
     def default_na_value(self):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
-        if dkind == 'f':
+        if dkind == "f":
             return self.dtype.type(np.nan)
-        elif dkind in 'iu':
+        elif dkind in "iu":
             return -1
-        elif dkind == 'b':
+        elif dkind == "b":
             return False
         else:
             raise TypeError(
-                "numeric column of {} has no NaN value".format(self.dtype))
+                "numeric column of {} has no NaN value".format(self.dtype)
+            )
 
     def find_and_replace(self, to_replace, replacement, all_nan):
         """
@@ -328,11 +324,13 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         to_replace_col = columnops.as_column(to_replace)
         replacement_dtype = self.dtype if all_nan else None
-        replacement_col = columnops.as_column(replacement,
-                                              dtype=replacement_dtype)
+        replacement_col = columnops.as_column(
+            replacement, dtype=replacement_dtype
+        )
         replaced = self.copy()
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
-               to_replace_col, replacement_col, replaced)
+            to_replace_col, replacement_col, replaced
+        )
         output = cpp_replace.replace(replaced, to_replace_col, replacement_col)
         return output
 
@@ -364,22 +362,18 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Returns offset of first value that matches
         """
-        found = cudautils.find_first(
-            self.data.mem,
-            value)
+        found = cudautils.find_first(self.data.mem, value)
         if found == -1:
-            raise ValueError('value not found')
+            raise ValueError("value not found")
         return found
 
     def find_last_value(self, value):
         """
         Returns offset of last value that matches
         """
-        found = cudautils.find_last(
-            self.data.mem,
-            value)
+        found = cudautils.find_last(self.data.mem, value)
         if found == -1:
-            raise ValueError('value not found')
+            raise ValueError("value not found")
         return found
 
 
@@ -436,12 +430,14 @@ def safe_cast_to_int(col, dtype):
         return col
 
     new_col = col.astype(dtype)
-    if new_col.unordered_compare('eq', col).all():
+    if new_col.unordered_compare("eq", col).all():
         return new_col
     else:
-        raise TypeError("Cannot safely cast non-equivalent {} to {}".format(
-            col.dtype.type.__name__,
-            np.dtype(dtype).type.__name__))
+        raise TypeError(
+            "Cannot safely cast non-equivalent {} to {}".format(
+                col.dtype.type.__name__, np.dtype(dtype).type.__name__
+            )
+        )
 
 
 def column_hash_values(column0, *other_columns, initial_hash_values=None):

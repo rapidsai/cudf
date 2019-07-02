@@ -1,17 +1,14 @@
 from __future__ import division
 
-import pytest
-
+import cudf
 import numpy as np
 import pandas as pd
-import cudf
-
+import pytest
 from cudf.dataframe import Series
-
 from cudf.tests import utils
 
 
-@pytest.mark.parametrize('dtype', [np.int32, np.int64, np.float32, np.float64])
+@pytest.mark.parametrize("dtype", [np.int32, np.int64, np.float32, np.float64])
 def test_series_abs(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
@@ -19,7 +16,7 @@ def test_series_abs(dtype):
     np.testing.assert_equal(abs(sr).to_array(), abs(arr))
 
 
-@pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
+@pytest.mark.parametrize("dtype", [np.int8, np.int16, np.int32, np.int64])
 def test_series_invert(dtype):
     arr = (np.random.random(1000) * 100).astype(dtype)
     sr = Series(arr)
@@ -27,10 +24,12 @@ def test_series_invert(dtype):
     np.testing.assert_equal((~sr).to_array(), ~arr)
 
 
-@pytest.mark.parametrize('dtype',
-                         [np.int8, np.int16, np.int32, np.int64, np.bool_])
+@pytest.mark.parametrize(
+    "dtype", [np.int8, np.int16, np.int32, np.int64, np.bool_]
+)
 def test_series_not(dtype):
     import pandas as pd
+
     arr = pd.Series(np.random.choice([True, False], 1000)).astype(dtype)
     if dtype is not np.bool_:
         arr = arr * (np.random.random(1000) * 100).astype(dtype)
@@ -60,7 +59,7 @@ def test_series_floor():
     np.testing.assert_equal(sr.floor().to_array(), np.floor(arr))
 
 
-@pytest.mark.parametrize('nelem', [1, 7, 8, 9, 32, 64, 128])
+@pytest.mark.parametrize("nelem", [1, 7, 8, 9, 32, 64, 128])
 def test_validity_ceil(nelem):
     # Data
     data = np.random.random(nelem) * 100
@@ -74,21 +73,21 @@ def test_validity_ceil(nelem):
 
     na_value = -100000
     got = res.fillna(na_value).to_array()
-    res_mask = np.asarray(bitmask, dtype=np.bool_)[:data.size]
+    res_mask = np.asarray(bitmask, dtype=np.bool_)[: data.size]
 
     expect = np.ceil(data)
     expect[~res_mask] = na_value
 
     # Check
-    print('expect')
+    print("expect")
     print(expect)
-    print('got')
+    print("got")
     print(got)
 
     np.testing.assert_array_equal(expect, got)
 
 
-@pytest.mark.parametrize('mth', ['min', 'max', 'sum', 'product'])
+@pytest.mark.parametrize("mth", ["min", "max", "sum", "product"])
 def test_series_pandas_methods(mth):
     np.random.seed(0)
     arr = (1 + np.random.random(5) * 100).astype(np.int64)
@@ -97,9 +96,7 @@ def test_series_pandas_methods(mth):
     np.testing.assert_equal(getattr(sr, mth)(), getattr(psr, mth)())
 
 
-@pytest.mark.parametrize('mth', [
-    'min', 'max', 'sum', 'product', 'quantile'
-])
+@pytest.mark.parametrize("mth", ["min", "max", "sum", "product", "quantile"])
 def test_series_pandas_methods_empty(mth):
     arr = np.array([])
     sr = Series(arr)

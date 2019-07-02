@@ -1,23 +1,21 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import pandas as pd
-import numpy as np
-import pyarrow as pa
-import nvstrings
-from numbers import Number
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import warnings
-
-from cudf.dataframe import column, columnops, numerical, series
-from cudf.dataframe.buffer import Buffer
-from cudf.utils import utils, cudautils
+from numbers import Number
 
 import cudf.bindings.binops as cpp_binops
+import numpy as np
+import nvstrings
+import pandas as pd
+import pyarrow as pa
 from cudf.bindings.cudf_cpp import get_ctype_ptr
-from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
-from librmm_cffi import librmm as rmm
+from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
-
+from cudf.dataframe import column, columnops, numerical, series
+from cudf.dataframe.buffer import Buffer
+from cudf.utils import cudautils, utils
+from librmm_cffi import librmm as rmm
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,
@@ -25,7 +23,7 @@ _str_to_numeric_typecast_functions = {
     np.dtype("float32"): nvstrings.nvstrings.stof,
     np.dtype("float64"): nvstrings.nvstrings.stod,
     np.dtype("bool"): nvstrings.nvstrings.to_booleans,
-    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int
+    np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -34,7 +32,7 @@ _numeric_to_str_typecast_functions = {
     np.dtype("float32"): nvstrings.ftos,
     np.dtype("float64"): nvstrings.dtos,
     np.dtype("bool"): nvstrings.from_booleans,
-    np.dtype("datetime64[ms]"): nvstrings.int2timestamp
+    np.dtype("datetime64[ms]"): nvstrings.int2timestamp,
 }
 
 
@@ -42,23 +40,26 @@ class StringMethods(object):
     """
     This mimicks pandas `df.str` interface.
     """
+
     def __init__(self, parent, index=None):
         self._parent = parent
         self._index = index
 
     def __getattr__(self, attr, *args, **kwargs):
         from cudf.dataframe.series import Series
+
         if hasattr(self._parent._data, attr):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
+
                 def wrapper(*args, **kwargs):
                     ret = getattr(self._parent._data, attr)(*args, **kwargs)
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
-                            columnops.as_column(ret),
-                            index=self._index
+                            columnops.as_column(ret), index=self._index
                         )
                     return ret
+
                 return wrapper
             else:
                 return passed_attr
@@ -75,7 +76,8 @@ class StringMethods(object):
             indicating the length of each element in the Series or Index.
         """
         from cudf.dataframe.series import Series
-        out_dev_arr = rmm.device_array(len(self._parent), dtype='int32')
+
+        out_dev_arr = rmm.device_array(len(self._parent), dtype="int32")
         ptr = get_ctype_ptr(out_dev_arr)
         self._parent.data.len(ptr)
 
@@ -84,9 +86,7 @@ class StringMethods(object):
             mask = self._parent.mask
 
         column = columnops.build_column(
-            Buffer(out_dev_arr),
-            np.dtype('int32'),
-            mask=mask
+            Buffer(out_dev_arr), np.dtype("int32"), mask=mask
         )
         return Series(column, index=self._index)
 
@@ -130,58 +130,59 @@ class StringMethods(object):
         from cudf.dataframe import Series, Index
 
         if isinstance(others, (Series, Index)):
-            '''
+            """
             If others is just another Series/Index,
             great go ahead with concatenation
-            '''
-            assert others.dtype == np.dtype('object')
+            """
+            assert others.dtype == np.dtype("object")
             others = others.data
         elif utils.is_list_like(others) and others:
-            '''
+            """
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
-            '''
+            """
 
-            '''
+            """
             Picking first element and checking if it really adheres to
             list like conditions, if not we switch to next case
 
             Note: We have made a call not to iterate over the entire list as
             it could be more expensive if it was of very large size.
             Thus only doing a sanity check on just the first element of list.
-            '''
+            """
             first = others[0]
 
-            if utils.is_list_like(first) or \
-                    isinstance(first, (Series, Index, pd.Series, pd.Index)):
-                '''
+            if utils.is_list_like(first) or isinstance(
+                first, (Series, Index, pd.Series, pd.Index)
+            ):
+                """
                 Internal elements in others list should also be
                 list-like and not a regular string/byte
-                '''
+                """
                 first = None
                 for frame in others:
                     if not isinstance(frame, (Series, Index)):
-                        '''
+                        """
                         Make sure all inputs to .cat function call
                         are of type nvstrings so creating a Series object.
-                        '''
-                        frame = Series(frame, dtype='str')
+                        """
+                        frame = Series(frame, dtype="str")
 
-                    if (first is None):
-                        '''
+                    if first is None:
+                        """
                         extracting nvstrings pointer since
                         `frame` is of type Series/Index and
                         first isn't yet initialized.
-                        '''
+                        """
                         first = frame.data
                     else:
-                        assert frame.dtype == np.dtype('object')
+                        assert frame.dtype == np.dtype("object")
                         frame = frame.data
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
             elif not utils.is_list_like(first):
-                '''
+                """
                 Picking first element and checking if it really adheres to
                 non-list like conditions.
 
@@ -189,7 +190,7 @@ class StringMethods(object):
                 list as it could be more expensive if it was of very
                 large size. Thus only doing a sanity check on just the
                 first element of list.
-                '''
+                """
                 others = Series(others)
                 others = others.data
         elif isinstance(others, (pd.Series, pd.Index)):
@@ -198,7 +199,7 @@ class StringMethods(object):
 
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
-            index=self._index
+            index=self._index,
         )
         if len(out) == 1 and others is None:
             out = out[0]
@@ -209,8 +210,9 @@ class StringMethods(object):
         Join lists contained as elements in the Series/Index with passed
         delimiter.
         """
-        raise NotImplementedError("Columns of arrays / lists are not yet "
-                                  "supported")
+        raise NotImplementedError(
+            "Columns of arrays / lists are not yet " "supported"
+        )
 
     def extract(self, pat, flags=0, expand=True):
         """
@@ -244,12 +246,10 @@ class StringMethods(object):
             raise NotImplementedError("`flags` parameter is not yet supported")
 
         from cudf.dataframe import DataFrame, Series
+
         out = self._parent.data.extract(pat)
         if len(out) == 1 and expand is False:
-            return Series(
-                out[0],
-                index=self._index
-            )
+            return Series(out[0], index=self._index)
         else:
             out_df = DataFrame(index=self._index)
             for idx, val in enumerate(out):
@@ -293,7 +293,8 @@ class StringMethods(object):
             raise NotImplementedError("`na` parameter is not yet supported")
 
         from cudf.dataframe import Series
-        out_dev_arr = rmm.device_array(len(self._parent), dtype='bool')
+
+        out_dev_arr = rmm.device_array(len(self._parent), dtype="bool")
         ptr = get_ctype_ptr(out_dev_arr)
         self._parent.data.contains(pat, regex=regex, devptr=ptr)
 
@@ -302,15 +303,10 @@ class StringMethods(object):
             mask = self._parent.mask
 
         column = columnops.build_column(
-            Buffer(out_dev_arr),
-            np.dtype('bool'),
-            mask=mask
+            Buffer(out_dev_arr), np.dtype("bool"), mask=mask
         )
 
-        return Series(
-            column,
-            index=self._index
-        )
+        return Series(column, index=self._index)
 
     def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
         """
@@ -351,9 +347,10 @@ class StringMethods(object):
             n = -1
 
         from cudf.dataframe import Series
+
         return Series(
             self._parent.data.replace(pat, repl, n=n, regex=regex),
-            index=self._index
+            index=self._index,
         )
 
     def lower(self):
@@ -366,10 +363,8 @@ class StringMethods(object):
             A copy of the object with all strings converted to lowercase.
         """
         from cudf.dataframe import Series
-        return Series(
-            self._parent.data.lower(),
-            index=self._index
-        )
+
+        return Series(self._parent.data.lower(), index=self._index)
 
     def split(self, pat=None, n=-1, expand=True):
         """
@@ -404,6 +399,7 @@ class StringMethods(object):
             n = -1
 
         from cudf.dataframe import DataFrame
+
         out_df = DataFrame(index=self._index)
         out = self._parent.data.split(delimiter=pat, n=n)
         for idx, val in enumerate(out):
@@ -414,6 +410,7 @@ class StringMethods(object):
 class StringColumn(columnops.TypedColumnBase):
     """Implements operations for Columns of String type
     """
+
     def __init__(self, data, null_count=None, **kwargs):
         """
         Parameters
@@ -424,6 +421,7 @@ class StringColumn(columnops.TypedColumnBase):
             The number of null values in the mask.
         """
         from collections.abc import Sequence
+
         if isinstance(data, Sequence):
             data = nvstrings.to_device(data)
         assert isinstance(data, nvstrings.nvstrings)
@@ -435,9 +433,10 @@ class StringColumn(columnops.TypedColumnBase):
         self._null_count = null_count
         self._mask = None
         if self._null_count > 0:
-            mask_size = utils.calc_chunk_size(len(self.data),
-                                              utils.mask_bitsize)
-            out_mask_arr = rmm.device_array(mask_size, dtype='int8')
+            mask_size = utils.calc_chunk_size(
+                len(self.data), utils.mask_bitsize
+            )
+            out_mask_arr = rmm.device_array(mask_size, dtype="int8")
             out_mask_ptr = get_ctype_ptr(out_mask_arr)
             self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
             self._mask = Buffer(out_mask_arr)
@@ -446,7 +445,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     def __reduce__(self):
         cpumem = self.to_arrow()
-        return columnops.as_column, (cpumem, False, np.dtype('object'))
+        return columnops.as_column, (cpumem, False, np.dtype("object"))
 
     def str(self, index=None):
         return StringMethods(self, index=index)
@@ -477,6 +476,7 @@ class StringColumn(columnops.TypedColumnBase):
     def nvcategory(self):
         if self._nvcategory is None:
             import nvcategory as nvc
+
             self._nvcategory = nvc.from_strings(self.data)
         return self._nvcategory
 
@@ -484,8 +484,7 @@ class StringColumn(columnops.TypedColumnBase):
     def indices(self):
         if self._indices is None:
             out_dev_arr = rmm.device_array(
-                self.nvcategory.size(),
-                dtype='int32'
+                self.nvcategory.size(), dtype="int32"
             )
             ptr = get_ctype_ptr(out_dev_arr)
             self.nvcategory.values(devptr=ptr)
@@ -509,7 +508,7 @@ class StringColumn(columnops.TypedColumnBase):
             return self.element_indexing(gpu_arr)
         elif isinstance(arg, DeviceNDArray):
             # NVStrings gather call expects an array of int32s
-            arg = cudautils.astype(arg, np.dtype('int32'))
+            arg = cudautils.astype(arg, np.dtype("int32"))
             arg = cudautils.modulo(arg, len(self))
             if len(arg) > 0:
                 gpu_ptr = get_ctype_ptr(arg)
@@ -530,32 +529,30 @@ class StringColumn(columnops.TypedColumnBase):
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
-        elif dtype in (np.dtype('int8'), np.dtype('int16')):
+        elif dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
-            dtype = np.dtype('int32')
+            dtype = np.dtype("int32")
         else:
             out_dtype = np.dtype(dtype)
 
         out_arr = rmm.device_array(shape=len(self), dtype=dtype)
         out_ptr = get_ctype_ptr(out_arr)
-        kwargs = {
-            'devptr': out_ptr
-        }
-        if dtype == np.dtype('datetime64[ms]'):
-            kwargs['units'] = 'ms'
-        _str_to_numeric_typecast_functions[
-            np.dtype(dtype)
-        ](self.str(), **kwargs)
+        kwargs = {"devptr": out_ptr}
+        if dtype == np.dtype("datetime64[ms]"):
+            kwargs["units"] = "ms"
+        _str_to_numeric_typecast_functions[np.dtype(dtype)](
+            self.str(), **kwargs
+        )
 
         out_col = columnops.as_column(out_arr)
         return out_col.astype(out_dtype)
 
     def to_arrow(self):
-        sbuf = np.empty(self._data.byte_count(), dtype='int8')
-        obuf = np.empty(len(self._data) + 1, dtype='int32')
+        sbuf = np.empty(self._data.byte_count(), dtype="int8")
+        obuf = np.empty(len(self._data) + 1, dtype="int32")
 
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
-        nbuf = np.empty(mask_size, dtype='int8')
+        nbuf = np.empty(mask_size, dtype="int8")
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
         sbuf = pa.py_buffer(sbuf)
@@ -593,18 +590,20 @@ class StringColumn(columnops.TypedColumnBase):
         return self.to_arrow().to_pandas()
 
     def serialize(self, serialize):
-        header = {
-            'null_count': self._null_count,
-        }
+        header = {"null_count": self._null_count}
         frames = []
         sub_headers = []
 
-        sbuf = rmm.device_array(self._data.byte_count(), dtype='int8')
-        obuf = rmm.device_array(len(self._data) + 1, dtype='int32')
+        sbuf = rmm.device_array(self._data.byte_count(), dtype="int8")
+        obuf = rmm.device_array(len(self._data) + 1, dtype="int32")
         mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
-        nbuf = rmm.device_array(mask_size, dtype='int8')
-        self.data.to_offsets(get_ctype_ptr(sbuf), get_ctype_ptr(obuf),
-                             nbuf=get_ctype_ptr(nbuf), bdevmem=True)
+        nbuf = rmm.device_array(mask_size, dtype="int8")
+        self.data.to_offsets(
+            get_ctype_ptr(sbuf),
+            get_ctype_ptr(obuf),
+            nbuf=get_ctype_ptr(nbuf),
+            bdevmem=True,
+        )
 
         for item in [nbuf, sbuf, obuf]:
             sheader, [frame] = serialize(item)
@@ -642,7 +641,7 @@ class StringColumn(columnops.TypedColumnBase):
         elif na_position == "first":
             nullfirst = True
 
-        idx_dev_arr = rmm.device_array(len(self), dtype='int32')
+        idx_dev_arr = rmm.device_array(len(self), dtype="int32")
         dev_ptr = get_ctype_ptr(idx_dev_arr)
         self.data.order(2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr)
 
@@ -650,7 +649,7 @@ class StringColumn(columnops.TypedColumnBase):
             data=Buffer(idx_dev_arr),
             mask=None,
             null_count=0,
-            dtype=idx_dev_arr.dtype
+            dtype=idx_dev_arr.dtype,
         )
 
         col_keys = self[col_inds.data.mem]
@@ -659,9 +658,9 @@ class StringColumn(columnops.TypedColumnBase):
 
     def _replace_defaults(self):
         params = {
-            'data': self.data,
-            'mask': self.mask,
-            'null_count': self.null_count,
+            "data": self.data,
+            "mask": self.mask,
+            "null_count": self.null_count,
         }
         return params
 
@@ -678,10 +677,7 @@ class StringColumn(columnops.TypedColumnBase):
         """
         to_replace = columnops.as_column(to_replace)
         replacement = columnops.as_column(replacement)
-        if (
-                len(to_replace) == 1
-                and len(replacement) == 1
-        ):
+        if len(to_replace) == 1 and len(replacement) == 1:
             to_replace = to_replace.data.to_host()[0]
             replacement = replacement.data.to_host()[0]
             result = self.data.replace(to_replace, replacement)
@@ -697,11 +693,10 @@ class StringColumn(columnops.TypedColumnBase):
         Fill null values with * fill_value *
         """
 
-        if not isinstance(fill_value, str) and \
-            not(
-                isinstance(fill_value, series.Series) and
-                isinstance(fill_value._column, StringColumn)
-                ):
+        if not isinstance(fill_value, str) and not (
+            isinstance(fill_value, series.Series)
+            and isinstance(fill_value._column, StringColumn)
+        ):
             raise TypeError("fill_value must be a string or a string series")
 
         # replace fill_value with nvstrings
@@ -709,8 +704,10 @@ class StringColumn(columnops.TypedColumnBase):
 
         if isinstance(fill_value, series.Series):
             if len(fill_value) < len(self):
-                raise ValueError("fill value series must be of same or "
-                                 "greater length than the series to be filled")
+                raise ValueError(
+                    "fill value series must be of same or "
+                    "greater length than the series to be filled"
+                )
 
             fill_value = fill_value[: len(self)]._column._data
 
@@ -732,23 +729,24 @@ class StringColumn(columnops.TypedColumnBase):
     def find_last_value(self, value):
         return self._find_first_and_last(value)[1]
 
-    def unique(self, method='sort'):
+    def unique(self, method="sort"):
         """
         Get unique strings in the data
         """
         import nvcategory as nvc
+
         return StringColumn(nvc.from_strings(self.data).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
-            col = utils.scalar_broadcast_to(other,
-                                            shape=len(self),
-                                            dtype="object")
+            col = utils.scalar_broadcast_to(
+                other, shape=len(self), dtype="object"
+            )
             return self.replace(data=col.data)
         else:
-            raise TypeError('cannot broadcast {}'.format(type(other)))
+            raise TypeError("cannot broadcast {}".format(type(other)))
 
     def default_na_value(self):
         return None
@@ -760,10 +758,8 @@ class StringColumn(columnops.TypedColumnBase):
         lhs = self
         if reflect:
             lhs, rhs = rhs, lhs
-        if isinstance(rhs, StringColumn) and binop == 'add':
-            return lhs.data.cat(
-                others=rhs.data,
-            )
+        if isinstance(rhs, StringColumn) and binop == "add":
+            return lhs.data.cat(others=rhs.data)
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
@@ -773,7 +769,7 @@ def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = lhs.has_null_mask or rhs.has_null_mask
-    out = columnops.column_empty_like(lhs, dtype='bool', masked=masked)
+    out = columnops.column_empty_like(lhs, dtype="bool", masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs=lhs, rhs=rhs, out=out, op=op)
 

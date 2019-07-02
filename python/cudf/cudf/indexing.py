@@ -1,9 +1,8 @@
+import cudf
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
-import cudf
 from cudf.utils.utils import is_single_value
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 
 class _SeriesLocIndexer(object):
@@ -17,10 +16,12 @@ class _SeriesLocIndexer(object):
     def __getitem__(self, arg):
         from cudf.dataframe.series import Series
         from cudf.dataframe.index import Index
-        if isinstance(arg, (list, np.ndarray, pd.Series, range, Index,
-                            DeviceNDArray)):
+
+        if isinstance(
+            arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
+        ):
             if len(arg) == 0:
-                arg = Series(np.array([], dtype='int32'))
+                arg = Series(np.array([], dtype="int32"))
             else:
                 arg = Series(arg)
         if isinstance(arg, Series):
@@ -41,7 +42,7 @@ class _SeriesLocIndexer(object):
             start_index, stop_index = self._sr.index.find_label_range(
                 arg.start, arg.stop
             )
-            return self._sr.iloc[start_index:stop_index:arg.step]
+            return self._sr.iloc[start_index : stop_index : arg.step]
         else:
             raise NotImplementedError(
                 ".loc not implemented for label type {}".format(
@@ -65,7 +66,6 @@ class _SeriesIlocIndexer(object):
 
 
 class _DataFrameIndexer(object):
-
     def __getitem__(self, arg):
         if type(arg) is not tuple:
             arg = (arg, slice(None, None))
@@ -87,7 +87,7 @@ class _DataFrameIndexer(object):
         """
         if isinstance(arg, str):
             return False
-        if not hasattr(arg, '__len__'):
+        if not hasattr(arg, "__len__"):
             return False
         for obj in arg:
             if not is_single_value(obj):
@@ -98,10 +98,9 @@ class _DataFrameIndexer(object):
         """
         Determine if we are indexing with a MultiIndex
         """
-        return (
-            isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)
-            and isinstance(arg, tuple)
-        )
+        return isinstance(
+            self._df.index, cudf.dataframe.multiindex.MultiIndex
+        ) and isinstance(arg, tuple)
 
     def _can_downcast_to_series(self, df, arg):
         """
@@ -171,6 +170,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
+
         columns = self._get_column_selection(arg[1])
         df = DataFrame()
         for col in columns:
@@ -221,6 +221,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
+
         columns = self._get_column_selection(arg[1])
 
         if isinstance(arg[0], slice):
@@ -264,10 +265,10 @@ def _normalize_dtypes(df):
 
 
 class _IndexLocIndexer(object):
-
     def __init__(self, idx):
         self.idx = idx
 
     def __getitem__(self, arg):
         from cudf.dataframe.index import as_index
+
         return as_index(self.idx.to_series().loc[arg])

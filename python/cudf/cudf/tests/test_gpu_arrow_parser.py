@@ -1,20 +1,19 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-import pytest
 import logging
+
+import numpy as np
+import pytest
+from cudf.comm.gpuarrow import GpuArrowReader
+from librmm_cffi import librmm as rmm
 
 try:
     import pyarrow as pa
+
     arrow_version = pa.__version__
 except ImportError as msg:
-    print('Failed to import pyarrow: {}'.format(msg))
+    print("Failed to import pyarrow: {}".format(msg))
     pa = None
     arrow_version = None
-
-import numpy as np
-
-from librmm_cffi import librmm as rmm
-
-from cudf.comm.gpuarrow import GpuArrowReader
 
 
 def make_gpu_parse_arrow_data_batch():
@@ -24,16 +23,19 @@ def make_gpu_parse_arrow_data_batch():
 
     dest_lat = pa.array(lat)
     dest_lon = pa.array(lon)
-    if arrow_version == '0.7.1':
+    if arrow_version == "0.7.1":
         dest_lat = dest_lat.cast(pa.float32())
         dest_lon = dest_lon.cast(pa.float32())
-    batch = pa.RecordBatch.from_arrays([dest_lat, dest_lon],
-                                       ['dest_lat', 'dest_lon'])
+    batch = pa.RecordBatch.from_arrays(
+        [dest_lat, dest_lon], ["dest_lat", "dest_lon"]
+    )
     return batch
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
+@pytest.mark.skipif(
+    arrow_version is None,
+    reason="need compatible pyarrow to generate test data",
+)
 def test_gpu_parse_arrow_data():
     batch = make_gpu_parse_arrow_data_batch()
     schema_data = batch.schema.serialize()
@@ -49,8 +51,8 @@ def test_gpu_parse_arrow_data():
 
     # test reader
     reader = GpuArrowReader(cpu_schema, gpu_data)
-    assert reader[0].name == 'dest_lat'
-    assert reader[1].name == 'dest_lon'
+    assert reader[0].name == "dest_lat"
+    assert reader[1].name == "dest_lon"
     lat = reader[0].data.copy_to_host()
     lon = reader[1].data.copy_to_host()
     assert lat.size == 23
@@ -61,8 +63,8 @@ def test_gpu_parse_arrow_data():
     np.testing.assert_array_less(-105, lon)
 
     dct = reader.to_dict()
-    np.testing.assert_array_equal(lat, dct['dest_lat'].to_array())
-    np.testing.assert_array_equal(lon, dct['dest_lon'].to_array())
+    np.testing.assert_array_equal(lat, dct["dest_lat"].to_array())
+    np.testing.assert_array_equal(lon, dct["dest_lon"].to_array())
 
 
 expected_values = """
@@ -101,9 +103,8 @@ expected_values = """
 
 def get_expected_values():
     lines = filter(lambda x: x.strip(), expected_values.splitlines())
-    rows = [ln.split(',') for ln in lines]
-    return [(int(idx), name, float(weight))
-            for idx, name, weight in rows]
+    rows = [ln.split(",") for ln in lines]
+    return [(int(idx), name, float(weight)) for idx, name, weight in rows]
 
 
 def make_gpu_parse_arrow_cats_batch():
@@ -115,35 +116,42 @@ def make_gpu_parse_arrow_cats_batch():
     d_names = pa.array(unique_names)
     d_name = pa.DictionaryArray.from_arrays(d_names_map, d_names)
     d_weight = pa.array(weights)
-    batch = pa.RecordBatch.from_arrays([d_index, d_name, d_weight],
-                                       ['idx', 'name', 'weight'])
+    batch = pa.RecordBatch.from_arrays(
+        [d_index, d_name, d_weight], ["idx", "name", "weight"]
+    )
     return batch
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
+@pytest.mark.skipif(
+    arrow_version is None,
+    reason="need compatible pyarrow to generate test data",
+)
 def test_gpu_parse_arrow_cats():
     batch = make_gpu_parse_arrow_cats_batch()
     schema_bytes = batch.schema.serialize().to_pybytes()
     recordbatches_bytes = batch.serialize().to_pybytes()
 
-    schema = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
-                        buffer=bytearray(schema_bytes))
-    rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
-                             buffer=bytearray(recordbatches_bytes))
+    schema = np.ndarray(
+        shape=len(schema_bytes), dtype=np.byte, buffer=bytearray(schema_bytes)
+    )
+    rb_cpu_data = np.ndarray(
+        shape=len(recordbatches_bytes),
+        dtype=np.byte,
+        buffer=bytearray(recordbatches_bytes),
+    )
     rb_gpu_data = rmm.to_device(rb_cpu_data)
 
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
 
-    sr_idx = columns['idx']
-    sr_name = columns['name']
-    sr_weight = columns['weight']
+    sr_idx = columns["idx"]
+    sr_name = columns["name"]
+    sr_weight = columns["weight"]
 
     assert sr_idx.dtype == np.int32
-    assert sr_name.dtype == 'category'
+    assert sr_name.dtype == "category"
     assert sr_weight.dtype == np.double
-    assert set(sr_name) == {'apple', 'pear', 'orange', 'grape'}
+    assert set(sr_name) == {"apple", "pear", "orange", "grape"}
 
     expected = get_expected_values()
     for i in range(len(sr_idx)):
@@ -159,37 +167,44 @@ def test_gpu_parse_arrow_cats():
         np.testing.assert_almost_equal(got_weight, exp_weight)
 
 
-@pytest.mark.skipif(arrow_version is None,
-                    reason='need compatible pyarrow to generate test data')
-@pytest.mark.parametrize('dtype', [np.int8, np.int16, np.int32, np.int64])
+@pytest.mark.skipif(
+    arrow_version is None,
+    reason="need compatible pyarrow to generate test data",
+)
+@pytest.mark.parametrize("dtype", [np.int8, np.int16, np.int32, np.int64])
 def test_gpu_parse_arrow_int(dtype):
 
     depdelay = np.array([0, 0, -3, -2, 11, 6, -7, -4, 4, -3], dtype=dtype)
     arrdelay = np.array([5, -3, 1, -2, 22, 11, -12, -5, 4, -9], dtype=dtype)
     d_depdelay = pa.array(depdelay)
     d_arrdelay = pa.array(arrdelay)
-    batch = pa.RecordBatch.from_arrays([d_depdelay, d_arrdelay],
-                                       ['depdelay', 'arrdelay'])
+    batch = pa.RecordBatch.from_arrays(
+        [d_depdelay, d_arrdelay], ["depdelay", "arrdelay"]
+    )
 
     schema_bytes = batch.schema.serialize().to_pybytes()
     recordbatches_bytes = batch.serialize().to_pybytes()
 
-    schema = np.ndarray(shape=len(schema_bytes), dtype=np.byte,
-                        buffer=bytearray(schema_bytes))
+    schema = np.ndarray(
+        shape=len(schema_bytes), dtype=np.byte, buffer=bytearray(schema_bytes)
+    )
 
-    rb_cpu_data = np.ndarray(shape=len(recordbatches_bytes), dtype=np.byte,
-                             buffer=bytearray(recordbatches_bytes))
+    rb_cpu_data = np.ndarray(
+        shape=len(recordbatches_bytes),
+        dtype=np.byte,
+        buffer=bytearray(recordbatches_bytes),
+    )
 
     rb_gpu_data = rmm.to_device(rb_cpu_data)
     gar = GpuArrowReader(schema, rb_gpu_data)
     columns = gar.to_dict()
-    assert columns['depdelay'].dtype == dtype
+    assert columns["depdelay"].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
-    assert list(columns['depdelay']) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
+    assert list(columns["depdelay"]) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
-    logging.getLogger('cudf.gpuarrow').setLevel(logging.DEBUG)
+    logging.getLogger("cudf.gpuarrow").setLevel(logging.DEBUG)
 
     test_gpu_parse_arrow_data()

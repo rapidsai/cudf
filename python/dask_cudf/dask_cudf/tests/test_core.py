@@ -1,19 +1,21 @@
+import cudf
 import dask
 import dask.dataframe as dd
+import dask_cudf as dgd
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 import pytest
-
-import cudf
-import dask_cudf as dgd
 
 
 def test_from_cudf():
     np.random.seed(0)
 
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10000), "y": np.random.normal(size=10000)}
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
     )
 
     gdf = cudf.DataFrame.from_pandas(df)
@@ -92,7 +94,10 @@ def test_query_local_dict():
 def test_head():
     np.random.seed(0)
     df = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=100), "y": np.random.normal(size=100)}
+        {
+            "x": np.random.randint(0, 5, size=100),
+            "y": np.random.normal(size=100),
+        }
     )
     gdf = cudf.DataFrame.from_pandas(df)
     dgf = dd.from_pandas(gdf, npartitions=2)
@@ -120,7 +125,9 @@ def test_set_index(nelem):
         # Use unique index range as the sort may not be stable-ordering
         x = np.arange(nelem)
         np.random.shuffle(x)
-        df = pd.DataFrame({"x": x, "y": np.random.randint(0, nelem, size=nelem)})
+        df = pd.DataFrame(
+            {"x": x, "y": np.random.randint(0, nelem, size=nelem)}
+        )
         ddf = dd.from_pandas(df, npartitions=2)
         dgdf = ddf.map_partitions(cudf.from_pandas)
 
@@ -348,9 +355,12 @@ def test_unary_ops(func, gdf, gddf):
     # Fixed in https://github.com/dask/dask/pull/4657
     if isinstance(p, cudf.Index):
         from packaging import version
+
         if version.parse(dask.__version__) < version.parse("1.1.6"):
-            pytest.skip("dask.dataframe assert_eq index check hardcoded to "
-                        "pandas prior to 1.1.6 release")
+            pytest.skip(
+                "dask.dataframe assert_eq index check hardcoded to "
+                "pandas prior to 1.1.6 release"
+            )
 
     dd.assert_eq(p, g, check_names=False)
 
@@ -360,7 +370,11 @@ def test_concat(gdf, gddf, series):
     if series:
         gdf = gdf.x
         gddf = gddf.x
-    a = cudf.concat([gdf, gdf + 1, gdf + 2]).sort_values("x").reset_index(drop=True)
+    a = (
+        cudf.concat([gdf, gdf + 1, gdf + 2])
+        .sort_values("x")
+        .reset_index(drop=True)
+    )
     b = (
         dd.concat([gddf, gddf + 1, gddf + 2], interleave_partitions=True)
         .compute()

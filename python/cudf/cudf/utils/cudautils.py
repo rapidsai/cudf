@@ -1,15 +1,19 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import numpy as np
-
-from numba import cuda, int32, numpy_support
 from math import fmod, isnan
 
-from librmm_cffi import librmm as rmm
-
-from cudf.utils.utils import (check_equals_int, check_equals_float,
-                              mask_bitsize, mask_get, mask_set, make_mask)
+import numpy as np
 import nvstrings
+from cudf.utils.utils import (
+    check_equals_float,
+    check_equals_int,
+    make_mask,
+    mask_bitsize,
+    mask_get,
+    mask_set,
+)
+from librmm_cffi import librmm as rmm
+from numba import cuda, int32, numpy_support
 
 
 def optimal_block_count(minblkct):
@@ -24,6 +28,7 @@ def to_device(ary):
 
 
 # GPU array initializer
+
 
 @cuda.jit
 def gpu_arange(start, size, step, out):
@@ -42,8 +47,11 @@ def arange(start, stop=None, step=1, dtype=np.int64):
 
     if size < 0:
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
-        raise ValueError(msgfmt.format(size=size, start=start, stop=stop,
-                                       step=step, dtype=dtype))
+        raise ValueError(
+            msgfmt.format(
+                size=size, start=start, stop=stop, step=step, dtype=dtype
+            )
+        )
     out = rmm.device_array(shape=int(size), dtype=dtype)
     if size > 0:
         gpu_arange.forall(size)(start, size, step, out)
@@ -106,9 +114,8 @@ def astype(ary, dtype):
     if ary.dtype == np.dtype(dtype):
         return ary
     elif (
-        (ary.dtype == np.int64 or ary.dtype == np.dtype('datetime64[ms]')) and
-        (dtype == np.dtype('int64') or dtype == np.dtype('datetime64[ms]'))
-    ):
+        ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")
+    ) and (dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")):
         return ary.view(dtype)
     elif ary.size == 0:
         return rmm.device_array(shape=ary.shape, dtype=dtype)
@@ -124,8 +131,11 @@ def copy_array(arr, out=None):
     if out is None:
         out = rmm.device_array_like(arr)
 
-    if (arr.is_c_contiguous() and out.is_c_contiguous() and
-            out.size == arr.size):
+    if (
+        arr.is_c_contiguous()
+        and out.is_c_contiguous()
+        and out.size == arr.size
+    ):
         out.copy_to_device(arr)
     else:
         if arr.size > 0:
@@ -140,6 +150,7 @@ def as_contiguous(arr):
 
 
 # Copy column into a matrix
+
 
 @cuda.jit
 def gpu_copy_column(matrix, colidx, colvals):
@@ -156,6 +167,7 @@ def copy_column(matrix, colidx, colvals):
 
 
 # Mask utils
+
 
 @cuda.jit
 def gpu_set_mask_from_stride(mask, stride):
@@ -286,17 +298,18 @@ def prefixsum(vals):
     from cudf.dataframe.buffer import Buffer
 
     # Allocate output
-    slots = rmm.device_array(shape=vals.size + 1,
-                             dtype=vals.dtype)
+    slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
     # Fill 0 to slot[0]
     gpu_fill_value[1, 1](slots[:1], 0)
 
     # Compute prefixsum on the mask
-    in_col = NumericalColumn(data=Buffer(vals), mask=None,
-                             null_count=0, dtype=vals.dtype)
-    out_col = NumericalColumn(data=Buffer(slots[1:]), mask=None,
-                              null_count=0, dtype=vals.dtype)
-    cpp_reduce.apply_scan(in_col, out_col, 'sum', inclusive=True)
+    in_col = NumericalColumn(
+        data=Buffer(vals), mask=None, null_count=0, dtype=vals.dtype
+    )
+    out_col = NumericalColumn(
+        data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
+    )
+    cpp_reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 
@@ -319,7 +332,7 @@ def copy_to_dense(data, mask, out=None):
         # output buffer is provided
         # check it
         if sz >= out.size:
-            raise ValueError('output array too small')
+            raise ValueError("output array too small")
     if out.size > 0:
         gpu_copy_to_dense.forall(data.size)(data, mask, slots, out)
     return (sz, out)
@@ -447,6 +460,7 @@ def notna_mask(data, mask):
 # Binary kernels
 #
 
+
 @cuda.jit
 def gpu_equal_constant_masked(arr, mask, val, out):
     i = cuda.grid(1)
@@ -459,7 +473,7 @@ def gpu_equal_constant_masked(arr, mask, val, out):
 def gpu_equal_constant(arr, val, out):
     i = cuda.grid(1)
     if i < out.size:
-        out[i] = (arr[i] == val)
+        out[i] = arr[i] == val
 
 
 def apply_equal_constant(arr, mask, val, dtype):
@@ -544,12 +558,12 @@ def gpu_shift(in_col, out_col, N):
     i = cuda.grid(1)
     if N > 0:
         if i < in_col.size:
-            out_col[i] = in_col[i-N]
+            out_col[i] = in_col[i - N]
         if i < N:
             out_col[i] = -1
     else:
         if i <= (in_col.size + N):
-            out_col[i] = in_col[i-N]
+            out_col[i] = in_col[i - N]
         if i >= (in_col.size + N) and i < in_col.size:
             out_col[i] = -1
 
@@ -586,12 +600,15 @@ def gpu_round(in_col, out_col, decimal):
         newval = in_col[i] // round_val * round_val
         remainder = fmod(in_col[i], round_val)
 
-        if remainder != 0 and remainder > (.5 * round_val) and in_col[i] > 0:
+        if remainder != 0 and remainder > (0.5 * round_val) and in_col[i] > 0:
             newval = newval + round_val
             out_col[i] = newval
 
-        elif remainder != 0 and abs(remainder) < (.5 * round_val) and \
-                in_col[i] < 0:
+        elif (
+            remainder != 0
+            and abs(remainder) < (0.5 * round_val)
+            and in_col[i] < 0
+        ):
             newval = newval + round_val
             out_col[i] = newval
 
@@ -683,7 +700,7 @@ class UniqueK(object):
 
     def run(self, arr, k):
         if k >= MAX_FAST_UNIQUE_K:
-            raise NotImplementedError('k >= {}'.format(MAX_FAST_UNIQUE_K))
+            raise NotImplementedError("k >= {}".format(MAX_FAST_UNIQUE_K))
         # setup mem
         outsz_ptr = rmm.device_array(shape=1, dtype=np.intp)
         out = rmm.device_array_like(arr)
@@ -692,7 +709,7 @@ class UniqueK(object):
         # copy to host
         unique_ct = outsz_ptr.copy_to_host()[0]
         if unique_ct < 0:
-            raise ValueError('too many unique value (hint: increase k)')
+            raise ValueError("too many unique value (hint: increase k)")
         else:
             hout = out.copy_to_host()
             return hout[:unique_ct]
@@ -769,15 +786,16 @@ def find_first(arr, val):
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if arr.dtype in ('float32', 'float64'):
+        if arr.dtype in ("float32", "float64"):
             gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
         else:
             gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
     from cudf.dataframe.columnops import as_column
+
     found_col = as_column(found)
     min_index = found_col.min()
     if min_index == arr.size:
-        return - 1
+        return -1
     else:
         return min_index
 
@@ -794,11 +812,12 @@ def find_last(arr, val):
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if arr.dtype in ('float32', 'float64'):
+        if arr.dtype in ("float32", "float64"):
             gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
         else:
             gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
     from cudf.dataframe.columnops import as_column
+
     found_col = as_column(found)
     max_index = found_col.max()
     return max_index
@@ -830,7 +849,7 @@ def find_segments(arr, segs=None, markers=None):
         assert markers.dtype == np.dtype(np.int32), markers.dtype
 
     if markers.size > 0:
-        if arr.dtype in ('float32', 'float64'):
+        if arr.dtype in ("float32", "float64"):
             gpu_mark_segment_begins_float.forall(markers.size)(arr, markers)
         else:
             gpu_mark_segment_begins_int.forall(markers.size)(arr, markers)
@@ -844,8 +863,9 @@ def find_segments(arr, segs=None, markers=None):
     # Compact segments
     begins = rmm.device_array(shape=int(ct), dtype=np.int32)
     if markers.size > 0:
-        gpu_scatter_segment_begins.forall(markers.size)(markers, scanned,
-                                                        begins)
+        gpu_scatter_segment_begins.forall(markers.size)(
+            markers, scanned, begins
+        )
     return begins, markers
 
 
@@ -853,7 +873,7 @@ def find_segments(arr, segs=None, markers=None):
 def gpu_value_counts(arr, counts, total_size):
     i = cuda.grid(1)
     if 0 <= i < arr.size - 1:
-        counts[i] = arr[i+1] - arr[i]
+        counts[i] = arr[i + 1] - arr[i]
     elif i == arr.size - 1:
         counts[i] = total_size - arr[i]
 
@@ -869,9 +889,9 @@ def value_count(arr, total_size):
 def gpu_recode(newdata, data, record_table, na_value):
     for i in range(cuda.threadIdx.x, data.size, cuda.blockDim.x):
         val = data[i]
-        newval = (record_table[val]
-                  if 0 <= val < record_table.size
-                  else na_value)
+        newval = (
+            record_table[val] if 0 <= val < record_table.size else na_value
+        )
         newdata[i] = newval
 
 
@@ -895,12 +915,13 @@ def gpu_row_matrix(rowmatrix, col, nrow, ncol):
 
 
 def row_matrix(cols, nrow, ncol, dtype):
-    matrix = rmm.device_array(shape=(nrow, ncol), dtype=dtype, order='C')
+    matrix = rmm.device_array(shape=(nrow, ncol), dtype=dtype, order="C")
     for colidx, col in enumerate(cols):
         data = matrix[:, colidx]
         if data.size > 0:
-            gpu_row_matrix.forall(data.size)(data, col.to_gpu_array(), nrow,
-                                             ncol)
+            gpu_row_matrix.forall(data.size)(
+                data, col.to_gpu_array(), nrow, ncol
+            )
     return matrix
 
 

@@ -1,14 +1,10 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 from setuptools import find_packages, setup
+
 import versioneer
 
-
-install_requires = [
-    'cudf',
-    'dask',
-    'distributed'
-]
+install_requires = ["cudf", "dask", "distributed"]
 
 setup(
     name="dask-cudf",

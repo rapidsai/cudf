@@ -6,20 +6,18 @@ LibGDF operates on column.
 """
 from numbers import Number
 
-import numpy as np
-import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
-from librmm_cffi import librmm as rmm
-import nvstrings
-import cudf.bindings.quantile as cpp_quantile
 import cudf.bindings.copying as cpp_copying
-
-from cudf.utils import cudautils, utils, ioutils
-from cudf.dataframe.buffer import Buffer
-from cudf.bindings.cudf_cpp import count_nonzero_mask, column_view_pointer
+import cudf.bindings.quantile as cpp_quantile
+import numpy as np
+import nvstrings
+import pandas as pd
 from cudf.bindings.concat import _column_concat
+from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
+from cudf.dataframe.buffer import Buffer
+from cudf.utils import cudautils, ioutils, utils
+from librmm_cffi import librmm as rmm
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 
 class Column(object):
@@ -42,6 +40,7 @@ class Column(object):
     These attributes are exported in the properties (e.g. *data*, *mask*,
     *null_count*).
     """
+
     @classmethod
     def _concat(cls, objs, dtype=None):
         from cudf.dataframe.string import StringColumn
@@ -50,15 +49,12 @@ class Column(object):
         if len(objs) == 0:
             if pd.api.types.is_categorical_dtype(dtype):
                 return CategoricalColumn(
-                    data=Column(Buffer.null(np.dtype('int8'))),
+                    data=Column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
-                    ordered=False
+                    ordered=False,
                 )
-            elif dtype == np.dtype('object'):
-                return StringColumn(
-                    data=nvstrings.to_device([]),
-                    null_count=0
-                )
+            elif dtype == np.dtype("object"):
+                return StringColumn(data=nvstrings.to_device([]), null_count=0)
             else:
                 dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
@@ -76,21 +72,21 @@ class Column(object):
                 # if all null, cast to appropriate dtype
                 if len(obj) == obj.null_count:
                     from cudf.dataframe.columnops import column_empty_like
-                    objs[i] = column_empty_like(head,
-                                                dtype=head.dtype,
-                                                masked=True,
-                                                newsize=len(obj))
+
+                    objs[i] = column_empty_like(
+                        head, dtype=head.dtype, masked=True, newsize=len(obj)
+                    )
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(set(
-                [val for o in objs for val in o.cat().categories]
-            ))
+            new_cats = tuple(
+                set([val for o in objs for val in o.cat().categories])
+            )
             objs = [o.cat()._set_categories(new_cats) for o in objs]
 
         head = objs[0]
         for obj in objs:
-            if not(obj.is_type_equivalent(head)):
+            if not (obj.is_type_equivalent(head)):
                 raise ValueError("All series must be of same type")
 
         # Handle strings separately
@@ -124,6 +120,7 @@ class Column(object):
            object), and an optional mask device array
         """
         from cudf.dataframe import columnops
+
         if isinstance(data_mem, nvstrings.nvstrings):
             return columnops.build_column(data_mem, np.dtype("object"))
         else:
@@ -164,10 +161,7 @@ class Column(object):
         assert null_count is None or null_count >= 0
         if null_count is None:
             if self._mask is not None:
-                nnz = count_nonzero_mask(
-                    self._mask.mem,
-                    size=len(self)
-                )
+                nnz = count_nonzero_mask(self._mask.mem, size=len(self))
                 null_count = len(self) - nnz
                 if null_count == 0:
                     self._mask = None
@@ -182,35 +176,36 @@ class Column(object):
         self._null_count = null_count
 
     def serialize(self, serialize):
-        header = {
-            'null_count': self._null_count,
-        }
+        header = {"null_count": self._null_count}
         frames = []
 
-        header['data_buffer'], data_frames = serialize(self._data)
-        header['data_frame_count'] = len(data_frames)
+        header["data_buffer"], data_frames = serialize(self._data)
+        header["data_frame_count"] = len(data_frames)
         frames.extend(data_frames)
-        header['mask_buffer'], mask_frames = serialize(self._mask)
-        header['mask_frame_count'] = len(mask_frames)
+        header["mask_buffer"], mask_frames = serialize(self._mask)
+        header["mask_frame_count"] = len(mask_frames)
         frames.extend(mask_frames)
-        header['frame_count'] = len(frames)
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        data_nframe = header['data_frame_count']
-        mask_nframe = header['mask_frame_count']
-        data = deserialize(header['data_buffer'], frames[:data_nframe])
-        mask = deserialize(header['mask_buffer'],
-                           frames[data_nframe:data_nframe + mask_nframe])
+        data_nframe = header["data_frame_count"]
+        mask_nframe = header["mask_frame_count"]
+        data = deserialize(header["data_buffer"], frames[:data_nframe])
+        mask = deserialize(
+            header["mask_buffer"],
+            frames[data_nframe : data_nframe + mask_nframe],
+        )
         return data, mask
 
     def _get_mask_as_column(self):
         from cudf.dataframe.numerical import NumericalColumn
 
         data = Buffer(cudautils.ones(len(self), dtype=np.bool_))
-        mask = NumericalColumn(data=data, mask=None, null_count=0,
-                               dtype=np.bool_)
+        mask = NumericalColumn(
+            data=data, mask=None, null_count=0, dtype=np.bool_
+        )
         if self._mask is not None:
             mask = mask.set_mask(self._mask).fillna(False)
         return mask
@@ -261,7 +256,7 @@ class Column(object):
         if not isinstance(mask, Buffer):
             mask = Buffer(mask)
         if mask.dtype not in (np.dtype(np.uint8), np.dtype(np.int8)):
-            msg = 'mask must be of byte; but got {}'.format(mask.dtype)
+            msg = "mask must be of byte; but got {}".format(mask.dtype)
             raise ValueError(msg)
         return self.replace(mask=mask, null_count=null_count)
 
@@ -274,7 +269,7 @@ class Column(object):
         mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
         mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
-            cudautils.fill_value(mask, 0xff if all_valid else 0)
+            cudautils.fill_value(mask, 0xFF if all_valid else 0)
         return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)
 
     def to_gpu_array(self, fillna=None):
@@ -333,13 +328,13 @@ class Column(object):
         if self.has_null_mask:
             return self._mask
         else:
-            raise ValueError('Column has no null mask')
+            raise ValueError("Column has no null mask")
 
     def _replace_defaults(self):
         params = {
-            'data': self.data,
-            'mask': self.mask,
-            'null_count': self.null_count,
+            "data": self.data,
+            "mask": self.mask,
+            "null_count": self.null_count,
         }
         return params
 
@@ -354,11 +349,12 @@ class Column(object):
         underlying data and mask and a shallow copy creates a new column and
         copies the references of the data and mask.
         """
-        if(deep):
+        if deep:
             deep = self.copy_data()
             if self.has_null_mask:
-                return deep.set_mask(mask=self.mask.copy(),
-                                     null_count=self.null_count)
+                return deep.set_mask(
+                    mask=self.mask.copy(), null_count=self.null_count
+                )
             else:
                 return deep.allocate_mask()
         else:
@@ -374,8 +370,8 @@ class Column(object):
         """
         params = self._replace_defaults()
         params.update(kwargs)
-        if 'mask' in kwargs and 'null_count' not in kwargs:
-            del params['null_count']
+        if "mask" in kwargs and "null_count" not in kwargs:
+            del params["null_count"]
         return type(self)(**params)
 
     def view(self, newcls, **kwargs):
@@ -394,8 +390,8 @@ class Column(object):
         """
         params = Column._replace_defaults(self)
         params.update(kwargs)
-        if 'mask' in kwargs and 'null_count' not in kwargs:
-            del params['null_count']
+        if "mask" in kwargs and "null_count" not in kwargs:
+            del params["null_count"]
         return newcls(**params)
 
     def element_indexing(self, index):
@@ -411,8 +407,11 @@ class Column(object):
         if index > len(self) - 1:
             raise IndexError
         val = self.data[index]  # this can raise IndexError
-        valid = (cudautils.mask_get.py_func(self.nullmask, index)
-                 if self.has_null_mask else True)
+        valid = (
+            cudautils.mask_get.py_func(self.nullmask, index)
+            if self.has_null_mask
+            else True
+        )
         return val if valid else None
 
     def __getitem__(self, arg):
@@ -429,9 +428,8 @@ class Column(object):
                 subdata = self.data[arg]
                 # slicing mask
                 bytemask = cudautils.expand_mask_bits(
-                    self.data.size,
-                    self.mask.to_gpu_array(),
-                    )
+                    self.data.size, self.mask.to_gpu_array()
+                )
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
                 return col
@@ -466,9 +464,11 @@ class Column(object):
 
         # need to invert to properly use gpu_fill_mask
         mask_invert = mask._column._invert()
-        out = cudautils.fill_mask(data=self.data.to_gpu_array(),
-                                  mask=mask_invert.as_mask(),
-                                  value=value)
+        out = cudautils.fill_mask(
+            data=self.data.to_gpu_array(),
+            mask=mask_invert.as_mask(),
+            value=value,
+        )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
     def fillna(self, value):
@@ -478,9 +478,11 @@ class Column(object):
         """
         if not self.has_null_mask:
             return self
-        out = cudautils.fillna(data=self.data.to_gpu_array(),
-                               mask=self.mask.to_gpu_array(),
-                               value=value)
+        out = cudautils.fillna(
+            data=self.data.to_gpu_array(),
+            mask=self.mask.to_gpu_array(),
+            value=value,
+        )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
     def to_dense_buffer(self, fillna=None):
@@ -500,11 +502,11 @@ class Column(object):
         if isinstance(fillna, Number):
             if self.null_count > 0:
                 return self.fillna(fillna)
-        elif fillna not in {None, 'pandas'}:
-            raise ValueError('invalid for fillna')
+        elif fillna not in {None, "pandas"}:
+            raise ValueError("invalid for fillna")
 
         if self.null_count > 0:
-            if fillna == 'pandas':
+            if fillna == "pandas":
                 na_value = self.default_na_value()
                 # fill nan
                 return self.fillna(na_value)
@@ -542,7 +544,7 @@ class Column(object):
         arr = self.to_array()
         indices = np.argwhere(arr == value)
         if not len(indices):
-            raise ValueError('value not found')
+            raise ValueError("value not found")
         return indices[-1, 0]
 
     def find_last_value(self, value):
@@ -552,11 +554,12 @@ class Column(object):
         arr = self.to_array()
         indices = np.argwhere(arr == value)
         if not len(indices):
-            raise ValueError('value not found')
+            raise ValueError("value not found")
         return indices[-1, 0]
 
     def append(self, other):
         from cudf.dataframe.columnops import as_column
+
         return Column._concat([self, as_column(other)])
 
     def quantile(self, q, interpolation, exact):
@@ -593,6 +596,7 @@ class Column(object):
     def to_dlpack(self):
         """{docstring}"""
         import cudf.io.dlpack as dlpack
+
         return dlpack.to_dlpack(self)
 
     @property

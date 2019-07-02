@@ -1,10 +1,9 @@
+import cudf
 import dask
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
-import dask.dataframe as dd
 
 
 @pytest.mark.parametrize("by", ["a", "b"])

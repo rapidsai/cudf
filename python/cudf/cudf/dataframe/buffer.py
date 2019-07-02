@@ -1,14 +1,13 @@
 import numpy as np
-
-from librmm_cffi import librmm as rmm
-
-from cudf.utils import cudautils, utils
 from cudf.comm.serialize import register_distributed_serializer
+from cudf.utils import cudautils, utils
+from librmm_cffi import librmm as rmm
 
 
 class Buffer(object):
     """A 1D gpu buffer.
     """
+
     _cached_ipch = None
 
     @classmethod
@@ -28,12 +27,12 @@ class Buffer(object):
         if size is None:
             if categorical:
                 size = len(mem)
-            elif hasattr(mem, '__len__'):
-                if hasattr(mem, 'ndim') and mem.ndim == 0:
+            elif hasattr(mem, "__len__"):
+                if hasattr(mem, "ndim") and mem.ndim == 0:
                     pass
                 elif len(mem) == 0:
                     size = 0
-            if hasattr(mem, 'size'):
+            if hasattr(mem, "size"):
                 size = mem.size
         if capacity is None:
             capacity = size
@@ -118,7 +117,7 @@ class Buffer(object):
 
     def _sentry_capacity(self, size_needed):
         if size_needed > self.avail_space:
-            raise MemoryError('insufficient space in buffer')
+            raise MemoryError("insufficient space in buffer")
 
     def append(self, element):
         self._sentry_capacity(1)
@@ -128,14 +127,14 @@ class Buffer(object):
         needed = array.size
         self._sentry_capacity(needed)
         array = cudautils.astype(array, dtype=self.dtype)
-        self.mem[self.size:self.size+needed].copy_to_device(array)
+        self.mem[self.size : self.size + needed].copy_to_device(array)
         self.size += needed
 
     def astype(self, dtype):
         if self.dtype == dtype:
             return self
-        elif self.dtype != 'int64' and np.issubdtype(dtype, np.datetime64):
-            return self.astype('int64').astype(dtype)
+        elif self.dtype != "int64" and np.issubdtype(dtype, np.datetime64):
+            return self.astype("int64").astype(dtype)
         else:
             return Buffer(cudautils.astype(self.mem, dtype=dtype))
 
@@ -143,17 +142,23 @@ class Buffer(object):
         return self.to_gpu_array().copy_to_host()
 
     def to_gpu_array(self):
-        return self.mem[:self.size]
+        return self.mem[: self.size]
 
     def copy(self):
         """Deep copy the buffer
         """
-        return Buffer(mem=cudautils.copy_array(self.mem),
-                      size=self.size, capacity=self.capacity)
+        return Buffer(
+            mem=cudautils.copy_array(self.mem),
+            size=self.size,
+            capacity=self.capacity,
+        )
 
     def as_contiguous(self):
-        out = Buffer(mem=cudautils.as_contiguous(self.mem),
-                     size=self.size, capacity=self.capacity)
+        out = Buffer(
+            mem=cudautils.as_contiguous(self.mem),
+            size=self.size,
+            capacity=self.capacity,
+        )
         assert out.is_contiguous()
         return out
 
@@ -171,17 +176,17 @@ class _BufferSentry(object):
 
     def dtype(self, dtype):
         if self._buf.dtype != dtype:
-            raise BufferSentryError('dtype mismatch')
+            raise BufferSentryError("dtype mismatch")
         return self
 
     def ndim(self, ndim):
         if self._buf.ndim != ndim:
-            raise BufferSentryError('ndim mismatch')
+            raise BufferSentryError("ndim mismatch")
         return self
 
     def contig(self):
         if not self._buf.is_c_contiguous():
-            raise BufferSentryError('non contiguous')
+            raise BufferSentryError("non contiguous")
 
 
 register_distributed_serializer(Buffer)

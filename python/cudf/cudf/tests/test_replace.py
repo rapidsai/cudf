@@ -1,9 +1,7 @@
-import pytest
-
 import numpy as np
 import pandas as pd
-
-from cudf.dataframe import Series, DataFrame
+import pytest
+from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 
@@ -17,7 +15,7 @@ def test_series_replace():
     np.testing.assert_equal(sr2.to_array(), a2)
 
     # Categorical
-    psr3 = pd.Series(["one", "two", "three"], dtype='category')
+    psr3 = pd.Series(["one", "two", "three"], dtype="category")
     psr4 = psr3.replace("one", "two")
     sr3 = Series.from_pandas(psr3)
     sr4 = sr3.replace("one", "two")
@@ -41,7 +39,7 @@ def test_series_replace():
     sr9 = Series(list(range(400)) + [None])
     sr10 = sr9.replace([22, 323, 27, 0], None)
     assert sr10.null_count == 5
-    assert len(sr10.to_array()) == (401-5)
+    assert len(sr10.to_array()) == (401 - 5)
 
     sr11 = sr9.replace([22, 323, 27, 0], -1)
     assert sr11.null_count == 1
@@ -89,18 +87,20 @@ def test_series_replace_with_nulls():
 
 def test_dataframe_replace():
     # numerical
-    pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
+    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, 4)
     pd.testing.assert_frame_equal(gdf2.to_pandas(), pdf2)
 
     # categorical
-    pdf4 = pd.DataFrame({'a': ['one', 'two', 'three'],
-                         'b': ['one', 'two', 'three']}, dtype='category')
+    pdf4 = pd.DataFrame(
+        {"a": ["one", "two", "three"], "b": ["one", "two", "three"]},
+        dtype="category",
+    )
     gdf4 = DataFrame.from_pandas(pdf4)
-    pdf5 = pdf4.replace('two', 'three')
-    gdf5 = gdf4.replace('two', 'three')
+    pdf5 = pdf4.replace("two", "three")
+    gdf5 = gdf4.replace("two", "three")
     pd.testing.assert_frame_equal(gdf5.to_pandas(), pdf5)
 
     # list input
@@ -113,18 +113,18 @@ def test_dataframe_replace():
     pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
 
     # dict input:
-    pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
-    gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
+    pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
+    gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
     pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
 
-    pdf9 = pdf1.replace({'a': 0}, {'a': 4})
-    gdf9 = gdf1.replace({'a': 0}, {'a': 4})
+    pdf9 = pdf1.replace({"a": 0}, {"a": 4})
+    gdf9 = gdf1.replace({"a": 0}, {"a": 4})
     pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf9)
 
 
 def test_dataframe_replace_with_nulls():
     # numerical
-    pdf1 = pd.DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, 3]})
+    pdf1 = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, 3]})
     gdf1 = DataFrame.from_pandas(pdf1)
     pdf2 = pdf1.replace(0, 4)
     gdf2 = gdf1.replace(0, None).fillna(4)
@@ -140,54 +140,46 @@ def test_dataframe_replace_with_nulls():
     pd.testing.assert_frame_equal(gdf7.to_pandas(), pdf7)
 
     # dict input:
-    pdf8 = pdf1.replace({'a': 0, 'b': 0}, {'a': 4, 'b': 5})
-    gdf8 = gdf1.replace({'a': 0, 'b': 0}, {'a': None, 'b': 5}).fillna(4)
+    pdf8 = pdf1.replace({"a": 0, "b": 0}, {"a": 4, "b": 5})
+    gdf8 = gdf1.replace({"a": 0, "b": 0}, {"a": None, "b": 5}).fillna(4)
     pd.testing.assert_frame_equal(gdf8.to_pandas(), pdf8)
 
-    gdf1 = DataFrame({'a': [0, 1, 2, 3], 'b': [0, 1, 2, None]})
+    gdf1 = DataFrame({"a": [0, 1, 2, 3], "b": [0, 1, 2, None]})
     gdf9 = gdf1.replace([0, 1], [4, 5]).fillna(3)
     pd.testing.assert_frame_equal(gdf9.to_pandas(), pdf6)
 
 
 def test_replace_strings():
-    pdf = pd.Series(['a', 'b', 'c', 'd'])
-    gdf = Series(['a', 'b', 'c', 'd'])
-    assert_eq(
-        pdf.replace('a', 'e'),
-        gdf.replace('a', 'e')
-    )
+    pdf = pd.Series(["a", "b", "c", "d"])
+    gdf = Series(["a", "b", "c", "d"])
+    assert_eq(pdf.replace("a", "e"), gdf.replace("a", "e"))
 
 
-@pytest.mark.parametrize('data_dtype', ['int8', 'int16', 'int32', 'int64',
-                                        'float32', 'float64'])
-@pytest.mark.parametrize('fill_dtype', ['int8', 'int16', 'int32', 'int64',
-                                        'float32', 'float64'])
 @pytest.mark.parametrize(
-    'fill_type',
-    ['scalar', 'series'])
+    "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
 @pytest.mark.parametrize(
-    'null_value',
-    [None, np.nan])
-@pytest.mark.parametrize(
-    'inplace',
-    [True, False])
-def test_series_fillna_numerical(data_dtype, fill_dtype,
-                                 fill_type, null_value, inplace):
+    "fill_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize("null_value", [None, np.nan])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_series_fillna_numerical(
+    data_dtype, fill_dtype, fill_type, null_value, inplace
+):
     # TODO: These tests should use Pandas' nullable int type
     # when we support a recent enough version of Pandas
     # https://pandas.pydata.org/pandas-docs/stable/user_guide/integer_na.html
 
-    if fill_type == 'scalar':
+    if fill_type == "scalar":
         fill_value = np.random.randint(0, 5)
-        expect = np.array(
-            [0, 1, fill_value, 2, fill_value],
-            dtype=data_dtype)
-    elif fill_type == 'series':
+        expect = np.array([0, 1, fill_value, 2, fill_value], dtype=data_dtype)
+    elif fill_type == "series":
         data = np.random.randint(0, 5, (5,))
         fill_value = pd.Series(data, dtype=data_dtype)
         expect = np.array(
-            [0, 1, fill_value[2], 2, fill_value[4]],
-            dtype=data_dtype)
+            [0, 1, fill_value[2], 2, fill_value[4]], dtype=data_dtype
+        )
 
     sr = Series([0, 1, null_value, 2, null_value], dtype=data_dtype)
     result = sr.fillna(fill_value, inplace=inplace)
@@ -200,29 +192,23 @@ def test_series_fillna_numerical(data_dtype, fill_dtype,
     np.testing.assert_equal(expect, got)
 
 
-@pytest.mark.parametrize(
-    'fill_type',
-    ['scalar', 'series'])
-@pytest.mark.parametrize(
-    'null_value',
-    [None, np.nan])
-@pytest.mark.parametrize(
-    'inplace',
-    [True, False])
+@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize("null_value", [None, np.nan])
+@pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_categorical(fill_type, null_value, inplace):
-    data = pd.Series(['a', 'b', 'a', null_value, 'c', null_value],
-                     dtype='category')
+    data = pd.Series(
+        ["a", "b", "a", null_value, "c", null_value], dtype="category"
+    )
     sr = Series.from_pandas(data)
 
-    if fill_type == 'scalar':
-        fill_value = 'c'
-        expect = pd.Series(['a', 'b', 'a', 'c', 'c', 'c'],
-                           dtype='category')
-    elif fill_type == 'series':
-        fill_value = pd.Series(['c', 'c', 'c', 'c', 'c', 'a'],
-                               dtype='category')
-        expect = pd.Series(['a', 'b', 'a', 'c', 'c', 'a'],
-                           dtype='category')
+    if fill_type == "scalar":
+        fill_value = "c"
+        expect = pd.Series(["a", "b", "a", "c", "c", "c"], dtype="category")
+    elif fill_type == "series":
+        fill_value = pd.Series(
+            ["c", "c", "c", "c", "c", "a"], dtype="category"
+        )
+        expect = pd.Series(["a", "b", "a", "c", "c", "a"], dtype="category")
 
     got = sr.fillna(fill_value, inplace=inplace)
 
@@ -232,19 +218,15 @@ def test_fillna_categorical(fill_type, null_value, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    'fill_type',
-    ['scalar', 'series'])
-@pytest.mark.parametrize(
-    'inplace',
-    [True, False])
+@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_datetime(fill_type, inplace):
-    psr = pd.Series(pd.date_range('2010-01-01', '2020-01-10', freq='1y'))
+    psr = pd.Series(pd.date_range("2010-01-01", "2020-01-10", freq="1y"))
 
-    if fill_type == 'scalar':
-        fill_value = pd.Timestamp('2010-01-02')
-    elif fill_type == 'series':
-        fill_value = psr + pd.Timedelta('1d')
+    if fill_type == "scalar":
+        fill_value = pd.Timestamp("2010-01-02")
+    elif fill_type == "series":
+        fill_value = psr + pd.Timedelta("1d")
 
     psr[[5, 9]] = None
     sr = Series.from_pandas(psr)
@@ -258,22 +240,18 @@ def test_fillna_datetime(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    'fill_type',
-    ['scalar', 'series', 'dict'])
-@pytest.mark.parametrize(
-    'inplace',
-    [True, False])
+@pytest.mark.parametrize("fill_type", ["scalar", "series", "dict"])
+@pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_dataframe(fill_type, inplace):
-    pdf = pd.DataFrame({'a': [1, 2, None], 'b': [None, None, 5]})
+    pdf = pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]})
     gdf = DataFrame.from_pandas(pdf)
 
-    if fill_type == 'scalar':
+    if fill_type == "scalar":
         fill_value = 5
-    elif fill_type == 'series':
+    elif fill_type == "series":
         fill_value = Series([3, 4, 5])
     else:
-        fill_value = {'a': 5, 'b': Series([3, 4, 5])}
+        fill_value = {"a": 5, "b": Series([3, 4, 5])}
 
     expect = pdf.fillna(fill_value)
     got = gdf.fillna(fill_value, inplace=inplace)
@@ -284,19 +262,15 @@ def test_fillna_dataframe(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    'fill_type',
-    ['scalar', 'series'])
-@pytest.mark.parametrize(
-    'inplace',
-    [True, False])
+@pytest.mark.parametrize("fill_type", ["scalar", "series"])
+@pytest.mark.parametrize("inplace", [True, False])
 def test_fillna_string(fill_type, inplace):
-    psr = pd.Series(['z', None, 'z', None])
+    psr = pd.Series(["z", None, "z", None])
 
-    if fill_type == 'scalar':
-        fill_value = 'a'
-    elif fill_type == 'series':
-        fill_value = Series(['a', 'b', 'c', 'd'])
+    if fill_type == "scalar":
+        fill_value = "a"
+    elif fill_type == "series":
+        fill_value = Series(["a", "b", "c", "d"])
 
     sr = Series.from_pandas(psr)
 
@@ -309,26 +283,23 @@ def test_fillna_string(fill_type, inplace):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    'data_dtype',
-    ['int8', 'int16', 'int32', 'int64'])
+@pytest.mark.parametrize("data_dtype", ["int8", "int16", "int32", "int64"])
 def test_series_fillna_invalid_dtype(data_dtype):
     gdf = Series([1, 2, None, 3], dtype=data_dtype)
     fill_value = 2.5
     with pytest.raises(TypeError) as raises:
         gdf.fillna(fill_value)
-    raises.match("Cannot safely cast non-equivalent {} to {}".format(
-        type(fill_value).__name__,
-        gdf.dtype.type.__name__
-    ))
+    raises.match(
+        "Cannot safely cast non-equivalent {} to {}".format(
+            type(fill_value).__name__, gdf.dtype.type.__name__
+        )
+    )
 
 
 @pytest.mark.parametrize(
-    'data_dtype',
-    ['int8', 'int16', 'int32', 'int64', 'float32', 'float64'])
-@pytest.mark.parametrize(
-    'fill_value',
-    [100, 100.0, 100.5])
+    "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
     sr = Series.from_pandas(psr)
@@ -346,9 +317,7 @@ def test_series_where(data_dtype, fill_value):
     assert_eq(expect, got)
 
 
-@pytest.mark.parametrize(
-    'fill_value',
-    [100, 100.0, 100.5])
+@pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])
 def test_series_with_nulls_where(fill_value):
     psr = pd.Series([None] * 3 + list(range(5)))
     sr = Series.from_pandas(psr)

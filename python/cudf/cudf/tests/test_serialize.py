@@ -1,21 +1,22 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import functools
+
+import cudf
+import msgpack  # noqa: E402
 import numpy as np
 import pandas as pd
 import pytest
-import cudf
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
+from distributed.protocol import deserialize, serialize  # noqa: E402
 
-pytest.importorskip('dask.distributed')
-pytest.importorskip('distributed.protocol')
+pytest.importorskip("dask.distributed")
+pytest.importorskip("distributed.protocol")
 
-import msgpack  # noqa: E402
-from distributed.protocol import serialize, deserialize  # noqa: E402
 
-cuda_serialize = functools.partial(serialize, serializers=['cuda'])
-cuda_deserialize = functools.partial(deserialize, deserializers=['cuda'])
+cuda_serialize = functools.partial(serialize, serializers=["cuda"])
+cuda_deserialize = functools.partial(deserialize, deserializers=["cuda"])
 
 
 @pytest.mark.parametrize(
@@ -49,7 +50,7 @@ cuda_deserialize = functools.partial(deserialize, deserializers=['cuda'])
 def test_serialize(df):
     """ This should hopefully replace all functions below """
     a = df()
-    if 'cudf' not in type(a).__module__:
+    if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
     header, frames = cuda_serialize(a)
     msgpack.dumps(header)  # ensure that header is msgpack serializable
@@ -59,7 +60,7 @@ def test_serialize(df):
             ndevice += 1
     # Indices etc. will not be DeviceNDArray
     # but data should be...
-    if hasattr(df, '_cols'):
+    if hasattr(df, "_cols"):
         assert ndevice >= len(df._cols)
     else:
         assert ndevice > 0
@@ -70,21 +71,23 @@ def test_serialize(df):
 
 def test_serialize_dataframe():
     df = cudf.DataFrame()
-    df['a'] = np.arange(100)
-    df['b'] = np.arange(100, dtype=np.float32)
-    df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
-                             categories=['a', 'b', 'c'])
+    df["a"] = np.arange(100)
+    df["b"] = np.arange(100, dtype=np.float32)
+    df["c"] = pd.Categorical(
+        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+    )
     outdf = cuda_deserialize(*cuda_serialize(df))
     assert_eq(df, outdf)
 
 
 def test_serialize_dataframe_with_index():
     df = cudf.DataFrame()
-    df['a'] = np.arange(100)
-    df['b'] = np.random.random(100)
-    df['c'] = pd.Categorical(['a', 'b', 'c', '_', '_'] * 20,
-                             categories=['a', 'b', 'c'])
-    df = df.sort_values('b')
+    df["a"] = np.arange(100)
+    df["b"] = np.random.random(100)
+    df["c"] = pd.Categorical(
+        ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
+    )
+    df = df.sort_values("b")
     outdf = cuda_deserialize(*cuda_serialize(df))
     assert_eq(df, outdf)
 
@@ -121,9 +124,9 @@ def test_serialize_masked_series():
 
 def test_serialize_groupby():
     df = cudf.DataFrame()
-    df['key'] = np.random.randint(0, 20, 100)
-    df['val'] = np.arange(100, dtype=np.float32)
-    gb = df.groupby('key')
+    df["key"] = np.random.randint(0, 20, 100)
+    df["val"] = np.arange(100, dtype=np.float32)
+    gb = df.groupby("key")
     outgb = deserialize(*serialize(gb))
     got = gb.mean()
     expect = outgb.mean()
@@ -132,10 +135,11 @@ def test_serialize_groupby():
 
 def test_serialize_datetime():
     # Make frame with datetime column
-    df = pd.DataFrame({'x': np.random.randint(0, 5, size=20),
-                       'y': np.random.normal(size=20)})
-    ts = np.arange(0, len(df), dtype=np.dtype('datetime64[ms]'))
-    df['timestamp'] = ts
+    df = pd.DataFrame(
+        {"x": np.random.randint(0, 5, size=20), "y": np.random.normal(size=20)}
+    )
+    ts = np.arange(0, len(df), dtype=np.dtype("datetime64[ms]"))
+    df["timestamp"] = ts
     gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
     recreated = cuda_deserialize(*cuda_serialize(gdf))
@@ -145,10 +149,11 @@ def test_serialize_datetime():
 
 def test_serialize_string():
     # Make frame with string column
-    df = pd.DataFrame({'x': np.random.randint(0, 5, size=5),
-                       'y': np.random.normal(size=5)})
-    str_data = ['a', 'bc', 'def', 'ghij', 'klmno']
-    df['timestamp'] = str_data
+    df = pd.DataFrame(
+        {"x": np.random.randint(0, 5, size=5), "y": np.random.normal(size=5)}
+    )
+    str_data = ["a", "bc", "def", "ghij", "klmno"]
+    df["timestamp"] = str_data
     gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
     recreated = cuda_deserialize(*cuda_serialize(gdf))
@@ -157,8 +162,8 @@ def test_serialize_string():
 
 
 def test_serialize_empty_string():
-    pd_series = pd.Series([], dtype='str')
-    gd_series = cudf.Series([], dtype='str')
+    pd_series = pd.Series([], dtype="str")
+    gd_series = cudf.Series([], dtype="str")
 
     recreated = cuda_deserialize(*cuda_serialize(gd_series))
     assert_eq(recreated, pd_series)
@@ -166,8 +171,8 @@ def test_serialize_empty_string():
 
 def test_serialize_all_null_string():
     data = [None, None, None, None, None]
-    pd_series = pd.Series(data, dtype='str')
-    gd_series = cudf.Series(data, dtype='str')
+    pd_series = pd.Series(data, dtype="str")
+    gd_series = cudf.Series(data, dtype="str")
 
     recreated = cuda_deserialize(*cuda_serialize(gd_series))
     assert_eq(recreated, pd_series)

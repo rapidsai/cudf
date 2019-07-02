@@ -1,21 +1,18 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import pytest
-
 import numpy as np
 import pandas as pd
-
+import pytest
 from cudf.dataframe import Series
 
-
 params_dtypes = [np.int32, np.float32, np.float64]
-methods = ['min', 'max', 'sum', 'mean', 'var', 'std']
+methods = ["min", "max", "sum", "mean", "var", "std"]
 
-interpolation_methods = ['linear', 'lower', 'higher', 'midpoint', 'nearest']
+interpolation_methods = ["linear", "lower", "higher", "midpoint", "nearest"]
 
 
-@pytest.mark.parametrize('method', methods)
-@pytest.mark.parametrize('dtype', params_dtypes)
+@pytest.mark.parametrize("method", methods)
+@pytest.mark.parametrize("dtype", params_dtypes)
 def test_series_reductions(method, dtype):
     np.random.seed(0)
     arr = np.random.random(100)
@@ -31,7 +28,7 @@ def test_series_reductions(method, dtype):
 
     def call_test(sr):
         fn = getattr(sr, method)
-        if method in ['std', 'var']:
+        if method in ["std", "var"]:
             return fn(ddof=1)
         else:
             return fn()
@@ -41,9 +38,10 @@ def test_series_reductions(method, dtype):
     np.testing.assert_approx_equal(expect, got)
 
 
-@pytest.mark.parametrize('method', methods)
+@pytest.mark.parametrize("method", methods)
 def test_series_reductions_concurrency(method):
     from concurrent.futures import ThreadPoolExecutor
+
     e = ThreadPoolExecutor(10)
 
     np.random.seed(0)
@@ -51,7 +49,7 @@ def test_series_reductions_concurrency(method):
 
     def call_test(sr):
         fn = getattr(sr, method)
-        if method in ['std', 'var']:
+        if method in ["std", "var"]:
             return fn(ddof=1)
         else:
             return fn()
@@ -62,7 +60,7 @@ def test_series_reductions_concurrency(method):
     list(e.map(f, srs * 50))
 
 
-@pytest.mark.parametrize('ddof', range(3))
+@pytest.mark.parametrize("ddof", range(3))
 def test_series_std(ddof):
     np.random.seed(0)
     arr = np.random.random(100) - 0.5
@@ -80,7 +78,7 @@ def test_series_unique():
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
         assert len(set(arr[mask])) == sr.nunique()
-        df = pd.DataFrame(data=arr[mask], columns=['col'])
+        df = pd.DataFrame(data=arr[mask], columns=["col"])
         expect = df.col.value_counts().sort_index()
         got = sr.value_counts().to_pandas().sort_index()
         print(expect.head())
@@ -88,9 +86,10 @@ def test_series_unique():
         assert got.equals(expect)
 
 
-@pytest.mark.parametrize('nan_as_null, dropna',
-                         [(True, True), (True, False),
-                          (False, True), (False, False)])
+@pytest.mark.parametrize(
+    "nan_as_null, dropna",
+    [(True, True), (True, False), (False, True), (False, False)],
+)
 def test_series_nunique(nan_as_null, dropna):
     # We remove nulls as opposed to NaNs using the dropna parameter,
     # so to test against pandas we replace NaN with another discrete value
@@ -100,8 +99,9 @@ def test_series_nunique(nan_as_null, dropna):
     got = cudf_series.nunique(dropna=dropna)
     assert expect == got
 
-    cudf_series = Series([1.0, 2.0, 3.0, np.nan, None],
-                         nan_as_null=nan_as_null)
+    cudf_series = Series(
+        [1.0, 2.0, 3.0, np.nan, None], nan_as_null=nan_as_null
+    )
     if nan_as_null is True:
         pd_series = pd.Series([1.0, 2.0, 3.0, np.nan, None])
     else:
@@ -133,7 +133,7 @@ def test_series_scale():
     pd.testing.assert_series_equal(sr.scale().to_pandas(), scaled)
 
 
-@pytest.mark.parametrize('int_method', interpolation_methods)
+@pytest.mark.parametrize("int_method", interpolation_methods)
 def test_exact_quantiles(int_method):
     arr = np.asarray([6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
@@ -141,16 +141,18 @@ def test_exact_quantiles(int_method):
     df = pd.DataFrame(arr)
     gdf_series = Series(arr)
 
-    q1 = gdf_series.quantile(quant_values, interpolation=int_method,
-                             exact=True)
+    q1 = gdf_series.quantile(
+        quant_values, interpolation=int_method, exact=True
+    )
 
     q2 = df.quantile(quant_values, interpolation=int_method)
 
-    np.testing.assert_allclose(q1.to_pandas().values,
-                               np.array(q2.values).T.flatten(), rtol=1e-10)
+    np.testing.assert_allclose(
+        q1.to_pandas().values, np.array(q2.values).T.flatten(), rtol=1e-10
+    )
 
 
-@pytest.mark.parametrize('int_method', interpolation_methods)
+@pytest.mark.parametrize("int_method", interpolation_methods)
 def test_exact_quantiles_int(int_method):
     arr = np.asarray([7, 0, 3, 4, 2, 1, -1, 1, 6])
     quant_values = [0.0, 0.25, 0.33, 0.5, 1.0]
@@ -158,13 +160,15 @@ def test_exact_quantiles_int(int_method):
     df = pd.DataFrame(arr)
     gdf_series = Series(arr)
 
-    q1 = gdf_series.quantile(quant_values, interpolation=int_method,
-                             exact=True)
+    q1 = gdf_series.quantile(
+        quant_values, interpolation=int_method, exact=True
+    )
 
     q2 = df.quantile(quant_values, interpolation=int_method)
 
-    np.testing.assert_allclose(q1.to_pandas().values,
-                               np.array(q2.values).T.flatten(), rtol=1e-10)
+    np.testing.assert_allclose(
+        q1.to_pandas().values, np.array(q2.values).T.flatten(), rtol=1e-10
+    )
 
 
 def test_approx_quantiles():
@@ -176,8 +180,9 @@ def test_approx_quantiles():
 
     q1 = gdf_series.quantile(quant_values, exact=False)
 
-    np.testing.assert_allclose(q1.to_pandas().values, approx_results,
-                               rtol=1e-10)
+    np.testing.assert_allclose(
+        q1.to_pandas().values, approx_results, rtol=1e-10
+    )
 
 
 def test_approx_quantiles_int():
@@ -192,20 +197,11 @@ def test_approx_quantiles_int():
     assert approx_results == q1.to_pandas().values
 
 
-@pytest.mark.parametrize('data', [
-    [],
-    [1, 2, 3, 10, 326497]
-])
-@pytest.mark.parametrize('q', [
-    [],
-    0.5,
-    1,
-    0.234,
-    [0.345],
-    [0.243, 0.5, 1]
-])
+@pytest.mark.parametrize("data", [[], [1, 2, 3, 10, 326497]])
+@pytest.mark.parametrize("q", [[], 0.5, 1, 0.234, [0.345], [0.243, 0.5, 1]])
 def test_misc_quantiles(data, q):
     from cudf.tests import utils
+
     pdf_series = pd.Series(data)
     gdf_series = Series(data)
 

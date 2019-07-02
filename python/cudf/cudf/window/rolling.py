@@ -1,6 +1,5 @@
-import pandas as pd
-
 import cudf
+import pandas as pd
 from cudf.bindings.rolling import apply_rolling
 from cudf.utils import cudautils
 
@@ -102,6 +101,7 @@ class Rolling:
     2019-01-01T09:00:08.000    1
     dtype: int64
     """
+
     def __init__(self, obj, window, min_periods=None, center=False):
         self.obj = obj
         self.window = window
@@ -111,11 +111,8 @@ class Rolling:
 
     def _apply_agg_series(self, sr, agg_name):
         result_col = apply_rolling(
-            sr._column,
-            self.window,
-            self.min_periods,
-            self.center,
-            agg_name)
+            sr._column, self.window, self.min_periods, self.center, agg_name
+        )
         return sr._copy_construct(data=result_col)
 
     def _apply_agg_dataframe(self, df, agg_name):
@@ -172,10 +169,12 @@ class Rolling:
             if self.min_periods is None:
                 min_periods = window
         else:
-            if not isinstance(self.obj.index,
-                              cudf.dataframe.index.DatetimeIndex):
-                raise ValueError("window must be an integer for "
-                                 "non datetime index")
+            if not isinstance(
+                self.obj.index, cudf.dataframe.index.DatetimeIndex
+            ):
+                raise ValueError(
+                    "window must be an integer for " "non datetime index"
+                )
             try:
                 window = pd.to_timedelta(window)
                 # to_timedelta will also convert np.arrays etc.,
@@ -183,11 +182,11 @@ class Rolling:
                     raise ValueError
                 window = window.to_timedelta64()
             except ValueError as e:
-                raise ValueError("window must be integer or "
-                                 "convertible to a timedelta") from e
+                raise ValueError(
+                    "window must be integer or " "convertible to a timedelta"
+                ) from e
             window = cudautils.window_sizes_from_offset(
-                self.obj.index.as_column().data.mem,
-                window
+                self.obj.index.as_column().data.mem, window
             )
             if self.min_periods is None:
                 min_periods = 1
@@ -196,8 +195,5 @@ class Rolling:
 
     def __repr__(self):
         return "{} [window={},min_periods={},center={}]".format(
-            self.__class__.__name__,
-            self.window,
-            self.min_periods,
-            self.center
+            self.__class__.__name__, self.window, self.min_periods, self.center
         )

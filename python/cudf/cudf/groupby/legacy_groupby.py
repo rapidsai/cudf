@@ -1,30 +1,29 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from collections import OrderedDict, defaultdict, namedtuple
-
 from itertools import chain
+
 import numpy as np
-
-from numba import cuda
-from librmm_cffi import librmm as rmm
-
+from cudf.bindings.sort import apply_segsort
+from cudf.comm.serialize import register_distributed_serializer
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
-from cudf.dataframe.column import Column
-from cudf.dataframe.buffer import Buffer
 from cudf.multi import concat
 from cudf.utils import cudautils
-from cudf.comm.serialize import register_distributed_serializer
-from cudf.bindings.sort import apply_segsort
+from librmm_cffi import librmm as rmm
+from numba import cuda
 
 
 def _auto_generate_grouper_agg(members):
     def make_fun(f):
         def groupby_agg(self):
             return self.agg(f)
+
         return groupby_agg
 
-    for k, f in members['_NAMED_FUNCTIONS'].items():
+    for k, f in members["_NAMED_FUNCTIONS"].items():
         fn = make_fun(f)
         fn.__name__ = k
         fn.__doc__ = """Compute the {} of each group
@@ -33,7 +32,9 @@ Returns
 -------
 
 result : DataFrame
-""".format(k)
+""".format(
+            k
+        )
         members[k] = fn
 
 
@@ -42,9 +43,7 @@ def group_mean(data, segments, output):
     i = cuda.grid(1)
     if i < segments.size:
         s = segments[i]
-        e = (segments[i + 1]
-             if (i + 1) < segments.size
-             else data.size)
+        e = segments[i + 1] if (i + 1) < segments.size else data.size
         # mean calculation
         carry = 0.0
         n = e - s
@@ -58,9 +57,7 @@ def group_max(data, segments, output):
     i = cuda.grid(1)
     if i < segments.size:
         s = segments[i]
-        e = (segments[i + 1]
-             if (i + 1) < segments.size
-             else data.size)
+        e = segments[i + 1] if (i + 1) < segments.size else data.size
 
         tmp = data[s]
         for j in range(s + 1, e):
@@ -73,9 +70,7 @@ def group_min(data, segments, output):
     i = cuda.grid(1)
     if i < segments.size:
         s = segments[i]
-        e = (segments[i + 1]
-             if (i + 1) < segments.size
-             else data.size)
+        e = segments[i + 1] if (i + 1) < segments.size else data.size
 
         tmp = data[s]
         for j in range(s + 1, e):
@@ -83,21 +78,23 @@ def group_min(data, segments, output):
         output[i] = tmp
 
 
-_dfsegs_pack = namedtuple('_dfsegs_pack', ['df', 'segs'])
+_dfsegs_pack = namedtuple("_dfsegs_pack", ["df", "segs"])
 
 
 class Groupby(object):
     """Groupby object returned by cudf.DataFrame.groupby().
     """
-    _NAMED_FUNCTIONS = {'mean': Series.mean,
-                        'std': Series.std,
-                        'var': Series.var,
-                        'min': Series.min,
-                        'max': Series.max,
-                        'count': Series.count,
-                        'sum': Series.sum,
-                        'sum_of_squares': Series.sum_of_squares,
-                        }
+
+    _NAMED_FUNCTIONS = {
+        "mean": Series.mean,
+        "std": Series.std,
+        "var": Series.var,
+        "min": Series.min,
+        "max": Series.max,
+        "count": Series.count,
+        "sum": Series.sum,
+        "sum_of_squares": Series.sum_of_squares,
+    }
 
     def __init__(self, df, by):
         """
@@ -110,20 +107,19 @@ class Groupby(object):
         """
         self._df = df
         self._by = [by] if isinstance(by, str) else list(by)
-        self._val_columns = [idx for idx in self._df.columns
-                             if idx not in self._by]
+        self._val_columns = [
+            idx for idx in self._df.columns if idx not in self._by
+        ]
 
     def serialize(self, serialize):
-        header = {
-            'by': self._by,
-        }
-        header['df'], frames = serialize(self._df)
+        header = {"by": self._by}
+        header["df"], frames = serialize(self._df)
         return header, frames
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
-        by = header['by']
-        df = deserialize(header['df'], frames)
+        by = header["by"]
+        df = deserialize(header["df"], frames)
         return Groupby(df, by)
 
     def __iter__(self):
@@ -204,14 +200,14 @@ class Groupby(object):
         # The "value" columns
         for k, vs in functors.items():
             if k not in self._df.columns:
-                raise NameError('column {} not found'.format(k))
+                raise NameError("column {} not found".format(k))
             if len(vs) == 1:
                 [functor] = vs
                 functors_mapping[k] = {k: functor}
             else:
                 functors_mapping[k] = cur_fn_mapping = OrderedDict()
                 for functor in vs:
-                    newk = '{}_{}'.format(k, functor.__name__)
+                    newk = "{}_{}".format(k, functor.__name__)
                     cur_fn_mapping[newk] = functor
 
             del functor
@@ -222,8 +218,11 @@ class Groupby(object):
         segs = sr_segs.to_array()
 
         for k in self._by:
-            outdf[k] = grouped_df[k].take(sr_segs.to_gpu_array())\
-                                    .reset_index(drop=True)
+            outdf[k] = (
+                grouped_df[k]
+                .take(sr_segs.to_gpu_array())
+                .reset_index(drop=True)
+            )
 
         size = len(outdf)
 
@@ -233,31 +232,31 @@ class Groupby(object):
             begin = segs
             sr = grouped_df[k].reset_index(drop=True)
             for newk, functor in infos.items():
-                if functor.__name__ == 'mean':
+                if functor.__name__ == "mean":
                     dev_begins = rmm.to_device(np.asarray(begin))
                     dev_out = rmm.device_array(size, dtype=np.float64)
                     if size > 0:
-                        group_mean.forall(size)(sr.to_gpu_array(),
-                                                dev_begins,
-                                                dev_out)
+                        group_mean.forall(size)(
+                            sr.to_gpu_array(), dev_begins, dev_out
+                        )
                     values[newk] = dev_out
 
-                elif functor.__name__ == 'max':
+                elif functor.__name__ == "max":
                     dev_begins = rmm.to_device(np.asarray(begin))
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
-                        group_max.forall(size)(sr.to_gpu_array(),
-                                               dev_begins,
-                                               dev_out)
+                        group_max.forall(size)(
+                            sr.to_gpu_array(), dev_begins, dev_out
+                        )
                     values[newk] = dev_out
 
-                elif functor.__name__ == 'min':
+                elif functor.__name__ == "min":
                     dev_begins = rmm.to_device(np.asarray(begin))
                     dev_out = rmm.device_array(size, dtype=sr.dtype)
                     if size > 0:
-                        group_min.forall(size)(sr.to_gpu_array(),
-                                               dev_begins,
-                                               dev_out)
+                        group_min.forall(size)(
+                            sr.to_gpu_array(), dev_begins, dev_out
+                        )
                     values[newk] = dev_out
                 else:
                     end = chain(segs[1:], [len(grouped_df)])
@@ -297,21 +296,22 @@ class Groupby(object):
         orig_df = df.copy()
         df = df.loc[:, levels].reset_index(drop=True)
         df = df.to_frame() if isinstance(df, Series) else df
-        rowid_column = '__cudf.groupby.rowid'
+        rowid_column = "__cudf.groupby.rowid"
         df[rowid_column] = df.index.as_column()
 
         col_order = list(levels)
 
         # Perform grouping
-        df, segs, markers = self._group_first_level(col_order[0],
-                                                    rowid_column, df)
+        df, segs, markers = self._group_first_level(
+            col_order[0], rowid_column, df
+        )
         rowidcol = df[rowid_column]
         sorted_keys = [Series(df.index.as_column())]
         del df
 
         more_keys, reordering_indices, segs = self._group_inner_levels(
-                                            col_order[1:], rowidcol, segs,
-                                            markers=markers)
+            col_order[1:], rowidcol, segs, markers=markers
+        )
         sorted_keys.extend(more_keys)
         valcols = [k for k in orig_df.columns if k not in levels]
         # Prepare output
@@ -320,8 +320,9 @@ class Groupby(object):
         for k, sr in zip(levels, sorted_keys):
             out_df[k] = sr
         # Shuffle the value columns
-        self._group_shuffle(orig_df.loc[:, valcols],
-                            reordering_indices, out_df)
+        self._group_shuffle(
+            orig_df.loc[:, valcols], reordering_indices, out_df
+        )
         return _dfsegs_pack(df=out_df, segs=segs)
 
     def _group_first_level(self, col, rowid_column, df):
@@ -379,8 +380,9 @@ class Groupby(object):
         plan_cache = {}
         for col in columns:
             # Shuffle the key column according to the previous groups
-            srkeys = self._df[col].take(rowidcol.to_gpu_array(),
-                                        ignore_index=True)
+            srkeys = self._df[col].take(
+                rowidcol.to_gpu_array(), ignore_index=True
+            )
             # Segmented sort on the key
             shuf = Column(Buffer(cudautils.arange(len(srkeys))))
 
@@ -389,10 +391,11 @@ class Groupby(object):
             plan = apply_segsort(srkeys._column, shuf, dsegs, plan=plan)
             plan_cache[cache_key] = plan
 
-            sorted_keys.append(srkeys)   # keep sorted key cols
+            sorted_keys.append(srkeys)  # keep sorted key cols
             # Determine segments
-            dsegs, markers = cudautils.find_segments(srkeys.to_gpu_array(),
-                                                     dsegs, markers=markers)
+            dsegs, markers = cudautils.find_segments(
+                srkeys.to_gpu_array(), dsegs, markers=markers
+            )
             # Shuffle
             rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
 
@@ -433,6 +436,7 @@ class Groupby(object):
         Notes
         -----
         """
+
         def _get_function(x):
             if isinstance(x, str):
                 return self._NAMED_FUNCTIONS[x]
@@ -446,9 +450,11 @@ class Groupby(object):
 
         elif isinstance(args, dict):
             for k, v in args.items():
-                functors[k] = ([_get_function(v)]
-                               if not isinstance(v, (tuple, list))
-                               else [_get_function(x) for x in v])
+                functors[k] = (
+                    [_get_function(v)]
+                    if not isinstance(v, (tuple, list))
+                    else [_get_function(x) for x in v]
+                )
         else:
             return self.agg([args])
         return self._agg_groups(functors)
@@ -640,7 +646,7 @@ class Groupby(object):
             raise TypeError("type {!r} is not callable", type(function))
 
         df, segs = self.as_df()
-        kwargs.update({'chunks': segs})
+        kwargs.update({"chunks": segs})
         return df.apply_chunks(function, **kwargs)
 
 

@@ -1,11 +1,10 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf.utils.docutils import docfmt_partial
-
-from io import BytesIO
 import os
 import urllib
+from io import BytesIO
 
+from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
@@ -38,7 +37,8 @@ See Also
 cudf.io.parquet.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
-    docstring=_docstring_read_parquet_metadata)
+    docstring=_docstring_read_parquet_metadata
+)
 
 _docstring_read_parquet = """
 Load a Parquet dataset into a DataFrame
@@ -749,7 +749,7 @@ def is_file_like(obj):
     is_file_like : bool
         If `obj` is file-like returns True otherwise False
     """
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
+    if not (hasattr(obj, "read") or hasattr(obj, "write")):
         return False
     elif not hasattr(obj, "__iter__"):
         return False
@@ -780,7 +780,7 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     """
     if is_url(path_or_data):
         with urllib.request.urlopen(path_or_data) as url:
-            compression = url.headers.get('Content-Encoding', None)
+            compression = url.headers.get("Content-Encoding", None)
             buffer = BytesIO(url.read())
         return buffer, compression
     elif isinstance(path_or_data, str):

@@ -1,25 +1,18 @@
+import cudf
 import dask.dataframe as dd
 import dask_cudf
-import pandas as pd
-import cudf
 import numpy as np
-
+import pandas as pd
 import pytest
 
 
-@pytest.mark.parametrize(
-    'agg',
-    [
-        'sum',
-        'mean',
-        'count',
-        'min',
-        'max'
-    ]
-)
+@pytest.mark.parametrize("agg", ["sum", "mean", "count", "min", "max"])
 def test_groupby_basic_aggs(agg):
     pdf = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10000), "y": np.random.normal(size=10000)}
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
     )
 
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -46,13 +39,16 @@ def test_groupby_basic_aggs(agg):
         lambda df: df.groupby("x").agg({"y": "max"}),
         pytest.param(
             lambda df: df.groupby("x").y.agg(["sum", "max"]),
-            marks=pytest.mark.skip
-        )
+            marks=pytest.mark.skip,
+        ),
     ],
 )
 def test_groupby_agg(func):
     pdf = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10000), "y": np.random.normal(size=10000)}
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
     )
 
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -72,11 +68,15 @@ def test_groupby_agg(func):
 
 @pytest.mark.xfail(reason="cudf issues")
 @pytest.mark.parametrize(
-    "func", [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()]
+    "func",
+    [lambda df: df.groupby("x").std(), lambda df: df.groupby("x").y.std()],
 )
 def test_groupby_std(func):
     pdf = pd.DataFrame(
-        {"x": np.random.randint(0, 5, size=10000), "y": np.random.normal(size=10000)}
+        {
+            "x": np.random.randint(0, 5, size=10000),
+            "y": np.random.normal(size=10000),
+        }
     )
 
     gdf = cudf.DataFrame.from_pandas(pdf)
@@ -98,15 +98,15 @@ def test_groupby_std(func):
     "func",
     [
         pytest.param(
-            lambda df: df.groupby(["a", "b"]).x.sum(),
-            marks=pytest.mark.xfail
+            lambda df: df.groupby(["a", "b"]).x.sum(), marks=pytest.mark.xfail
         ),
         pytest.param(
             lambda df: df.groupby(["a", "b"]).sum(), marks=pytest.mark.xfail
         ),
         pytest.param(
-            lambda df: df.groupby(["a", "b"]).agg({'x', "sum"}), marks=pytest.mark.xfail
-        )
+            lambda df: df.groupby(["a", "b"]).agg({"x", "sum"}),
+            marks=pytest.mark.xfail,
+        ),
     ],
 )
 def test_groupby_multi_column(func):

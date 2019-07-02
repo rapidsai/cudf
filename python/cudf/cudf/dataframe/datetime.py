@@ -1,24 +1,21 @@
 import datetime as dt
 
+import cudf.bindings.binops as cpp_binops
+import cudf.bindings.copying as cpp_copying
+import cudf.bindings.reduce as cpp_reduce
+import cudf.bindings.replace as cpp_replace
+import cudf.bindings.unaryops as cpp_unaryops
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-
-from cudf.dataframe import columnops, numerical, string
-from cudf.utils import utils
-from cudf.dataframe.buffer import Buffer
-from cudf.comm.serialize import register_distributed_serializer
-from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
-from cudf.bindings.cudf_cpp import np_to_pa_dtype
-from cudf.utils.utils import is_single_value
 from cudf._sort import get_sorted_inds
-
-import cudf.bindings.replace as cpp_replace
-import cudf.bindings.reduce as cpp_reduce
-import cudf.bindings.copying as cpp_copying
-import cudf.bindings.binops as cpp_binops
-import cudf.bindings.unaryops as cpp_unaryops
-from cudf.bindings.cudf_cpp import get_ctype_ptr
+from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
+from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf.comm.serialize import register_distributed_serializer
+from cudf.dataframe import columnops, numerical, string
+from cudf.dataframe.buffer import Buffer
+from cudf.utils import utils
+from cudf.utils.utils import is_single_value
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -26,22 +23,20 @@ class DatetimeColumn(columnops.TypedColumnBase):
     # we should support date32 and timestamp, but perhaps
     # only after we move to arrow
     # we also need to support other formats besides Date64
-    _npdatetime64_dtype = np.dtype('datetime64[ms]')
+    _npdatetime64_dtype = np.dtype("datetime64[ms]")
 
     def __init__(self, data, mask=None, null_count=None, dtype=None):
-        super(DatetimeColumn, self).__init__(data=data,
-                                             mask=mask,
-                                             null_count=null_count,
-                                             dtype=dtype
-                                             )
+        super(DatetimeColumn, self).__init__(
+            data=data, mask=mask, null_count=null_count, dtype=dtype
+        )
         self._precision = 1e-3
         self._inverse_precision = 1e3
         self._pandas_conversion_factor = 1e9 * self._precision
 
     def serialize(self, serialize):
         header, frames = super(DatetimeColumn, self).serialize(serialize)
-        assert 'dtype' not in header
-        header['dtype'] = serialize(self._dtype)
+        assert "dtype" not in header
+        header["dtype"] = serialize(self._dtype)
         return header, frames
 
     @classmethod
@@ -52,8 +47,8 @@ class DatetimeColumn(columnops.TypedColumnBase):
         col = cls(
             data=data,
             mask=mask,
-            null_count=header['null_count'],
-            dtype=deserialize(*header['dtype']),
+            null_count=header["null_count"],
+            dtype=deserialize(*header["dtype"]),
         )
         return col
 
@@ -66,38 +61,31 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @property
     def year(self):
-        return self.get_dt_field('year')
+        return self.get_dt_field("year")
 
     @property
     def month(self):
-        return self.get_dt_field('month')
+        return self.get_dt_field("month")
 
     @property
     def day(self):
-        return self.get_dt_field('day')
+        return self.get_dt_field("day")
 
     @property
     def hour(self):
-        return self.get_dt_field('hour')
+        return self.get_dt_field("hour")
 
     @property
     def minute(self):
-        return self.get_dt_field('minute')
+        return self.get_dt_field("minute")
 
     @property
     def second(self):
-        return self.get_dt_field('second')
+        return self.get_dt_field("second")
 
     def get_dt_field(self, field):
-        out = columnops.column_empty_like_same_mask(
-            self,
-            dtype=np.int16
-        )
-        cpp_unaryops.apply_dt_extract_op(
-            self,
-            out,
-            field
-        )
+        out = columnops.column_empty_like_same_mask(self, dtype=np.int16)
+        cpp_unaryops.apply_dt_extract_op(self, out, field)
         return out
 
     def normalize_binop_value(self, other):
@@ -108,17 +96,15 @@ class DatetimeColumn(columnops.TypedColumnBase):
             ary = utils.scalar_broadcast_to(
                 other.value * self._pandas_conversion_factor,
                 shape=len(self),
-                dtype=self._npdatetime64_dtype
+                dtype=self._npdatetime64_dtype,
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self._npdatetime64_dtype)
             ary = utils.scalar_broadcast_to(
-                other,
-                shape=len(self),
-                dtype=self._npdatetime64_dtype
+                other, shape=len(self), dtype=self._npdatetime64_dtype
             )
         else:
-            raise TypeError('cannot broadcast {}'.format(type(other)))
+            raise TypeError("cannot broadcast {}".format(type(other)))
 
         buf = Buffer(ary)
         result = self.replace(data=buf, dtype=self.dtype)
@@ -128,15 +114,16 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def as_numerical(self):
         return self.view(
             numerical.NumericalColumn,
-            dtype='int64',
-            data=self.data.astype('int64')
+            dtype="int64",
+            data=self.data.astype("int64"),
         )
 
     def astype(self, dtype):
         if self.dtype is dtype:
             return self
-        elif (dtype == np.dtype('object') or
-              np.issubdtype(dtype, np.dtype('U').type)):
+        elif dtype == np.dtype("object") or np.issubdtype(
+            dtype, np.dtype("U").type
+        ):
             if len(self) > 0:
                 dev_array = self.data.mem
                 dev_ptr = get_ctype_ptr(dev_array)
@@ -144,10 +131,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 if self.mask is not None:
                     null_ptr = get_ctype_ptr(self.mask.mem)
                 kwargs = {
-                    'count': len(self),
-                    'nulls': null_ptr,
-                    'bdevmem': True,
-                    'units': 'ms'
+                    "count": len(self),
+                    "nulls": null_ptr,
+                    "bdevmem": True,
+                    "units": "ms",
                 }
                 data = string._numeric_to_str_typecast_functions[
                     np.dtype(self.dtype)
@@ -162,55 +149,44 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
-        return binop(
-            lhs, rhs,
-            op=cmpop,
-            out_dtype=np.bool
-        )
+        return binop(lhs, rhs, op=cmpop, out_dtype=np.bool)
 
     def ordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
-        return binop(
-            lhs, rhs,
-            op=cmpop,
-            out_dtype=np.bool
-        )
+        return binop(lhs, rhs, op=cmpop, out_dtype=np.bool)
 
     def to_pandas(self, index=None):
         return pd.Series(
-            self.to_array(fillna='pandas').astype(self.dtype),
-            index=index
+            self.to_array(fillna="pandas").astype(self.dtype), index=index
         )
 
     def to_arrow(self):
         mask = None
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        data = pa.py_buffer(self.data.mem.copy_to_host().view('int64'))
+        data = pa.py_buffer(self.data.mem.copy_to_host().view("int64"))
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),
-            buffers=[
-                mask,
-                data
-            ],
-            null_count=self.null_count
+            buffers=[mask, data],
+            null_count=self.null_count,
         )
 
     def default_na_value(self):
         """Returns the default NA value for this column
         """
         dkind = self.dtype.kind
-        if dkind == 'M':
-            return np.datetime64('nat', 'ms')
+        if dkind == "M":
+            return np.datetime64("nat", "ms")
         else:
             raise TypeError(
-                "datetime column of {} has no NaN value".format(self.dtype))
+                "datetime column of {} has no NaN value".format(self.dtype)
+            )
 
     def fillna(self, fill_value, inplace=False):
         if is_single_value(fill_value):
-            fill_value = np.datetime64(fill_value, 'ms')
+            fill_value = np.datetime64(fill_value, "ms")
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
 
@@ -222,16 +198,18 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
-        col_inds = self.replace(data=sort_inds.data,
-                                mask=sort_inds.mask,
-                                dtype=sort_inds.data.dtype)
+        col_inds = self.replace(
+            data=sort_inds.data,
+            mask=sort_inds.mask,
+            dtype=sort_inds.data.dtype,
+        )
         return col_keys, col_inds
 
     def min(self, dtype=None):
-        return cpp_reduce.apply_reduce('min', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return cpp_reduce.apply_reduce('max', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("max", self, dtype=dtype)
 
     def find_first_value(self, value):
         """

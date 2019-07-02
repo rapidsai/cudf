@@ -12,11 +12,12 @@ accessor properties.
 
 """
 
-from toolz import partial
-
 import cudf
-from cudf.dataframe.categorical import CategoricalAccessor as GdfCategoricalAccessor
+from cudf.dataframe.categorical import (
+    CategoricalAccessor as GdfCategoricalAccessor,
+)
 from cudf.dataframe.series import DatetimeProperties
+from toolz import partial
 
 # Adapted from
 # https://github.com/dask/dask/blob/master/dask/dataframe/accessor.py
@@ -64,15 +65,25 @@ class Accessor(object):
         return out
 
     def _property_map(self, attr):
-        meta = self._delegate_property(self._series._meta, self._accessor_name, attr)
+        meta = self._delegate_property(
+            self._series._meta, self._accessor_name, attr
+        )
         token = "%s-%s" % (self._accessor_name, attr)
         return self._series.map_partitions(
-            self._delegate_property, self._accessor_name, attr, token=token, meta=meta
+            self._delegate_property,
+            self._accessor_name,
+            attr,
+            token=token,
+            meta=meta,
         )
 
     def _function_map(self, attr, *args, **kwargs):
         meta = self._delegate_method(
-            self._series._meta_nonempty, self._accessor_name, attr, args, kwargs
+            self._series._meta_nonempty,
+            self._accessor_name,
+            attr,
+            args,
+            kwargs,
         )
         token = "%s-%s" % (self._accessor_name, attr)
         return self._series.map_partitions(
@@ -159,4 +170,6 @@ class CategoricalAccessor(Accessor):
         if not isinstance(
             series._meta._column, cudf.dataframe.categorical.CategoricalColumn
         ):
-            raise AttributeError("Can only use .cat accessor with categorical values")
+            raise AttributeError(
+                "Can only use .cat accessor with categorical values"
+            )

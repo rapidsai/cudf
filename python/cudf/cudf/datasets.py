@@ -1,18 +1,17 @@
-import pandas as pd
-import numpy as np
-
 import cudf
+import numpy as np
+import pandas as pd
 
-__all__ = ['timeseries', 'randomdata']
+__all__ = ["timeseries", "randomdata"]
 
 
 # TODO:
 # change default of name from category to str type when nvstring are merged
 def timeseries(
-    start='2000-01-01',
-    end='2000-01-31',
-    freq='1s',
-    dtypes={'name': 'category', 'id': int, 'x': float, 'y': float},
+    start="2000-01-01",
+    end="2000-01-31",
+    freq="1s",
+    dtypes={"name": "category", "id": int, "x": float, "y": float},
     seed=None,
 ):
     """ Create timeseries dataframe with random data
@@ -44,18 +43,20 @@ def timeseries(
     2000-01-01 00:00:04   998   Ursula  0.684902 -0.463278
     """
 
-    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name='timestamp')
+    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name="timestamp")
     state = np.random.RandomState(seed)
-    columns = dict((k, make[dt](len(index), state)) for
-                   k, dt in dtypes.items())
+    columns = dict(
+        (k, make[dt](len(index), state)) for k, dt in dtypes.items()
+    )
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
     return cudf.from_pandas(df)
 
 
-def randomdata(nrows=10, dtypes={'id': int, 'x': float, 'y': float},
-               seed=None,):
+def randomdata(
+    nrows=10, dtypes={"id": int, "x": float, "y": float}, seed=None
+):
     """ Create a dataframe with random data
 
     Parameters
@@ -94,10 +95,34 @@ def make_int(n, rstate):
     return rstate.poisson(1000, size=n)
 
 
-names = ['Alice', 'Bob', 'Charlie', 'Dan', 'Edith', 'Frank', 'George',
-         'Hannah', 'Ingrid', 'Jerry', 'Kevin', 'Laura', 'Michael', 'Norbert',
-         'Oliver', 'Patricia', 'Quinn', 'Ray', 'Sarah', 'Tim', 'Ursula',
-         'Victor', 'Wendy', 'Xavier', 'Yvonne', 'Zelda']
+names = [
+    "Alice",
+    "Bob",
+    "Charlie",
+    "Dan",
+    "Edith",
+    "Frank",
+    "George",
+    "Hannah",
+    "Ingrid",
+    "Jerry",
+    "Kevin",
+    "Laura",
+    "Michael",
+    "Norbert",
+    "Oliver",
+    "Patricia",
+    "Quinn",
+    "Ray",
+    "Sarah",
+    "Tim",
+    "Ursula",
+    "Victor",
+    "Wendy",
+    "Xavier",
+    "Yvonne",
+    "Zelda",
+]
 
 
 def make_string(n, rstate):
@@ -105,12 +130,15 @@ def make_string(n, rstate):
 
 
 def make_categorical(n, rstate):
-    return pd.Categorical.from_codes(rstate.randint(0, len(names), size=n),
-                                     names)
+    return pd.Categorical.from_codes(
+        rstate.randint(0, len(names), size=n), names
+    )
 
 
-make = {float: make_float,
-        int: make_int,
-        str: make_string,
-        object: make_string,
-        'category': make_categorical}
+make = {
+    float: make_float,
+    int: make_int,
+    str: make_string,
+    object: make_string,
+    "category": make_categorical,
+}

@@ -1,9 +1,8 @@
-from dask.dataframe.methods import concat_dispatch
-from dask.dataframe.core import get_parallel_type, meta_nonempty, make_meta
 import cudf
+from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
+from dask.dataframe.methods import concat_dispatch
 
-from .core import DataFrame, Series, Index
-
+from .core import DataFrame, Index, Series
 
 get_parallel_type.register(cudf.DataFrame, lambda _: DataFrame)
 get_parallel_type.register(cudf.Series, lambda _: Series)

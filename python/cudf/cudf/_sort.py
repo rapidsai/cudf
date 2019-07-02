@@ -1,17 +1,18 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 
+import collections
+import logging
+
+import cudf.bindings.sort as cpp_sort
+import numpy as np
+from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils
-import cudf.bindings.sort as cpp_sort
-from cudf.dataframe import columnops
 from librmm_cffi import librmm as rmm
 
-import collections
-import numpy as np
-import logging
-logging.basicConfig(format='%(levelname)s:%(message)s')
+logging.basicConfig(format="%(levelname)s:%(message)s")
 
 
 def get_sorted_inds(by, ascending=True, na_position="last"):
@@ -41,7 +42,7 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
 
     inds = Buffer(cudautils.arange(len(by[0])))
     # This is due to current limitation in libcudf of using int32
-    col_inds = columnops.as_column(inds).astype('int32')
+    col_inds = columnops.as_column(inds).astype("int32")
 
     # This needs to be updated to handle list of bools for ascending
     if ascending is True:
@@ -69,7 +70,7 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
     if isinstance(ascending, collections.abc.Sequence):
         # Need to flip the boolean here since libcudf has 0 as ascending
         ascending = [not val for val in ascending]
-        ascending = rmm.to_device(np.array(ascending, dtype='int8'))
+        ascending = rmm.to_device(np.array(ascending, dtype="int8"))
     else:
         raise ValueError("Must use a boolean or list of booleans")
 

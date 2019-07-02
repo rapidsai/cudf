@@ -1,14 +1,15 @@
-from dask import delayed
-import dask.dataframe as dd
-
 import cudf
+import dask.dataframe as dd
+from dask import delayed
 
 
 @delayed
 def local_shuffle(frame, num_new_parts, key_columns):
     """Regroup the frame based on the key column(s)
     """
-    partitions = frame.partition_by_hash(columns=key_columns, nparts=num_new_parts)
+    partitions = frame.partition_by_hash(
+        columns=key_columns, nparts=num_new_parts
+    )
     return dict(enumerate(partitions))
 
 
@@ -24,13 +25,15 @@ def group_frame(frame_partitions, num_new_parts, key_columns):
     """Group frame to prepare for the join
     """
     return [
-        local_shuffle(part, num_new_parts, key_columns) for part in frame_partitions
+        local_shuffle(part, num_new_parts, key_columns)
+        for part in frame_partitions
     ]
 
 
 def fanout_subgroups(grouped_parts, num_new_parts):
     return [
-        [get_subgroup(part, j) for part in grouped_parts] for j in range(num_new_parts)
+        [get_subgroup(part, j) for part in grouped_parts]
+        for j in range(num_new_parts)
     ]
 
 
@@ -62,7 +65,8 @@ def join_frames(left, right, on, how, lsuffix, rsuffix):
     same_names = set(left_val_names) & set(right_val_names)
     if same_names and not (lsuffix or rsuffix):
         raise ValueError(
-            "there are overlapping columns but " "lsuffix and rsuffix are not defined"
+            "there are overlapping columns but "
+            "lsuffix and rsuffix are not defined"
         )
 
     dtypes = {k: left[k].dtype for k in left.columns}
@@ -85,11 +89,14 @@ def join_frames(left, right, on, how, lsuffix, rsuffix):
 
     # Concat
     left_cats = [delayed(cudf.concat, pure=True)(it) for it in left_subgroups]
-    right_cats = [delayed(cudf.concat, pure=True)(it) for it in right_subgroups]
+    right_cats = [
+        delayed(cudf.concat, pure=True)(it) for it in right_subgroups
+    ]
 
     # Combine
     merged = [
-        delayed(merge, pure=True)(left_cats[i], right_cats[i]) for i in range(nparts)
+        delayed(merge, pure=True)(left_cats[i], right_cats[i])
+        for i in range(nparts)
     ]
 
     return dd.from_delayed(merged, prefix="join_result", meta=empty_frame)
