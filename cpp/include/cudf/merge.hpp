@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef SORTED_MERGE_HPP
-#define SORTED_MERGE_HPP
+#ifndef MERGE_HPP
+#define MERGE_HPP
 
 #include <vector>
 #include "cudf.h"
@@ -47,12 +47,12 @@ namespace cudf {
  *
  * @Returns A table containing sorted data from left_table and right_table
  */
-table sorted_merge(table const& left_table,
-                   table const& right_table,
-                   std::vector<gdf_size_type> const& key_cols,
-                   std::vector<order_by_type> const& asc_desc,
-                   bool nulls_are_smallest = false);
+table merge(table const& left_table,
+            table const& right_table,
+            std::vector<gdf_size_type> const& key_cols,
+            std::vector<order_by_type> const& asc_desc,
+            bool nulls_are_smallest = false);
 
 }  // namespace cudf
 
-#endif  // SORTED_MERGE_HPP
+#endif  // MERGE_HPP

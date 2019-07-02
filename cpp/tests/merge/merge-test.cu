@@ -8,7 +8,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/functions.h>
-#include <cudf/sorted_merge.hpp>
+#include <cudf/merge.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/table.hpp>
 
@@ -19,15 +19,15 @@
 #include "tests/utilities/nvcategory_utils.cuh"
 
 template <typename T>
-class SortedMergeTest : public GdfTest {};
+class MergeTest : public GdfTest {};
 
 using test_types =
   ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
                    /* cudf::bool8, */ cudf::nvstring_category>;
 
-TYPED_TEST_CASE(SortedMergeTest, test_types);
+TYPED_TEST_CASE(MergeTest, test_types);
 
-TYPED_TEST(SortedMergeTest, MismatchedNumColumns) {
+TYPED_TEST(MergeTest, MismatchedNumColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -46,13 +46,13 @@ TYPED_TEST(SortedMergeTest, MismatchedNumColumns) {
     std::vector<gdf_size_type> sortByCols = {0};
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                    cudf::table(rightColumns, 2),
-                                    sortByCols,
-                                    orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
+                            cudf::table(rightColumns, 2),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
 }
 
-TYPED_TEST(SortedMergeTest, EmptyKeyColumns) {
+TYPED_TEST(MergeTest, EmptyKeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -69,13 +69,13 @@ TYPED_TEST(SortedMergeTest, EmptyKeyColumns) {
     std::vector<gdf_size_type> sortByCols;
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                    cudf::table(rightColumns, 1),
-                                    sortByCols,
-                                    orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
+                            cudf::table(rightColumns, 1),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
 }
 
-TYPED_TEST(SortedMergeTest, TooManyKeyColumns) {
+TYPED_TEST(MergeTest, TooManyKeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -92,13 +92,13 @@ TYPED_TEST(SortedMergeTest, TooManyKeyColumns) {
     std::vector<gdf_size_type> sortByCols = {0, 1};
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                    cudf::table(rightColumns, 1),
-                                    sortByCols,
-                                    orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
+                            cudf::table(rightColumns, 1),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
 }
 
-TYPED_TEST(SortedMergeTest, EmptyOrderTypes) {
+TYPED_TEST(MergeTest, EmptyOrderTypes) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -115,13 +115,13 @@ TYPED_TEST(SortedMergeTest, EmptyOrderTypes) {
     std::vector<gdf_size_type> sortByCols = {0};
     std::vector<order_by_type> orderByTypes;
 
-    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                    cudf::table(rightColumns, 1),
-                                    sortByCols,
-                                    orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
+                            cudf::table(rightColumns, 1),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
 }
 
-TYPED_TEST(SortedMergeTest, TooManyOrderTypes) {
+TYPED_TEST(MergeTest, TooManyOrderTypes) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -138,13 +138,13 @@ TYPED_TEST(SortedMergeTest, TooManyOrderTypes) {
     std::vector<gdf_size_type> sortByCols = {0};
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
 
-    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                    cudf::table(rightColumns, 1),
-                                    sortByCols,
-                                    orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
+                            cudf::table(rightColumns, 1),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
 }
 
-TYPED_TEST(SortedMergeTest, MismatchedKeyColumnsAndOrderTypes) {
+TYPED_TEST(MergeTest, MismatchedKeyColumnsAndOrderTypes) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -165,13 +165,13 @@ TYPED_TEST(SortedMergeTest, MismatchedKeyColumnsAndOrderTypes) {
     std::vector<gdf_size_type> sortByCols = {0, 1};
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                    cudf::table(rightColumns, 2),
-                                    sortByCols,
-                                    orderByTypes), cudf::logic_error);
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 2),
+                            cudf::table(rightColumns, 2),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
 }
 
-TYPED_TEST(SortedMergeTest, MergeWithEmptyColumn) {
+TYPED_TEST(MergeTest, MergeWithEmptyColumn) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -189,10 +189,10 @@ TYPED_TEST(SortedMergeTest, MergeWithEmptyColumn) {
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
     cudf::table outputTable;
-    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                                    cudf::table(rightColumns, 1),
-                                                    sortByCols,
-                                                    orderByTypes));
+    EXPECT_NO_THROW(outputTable = cudf::merge(cudf::table(leftColumns, 1),
+                                            cudf::table(rightColumns, 1),
+                                            sortByCols,
+                                            orderByTypes));
     
     const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
     auto expectedDataWrap1 = columnFactory.make(outputRows, [](gdf_index_type row) { return row; });
@@ -200,7 +200,7 @@ TYPED_TEST(SortedMergeTest, MergeWithEmptyColumn) {
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
 }
 
-TYPED_TEST(SortedMergeTest, Merge1KeyColumns) {
+TYPED_TEST(MergeTest, Merge1KeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -222,10 +222,10 @@ TYPED_TEST(SortedMergeTest, Merge1KeyColumns) {
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
     cudf::table outputTable;
-    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                                    cudf::table(rightColumns, 2),
-                                                    sortByCols,
-                                                    orderByTypes));
+    EXPECT_NO_THROW(outputTable = cudf::merge(cudf::table(leftColumns, 2),
+                                            cudf::table(rightColumns, 2),
+                                            sortByCols,
+                                            orderByTypes));
 
     const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
     auto expectedDataWrap1 = columnFactory.make(outputRows, [](gdf_index_type row) { return row; });
@@ -235,7 +235,7 @@ TYPED_TEST(SortedMergeTest, Merge1KeyColumns) {
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
 
-TYPED_TEST(SortedMergeTest, Merge2KeyColumns) {
+TYPED_TEST(MergeTest, Merge2KeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -257,10 +257,10 @@ TYPED_TEST(SortedMergeTest, Merge2KeyColumns) {
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
 
     cudf::table outputTable;
-    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                                    cudf::table(rightColumns, 2),
-                                                    sortByCols,
-                                                    orderByTypes));
+    EXPECT_NO_THROW(outputTable = cudf::merge(cudf::table(leftColumns, 2),
+                                            cudf::table(rightColumns, 2),
+                                            sortByCols,
+                                            orderByTypes));
 
     const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
     auto expectedDataWrap1 = columnFactory.make(outputRows, [](gdf_index_type row) { return row / 2; });
@@ -270,7 +270,7 @@ TYPED_TEST(SortedMergeTest, Merge2KeyColumns) {
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
 
-TYPED_TEST(SortedMergeTest, Merge1KeyNullColumns) {
+TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -290,10 +290,10 @@ TYPED_TEST(SortedMergeTest, Merge1KeyNullColumns) {
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
     cudf::table outputTable;
-    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                                    cudf::table(rightColumns, 1),
-                                                    sortByCols,
-                                                    orderByTypes));
+    EXPECT_NO_THROW(outputTable = cudf::merge(cudf::table(leftColumns, 1),
+                                            cudf::table(rightColumns, 1),
+                                            sortByCols,
+                                            orderByTypes));
 
     const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
     // data: 0 1 2 3 4 5 6 7 | valid: 1 1 1 1 1 1 0 0
@@ -305,7 +305,7 @@ TYPED_TEST(SortedMergeTest, Merge1KeyNullColumns) {
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
 }
 
-TYPED_TEST(SortedMergeTest, Merge2KeyNullColumns) {
+TYPED_TEST(MergeTest, Merge2KeyNullColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
     gdf_size_type inputRows = 4;
@@ -331,10 +331,10 @@ TYPED_TEST(SortedMergeTest, Merge2KeyNullColumns) {
     std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
 
     cudf::table outputTable;
-    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                                    cudf::table(rightColumns, 2),
-                                                    sortByCols,
-                                                    orderByTypes));
+    EXPECT_NO_THROW(outputTable = cudf::merge(cudf::table(leftColumns, 2),
+                                            cudf::table(rightColumns, 2),
+                                            sortByCols,
+                                            orderByTypes));
 
     const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
     // data: 0 0 1 1 2 2 3 3 | valid: 1 1 1 1 1 1 1 1

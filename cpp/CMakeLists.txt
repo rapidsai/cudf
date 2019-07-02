@@ -292,7 +292,7 @@ add_library(cudf SHARED
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
-            src/sortedmerge/sortedmerge.cu
+            src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp

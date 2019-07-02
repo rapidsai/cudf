@@ -176,12 +176,12 @@ generate_merged_indices(device_table const& left_table,
 namespace cudf {
 namespace detail {
 
-table sorted_merge(table const& left_table,
-                   table const& right_table,
-                   std::vector<gdf_size_type> const& key_cols,
-                   std::vector<order_by_type> const& asc_desc,
-                   bool nulls_are_smallest,
-                   cudaStream_t stream = 0) {
+table merge(table const& left_table,
+            table const& right_table,
+            std::vector<gdf_size_type> const& key_cols,
+            std::vector<order_by_type> const& asc_desc,
+            bool nulls_are_smallest,
+            cudaStream_t stream = 0) {
     CUDF_EXPECTS(left_table.num_columns() == right_table.num_columns(), "Mismatched number of columns");
     if (left_table.num_columns() == 0) {
         return cudf::empty_like(left_table);
@@ -314,12 +314,12 @@ table sorted_merge(table const& left_table,
 
 }  // namespace detail
 
-table sorted_merge(table const& left_table,
-                   table const& right_table,
-                   std::vector<gdf_size_type> const& key_cols,
-                   std::vector<order_by_type> const& asc_desc,
-                   bool nulls_are_smallest) {
-    return detail::sorted_merge(left_table, right_table, key_cols, asc_desc, nulls_are_smallest);
+table merge(table const& left_table,
+            table const& right_table,
+            std::vector<gdf_size_type> const& key_cols,
+            std::vector<order_by_type> const& asc_desc,
+            bool nulls_are_smallest) {
+    return detail::merge(left_table, right_table, key_cols, asc_desc, nulls_are_smallest);
 }
 
 }  // namespace cudf

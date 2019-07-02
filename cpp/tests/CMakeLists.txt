@@ -351,11 +351,11 @@ ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 ###################################################################################################
 # - sorted-merge tests -------------------------------------------------------------------------------------
 
-set(SORTED_MERGE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/sorted-merge/sorted_merge-test.cu"
+set(MERGE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
-ConfigureTest(SORTED_MERGE_TEST "${SORTED_MERGE_TEST_SRC}")
+ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
 ###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
@@ -420,4 +420,3 @@ set(ITERATOR_BENCH_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
 
 ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
-
