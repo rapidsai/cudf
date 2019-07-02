@@ -36,7 +36,7 @@ namespace avro {
 /**
  * @brief Function that translates Avro datatype to GDF dtype
  **/
-constexpr gdf_dtype to_dtype(const avro::schema_entry *col) {
+gdf_dtype to_dtype(const avro::schema_entry *col) {
   switch (col->kind) {
     case avro::type_boolean:
       return GDF_BOOL8;
