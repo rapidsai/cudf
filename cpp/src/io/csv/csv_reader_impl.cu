@@ -558,6 +558,19 @@ table reader::Impl::read()
     }
   }
 
+  // User can specify which columns should be inferred as datetime
+  if (not args_.infer_date_indexes.empty() || not args_.infer_date_names.empty()) {
+    for (auto index : args_.infer_date_indexes) {
+      h_column_flags[index] |= column_parse::as_datetime;
+    }
+    for (auto name : args_.infer_date_names) {
+      auto it = std::find(col_names.begin(), col_names.end(), name);
+      if (it != col_names.end()) {
+        h_column_flags[it - col_names.begin()] |= column_parse::as_datetime;
+      }
+    }
+  }
+
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
 
@@ -1123,7 +1136,6 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
               break;
           }
         }
-        const int countSign = countDash + countPlus;
 
         // Integers have to have the length of the string
         long int_req_number_cnt = field_len;
@@ -1135,6 +1147,14 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
         if (field_len == 0) {
           // Ignoring whitespace and quotes can result in empty fields
           atomicAdd(&d_columnData[actual_col].countNULL, 1);
+        } else if (flags[col] & column_parse::as_datetime) {
+          // PANDAS uses `object` dtype if the date is unparseable
+          if (isLikeDateTime(countString, countDecimal, countColon, countDash,
+                             countSlash)) {
+            atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
+          } else {
+            atomicAdd(&d_columnData[actual_col].countString, 1);
+          }
         } else if (countNumber == int_req_number_cnt) {
           // Checking to see if we the integer value requires 8,16,32,64 bits.
           // This will allow us to allocate the exact amount of memory.
@@ -1149,32 +1169,11 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
           } else {
             atomicAdd(&d_columnData[actual_col].countInt8, 1);
           }
-        } else if (isLikeFloat(field_len, countNumber, countDecimal, countSign,
-                               countExponent)) {
+        } else if (isLikeFloat(field_len, countNumber, countDecimal,
+                               countDash + countPlus, countExponent)) {
           atomicAdd(&d_columnData[actual_col].countFloat, 1);
-        }
-        // The date-time field cannot have more than 3 strings. As such if an
-        // entry has more than 3 string characters, it is not a data-time field.
-        // Also, if a string has multiple decimals, then is not a legit number.
-        else if (countString > 3 || countDecimal > 1) {
-          atomicAdd(&d_columnData[actual_col].countString, 1);
         } else {
-          // A date field can have either one or two '-' or '\'. A legal
-          // combination will only have one of them. To simplify the process of
-          // auto column detection, we are not covering all the date-time
-          // formation permutations.
-          if ((countDash > 0 && countDash <= 2 && countSlash == 0) ||
-              (countDash == 0 && countSlash > 0 && countSlash <= 2)) {
-            if ((countColon <= 2)) {
-              atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
-            } else {
-              atomicAdd(&d_columnData[actual_col].countString, 1);
-            }
-          }
-          // Default field is string type.
-          else {
-            atomicAdd(&d_columnData[actual_col].countString, 1);
-          }
+          atomicAdd(&d_columnData[actual_col].countString, 1);
         }
       }
       actual_col++;
