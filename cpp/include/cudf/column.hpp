@@ -15,7 +15,7 @@
  */
 #pragma once
 
-#include "bitmask.hpp"
+#include "bitmask.cuh"
 #include "column_view.hpp"
 #include "types.hpp"
 
@@ -146,8 +146,9 @@ class column {
   bitmask _mask{};             ///< Validity bitmask for columne elements
   cudf::size_type _size;       ///< The number of elements in the column
   data_type _type{INVALID};    ///< Logical type of elements in the column
-  std::unique_ptr<column> _other{
-      nullptr};  ///< Depending on column's type, may point to
-                 ///< another column, e.g., a Dicitionary
+  std::vector<column>
+      _children{};  ///< Depending on element type, child columns may contain
+                    ///< additional data, e.g., the dictionary for a dictionary
+                    ///< column
 };
 }  // namespace cudf
