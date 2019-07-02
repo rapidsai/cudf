@@ -424,7 +424,7 @@ def test_groupby_external_series_incorrect_length(series):
 )
 def test_groupby_levels(level):
     idx = pd.MultiIndex.from_frame(
-        pd.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 2,]})
+        pd.DataFrame({'a': [1, 1, 2], 'b': [1, 2, 2]})
     )
     pdf = pd.DataFrame({'c': [1, 2, 3], 'd': [2, 3, 4]}, index=idx)
     gdf = cudf.from_pandas(pdf)
