@@ -372,7 +372,7 @@ class MultiIndex(Index):
         if level not in colnames:
             if isinstance(level, int):
                 if level < 0:
-                    level = level - len(colnames)
+                    level = level + len(colnames)
                 if level < 0 or level >= len(colnames):
                     raise IndexError(f"Invalid level number: '{level}'")
                 level_idx = level
