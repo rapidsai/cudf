@@ -1,6 +1,8 @@
-import cudf
 import numpy as np
 import pytest
+
+import cudf
+
 from dask_cudf import batcher_sortnet
 
 

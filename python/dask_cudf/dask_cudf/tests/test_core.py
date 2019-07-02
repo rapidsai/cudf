@@ -1,11 +1,14 @@
-import cudf
-import dask
-import dask.dataframe as dd
-import dask_cudf as dgd
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 import pytest
+
+import dask
+import dask.dataframe as dd
+
+import cudf
+
+import dask_cudf as dgd
 
 
 def test_from_cudf():

@@ -1,10 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import cudf.bindings.copying as cpp_copying
-import cudf.bindings.replace as cpp_replace
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+
+import cudf.bindings.copying as cpp_copying
+import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops, numerical
 from cudf.dataframe.buffer import Buffer

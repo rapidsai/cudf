@@ -2,10 +2,10 @@
 
 from distutils.sysconfig import get_python_lib
 
+import versioneer
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
 
-import versioneer
 from Cython.Build import cythonize
 
 install_requires = ["numba", "cython"]

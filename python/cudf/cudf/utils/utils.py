@@ -5,8 +5,9 @@ from math import ceil, isinf, isnan
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from librmm_cffi import librmm as rmm
 from numba import njit
+
+from librmm_cffi import librmm as rmm
 
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8

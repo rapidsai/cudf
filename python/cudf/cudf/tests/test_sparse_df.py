@@ -3,10 +3,12 @@ import os.path
 
 import numpy as np
 import pytest
+
+from librmm_cffi import librmm as rmm
+
 from cudf.comm.gpuarrow import GpuArrowReader
 from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
-from librmm_cffi import librmm as rmm
 
 try:
     import pyarrow as pa

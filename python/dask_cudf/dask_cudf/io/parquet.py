@@ -1,10 +1,11 @@
 from glob import glob
 
-import cudf
 import dask.dataframe as dd
 from dask.base import tokenize
 from dask.compatibility import apply
 from dask.utils import natural_sort_key
+
+import cudf
 
 
 def read_parquet(path, **kwargs):

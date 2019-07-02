@@ -1,8 +1,9 @@
-import cudf
 import numpy as np
 import pandas as pd
-from cudf.utils.utils import is_single_value
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
+
+import cudf
+from cudf.utils.utils import is_single_value
 
 
 class _SeriesLocIndexer(object):

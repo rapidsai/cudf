@@ -1,12 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+from numpy.testing import assert_array_equal
+
+import cudf
 from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
-from numpy.testing import assert_array_equal
 
 
 def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):

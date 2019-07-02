@@ -61,7 +61,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libcudf cudf dask-cudf
+$WORKSPACE/build.sh clean libcudf cudf dask_cudf
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf and cuDF

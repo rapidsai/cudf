@@ -3,7 +3,11 @@
 from math import fmod, isnan
 
 import numpy as np
+from numba import cuda, int32, numpy_support
+
 import nvstrings
+from librmm_cffi import librmm as rmm
+
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
@@ -12,8 +16,6 @@ from cudf.utils.utils import (
     mask_get,
     mask_set,
 )
-from librmm_cffi import librmm as rmm
-from numba import cuda, int32, numpy_support
 
 
 def optimal_block_count(minblkct):

@@ -4,6 +4,10 @@ from collections import OrderedDict, defaultdict, namedtuple
 from itertools import chain
 
 import numpy as np
+from numba import cuda
+
+from librmm_cffi import librmm as rmm
+
 from cudf.bindings.sort import apply_segsort
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
@@ -12,8 +16,6 @@ from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.multi import concat
 from cudf.utils import cudautils
-from librmm_cffi import librmm as rmm
-from numba import cuda
 
 
 def _auto_generate_grouper_agg(members):

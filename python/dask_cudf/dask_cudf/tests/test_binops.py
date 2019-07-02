@@ -1,10 +1,12 @@
 import operator
 
-import cudf
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pytest
+
+import dask.dataframe as dd
+
+import cudf
 
 
 def _make_empty_frame(npartitions=2):

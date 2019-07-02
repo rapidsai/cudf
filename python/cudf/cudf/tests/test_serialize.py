@@ -2,14 +2,16 @@
 
 import functools
 
-import cudf
 import msgpack  # noqa: E402
 import numpy as np
 import pandas as pd
 import pytest
+
+from distributed.protocol import deserialize, serialize  # noqa: E402
+
+import cudf
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
-from distributed.protocol import deserialize, serialize  # noqa: E402
 
 pytest.importorskip("dask.distributed")
 pytest.importorskip("distributed.protocol")

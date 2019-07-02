@@ -2,9 +2,10 @@
 
 import warnings
 
+from pyarrow import feather
+
 from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils
-from pyarrow import feather
 
 
 @ioutils.doc_read_feather()

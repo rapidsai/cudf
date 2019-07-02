@@ -5,11 +5,15 @@ view of Columns.
 
 import warnings
 
-import cudf.bindings.copying as cpp_copying
 import numpy as np
-import nvstrings
 import pandas as pd
 import pyarrow as pa
+from numba import cuda, njit
+
+import nvstrings
+from librmm_cffi import librmm as rmm
+
+import cudf.bindings.copying as cpp_copying
 from cudf.bindings.cudf_cpp import np_to_pa_dtype
 from cudf.bindings.stream_compaction import (
     cpp_apply_boolean_mask,
@@ -19,8 +23,6 @@ from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
 from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
-from librmm_cffi import librmm as rmm
-from numba import cuda, njit
 
 
 class TypedColumnBase(Column):

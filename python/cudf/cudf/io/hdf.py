@@ -2,8 +2,9 @@
 
 import warnings
 
-import cudf
 import pandas as pd
+
+import cudf
 from cudf.utils import ioutils
 
 

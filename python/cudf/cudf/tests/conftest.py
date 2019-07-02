@@ -1,6 +1,7 @@
 import pathlib
 
 import pytest
+
 from librmm_cffi import librmm
 
 

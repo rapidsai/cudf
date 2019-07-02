@@ -1,6 +1,7 @@
-import cudf
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
+
+import cudf
 
 from .core import DataFrame, Index, Series
 

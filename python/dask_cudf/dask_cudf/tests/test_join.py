@@ -1,11 +1,14 @@
 from functools import partial
 
-import cudf
-import dask.dataframe as dd
-import dask_cudf as dgd
 import numpy as np
 import pandas as pd
 import pytest
+
+import dask.dataframe as dd
+
+import cudf
+
+import dask_cudf as dgd
 
 param_nrows = [5, 10, 50, 100]
 

@@ -1,6 +1,7 @@
-import cudf
 import dask.dataframe as dd
 from dask import delayed
+
+import cudf
 
 
 @delayed

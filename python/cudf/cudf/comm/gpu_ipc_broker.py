@@ -7,8 +7,9 @@ import pickle
 import socket
 import threading
 
-from librmm_cffi import librmm as rmm
 from numba import cuda
+
+from librmm_cffi import librmm as rmm
 
 try:
     import zmq

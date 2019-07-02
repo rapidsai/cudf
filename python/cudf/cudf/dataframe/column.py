@@ -6,18 +6,20 @@ LibGDF operates on column.
 """
 from numbers import Number
 
+import numpy as np
+import pandas as pd
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
+
+import nvstrings
+from librmm_cffi import librmm as rmm
+
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.quantile as cpp_quantile
-import numpy as np
-import nvstrings
-import pandas as pd
 from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
-from librmm_cffi import librmm as rmm
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 
 class Column(object):

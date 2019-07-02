@@ -6,6 +6,7 @@ Test related to Index
 import numpy as np
 import pandas as pd
 import pytest
+
 from cudf.dataframe import DataFrame
 from cudf.dataframe.index import (
     CategoricalIndex,

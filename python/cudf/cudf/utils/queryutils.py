@@ -5,8 +5,9 @@ import datetime as dt
 
 import numpy as np
 import six
-from librmm_cffi import librmm as rmm
 from numba import cuda
+
+from librmm_cffi import librmm as rmm
 
 ENVREF_PREFIX = "__CUDF_ENVREF__"
 

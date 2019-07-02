@@ -1,9 +1,12 @@
-import cudf
-import dask.dataframe as dd
-import dask_cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import dask.dataframe as dd
+
+import cudf
+
+import dask_cudf
 
 
 @pytest.mark.parametrize("agg", ["sum", "mean", "count", "min", "max"])

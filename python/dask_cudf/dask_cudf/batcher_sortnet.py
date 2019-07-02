@@ -4,8 +4,9 @@ Adapted from https://en.wikipedia.org/wiki/Batcher_odd%E2%80%93even_mergesort
 """
 import math
 
-import cudf as gd
 from dask import compute, delayed
+
+import cudf as gd
 
 
 def get_oversized(length):

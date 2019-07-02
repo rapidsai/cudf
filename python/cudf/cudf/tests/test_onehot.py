@@ -2,6 +2,7 @@
 
 import numpy as np
 import pytest
+
 from cudf.dataframe import DataFrame, GenericIndex, Series
 from cudf.reshape import get_dummies
 from cudf.tests import utils

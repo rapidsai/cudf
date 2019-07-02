@@ -1,9 +1,10 @@
 from glob import glob
 
-import cudf
 import dask.dataframe as dd
 from dask.base import tokenize
 from dask.compatibility import apply
+
+import cudf
 
 
 def read_orc(path, **kwargs):

@@ -2,13 +2,14 @@ import os
 from glob import glob
 from warnings import warn
 
-import cudf
 import dask.dataframe as dd
-from cudf.bindings.GDFError import GDFError
 from dask.base import tokenize
 from dask.compatibility import apply
 from dask.dataframe.io.csv import make_reader
 from dask.utils import parse_bytes
+
+import cudf
+from cudf.bindings.GDFError import GDFError
 
 
 def read_csv(path, chunksize="256 MiB", **kwargs):
