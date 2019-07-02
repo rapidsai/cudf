@@ -85,6 +85,15 @@ else
     logger "conda install feather-format"
     conda install "feather-format" "cupy>=6.0.0"
 
+    # set environment variable for numpy 1.16
+    # will be enabled for later versions by default
+    np_ver=$(python -c "import numpy; print(numpy.__version__)")
+    if np_ver==1.16;then
+        logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
+        export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+    fi
+
+
     logger "Python py.test for cuDF..."
     cd $WORKSPACE/python/cudf
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
