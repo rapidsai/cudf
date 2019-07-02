@@ -13,33 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#ifndef __IO_AVRO_GPU_H__
-#define __IO_AVRO_GPU_H__
-
-#include "avro_common.h"
+#include "avro_gpu.h"
 
 namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-
-/**
- * @brief Struct to describe the output of a string datatype
- **/
-struct nvstrdesc_s {
-    const char *ptr;
-    size_t count;
-};
-
-/**
- * @brief Struct to describe the avro schema
- **/
-struct schemadesc_s {
-    uint32_t kind;  // avro type kind
-    uint32_t count; // for unions: number of following child columns, for nulls: global null_count, for enums: dictionary ofs
-    void *dataptr;  // Ptr to column data, or null if column not selected
-};
-
 
 /**
  * @brief Launches kernel for decoding column data
@@ -56,12 +35,15 @@ struct schemadesc_s {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint32_t num_blocks,
-    uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows = ~0, size_t first_row = 0, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint32_t num_blocks,
+    uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows, size_t first_row, cudaStream_t stream)
+{
+    dim3 dim_block(32*16, 1);   // 16 warps per threadblock
+    dim3 dim_grid((num_blocks + 0xf) >> 4, 1); // 1 warp per datablock, 16 datablocks per threadblock
+    //gpuDecodeAvroColumnData <<< dim_grid, dim_block, 0, stream >>>(blocks, schema, global_dictionary, num_blocks, schema_len, num_dictionary_entries, max_rows, first_row);
+    return cudaSuccess;
+}
 
 
 }}}} // cudf::io::avro::gpu namespace
-
-#endif // __IO_AVRO_GPU_H__
-
 

@@ -15,6 +15,7 @@
  */
 
 #include <string.h>
+#include <unordered_map>
 #include "avro.h"
 
 namespace cudf {
@@ -206,11 +207,11 @@ bool schema_parser::parse(std::vector<schema_entry> &schema, const std::string &
     int depth = 0, parent_idx = -1, entry_idx = -1;
     json_state_e state = state_attrname;
     std::string str;
-    std::map<std::string, type_kind_e> typenames = {
+    std::unordered_map<std::string, type_kind_e> typenames = {
                                             {"null", type_null},    {"boolean", type_boolean},  {"int", type_int},      {"long", type_long},
                                             {"float", type_float},  {"double", type_double},    {"bytes", type_bytes},  {"string", type_string},
                                             {"record", type_record},{"enum", type_enum}};
-    std::map<std::string, int> attrnames = {
+    std::unordered_map<std::string, int> attrnames = {
                                             {"type", attrtype_type}, {"name", attrtype_name}, {"fields", attrtype_fields}, {"symbols", attrtype_symbols}};
     int cur_attr = attrtype_none;
     m_base = json_str.c_str();

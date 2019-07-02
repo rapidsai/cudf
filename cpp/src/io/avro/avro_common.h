@@ -17,6 +17,8 @@
 #ifndef __IO_AVRO_COMMON_H__
 #define __IO_AVRO_COMMON_H__
 
+#include <stdint.h>
+
 namespace cudf {
 namespace io {
 namespace avro {

@@ -300,6 +300,7 @@ add_library(cudf SHARED
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro_gpu.cu
             src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
