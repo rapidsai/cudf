@@ -32,7 +32,8 @@ test:
     - dask_cudf
 
 about:
-  home: http://rapids.ai
-  license: Apache
-  license_file: ../../../LICENSE.txt
+  home: http://rapids.ai/
+  license: Apache-2.0
+  license_family: Apache
+  license_file: LICENSE
   summary: dask-cudf library
