@@ -65,7 +65,7 @@ namespace cudf {
  *     For `mean`, `var` and `std` ops, a floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (date32, timestamp, category...), the same type must be specified.
- * @param[in] ddof Delta Degrees of Freedom used for `std`, `var`
+ * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of `std` and `var` is `N - ddof`, where `N` is the population size.`
  *
  * @returns  gdf_scalar the result value
  * If the reduction fails, the member is_valid of the output gdf_scalar
