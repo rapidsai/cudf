@@ -90,20 +90,40 @@ table apply_boolean_mask(table const &input,
  * output if the corresponding element `i` in the input's valid bitmask is
  * non-null.
  *
- * The output column has size equal to the number of elements in boolean_mask
- * that are both non-null and `true`. Note that the output column memory is
+ * Note that the output column memory is
  * allocated by this function but must be freed by the caller when finished.
  *
- * If the input column is not nullable, this function just copies the input
- * to the output.
- *
- * * @note if @p input.size is zero, there is no error, and an empty column is
+ * If the input column is not nullable, this function just returns a copy of the
+ * input.
+ * 
+ * @note if @p input.size is zero, there is no error, and an empty column is
  * returned.
  *
  * @param[in] input The input column to filter
  * @return gdf_column Column containing copy of all non-null elements of @p input.
  */
 gdf_column drop_nulls(gdf_column const &input);
+
+/**
+ * @brief Filters a table to remove null elements.
+ *
+ * Given an input table row `i` from the input columns is copied to the
+ * output if the row is non-null. Non-null means that there are not nulls in
+ * any of the columns at that row.
+ *
+ * Note that the memory for the columns of the output table is allocated by this
+ * function but must be freed by the caller when finished.
+ *
+ * If the input table columns are not nullable, this function just returns a
+ * copy of the input.
+ *
+ * @note if @p input.num_rows() is zero, there is no error, and an empty table
+ * is returned
+ *
+ * @param[in] input The input table to filter
+ * @return cudf::table Table containing all non-null rows of the input table
+ */
+table drop_nulls(table const &input);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
