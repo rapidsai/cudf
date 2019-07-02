@@ -956,3 +956,4 @@ def test_string_misc_name(ps_gs, name):
     got = gs.str.slice(0, 1)
 
     assert_eq(expect, got)
+    assert_eq(ps+ps, gs+gs)
