@@ -46,6 +46,13 @@ intra_element_index(size_type bit_index) {
 
 class mutable_bitmask_view {
  public:
+  mutable_bitmask_view() = default;
+  ~mutable_bitmask_view() = default;
+  mutable_bitmask_view(mutable_bitmask_view const& other) = default;
+  mutable_bitmask_view(mutable_bitmask_view&& other) = default;
+  mutable_bitmask_view& operator=(mutable_bitmask_view const& other) = default;
+  mutable_bitmask_view& operator=(mutable_bitmask_view&& other) = default;
+
   mutable_bitmask_view(bitmask_type* mask, size_type size)
       : _mask{mask}, _size{size} {}
 
@@ -100,6 +107,13 @@ class mutable_bitmask_view {
 
 class bitmask_view {
  public:
+  bitmask_view() = default;
+  ~bitmask_view() = default;
+  bitmask_view(bitmask_view const& other) = default;
+  bitmask_view(bitmask_view&& other) = default;
+  bitmask_view& operator=(bitmask_view const& other) = default;
+  bitmask_view& operator=(bitmask_view&& other) = default;
+
   bitmask_view(bitmask_type const* mask, size_type size)
       : mutable_view{const_cast<bitmask_type*>(mask), size} {}
 
@@ -122,12 +136,13 @@ class bitmask_view {
   }
 
  private:
-  mutable_bitmask_view const mutable_view;
+  mutable_bitmask_view const mutable_view{};
 };
 
 class bitmask {
  public:
   bitmask() = default;
+  ~bitmask() = default;
   bitmask(bitmask const& other) = default;
   bitmask(bitmask&& other) = default;
   bitmask& operator=(bitmask const& other) = delete;
