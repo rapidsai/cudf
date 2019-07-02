@@ -17,6 +17,14 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <cassert>
+
+// Forward decls
+namespace rmm {
+class device_memory_resource;
+device_memory_resource* get_default_resource();
+}  // namespace rmm
+
 namespace cudf {
 
 class mutable_bitmask_view {
@@ -24,34 +32,40 @@ class mutable_bitmask_view {
   mutable_bitmask_view(bitmask_type* mask, size_type size)
       : _mask{mask}, _size{size} {}
 
-  __host__ __device__ bool nullable() const noexcept {
-    return nullptr != _mask;
-  }
-
   __device__ bool is_valid(size_type bit_index) const noexcept {
-    // FIXME Implement
+    assert(bit_index >= 0);
+    assert(bit_index < _size);
+    // TODO Implement
     return true;
   }
 
   __device__ bool is_null(size_type bit_index) const noexcept {
+    assert(bit_index >= 0);
+    assert(bit_index < _size);
     return not is_valid(bit_index);
   }
 
   __device__ void set_valid(size_type bit_index) noexcept {
+    assert(bit_index >= 0);
+    assert(bit_index < _size);
     // TODO Implement
     return;
   }
 
   __device__ void set_null(size_type bit_index) noexcept {
+    assert(bit_index >= 0);
+    assert(bit_index < _size);
     // TODO Implement
     return;
   }
 
   __device__ bitmask_type get_element(size_type element_index) const noexcept {
+    assert(element_index >= 0);
     // TODO Implement
     return 0xffffffff;
   }
   __device__ void set_element(size_type element_index) noexcept {
+    assert(element_index >= 0);
     // TODO Implement
     return;
   }
@@ -70,30 +84,28 @@ class mutable_bitmask_view {
 class bitmask_view {
  public:
   bitmask_view(bitmask_type const* mask, size_type size)
-      : _mask{const_cast<bitmask_type*>(mask), size} {}
+      : mutable_view{const_cast<bitmask_type*>(mask), size} {}
 
-  __host__ __device__ bool nullable() const noexcept {
-    return _mask.nullable();
-  }
+  bitmask_view(mutable_bitmask_view m_view) : mutable_view{m_view} {}
 
   __device__ bool is_valid(size_type bit_index) const noexcept {
-    return _mask.is_valid(bit_index);
+    return mutable_view.is_valid(bit_index);
   }
 
   __device__ bool is_null(size_type bit_index) const noexcept {
-    return _mask.is_null(bit_index);
+    return mutable_view.is_null(bit_index);
   }
 
   __device__ bitmask_type get_element(size_type element_index) const noexcept {
-    return _mask.get_element(element_index);
+    return mutable_view.get_element(element_index);
   }
 
   __host__ __device__ bitmask_type const* data() const noexcept {
-    return _mask.data();
+    return mutable_view.data();
   }
 
  private:
-  mutable_bitmask_view const _mask;
+  mutable_bitmask_view const mutable_view;
 };
 
 class bitmask {
@@ -110,12 +122,16 @@ class bitmask {
    *
    * @note Bits outside the range [0,size) are undefined.
    *
-   * @param size The minimum number of bits in the bitmask
-   * @param padding_boundary  optional, specifies the quantum, in bytes, of the
-   * amount of memory allocated (i.e. the allocation size is padded to a
+   * @param size[in] The minimum number of bits in the bitmask
+   * @param padding_boundary[in]  optional, specifies the quantum, in bytes, of
+   * the amount of memory allocated (i.e. the allocation size is padded to a
    * multiple of this value).
+   * @param mr[in] optional, the `device_memory_resource` to use for device
+   * memory allocation
    *---------------------------------------------------------------------------**/
-  explicit bitmask(size_type size, size_type padding_boundary = 64);
+  explicit bitmask(
+      size_type size, size_type padding_boundary = 64,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by copying from an existing device_buffer.
@@ -142,6 +158,27 @@ class bitmask {
   bitmask(size_type size, rmm::device_buffer&& mask) noexcept;
 
   /**---------------------------------------------------------------------------*
+   * @brief Construct a new bitmask by copying from an existing `bitmask_view`.
+   *
+   * @param view[in]  The `bitmask_view` to copy from.
+   * @param mr[in] optional, the `device_memory_resource` to use for device
+   * memory allocation
+   *---------------------------------------------------------------------------**/
+  bitmask(bitmask_view view, rmm::mr::device_memory_resource* mr =
+                                 rmm::mr::get_default_resource());
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new bitmask by copying from an existing
+   * `mutable_bitmask_view`
+   *
+   * @param view The `mutable_bitmask_view` to copy from.
+   * @param mr[in] optional, the `device_memory_resource` to use for device
+   * memory allocation
+   *---------------------------------------------------------------------------**/
+  bitmask(mutable_bitmask_view view, rmm::mr::device_memory_resource* mr =
+                                         rmm::mr::get_default_resource());
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns the number of bits represented by the bitmask.
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return _size; }
@@ -165,11 +202,17 @@ class bitmask {
     return this->operator mutable_bitmask_view();
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a zero-copy `mutable_bitmask_view` from this `bitmask`
+   *---------------------------------------------------------------------------**/
   operator mutable_bitmask_view() noexcept {
     return mutable_bitmask_view{static_cast<bitmask_type*>(_data.data()),
                                 _size};
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a zero-copy immutable `bitmask_view` from this `bitmask`.
+   *---------------------------------------------------------------------------**/
   operator bitmask_view() const noexcept {
     return bitmask_view{static_cast<bitmask_type const*>(_data.data()), _size};
   }

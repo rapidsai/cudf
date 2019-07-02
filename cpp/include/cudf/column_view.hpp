@@ -39,7 +39,7 @@ struct column_view {
   }
 
   __host__ __device__ bool nullable() const noexcept {
-    return _bitmask.nullable();
+    return nullptr != _bitmask.data();
   }
 
   /*
