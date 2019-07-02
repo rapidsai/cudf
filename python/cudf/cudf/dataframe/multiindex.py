@@ -264,7 +264,7 @@ class MultiIndex(Index):
             out_index = []
             for val in result.index.codes[
                 result.index.codes.columns[len(result.index.codes.columns) - 1]
-            ]:  # noqa: E501
+            ]:
                 out_index.append(
                     result.index.levels[len(result.index.codes.columns) - 1][
                         val

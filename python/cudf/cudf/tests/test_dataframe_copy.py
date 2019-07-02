@@ -1,7 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from copy import copy  # noqa:F401
-from copy import deepcopy  # noqa:F401
+from copy import copy, deepcopy
 
 import numpy as np
 import pandas as pd

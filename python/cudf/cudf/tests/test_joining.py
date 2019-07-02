@@ -438,7 +438,7 @@ def test_dataframe_merge_order():
         ("bcd", "cde"),
         ("cde", "cde"),
     ],
-)  # noqa: E501
+)
 @pytest.mark.parametrize("max", [5, 1000])
 @pytest.mark.parametrize("rows", [1, 5, 100])
 @pytest.mark.parametrize("how", ["left", "inner", "outer"])

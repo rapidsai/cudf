@@ -207,7 +207,7 @@ class Groupby(object):
                                 len(self._df.index._source_data.columns),
                                 which_level + 1,
                             )
-                        )  # noqa: E501
+                        )
                     self._df[self._df.index.names[which_level]] = level_values
                     self._by.append(self._df.index.names[which_level])
         else:

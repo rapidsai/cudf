@@ -534,7 +534,7 @@ def test_dataframe_loc_outbound():
     df["a"] = ha = np.random.randint(low=0, high=100, size=size).astype(
         np.int32
     )
-    df["b"] = hb = np.random.random(size).astype(np.float32)  # noqa: F841
+    df["b"] = hb = np.random.random(size).astype(np.float32)
 
     pdf = pd.DataFrame()
     pdf["a"] = ha
@@ -2169,7 +2169,7 @@ def test_boolmask(pdf, gdf):
         (4, "abc"),
         (4, "abcd"),
     ],
-)  # noqa: E501
+)
 def test_dataframe_boolmask(mask_shape):
     pdf = pd.DataFrame()
     for col in "abc":

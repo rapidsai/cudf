@@ -2,8 +2,11 @@
 
 import pytest
 
-from dask.dataframe.utils import is_dataframe_like  # noqa: E402
-from dask.dataframe.utils import is_index_like, is_series_like
+from dask.dataframe.utils import (
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+)
 
 import cudf
 

@@ -10,7 +10,7 @@ import cudf
 dask_cuda = pytest.importorskip("dask_cuda")
 
 
-@pytest.mark.parametrize("delayed", [True, False])  # noqa: F811
+@pytest.mark.parametrize("delayed", [True, False])
 def test_basic(loop, delayed):  # noqa: F811
     with dask_cuda.LocalCUDACluster(loop=loop) as cluster:
         with Client(cluster):

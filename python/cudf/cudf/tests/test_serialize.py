@@ -2,12 +2,12 @@
 
 import functools
 
-import msgpack  # noqa: E402
+import msgpack
 import numpy as np
 import pandas as pd
 import pytest
 
-from distributed.protocol import deserialize, serialize  # noqa: E402
+from distributed.protocol import deserialize, serialize
 
 import cudf
 from cudf.tests import utils
