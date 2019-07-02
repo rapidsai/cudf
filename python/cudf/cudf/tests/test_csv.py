@@ -635,6 +635,7 @@ def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
             ["no", "NO", "No"],
         ),
         (["A", "B"], ["int32", "int32"], "foo,bar\nbar,foo", ["foo"], ["bar"]),
+        (["x", "y"], None, "True,1\nFalse,0", None, None),
     ],
 )
 def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
@@ -656,7 +657,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     )
 
     out = read_csv(
-        str(fname),
+        fname,
         names=names,
         dtype=dtypes,
         skiprows=1,
