@@ -369,7 +369,7 @@ class MultiIndex(Index):
 
     def get_level_values(self, level):
         from cudf import DataFrame
-        colnames = list(self.codes.columns)
+        colnames = list(self._source_data.columns)
         if level not in colnames:
             if isinstance(level, int):
                 if level < 0:
@@ -380,18 +380,7 @@ class MultiIndex(Index):
                 level = colnames[level_idx]
             else:
                 raise KeyError(f"Level not found: '{level}'")
-        else:
-            level_idx = list(self.codes.columns).index(level)
-        col = self.codes[level]
-        rhs = DataFrame({
-            'idx': Series(cudautils.arange(len(
-                self.levels[level_idx]),
-                dtype=col.dtype)),
-            'level': self.levels[level_idx]
-        })
-        lhs = DataFrame({'idx': col})
-        level_values = lhs.merge(rhs).level
-        level_values.name = self.codes[level].name
+        level_values = self._source_data[level]
         return level_values
 
     def _to_frame(self):
