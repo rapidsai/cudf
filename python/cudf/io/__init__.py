@@ -1,5 +1,6 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
+from cudf.io.avro import read_avro
 from cudf.io.csv import read_csv, to_csv
 from cudf.io.parquet import read_parquet, read_parquet_metadata
 from cudf.io.feather import read_feather

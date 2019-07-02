@@ -299,6 +299,8 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
@@ -311,7 +313,6 @@ add_library(cudf SHARED
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader_impl.cu
             src/io/parquet/parquet.cpp
-            src/io/avro/avro.cpp
             src/io/comp/cpu_unbz2.cpp
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp

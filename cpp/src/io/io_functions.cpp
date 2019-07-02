@@ -22,6 +22,29 @@ using namespace cudf::io;
 
 namespace cudf {
 
+table read_avro(avro_read_arg const &args) {
+  auto reader = [&]() {
+    avro::reader_options options{args.columns};
+
+    if (args.source.type == FILE_PATH) {
+      return std::make_unique<avro::reader>(args.source.filepath, options);
+    } else if (args.source.type == HOST_BUFFER) {
+      return std::make_unique<avro::reader>(args.source.buffer.first,
+                                           args.source.buffer.second, options);
+    } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
+      return std::make_unique<avro::reader>(args.source.file, options);
+    } else {
+      CUDF_FAIL("Unsupported source type");
+    }
+  }();
+
+  if (args.skip_rows != -1 || args.num_rows != -1) {
+    return reader->read_rows(args.skip_rows, args.num_rows);
+  } else {
+    return reader->read_all();
+  }
+}
+
 table read_csv(csv_read_arg const &args) {
   auto reader = [&]() {
     csv::reader_options options{};

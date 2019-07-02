@@ -12,6 +12,7 @@ dependencies:
 - numba>=0.41
 - pandas>=0.23.4
 - pyarrow=0.12.1
+- fastavro>=0.22.0
 - notebook>=0.5.0
 - boost
 - distributed>=1.23.0
