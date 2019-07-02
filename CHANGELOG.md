@@ -17,6 +17,7 @@
 - PR #2145 Work around binops validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
+- PR #2161 Implicitly convert unsigned to signed integer types in binops
 
 # cuDF 0.8.0 (27 June 2019)
 
