@@ -197,22 +197,36 @@ class _GroupbyHelper(object):
         For a Series, the dictionary has a single key ``None``
         """
         if isinstance(agg, collections.Mapping):
-            for key, val in agg.items():
-                if not isinstance(val, list):
-                    agg[key] = [val]
+            for col_name, agg_name in agg.items():
+                if not isinstance(agg_name, list):
+                    agg[col_name] = [agg_name]
             self.aggs = agg
             return
-        if isinstance(self.obj, cudf.Series):
-            keys = [None]
-        else:
-            keys = []
-            for col_name in self.obj.columns:
-                if col_name not in self.key_names:
-                    keys.append(col_name)
         if isinstance(agg, str):
             agg = [agg]
-        values = [agg] * len(keys)
-        self.aggs = dict(zip(keys, values))
+        if isinstance(self.obj, cudf.Series):
+            value_col_names = [None]
+        else:
+            value_col_names = []
+            # add all non-key columns to value_col_names,
+            # dropping "nuisance columns":
+            for col_name in self.obj.columns:
+                if col_name not in self.key_names:
+                    drop = False
+                    if isinstance(
+                        self.obj[col_name]._column,
+                        (
+                            cudf.dataframe.StringColumn,
+                            cudf.dataframe.CategoricalColumn
+                        )
+                    ):
+                        for agg_name in agg:
+                            if agg_name in ('mean', 'sum'):
+                                drop = True
+                    if not drop:
+                        value_col_names.append(col_name)
+        agg_list = [agg] * len(value_col_names)
+        self.aggs = dict(zip(value_col_names, agg_list))
         self.validate_aggs()
 
     def validate_aggs(self):
@@ -243,13 +257,6 @@ class _GroupbyHelper(object):
             self.value_names = []
             for col_name, agg_list in self.aggs.items():
                 col = self.obj[col_name]._column
-                # drop nuisance columns
-                if isinstance(
-                    col,
-                    (cudf.dataframe.StringColumn,
-                     cudf.dataframe.CategoricalColumn)
-                ):
-                    continue
                 if len(agg_list) == 1:
                     self.value_columns.append(col)
                     self.value_names.append(col_name)
