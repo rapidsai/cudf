@@ -11,6 +11,7 @@ import numpy as np
 import pyarrow as pa
 from string import ascii_letters
 from distutils.version import LooseVersion
+from io import BytesIO
 
 
 @pytest.fixture(scope='module')
@@ -81,6 +82,35 @@ def make_pdf(nrows, ncolumns=1, nvalids=0, dtype=np.int64):
     test_pdf[test_pdf.index.isin(mask)] = np.NaN
 
     return test_pdf
+
+
+@pytest.fixture
+def parquet_path_or_buf(datadir):
+    fname = datadir / 'spark_timestamp.snappy.parquet'
+    try:
+        with open(fname, 'rb') as f:
+            buffer = BytesIO(f.read())
+    except Exception as excpr:
+        if type(excpr).__name__ == 'FileNotFoundError':
+            pytest.skip('.parquet file is not found')
+        else:
+            print(type(excpr).__name__)
+
+    def _make_parquet_path_or_buf(src):
+        if src == 'filepath':
+            return str(fname)
+        if src == 'pathobj':
+            return fname
+        if src == 'bytes_io':
+            return buffer
+        if src == 'bytes':
+            return buffer.getvalue()
+        if src == 'url':
+            return fname.as_uri()
+
+        raise ValueError('Invalid source type')
+
+    yield _make_parquet_path_or_buf
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -258,6 +288,23 @@ def test_parquet_reader_filenotfound(tmpdir):
 
     with pytest.raises(FileNotFoundError):
         cudf.read_parquet(tmpdir.mkdir("cudf_parquet"))
+
+
+def test_parquet_reader_local_filepath():
+    fname = '~/TestLocalFile.parquet'
+    if not os.path.isfile(fname):
+        pytest.skip('Local .parquet file is not found')
+
+    cudf.read_parquet(fname)
+
+
+@pytest.mark.parametrize('src', ['filepath', 'pathobj', 'bytes_io', 'bytes',
+                                 'url'])
+def test_parquet_reader_filepath_or_buffer(parquet_path_or_buf, src):
+    expect = pd.read_parquet(parquet_path_or_buf('filepath'))
+    got = cudf.read_parquet(parquet_path_or_buf(src))
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

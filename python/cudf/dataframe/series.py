@@ -447,10 +447,13 @@ class Series(object):
             # TODO: fn is not the same as arg expected by _apply_op
             # e.g. for fn = 'and', _apply_op equivalent is '__and__'
             return other._apply_op(self, fn)
+
         nvtx_range_push("CUDF_BINARY_OP", "orange")
-        other = self._normalize_binop_value(other)
-        outcol = self._column.binary_operator(fn, other, reflect=reflect)
-        result = self._copy_construct(data=outcol)
+
+        lhs, rhs = _align_indices(self, other)
+        rhs = self._normalize_binop_value(rhs)
+        outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
+        result = lhs._copy_construct(data=outcol)
         result.name = None
         nvtx_range_pop()
         return result
@@ -476,24 +479,26 @@ class Series(object):
         def func(lhs, rhs):
             return fn(rhs, lhs) if reflect else fn(lhs, rhs)
 
+        lhs, rhs = _align_indices(self, other)
+
         if fill_value is not None:
-            if isinstance(other, Series):
-                if self.has_null_mask and other.has_null_mask:
-                    lmask = Series(data=self.nullmask)
-                    rmask = Series(data=other.nullmask)
-                    out_mask = (lmask | rmask).data
-                    temp_lhs = self.fillna(fill_value)
-                    temp_rhs = other.fillna(fill_value)
-                    out = func(temp_lhs, temp_rhs)
-                    col = self._column.replace(data=out.data, mask=out_mask)
-                    return self._copy_construct(data=col)
-                else:
-                    return func(self.fillna(fill_value),
-                                other.fillna(fill_value))
-            elif is_scalar(other):
-                return func(self.fillna(fill_value), other)
-        else:
-            return func(self, other)
+            if isinstance(rhs, Series):
+                if lhs.has_null_mask and rhs.has_null_mask:
+                    lmask = Series(data=lhs.nullmask)
+                    rmask = Series(data=rhs.nullmask)
+                    mask = (lmask | rmask).data
+                    lhs = lhs.fillna(fill_value)
+                    rhs = rhs.fillna(fill_value)
+                    data = func(lhs, rhs).data
+                    data = lhs._column.replace(data=data, mask=mask)
+                    return lhs._copy_construct(data=data)
+                elif lhs.has_null_mask:
+                    return func(lhs.fillna(fill_value), rhs)
+                elif rhs.has_null_mask:
+                    return func(lhs, rhs.fillna(fill_value))
+            elif is_scalar(rhs):
+                return func(lhs.fillna(fill_value), rhs)
+        return func(lhs, rhs)
 
     def add(self, other, fill_value=None):
         """Addition of series and other, element-wise
@@ -1483,27 +1488,21 @@ class Series(object):
         -------
         A sequence of encoded labels with value between 0 and n-1 classes(cats)
         """
+        from cudf import DataFrame
 
-        if self.null_count != 0:
-            mesg = 'series contains NULL values'
-            raise ValueError(mesg)
-
-        if self.dtype.kind not in 'iuf':
-            raise TypeError('expecting integer or float dtype')
-
-        gpuarr = self.to_gpu_array()
-        sr_cats = Series(cats)
         if dtype is None:
-            # Get smallest type to represent the category size
-            min_dtype = np.min_scalar_type(len(cats))
-            # Normalize the size to at least 32-bit
-            normalized_sizeof = max(4, min_dtype.itemsize)
-            dtype = getattr(np, "int{}".format(normalized_sizeof * 8))
-        dtype = np.dtype(dtype)
-        labeled = cudautils.apply_label(gpuarr, sr_cats.to_gpu_array(), dtype,
-                                        na_sentinel)
+            dtype = utils.min_scalar_type(len(cats), 32)
 
-        return Series(labeled)
+        value = Series(cats).astype(self.dtype)
+        order = Series(cudautils.arange(len(self)))
+        codes = Series(cudautils.arange(len(value), dtype=dtype))
+
+        value = DataFrame({'value': value, 'code': codes})
+        codes = DataFrame({'value': self, 'order': order})
+        codes = codes.merge(value, on='value', how='left')
+        codes = codes.sort_values('order')['code'].fillna(na_sentinel)
+
+        return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
         """Encode the input values as integer labels
@@ -1520,7 +1519,7 @@ class Series(object):
             - *cats* contains the categories in order that the N-th
               item corresponds to the (N-1) code.
         """
-        cats = self.unique()
+        cats = self.unique().astype(self.dtype)
         labels = self.label_encoding(cats=cats)
         return labels, cats
 
@@ -1680,7 +1679,8 @@ class Series(object):
             msg = 'not sorted unique not implemented yet.'
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return np.empty(0, dtype=self.dtype)
+            res = columnops.column_empty_like(self._column, newsize=0)
+            return self._copy_construct(data=res)
         res = self._column.unique(method=method)
         return Series(res, name=self.name)
 
@@ -1849,11 +1849,37 @@ class Series(object):
         DataFrame
 
         """
+
+        if isinstance(q, Number) or utils.is_list_like(q):
+            np_array_q = np.asarray(q)
+            if np.logical_or(np_array_q < 0, np_array_q > 1).any():
+                raise ValueError("percentiles should all \
+                             be in the interval [0, 1]")
+
+        # Beyond this point, q either being scalar or list-like
+        # will only have values in range [0, 1]
+
+        if isinstance(q, Number):
+            res = self._column.quantile(q, interpolation, exact)
+            if len(res) == 0:
+                return np.nan
+            else:
+                # if q is an int/float, we shouldn't be constructing series
+                return res.pop()
+
         if not quant_index:
             return Series(self._column.quantile(q, interpolation, exact))
         else:
-            return Series(self._column.quantile(q, interpolation, exact),
-                          index=as_index(np.asarray(q)))
+            from cudf.dataframe.columnops import column_empty_like
+            np_array_q = np.asarray(q)
+            if len(self) == 0:
+                result = column_empty_like(np_array_q, dtype=self.dtype,
+                                           masked=True,
+                                           newsize=len(np_array_q))
+            else:
+                result = self._column.quantile(q, interpolation, exact)
+            return Series(result,
+                          index=as_index(np_array_q))
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
@@ -1891,8 +1917,6 @@ class Series(object):
         7    max     10.0
         """
 
-        from cudf import DataFrame
-
         def _prepare_percentiles(percentiles):
             percentiles = list(percentiles)
 
@@ -1918,14 +1942,12 @@ class Series(object):
             names = ['count', 'mean', 'std', 'min'] + \
                     _format_percentile_names(percentiles) + ['max']
             data = [self.count(), self.mean(), self.std(), self.min()] + \
-                self.quantile(percentiles).to_array().tolist() + [self.max()]
+                self.quantile(percentiles)\
+                    .to_array(fillna='pandas').tolist() + [self.max()]
             data = _format_stats_values(data)
 
-            values_name = 'values'
-            if self.name:
-                values_name = self.name
-
-            return DataFrame({'stats': names, values_name: data})
+            return Series(data=data, index=names,
+                          nan_as_null=False, name=self.name)
 
         def describe_categorical(self):
             # blocked by StringColumn/DatetimeColumn support for
@@ -2241,3 +2263,15 @@ class DatetimeProperties(object):
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)
+
+
+def _align_indices(lhs, rhs):
+    """
+    Internal util to align the indices of two Series. Returns a tuple of the
+    aligned series, or the original arguments if the indices are the same, or
+    if rhs isn't a Series.
+    """
+    if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
+        lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
+        lhs, rhs = lhs.join(rhs, how='outer', sort=True)._cols.values()
+    return lhs, rhs

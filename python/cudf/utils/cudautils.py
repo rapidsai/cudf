@@ -507,43 +507,6 @@ def compute_scale(arr, vmin, vmax):
     return out
 
 
-@cuda.jit
-def gpu_label(arr, cats, enc, na_sentinel, out):
-    i = cuda.grid(1)
-    if i < out.size:
-        val = arr[i]
-        out[i] = na_sentinel
-        for j in range(cats.shape[0]):
-            if val == cats[j]:
-                res = enc[j]
-                out[i] = res
-                break
-
-
-def apply_label(arr, cats, dtype, na_sentinel):
-    """
-    Parameters
-    ----------
-    arr : device array
-        data
-    cats : device array
-        Unique category value
-    dtype : np.dtype
-        output array dtype
-    na_sentinel : int
-        Value to indicate missing value
-    Returns
-    -------
-    result : device array
-    """
-    encs = np.asarray(list(range(cats.size)))
-    d_encs = to_device(encs)
-    out = rmm.device_array(shape=arr.size, dtype=dtype)
-    if out.size > 0:
-        configured = gpu_label.forall(out.size)
-        configured(arr, cats, d_encs, na_sentinel, out)
-    return out
-
 #
 # Misc kernels
 #
