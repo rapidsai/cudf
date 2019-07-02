@@ -33,6 +33,8 @@ dependencies:
 - boto3
 - httpretty
 - flake8
+- black
+- isort
 - pre_commit
 - dask>=2.0
 - distributed>=2.0
