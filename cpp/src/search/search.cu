@@ -89,15 +89,10 @@ public:
 
   }
 
-  // TODO: clean up args here
   template <typename T,
+            typename... Args,
             typename std::enable_if_t<!is_supported<T>()>* = nullptr>
-  void operator()(gdf_column const& column,
-                  gdf_column const& values,
-                  bool find_first,
-                  bool nulls_as_largest,
-                  cudaStream_t stream,
-                  gdf_column& result)
+  void operator()(Args&&... args)
   {
     CUDF_FAIL("Unsupported datatype for search_ordered");
   }
