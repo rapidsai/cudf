@@ -736,8 +736,8 @@ class StringColumn(columnops.TypedColumnBase):
         """
         Get unique strings in the data
         """
-        result = StringColumn(self.nvcategory.keys())
-        return result
+        import nvcategory as nvc
+        return StringColumn(nvc.from_strings(self.data).keys())
 
     def normalize_binop_value(self, other):
         if isinstance(other, column.Column):

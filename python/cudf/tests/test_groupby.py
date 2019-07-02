@@ -471,7 +471,7 @@ def test_advanced_groupby_levels():
 def test_empty_groupby(func):
     pdf = pd.DataFrame({'x': [], 'y': [], 'z': []})
     gdf = cudf.from_pandas(pdf)
-    assert_eq(func(pdf), func(gdf))
+    assert_eq(func(pdf), func(gdf), check_index_type=False)
 
 
 def test_groupby_unsupported_columns():

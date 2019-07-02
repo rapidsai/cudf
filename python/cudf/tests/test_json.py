@@ -10,8 +10,8 @@ import pandas as pd
 import itertools
 import copy
 
-from io import StringIO
-from io import BytesIO
+from io import StringIO, BytesIO
+from pathlib import Path
 
 
 def make_numeric_dataframe(nrows, dtype):
@@ -146,22 +146,28 @@ def test_json_writer(tmpdir, pdf, gdf):
         assert_eq(expect_series, got_series)
 
 
-@pytest.fixture(params=['file_path', 'string', 'bytes_io', 'string_io'])
+@pytest.fixture(params=['string', 'filepath', 'pathobj', 'bytes_io',
+                        'string_io', 'url'])
 def json_input(request, tmp_path_factory):
     input_type = request.param
     buffer = '[1, 2, 3]\n[4, 5, 6]\n[7, 8, 9]\n'
+    fname = tmp_path_factory.mktemp("json") / "test_df.json"
+    if not os.path.isfile(fname):
+        with open(str(fname), 'w') as fp:
+            fp.write(buffer)
 
     if input_type == 'string':
         return buffer
-    if input_type == 'file_path':
-        fname = tmp_path_factory.mktemp("json") / "test_df.json"
-        with open(str(fname), 'w') as fp:
-            fp.write(buffer)
+    if input_type == 'filepath':
         return str(fname)
+    if input_type == 'pathobj':
+        return Path(fname)
     if input_type == 'bytes_io':
         return BytesIO(buffer.encode())
     if input_type == 'string_io':
         return StringIO(buffer)
+    if input_type == 'url':
+        return Path(fname).as_uri()
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")

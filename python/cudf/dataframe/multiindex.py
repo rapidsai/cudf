@@ -30,7 +30,9 @@ class MultiIndex(Index):
 
     def __init__(self, levels=None, codes=None, labels=None, names=None,
                  **kwargs):
+        self.name = None
         self.names = names
+        self._source_data = None
         column_names = []
         if labels:
             warnings.warn("the 'labels' keyword is deprecated, use 'codes' "
@@ -40,10 +42,11 @@ class MultiIndex(Index):
 
         # early termination enables lazy evaluation of codes
         if 'source_data' in kwargs:
-            self._source_data = kwargs['source_data']
+            self._source_data = kwargs['source_data'].reset_index(drop=True)
             self._codes = codes
             self._levels = levels
-            self.names = self._source_data.columns
+            if names is None:
+                self.names = self._source_data.columns
             return
 
         # name setup
@@ -62,26 +65,36 @@ class MultiIndex(Index):
         if len(levels) == 0:
             raise ValueError('Must pass non-zero number of levels/codes')
 
-        import cudf
-        if not isinstance(codes, cudf.dataframe.dataframe.DataFrame) and\
+        from cudf import DataFrame
+
+        if not isinstance(codes, DataFrame) and\
                 not isinstance(codes[0], (Sequence,
                                pd.core.indexes.frozen.FrozenNDArray)):
             raise TypeError('Codes is not a Sequence of sequences')
-        if not isinstance(codes, cudf.dataframe.dataframe.DataFrame):
-            self._codes = cudf.dataframe.dataframe.DataFrame()
-            for idx, code in enumerate(codes):
-                code = np.array(code)
-                self._codes.add_column(column_names[idx],
-                                       columnops.as_column(code))
-        else:
+
+        if isinstance(codes, DataFrame):
             self._codes = codes
+        elif len(levels) == len(codes):
+            self._codes = DataFrame()
+            for i, codes in enumerate(codes):
+                name = column_names[i] or i
+                codes = columnops.as_column(codes)
+                self._codes[name] = codes.astype(np.int64)
+        else:
+            raise ValueError('MultiIndex has unequal number of levels and '
+                             'codes and is inconsistent!')
 
         # converting levels to numpy array will produce a Float64Index
         # (on empty levels)for levels mimicking the behavior of Pandas
-        self._levels = np.array([Series(level).to_array() for level in levels])
+        self._levels = np.array([Series(level) for level in levels])
         self._validate_levels_and_codes(self._levels, self._codes)
-        self.name = None
-        self.names = names
+
+        self._source_data = DataFrame()
+        for i, name in enumerate(self._codes.columns):
+            codes = as_index(self._codes[name]._column)
+            level = DataFrame({name: self._levels[i]})
+            level = DataFrame(index=codes).join(level)
+            self._source_data[name] = level[name].reset_index(drop=True)
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -98,14 +111,11 @@ class MultiIndex(Index):
                                  'than maximum level size at this position')
 
     def copy(self, deep=True):
-        if hasattr(self, '_source_data'):
-            mi = MultiIndex(source_data=self._source_data)
-            if self._levels is not None:
-                mi._levels = self._levels.copy()
-            if self._codes is not None:
-                mi._codes = self._codes.copy(deep)
-        else:
-            mi = MultiIndex(self.levels.copy(), self.codes.copy(deep))
+        mi = MultiIndex(source_data=self._source_data.copy(deep))
+        if self._levels is not None:
+            mi._levels = np.array([s.copy(deep) for s in self._levels])
+        if self._codes is not None:
+            mi._codes = self._codes.copy(deep)
         if self.names is not None:
             mi.names = self.names.copy()
         return mi
@@ -127,7 +137,8 @@ class MultiIndex(Index):
         for idx in self.codes.columns[n:]:
             codes.add_column(idx, self.codes[idx])
         result = MultiIndex(self.levels[n:], codes)
-        result.names = self.names[n:]
+        if self.names is not None:
+            result.names = self.names[n:]
         return result
 
     def __repr__(self):
@@ -136,19 +147,15 @@ class MultiIndex(Index):
 
     @property
     def codes(self):
-        if self._codes is not None:
-            return self._codes
-        else:
+        if self._codes is None:
             self._compute_levels_and_codes()
-            return self._codes
+        return self._codes
 
     @property
     def levels(self):
-        if self._levels is not None:
-            return self._levels
-        else:
+        if self._levels is None:
             self._compute_levels_and_codes()
-            return self._levels
+        return self._levels
 
     @property
     def labels(self):
@@ -160,26 +167,17 @@ class MultiIndex(Index):
         levels = []
         from cudf import DataFrame
         codes = DataFrame()
-        names = []
         # Note: This is an O(N^2) solution using gpu masking
         # to compute new codes for the MultiIndex. There may be
         # a faster solution that could be executed on gpu at the same
         # time the groupby is calculated.
-        for by in self._source_data.columns:
-            if len(self._source_data[by]) > 0:
-                level = self._source_data[by].unique()
-                replaced = self._source_data[by].replace(
-                        level, Series(cudautils.arange(len(level))))
-            else:
-                level = np.array([])
-                replaced = np.array([])
-            levels.append(level)
-            codes[by] = Series(replaced, dtype="int32")
-            names.append(by)
+        for name in self._source_data.columns:
+            code, cats = self._source_data[name].factorize()
+            codes[name] = code.reset_index(drop=True).astype(np.int64)
+            levels.append(cats.reset_index(drop=True))
 
         self._levels = levels
         self._codes = codes
-        self.names = names
 
     def _compute_validity_mask(self, df, row_tuple):
         """ Computes the valid set of indices of values in the lookup
@@ -287,22 +285,21 @@ class MultiIndex(Index):
         return result
 
     def __len__(self):
-        if hasattr(self, '_source_data'):
-            return len(self._source_data)
-        else:
-            return len(self.codes[self.codes.columns[0]])
+        return len(self._source_data)
+
+    def equals(self, other):
+        if self is other:
+            return True
+        if len(self) != len(other):
+            return False
+        return self == other
 
     def __eq__(self, other):
         if not hasattr(other, '_levels'):
             return False
         # Lazy comparison
-        if hasattr(other, '_source_data'):
-            for col in self._source_data.columns:
-                if col not in other._source_data.columns:
-                    return False
-                if not self._source_data[col].equals(other._source_data[col]):
-                    return False
-            return True
+        if isinstance(other, MultiIndex) or hasattr(other, '_source_data'):
+            return self._source_data.equals(other._source_data)
         else:
             # Lazy comparison isn't possible - MI was created manually.
             # Actually compare the MI, not its source data (it doesn't have
@@ -320,10 +317,7 @@ class MultiIndex(Index):
 
     @property
     def size(self):
-        if hasattr(self, '_source_data'):
-            return len(self._source_data)
-        else:
-            return len(self.codes[0])
+        return len(self._source_data)
 
     def take(self, indices):
         from collections.abc import Sequence
@@ -337,11 +331,7 @@ class MultiIndex(Index):
             start, stop, step, sln = utils.standard_python_slice(len(self),
                                                                  indices)
             indices = cudautils.arange(start, stop, step)
-        if hasattr(self, '_source_data'):
-            result = MultiIndex(source_data=self._source_data.take(indices))
-        else:
-            codes = self.codes.take(indices)
-            result = MultiIndex(self.levels, codes)
+        result = MultiIndex(source_data=self._source_data.take(indices))
         result.names = self.names
         return result
 
@@ -367,8 +357,7 @@ class MultiIndex(Index):
         return tuple(result)
 
     def to_frame(self, index=True, name=None):
-        df = self._source_data if hasattr(
-                self, '_source_data') else self._to_frame()
+        df = self._source_data
         if index:
             df = df.set_index(self)
         if name:
@@ -426,17 +415,15 @@ class MultiIndex(Index):
 
     @classmethod
     def _concat(cls, objs):
-        from cudf import DataFrame
-        from cudf import MultiIndex
-        _need_codes = not all([hasattr(o, '_source_data') for o in objs])
-        if _need_codes:
-            raise NotImplementedError(
-                    'MultiIndex._concat is only supported '
-                    'for groupby generated MultiIndexes at this time.')
-        else:
-            _source_data = DataFrame._concat([o._source_data for o in objs])
-            index = MultiIndex(source_data=_source_data)
-        return index
+        from cudf import DataFrame, MultiIndex
+        source_data = [o._source_data for o in objs]
+        source_data = DataFrame._concat(source_data)
+        names = [None for x in source_data.columns]
+        objs = list(filter(lambda o: o.names is not None, objs))
+        for o in range(len(objs)):
+            for i, name in enumerate(objs[o].names):
+                names[i] = names[i] or name
+        return MultiIndex(names=names, source_data=source_data)
 
     @classmethod
     def from_tuples(cls, tuples, names=None):
