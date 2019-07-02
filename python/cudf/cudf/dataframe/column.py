@@ -629,5 +629,21 @@ class Column(object):
         """
         return column_view_pointer(self)
 
+    @property
+    def is_unique(self):
+        return self.unique_count() == len(self)
+
+    @property
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        raise(NotImplementedError)
+
+    @property
+    def is_monotonic_decreasing(self):
+        raise(NotImplementedError)
+
 
 register_distributed_serializer(Column)

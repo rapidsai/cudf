@@ -380,6 +380,22 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise ValueError("value not found")
         return found
 
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, '_is_monotonic_increasing'):
+            self._is_monotonic_increasing = numeric_column_binop(
+                self[1:], self[:-1], 'ge', 'bool'
+            ).all()
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, '_is_monotonic_decreasing'):
+            self._is_monotonic_decreasing = numeric_column_binop(
+                self[1:], self[:-1], 'le', 'bool'
+            ).all()
+        return self._is_monotonic_decreasing
+
 
 def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     if reflect:

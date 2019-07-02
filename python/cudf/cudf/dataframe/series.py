@@ -2317,6 +2317,22 @@ class Series(object):
 
         return out.copy(deep=copy)
 
+    @property
+    def is_unique(self):
+        return self._column.is_unique
+
+    @property
+    def is_monotonic(self):
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._column.is_monotonic_decreasing
+
 
 register_distributed_serializer(Series)
 

@@ -29,11 +29,6 @@ from cudf.utils import cudautils, ioutils, utils
 class Index(object):
     """The root interface for all Series indexes.
     """
-
-    is_monotonic = None
-    is_monotonic_increasing = None
-    is_monotonic_decreasing = None
-
     def serialize(self, serialize):
         """Serialize into pickle format suitable for file storage or network
         transmission.
@@ -309,6 +304,22 @@ class Index(object):
     def loc(self):
         return _IndexLocIndexer(self)
 
+    @property
+    def is_unique(self):
+        return False
+
+    @property
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        return False
+
+    @property
+    def is_monotonic_decreasing(self):
+        return False
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -452,6 +463,30 @@ class RangeIndex(Index):
             name=self.name,
         )
 
+    @property
+    def is_unique(self):
+        return True
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._start <= self._stop
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._start >= self._stop
+
+    @property
+    def is_unique(self):
+        return True
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._start <= self._stop
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._start >= self._stop
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
@@ -569,6 +604,22 @@ class GenericIndex(Index):
             end = col.find_last_value(last)
             end += 1
         return begin, end
+
+    @property
+    def is_unique(self):
+        return self._values.is_unique
+
+    @property
+    def is_monotonic(self):
+        return self._values.is_monotonic
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._values.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._values.is_monotonic_decreasing
 
 
 class DatetimeIndex(GenericIndex):
