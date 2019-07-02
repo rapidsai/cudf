@@ -491,7 +491,8 @@ def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
     (['A', 'B'], ['int32', 'int32'], 'True,1\nFalse,2\nTrue,3', None, None),
     (['A', 'B'], ['int32', 'int32'], 'YES,1\nno,2\nyes,3\nNo,4\nYes,5',
         ["yes", "Yes", "YES"], ["no", "NO", "No"]),
-    (['A', 'B'], ['int32', 'int32'], 'foo,bar\nbar,foo', ['foo'], ['bar'])
+    (['A', 'B'], ['int32', 'int32'], 'foo,bar\nbar,foo', ['foo'], ['bar'],),
+    (['x', 'y'], None, 'True,1\nFalse,0', None, None)
 ])
 def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
@@ -506,7 +507,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
                          dtype=(dtypes[0] if dtypes else None),
                          true_values=trues, false_values=falses)
 
-    out = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+    out = read_csv(fname, names=names, dtype=dtypes, skiprows=1,
                    true_values=trues, false_values=falses)
 
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
