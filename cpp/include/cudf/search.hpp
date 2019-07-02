@@ -22,7 +22,11 @@
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief Find indices where elements should be inserted to maintain order
+ * @brief Find indices in sorted column where values should be inserted to
+ *  maintain order
+ * 
+ * @note The @p column is required to be sorted in ascending order otherwise
+ *  the behaviour is undefined
  * 
  * @param column        Column to search in. Must be sorted in ascending order
  * @param values        Values to search insert locations for
@@ -31,9 +35,10 @@ namespace cudf {
  * 
  * @return gdf_column   Insertion points with the same shape as values
  *---------------------------------------------------------------------------**/
-gdf_column search_sorted(gdf_column const& column,
-                         gdf_column const& values,
-                         bool find_first = true);
+gdf_column search_ordered(gdf_column const& column,
+                          gdf_column const& values,
+                          bool find_first = true,
+                          bool nulls_as_largest = true);
 
 } // namespace cudf
 

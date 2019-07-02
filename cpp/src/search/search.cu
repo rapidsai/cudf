@@ -43,45 +43,82 @@ public:
   void operator()(gdf_column const& column,
                   gdf_column const& values,
                   bool find_first,
+                  bool nulls_as_largest,
                   cudaStream_t stream,
                   gdf_column& result)
   {
     // TODO: handle nulls
-    // if ( is_nullable(column) ) {
-    //   auto it_dev = cudf::make_iterator<true, T>(column,
-    //     std::numeric_limits<T>::lowest());
-    // }
-    // else {
+    if ( is_nullable(column) ) {
+      if (nulls_as_largest) {
+        auto it_col = cudf::make_iterator<true, T>(column,
+          std::numeric_limits<T>::max());
+        auto it_val = cudf::make_iterator<true, T>(values,
+          std::numeric_limits<T>::max());
 
+        if (find_first) {
+          thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                              it_col, it_col + column.size,
+                              it_val, it_val + values.size,
+                              static_cast<gdf_index_type*>(result.data));
+        }
+        else {
+          thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                              it_col, it_col + column.size,
+                              it_val, it_val + values.size,
+                              static_cast<gdf_index_type*>(result.data));
+        }
+      }
+      else {
+        auto it_col = cudf::make_iterator<true, T>(column,
+          std::numeric_limits<T>::lowest());
+        auto it_val = cudf::make_iterator<true, T>(values,
+          std::numeric_limits<T>::lowest());
+
+        if (find_first) {
+          thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                              it_col, it_col + column.size,
+                              it_val, it_val + values.size,
+                              static_cast<gdf_index_type*>(result.data));
+        }
+        else {
+          thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                              it_col, it_col + column.size,
+                              it_val, it_val + values.size,
+                              static_cast<gdf_index_type*>(result.data));
+        }
+      }
+    }
+    else {
       auto it_col = cudf::make_iterator<false, T>(column);
       auto it_val = cudf::make_iterator<false, T>(values);
-      if (find_first)
-      {
+
+      if (find_first) {
         thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
                             it_col, it_col + column.size,
                             it_val, it_val + values.size,
                             static_cast<gdf_index_type*>(result.data));
       }
-      else
-      {
+      else {
         thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
                             it_col, it_col + column.size,
                             it_val, it_val + values.size,
                             static_cast<gdf_index_type*>(result.data));
       }
-    // }
+    }
 
   }
 
+  // TODO: clean up args here
   template <typename T,
             typename std::enable_if_t<!is_supported<T>()>* = nullptr>
   void operator()(gdf_column const& column,
                   gdf_column const& values,
                   bool find_first,
+                  bool nulls_as_largest,
                   cudaStream_t stream,
                   gdf_column& result)
   {
-    CUDF_FAIL("Unsupported datatype for search_sorted");
+    CUDF_FAIL("Unsupported datatype for search_ordered");
   }
 
 };
@@ -90,10 +127,11 @@ public:
 
 namespace detail {
 
-gdf_column search_sorted(gdf_column const& column,
-                         gdf_column const& values,
-                         bool find_first,
-                         cudaStream_t stream = 0)
+gdf_column search_ordered(gdf_column const& column,
+                          gdf_column const& values,
+                          bool find_first,
+                          bool nulls_as_largest,
+                          cudaStream_t stream = 0)
 {
   validate(column);
 
@@ -105,24 +143,21 @@ gdf_column search_sorted(gdf_column const& column,
   // TODO: let result have nulls? this could be used for records not found
   auto result = allocate_like(result_like);
 
-  // TODO: find out whether nulls_before_values
-  // Just need to check if nullmask exists and then first value is null or not
-  // before that, maybe check if sorted or not
-  
   type_dispatcher(column.dtype,
                   search_functor{},
-                  column, values, find_first, stream, result);
+                  column, values, find_first, nulls_as_largest, stream, result);
 
   return result;
 }
 
 } // namespace detail
 
-gdf_column search_sorted(gdf_column const& column,
-                         gdf_column const& values,
-                         bool find_first)
+gdf_column search_ordered(gdf_column const& column,
+                          gdf_column const& values,
+                          bool find_first,
+                          bool nulls_as_largest)
 {
-  return detail::search_sorted(column, values, find_first);
+  return detail::search_ordered(column, values, find_first, nulls_as_largest);
 }
 
 } // namespace cudf
