@@ -5,7 +5,7 @@
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
-- PR #XXXX Merge `dask-cudf` codebase into `cudf` repo
+- PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 
 ## Improvements
 
