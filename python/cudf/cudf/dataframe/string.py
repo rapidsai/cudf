@@ -15,7 +15,7 @@ import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.dataframe import column, columnops, numerical, series
+from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
 
@@ -647,11 +647,8 @@ class StringColumn(columnops.TypedColumnBase):
         dev_ptr = get_ctype_ptr(idx_dev_arr)
         self.data.order(2, asc=ascending, nullfirst=nullfirst, devptr=dev_ptr)
 
-        col_inds = numerical.NumericalColumn(
-            data=Buffer(idx_dev_arr),
-            mask=None,
-            null_count=0,
-            dtype=idx_dev_arr.dtype,
+        col_inds = columnops.build_column(
+            Buffer(idx_dev_arr), idx_dev_arr.dtype, mask=None
         )
 
         col_keys = self[col_inds.data.mem]
@@ -694,9 +691,10 @@ class StringColumn(columnops.TypedColumnBase):
         """
         Fill null values with * fill_value *
         """
+        from cudf.dataframe.series import Series
 
         if not isinstance(fill_value, str) and not (
-            isinstance(fill_value, series.Series)
+            isinstance(fill_value, Series)
             and isinstance(fill_value._column, StringColumn)
         ):
             raise TypeError("fill_value must be a string or a string series")
@@ -704,7 +702,7 @@ class StringColumn(columnops.TypedColumnBase):
         # replace fill_value with nvstrings
         # if it is a column
 
-        if isinstance(fill_value, series.Series):
+        if isinstance(fill_value, Series):
             if len(fill_value) < len(self):
                 raise ValueError(
                     "fill value series must be of same or "

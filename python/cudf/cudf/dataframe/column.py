@@ -13,7 +13,6 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 import nvstrings
 from librmm_cffi import librmm as rmm
 
-import cudf.bindings.copying as cpp_copying
 import cudf.bindings.quantile as cpp_quantile
 from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
@@ -577,6 +576,8 @@ class Column(object):
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.
         """
+        import cudf.bindings.copying as cpp_copying
+
         indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:

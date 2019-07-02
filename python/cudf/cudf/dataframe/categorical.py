@@ -7,7 +7,7 @@ import pyarrow as pa
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.dataframe import columnops, numerical
+from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
 
@@ -133,6 +133,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     @property
     def as_numerical(self):
+        from cudf.dataframe import numerical
+
         return self.view(numerical.NumericalColumn, dtype=self.data.dtype)
 
     def cat(self):
@@ -248,7 +250,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         out = cudautils.value_count(segs, len(sortedvals))
         out_vals = self.replace(data=out_col.data, mask=None)
-        out_counts = numerical.NumericalColumn(data=Buffer(out), dtype=np.intp)
+        out_counts = columnops.build_column(Buffer(out), np.intp)
         return out_vals, out_counts
 
     def _encode(self, value):

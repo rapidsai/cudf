@@ -10,7 +10,6 @@ import pandas as pd
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.index import Index, StringIndex, as_index
-from cudf.dataframe.series import Series
 from cudf.utils import cudautils, utils
 
 
@@ -29,6 +28,8 @@ class MultiIndex(Index):
     def __init__(
         self, levels=None, codes=None, labels=None, names=None, **kwargs
     ):
+        from cudf.dataframe.series import Series
+
         self.name = None
         self.names = names
         self._source_data = None
@@ -411,7 +412,7 @@ class MultiIndex(Index):
         return df
 
     def _to_frame(self):
-        from cudf import DataFrame
+        from cudf import DataFrame, Series
 
         # for each column of codes
         # replace column with mapping from integers to levels

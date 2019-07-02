@@ -20,7 +20,7 @@ from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.dataframe import columnops, datetime, string
+from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
 
@@ -114,6 +114,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError("cannot broadcast {}".format(type(other)))
 
     def astype(self, dtype):
+        from cudf.dataframe import datetime, string
+
         if self.dtype == dtype:
             return self
 

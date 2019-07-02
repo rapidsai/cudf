@@ -13,12 +13,6 @@ from numba import cuda, njit
 import nvstrings
 from librmm_cffi import librmm as rmm
 
-import cudf.bindings.copying as cpp_copying
-from cudf.bindings.cudf_cpp import np_to_pa_dtype
-from cudf.bindings.stream_compaction import (
-    cpp_apply_boolean_mask,
-    cpp_drop_nulls,
-)
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
@@ -94,10 +88,14 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def dropna(self):
+        from cudf.bindings.stream_compaction import cpp_drop_nulls
+
         dropped_col = cpp_drop_nulls(self)
         return self.replace(data=dropped_col.data, mask=None, null_count=0)
 
     def apply_boolean_mask(self, mask):
+        from cudf.bindings.stream_compaction import cpp_apply_boolean_mask
+
         mask = as_column(mask, dtype="bool")
         data = cpp_apply_boolean_mask(self, mask)
         return self.replace(data=data.data, mask=data.mask)
@@ -199,6 +197,7 @@ def column_select_by_position(column, positions):
     Returns (selected_column, selected_positions)
     """
     from cudf.dataframe.numerical import NumericalColumn
+    import cudf.bindings.copying as cpp_copying
 
     pos_ary = positions.data.to_gpu_array()
     selected_values = cpp_copying.apply_gather_column(column, pos_ary)
@@ -258,6 +257,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
     from cudf.dataframe import numerical, categorical, datetime, string
     from cudf.dataframe.series import Series
     from cudf.dataframe.index import Index
+    from cudf.bindings.cudf_cpp import np_to_pa_dtype
 
     if isinstance(arbitrary, Column):
         categories = None

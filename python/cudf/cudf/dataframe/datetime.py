@@ -13,7 +13,7 @@ from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.dataframe import columnops, numerical, string
+from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils
 from cudf.utils.utils import is_single_value
@@ -113,6 +113,8 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @property
     def as_numerical(self):
+        from cudf.dataframe import numerical
+
         return self.view(
             numerical.NumericalColumn,
             dtype="int64",
@@ -120,6 +122,8 @@ class DatetimeColumn(columnops.TypedColumnBase):
         )
 
     def astype(self, dtype):
+        from cudf.dataframe import string
+
         if self.dtype is dtype:
             return self
         elif dtype == np.dtype("object") or np.issubdtype(
