@@ -18,6 +18,7 @@
 #include <rmm/device_buffer.hpp>
 
 #include <cassert>
+#include <climits>
 
 // Forward decls
 namespace rmm {
@@ -26,6 +27,22 @@ device_memory_resource* get_default_resource();
 }  // namespace rmm
 
 namespace cudf {
+
+namespace detail {
+template <typename T>
+constexpr inline std::size_t size_in_bits() {
+  return sizeof(T) * CHAR_BIT;
+}
+
+constexpr __host__ __device__ size_type element_index(size_type bit_index) {
+  return bit_index / size_in_bits<bitmask_type>();
+}
+
+constexpr __host__ __device__ size_type
+intra_element_index(size_type bit_index) {
+  return bit_index % size_in_bits<bitmask_type>();
+}
+}  // namespace detail
 
 class mutable_bitmask_view {
  public:
