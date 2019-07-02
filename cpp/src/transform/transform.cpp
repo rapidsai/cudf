@@ -38,26 +38,6 @@ namespace transformation {
  * @param valid_col input mask of column
  * @param num_values number of values in input mask valid_col
  *---------------------------------------------------------------------------**/
-void col_valid_mask(gdf_valid_type* valid_out,
-                    const gdf_valid_type* valid_col,
-                    gdf_size_type num_values) {
-  
-  if (valid_out == nullptr && valid_col == nullptr) {
-    return;
-  }
-
-  CUDF_EXPECTS((valid_out != nullptr), "Output valid mask pointer is null");
-
-  gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
-
-  if (valid_col != nullptr) {
-    CUDA_TRY(cudaMemcpy(valid_out, valid_col, num_bitmask_elements,
-                        cudaMemcpyDeviceToDevice));
-  } else {
-    CUDA_TRY(cudaMemset(valid_out, 0xff, num_bitmask_elements));
-  }
-
-}
 
 namespace jit {
 
@@ -84,8 +64,7 @@ gdf_column transform(const gdf_column& input,
   }
 
   // Check for null data pointer
-  CUDF_EXPECTS((output.data != nullptr) && (input.data != nullptr),
-               "Column data pointers are null");
+  CUDF_EXPECTS((input.data != nullptr), "Input column data pointers are null");
 
   // Check for datatype
   // Input data types can be different but they have to be one of the
@@ -95,7 +74,10 @@ gdf_column transform(const gdf_column& input,
                 input.dtype == GDF_INT64   || 
                 input.dtype == GDF_INT32, "Invalid/Unsupported input datatype" );
   
-  transformation::col_valid_mask(output.valid, input.valid, input.size);
+  if (input.valid != nullptr) {
+    gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
+    CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));
+  }
 
   transformation::jit::unary_operation(&output, &input, ptx_unary_function, cudf::jit::getTypeName(output_type));
   
