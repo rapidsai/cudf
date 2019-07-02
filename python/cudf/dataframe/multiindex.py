@@ -393,7 +393,7 @@ class MultiIndex(Index):
                 raise KeyError(f"Level not found: '{level}'")
         else:
             level_idx = list(self.codes.columns).index(level)
-        col = self.codes[level].copy()
+        col = self.codes[level]
         rhs = DataFrame({
             'idx': Series(cudautils.arange(len(
                 self.levels[level_idx]),
