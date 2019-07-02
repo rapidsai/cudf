@@ -606,3 +606,11 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._cols)]
 
     utils.assert_eq(expect, got)
+
+
+def test_eq_bool_uint():
+    psr = pd.Series([True, False, False])
+    gsr = cudf.from_pandas(psr)
+    utils.assert_eq(psr == 1, gsr == 1)
+    utils.assert_eq(psr == 0, gsr == 0)
+    utils.assert_eq(psr == 2, gsr == 2)
