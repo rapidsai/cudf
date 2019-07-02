@@ -19,46 +19,22 @@
 
 namespace cudf {
 
-class bitmask_view {
+class mutable_bitmask_view {
  public:
-  bitmask_view(bitmask_type* mask, size_type size) : _mask{mask}, _size{size} {}
-
-  __device__ bool is_valid(size_type i) const noexcept {
-    // FIXME Implement
-    return true;
-  }
-
-  __device__ bool is_null(size_type i) const noexcept {
-    return not is_valid(i);
-  }
-
-  __device__ bitmask_type get_element(size_type element_index) const noexcept {
-    // TODO Implement
-    return;
-  }
+  mutable_bitmask_view(bitmask_type* mask, size_type size)
+      : _mask{mask}, _size{size} {}
 
   __host__ __device__ bool nullable() const noexcept {
     return nullptr != _mask;
   }
 
-  __host__ __device__ bitmask_type const* data() const noexcept {
-    return _mask;
+  __device__ bool is_valid(size_type bit_index) const noexcept {
+    // FIXME Implement
+    return true;
   }
 
- private:
-  bitmask_type* _mask{nullptr};
-  size_type _size{0};
-};
-
-class mutable_bitmask_view : bitmask_view {
-  using Base = bitmask_view;
-
- public:
-  mutable_bitmask_view(bitmask_type* mask, size_type size) : Base{mask, size} {}
-
-  __device__ void set_element(size_type element_index) noexcept {
-    // TODO Implement
-    return;
+  __device__ bool is_null(size_type bit_index) const noexcept {
+    return not is_valid(bit_index);
   }
 
   __device__ void set_valid(size_type bit_index) noexcept {
@@ -70,6 +46,54 @@ class mutable_bitmask_view : bitmask_view {
     // TODO Implement
     return;
   }
+
+  __device__ bitmask_type get_element(size_type element_index) const noexcept {
+    // TODO Implement
+    return 0xffffffff;
+  }
+  __device__ void set_element(size_type element_index) noexcept {
+    // TODO Implement
+    return;
+  }
+
+  __host__ __device__ bitmask_type* data() noexcept { return _mask; }
+
+  __host__ __device__ bitmask_type const* data() const noexcept {
+    return _mask;
+  }
+
+ private:
+  bitmask_type* _mask{nullptr};
+  size_type _size{0};
+};
+
+class bitmask_view {
+ public:
+  bitmask_view(bitmask_type const* mask, size_type size)
+      : _mask{const_cast<bitmask_type*>(mask), size} {}
+
+  __host__ __device__ bool nullable() const noexcept {
+    return _mask.nullable();
+  }
+
+  __device__ bool is_valid(size_type bit_index) const noexcept {
+    return _mask.is_valid(bit_index);
+  }
+
+  __device__ bool is_null(size_type bit_index) const noexcept {
+    return _mask.is_null(bit_index);
+  }
+
+  __device__ bitmask_type get_element(size_type element_index) const noexcept {
+    return _mask.get_element(element_index);
+  }
+
+  __host__ __device__ bitmask_type const* data() const noexcept {
+    return _mask.data();
+  }
+
+ private:
+  mutable_bitmask_view const _mask;
 };
 
 class bitmask {
@@ -115,7 +139,12 @@ class bitmask {
    * @param size The number of bits represented by the bitmask
    * @param mask The `device_buffer` to move from
    *---------------------------------------------------------------------------**/
-  bitmask(size_type size, rmm::device_buffer&& mask);
+  bitmask(size_type size, rmm::device_buffer&& mask) noexcept;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of bits represented by the bitmask.
+   *---------------------------------------------------------------------------**/
+  size_type size() const noexcept { return _size; }
 
   /**---------------------------------------------------------------------------*
    * @brief Constructs an immutable, zero-copy `bitmask_view` with device-level
@@ -136,13 +165,13 @@ class bitmask {
     return this->operator mutable_bitmask_view();
   }
 
-  operator bitmask_view() const noexcept {
-    return bitmask_view{static_cast<bitmask_type*>(_data.data()), _size};
-  }
-
   operator mutable_bitmask_view() noexcept {
     return mutable_bitmask_view{static_cast<bitmask_type*>(_data.data()),
                                 _size};
+  }
+
+  operator bitmask_view() const noexcept {
+    return bitmask_view{static_cast<bitmask_type const*>(_data.data()), _size};
   }
 
  private:
