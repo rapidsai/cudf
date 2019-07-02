@@ -319,26 +319,20 @@ class Series(object):
             if hasattr(cudf_series_module, submodule):
                 cudf_series_module = getattr(cudf_series_module, submodule)
             else:
-                raise NotImplementedError
+                return NotImplemented
 
         fname = func.__name__
-
-        # Note: this allows subclasses that don't override
-        # __array_function__ to handle series objects
-
-        if not all(issubclass(t, cudf_series_module) for t in types):
-            raise NotImplementedError
 
         if hasattr(cudf_series_module, fname):
             cudf_func = getattr(cudf_series_module, fname)
             # Handle case if cudf_func is same as numpy function
             if cudf_func is func:
-                raise NotImplementedError
+                return NotImplemented
             else:
                 return cudf_func(*args, **kwargs)
 
         else:
-            raise NotImplementedError
+            return NotImplemented
 
     @property
     def empty(self):
