@@ -72,30 +72,23 @@ gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists, 
 /*
  * Allocates a new column of the same size as the input with the specified type.
  */
-gdf_column allocate_dtype(const gdf_column& input, gdf_dtype output_type, bool allocate_mask_if_exists, cudaStream_t stream)
+gdf_column allocate_size_dtype(gdf_size_type size, gdf_dtype output_type, bool allocate_mask, cudaStream_t stream)
 {
-  CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-  gdf_column output;
+  gdf_column output{};
+  output.size = size;
+  output.dtype = output_type;
 
-  gdf_dtype_extra_info info = input.dtype_info;
-  info.category = nullptr;
+  if(size == 0){
+    return output;
+  }
 
-  CUDF_EXPECTS(GDF_SUCCESS == 
-    gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                     output_type, 0, info),
-    "Invalid column parameters");
-
-  output.size = input.size;
-
-  if (input.size > 0) {
-    const auto byte_width = (output_type == GDF_STRING)
-                    ? sizeof(std::pair<const char *, size_t>)
-                    : cudf::size_of(output_type);
-    RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
-    if ((input.valid != nullptr) && allocate_mask_if_exists) {
-      size_t valid_size = gdf_valid_allocation_size(input.size);
-      RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
-    }
+  const auto byte_width = (output_type == GDF_STRING)
+                  ? sizeof(std::pair<const char *, size_t>)
+                  : cudf::size_of(output_type);
+  RMM_TRY(RMM_ALLOC(&output.data, size * byte_width, stream));
+  if (allocate_mask) {
+    size_t valid_size = gdf_valid_allocation_size(size);
+    RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
   }
 
   return output;

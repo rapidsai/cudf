@@ -160,7 +160,7 @@ def apply_op_udf(lhs, rhs, udf_ptx, np_dtype):
     with nogil:
         c_outcol = binary_operation(<gdf_column>c_lhs[0], <gdf_column>c_rhs[0], cpp_str, g_type)
  
-    (data, mask) = gdf_column_to_column_mem(&c_outcol)
+    data, mask = gdf_column_to_column_mem(&c_outcol)
     
     free(c_lhs)
     free(c_rhs)

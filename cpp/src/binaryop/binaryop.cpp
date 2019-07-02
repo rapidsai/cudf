@@ -289,30 +289,34 @@ gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
                             const std::string& ptx, gdf_dtype output_type) {
   CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
 
-  gdf_column output;
-  if (lhs.valid != nullptr) {
-    output = allocate_dtype(lhs, output_type);
-  } else if (rhs.valid != nullptr) {
-    output = allocate_dtype(rhs, output_type);
-  } else {
-    output = allocate_dtype(lhs, output_type);
-  }
+  gdf_column output{};
 
   // Check for 0 sized data
   if ((lhs.size == 0) && (rhs.size == 0)) return output;
   CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
+
+  if (lhs.valid != nullptr) {
+    output = allocate_size_dtype(lhs.size, output_type);
+  } else if (rhs.valid != nullptr) {
+    output = allocate_size_dtype(rhs.size, output_type);
+  } else {
+    output = allocate_size_dtype(lhs.size, output_type, false); // don't allocate valid for the output
+  }
 
   // Check for null data pointer
   CUDF_EXPECTS((lhs.data != nullptr) && (rhs.data != nullptr),
                "Column data pointers are null");
 
   // Check for datatype
-  CUDF_EXPECTS((lhs.dtype == GDF_FLOAT32 || lhs.dtype == GDF_FLOAT64 ||
-                lhs.dtype == GDF_INT64 || lhs.dtype == GDF_INT32) &&
-                   (rhs.dtype == GDF_FLOAT32 || rhs.dtype == GDF_FLOAT64 ||
-                    rhs.dtype == GDF_INT64 || rhs.dtype == GDF_INT32),
-               "Invalid/Unsupported datatype");
-
+  CUDF_EXPECTS( lhs.dtype == GDF_FLOAT32 || 
+                lhs.dtype == GDF_FLOAT64 ||
+                lhs.dtype == GDF_INT64   ||
+                lhs.dtype == GDF_INT32,  "Invalid/Unsupported lhs datatype");
+  CUDF_EXPECTS( rhs.dtype == GDF_FLOAT32 || 
+                rhs.dtype == GDF_FLOAT64 ||
+                rhs.dtype == GDF_INT64   ||
+                rhs.dtype == GDF_INT32,  "Invalid/Unsupported rhs datatype");
+  
   binops::binary_valid_mask_and(output.null_count, output.valid, lhs.valid,
                                 rhs.valid, rhs.size);
 

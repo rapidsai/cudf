@@ -53,7 +53,7 @@ gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists =
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_dtype(const gdf_column& input, gdf_dtype output_type, bool allocate_mask_if_exists=true, cudaStream_t stream=0);
+gdf_column allocate_size_dtype(gdf_size_type size, gdf_dtype output_type, bool allocate_mask=true, cudaStream_t stream=0);
 
 /**
  * @brief Creates a new column that is a copy of input

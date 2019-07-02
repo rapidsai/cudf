@@ -71,7 +71,7 @@ def column_applymap(incol, udf_ptx, np_dtype):
     with nogil:
         c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type)
     
-    (data, mask) = gdf_column_to_column_mem(&c_outcol)
+    data, mask = gdf_column_to_column_mem(&c_outcol)
 
     free(c_incol)
 

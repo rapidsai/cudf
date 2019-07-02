@@ -29,10 +29,11 @@ namespace cudf {
  * Computes:
  * `out[i] = F(in[i])`
  *
- * @param input The input column to transform
- * @param ptx_unary_function The PTX of the unary function to apply
- * @return gdf_column The column resulting from applying the unary function to
- * every element of the input
+ * @param input               The input column to transform
+ * @param ptx_unary_function  The PTX of the unary function to apply
+ * @param outout_type         The output type that is compatible with the output type in the PTX code
+ * @return gdf_column         The column resulting from applying the unary function to
+ *                            every element of the input
  *---------------------------------------------------------------------------**/
 gdf_column transform(const gdf_column &input,
                      const std::string &ptx_unary_function,
