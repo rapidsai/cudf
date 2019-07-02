@@ -6,68 +6,212 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
+#include <cudf/cudf.h>
+#include <cudf/functions.h>
+#include <cudf/sorted_merge.hpp>
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/table.hpp>
+
+#include "string/nvcategory_util.hpp"
 #include "tests/utilities/column_wrapper.cuh"
+#include "tests/utilities/column_wrapper_factory.hpp"
 #include "tests/utilities/cudf_test_fixtures.h"
 #include "tests/utilities/nvcategory_utils.cuh"
-
-#include <cudf.h>
-#include <cudf/functions.h>
-#include <sorted_merge.hpp>
-#include <rmm/thrust_rmm_allocator.h>
-#include <table.hpp>
-#include "string/nvcategory_util.hpp"
-
-std::vector<gdf_valid_type> bools_to_valids(const std::vector<uint8_t> & input) {
-    std::vector<gdf_valid_type> vec(gdf_valid_allocation_size(input.size()), 0);
-    for(size_t i = 0; i < input.size(); ++i){
-        if(input[i]){
-            gdf::util::turn_bit_on(vec.data(), i);
-        } else {
-            gdf::util::turn_bit_off(vec.data(), i);
-        }
-    }
-    return vec;
-}
 
 template <typename T>
 class SortedMergeTest : public GdfTest {};
 
-using SortedMergerTypes = ::testing::Types<int8_t, int32_t, double>;
+using test_types =
+  ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
+                   /* cudf::bool8, */ cudf::nvstring_category>;
 
-TYPED_TEST_CASE(SortedMergeTest, SortedMergerTypes);
+TYPED_TEST_CASE(SortedMergeTest, test_types);
 
-TYPED_TEST(SortedMergeTest, MergeWithEmptyColumn) {
-    cudf::test::column_wrapper<TypeParam> leftColWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
+TYPED_TEST(SortedMergeTest, MismatchedNumColumns) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
     gdf_column *leftColumn1 = leftColWrap1.get();
 
-    cudf::test::column_wrapper<TypeParam> rightColWrap1(0);
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    auto rightColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+    gdf_column *rightColumn2 = rightColWrap2.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1, rightColumn2};
+
+    std::vector<gdf_size_type> sortByCols = {0};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+
+    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                    cudf::table(rightColumns, 2),
+                                    sortByCols,
+                                    orderByTypes), cudf::logic_error);
+}
+
+TYPED_TEST(SortedMergeTest, EmptyKeyColumns) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1};
+
+    std::vector<gdf_size_type> sortByCols;
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+
+    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                    cudf::table(rightColumns, 1),
+                                    sortByCols,
+                                    orderByTypes), cudf::logic_error);
+}
+
+TYPED_TEST(SortedMergeTest, TooManyKeyColumns) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1};
+
+    std::vector<gdf_size_type> sortByCols = {0, 1};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+
+    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                    cudf::table(rightColumns, 1),
+                                    sortByCols,
+                                    orderByTypes), cudf::logic_error);
+}
+
+TYPED_TEST(SortedMergeTest, EmptyOrderTypes) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
     gdf_column *rightColumn1 = rightColWrap1.get();
 
     gdf_column *leftColumns[]  = {leftColumn1};
     gdf_column *rightColumns[] = {rightColumn1};
 
     std::vector<gdf_size_type> sortByCols = {0};
-    rmm::device_vector<int8_t> ordersDeviceVector(std::vector<int8_t>{GDF_ORDER_ASC});
+    std::vector<order_by_type> orderByTypes;
 
-    cudf::table outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                                cudf::table(rightColumns, 1),
-                                                sortByCols,
-                                                ordersDeviceVector);
+    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                    cudf::table(rightColumns, 1),
+                                    sortByCols,
+                                    orderByTypes), cudf::logic_error);
+}
 
-    const gdf_size_type outputLength = leftColumn1->size + rightColumn1->size;
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(outputLength),0xFF));
+TYPED_TEST(SortedMergeTest, TooManyOrderTypes) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap1.get(), outputTable.get_column(0)));
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1};
+
+    std::vector<gdf_size_type> sortByCols = {0};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
+
+    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                    cudf::table(rightColumns, 1),
+                                    sortByCols,
+                                    orderByTypes), cudf::logic_error);
+}
+
+TYPED_TEST(SortedMergeTest, MismatchedKeyColumnsAndOrderTypes) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    auto leftColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+    gdf_column *leftColumn2 = leftColWrap2.get();
+
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    auto rightColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+    gdf_column *rightColumn2 = rightColWrap2.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1, leftColumn2};
+    gdf_column *rightColumns[] = {rightColumn1, rightColumn2};
+
+    std::vector<gdf_size_type> sortByCols = {0, 1};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+
+    EXPECT_THROW(cudf::sorted_merge(cudf::table(leftColumns, 2),
+                                    cudf::table(rightColumns, 2),
+                                    sortByCols,
+                                    orderByTypes), cudf::logic_error);
+}
+
+TYPED_TEST(SortedMergeTest, MergeWithEmptyColumn) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    auto rightColWrap1 = columnFactory.make(0, [](gdf_index_type row) { return 0; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1};
+
+    std::vector<gdf_size_type> sortByCols = {0};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+
+    cudf::table outputTable;
+    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                                    cudf::table(rightColumns, 1),
+                                                    sortByCols,
+                                                    orderByTypes));
+    
+    const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
+    auto expectedDataWrap1 = columnFactory.make(outputRows, [](gdf_index_type row) { return row; });
+
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
 }
 
 TYPED_TEST(SortedMergeTest, Merge1KeyColumns) {
-    cudf::test::column_wrapper<TypeParam> leftColWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
-    cudf::test::column_wrapper<TypeParam> leftColWrap2({4, 5, 6, 7}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; });
+    auto leftColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
     gdf_column *leftColumn1 = leftColWrap1.get();
     gdf_column *leftColumn2 = leftColWrap2.get();
 
-    cudf::test::column_wrapper<TypeParam> rightColWrap1({1, 2}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(2),0xFF));
-    cudf::test::column_wrapper<TypeParam> rightColWrap2({8, 9}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(2),0xFF));
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row + 1; });
+    auto rightColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
     gdf_column *rightColumn1 = rightColWrap1.get();
     gdf_column *rightColumn2 = rightColWrap2.get();
 
@@ -75,29 +219,34 @@ TYPED_TEST(SortedMergeTest, Merge1KeyColumns) {
     gdf_column *rightColumns[] = {rightColumn1, rightColumn2};
 
     std::vector<gdf_size_type> sortByCols = {0};
-    rmm::device_vector<int8_t> ordersDeviceVector(std::vector<int8_t>{GDF_ORDER_ASC});
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    cudf::table outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                                cudf::table(rightColumns, 2),
-                                                sortByCols,
-                                                ordersDeviceVector);
+    cudf::table outputTable;
+    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
+                                                    cudf::table(rightColumns, 2),
+                                                    sortByCols,
+                                                    orderByTypes));
 
-    const gdf_size_type outputLength = leftColumn1->size + rightColumn1->size;
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap1({0, 1, 1, 2, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(outputLength),0xFF));
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap2({4, 5, 8, 6, 9, 7}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(outputLength),0xFF));
+    const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
+    auto expectedDataWrap1 = columnFactory.make(outputRows, [](gdf_index_type row) { return row; });
+    auto expectedDataWrap2 = columnFactory.make(outputRows, [](gdf_index_type row) { return row / 2; });
 
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap1.get(), outputTable.get_column(0)));
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap2.get(), outputTable.get_column(1)));
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
 
 TYPED_TEST(SortedMergeTest, Merge2KeyColumns) {
-    cudf::test::column_wrapper<TypeParam> leftColWrap1({0, 1, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
-    cudf::test::column_wrapper<TypeParam> leftColWrap2({4, 5, 6, 7}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(4),0xFF));
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    auto leftColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; });
     gdf_column *leftColumn1 = leftColWrap1.get();
     gdf_column *leftColumn2 = leftColWrap2.get();
 
-    cudf::test::column_wrapper<TypeParam> rightColWrap1({1, 2}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(2),0xFF));
-    cudf::test::column_wrapper<TypeParam> rightColWrap2({8, 9}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(2),0xFF));
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    auto rightColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row + 1; });
     gdf_column *rightColumn1 = rightColWrap1.get();
     gdf_column *rightColumn2 = rightColWrap2.get();
 
@@ -105,95 +254,98 @@ TYPED_TEST(SortedMergeTest, Merge2KeyColumns) {
     gdf_column *rightColumns[] = {rightColumn1, rightColumn2};
 
     std::vector<gdf_size_type> sortByCols = {0, 1};
-    rmm::device_vector<int8_t> ordersDeviceVector(std::vector<int8_t>{GDF_ORDER_ASC, GDF_ORDER_DESC});
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
 
-    cudf::table outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                                cudf::table(rightColumns, 2),
-                                                sortByCols,
-                                                ordersDeviceVector);
+    cudf::table outputTable;
+    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
+                                                    cudf::table(rightColumns, 2),
+                                                    sortByCols,
+                                                    orderByTypes));
 
-    const gdf_size_type outputLength = leftColumn1->size + rightColumn1->size;
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap1({0, 1, 1, 2, 2, 3}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(outputLength),0xFF));
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap2({4, 8, 5, 9, 6, 7}, std::vector<gdf_valid_type>(gdf_valid_allocation_size(outputLength),0xFF));
+    const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
+    auto expectedDataWrap1 = columnFactory.make(outputRows, [](gdf_index_type row) { return row / 2; });
+    auto expectedDataWrap2 = columnFactory.make(outputRows, [](gdf_index_type row) { return row % 2 == 0 ? row + 1 : row -1; });
 
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap1.get(), outputTable.get_column(0)));
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap2.get(), outputTable.get_column(1)));
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
 
-TYPED_TEST(SortedMergeTest, Merge2KeyNullColumns) {
-    cudf::test::column_wrapper<TypeParam> leftColWrap1({0, 1, 2, 3, -1}, bools_to_valids({1, 1, 1, 1, 0}));
-    cudf::test::column_wrapper<TypeParam> leftColWrap2({4, 5, 6, 7, 1}, bools_to_valids({1, 1, 0, 1, 1}));
+TYPED_TEST(SortedMergeTest, Merge1KeyNullColumns) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
+
+    gdf_size_type inputRows = 4;
+
+    // data: 0  2  4  6 | valid: 1 1 1 0
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; }, [=](gdf_index_type row) { return row < inputRows - 1; });
     gdf_column *leftColumn1 = leftColWrap1.get();
-    gdf_column *leftColumn2 = leftColWrap2.get();
 
-    cudf::test::column_wrapper<TypeParam> rightColWrap1({1, 2, -1}, bools_to_valids({1, 1, 0}));
-    cudf::test::column_wrapper<TypeParam> rightColWrap2({8, 9, 2}, bools_to_valids({0, 1, 1}));
+    // data: 1  3  5  7 | valid: 1 1 1 0
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row + 1; }, [=](gdf_index_type row) { return row < inputRows - 1; });
     gdf_column *rightColumn1 = rightColWrap1.get();
-    gdf_column *rightColumn2 = rightColWrap2.get();
-
-    gdf_column *leftColumns[]  = {leftColumn1, leftColumn2};
-    gdf_column *rightColumns[] = {rightColumn1, rightColumn2};
-
-    std::vector<gdf_size_type> sortByCols = {0, 1};
-    rmm::device_vector<int8_t> ordersDeviceVector(std::vector<int8_t>{GDF_ORDER_ASC, GDF_ORDER_DESC});
-
-    cudf::table outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
-                                                cudf::table(rightColumns, 2),
-                                                sortByCols,
-                                                ordersDeviceVector);
-
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap1({0, 1, 1, 2, 2, 3, -1, -1}, bools_to_valids({1, 1, 1, 1, 1, 1, 0, 0}));
-    cudf::test::column_wrapper<TypeParam> expectedDataWrap2({4, 8, 5, 6, 9, 7, 2, 1}, bools_to_valids({1, 0, 1, 0, 1, 1, 1, 1}));
-
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap1.get(), outputTable.get_column(0)));
-    EXPECT_TRUE(gdf_equal_columns<TypeParam>(expectedDataWrap2.get(), outputTable.get_column(1)));
-}
-
-
-class SortedMergeStringTest : public GdfTest {};
-
-TEST_F(SortedMergeStringTest, Merge1KeyColumns) {
-    constexpr int STRING_LENGTH = 8;
-
-    const char * leftStrings1[] = {"aaaaaaab", "aaaaaaaf", "aaaaaaak", "aaaaaaap", "aaaaaaat", "aaaaaaax", "aaaaaaaz"};
-    gdf_column *leftColumn1 = cudf::test::create_nv_category_column_strings(leftStrings1, 7);
-
-    const char * rightStrings1[] = {"aaaaaaad", "aaaaaaan", "aaaaaaay"};
-    gdf_column *rightColumn1 = cudf::test::create_nv_category_column_strings(rightStrings1, 3);
 
     gdf_column *leftColumns[]  = {leftColumn1};
     gdf_column *rightColumns[] = {rightColumn1};
 
     std::vector<gdf_size_type> sortByCols = {0};
-    rmm::device_vector<int8_t> ordersDeviceVector(std::vector<int8_t>{GDF_ORDER_ASC});
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
 
-    cudf::table outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
-                                                cudf::table(rightColumns, 1),
-                                                sortByCols,
-                                                ordersDeviceVector);
+    cudf::table outputTable;
+    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 1),
+                                                    cudf::table(rightColumns, 1),
+                                                    sortByCols,
+                                                    orderByTypes));
 
-    gdf_column * outCol = outputTable.get_column(0);
-    const gdf_size_type outputLength = leftColumn1->size + rightColumn1->size;
-    NVStrings * tempNVStrings = static_cast<NVCategory *>(outCol->dtype_info.category)->gather_strings( 
-			(nv_category_index_type *) outCol->data, outputLength, DEVICE_ALLOCATED );
+    const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
+    // data: 0 1 2 3 4 5 6 7 | valid: 1 1 1 1 1 1 0 0
+    const gdf_size_type column1TotalNulls = leftColumn1->null_count + rightColumn1->null_count;
+    auto expectedDataWrap1 = columnFactory.make(outputRows,
+                                                [](gdf_index_type row) { return row; },
+                                                [=](gdf_index_type row) { return row < (outputRows - column1TotalNulls); });
 
-    std::vector<std::unique_ptr<char[]>> c_strings(outputLength);
-    std::vector<char*> hostStrings(outputLength);
-    for(gdf_size_type i = 0; i < outputLength; i++){
-        c_strings[i] = std::make_unique<char[]>(STRING_LENGTH+1);
-        hostStrings[i] = c_strings[i].get();
-    }
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
+}
 
-    tempNVStrings->to_host(hostStrings.data(), 0, outputLength);
-	
-    for(gdf_size_type i = 0; i < outputLength; i++){
-        hostStrings[i][STRING_LENGTH] = 0;
-    }
-    std::vector<std::string> outputStrings(hostStrings.begin(), hostStrings.end());
+TYPED_TEST(SortedMergeTest, Merge2KeyNullColumns) {
+    cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    NVStrings::destroy(tempNVStrings);
+    gdf_size_type inputRows = 4;
 
-    std::vector<std::string> expectedOutput = {"aaaaaaab", "aaaaaaad", "aaaaaaaf", "aaaaaaak", "aaaaaaan", "aaaaaaap", "aaaaaaat", "aaaaaaax", "aaaaaaay", "aaaaaaaz"};
+    // data: 0 1 2 3 | valid: 1 1 1 1
+    auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    // data: 0 2 4 6 | valid: 1 1 1 1
+    auto leftColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; }, [](gdf_index_type row) { return true; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+    gdf_column *leftColumn2 = leftColWrap2.get();
 
-    EXPECT_TRUE(std::equal(expectedOutput.begin(), expectedOutput.end(), outputStrings.begin(), outputStrings.end()));
+    // data: 0 1 2 3 | valid: 1 1 1 1
+    auto rightColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
+    // data: 0 1 2 3 | valid: 0 0 0 0
+    auto rightColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; }, [](gdf_index_type row) { return false; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+    gdf_column *rightColumn2 = rightColWrap2.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1, leftColumn2};
+    gdf_column *rightColumns[] = {rightColumn1, rightColumn2};
+
+    std::vector<gdf_size_type> sortByCols = {0, 1};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC, GDF_ORDER_DESC};
+
+    cudf::table outputTable;
+    EXPECT_NO_THROW(outputTable = cudf::sorted_merge(cudf::table(leftColumns, 2),
+                                                    cudf::table(rightColumns, 2),
+                                                    sortByCols,
+                                                    orderByTypes));
+
+    const gdf_size_type outputRows = leftColumn1->size + rightColumn1->size;
+    // data: 0 0 1 1 2 2 3 3 | valid: 1 1 1 1 1 1 1 1
+    auto expectedDataWrap1 = columnFactory.make(outputRows,
+                                                [](gdf_index_type row) { return row / 2; },
+                                                [](gdf_index_type row) { return true; });
+    // data: 0 0 2 1 4 2 6 3 | valid: 1 0 1 0 1 0 1 0
+    auto expectedDataWrap2 = columnFactory.make(outputRows,
+                                                [](gdf_index_type row) { return row % 2 != 0 ? 2 * (row / 2) : (row / 2); },
+                                                [](gdf_index_type row) { return row % 2 != 0; });
+
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
+    EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap2.get(), *outputTable.get_column(1)));
 }
