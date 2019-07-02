@@ -49,43 +49,24 @@ public:
   {
     // TODO: handle nulls
     if ( is_nullable(column) ) {
-      if (nulls_as_largest) {
-        auto it_col = cudf::make_iterator<true, T>(column,
-          std::numeric_limits<T>::max());
-        auto it_val = cudf::make_iterator<true, T>(values,
-          std::numeric_limits<T>::max());
+      T null_substitute = (nulls_as_largest) 
+                        ? std::numeric_limits<T>::max()
+                        : std::numeric_limits<T>::lowest();
 
-        if (find_first) {
-          thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                              it_col, it_col + column.size,
-                              it_val, it_val + values.size,
-                              static_cast<gdf_index_type*>(result.data));
-        }
-        else {
-          thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                              it_col, it_col + column.size,
-                              it_val, it_val + values.size,
-                              static_cast<gdf_index_type*>(result.data));
-        }
+      auto it_col = cudf::make_iterator<true, T>(column, null_substitute);
+      auto it_val = cudf::make_iterator<true, T>(values, null_substitute);
+
+      if (find_first) {
+        thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                            it_col, it_col + column.size,
+                            it_val, it_val + values.size,
+                            static_cast<gdf_index_type*>(result.data));
       }
       else {
-        auto it_col = cudf::make_iterator<true, T>(column,
-          std::numeric_limits<T>::lowest());
-        auto it_val = cudf::make_iterator<true, T>(values,
-          std::numeric_limits<T>::lowest());
-
-        if (find_first) {
-          thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                              it_col, it_col + column.size,
-                              it_val, it_val + values.size,
-                              static_cast<gdf_index_type*>(result.data));
-        }
-        else {
-          thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                              it_col, it_col + column.size,
-                              it_val, it_val + values.size,
-                              static_cast<gdf_index_type*>(result.data));
-        }
+        thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                            it_col, it_col + column.size,
+                            it_val, it_val + values.size,
+                            static_cast<gdf_index_type*>(result.data));
       }
     }
     else {
