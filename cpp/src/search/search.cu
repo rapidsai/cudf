@@ -15,15 +15,18 @@
  */
 
 #include <iterator/iterator.cuh>
+#include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
+
 #include <cudf/search.hpp>
 #include <cudf/copying.hpp>
+
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/binary_search.h>
 
-#include <iostream>
 
 namespace cudf {
 
@@ -47,7 +50,6 @@ public:
                   cudaStream_t stream,
                   gdf_column& result)
   {
-    // TODO: handle nulls
     if ( is_nullable(column) ) {
       T null_substitute = (nulls_as_largest) 
                         ? std::numeric_limits<T>::max()
@@ -109,7 +111,9 @@ gdf_column search_ordered(gdf_column const& column,
                           bool nulls_as_largest,
                           cudaStream_t stream = 0)
 {
+  // TODO: allow empty input
   validate(column);
+  validate(values);
 
   // Allocate result column
   gdf_column result_like{};
@@ -126,6 +130,37 @@ gdf_column search_ordered(gdf_column const& column,
   return result;
 }
 
+gdf_column search_ordered(table const& t,
+                          table const& values,
+                          bool find_first,
+                          bool nulls_as_largest,
+                          cudaStream_t stream = 0)
+{
+  // TODO: validate input table and values
+  // TODO: allow empty input
+
+  // Allocate result column
+  gdf_column result_like{};
+  result_like.dtype = GDF_INT32;
+  result_like.size = values.num_rows();
+  result_like.data = values.get_column(0)->data;
+  // TODO: let result have nulls? this could be used for records not found
+  auto result = allocate_like(result_like);
+
+  auto d_t      = device_table::create(t, stream);
+  auto d_values = device_table::create(values, stream);
+  auto ineq_op  = row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest);
+  thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                      thrust::make_counting_iterator(0), 
+                      thrust::make_counting_iterator(t.num_rows()),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(values.num_rows()),
+                      static_cast<gdf_index_type*>(result.data),
+                      ineq_op);
+
+  return result;
+}
+
 } // namespace detail
 
 gdf_column search_ordered(gdf_column const& column,
@@ -134,6 +169,14 @@ gdf_column search_ordered(gdf_column const& column,
                           bool nulls_as_largest)
 {
   return detail::search_ordered(column, values, find_first, nulls_as_largest);
+}
+
+gdf_column search_ordered(table const& t,
+                          table const& values,
+                          bool find_first,
+                          bool nulls_as_largest)
+{
+  return detail::search_ordered(t, values, find_first, nulls_as_largest);
 }
 
 } // namespace cudf

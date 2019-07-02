@@ -212,3 +212,35 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
                               << "Expected:" << expect.to_str();
 }
 
+TEST_F(SearchTest, table)
+{
+    auto column_0 = column_wrapper<int32_t> {  10,  20,  20,  20,  20,  20,  50 };
+    auto column_1 = column_wrapper<float>   { 5.0,  .5,  .5,  .7,  .7,  .7,  .7 };
+    auto column_2 = column_wrapper<int8_t>  {  90,  77,  78,  61,  62,  63,  41 };
+
+    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+
+    auto expect = column_wrapper<gdf_index_type>
+                                            { 0,  0,  0,  0,  0,  0,  0,  1,  0,  1,  1,  1,  1,  1,  1,  1,  2,  1,  3,  3,  3,  6,  4,  6,  6,  6,  7 };
+
+    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
+    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+
+    auto input_table  = cudf::table(columns);
+    auto values_table = cudf::table(values);
+
+    gdf_column result_column{};
+
+    EXPECT_NO_THROW(
+        result_column = cudf::search_ordered(
+            input_table,
+            values_table)
+    );
+
+    auto result = column_wrapper<gdf_index_type>(result_column);
+    
+    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
+                              << "Expected:" << expect.to_str();
+}

@@ -40,5 +40,11 @@ gdf_column search_ordered(gdf_column const& column,
                           bool find_first = true,
                           bool nulls_as_largest = true);
 
+// TODO: docs but after finalizing what all it can do
+gdf_column search_ordered(table const& t,
+                          table const& values,
+                          bool find_first = true,
+                          bool nulls_as_largest = true);
+
 } // namespace cudf
 
