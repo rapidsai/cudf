@@ -957,3 +957,5 @@ def test_string_misc_name(ps_gs, name):
 
     assert_eq(expect, got)
     assert_eq(ps+ps, gs+gs)
+    assert_eq(ps+"RAPIDS", gs+"RAPIDS")
+    assert_eq("RAPIDS"+ps, "RAPIDS"+gs)
