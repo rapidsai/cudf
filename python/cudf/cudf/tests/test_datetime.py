@@ -16,11 +16,13 @@ from cudf.tests.utils import assert_eq
 
 
 def data1():
-    return pd.date_range("20010101", "20020215", freq="400h")
+    return pd.date_range("20010101", "20020215", freq="400h", name="times")
 
 
 def data2():
-    return pd.date_range("20010101", "20020215", freq="400h", tz="US/Eastern")
+    return pd.date_range(
+        "20010101", "20020215", freq="400h", tz="US/Eastern", name="times"
+    )
 
 
 def numerical_data():
@@ -35,6 +37,16 @@ def test_series(data):
     pd_data = pd.Series(data.copy())
     gdf_data = Series(pd_data)
     np.testing.assert_equal(np.array(pd_data), np.array(gdf_data))
+
+
+@pytest.mark.parametrize("data", [data1(), data2()])
+def test_dt_ops(data):
+    pd_data = pd.Series(data.copy())
+    gdf_data = Series(data.copy())
+
+    assert_eq(pd_data == pd_data, gdf_data == gdf_data)
+    assert_eq(pd_data < pd_data, gdf_data < gdf_data)
+    assert_eq(pd_data > pd_data, gdf_data > gdf_data)
 
 
 # libgdf doesn't respect timezones
