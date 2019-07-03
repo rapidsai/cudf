@@ -20,12 +20,12 @@ requirements:
   host:
     - python
     - cudf {{ version }}
-    - dask >=2.0.0
+    - dask-core >=2.0.0
     - distributed >=2.0.0
   run:
     - python
     - cudf {{ version }}
-    - dask >=2.0.0
+    - dask-core >=2.0.0
     - distributed >=2.0.0
 test:
   imports:

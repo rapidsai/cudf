@@ -42,7 +42,7 @@ nvidia-smi
 logger "Activate conda env..."
 source activate gdf
 conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
-              "dask>=2.0" "distributed>=2.0"
+              "dask-core>=2.0" "distributed>=2.0"
 
 # Install the master version of dask and distributed
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps" 

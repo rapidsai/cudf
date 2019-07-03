@@ -36,7 +36,7 @@ dependencies:
 - black
 - isort
 - pre_commit
-- dask>=2.0
+- dask-core>=2.0
 - distributed>=2.0
 - pip:
   - sphinx-markdown-tables
