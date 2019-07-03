@@ -149,7 +149,7 @@ def melt(frame, id_vars=None, value_vars=None, var_name=None,
     return DataFrame(mdata)
 
 
-def get_dummies(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
+def get_dummies(df, prefix=None, prefix_sep='_', dummy_na=False, columns=None,
                 cats={}, sparse=False, drop_first=False, dtype='float64'):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -192,10 +192,13 @@ def get_dummies(df, prefix='', prefix_sep='_', dummy_na=False, columns=None,
         raise NotImplementedError("drop_first is not supported yet")
 
     from cudf.multi import concat
-    if columns is None:
+    if columns is None or len(columns) == 0:
         columns = df.columns
 
-    if isinstance(prefix, str):
+    if prefix is None:
+        prefix_map = {}
+        prefix = ''
+    elif isinstance(prefix, str):
         prefix_map = {}
     elif isinstance(prefix, dict):
         prefix_map = prefix
