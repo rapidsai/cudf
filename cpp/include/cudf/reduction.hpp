@@ -23,16 +23,16 @@
  * @brief These enums indicate the supported reduction operations that can be
  * performed on a column
  */
-typedef enum {
-  GDF_REDUCTION_SUM = 0,        ///< Computes the sum of all values in the column
-  GDF_REDUCTION_MIN,            ///< Computes the minimum of all values in the column
-  GDF_REDUCTION_MAX,            ///< Computes the maximum of all values in the column
-  GDF_REDUCTION_PRODUCT,        ///< Computes the multiplicative product of all values in the column
-  GDF_REDUCTION_SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
-  GDF_REDUCTION_MEAN,           ///< Computes the arithmetic mean of the values in the column
-  GDF_REDUCTION_VAR,            ///< Computes the variance of the values in the column
-  GDF_REDUCTION_STD,            ///< Computes the standard deviation of the values in the column
-} gdf_reduction_op;
+enum gdf_reduction_op {
+  SUM = 0,        ///< Computes the sum of all values in the column
+  MIN,            ///< Computes the minimum of all values in the column
+  MAX,            ///< Computes the maximum of all values in the column
+  PRODUCT,        ///< Computes the multiplicative product of all values in the column
+  SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
+  MEAN,           ///< Computes the arithmetic mean of the values in the column
+  VAR,            ///< Computes the variance of the values in the column
+  STD,            ///< Computes the standard deviation of the values in the column
+};
 
 /**
  * @brief These enums indicate the supported operations of prefix scan that can be

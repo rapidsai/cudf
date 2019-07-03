@@ -31,29 +31,29 @@ gdf_scalar reduce(const gdf_column *col,
     if( col->size <= col->null_count )return scalar;
 
     switch(op){
-    case GDF_REDUCTION_SUM:
+    case SUM:
         cudf::reduction::sum(*col, scalar);
         break;
-    case GDF_REDUCTION_MIN:
+    case MIN:
         cudf::reduction::min(*col, scalar);
         break;
-    case GDF_REDUCTION_MAX:
+    case MAX:
         cudf::reduction::max(*col, scalar);
         break;
-    case GDF_REDUCTION_PRODUCT:
+    case PRODUCT:
         cudf::reduction::product(*col, scalar);
         break;
-    case GDF_REDUCTION_SUMOFSQUARES:
+    case SUMOFSQUARES:
         cudf::reduction::sum_of_squares(*col, scalar);
         break;
 
-    case GDF_REDUCTION_MEAN:
+    case MEAN:
         cudf::reduction::mean(*col, scalar);
         break;
-    case GDF_REDUCTION_VAR:
+    case VAR:
         cudf::reduction::variance(*col, scalar, ddof);
         break;
-    case GDF_REDUCTION_STD:
+    case STD:
         cudf::reduction::standard_deviation(*col, scalar, ddof);
         break;
     default:

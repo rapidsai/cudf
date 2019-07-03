@@ -11,14 +11,14 @@ from cudf.bindings.cudf_cpp cimport *
 cdef extern from "reduction.hpp" nogil:
 
     ctypedef enum gdf_reduction_op:
-        GDF_REDUCTION_SUM = 0,
-        GDF_REDUCTION_MIN,
-        GDF_REDUCTION_MAX,
-        GDF_REDUCTION_PRODUCT,
-        GDF_REDUCTION_SUMOFSQUARES,
-        GDF_REDUCTION_MEAN,
-        GDF_REDUCTION_VAR,
-        GDF_REDUCTION_STD,
+        SUM = 0,
+        MIN,
+        MAX,
+        PRODUCT,
+        SUMOFSQUARES,
+        MEAN,
+        VAR,
+        STD,
 
     ctypedef enum gdf_scan_op:
         GDF_SCAN_SUM = 0,

@@ -25,14 +25,14 @@ from libcpp.string  cimport string as cstring
 
 
 _REDUCTION_OP = {
-  'max': GDF_REDUCTION_MAX,
-  'min': GDF_REDUCTION_MIN,
-  'sum': GDF_REDUCTION_SUM,
-  'product': GDF_REDUCTION_PRODUCT,
-  'sum_of_squares': GDF_REDUCTION_SUMOFSQUARES,
-  'mean': GDF_REDUCTION_MEAN,
-  'var':  GDF_REDUCTION_VAR,
-  'std': GDF_REDUCTION_STD,
+  'max': MAX,
+  'min': MIN,
+  'sum': SUM,
+  'product': PRODUCT,
+  'sum_of_squares': SUMOFSQUARES,
+  'mean': MEAN,
+  'var':  VAR,
+  'std':  STD,
 }
 
 _SCAN_OP = {
