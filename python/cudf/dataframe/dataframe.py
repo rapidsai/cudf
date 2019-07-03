@@ -1123,7 +1123,7 @@ class DataFrame(object):
             raise ValueError('Length of values does not match index length')
         return series
 
-    def _prepare_series_for_add(self, col, forceindex=False):
+    def _prepare_series_for_add(self, col, forceindex=False, name=None):
         """Prepare a series to be added to the DataFrame.
 
         Parameters
@@ -1138,7 +1138,9 @@ class DataFrame(object):
         # Check if the input is scalar before converting to a series
         # This won't handle 0 dimensional arrays which should be okay
         SCALAR = np.isscalar(col)
-        series = Series(col) if not SCALAR else col
+        if (not SCALAR) and (name is None) and hasattr(col, 'name'):
+            name = col.name
+        series = Series(col, name=name) if not SCALAR else col
         self._sanitize_columns(series)
         series = self._sanitize_values(series, SCALAR)
 
@@ -1170,7 +1172,9 @@ class DataFrame(object):
 
         if isinstance(data, GeneratorType):
             data = Series(data)
-        series = self._prepare_series_for_add(data, forceindex=forceindex)
+        series = self._prepare_series_for_add(data,
+                                              forceindex=forceindex,
+                                              name=name)
         series.name = name
         self._cols[name] = series
 

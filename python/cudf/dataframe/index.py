@@ -134,7 +134,7 @@ class Index(object):
 
     def _apply_op(self, fn, other=None):
         from cudf.dataframe.series import Series
-        idx_series = Series(self)
+        idx_series = Series(self, name=self.name)
         op = getattr(idx_series, fn)
         if other is not None:
             return as_index(op(other))
@@ -341,8 +341,10 @@ class RangeIndex(Index):
         return result
 
     def __repr__(self):
-        return "{}(start={}, stop={})".format(self.__class__.__name__,
-                                              self._start, self._stop)
+        return "{}(start={}, stop={}".format(self.__class__.__name__,
+                                             self._start, self._stop)\
+                + (", name='{}'".format(str(self.name))
+                   if self.name is not None else "") + ")"
 
     def __len__(self):
         return max(0, self._stop - self._start)
@@ -499,8 +501,10 @@ class GenericIndex(Index):
 
     def __repr__(self):
         vals = [self._values[i] for i in range(min(len(self), 10))]
-        return "{}({}, dtype={})".format(self.__class__.__name__,
-                                         vals, self._values.dtype)
+        return "{}({}, dtype={}".format(self.__class__.__name__,
+                                        vals, self._values.dtype)\
+            + (", name='{}'".format(self.name)
+                if self.name is not None else "") + ")"
 
     def __getitem__(self, index):
         res = self._values[index]
@@ -547,6 +551,8 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
+        if name is None and hasattr(values, 'name'):
+            name = values.name
         if isinstance(values, np.ndarray) and values.dtype.kind == 'M':
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
@@ -555,6 +561,7 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(
                 np.array(values, dtype='<M8[ms]')
             )
+
         assert values.null_count == 0
         self._values = values
         self.name = name
@@ -591,7 +598,8 @@ class DatetimeIndex(GenericIndex):
         out_column = NumericalColumn(data=out_column.data,
                                      mask=out_column.mask,
                                      null_count=out_column.null_count,
-                                     dtype=out_column.dtype)
+                                     dtype=out_column.dtype,
+                                     name=self.name)
         return as_index(out_column)
 
 
@@ -676,8 +684,10 @@ class StringIndex(GenericIndex):
         return columnops.as_column(self._values).element_indexing(indices)
 
     def __repr__(self):
-        return "{}({}, dtype='object', name={})".format(
-                self.__class__.__name__, self._values.to_array(), self.name)
+        return "{}({}, dtype='object'".format(
+                self.__class__.__name__, self._values.to_array()
+        ) + (", name='{}'".format(
+            self.name) if self.name is not None else "") + ")"
 
 
 def as_index(arbitrary, name=None):
@@ -702,8 +712,11 @@ def as_index(arbitrary, name=None):
         - GenericIndex for all other inputs.
     """
     # This function should probably be moved to Index.__new__
+    if hasattr(arbitrary, 'name') and name is None:
+        name = arbitrary.name
+
     if isinstance(arbitrary, Index):
-        return arbitrary
+        return arbitrary.rename(name=name)
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, name=name)
     elif isinstance(arbitrary, StringColumn):
@@ -713,8 +726,6 @@ def as_index(arbitrary, name=None):
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
     else:
-        if hasattr(arbitrary, 'name') and name is None:
-            name = arbitrary.name
         return as_index(columnops.as_column(arbitrary), name=name)
 
 
