@@ -161,6 +161,20 @@ class Column(object):
 
         self._update_null_count(null_count)
 
+    def __eq__(self, other):
+        if self is other:
+            return True
+        if other is None or len(self) != len(other):
+            return False
+        if len(self) == 1:
+            val = self[0] == other[0]
+            # when self is multiindex we need to checkall
+            if isinstance(val, np.ndarray):
+                return val.all()
+            return bool(val)
+        from cudf.dataframe.series import Series
+        return Series(self).equals(other)
+
     def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0
         if null_count is None:
