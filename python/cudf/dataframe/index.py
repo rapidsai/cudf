@@ -716,9 +716,7 @@ def as_index(arbitrary, name=None):
         name = arbitrary.name
 
     if isinstance(arbitrary, Index):
-        if name is not None:
-            arbitrary.name = name
-        return arbitrary
+        return arbitrary.rename(name=name)
     elif isinstance(arbitrary, NumericalColumn):
         return GenericIndex(arbitrary, name=name)
     elif isinstance(arbitrary, StringColumn):
