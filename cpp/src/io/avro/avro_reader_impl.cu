@@ -18,6 +18,8 @@
 #include "avro_gpu.h"
 #include "avro_reader_impl.hpp"
 
+#include "io/comp/gpuinflate.h"
+
 #include <cudf/cudf.h>
 #include <nvstrings/NVStrings.h>
 
@@ -75,7 +77,8 @@ class avro_metadata : public avro::file_metadata {
   void init_and_select_rows(int &row_start, int &row_count) {
     const auto buffer = source->get_buffer(0, source->size());
     avro::container pod(buffer->data(), buffer->size());
-    CUDF_EXPECTS(pod.parse(this, row_count, row_start), "Cannot parse metadata");
+    CUDF_EXPECTS(pod.parse(this, row_count, row_start),
+                 "Cannot parse metadata");
     print_metadata();
     row_start = skip_rows;
     row_count = num_rows;
@@ -152,7 +155,7 @@ reader::Impl::Impl(std::unique_ptr<DataSource> source,
                    reader_options const &options)
     : source_(std::move(source)), columns_(options.columns) {
 
-  // Open and parse the source Avro dataset metadata
+  // Open the source Avro dataset metadata
   md_ = std::make_unique<avro_metadata>(source_.get());
 }
 
@@ -184,17 +187,54 @@ table reader::Impl::read(int skip_rows, int num_rows) {
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
   }
 
-  // TODO: decompress block data
-  for (auto &column : columns) {
-    CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-    if (column->dtype == GDF_STRING) {
-      // Kernel doesn't init invalid entries but NvStrings expects zero length
-      CUDA_TRY(cudaMemsetAsync(
-          column->data, 0,
-          column->size * sizeof(std::pair<const char *, size_t>)));
+  if (md_->total_data_size > 0) {
+    device_buffer<uint8_t> block_data(md_->total_data_size);
+
+    const auto buffer =
+        source_->get_buffer(md_->block_list[0].offset, md_->total_data_size);
+    CUDA_TRY(cudaMemcpyAsync(block_data.data(), buffer->data(), buffer->size(),
+                             cudaMemcpyHostToDevice));
+
+    if (md_->codec != "" && md_->codec != "null") {
+      auto decomp_block_data = decompress_data(block_data);
+      block_data = std::move(decomp_block_data);
+    }
+
+    size_t total_dictionary_entries = 0;
+    size_t dictionary_data_size = 0;
+    std::vector<std::pair<uint32_t, uint32_t>> dict(columns.size());
+    for (size_t i = 0; i < columns.size(); ++i) {
+      CUDF_EXPECTS(columns[i].allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      if (columns[i]->dtype == GDF_STRING) {
+        // Kernel doesn't init invalid entries but NvStrings expects zero length
+        CUDA_TRY(cudaMemsetAsync(
+            columns[i]->data, 0,
+            columns[i]->size * sizeof(std::pair<const char *, size_t>)));
+      }
+
+      auto col_idx = selected_cols_[i].first;
+      auto &col_schema = md_->schema[md_->columns[col_idx].schema_data_idx];
+      dict[i].first = static_cast<uint32_t>(total_dictionary_entries);
+      dict[i].second = static_cast<uint32_t>(col_schema.symbols.size());
+      total_dictionary_entries += dict[i].second;
+      for (const auto &sym : col_schema.symbols) {
+        dictionary_data_size += sym.length();
+      }
+    }
+
+    //TODO: `decode_data(block_data, columns)` to write out columns
+
+  } else {
+    for (auto &column : columns) {
+      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      if (column->dtype == GDF_STRING) {
+        // Kernel doesn't init invalid entries but NvStrings expects zero length
+        CUDA_TRY(cudaMemsetAsync(
+            column->data, 0,
+            column->size * sizeof(std::pair<const char *, size_t>)));
+      }
     }
   }
-  // TODO: decode block data
 
   // For string dtype, allocate an NvStrings container instance, deallocating
   // the original string list memory in the process.
@@ -219,6 +259,110 @@ table reader::Impl::read(int skip_rows, int num_rows) {
   }
 
   return table(out_cols.data(), out_cols.size());
+}
+
+device_buffer<uint8_t> reader::Impl::decompress_data(
+    const device_buffer<uint8_t> &comp_block_data) {
+
+  size_t uncompressed_data_size = 0;
+  hostdevice_vector<gpu_inflate_input_s> inflate_in(md_->block_list.size());
+  hostdevice_vector<gpu_inflate_status_s> inflate_out(md_->block_list.size());
+
+  if (md_->codec == "deflate") {
+    // Guess an initial maximum uncompressed block size
+    uint32_t initial_blk_len = (md_->max_block_size * 2 + 0xfff) & ~0xfff;
+    uncompressed_data_size = initial_blk_len * md_->block_list.size();
+    for (size_t i = 0; i < inflate_in.size(); ++i) {
+      inflate_in[i].dstSize = initial_blk_len;
+    }
+  } else if (md_->codec == "snappy") {
+    // Extract the uncompressed length from the snappy stream
+    for (size_t i = 0; i < md_->block_list.size(); i++) {
+      const auto buffer = source_->get_buffer(md_->block_list[i].offset, 4);
+      const uint8_t *blk = buffer->data();
+      uint32_t blk_len = blk[0];
+      if (blk_len > 0x7f) {
+        blk_len = (blk_len & 0x7f) | (blk[1] << 7);
+        if (blk_len > 0x3fff) {
+          blk_len = (blk_len & 0x3fff) | (blk[2] << 14);
+          if (blk_len > 0x1fffff) {
+            blk_len = (blk_len & 0x1fffff) | (blk[3] << 21);
+          }
+        }
+      }
+      inflate_in[i].dstSize = blk_len;
+      uncompressed_data_size += blk_len;
+    }
+  } else {
+    CUDF_FAIL("Unsupported compression codec\n");
+  }
+
+  device_buffer<uint8_t> decomp_block_data(uncompressed_data_size);
+
+  const auto base_offset = md_->block_list[0].offset;
+  for (size_t i = 0, dst_pos = 0; i < md_->block_list.size(); i++) {
+    const auto src_pos = md_->block_list[i].offset - base_offset;
+
+    inflate_in[i].srcDevice = comp_block_data.data() + src_pos;
+    inflate_in[i].srcSize = md_->block_list[i].size;
+    inflate_in[i].dstDevice = decomp_block_data.data() + dst_pos;
+
+    // Update blocks offsets & sizes to refer to uncompressed data
+    md_->block_list[i].offset = dst_pos;
+    md_->block_list[i].size = static_cast<uint32_t>(inflate_in[i].dstSize);
+    dst_pos += md_->block_list[i].size;
+  }
+
+  for (int loop_cnt = 0; loop_cnt < 2; loop_cnt++) {
+    CUDA_TRY(cudaMemcpyAsync(inflate_in.device_ptr(), inflate_in.host_ptr(),
+                             inflate_in.memory_size(), cudaMemcpyHostToDevice,
+                             0));
+    CUDA_TRY(cudaMemsetAsync(inflate_out.device_ptr(), 0,
+                             inflate_out.memory_size(), 0));
+    if (md_->codec == "deflate") {
+      CUDA_TRY(gpuinflate(inflate_in.device_ptr(), inflate_out.device_ptr(),
+                          inflate_in.memory_size(), 0, 0));
+    } else if (md_->codec == "snappy") {
+      CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(),
+                          inflate_in.memory_size(), 0));
+    } else {
+      CUDF_FAIL("Unsupported compression codec\n");
+    }
+    CUDA_TRY(cudaMemcpyAsync(inflate_out.host_ptr(), inflate_out.device_ptr(),
+                             inflate_out.memory_size(), cudaMemcpyDeviceToHost,
+                             0));
+    CUDA_TRY(cudaStreamSynchronize(0));
+
+    // Check if larger output is required, as it's not known ahead of time
+    if (md_->codec == "deflate" && !loop_cnt) {
+      size_t actual_uncompressed_size = 0;
+      for (size_t i = 0; i < md_->block_list.size(); i++) {
+        // If error status is 1 (buffer too small), the `bytes_written` field
+        // is actually contains the uncompressed data size
+        if (inflate_out[i].status == 1 &&
+            inflate_out[i].bytes_written > inflate_in[i].dstSize) {
+          inflate_in[i].dstSize = inflate_out[i].bytes_written;
+        }
+        actual_uncompressed_size += inflate_in[i].dstSize;
+      }
+      if (actual_uncompressed_size > uncompressed_data_size) {
+        decomp_block_data.resize(actual_uncompressed_size);
+        for (size_t i = 0, dst_pos = 0; i < md_->block_list.size(); i++) {
+          inflate_in[i].dstDevice = decomp_block_data.data() + dst_pos;
+
+          md_->block_list[i].offset = dst_pos;
+          md_->block_list[i].size = static_cast<uint32_t>(inflate_in[i].dstSize);
+          dst_pos += md_->block_list[i].size;
+        }
+      } else {
+        break;
+      }
+    } else {
+      break;
+    }
+  }
+
+  return decomp_block_data;
 }
 
 reader::reader(std::string filepath, reader_options const &options)

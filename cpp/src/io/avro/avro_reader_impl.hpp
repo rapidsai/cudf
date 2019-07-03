@@ -53,6 +53,15 @@ class reader::Impl {
   table read(int skip_rows, int num_rows);
 
  private:
+  /**
+   * @brief Decompresses the block data.
+   *
+   * @param[in] comp_block_data Compressed block data
+   *
+   * @return device_buffer<uint8_t> Device buffer to decompressed block data
+   **/
+  device_buffer<uint8_t> decompress_data(
+      const device_buffer<uint8_t> &comp_block_data);
 
  private:
   std::unique_ptr<DataSource> source_;
