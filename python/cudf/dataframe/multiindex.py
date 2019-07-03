@@ -229,14 +229,9 @@ class MultiIndex(Index):
         slice_access = False
         if isinstance(row_tuple, slice):
             slice_access = True
-            if row_tuple.stop is None:
-                stop = len(df)
-            else:
-                stop = row_tuple.stop
-            valid_indices = arange(row_tuple.start,
-                                   stop,
-                                   row_tuple.step
-                            )
+            start, stop, step, sln = utils.standard_python_slice(len(df),
+                                                                 row_tuple)
+            valid_indices = arange(start, stop, step)
             row_tuple = [row_tuple]
         elif isinstance(row_tuple[0], numbers.Number):
             valid_indices = row_tuple[0]
