@@ -7,6 +7,7 @@
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 
 ## Improvements
 
@@ -16,6 +17,7 @@
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
+- PR #2175 Removed old C++ `groupby` implementation
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 
 ## Bug Fixes
