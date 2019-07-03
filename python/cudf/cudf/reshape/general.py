@@ -164,7 +164,7 @@ def melt(
 
 def get_dummies(
     df,
-    prefix="",
+    prefix=None,
     prefix_sep="_",
     dummy_na=False,
     columns=None,
@@ -215,10 +215,13 @@ def get_dummies(
 
     from cudf.multi import concat
 
-    if columns is None:
+    if columns is None or len(columns) == 0:
         columns = df.columns
 
-    if isinstance(prefix, str):
+    if prefix is None:
+        prefix_map = {}
+        prefix = ""
+    elif isinstance(prefix, str):
         prefix_map = {}
     elif isinstance(prefix, dict):
         prefix_map = prefix
