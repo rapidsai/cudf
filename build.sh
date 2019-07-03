@@ -61,10 +61,10 @@ fi
 # Check for valid usage
 if (( ${NUMARGS} != 0 )); then
     for a in ${ARGS}; do
-	if ! (echo " ${VALIDARGS} " | grep -q " ${a} "); then
-	    echo "Invalid option: ${a}"
-	    exit 1
-	fi
+    if ! (echo " ${VALIDARGS} " | grep -q " ${a} "); then
+        echo "Invalid option: ${a}"
+        exit 1
+    fi
     done
 fi
 
@@ -86,10 +86,10 @@ if hasArg clean; then
     # The find removes all contents but leaves the dirs, the rmdir
     # attempts to remove the dirs but can fail safely.
     for bd in ${BUILD_DIRS}; do
-	if [ -d ${bd} ]; then
-	    find ${bd} -mindepth 1 -delete
-	    rmdir ${bd} || true
-	fi
+    if [ -d ${bd} ]; then
+        find ${bd} -mindepth 1 -delete
+        rmdir ${bd} || true
+    fi
     done
 fi
 
@@ -110,10 +110,10 @@ if (( ${NUMARGS} == 0 )) || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
-	python setup.py build_ext --inplace
-	python setup.py install --single-version-externally-managed --record=record.txt
+    python setup.py build_ext --inplace
+    python setup.py install --single-version-externally-managed --record=record.txt
     else
-	python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+    python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
     fi
 fi
 
@@ -121,5 +121,5 @@ fi
 if (( ${NUMARGS} == 0 )) || hasArg dask_cudf; then
 
     cd ${REPODIR}/python/dask_cudf
-	python setup.py install --single-version-externally-managed --record=record.txt
+    python setup.py install --single-version-externally-managed --record=record.txt
 fi
