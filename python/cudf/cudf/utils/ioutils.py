@@ -2,7 +2,7 @@
 
 import os
 import urllib
-from io import BytesIO
+from io import BytesIO, TextIOWrapper
 
 from cudf.utils.docutils import docfmt_partial
 
@@ -786,9 +786,8 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     elif isinstance(path_or_data, str):
         return os.path.expanduser(path_or_data), compression
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
-        data = path_or_data.read()
-        if isinstance(data, str):
-            data = str.encode(data)
-        return BytesIO(data), compression
+        if isinstance(path_or_data, TextIOWrapper):
+            path_or_data = path_or_data.buffer
+        return BytesIO(path_or_data.read()), compression
     else:
         return path_or_data, compression
