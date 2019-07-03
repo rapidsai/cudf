@@ -1138,6 +1138,8 @@ class DataFrame(object):
         # Check if the input is scalar before converting to a series
         # This won't handle 0 dimensional arrays which should be okay
         SCALAR = np.isscalar(col)
+        if (not SCALAR) and (name is None) and hasattr(col, 'name'):
+            name = col.name
         series = Series(col, name=name) if not SCALAR else col
         self._sanitize_columns(series)
         series = self._sanitize_values(series, SCALAR)

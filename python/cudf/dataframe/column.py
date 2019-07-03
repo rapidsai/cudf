@@ -186,6 +186,10 @@ class Column(object):
     def name(self):
         return self._name
 
+    @name.setter
+    def name(self, name):
+        self._name = name
+
     def serialize(self, serialize):
         header = {
             'null_count': self._null_count,

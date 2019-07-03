@@ -74,24 +74,27 @@ class Series(object):
     def __init__(self, data=None, index=None, name=None, nan_as_null=True,
                  dtype=None):
         if isinstance(data, pd.Series):
-            name = data.name
+            if name is None:
+                name = data.name
             index = as_index(data.index)
         if isinstance(data, Series):
             index = data._index if index is None else index
-            name = data.name
+            if name is None:
+                name = data.name
             data = data._column
         if data is None:
             data = {}
 
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null,
-                                       dtype=dtype)
+                                       dtype=dtype, name=name)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
         assert isinstance(data, columnops.TypedColumnBase)
-
-        data._name = name
+        if name is None:
+            name = data.name
+        data.name = name
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
@@ -144,7 +147,7 @@ class Series(object):
     @name.setter
     def name(self, name):
         self._name = name
-        self._column._name = name
+        self._column.name = name
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -466,8 +469,7 @@ class Series(object):
         lhs, rhs = _align_indices(self, other)
         rhs = self._normalize_binop_value(rhs)
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-        result = lhs._copy_construct(data=outcol)
-        result._name = result_name
+        result = lhs._copy_construct(data=outcol, name=result_name)
         nvtx_range_pop()
         return result
 
@@ -814,19 +816,19 @@ class Series(object):
 
     def _unordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other)
-        result = self._copy_construct(data=outcol)
-        result.name = None
+        result = self._copy_construct(data=outcol, name=result_name)
         nvtx_range_pop()
         return result
 
     def _ordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_ORDERED_COMP", "orange")
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other)
-        result = self._copy_construct(data=outcol)
-        result.name = None
+        result = self._copy_construct(data=outcol, name=result_name)
         nvtx_range_pop()
         return result
 

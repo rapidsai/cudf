@@ -57,7 +57,7 @@ class StringMethods(object):
                         ret = Series(
                             columnops.as_column(ret),
                             index=self._index,
-                            name=self._parent._name
+                            name=self._parent.name
                         )
                     return ret
                 return wrapper
@@ -89,7 +89,7 @@ class StringMethods(object):
             np.dtype('int32'),
             mask=mask
         )
-        return Series(column, index=self._index, name=self._parent._name)
+        return Series(column, index=self._index, name=self._parent.name)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -200,7 +200,7 @@ class StringMethods(object):
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
             index=self._index,
-            name=self._parent._name
+            name=self._parent.name
         )
         if len(out) == 1 and others is None:
             out = out[0]
@@ -251,7 +251,7 @@ class StringMethods(object):
             return Series(
                 out[0],
                 index=self._index,
-                name=self._parent._name
+                name=self._parent.name
             )
         else:
             out_df = DataFrame(index=self._index)
@@ -313,7 +313,7 @@ class StringMethods(object):
         return Series(
             column,
             index=self._index,
-            name=self._parent._name
+            name=self._parent.name
         )
 
     def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
@@ -358,7 +358,7 @@ class StringMethods(object):
         return Series(
             self._parent.data.replace(pat, repl, n=n, regex=regex),
             index=self._index,
-            name=self._parent._name
+            name=self._parent.name
         )
 
     def lower(self):
@@ -374,7 +374,7 @@ class StringMethods(object):
         return Series(
             self._parent.data.lower(),
             index=self._index,
-            name=self._parent._name
+            name=self._parent.name
         )
 
     def split(self, pat=None, n=-1, expand=True):
@@ -468,6 +468,10 @@ class StringColumn(columnops.TypedColumnBase):
     @property
     def name(self):
         return self._name
+
+    @name.setter
+    def name(self, name):
+        self._name = name
 
     @property
     def data(self):
@@ -583,7 +587,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
-        return pd.Series(pd_series, index=index, name=self._name)
+        return pd.Series(pd_series, index=index, name=self.name)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

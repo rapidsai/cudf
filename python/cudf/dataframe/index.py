@@ -551,6 +551,8 @@ class DatetimeIndex(GenericIndex):
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
+        if name is None and hasattr(values, 'name'):
+            name = values.name
         if isinstance(values, np.ndarray) and values.dtype.kind == 'M':
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
@@ -559,6 +561,7 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(
                 np.array(values, dtype='<M8[ms]')
             )
+
         assert values.null_count == 0
         self._values = values
         self.name = name
@@ -595,7 +598,8 @@ class DatetimeIndex(GenericIndex):
         out_column = NumericalColumn(data=out_column.data,
                                      mask=out_column.mask,
                                      null_count=out_column.null_count,
-                                     dtype=out_column.dtype)
+                                     dtype=out_column.dtype,
+                                     name=self.name)
         return as_index(out_column)
 
 

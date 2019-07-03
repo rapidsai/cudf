@@ -28,12 +28,13 @@ class DatetimeColumn(columnops.TypedColumnBase):
     # we also need to support other formats besides Date64
     _npdatetime64_dtype = np.dtype('datetime64[ms]')
 
-    def __init__(self, data, mask=None, null_count=None, dtype=None):
+    def __init__(self, data, mask=None, null_count=None, dtype=None,
+                 name=None):
         super(DatetimeColumn, self).__init__(data=data,
                                              mask=mask,
                                              null_count=null_count,
-                                             dtype=dtype
-                                             )
+                                             dtype=dtype,
+                                             name=name)
         self._precision = 1e-3
         self._inverse_precision = 1e3
         self._pandas_conversion_factor = 1e9 * self._precision
@@ -98,6 +99,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             out,
             field
         )
+        out.name = self.name
         return out
 
     def normalize_binop_value(self, other):

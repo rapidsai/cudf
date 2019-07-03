@@ -207,29 +207,32 @@ def column_select_by_position(column, positions):
                                             dtype=selected_index.dtype)
 
 
-def build_column(buffer, dtype, mask=None, categories=None):
+def build_column(buffer, dtype, mask=None, categories=None, name=None):
     from cudf.dataframe import numerical, categorical, datetime, string
     if pd.api.types.is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(data=buffer,
                                              dtype='categorical',
                                              categories=categories,
                                              ordered=False,
-                                             mask=mask)
+                                             mask=mask,
+                                             name=name)
     elif np.dtype(dtype).type == np.datetime64:
         return datetime.DatetimeColumn(data=buffer,
                                        dtype=np.dtype(dtype),
-                                       mask=mask)
+                                       mask=mask,
+                                       name=name)
     elif np.dtype(dtype).type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError
-        return string.StringColumn(data=buffer)
+        return string.StringColumn(data=buffer, name=name)
     else:
         return numerical.NumericalColumn(data=buffer,
                                          dtype=dtype,
-                                         mask=mask)
+                                         mask=mask,
+                                         name=name)
 
 
-def as_column(arbitrary, nan_as_null=True, dtype=None):
+def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     """Create a Column from an arbitrary object
 
     Currently support inputs are:
@@ -255,6 +258,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
     from cudf.dataframe.series import Series
     from cudf.dataframe.index import Index
 
+    if name is None and hasattr(arbitrary, 'name'):
+        name = arbitrary.name
+
     if isinstance(arbitrary, Column):
         categories = None
         if hasattr(arbitrary, "categories"):
@@ -263,12 +269,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
             arbitrary.data,
             arbitrary.dtype,
             mask=arbitrary.mask,
-            categories=categories
+            categories=categories,
+            name=name
         )
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column
-
     elif isinstance(arbitrary, Index):
         data = arbitrary._values
 
@@ -494,7 +500,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                         np.array(arbitrary, dtype=np_type),
                         nan_as_null=nan_as_null
                     )
-
+    data.name = name
     return data
 
 
