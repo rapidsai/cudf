@@ -242,3 +242,13 @@ def min_scalar_type(a, min_size=8):
     # Normalize the size to at least `min_size` bytes
     sizeof = max(max(min_size, 8) // 8, sizeof)
     return getattr(np, 'int' + str(sizeof * 8))
+
+
+def min_signed_type(x):
+    """
+    Return the smallest *signed* integer dtype
+    that can represent the integer ``x``
+    """
+    for int_dtype in np.sctypes['int']:
+        if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
+            return int_dtype
