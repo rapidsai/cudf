@@ -194,8 +194,10 @@ class MultiIndex(Index):
         from cudf.utils.cudautils import arange
         lookup = DataFrame()
         if isinstance(row_tuple, slice):
-            start, stop, step, sln = utils.standard_python_slice(len(self),
-                                                                 indices)
+            start, stop, step, sln = utils.standard_python_slice(
+                    len(index.codes),
+                    row_tuple
+            )
             return Series(arange(start, stop, step))
         for idx, row in enumerate(row_tuple):
             if row == slice(None):

@@ -249,8 +249,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         return self._df[col].iloc[arg[0]]
 
     def _getitem_multiindex_arg(self, arg):
-        from cudf.dataframe.dataframe import DataFrame
-        from cudf.dataframe.index import as_index
         row_tuple, column_tuple = self._df._index._split_tuples(arg)
         columns = self._get_column_selection(column_tuple)
 
