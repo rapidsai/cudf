@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #2165 made changes to get_dummies api for it to be available in MethodCache
+
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
