@@ -32,17 +32,34 @@ namespace cudf {
 
 namespace {
 
-struct search_functor {
-private:
-  template <typename T>
-  static constexpr bool is_supported() {
-    // TODO: allow for all types which can be compared and have std::numeric_limits defined for
-    return std::is_arithmetic<T>::value;
+template <typename DataIterator, typename ValuesIterator, typename Comparator>
+void launch_search(DataIterator it_data,
+                    ValuesIterator it_vals,
+                    gdf_size_type data_size,
+                    gdf_size_type values_size,
+                    void* output,
+                    Comparator comp,
+                    bool find_first,
+                    cudaStream_t stream)
+{
+  if (find_first) {
+    thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                        it_data, it_data + data_size,
+                        it_vals, it_vals + values_size,
+                        static_cast<gdf_index_type*>(output),
+                        comp);
   }
+  else {
+    thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                        it_data, it_data + data_size,
+                        it_vals, it_vals + values_size,
+                        static_cast<gdf_index_type*>(output),
+                        comp);
+  }
+}
 
-public:
-  template <typename T,
-            typename std::enable_if_t<is_supported<T>()>* = nullptr>
+struct search_functor {
+  template <typename T>
   void operator()(gdf_column const& column,
                   gdf_column const& values,
                   bool find_first,
@@ -58,47 +75,17 @@ public:
       auto it_col = cudf::make_iterator<true, T>(column, null_substitute);
       auto it_val = cudf::make_iterator<true, T>(values, null_substitute);
 
-      if (find_first) {
-        thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                            it_col, it_col + column.size,
-                            it_val, it_val + values.size,
-                            static_cast<gdf_index_type*>(result.data));
-      }
-      else {
-        thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                            it_col, it_col + column.size,
-                            it_val, it_val + values.size,
-                            static_cast<gdf_index_type*>(result.data));
-      }
+      launch_search(it_col, it_val, column.size, values.size, result.data,
+                    thrust::less<T>(), find_first, stream);
     }
     else {
       auto it_col = cudf::make_iterator<false, T>(column);
       auto it_val = cudf::make_iterator<false, T>(values);
 
-      if (find_first) {
-        thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                            it_col, it_col + column.size,
-                            it_val, it_val + values.size,
-                            static_cast<gdf_index_type*>(result.data));
-      }
-      else {
-        thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                            it_col, it_col + column.size,
-                            it_val, it_val + values.size,
-                            static_cast<gdf_index_type*>(result.data));
-      }
+      launch_search(it_col, it_val, column.size, values.size, result.data,
+                    thrust::less<T>(), find_first, stream);
     }
-
   }
-
-  template <typename T,
-            typename... Args,
-            typename std::enable_if_t<!is_supported<T>()>* = nullptr>
-  void operator()(Args&&... args)
-  {
-    CUDF_FAIL("Unsupported datatype for search_ordered");
-  }
-
 };
 
 } // namespace
@@ -149,49 +136,23 @@ gdf_column search_ordered(table const& t,
 
   auto d_t      = device_table::create(t, stream);
   auto d_values = device_table::create(values, stream);
+  auto count_it = thrust::make_counting_iterator(0);
+  
   if ( has_nulls(t) ) {
-    if (find_first) {
-      auto ineq_op  = row_inequality_comparator<true>(*d_t, *d_values, !nulls_as_largest);
-      thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                          thrust::make_counting_iterator(0), 
-                          thrust::make_counting_iterator(t.num_rows()),
-                          thrust::make_counting_iterator(0),
-                          thrust::make_counting_iterator(values.num_rows()),
-                          static_cast<gdf_index_type*>(result.data),
-                          ineq_op);
-    }
-    else {
-      auto ineq_op  = row_inequality_comparator<true>(*d_values, *d_t, !nulls_as_largest);
-      thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                          thrust::make_counting_iterator(0), 
-                          thrust::make_counting_iterator(t.num_rows()),
-                          thrust::make_counting_iterator(0),
-                          thrust::make_counting_iterator(values.num_rows()),
-                          static_cast<gdf_index_type*>(result.data),
-                          ineq_op);
-    }
+    auto ineq_op = (find_first)
+                 ? row_inequality_comparator<true>(*d_t, *d_values, !nulls_as_largest)
+                 : row_inequality_comparator<true>(*d_values, *d_t, !nulls_as_largest);
+
+    launch_search(count_it, count_it, t.num_rows(), values.num_rows(), result.data,
+                  ineq_op, find_first, stream);
   }
   else {
-    if (find_first) {
-      auto ineq_op  = row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest);
-      thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                          thrust::make_counting_iterator(0), 
-                          thrust::make_counting_iterator(t.num_rows()),
-                          thrust::make_counting_iterator(0),
-                          thrust::make_counting_iterator(values.num_rows()),
-                          static_cast<gdf_index_type*>(result.data),
-                          ineq_op);
-    }
-    else {
-      auto ineq_op  = row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest);
-      thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                          thrust::make_counting_iterator(0), 
-                          thrust::make_counting_iterator(t.num_rows()),
-                          thrust::make_counting_iterator(0),
-                          thrust::make_counting_iterator(values.num_rows()),
-                          static_cast<gdf_index_type*>(result.data),
-                          ineq_op);
-    }
+    auto ineq_op = (find_first)
+                 ? row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest)
+                 : row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest);
+
+    launch_search(count_it, count_it, t.num_rows(), values.num_rows(), result.data,
+                  ineq_op, find_first, stream);
   }
 
   return result;
