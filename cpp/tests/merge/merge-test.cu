@@ -2,6 +2,7 @@
 #include <vector>
 #include <memory>
 #include <algorithm>
+#include <limits>
 #include <gtest/gtest.h>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
@@ -48,6 +49,27 @@ TYPED_TEST(MergeTest, MismatchedNumColumns) {
 
     EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
                             cudf::table(rightColumns, 2),
+                            sortByCols,
+                            orderByTypes), cudf::logic_error);
+}
+
+TYPED_TEST(MergeTest, MismatchedColumnDypes) {
+    gdf_size_type inputRows = 4;
+
+    cudf::test::column_wrapper<int32_t> leftColWrap1(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *leftColumn1 = leftColWrap1.get();
+
+    cudf::test::column_wrapper<double> rightColWrap1(inputRows, [](gdf_index_type row) { return row; });
+    gdf_column *rightColumn1 = rightColWrap1.get();
+
+    gdf_column *leftColumns[]  = {leftColumn1};
+    gdf_column *rightColumns[] = {rightColumn1};
+
+    std::vector<gdf_size_type> sortByCols = {0};
+    std::vector<order_by_type> orderByTypes = {GDF_ORDER_ASC};
+
+    EXPECT_THROW(cudf::merge(cudf::table(leftColumns, 1),
+                            cudf::table(rightColumns, 1),
                             sortByCols,
                             orderByTypes), cudf::logic_error);
 }
@@ -174,7 +196,8 @@ TYPED_TEST(MergeTest, MismatchedKeyColumnsAndOrderTypes) {
 TYPED_TEST(MergeTest, MergeWithEmptyColumn) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    gdf_size_type inputRows = 4;
+    gdf_size_type inputRows = 50000;
+    inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 50 : inputRows);
 
     auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
     gdf_column *leftColumn1 = leftColWrap1.get();
@@ -203,7 +226,8 @@ TYPED_TEST(MergeTest, MergeWithEmptyColumn) {
 TYPED_TEST(MergeTest, Merge1KeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    gdf_size_type inputRows = 4;
+    gdf_size_type inputRows = 50000;
+    inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 50 : inputRows);
 
     auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; });
     auto leftColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
@@ -238,7 +262,8 @@ TYPED_TEST(MergeTest, Merge1KeyColumns) {
 TYPED_TEST(MergeTest, Merge2KeyColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    gdf_size_type inputRows = 4;
+    gdf_size_type inputRows = 50000;
+    inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 50 : inputRows);
 
     auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });
     auto leftColWrap2 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; });
@@ -273,7 +298,8 @@ TYPED_TEST(MergeTest, Merge2KeyColumns) {
 TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    gdf_size_type inputRows = 4;
+    gdf_size_type inputRows = 50000;
+    inputRows = (cudf::detail::unwrap(std::numeric_limits<TypeParam>::max()) < inputRows ? 50 : inputRows);
 
     // data: 0  2  4  6 | valid: 1 1 1 0
     auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return 2 * row; }, [=](gdf_index_type row) { return row < inputRows - 1; });
@@ -308,7 +334,8 @@ TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
 TYPED_TEST(MergeTest, Merge2KeyNullColumns) {
     cudf::test::column_wrapper_factory<TypeParam> columnFactory;
 
-    gdf_size_type inputRows = 4;
+    gdf_size_type inputRows = 50000;
+    inputRows = (cudf::detail::unwrap(cudf::detail::unwrap(std::numeric_limits<TypeParam>::max())) < inputRows ? 50 : inputRows);
 
     // data: 0 1 2 3 | valid: 1 1 1 1
     auto leftColWrap1 = columnFactory.make(inputRows, [](gdf_index_type row) { return row; });

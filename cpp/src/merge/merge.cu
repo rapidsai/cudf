@@ -90,24 +90,24 @@ __global__ void materialize_merged_bitmask_kernel(
   }
 }
 
-void materialize_bitmask(gdf_column const* leftCol,
-                        gdf_column const* rightCol,
-                        gdf_column* outCol,
-                        gdf_size_type const* tableIndices,
-                        gdf_size_type const* rowIndices,
+void materialize_bitmask(gdf_column const* left_col,
+                        gdf_column const* right_col,
+                        gdf_column* out_col,
+                        gdf_size_type const* table_indices,
+                        gdf_size_type const* row_indices,
                         cudaStream_t stream) {
     constexpr gdf_size_type BLOCK_SIZE{256};
-    cudf::util::cuda::grid_config_1d grid_config {outCol->size, BLOCK_SIZE };
+    cudf::util::cuda::grid_config_1d grid_config {out_col->size, BLOCK_SIZE };
     // TODO: cant use just one template flag for valids, so need to test for null explicitly
     // or make the kernel receive just one input col and call it twice one for each input column
     materialize_merged_bitmask_kernel
     <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-    (reinterpret_cast<bit_mask_t*>(leftCol->valid),
-     reinterpret_cast<bit_mask_t*>(rightCol->valid),
-     reinterpret_cast<bit_mask_t*>(outCol->valid),
-     outCol->size,
-     tableIndices,
-     rowIndices);
+    (reinterpret_cast<bit_mask_t*>(left_col->valid),
+     reinterpret_cast<bit_mask_t*>(right_col->valid),
+     reinterpret_cast<bit_mask_t*>(out_col->valid),
+     out_col->size,
+     table_indices,
+     row_indices);
 
     CHECK_STREAM(stream);
 }
@@ -135,9 +135,9 @@ generate_merged_indices(device_table const& left_table,
     auto left_end_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(left_side + left_size, left_indices + left_size));
     auto right_end_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(right_side + right_size, right_indices + right_size));
 
-    rmm::device_vector<gdf_size_type> outputTableIndices(total_size);
-    rmm::device_vector<gdf_size_type> outputRowIndices(total_size);
-    auto output_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(outputTableIndices.begin(), outputRowIndices.begin()));
+    rmm::device_vector<gdf_size_type> out_table_indices(total_size);
+    rmm::device_vector<gdf_size_type> out_row_indices(total_size);
+    auto output_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(out_table_indices.begin(), out_row_indices.begin()));
 
     bool nullable = left_table.has_nulls() || right_table.has_nulls();
     if (nullable){
@@ -148,9 +148,9 @@ generate_merged_indices(device_table const& left_table,
                     right_begin_zip_iterator,
                     right_end_zip_iterator,
                     output_zip_iterator,
-                    [=] __device__ (thrust::tuple<gdf_size_type, gdf_size_type> const & rightTuple,
-                                    thrust::tuple<gdf_size_type, gdf_size_type> const & leftTuple) {
-                        return ineq_op(thrust::get<1>(rightTuple), thrust::get<1>(leftTuple));
+                    [=] __device__ (thrust::tuple<gdf_size_type, gdf_size_type> const & right_tuple,
+                                    thrust::tuple<gdf_size_type, gdf_size_type> const & left_tuple) {
+                        return ineq_op(thrust::get<1>(right_tuple), thrust::get<1>(left_tuple));
                     });			        
     } else {
         auto ineq_op = row_inequality_comparator<false>(right_table, left_table, nulls_are_smallest, asc_desc.data().get()); 
@@ -160,15 +160,15 @@ generate_merged_indices(device_table const& left_table,
                     right_begin_zip_iterator,
                     right_end_zip_iterator,
                     output_zip_iterator,
-                    [=] __device__ (thrust::tuple<gdf_size_type, gdf_size_type> const & rightTuple,
-                                    thrust::tuple<gdf_size_type, gdf_size_type> const & leftTuple) {
-                        return ineq_op(thrust::get<1>(rightTuple), thrust::get<1>(leftTuple));
+                    [=] __device__ (thrust::tuple<gdf_size_type, gdf_size_type> const & right_tuple,
+                                    thrust::tuple<gdf_size_type, gdf_size_type> const & left_tuple) {
+                        return ineq_op(thrust::get<1>(right_tuple), thrust::get<1>(left_tuple));
                     });					        
     }
 
     CHECK_STREAM(stream);
 
-    return std::make_pair(outputTableIndices, outputRowIndices);
+    return std::make_pair(out_table_indices, out_row_indices);
 }
 
 } // namespace
@@ -187,11 +187,15 @@ table merge(table const& left_table,
         return cudf::empty_like(left_table);
     }
     
+    std::vector<gdf_dtype> left_table_dtypes = cudf::column_dtypes(left_table);
+    std::vector<gdf_dtype> right_table_dtypes = cudf::column_dtypes(right_table);
+    CUDF_EXPECTS(std::equal(left_table_dtypes.cbegin(), left_table_dtypes.cend(), right_table_dtypes.cbegin(), right_table_dtypes.cend()), "Mismatched column dtypes");
     CUDF_EXPECTS(key_cols.size() > 0, "Empty key_cols");
     CUDF_EXPECTS(key_cols.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in key_cols");
     CUDF_EXPECTS(asc_desc.size() > 0, "Empty asc_desc");
     CUDF_EXPECTS(asc_desc.size() <= static_cast<size_t>(left_table.num_columns()), "Too many values in asc_desc");
     CUDF_EXPECTS(key_cols.size() == asc_desc.size(), "Mismatched size between key_cols and asc_desc");
+
 
     auto gdf_col_deleter = [](gdf_column *col) {
         gdf_column_free(col);
@@ -202,10 +206,10 @@ table merge(table const& left_table,
     std::vector<gdf_column*> left_cols_sync(const_cast<gdf_column**>(left_table.begin()), const_cast<gdf_column**>(left_table.end()));
     std::vector<gdf_column*> right_cols_sync(const_cast<gdf_column**>(right_table.begin()), const_cast<gdf_column**>(right_table.end()));
     for (gdf_size_type i = 0; i < left_table.num_columns(); i++) {
-        gdf_column * leftCol = const_cast<gdf_column*>(left_table.get_column(i));
-        gdf_column * rightCol = const_cast<gdf_column*>(right_table.get_column(i));
+        gdf_column * left_col = const_cast<gdf_column*>(left_table.get_column(i));
+        gdf_column * right_col = const_cast<gdf_column*>(right_table.get_column(i));
         
-        if (leftCol->dtype != GDF_STRING_CATEGORY){
+        if (left_col->dtype != GDF_STRING_CATEGORY){
             continue;
         }
 
@@ -216,19 +220,19 @@ table merge(table const& left_table,
         temp_columns_to_free.push_back(gdf_col_ptr(new gdf_column{}, gdf_col_deleter));
         gdf_column * new_right_column_ptr = temp_columns_to_free.back().get();
 
-        *new_left_column_ptr = allocate_like(*leftCol, true, stream);
+        *new_left_column_ptr = allocate_like(*left_col, true, stream);
         if (new_left_column_ptr->valid) {
-            CUDA_TRY( cudaMemcpyAsync(new_left_column_ptr->valid, leftCol->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(leftCol->size), cudaMemcpyDefault, stream) );
-            new_left_column_ptr->null_count = leftCol->null_count;
+            CUDA_TRY( cudaMemcpyAsync(new_left_column_ptr->valid, left_col->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(left_col->size), cudaMemcpyDefault, stream) );
+            new_left_column_ptr->null_count = left_col->null_count;
         }
         
-        *new_right_column_ptr = allocate_like(*rightCol, true, stream);
+        *new_right_column_ptr = allocate_like(*right_col, true, stream);
         if (new_right_column_ptr->valid) {
-            CUDA_TRY( cudaMemcpyAsync(new_right_column_ptr->valid, rightCol->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(rightCol->size), cudaMemcpyDefault, stream) );
-            new_right_column_ptr->null_count = rightCol->null_count;
+            CUDA_TRY( cudaMemcpyAsync(new_right_column_ptr->valid, right_col->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(right_col->size), cudaMemcpyDefault, stream) );
+            new_right_column_ptr->null_count = right_col->null_count;
         }
 
-        gdf_column * tmp_arr_input[2] = {leftCol, rightCol};
+        gdf_column * tmp_arr_input[2] = {left_col, right_col};
         gdf_column * tmp_arr_output[2] = {new_left_column_ptr, new_right_column_ptr};
         CUDF_TRY( sync_column_categories(tmp_arr_input, tmp_arr_output, 2) );
 
@@ -247,65 +251,65 @@ table merge(table const& left_table,
     std::transform(key_cols.cbegin(), key_cols.cend(), right_key_cols_vect.begin(),
                   [&] (gdf_index_type const index) { return right_sync_table.get_column(index); });
 
-    auto leftKeyTable = device_table::create(left_key_cols_vect.size(), left_key_cols_vect.data());
-    auto rightKeyTable = device_table::create(right_key_cols_vect.size(), right_key_cols_vect.data());
+    auto left_key_table = device_table::create(left_key_cols_vect.size(), left_key_cols_vect.data());
+    auto right_key_table = device_table::create(right_key_cols_vect.size(), right_key_cols_vect.data());
     rmm::device_vector<int8_t> asc_desc_d(asc_desc);
 
-    rmm::device_vector<gdf_size_type> mergedTableIndices;
-    rmm::device_vector<gdf_size_type> mergedRowIndices;
-    std::tie(mergedTableIndices, mergedRowIndices) = generate_merged_indices(*leftKeyTable, *rightKeyTable, asc_desc_d, nulls_are_smallest, stream);
+    rmm::device_vector<gdf_size_type> merged_table_indices;
+    rmm::device_vector<gdf_size_type> merged_row_indices;
+    std::tie(merged_table_indices, merged_row_indices) = generate_merged_indices(*left_key_table, *right_key_table, asc_desc_d, nulls_are_smallest, stream);
 
     // Allocate output table
     bool nullable = has_nulls(left_sync_table) || has_nulls(right_sync_table);
     table destination_table(left_sync_table.num_rows() + right_sync_table.num_rows(), column_dtypes(left_sync_table), nullable, false, stream);
     for (gdf_size_type i = 0; i < destination_table.num_columns(); i++) {
-        gdf_column const* leftCol = left_sync_table.get_column(i);
-        gdf_column * outCol = destination_table.get_column(i);
+        gdf_column const* left_col = left_sync_table.get_column(i);
+        gdf_column * out_col = destination_table.get_column(i);
         
-        if (leftCol->dtype != GDF_STRING_CATEGORY){
+        if (left_col->dtype != GDF_STRING_CATEGORY){
             continue;
         }
 
-        NVCategory * category = static_cast<NVCategory*>(leftCol->dtype_info.category);
-        outCol->dtype_info.category = category->copy();
+        NVCategory * category = static_cast<NVCategory*>(left_col->dtype_info.category);
+        out_col->dtype_info.category = category->copy();
     }
     
     // Materialize
-    auto leftInputDeviceTablePtr = device_table::create(left_sync_table, stream);
-    auto rightInputDeviceTablePtr = device_table::create(right_sync_table, stream);
-    auto outputDeviceTablePtr = device_table::create(destination_table, stream);
-    auto& leftInputDeviceTable = *leftInputDeviceTablePtr;
-    auto& rightInputDeviceTable = *rightInputDeviceTablePtr;
-    auto& outputDeviceTable = *outputDeviceTablePtr;
+    auto left_device_table_ptr = device_table::create(left_sync_table, stream);
+    auto right_device_table_ptr = device_table::create(right_sync_table, stream);
+    auto output_device_table_ptr = device_table::create(destination_table, stream);
+    auto& left_device_table = *left_device_table_ptr;
+    auto& right_device_table = *right_device_table_ptr;
+    auto& output_device_table = *output_device_table_ptr;
 
     auto index_start_it = thrust::make_zip_iterator(thrust::make_tuple(
                                                     thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), 
-                                                    mergedTableIndices.begin(),
-                                                    mergedRowIndices.begin()));
+                                                    merged_table_indices.begin(),
+                                                    merged_row_indices.begin()));
     auto index_end_it = thrust::make_zip_iterator(thrust::make_tuple(
-                                                thrust::make_counting_iterator(static_cast<gdf_size_type>(mergedTableIndices.size())),
-                                                mergedTableIndices.end(),
-                                                mergedRowIndices.end()));
+                                                thrust::make_counting_iterator(static_cast<gdf_size_type>(merged_table_indices.size())),
+                                                merged_table_indices.end(),
+                                                merged_row_indices.end()));
 
     thrust::for_each(rmm::exec_policy(stream)->on(stream),
                     index_start_it,
                     index_end_it,
                     [=] __device__ (auto const & idx_tuple){
-                        device_table const & sourceDeviceTable = thrust::get<1>(idx_tuple) == LEFT_TABLE ? leftInputDeviceTable : rightInputDeviceTable;
-                        copy_row<false>(outputDeviceTable, thrust::get<0>(idx_tuple), sourceDeviceTable, thrust::get<2>(idx_tuple));
+                        device_table const & sourceDeviceTable = thrust::get<1>(idx_tuple) == LEFT_TABLE ? left_device_table : right_device_table;
+                        copy_row<false>(output_device_table, thrust::get<0>(idx_tuple), sourceDeviceTable, thrust::get<2>(idx_tuple));
                     });
     
     CHECK_STREAM(0);
 
     if (nullable) {
         for (gdf_size_type i = 0; i < destination_table.num_columns(); i++) {
-            gdf_column const* leftCol = left_sync_table.get_column(i);
-            gdf_column const* rightCol = right_sync_table.get_column(i);
-            gdf_column* outCol = destination_table.get_column(i);
+            gdf_column const* left_col = left_sync_table.get_column(i);
+            gdf_column const* right_col = right_sync_table.get_column(i);
+            gdf_column* out_col = destination_table.get_column(i);
             
-            materialize_bitmask(leftCol, rightCol, outCol, mergedTableIndices.data().get(), mergedRowIndices.data().get(), stream);
+            materialize_bitmask(left_col, right_col, out_col, merged_table_indices.data().get(), merged_row_indices.data().get(), stream);
             
-            outCol->null_count = leftCol->null_count + rightCol->null_count;
+            out_col->null_count = left_col->null_count + right_col->null_count;
         }
     }
 
