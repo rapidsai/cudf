@@ -5,6 +5,7 @@
 
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2164 Use merge for MultiIndex search
 
 ## Improvements
 
