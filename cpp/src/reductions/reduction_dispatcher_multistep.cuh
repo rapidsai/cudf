@@ -44,7 +44,6 @@ void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
 {
     gdf_size_type valid_count = col.size - col.null_count;
 
-    ResultType identity = Op::Op::template identity<ResultType>();
     using intermediateOp = typename Op::template intermediate<ResultType>;
     // IntermediateType: intermediate structure, output type of `reduction_op` and
     // input type of `intermediateOp::ComputeResult`
@@ -61,7 +60,7 @@ void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
     CHECK_STREAM(stream);
 
     // reduction by iterator
-    auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col, identity);
+    auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);
     reduce(static_cast<IntermediateType*>(dev_result), it, col.size, intermediate,
         typename Op::Op{}, stream);
 

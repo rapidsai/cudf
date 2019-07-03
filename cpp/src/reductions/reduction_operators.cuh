@@ -91,9 +91,10 @@ struct sum {
     using Op = cudf::DeviceSum;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
     }
 };
 
@@ -101,9 +102,10 @@ struct product {
     using Op = cudf::DeviceProduct;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
     }
 };
 
@@ -111,9 +113,10 @@ struct sum_of_squares {
     using Op = cudf::DeviceSum;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
-        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
         return thrust::make_transform_iterator(it_raw,
             cudf::transformer_squared<ResultType>{});
     }
@@ -123,9 +126,10 @@ struct min {
     using Op = cudf::DeviceMin;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
     }
 };
 
@@ -133,9 +137,10 @@ struct max {
     using Op = cudf::DeviceMax;
     
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
     }
 };
 
@@ -151,9 +156,10 @@ struct mean {
     using Op = cudf::DeviceSum;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
-        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        return cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
     }
 
     template<typename ResultType>
@@ -174,10 +180,11 @@ struct variance {
     using Op = cudf::DeviceSum;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
         auto transformer = cudf::reduction::transformer_var_std<ResultType>{};
-        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
         return thrust::make_transform_iterator(it_raw, transformer);
     }
 
@@ -203,10 +210,11 @@ struct standard_deviation {
     using Op = cudf::DeviceSum;
 
     template<bool has_nulls, typename ElementType, typename ResultType>
-    static auto make_iterator(gdf_column const& column, ResultType identity)
+    static auto make_iterator(gdf_column const& column)
     {
         auto transformer = cudf::reduction::transformer_var_std<ResultType>{};
-        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column, identity);
+        auto it_raw = cudf::make_iterator<has_nulls, ElementType, ResultType>(column,
+            Op::template identity<ResultType>());
         return thrust::make_transform_iterator(it_raw, transformer);
     }
     template<typename ResultType>

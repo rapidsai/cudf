@@ -51,7 +51,7 @@ void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t st
     CHECK_STREAM(stream);
 
     // reduction by iterator
-    auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col, identity);
+    auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);
     reduce(static_cast<ResultType*>(result), it, col.size, identity,
         typename Op::Op{}, stream);
 
