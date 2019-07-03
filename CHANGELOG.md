@@ -2,14 +2,12 @@
 
 ## New Features
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
-
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 
 ## Improvements
-- PR #2109 added name support for string column
 
-
+- PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
 
