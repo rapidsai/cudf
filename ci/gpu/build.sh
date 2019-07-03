@@ -82,6 +82,6 @@ else
     cd $WORKSPACE/python
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf-coverage.xml --cov-report term
 
-    conda install -c conda-forge codecov
+    conda install codecov
     codecov -t $CODECOV_TOKEN
 fi
