@@ -8,6 +8,7 @@ from cudf import MultiIndex
 from cudf.utils.utils import is_single_value
 
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
+from cudf.bindings.nvtx import nvtx_range_pop
 
 
 def columns_from_dataframe(df):
@@ -65,7 +66,9 @@ class DataFrameGroupBy(_Groupby):
         """
         Applies the aggregation function(s) ``agg`` on all columns
         """
-        return self._groupby.compute_result(agg)
+        result = self._groupby.compute_result(agg)
+        nvtx_range_pop()
+        return result
 
     def __getitem__(self, arg):
         if is_single_value(arg):

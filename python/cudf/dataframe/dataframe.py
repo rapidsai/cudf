@@ -2109,6 +2109,9 @@ class DataFrame(object):
         else:
             from cudf.groupby.groupby import DataFrameGroupBy
 
+            # The corresponding pop() is in DataFrameGroupBy._apply_aggregation()
+            nvtx_range_push("CUDF_GROUPBY", "purple")
+
             result = DataFrameGroupBy(
                 self, by=by, method=method, as_index=as_index,
                 sort=sort, level=level
