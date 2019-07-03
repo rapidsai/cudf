@@ -563,7 +563,7 @@ class StringColumn(columnops.TypedColumnBase):
         nbuf = pa.py_buffer(nbuf)
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), np.empty(0), self.null_count
+                pa.null(), len(self), [pa.py_buffer((b''))], self.null_count
             )
         else:
             return pa.StringArray.from_buffers(

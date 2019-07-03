@@ -219,11 +219,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return pa.DictionaryArray.from_arrays(
             from_pandas=True,
             ordered=self._ordered,
-            indices=self.cat().codes.to_arrow(),
-            # We should be able to do this but nvstrings
-            # segfaults when the length is zero:
-            # dictionary=self.cat().categories.to_arrow(),
-            dictionary=pa.array(self.cat().categories.to_array())
+            indices=self.as_numerical.to_arrow(),
+            dictionary=self._categories.to_arrow()
         )
 
     def _unique_segments(self):
