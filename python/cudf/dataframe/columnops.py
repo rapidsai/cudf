@@ -269,8 +269,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             arbitrary.data,
             arbitrary.dtype,
             mask=arbitrary.mask,
-            categories=categories,
-            name=name
+            categories=categories
         )
 
     elif isinstance(arbitrary, Series):
@@ -500,7 +499,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         np.array(arbitrary, dtype=np_type),
                         nan_as_null=nan_as_null
                     )
-    data.name = name
+    if hasattr(data, 'name') and (data.name is None) and (name is not None):
+        data.name = name
     return data
 
 

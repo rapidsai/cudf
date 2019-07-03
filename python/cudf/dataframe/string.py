@@ -466,14 +466,6 @@ class StringColumn(columnops.TypedColumnBase):
         return self._dtype
 
     @property
-    def name(self):
-        return self._name
-
-    @name.setter
-    def name(self, name):
-        self._name = name
-
-    @property
     def data(self):
         """ nvstrings object """
         return self._data
