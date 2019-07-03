@@ -22,6 +22,7 @@
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
+#include <nvstrings/NVCategory.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -50,23 +51,51 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
     auto valid = column->valid;
     if( valid )                                    // normalize row_offset (number of bits here)
         valid += (row_offset / GDF_VALID_BITSIZE); // to appropriate pointer for the bitmask
+
+    auto gdf2nvs_timeunit = [] (gdf_time_unit time_unit) -> NVStrings::timestamp_units {
+        if( time_unit==TIME_UNIT_s )
+            return NVStrings::seconds;
+        if( time_unit==TIME_UNIT_us )
+            return NVStrings::us;
+        if( time_unit==TIME_UNIT_ns )
+            return NVStrings::ns;
+        return NVStrings::ms;
+    };
+
     switch( column->dtype )
     {
         case GDF_STRING:
             rtn = (static_cast<NVStrings*>(column->data))->sublist(row_offset,row_offset+rows);
             break;
-        case GDF_BOOL8:
-            {
-            auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
-            device_buffer<bool> bool_buffer(rows);
-            thrust::transform(
-                rmm::exec_policy()->on(0), d_src, d_src + rows,
-                bool_buffer.data(),
-                [] __device__(const cudf::bool8 value) { return bool{value}; });
-            rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
-                                               true_string, false_string, valid);
-            }
+        case GDF_STRING_CATEGORY:
+        {
+            NVCategory* category = reinterpret_cast<NVCategory*>(column->dtype_info.category);
+            if( category )
+                rtn = category->gather_strings((static_cast<const int32_t*>(column->data)) + row_offset, rows);
             break;
+        }
+        case GDF_BOOL8:
+            rtn = NVStrings::create_from_bools((reinterpret_cast<const bool*>(column->data))+row_offset, rows,
+                                               true_string, false_string, valid);
+            break;
+        case GDF_INT8:
+        {
+            auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
+            device_buffer<int32_t> int_buffer(rows);
+            thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+                [] __device__(const int8_t value) { return int32_t{value}; });
+            rtn = NVStrings::itos(int_buffer.data(),rows,valid);
+            break;
+        }
+        case GDF_INT16:
+        {
+            auto d_src = (static_cast<const int16_t*>(column->data)) + row_offset;
+            device_buffer<int32_t> int_buffer(rows);
+            thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+                [] __device__(const int16_t value) { return int32_t{value}; });
+            rtn = NVStrings::itos(int_buffer.data(),rows,valid);
+            break;
+        }
         case GDF_INT32:
             rtn = NVStrings::itos((static_cast<const int32_t*>(column->data))+row_offset,rows,valid);
             break;
@@ -79,10 +108,26 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
         case GDF_FLOAT64:
             rtn = NVStrings::dtos((static_cast<const double*>(column->data))+row_offset,rows,valid);
             break;
+        case GDF_TIMESTAMP:
         case GDF_DATE64:
+        {
+            NVStrings::timestamp_units units = gdf2nvs_timeunit(column->dtype_info.time_unit);
             rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data)+row_offset,rows,
-                                            NVStrings::ms,nullptr,valid);
+                                            units,nullptr,valid);
             break;
+        }
+        case GDF_DATE32:
+        {
+            NVStrings::timestamp_units units = NVStrings::days;
+            if( column->dtype_info.time_unit != TIME_UNIT_NONE )
+                units = gdf2nvs_timeunit(column->dtype_info.time_unit);
+            auto d_src = (static_cast<const cudf::date32*>(column->data)) + row_offset;
+            device_buffer<unsigned long> ulong_buffer(rows);
+            thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.data(),
+                [] __device__(const cudf::date32 value) { return (unsigned long)(int32_t{value}); });
+            rtn = NVStrings::long2timestamp(ulong_buffer.data(),rows,units,nullptr,valid);
+            break;
+        }
         default:
             break;
     }
