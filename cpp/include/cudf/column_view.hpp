@@ -31,11 +31,11 @@ struct column_view {
   __host__ __device__ void const* data() const noexcept { return _data; }
 
   __device__ bool is_valid(size_type i) const noexcept {
-    return _bitmask.is_valid(i);
+    return _bitmask.bit_is_set(i);
   }
 
   __device__ bool is_null(size_type i) const noexcept {
-    return _bitmask.is_null(i);
+    return not is_valid(i);
   }
 
   __host__ __device__ bool nullable() const noexcept {
