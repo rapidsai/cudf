@@ -5,6 +5,7 @@
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 
 ## Improvements
 
