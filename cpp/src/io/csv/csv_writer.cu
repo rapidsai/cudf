@@ -75,9 +75,21 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
             break;
         }
         case GDF_BOOL8:
-            rtn = NVStrings::create_from_bools((reinterpret_cast<const bool*>(column->data))+row_offset, rows,
-                                               true_string, false_string, valid);
+        {
+            if( sizeof(bool) == sizeof(cudf::bool8) )
+                rtn = NVStrings::create_from_bools((static_cast<const bool*>(column->data))+row_offset, rows,
+                                                   true_string, false_string, valid);
+            else
+            {
+                auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
+                device_buffer<bool> bool_buffer(rows);
+                thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.data(),
+                    [] __device__(const cudf::bool8 value) { return bool{value}; });
+                rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
+                                                   true_string, false_string, valid);
+            }
             break;
+        }
         case GDF_INT8:
         {
             auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
