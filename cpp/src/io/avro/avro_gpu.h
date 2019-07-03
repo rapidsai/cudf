@@ -36,7 +36,7 @@ struct nvstrdesc_s {
  **/
 struct schemadesc_s {
     uint32_t kind;  // avro type kind
-    uint32_t count; // for unions: number of following child columns, for nulls: global null_count, for enums: dictionary ofs
+    uint32_t count; // for records/unions: number of following child columns, for nulls: global null_count, for enums: dictionary ofs
     void *dataptr;  // Ptr to column data, or null if column not selected
 };
 
@@ -47,6 +47,7 @@ struct schemadesc_s {
  * @param[in] blocks Data block descriptions
  * @param[in] schema Schema description
  * @param[in] global_dictionary Global dictionary entries
+ * @param[in] avro_data Raw block data
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
  * @param[in] num_dictionary_entries Number of entries in global dictionary
@@ -56,8 +57,8 @@ struct schemadesc_s {
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint32_t num_blocks,
-    uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows = ~0, size_t first_row = 0, cudaStream_t stream = (cudaStream_t)0);
+cudaError_t DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
+    uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows = ~0, size_t first_row = 0, cudaStream_t stream = (cudaStream_t)0);
 
 
 }}}} // cudf::io::avro::gpu namespace
