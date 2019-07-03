@@ -71,7 +71,7 @@ namespace cudf {
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduction(const gdf_column *col, gdf_reduction_op op,
+gdf_scalar reduce(const gdf_column *col, gdf_reduction_op op,
                         gdf_dtype output_dtype,
                         gdf_size_type ddof = 1);
 

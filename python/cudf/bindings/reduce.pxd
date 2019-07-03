@@ -28,5 +28,5 @@ cdef extern from "reduction.hpp" nogil:
 
 cdef extern from "reduction.hpp" namespace "cudf" nogil:
 
-    cdef gdf_scalar reduction(gdf_column *inp, gdf_reduction_op op, gdf_dtype output_dtype, gdf_size_type ddof) except +
+    cdef gdf_scalar reduce(gdf_column *inp, gdf_reduction_op op, gdf_dtype output_dtype, gdf_size_type ddof) except +
     cdef void scan(gdf_column *inp, gdf_column *out, gdf_scan_op op, bool inclusive) except +

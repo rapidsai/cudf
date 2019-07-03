@@ -96,7 +96,7 @@ struct ReductionTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T_out> result
-                = cudf::reduction(underlying_column, op, output_dtype, ddof);
+                = cudf::reduce(underlying_column, op, output_dtype, ddof);
             EXPECT_EQ(expected_value, result.value());
         };
 
@@ -331,7 +331,7 @@ struct ReductionMultiStepErrorCheck : public ReductionTest<T>
     {
         const gdf_column * underlying_column = col.get();
         auto statement = [&]() {
-            cudf::reduction(underlying_column, op, output_dtype);
+            cudf::reduce(underlying_column, op, output_dtype);
         };
 
         if( succeeded_condition ){
@@ -397,7 +397,7 @@ struct ReductionDtypeTest : public GdfTest
 
         auto statement = [&]() {
             cudf::test::scalar_wrapper<T_out> result =
-                cudf::reduction(col.get(), op, out_dtype);
+                cudf::reduce(col.get(), op, out_dtype);
             if( result.is_valid() && ! expected_overflow){
                 EXPECT_EQ(expected_value, result.value());
             }
@@ -520,7 +520,7 @@ TEST(ReductionErrorTest, empty_column)
     using T = int32_t;
     auto statement = [](const gdf_column* col) {
         cudf::test::scalar_wrapper<T> result =
-            cudf::reduction(col, GDF_REDUCTION_SUM, GDF_INT64);
+            cudf::reduce(col, GDF_REDUCTION_SUM, GDF_INT64);
         EXPECT_EQ( result.is_valid(), false );
     };
 

@@ -322,7 +322,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     // copy back data and valid arrays
     auto hos = w_col.to_host();
 
-    // calculate by cudf::reduction
+    // calculate by cudf::reduce
     std::vector<T> replaced_array(w_col.size());
     std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
         replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
@@ -336,9 +336,9 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
 
-    // compare with cudf::reduction
+    // compare with cudf::reduce
     cudf::test::scalar_wrapper<T> result =
-        cudf::reduction(w_col, GDF_REDUCTION_SUM, GDF_INT32);
+        cudf::reduce(w_col, GDF_REDUCTION_SUM, GDF_INT32);
 
     EXPECT_EQ(expected_value, result.value());
 }

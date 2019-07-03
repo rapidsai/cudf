@@ -18,7 +18,7 @@
 
 namespace cudf{
 
-gdf_scalar reduction(const gdf_column *col,
+gdf_scalar reduce(const gdf_column *col,
                   gdf_reduction_op op, gdf_dtype output_dtype,
                   gdf_size_type ddof)
 {
