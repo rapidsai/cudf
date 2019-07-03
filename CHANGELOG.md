@@ -5,6 +5,7 @@
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 
 ## Improvements
@@ -25,6 +26,7 @@
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
+- PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
 
 
 # cuDF 0.8.0 (27 June 2019)
