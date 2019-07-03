@@ -210,6 +210,8 @@ class Index(object):
         return self._apply_op('__ge__', other)
 
     def equals(self, other):
+        if self is other:
+            return True
         if len(self) != len(other):
             return False
         elif len(self) == 1:
@@ -457,10 +459,10 @@ class GenericIndex(Index):
                     values = np.asarray([], dtype="int64")
                 else:
                     values = np.asarray(values)
-            values = NumericalColumn(data=Buffer(values), dtype=values.dtype)
+            values = columnops.as_column(values)
+            assert isinstance(values, (NumericalColumn, StringColumn))
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
-        assert values.null_count == 0
 
         self._values = values
         self.name = name

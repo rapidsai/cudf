@@ -3,15 +3,46 @@
 import cudf
 from cudf.tests.utils import assert_eq
 
+import os
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from io import BytesIO
 
 
 @pytest.fixture(scope='module')
 def datadir(datadir):
     return datadir / 'orc'
+
+
+@pytest.fixture
+def path_or_buf(datadir):
+    fname = datadir / 'TestOrcFile.test1.orc'
+    try:
+        with open(fname, 'rb') as f:
+            buffer = BytesIO(f.read())
+    except Exception as excpr:
+        if type(excpr).__name__ == 'FileNotFoundError':
+            pytest.skip('.parquet file is not found')
+        else:
+            print(type(excpr).__name__)
+
+    def _make_path_or_buf(src):
+        if src == 'filepath':
+            return str(fname)
+        if src == 'pathobj':
+            return fname
+        if src == 'bytes_io':
+            return buffer
+        if src == 'bytes':
+            return buffer.getvalue()
+        if src == 'url':
+            return fname.as_uri()
+
+        raise ValueError('Invalid source type')
+
+    yield _make_path_or_buf
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
@@ -75,6 +106,26 @@ def test_orc_reader_filenotfound(tmpdir):
 
     with pytest.raises(FileNotFoundError):
         cudf.read_orc(tmpdir.mkdir("cudf_orc"))
+
+
+def test_orc_reader_local_filepath():
+    path = '~/TestLocalFile.orc'
+    if not os.path.isfile(path):
+        pytest.skip('Local .orc file is not found')
+
+    cudf.read_orc(path)
+
+
+@pytest.mark.parametrize('src', ['filepath', 'pathobj', 'bytes_io', 'bytes',
+                                 'url'])
+def test_orc_reader_filepath_or_buffer(path_or_buf, src):
+    cols = ['int1', 'long1', 'float1', 'double1']
+
+    orcfile = pa.orc.ORCFile(path_or_buf('filepath'))
+    expect = orcfile.read(columns=cols).to_pandas()
+    got = cudf.read_orc(path_or_buf(src), columns=cols)
+
+    assert_eq(expect, got)
 
 
 def test_orc_reader_trailing_nulls(datadir):

@@ -23,13 +23,19 @@ def read_orc_metadata(path):
 
 
 @ioutils.doc_read_orc()
-def read_orc(path, engine='cudf', columns=None, stripe=None, skip_rows=None,
-             num_rows=None, use_index=True):
+def read_orc(filepath_or_buffer, engine='cudf', columns=None,
+             stripe=None, skip_rows=None, num_rows=None, use_index=True):
     """{docstring}"""
+
+    filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
+        filepath_or_buffer, None
+    )
+    if compression is not None:
+        ValueError('URL content-encoding decompression is not supported')
 
     if engine == 'cudf':
         df = cpp_read_orc(
-            path,
+            filepath_or_buffer,
             columns,
             stripe,
             skip_rows,
@@ -38,7 +44,7 @@ def read_orc(path, engine='cudf', columns=None, stripe=None, skip_rows=None,
         )
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
-        orc_file = orc.ORCFile(path)
+        orc_file = orc.ORCFile(filepath_or_buffer)
         pa_table = orc_file.read(columns=columns)
         df = DataFrame.from_arrow(pa_table)
 

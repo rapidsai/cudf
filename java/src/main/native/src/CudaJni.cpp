@@ -45,9 +45,16 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memcpy(JNIEnv *env, jclass, jlon
   JNI_CUDA_TRY(env, , cudaMemcpy((void *)dst, (const void *)src, count, (cudaMemcpyKind)kind));
 }
 
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memset(JNIEnv *env, jclass, jlong dst, jbyte value,
+                                                       jlong count, jint kind) {
+  JNI_NULL_CHECK(env, dst, "dst memory pointer is null", );
+  JNI_CUDA_TRY(env, , cudaMemset((void *)dst, value, count));
+}
+
 JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cuda_getDevice(JNIEnv *env, jclass) {
   jint dev;
   JNI_CUDA_TRY(env, -2, cudaGetDevice(&dev));
   return dev;
 }
-}
+
+} // extern "C"
