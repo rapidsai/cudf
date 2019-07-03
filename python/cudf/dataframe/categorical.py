@@ -83,7 +83,7 @@ class CategoricalAccessor(object):
 
         codes = self._parent.data.to_gpu_array()
         na_sentinel = self._parent.default_na_value()
-        old_to_new_codes_map = pos['new'].fillna(na_sentinel)
+        old_to_new_codes_map = pos['new'].to_gpu_array(fillna=na_sentinel)
         # Finally, recode the data buffer with the new codes
         codes = cudautils.recode(codes, old_to_new_codes_map, na_sentinel)
 
