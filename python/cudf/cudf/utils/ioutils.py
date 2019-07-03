@@ -786,6 +786,9 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     elif isinstance(path_or_data, str):
         return os.path.expanduser(path_or_data), compression
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
-        return BytesIO(path_or_data.read()), compression
+        data = path_or_data.read()
+        if isinstance(data, str):
+            data = str.encode(data)
+        return BytesIO(data), compression
     else:
         return path_or_data, compression
