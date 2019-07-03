@@ -51,7 +51,7 @@ def dataframe_from_columns(cols, index=None, columns=None):
     return df
 
 
-def apply_groupby(keys, values, ops, method='hash'):
+def apply_groupby(keys, values, ops, method='hash', sort_results=True):
     """
     Apply aggregations *ops* on *values*, grouping by *keys*.
 
@@ -120,7 +120,7 @@ def apply_groupby(keys, values, ops, method='hash'):
     return (result_key_cols, result_value_cols)
 
 
-def agg(groupby_class, args):
+def agg(groupby_class, args, sort_results=True):
     """ Invoke aggregation functions on the groups.
 
     Parameters
@@ -140,8 +140,6 @@ def agg(groupby_class, args):
     -------
     result : DataFrame
     """
-    sort_results = True
-
     key_columns = []
     value_columns = []
     result_key_names = []
@@ -279,7 +277,7 @@ def agg(groupby_class, args):
     return result
 
 
-def apply_basic_agg(groupby_class, agg_type, sort_results=False):
+def apply_basic_agg(groupby_class, agg_type, sort_results=True):
     """
     Parameters
     ----------
@@ -288,8 +286,6 @@ def apply_basic_agg(groupby_class, agg_type, sort_results=False):
     agg_type : str
         The aggregation function to run.
     """
-    sort_results = True
-
     key_columns = columns_from_dataframe(groupby_class._df[groupby_class._by])
     value_columns = columns_from_dataframe(groupby_class._df[groupby_class._val_columns])
     result_key_names = groupby_class._by
