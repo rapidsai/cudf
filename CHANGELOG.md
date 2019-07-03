@@ -2,13 +2,13 @@
 
 ## New Features
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
-
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 
 ## Improvements
 
+- PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
 - PR #2131 Chunk rows logic added to csv_writer
