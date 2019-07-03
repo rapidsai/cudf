@@ -158,6 +158,18 @@ def test_index_rename():
     got = gds.rename('new_name')
 
     assert_eq(expect, got)
+    '''
+    From here on testing recursive creation
+    and if name is being handles in recursive creation.
+    '''
+    pds = pd.Index(expect)
+    gds = as_index(got)
+
+    assert_eq(pds, gds)
+
+    pds = pd.Index(pds, name='abc')
+    gds = as_index(gds, name='abc')
+    assert_eq(pds, gds)
 
 
 def test_set_index_as_property():

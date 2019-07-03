@@ -74,7 +74,8 @@ class Series(object):
     def __init__(self, data=None, index=None, name=None, nan_as_null=True,
                  dtype=None):
         if isinstance(data, pd.Series):
-            name = data.name
+            if name is None:
+                name = data.name
             index = as_index(data.index)
         elif isinstance(data, pd.Index):
             name = data.name
@@ -85,7 +86,8 @@ class Series(object):
 
         if isinstance(data, Series):
             index = data._index if index is None else index
-            name = data.name
+            if name is None:
+                name = data.name
             data = data._column
 
         if data is None:
@@ -93,14 +95,17 @@ class Series(object):
 
         if not isinstance(data, columnops.TypedColumnBase):
             data = columnops.as_column(data, nan_as_null=nan_as_null,
-                                       dtype=dtype)
+                                       dtype=dtype, name=name)
 
         if index is not None and not isinstance(index, Index):
             index = as_index(index)
         assert isinstance(data, columnops.TypedColumnBase)
+        if name is None:
+            name = data.name
+        data.name = name
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
-        self.name = name
+        self._name = name
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
@@ -140,6 +145,17 @@ class Series(object):
         """Dimension of the data. Series ndim is always 1.
         """
         return 1
+
+    @property
+    def name(self):
+        """Returns name of the Series.
+        """
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        self._name = name
+        self._column.name = name
 
     @classmethod
     def deserialize(cls, deserialize, header, frames):
@@ -457,12 +473,11 @@ class Series(object):
             return other._apply_op(self, fn)
 
         nvtx_range_push("CUDF_BINARY_OP", "orange")
-
+        result_name = utils.get_result_name(self, other)
         lhs, rhs = _align_indices(self, other)
         rhs = self._normalize_binop_value(rhs)
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
-        result = lhs._copy_construct(data=outcol)
-        result.name = None
+        result = lhs._copy_construct(data=outcol, name=result_name)
         nvtx_range_pop()
         return result
 
@@ -809,19 +824,19 @@ class Series(object):
 
     def _unordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other)
-        result = self._copy_construct(data=outcol)
-        result.name = None
+        result = self._copy_construct(data=outcol, name=result_name)
         nvtx_range_pop()
         return result
 
     def _ordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_ORDERED_COMP", "orange")
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other)
-        result = self._copy_construct(data=outcol)
-        result.name = None
+        result = self._copy_construct(data=outcol, name=result_name)
         nvtx_range_pop()
         return result
 
