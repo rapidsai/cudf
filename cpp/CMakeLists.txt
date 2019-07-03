@@ -269,6 +269,7 @@ add_library(cudf SHARED
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
+            src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
