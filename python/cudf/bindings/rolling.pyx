@@ -21,7 +21,8 @@ def apply_rolling(inp, window, min_periods, center, op):
     cdef gdf_index_type *c_forward_window_col = NULL
 
     if op == "mean":
-        inp_col = column_view_from_column(inp.astype("float64"))
+        inp = inp.astype("float64")
+        inp_col = column_view_from_column(inp)
     else:
         inp_col = column_view_from_column(inp)
 

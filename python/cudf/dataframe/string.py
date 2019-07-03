@@ -56,7 +56,8 @@ class StringMethods(object):
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
                             columnops.as_column(ret),
-                            index=self._index
+                            index=self._index,
+                            name=self._parent.name
                         )
                     return ret
                 return wrapper
@@ -88,7 +89,7 @@ class StringMethods(object):
             np.dtype('int32'),
             mask=mask
         )
-        return Series(column, index=self._index)
+        return Series(column, index=self._index, name=self._parent.name)
 
     def cat(self, others=None, sep=None, na_rep=None):
         """
@@ -198,7 +199,8 @@ class StringMethods(object):
 
         out = Series(
             self._parent.data.cat(others=others, sep=sep, na_rep=na_rep),
-            index=self._index
+            index=self._index,
+            name=self._parent.name
         )
         if len(out) == 1 and others is None:
             out = out[0]
@@ -248,7 +250,8 @@ class StringMethods(object):
         if len(out) == 1 and expand is False:
             return Series(
                 out[0],
-                index=self._index
+                index=self._index,
+                name=self._parent.name
             )
         else:
             out_df = DataFrame(index=self._index)
@@ -309,7 +312,8 @@ class StringMethods(object):
 
         return Series(
             column,
-            index=self._index
+            index=self._index,
+            name=self._parent.name
         )
 
     def replace(self, pat, repl, n=-1, case=None, flags=0, regex=True):
@@ -353,7 +357,8 @@ class StringMethods(object):
         from cudf.dataframe import Series
         return Series(
             self._parent.data.replace(pat, repl, n=n, regex=regex),
-            index=self._index
+            index=self._index,
+            name=self._parent.name
         )
 
     def lower(self):
@@ -368,7 +373,8 @@ class StringMethods(object):
         from cudf.dataframe import Series
         return Series(
             self._parent.data.lower(),
-            index=self._index
+            index=self._index,
+            name=self._parent.name
         )
 
     def split(self, pat=None, n=-1, expand=True):
@@ -414,7 +420,7 @@ class StringMethods(object):
 class StringColumn(columnops.TypedColumnBase):
     """Implements operations for Columns of String type
     """
-    def __init__(self, data, null_count=None, **kwargs):
+    def __init__(self, data, null_count=None, name=None, **kwargs):
         """
         Parameters
         ----------
@@ -429,6 +435,7 @@ class StringColumn(columnops.TypedColumnBase):
         assert isinstance(data, nvstrings.nvstrings)
         self._data = data
         self._dtype = np.dtype("object")
+        self._name = name
 
         if null_count is None:
             null_count = data.null_count()
@@ -572,7 +579,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     def to_pandas(self, index=None):
         pd_series = self.to_arrow().to_pandas()
-        return pd.Series(pd_series, index=index)
+        return pd.Series(pd_series, index=index, name=self.name)
 
     def to_array(self, fillna=None):
         """Get a dense numpy array for the data.

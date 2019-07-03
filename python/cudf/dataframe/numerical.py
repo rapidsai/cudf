@@ -389,12 +389,15 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
     masked = False
+    name = None
     if np.isscalar(lhs):
         masked = rhs.has_null_mask
         row_count = len(rhs)
+        name = rhs.name
     elif np.isscalar(rhs):
         masked = lhs.has_null_mask
         row_count = len(lhs)
+        name = lhs.name
     else:
         masked = lhs.has_null_mask or rhs.has_null_mask
         row_count = len(lhs)
@@ -404,7 +407,7 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
     out = out.replace(null_count=null_count)
-    result = out.view(NumericalColumn, dtype=out_dtype)
+    result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     nvtx_range_pop()
     return result
 

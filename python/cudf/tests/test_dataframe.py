@@ -2137,12 +2137,22 @@ def test_dataframe_rename():
 
 def test_series_rename():
     pds = pd.Series([1, 2, 3], name='asdf')
-    gds = Series.from_pandas(pds)
+    gds = Series([1, 2, 3], name='asdf')
 
     expect = pds.rename('new_name')
     got = gds.rename('new_name')
 
     assert_eq(expect, got)
+
+    pds = pd.Series(expect)
+    gds = Series(got)
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(expect, name='name name')
+    gds = Series(got, name='name name')
+
+    assert_eq(pds, gds)
 
 
 @pytest.mark.parametrize(
