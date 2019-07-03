@@ -106,7 +106,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         if other_dtype.kind in 'biuf':
             other_dtype = np.promote_types(self.dtype, other_dtype)
             if other_dtype.kind in 'u':
-                other_dtype = np.dtype(other_dtype.name.lstrip('u'))
+                # convert to signed integer:
+                other_dtype = np.min_scalar_type(-np.iinfo(other_dtype).max)
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
                 return other
