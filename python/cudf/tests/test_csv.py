@@ -490,7 +490,8 @@ def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
     (['A', 'B'], ['int32', 'int32'], 'True,1\nFalse,2\nTrue,3', None, None),
     (['A', 'B'], ['int32', 'int32'], 'YES,1\nno,2\nyes,3\nNo,4\nYes,5',
         ["yes", "Yes", "YES"], ["no", "NO", "No"]),
-    (['A', 'B'], ['int32', 'int32'], 'foo,bar\nbar,foo', ['foo'], ['bar'])
+    (['A', 'B'], ['int32', 'int32'], 'foo,bar\nbar,foo', ['foo'], ['bar'],),
+    (['x', 'y'], None, 'True,1\nFalse,0', None, None)
 ])
 def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file11.csv")
@@ -505,7 +506,7 @@ def test_csv_reader_bools(tmpdir, names, dtypes, data, trues, falses):
                          dtype=(dtypes[0] if dtypes else None),
                          true_values=trues, false_values=falses)
 
-    out = read_csv(str(fname), names=names, dtype=dtypes, skiprows=1,
+    out = read_csv(fname, names=names, dtype=dtypes, skiprows=1,
                    true_values=trues, false_values=falses)
 
     pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
@@ -956,21 +957,26 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     assert(np.count_nonzero(df['zeros']) == 0)
 
 
-def test_csv_reader_hex_ints(tmpdir):
-    lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF']
+@pytest.mark.parametrize('pdf_dtype, gdf_dtype', [(None, None),
+                                                  ('int', 'hex'),
+                                                  ('int32', 'hex32'),
+                                                  ('int64', 'hex64')])
+def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
+    lines = ['0x0', '-0x1000', '0xfedcba', '0xABCDEF', '0xaBcDeF', '9512c20b']
     values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = '\n'.join(lines)
 
-    # with explicit data types
-    df = read_csv(StringIO(buffer),
-                  dtype=['int32'], names=['hex_int'])
-    np.testing.assert_array_equal(values, df['hex_int'])
-
-    # with data type inference
-    df = read_csv(StringIO(buffer),
-                  names=['hex_int'])
-    np.testing.assert_array_equal(values, df['hex_int'])
+    if gdf_dtype is not None:
+        # require explicit `hex` dtype to parse hexadecimals
+        pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=['hex_int'])
+        gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=['hex_int'])
+        np.testing.assert_array_equal(pdf['hex_int'], gdf['hex_int'])
+    else:
+        # otherwise, dtype inference returns as object (string)
+        pdf = pd.read_csv(StringIO(buffer), names=['hex_int'])
+        gdf = read_csv(StringIO(buffer), names=['hex_int'])
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize('quoting', [0, 1, 2, 3])

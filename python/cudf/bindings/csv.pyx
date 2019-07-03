@@ -248,6 +248,7 @@ cpdef cpp_write_csv(
     false_value = 'False'.encode()
     csv_writer.false_value = false_value
     csv_writer.include_header = header
+    csv_writer.rows_per_chunk = 10240000
 
     cdef vector[gdf_column*] list_cols
     # Variable for storing col name list that does not get garbage collected
