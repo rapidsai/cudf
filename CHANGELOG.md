@@ -1,9 +1,11 @@
 # cuDF 0.9.0 (Date TBD)
 
 ## New Features
+
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 
 ## Improvements
@@ -16,6 +18,7 @@
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
 
 ## Bug Fixes
+
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2128 Add offset param to host buffer readers in java API.
 - PR #2145 Work around binops validity checks for java
