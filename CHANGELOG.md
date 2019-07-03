@@ -11,6 +11,7 @@
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
 - PR #2129 Add functions in the Java API to support nullable column filtering
+- PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 
 ## Bug Fixes
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
