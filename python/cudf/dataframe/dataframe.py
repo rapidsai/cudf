@@ -1673,6 +1673,42 @@ class DataFrame(object):
         from cudf.reshape.general import melt
         return melt(self, **kwargs)
 
+    def get_dummies(self, **kwargs):
+        """ Returns a dataframe whose columns are the one hot encodings of all
+        columns in `df`
+
+        Parameters
+        ----------
+        df : cudf.DataFrame
+            dataframe to encode
+        prefix : str, dict, or sequence, optional
+            prefix to append. Either a str (to apply a constant prefix), dict
+            mapping column names to prefixes, or sequence of prefixes to apply
+            with the same length as the number of columns. If not supplied,
+            defaults to the empty string
+        prefix_sep : str, optional
+            separator to use when appending prefixes
+        dummy_na : boolean, optional
+            Right now this is NON-FUNCTIONAL argument in rapids.
+        cats : dict, optional
+            dictionary mapping column names to sequences of integers
+            representing that column's category.
+            See `cudf.DataFrame.one_hot_encoding` for more information.
+            if not supplied, it will be computed
+        sparse : boolean, optional
+            Right now this is NON-FUNCTIONAL argument in rapids.
+        drop_first : boolean, optional
+            Right now this is NON-FUNCTIONAL argument in rapids.
+        columns : sequence of str, optional
+            Names of columns to encode. If not provided, will attempt to encode
+            all columns. Note this is different from pandas default behavior,
+            which encodes all columns with dtype object or categorical
+        dtype : str, optional
+            output dtype, default 'float64'
+        """
+        from cudf.reshape import get_dummies
+        return get_dummies(self, **kwargs)
+
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
               left_index=False, right_index=False, sort=False, lsuffix=None,
               rsuffix=None, type="", method='hash', indicator=False,
