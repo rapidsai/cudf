@@ -13,6 +13,9 @@ from cudf.bindings.nvtx import nvtx_range_pop
 
 def columns_from_dataframe(df):
     cols = [sr._column for sr in df._cols.values()]
+    # strip column names
+    for col in cols:
+        col.name = None
     return cols
 
 
