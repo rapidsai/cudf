@@ -517,28 +517,28 @@ class DataFrame(object):
             for k, col in enumerate(self._cols):
                 result[col] = getattr(self._cols[col], fn)(other[k])
         elif isinstance(other, DataFrame):
-            max_num_rows = max(self.shape[0], other.shape[0])
+
+            lhs, rhs = _align_indices(self, other)
+
+            max_num_rows = max(lhs.shape[0], rhs.shape[0])
 
             def fallback(col, fn):
                 if fill_value is None:
                     return Series.from_masked_array(
                         data=rmm.device_array(max_num_rows, dtype='float64'),
-                        mask=cudautils.make_empty_mask(max_num_rows))
+                        mask=cudautils.make_empty_mask(max_num_rows)
+                    ).set_index(col.index)
                 else:
                     return getattr(col, fn)(fill_value)
 
-            for col in self._cols:
-                if col not in other._cols:
-                    result[col] = fallback(self._cols[col], fn)
-            for col in other._cols:
-                if col in self._cols:
-                    if self.shape[0] != other.shape[0]:
-                        raise NotImplementedError(
-                                "%s on columns with different "
-                                "length is not supported", fn)
-                    result[col] = op(self._cols[col], other._cols[col])
+            for col in lhs._cols:
+                if col not in rhs._cols:
+                    result[col] = fallback(lhs._cols[col], fn)
+            for col in rhs._cols:
+                if col in lhs._cols:
+                    result[col] = op(lhs._cols[col], rhs._cols[col])
                 else:
-                    result[col] = fallback(other._cols[col], _reverse_op(fn))
+                    result[col] = fallback(rhs._cols[col], _reverse_op(fn))
         elif isinstance(other, Series):
             raise NotImplementedError(
                     "Series to DataFrame arithmetic not supported "
@@ -2532,12 +2532,8 @@ class DataFrame(object):
 
         def _create_output_frame(data, percentiles=None):
             # hack because we don't support strings in indexes
-            columns = data.columns
-            out_df = data[columns[0]].describe(percentiles=percentiles)
-            for col in columns[1:]:
-                out_df[col] = data[col].describe(percentiles=percentiles)[col]
-
-            return out_df
+            return DataFrame({col: data[col].describe(percentiles=percentiles)
+                              for col in data.columns})
 
         if not include and not exclude:
             numeric_data = self.select_dtypes(np.number)
@@ -3196,3 +3192,36 @@ merge.__doc__ = ''.join([merge_doc[:idx], '\n\tleft : DataFrame\n\t',
                         merge_doc[idx:]])
 
 register_distributed_serializer(DataFrame)
+
+
+def _align_indices(lhs, rhs):
+    """
+    Internal util to align the indices of two DataFrames. Returns a tuple of
+    the aligned dataframes, or the original arguments if the indices are the
+    same, or if rhs isn't a DataFrame.
+    """
+    lhs_out, rhs_out = lhs, rhs
+    if isinstance(rhs, DataFrame) and not lhs.index.equals(rhs.index):
+        df = lhs.merge(rhs,
+                       sort=True,
+                       how='outer',
+                       left_index=True,
+                       right_index=True,
+                       suffixes=('_x', '_y'))
+        df = df.sort_index()
+        lhs_out = DataFrame()
+        rhs_out = DataFrame()
+        common = set(lhs.columns) & set(rhs.columns)
+        common_x = set(['{}_x'.format(x) for x in common])
+        common_y = set(['{}_y'.format(x) for x in common])
+        for col in df.columns:
+            if col in common_x:
+                lhs_out[col[:-2]] = df[col]
+            elif col in common_y:
+                rhs_out[col[:-2]] = df[col]
+            elif col in lhs:
+                lhs_out[col] = df[col]
+            elif col in rhs:
+                rhs_out[col] = df[col]
+
+    return lhs_out, rhs_out

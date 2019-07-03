@@ -21,6 +21,7 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import numpy as np
 import collections.abc
+import errno
 import os
 
 
@@ -52,7 +53,6 @@ cpdef cpp_read_csv(
     nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
     na_values=None, keep_default_na=True, na_filter=True,
     prefix=None, index_col=None):
-
     """
     Cython function to call into libcudf API, see `read_csv`.
 
@@ -85,11 +85,11 @@ cpdef cpp_read_csv(
             args.filepath_or_buffer = buffer
         args.input_data_form = HOST_BUFFER
     else:
-        if (not os.path.isfile(filepath_or_buffer)):
-            raise(FileNotFoundError)
-        if (not os.path.exists(filepath_or_buffer)):
-            raise(FileNotFoundError)
-        args.filepath_or_buffer = filepath_or_buffer.encode()
+        if not os.path.isfile(filepath_or_buffer):
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+            )
+        args.filepath_or_buffer = str(filepath_or_buffer).encode()
         args.input_data_form = FILE_PATH
 
     if header == 'infer':
@@ -176,7 +176,7 @@ cpdef cpp_read_csv(
     cdef unique_ptr[csv_reader] reader
     with nogil:
         reader = unique_ptr[csv_reader](new csv_reader(args))
-    
+
     cdef cudf_table table
     if byte_range is not None:
         table = reader.get().read_byte_range(byte_range[0], byte_range[1])
@@ -249,6 +249,7 @@ cpdef cpp_write_csv(
     false_value = 'False'.encode()
     csv_writer.false_value = false_value
     csv_writer.include_header = header
+    csv_writer.rows_per_chunk = 10240000
 
     cdef vector[gdf_column*] list_cols
     # Variable for storing col name list that does not get garbage collected
