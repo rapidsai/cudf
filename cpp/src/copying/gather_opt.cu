@@ -24,10 +24,11 @@
 
 #include <algorithm>
 
+#include <thrust/gather.h>
 #include <table/device_table.cuh>
 
 #include <utilities/column_utils.hpp>
-
+#include <utilities/cuda_utils.hpp>
 #include <bitmask/bit_mask.cuh>
 #include <cub/cub.cuh>
 
@@ -61,7 +62,6 @@ __device__ __inline__ void single_lane_reduce(CountType f, CountType* d_output){
       atomicAdd(d_output, f);
     }
   }
-  __syncthreads();
 }
 
 template<bool check_bounds>
@@ -100,104 +100,92 @@ __device__ __inline__ void gather_bitmask_device(
   single_lane_reduce(__popc(valid_warp), d_count);
 }
 
-struct copy_element_smem {
-  template <typename T>
-  __device__ inline void operator()(gdf_column const& target,
-                                    gdf_size_type target_index,
-                                    gdf_column const& source,
-                                    gdf_size_type source_index) {
-    reinterpret_cast<T*>(target.data)[target_index] 
-      = reinterpret_cast<const T*>(source.data)[source_index];
-  }
-};
-
-template<bool check_bounds, bool do_valid, int block_size>
-__launch_bounds__(block_size, 2048/block_size)
-__global__ void gather_kernel(const device_table source, 
-                                  const gdf_size_type gather_map[], 
-                                  device_table destination,
-                                  gdf_size_type* d_count)
-{
-  const gdf_index_type num_source_rows = source.num_rows();
-  const gdf_index_type num_destination_rows = destination.num_rows();
   
-  // Each element of gather_map[] only needs to be used once. 
-  gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
- 
-  const bool active_threads = destination_row < num_destination_rows;
-  gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
-  for(gdf_index_type i = 0; i < destination.num_columns(); i++){
-    if(active_threads && (!check_bounds || source_row < num_source_rows)){
-      // gather the entire row
-      cudf::type_dispatcher(source.get_column(i)->dtype,
-                          copy_element_smem{},
-                          *destination.get_column(i), destination_row,
-                          *source.get_column(i), source_row);
-    }
-    
-    if(do_valid){
-      // Before bit_mask_t is used in device_table we will do the cast here.
-      bit_mask_t* __restrict__ src_valid =
-        reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid);
-      bit_mask_t* __restrict__ dest_valid =
-        reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
-      // Gather the bitmasks and do the null count 
-      gather_bitmask_device<check_bounds>(src_valid, source_row, num_source_rows,
-        dest_valid, destination_row, num_destination_rows, d_count + i);
-    }
-  }
-}
-
- 
-template<bool check_bounds, bool do_valid, int block_size>
+template<bool check_bounds, int block_size>
 __launch_bounds__(block_size, 2048/block_size)
-__global__ void gather_kernel_sparse(const device_table source, 
-                                  const gdf_size_type gather_map[], 
-                                  device_table destination,
-                                  gdf_size_type* d_count)
+__global__ void gather_bitmask_kernel(
+    const device_table source, 
+    const gdf_size_type gather_map[], 
+    device_table destination,
+    gdf_size_type* d_count)
 {
   const gdf_index_type num_source_rows = source.num_rows();
   const gdf_index_type num_destination_rows = destination.num_rows();
   for(gdf_index_type i = 0; i < destination.num_columns(); i++){
-    
-    // data part
-    gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-    while(destination_row < num_destination_rows){
-      
-      gdf_index_type source_row = gather_map[destination_row];
-      
-      cudf::type_dispatcher(source.get_column(i)->dtype,
-                            copy_element_smem{},
-                            *destination.get_column(i), destination_row,
-                            *source.get_column(i), source_row);
-      
-      destination_row += blockDim.x * gridDim.x; 
-    }
-    if(do_valid){ 
-      // bitmask part  
-      gdf_index_type destination_row_base = blockIdx.x * blockDim.x;
-      while(destination_row_base < num_destination_rows){
-        
+    // bitmask part  
+    gdf_index_type destination_row_base = blockIdx.x * blockDim.x;
+
+    // Before bit_mask_t is used in device_table we will do the cast here.
+    // TODO: modify device_table to use bit_mask_t
+    bit_mask_t* __restrict__ src_valid =
+      reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid);
+    bit_mask_t* __restrict__ dest_valid =
+      reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
+    // Gather the bitmasks and do the null count 
+
+    while(destination_row_base < num_destination_rows){
         gdf_index_type destination_row = destination_row_base + threadIdx.x;
         const bool active_threads = destination_row < num_destination_rows;
         gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
         
-        // Before bit_mask_t is used in device_table we will do the cast here.
-        bit_mask_t* __restrict__ src_valid =
-          reinterpret_cast<bit_mask_t*>(source.get_column(i)->valid);
-        bit_mask_t* __restrict__ dest_valid =
-          reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
-        // Gather the bitmasks and do the null count 
-        
         gather_bitmask_device<check_bounds>(src_valid, source_row, num_source_rows,
           dest_valid, destination_row, num_destination_rows, d_count + i);
-        
+      
         destination_row_base += blockDim.x * gridDim.x; 
-      }
     }
   }
-
 }
+
+/**---------------------------------------------------------------------------*
+ * @brief Function object for gathering a type-erased
+ * gdf_column. To be used with the cudf::type_dispatcher.
+ *
+ *---------------------------------------------------------------------------**/
+struct column_gatherer {
+  /**---------------------------------------------------------------------------*
+   * @brief Type-dispatched function to gather from one column to another based
+   * on a `gather_map`.
+   *
+   * @tparam ColumnType Dispatched type for the column being gathered
+   * @param source_column The column to gather from
+   * @param gather_map Array of indices that maps source elements to destination
+   * elements
+   * @param destination_column The column to gather into
+   * @param check_bounds Optionally perform bounds checking on the values of
+   * `gather_map`
+   * @param stream Optional CUDA stream on which to execute kernels
+   *---------------------------------------------------------------------------**/
+  template <typename ColumnType>
+  void operator()(gdf_column const* source_column,
+                  gdf_index_type const gather_map[],
+                  gdf_column* destination_column, bool check_bounds = false,
+                  cudaStream_t stream = 0) {
+    ColumnType const* const source_data{
+        static_cast<ColumnType const*>(source_column->data)};
+    ColumnType* destination_data{
+        static_cast<ColumnType*>(destination_column->data)};
+
+    gdf_size_type const num_destination_rows{destination_column->size};
+
+    // If gathering in-place, allocate temporary buffers to hold intermediate
+    // results
+    rmm::device_vector<ColumnType> temp_destination;
+ 
+    if (check_bounds) {/**
+      thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
+                        gather_map + num_destination_rows, gather_map,
+                        source_data, destination_data,
+                        bounds_checker{0, source_column->size});*/
+    } else {
+      thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
+                     gather_map + num_destination_rows, source_data,
+                     destination_data);
+    }
+
+    CHECK_STREAM(stream);
+  }
+};
+
 
 }  // namespace
 
@@ -207,7 +195,7 @@ namespace detail {
 
 template<int block_size>
 void gather(table const* source_table, gdf_index_type const gather_map[],
-            table* destination_table, bool check_bounds, cudaStream_t stream) {
+            table* destination_table, bool check_bounds, cudaStream_t stream, int grid_size) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -223,12 +211,23 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  
   bool src_has_nulls = source_table->get_column(0)->valid != nullptr;
   bool dest_has_nulls = destination_table->get_column(0)->valid != nullptr;
-  
+ 
+  // We create (n_cols+1) streams for the (n_cols+1) kernels we are gonna launch.
+  // std::vector<util::cuda::scoped_stream> v_stream(n_cols+1);
+  std::vector<cudaStream_t> v_stream(2, nullptr);
+  for(int i = 0; i < 2; i++){
+    CUDA_TRY(cudaStreamCreate(&v_stream[i]));
+  }
+
   // Perform sanity checks
   for(gdf_size_type i = 0; i < n_cols; i++){
+
     gdf_column* dest_col = destination_table->get_column(i);
     const gdf_column* src_col = source_table->get_column(i);
- 
+   
+    // h_vp_src_valid[i] = reinterpret_cast<bit_mask_t*>(src_col->valid); 
+    // h_vp_dest_valid[i] = reinterpret_cast<bit_mask_t*>(dest_col->valid); 
+
     CUDF_EXPECTS(src_col->dtype == dest_col->dtype, "Column type mismatch");
     
     // If one column has a valid buffer then we require all columns to have one.
@@ -244,86 +243,96 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
       "In place gather/scatter is NOT supported.");
     CUDF_EXPECTS(src_col->valid != dest_col->valid || src_col->valid != nullptr,
       "In place gather/scatter is NOT supported.");
+    
+    // The data gather for n columns will be put on the first n streams
+    
+    // Somehow putting the following on to one or multiple non-default streams significantly deceases the L2 hit rate.
+    // cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds, v_stream[0]);
+    // cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds);
   }
+/**  
+  for(int i = 0; i < n_cols; i++){
+    gdf_column* dest_col = destination_table->get_column(i);
+    const gdf_column* src_col = source_table->get_column(i);
+    cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds);
+  }*/
+/**  
+  auto gather_column = [gather_map, check_bounds, v_stream, source_table](
+                           const gdf_column * const source, gdf_column* destination) {
+    // TODO: Each column could be gathered on a separate stream
+    cudf::type_dispatcher(source->dtype, impl::column_gatherer{}, source, gather_map,
+                          destination, check_bounds, v_stream[std::distance(source_table->begin(), &source)]);
+
+    return destination;
+  };
+
+  // Gather columns one-by-one
+  std::transform(source_table->begin(), source_table->end(),
+                 destination_table->begin(), destination_table->begin(),
+                 gather_column);
+*/
   // If the source column has a valid buffer, the destination column must also have one
   CUDF_EXPECTS((src_has_nulls && dest_has_nulls) || (!src_has_nulls),
     "Missing destination validity buffer");
-
-  // Allocate the device_table to be passed into the kernel
-  auto d_source_table = device_table::create(*source_table);
-  auto d_destination_table = device_table::create(*destination_table);
   
-  // Allocate memory for reduction
+  // The bitmask part will be put on the n_cols+1'th stream 
+  // Allocate the device_table to be passed into the kernel
+  auto d_source_table = device_table::create(*source_table, v_stream[1]);
+  auto d_destination_table = device_table::create(*destination_table, v_stream[1]);
+  
+  // Allocate memory for bitmask reduction
   gdf_size_type* d_count_p;
-  CUDA_TRY(cudaMalloc(&d_count_p, sizeof(gdf_size_type)*n_cols));
-  CUDA_TRY(cudaMemset(d_count_p, 0, sizeof(gdf_size_type)*n_cols));
+  RMM_TRY(RMM_ALLOC(&d_count_p, sizeof(gdf_size_type)*n_cols, v_stream[1]));
+  CUDA_TRY(cudaMemsetAsync(d_count_p, 0, sizeof(gdf_size_type)*n_cols, v_stream[1]));
 
-  // Call the optimized gather kernel
-#if 0
-  const gdf_size_type gather_grid_size =
-      (destination_table->num_rows() + block_size - 1) / block_size;
-
-  if (check_bounds) {
-    if(dest_has_nulls){
-      impl::gather_kernel<true , true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
-    }else{
-      impl::gather_kernel<true , false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
-    }
-  }else{
-    if(dest_has_nulls){
-      impl::gather_kernel<false, true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
-    }else{
-      impl::gather_kernel<false, false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
-    }
-  }
-#else
-  constexpr gdf_size_type gather_grid_size = 64/(block_size/impl::warp_size)*80;
+  // constexpr gdf_size_type gather_grid_size = 64/(block_size/impl::warp_size)*80;
+  int gather_grid_size = grid_size;
+  // cudaOccupancyMaxActiveBlocksPerMultiprocessor(&gather_grid_size, impl::gather_kernel_sparse<false, true , block_size>, block_size, 0);
+  // printf("grid_size = %d, block_size = %d\n", gather_grid_size, block_size);
 
   if (check_bounds) {
     if(dest_has_nulls){
-      impl::gather_kernel_sparse<true , true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
-    }else{
-      impl::gather_kernel_sparse<true , false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
+//      impl::gather_kernel_sparse<true , true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
+//          *d_source_table, d_vp_src_valid, gather_map, *d_destination_table, d_vp_src_valid, d_count_p);
     }
   }else{
     if(dest_has_nulls){
-      impl::gather_kernel_sparse<false, true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
-    }else{
-      impl::gather_kernel_sparse<false, false, block_size><<<gather_grid_size, block_size, 0, stream>>>(
+        impl::gather_bitmask_kernel<false, block_size><<<gather_grid_size, block_size, 0, v_stream[1]>>>(
           *d_source_table, gather_map, *d_destination_table, d_count_p);
     }
   }
-#endif 
+  
   std::vector<gdf_size_type> h_count(n_cols);
-  CUDA_TRY(cudaMemcpy(h_count.data(), d_count_p, sizeof(gdf_size_type)*n_cols, cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(h_count.data(), d_count_p, sizeof(gdf_size_type)*n_cols, cudaMemcpyDeviceToHost, v_stream[1]));
+  RMM_TRY(RMM_FREE(d_count_p, v_stream[1]));
+  // CUDA_TRY(cudaStreamSynchronize(v_stream[1]));
   if(dest_has_nulls){  
     for(gdf_size_type i = 0; i < destination_table->num_columns(); i++){
       destination_table->get_column(i)->null_count = destination_table->get_column(i)->size - h_count[i];
     }
   }
-  CUDA_TRY(cudaFree(d_count_p));
+
+  for(int t = 0; t < 2; t++){
+    // CHECK_STREAM(v_stream[t]);
+    // CUDA_TRY(cudaStreamSynchronize(v_stream[t]));
+    // cudaStreamSynchronize(v_stream[t]);
+    CUDA_TRY(cudaStreamDestroy(v_stream[t]));
+  }
 }
 
 }  // namespace detail
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
-            table* destination_table, int block_size) {
+            table* destination_table, int block_size, int grid_size) {
   switch(block_size){
   case  64:
-    detail::gather< 64>(source_table, gather_map, destination_table, false, 0); break;
+    detail::gather< 64>(source_table, gather_map, destination_table, false, 0, grid_size); break;
   case 128:
-    detail::gather<128>(source_table, gather_map, destination_table, false, 0); break;
+    detail::gather<128>(source_table, gather_map, destination_table, false, 0, grid_size); break;
   case 192:
-    detail::gather<192>(source_table, gather_map, destination_table, false, 0); break;
+    detail::gather<192>(source_table, gather_map, destination_table, false, 0, grid_size); break;
   case 256:
-    detail::gather<256>(source_table, gather_map, destination_table, false, 0); break;
+    detail::gather<256>(source_table, gather_map, destination_table, false, 0, grid_size); break;
   default:
     CUDF_EXPECTS(false, "Unsupported block size.");
   }

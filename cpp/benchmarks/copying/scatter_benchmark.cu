@@ -73,7 +73,7 @@ void scatter_inverse(benchmark::State& state){
 
   for(auto _ : state){
     if(opt){
-      cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table);
+      cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table, 128);
     }else{
       cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
     }
@@ -82,8 +82,8 @@ void scatter_inverse(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-BENCHMARK_TEMPLATE(scatter_inverse,double,false)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
-BENCHMARK_TEMPLATE(scatter_inverse,double, true)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_TEMPLATE(scatter_inverse,double,false)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
+BENCHMARK_TEMPLATE(scatter_inverse,double, true)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
 
 template<class TypeParam, bool opt>
 void scatter_random_(benchmark::State& state){
@@ -132,7 +132,7 @@ void scatter_random_(benchmark::State& state){
   cudf::table source_table{ vp_src };
   cudf::table destination_table{ vp_dest };
   if(opt){
-    cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table);
+    cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table, 128);
   }else{
     cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
   }
@@ -148,6 +148,6 @@ void scatter_random_(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-BENCHMARK_TEMPLATE(scatter_random_,double,false)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
-BENCHMARK_TEMPLATE(scatter_random_,double, true)->RangeMultiplier(4)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_TEMPLATE(scatter_random_,double,false)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
+BENCHMARK_TEMPLATE(scatter_random_,double, true)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
 
