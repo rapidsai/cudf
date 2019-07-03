@@ -62,24 +62,26 @@ $WORKSPACE/build.sh clean libcudf cudf
 
 if hasArg --skip-tests; then
     logger "Skipping Tests..."
-    exit 0
+else
+    logger "Check GPU usage..."
+    nvidia-smi
+
+    logger "GoogleTest for libcudf..."
+    cd $WORKSPACE/cpp/build
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
+
+    # Install the master version of distributed for serialization testing
+    logger "pip install git+https://github.com/dask/distributed.git"
+    pip install "git+https://github.com/dask/distributed.git"
+
+    # Temporarily install feather and cupy for testing
+    logger "conda install feather-format"
+    conda install "feather-format" "cupy>=6.0.0"
+
+    logger "Python py.test for cuDF..."
+    cd $WORKSPACE/python
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf-coverage.xml --cov-report term
+
+    conda install -c conda-forge codecov
+    codecov -t $CODECOV_TOKEN
 fi
-
-logger "Check GPU usage..."
-nvidia-smi
-
-logger "GoogleTest for libcudf..."
-cd $WORKSPACE/cpp/build
-GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
-
-# Install the master version of distributed for serialization testing
-logger "pip install git+https://github.com/dask/distributed.git"
-pip install "git+https://github.com/dask/distributed.git"
-
-# Temporarily install feather and cupy for testing
-logger "conda install feather-format"
-conda install "feather-format" "cupy>=6.0.0"
-
-logger "Python py.test for cuDF..."
-cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term
