@@ -289,14 +289,14 @@ add_library(cudf SHARED
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
-            src/reductions/reduction_min.cu
-            src/reductions/reduction_max.cu
-            src/reductions/reduction_sum.cu
-            src/reductions/reduction_prod.cu
-            src/reductions/reduction_sos.cu
-            src/reductions/reduction_mean.cu
-            src/reductions/reduction_var.cu
-            src/reductions/reduction_std.cu
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
