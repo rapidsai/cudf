@@ -655,7 +655,7 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             if name is None:
                 name = values.name
-            self._values = values.values.copy()
+            self._values = values._values.copy()
         else:
             self._values = columnops.build_column(nvstrings.to_device(values),
                                                   dtype='object')
