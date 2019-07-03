@@ -47,23 +47,24 @@ class _Groupby(object):
 
 
 class SeriesGroupBy(_Groupby):
-
     def __init__(self, sr, by=None, level=None, method="hash", sort=True):
         self._sr = sr
-        self._groupby = _GroupbyHelper(obj=self._sr, by=by,
-                                       level=level, sort=sort)
+        self._groupby = _GroupbyHelper(
+            obj=self._sr, by=by, level=level, sort=sort
+        )
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
 
 
 class DataFrameGroupBy(_Groupby):
-
-    def __init__(self, df, by=None, as_index=True, level=None,
-                 sort=True, method="hash"):
+    def __init__(
+        self, df, by=None, as_index=True, level=None, sort=True, method="hash"
+    ):
         self._df = df
-        self._groupby = _GroupbyHelper(obj=self._df, by=by, as_index=as_index,
-                                       level=level, sort=sort)
+        self._groupby = _GroupbyHelper(
+            obj=self._df, by=by, as_index=as_index, level=level, sort=sort
+        )
 
     def _apply_aggregation(self, agg):
         """
@@ -79,11 +80,11 @@ class DataFrameGroupBy(_Groupby):
         else:
             arg = list(arg)
             by_list = []
-            for by_name, by in zip(self._groupby.key_names,
-                                   self._groupby.key_columns):
+            for by_name, by in zip(
+                self._groupby.key_names, self._groupby.key_columns
+            ):
                 by_list.append(cudf.Series(by, name=by_name))
-            return self._df[arg].groupby(by_list,
-                                         sort=self._groupby.sort)
+            return self._df[arg].groupby(by_list, sort=self._groupby.sort)
 
     def __getattr__(self, key):
         if key == "_df":
@@ -91,18 +92,19 @@ class DataFrameGroupBy(_Groupby):
             raise AttributeError()
         if key in self._df.columns:
             by_list = []
-            for by_name, by in zip(self._groupby.key_names,
-                                   self._groupby.key_columns):
+            for by_name, by in zip(
+                self._groupby.key_names, self._groupby.key_columns
+            ):
                 by_list.append(cudf.Series(by, name=by_name))
-            return self._df[key].groupby(by_list,
-                                         sort=self._groupby.sort)
-        raise AttributeError("'DataFrameGroupBy' object has no attribute "
-                             "'{}'".format(key))
+            return self._df[key].groupby(by_list, sort=self._groupby.sort)
+        raise AttributeError(
+            "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
+        )
 
 
 class _GroupbyHelper(object):
 
-    NAMED_AGGS = ('sum', 'mean', 'min', 'max', 'count')
+    NAMED_AGGS = ("sum", "mean", "min", "max", "count")
 
     def __init__(self, obj, by=None, level=None, as_index=True, sort=None):
         """
@@ -166,7 +168,8 @@ class _GroupbyHelper(object):
             if len(by) != len(self.obj):
                 raise NotImplementedError(
                     "cuDF does not support arbitrary series index lengths "
-                    "for groupby")
+                    "for groupby"
+                )
             key_name = by.name
             key_column = by._column
         return key_name, key_column
@@ -180,10 +183,7 @@ class _GroupbyHelper(object):
         aggs_as_list = self.get_aggs_as_list()
 
         out_key_columns, out_value_columns = _groupby_engine(
-            self.key_columns,
-            self.value_columns,
-            aggs_as_list,
-            self.sort
+            self.key_columns, self.value_columns, aggs_as_list, self.sort
         )
 
         return self.construct_result(out_key_columns, out_value_columns)
@@ -216,11 +216,11 @@ class _GroupbyHelper(object):
                         self.obj[col_name]._column,
                         (
                             cudf.dataframe.StringColumn,
-                            cudf.dataframe.CategoricalColumn
-                        )
+                            cudf.dataframe.CategoricalColumn,
+                        ),
                     ):
                         for agg_name in agg:
-                            if agg_name in ('mean', 'sum'):
+                            if agg_name in ("mean", "sum"):
                                 drop = True
                     if not drop:
                         value_col_names.append(col_name)
@@ -260,26 +260,27 @@ class _GroupbyHelper(object):
                     self.value_columns.append(col)
                     self.value_names.append(col_name)
                 else:
-                    self.value_columns.extend([col]*len(agg_list))
-                    self.value_names.extend([col_name]*len(agg_list))
+                    self.value_columns.extend([col] * len(agg_list))
+                    self.value_names.extend([col_name] * len(agg_list))
 
     def construct_result(self, out_key_columns, out_value_columns):
         if not self.as_index:
             result = cudf.concat(
                 [
-                    dataframe_from_columns(out_key_columns,
-                                           columns=self.key_names),
-                    dataframe_from_columns(out_value_columns,
-                                           columns=self.value_names)
+                    dataframe_from_columns(
+                        out_key_columns, columns=self.key_names
+                    ),
+                    dataframe_from_columns(
+                        out_value_columns, columns=self.value_names
+                    ),
                 ],
-                axis=1
+                axis=1,
             )
             return result
 
         result = dataframe_from_columns(
-                out_value_columns,
-                columns=self.compute_result_column_index()
-            )
+            out_value_columns, columns=self.compute_result_column_index()
+        )
 
         index = self.compute_result_index(out_key_columns, out_value_columns)
         if len(result) == 0 and len(index) != 0:
@@ -302,17 +303,19 @@ class _GroupbyHelper(object):
         """
         key_names = self.key_names
         if (len(key_columns)) == 1:
-            return cudf.dataframe.index.as_index(key_columns[0],
-                                                 name=key_names[0])
+            return cudf.dataframe.index.as_index(
+                key_columns[0], name=key_names[0]
+            )
         else:
             empty_keys = all([len(x) == 0 for x in key_columns])
             if len(value_columns) == 0 and empty_keys:
                 return cudf.dataframe.index.GenericIndex(
-                    cudf.Series([], dtype='object')
+                    cudf.Series([], dtype="object")
                 )
             return MultiIndex(
-                source_data=dataframe_from_columns(key_columns,
-                                                   columns=key_names)
+                source_data=dataframe_from_columns(
+                    key_columns, columns=key_names
+                )
             )
 
     def compute_result_column_index(self):
@@ -359,23 +362,21 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
     out_value_columns : list of Columns
     """
     out_key_columns, out_value_columns = cpp_apply_groupby(
-        key_columns,
-        value_columns,
-        aggs
+        key_columns, value_columns, aggs
     )
 
     if sort:
-        key_names = ["key_"+str(i) for i in range(len(key_columns))]
-        value_names = ["value_"+str(i) for i in range(len(value_columns))]
+        key_names = ["key_" + str(i) for i in range(len(key_columns))]
+        value_names = ["value_" + str(i) for i in range(len(value_columns))]
         value_names = _add_prefixes(value_names, aggs)
 
         # concatenate
         result = cudf.concat(
             [
                 dataframe_from_columns(out_key_columns, columns=key_names),
-                dataframe_from_columns(out_value_columns, columns=value_names)
+                dataframe_from_columns(out_value_columns, columns=value_names),
             ],
-            axis=1
+            axis=1,
         )
 
         # sort values

@@ -2125,14 +2125,21 @@ class Series(object):
         )
         return Series(output_dary, name=self.name, index=self.index)
 
-    def groupby(self, by=None, group_series=None, level=None, sort=True,
-                group_keys=True):
+    def groupby(
+        self,
+        by=None,
+        group_series=None,
+        level=None,
+        sort=True,
+        group_keys=True,
+    ):
         if group_keys is not True:
             raise NotImplementedError(
                 "The group_keys keyword is not yet implemented"
             )
 
         from cudf.groupby.groupby import SeriesGroupBy
+
         return SeriesGroupBy(self, by=by, level=level, sort=sort)
 
     @copy_docstring(Rolling)

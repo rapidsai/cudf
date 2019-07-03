@@ -2270,8 +2270,12 @@ class DataFrame(object):
             nvtx_range_push("CUDF_GROUPBY", "purple")
 
             result = DataFrameGroupBy(
-                self, by=by, method=method, as_index=as_index,
-                sort=sort, level=level
+                self,
+                by=by,
+                method=method,
+                as_index=as_index,
+                sort=sort,
+                level=level,
             )
             return result
 
