@@ -46,7 +46,21 @@ _SCAN_OP = {
 def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     """
       Call gdf reductions.
+
+    Args:
+        reduction_op: reduction operator as string. It should be one of 
+        'min', 'max', 'sum', 'product', 'sum_of_squares', 'mean', 'var', 'std'
+        col: input column to apply reduction operation on
+        dtype: output dtype
+        ddof: This parameter is used only for 'std' and 'var'.
+        Delta Degrees of Freedom. The divisor used in calculations is N - ddof,
+        where N represents the number of elements.
+
+    Returns:
+        dtype scalar value of reduction operation on column
+
     """
+
 
     check_gdf_compatibility(col)
 
@@ -67,7 +81,7 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     cdef gdf_size_type c_ddof = ddof
 
     with nogil:    
-        c_result = reduction(
+        c_result = reduce(
             <gdf_column*>c_col,
             c_op,
             c_out_dtype,
