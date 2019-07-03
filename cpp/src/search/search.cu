@@ -149,25 +149,49 @@ gdf_column search_ordered(table const& t,
 
   auto d_t      = device_table::create(t, stream);
   auto d_values = device_table::create(values, stream);
-  if (find_first) {
-    auto ineq_op  = row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest);
-    thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
-                        thrust::make_counting_iterator(0), 
-                        thrust::make_counting_iterator(t.num_rows()),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(values.num_rows()),
-                        static_cast<gdf_index_type*>(result.data),
-                        ineq_op);
+  if ( has_nulls(t) ) {
+    if (find_first) {
+      auto ineq_op  = row_inequality_comparator<true>(*d_t, *d_values, !nulls_as_largest);
+      thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                          thrust::make_counting_iterator(0), 
+                          thrust::make_counting_iterator(t.num_rows()),
+                          thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(values.num_rows()),
+                          static_cast<gdf_index_type*>(result.data),
+                          ineq_op);
+    }
+    else {
+      auto ineq_op  = row_inequality_comparator<true>(*d_values, *d_t, !nulls_as_largest);
+      thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                          thrust::make_counting_iterator(0), 
+                          thrust::make_counting_iterator(t.num_rows()),
+                          thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(values.num_rows()),
+                          static_cast<gdf_index_type*>(result.data),
+                          ineq_op);
+    }
   }
   else {
-    auto ineq_op  = row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest);
-    thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                        thrust::make_counting_iterator(0), 
-                        thrust::make_counting_iterator(t.num_rows()),
-                        thrust::make_counting_iterator(0),
-                        thrust::make_counting_iterator(values.num_rows()),
-                        static_cast<gdf_index_type*>(result.data),
-                        ineq_op);
+    if (find_first) {
+      auto ineq_op  = row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest);
+      thrust::lower_bound(rmm::exec_policy(stream)->on(stream),
+                          thrust::make_counting_iterator(0), 
+                          thrust::make_counting_iterator(t.num_rows()),
+                          thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(values.num_rows()),
+                          static_cast<gdf_index_type*>(result.data),
+                          ineq_op);
+    }
+    else {
+      auto ineq_op  = row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest);
+      thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                          thrust::make_counting_iterator(0), 
+                          thrust::make_counting_iterator(t.num_rows()),
+                          thrust::make_counting_iterator(0),
+                          thrust::make_counting_iterator(values.num_rows()),
+                          static_cast<gdf_index_type*>(result.data),
+                          ineq_op);
+    }
   }
 
   return result;
