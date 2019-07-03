@@ -1330,6 +1330,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                                    long deviceOutputDataPtr,
                                                    int numRows, int dtype, int nullCount);
 
+  private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+
+  private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
+
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses
    * returned were allocated by native code but will be freed through java's Unsafe API.
@@ -1865,6 +1869,23 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       columnHandles[i] = columns[i].getNativeCudfColumnAddress();
     }
     return new ColumnVector(concatenate(columnHandles));
+  }
+
+  /**
+   * Calculate the quantile of this ColumnVector
+   * @param method   the method used to calculate the quantile
+   * @param quantile the quantile value [0,1]
+   */
+  public Scalar exactQuantile(QuantileMethod method, double quantile) {
+    return exactQuantile(this.getNativeCudfColumnAddress(), method.nativeId, quantile);
+  }
+
+  /**
+   * Calculate the approximate quantile of this ColumnVector
+   * @param quantile the quantile value [0,1]
+   */
+  public Scalar approxQuantile(double quantile) {
+    return approxQuantile(this.getNativeCudfColumnAddress(), quantile);
   }
 
   /**
