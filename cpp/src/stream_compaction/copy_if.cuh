@@ -83,8 +83,10 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
 // To make scattering efficient, we "coalesce" the block's scattered data and 
 // valids in shared memory, and then write from shared memory to global memory
 // in a contiguous manner.
-// The has_validity template parameter allows us to specialize this kernel for
-// the non-nullable case for performance without writing another kernel.
+// The has_validity template parameter specializes this kernel for the 
+// non-nullable case for performance without writing another kernel.
+//
+// Note: `filter` is expected to return false if the index is out of bounds.
 template <typename T, typename Filter, 
           int block_size, int per_thread, bool has_validity>
 __launch_bounds__(block_size, 2048/block_size)
@@ -105,6 +107,9 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
   __shared__ bool temp_valids[has_validity ? block_size+warp_size : 1];
   __shared__ T    temp_data[block_size];
   
+  // Note that since the maximum gridDim.x on all supported GPUs is as big as
+  // gdf_size_type, this loop is sufficient to cover our maximum column size
+  // regardless of the value of block_size and per_thread.
   for (int i = 0; i < per_thread; i++) {
     bool mask_true = filter(tid);
 
@@ -355,7 +360,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
 
     // 4. Scatter the output data and valid mask
     for (int col = 0; col < input.num_columns(); col++) {
-      cudf::type_dispatcher(output.get_column(0)->dtype,
+      cudf::type_dispatcher(output.get_column(col)->dtype,
                             scatter_functor<Filter, block_size, per_thread>{},
                             *output.get_column(col), *input.get_column(col), 
                             block_offsets, filter, has_valid, stream);
@@ -373,7 +378,11 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
  * 
  * @p filter must be a functor or lambda with the following signature:
  * __device__ bool operator()(gdf_index_type i);
- * It return true if element i of @p input should be copied, false otherwise.
+ * It returns true if element i of @p input should be copied, false otherwise.
+ * 
+ * @note: filter must return false if its input i is out of bounds for any 
+ * memory accesses, therefore it is expected to know the bounds of any 
+ * arrays it uses internally.
  *
  * @tparam Filter the filter functor type
  * @param[in] input The column to filter-copy
