@@ -8,6 +8,7 @@
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 
 ## Improvements
+
 - PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
 
 - PR #1947 Cleanup serialization code
