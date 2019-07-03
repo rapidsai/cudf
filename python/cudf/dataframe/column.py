@@ -44,6 +44,7 @@ class Column(object):
     """
     @classmethod
     def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.columnops import as_column
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
@@ -83,10 +84,10 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(set(
-                [val for o in objs for val in o.cat().categories]
-            ))
-            objs = [o.cat()._set_categories(new_cats) for o in objs]
+            cats = [o.cat().categories for o in objs]
+            cats = [as_column(cats) for cats in cats]
+            cats = Column._concat(cats).unique()
+            objs = [o.cat()._set_categories(cats) for o in objs]
 
         head = objs[0]
         for obj in objs:

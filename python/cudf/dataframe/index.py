@@ -606,17 +606,19 @@ class CategoricalIndex(GenericIndex):
     """
 
     def __init__(self, values, name=None):
-        if isinstance(values, pd.Series) and \
+        if isinstance(values, CategoricalColumn):
+            values = values
+        elif isinstance(values, pd.Series) and \
                 pd.api.types.is_categorical_dtype(values.dtype):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
-                categories=values.cat.categories.tolist(),
+                categories=values.cat.categories,
                 ordered=values.cat.ordered
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             values = CategoricalColumn(
                 data=Buffer(values.codes),
-                categories=values.categories.tolist(),
+                categories=values.categories,
                 ordered=values.ordered
             )
         elif isinstance(values, (list, tuple)):

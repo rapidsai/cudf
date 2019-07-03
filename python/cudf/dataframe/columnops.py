@@ -363,7 +363,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
                 data=padata,
                 mask=pamask,
                 null_count=arbitrary.null_count,
-                categories=arbitrary.dictionary.to_pylist(),
+                categories=arbitrary.dictionary,
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
