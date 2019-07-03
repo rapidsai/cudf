@@ -250,4 +250,4 @@ def min_signed_type(x, min_size=8):
             if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
                 return int_dtype
     # resort to using `int64` and let numpy raise appropriate exception:
-    return np.int64(x)
+    return np.int64(x).dtype
