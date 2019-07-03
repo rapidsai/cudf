@@ -1163,19 +1163,26 @@ def test_csv_reader_aligned_byte_range(tmpdir):
     assert np.count_nonzero(df["zeros"]) == 0
 
 
-def test_csv_reader_hex_ints(tmpdir):
-    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF"]
+@pytest.mark.parametrize(
+    "pdf_dtype, gdf_dtype",
+    [(None, None), ("int", "hex"), ("int32", "hex32"), ("int64", "hex64")],
+)
+def test_csv_reader_hexadecimals(pdf_dtype, gdf_dtype):
+    lines = ["0x0", "-0x1000", "0xfedcba", "0xABCDEF", "0xaBcDeF", "9512c20b"]
     values = [int(hex_int, 16) for hex_int in lines]
 
     buffer = "\n".join(lines)
 
-    # with explicit data types
-    df = read_csv(StringIO(buffer), dtype=["int32"], names=["hex_int"])
-    np.testing.assert_array_equal(values, df["hex_int"])
-
-    # with data type inference
-    df = read_csv(StringIO(buffer), names=["hex_int"])
-    np.testing.assert_array_equal(values, df["hex_int"])
+    if gdf_dtype is not None:
+        # require explicit `hex` dtype to parse hexadecimals
+        pdf = pd.DataFrame(data=values, dtype=pdf_dtype, columns=["hex_int"])
+        gdf = read_csv(StringIO(buffer), dtype=[gdf_dtype], names=["hex_int"])
+        np.testing.assert_array_equal(pdf["hex_int"], gdf["hex_int"])
+    else:
+        # otherwise, dtype inference returns as object (string)
+        pdf = pd.read_csv(StringIO(buffer), names=["hex_int"])
+        gdf = read_csv(StringIO(buffer), names=["hex_int"])
+        assert_eq(pdf, gdf)
 
 
 @pytest.mark.parametrize("quoting", [0, 1, 2, 3])
