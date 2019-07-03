@@ -164,7 +164,7 @@ def test_csv_reader_dtype_list(use_list):
     df = make_numeric_dataframe(10, dtype=np.float32)
     buffer = df.to_csv(index=False, header=False)
 
-    # PANDAS doesn't list but cudf does (treated as implied ordered dict)
+    # PANDAS doesn't support list but cudf does (treated as ordered dict)
     # Select first column's dtype if non-list; expect the same dtype for all
     if use_list:
         dtypes = [df[k].dtype for k in df.columns]
