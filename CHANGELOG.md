@@ -10,10 +10,12 @@
 
 ## Improvements
 
+- PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
+- PR #2165 made changes to get_dummies api for it to be available in MethodCache
 
 ## Bug Fixes
 

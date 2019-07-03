@@ -57,8 +57,8 @@ def index(request):
 
 @pytest.fixture
 def ps_gs(data, index):
-    ps = pd.Series(data, index=index, dtype='str')
-    gs = Series(data, index=index, dtype='str')
+    ps = pd.Series(data, index=index, dtype='str', name='nice name')
+    gs = Series(data, index=index, dtype='str', name='nice name')
     return (ps, gs)
 
 
@@ -488,7 +488,16 @@ def test_string_lower(ps_gs):
     ps, gs = ps_gs
 
     expect = ps.str.lower()
-    got = ps.str.lower()
+    got = gs.str.lower()
+
+    assert_eq(expect, got)
+
+
+def test_string_upper(ps_gs):
+    ps, gs = ps_gs
+
+    expect = ps.str.upper()
+    got = gs.str.upper()
 
     assert_eq(expect, got)
 
@@ -886,8 +895,12 @@ def test_string_unique(item):
 
 def test_string_slice():
     df = DataFrame({'a': ['hello', 'world']})
-    a_slice = df.a.str.slice(0, 2)
-    assert isinstance(a_slice, Series)
+    pdf = pd.DataFrame({'a': ['hello', 'world']})
+    a_slice_got = df.a.str.slice(0, 2)
+    a_slice_expected = pdf.a.str.slice(0, 2)
+
+    assert isinstance(a_slice_got, Series)
+    assert_eq(a_slice_expected, a_slice_got)
 
 
 def test_string_equality():
@@ -924,3 +937,25 @@ def test_string_binary_op_add(lhs, rhs):
     gds = Series(lhs) + Series(rhs)
 
     assert_eq(pds, gds)
+
+
+@pytest.mark.parametrize(
+    'name',
+    [
+        None,
+        'new name',
+        123
+    ]
+)
+def test_string_misc_name(ps_gs, name):
+    ps, gs = ps_gs
+    ps.name = name
+    gs.name = name
+
+    expect = ps.str.slice(0, 1)
+    got = gs.str.slice(0, 1)
+
+    assert_eq(expect, got)
+    assert_eq(ps+ps, gs+gs)
+    assert_eq(ps+"RAPIDS", gs+"RAPIDS")
+    assert_eq("RAPIDS"+ps, "RAPIDS"+gs)

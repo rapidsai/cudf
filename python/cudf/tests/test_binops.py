@@ -606,3 +606,21 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     expect = getattr(pdf1, func)(pdf2, fill_value=fill_value)[list(got._cols)]
 
     utils.assert_eq(expect, got)
+
+
+def test_series_misc_binop():
+    pds = pd.Series([1, 2, 4], name='abc xyz')
+    gds = cudf.Series([1, 2, 4], name='abc xyz')
+
+    utils.assert_eq(pds+1, gds+1)
+    utils.assert_eq(1+pds, 1+gds)
+
+    utils.assert_eq(pds+pds, gds+gds)
+
+    pds1 = pd.Series([1, 2, 4], name='hello world')
+    gds1 = cudf.Series([1, 2, 4], name='hello world')
+
+    utils.assert_eq(pds+pds1, gds+gds1)
+    utils.assert_eq(pds1+pds, gds1+gds)
+
+    utils.assert_eq(pds1+pds+5, gds1+gds+5)

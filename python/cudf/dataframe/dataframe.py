@@ -1123,7 +1123,7 @@ class DataFrame(object):
             raise ValueError('Length of values does not match index length')
         return series
 
-    def _prepare_series_for_add(self, col, forceindex=False):
+    def _prepare_series_for_add(self, col, forceindex=False, name=None):
         """Prepare a series to be added to the DataFrame.
 
         Parameters
@@ -1138,7 +1138,9 @@ class DataFrame(object):
         # Check if the input is scalar before converting to a series
         # This won't handle 0 dimensional arrays which should be okay
         SCALAR = np.isscalar(col)
-        series = Series(col) if not SCALAR else col
+        if (not SCALAR) and (name is None) and hasattr(col, 'name'):
+            name = col.name
+        series = Series(col, name=name) if not SCALAR else col
         self._sanitize_columns(series)
         series = self._sanitize_values(series, SCALAR)
 
@@ -1170,7 +1172,9 @@ class DataFrame(object):
 
         if isinstance(data, GeneratorType):
             data = Series(data)
-        series = self._prepare_series_for_add(data, forceindex=forceindex)
+        series = self._prepare_series_for_add(data,
+                                              forceindex=forceindex,
+                                              name=name)
         series.name = name
         self._cols[name] = series
 
@@ -1667,6 +1671,42 @@ class DataFrame(object):
         """
         from cudf.reshape.general import melt
         return melt(self, **kwargs)
+
+    def get_dummies(self, **kwargs):
+        """ Returns a dataframe whose columns are the one hot encodings of all
+        columns in `df`
+
+        Parameters
+        ----------
+        df : cudf.DataFrame
+            dataframe to encode
+        prefix : str, dict, or sequence, optional
+            prefix to append. Either a str (to apply a constant prefix), dict
+            mapping column names to prefixes, or sequence of prefixes to apply
+            with the same length as the number of columns. If not supplied,
+            defaults to the empty string
+        prefix_sep : str, optional
+            separator to use when appending prefixes
+        dummy_na : boolean, optional
+            Right now this is NON-FUNCTIONAL argument in rapids.
+        cats : dict, optional
+            dictionary mapping column names to sequences of integers
+            representing that column's category.
+            See `cudf.DataFrame.one_hot_encoding` for more information.
+            if not supplied, it will be computed
+        sparse : boolean, optional
+            Right now this is NON-FUNCTIONAL argument in rapids.
+        drop_first : boolean, optional
+            Right now this is NON-FUNCTIONAL argument in rapids.
+        columns : sequence of str, optional
+            Names of columns to encode. If not provided, will attempt to encode
+            all columns. Note this is different from pandas default behavior,
+            which encodes all columns with dtype object or categorical
+        dtype : str, optional
+            output dtype, default 'float64'
+        """
+        from cudf.reshape import get_dummies
+        return get_dummies(self, **kwargs)
 
     def merge(self, right, on=None, how='inner', left_on=None, right_on=None,
               left_index=False, right_index=False, sort=False, lsuffix=None,
