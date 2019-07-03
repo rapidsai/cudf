@@ -89,6 +89,8 @@ class CategoricalAccessor(object):
         # Finally, recode the data buffer with the new codes
         codes = cudautils.recode(codes, old_to_new_codes_map, na_sentinel)
 
+        new_cats._name = None
+
         return self._parent.replace(data=Buffer(codes), categories=new_cats)
 
 
