@@ -2626,7 +2626,6 @@ class DataFrame(object):
                     for idx in range(len(vals.shape)):
                         df[colk+str(idx)] = Series(vals[idx],
                                                    nan_as_null=nan_as_null)
-        df.columns = dataframe.columns
         # Set index
         if isinstance(dataframe.index, pd.MultiIndex):
             import cudf
