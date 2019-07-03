@@ -26,7 +26,7 @@
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
 - PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
-- PR #XXXX Fix issue with isort reordering `importorskip` below imports depending on them
+- PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
 
 
 # cuDF 0.8.0 (27 June 2019)
