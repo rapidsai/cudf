@@ -32,14 +32,14 @@
 #include <bitmask/bit_mask.cuh>
 #include <cub/cub.cuh>
 
-using bit_mask::bit_mask_t;
+using bit_mask_t = bit_mask::bit_mask_t;
 
 namespace impl {
 
 constexpr int warp_size = 32;
 
-template<class CountType, int lane = 0>
-__device__ __inline__ void single_lane_reduce(CountType f, CountType* d_output){
+template<class BitType, class CountType, int lane = 0>
+__device__ __inline__ void single_lane_reduce(BitType f, CountType* d_output){
   
   static __shared__ gdf_size_type smem[warp_size];
   
@@ -48,7 +48,7 @@ __device__ __inline__ void single_lane_reduce(CountType f, CountType* d_output){
   
   // Assuming lane 0 of each warp holds the value that we want to perform reduction
   if(lane_id == lane){
-    smem[warp_id] = f;
+    smem[warp_id] = __popc(f);
   }
   __syncthreads();
   
@@ -97,24 +97,27 @@ __device__ __inline__ void gather_bitmask_device(
   if(0 == threadIdx.x % warp_size){
     destination_valid[valid_index] = valid_warp;
   }
-  single_lane_reduce(__popc(valid_warp), d_count);
+  single_lane_reduce(valid_warp, d_count);
 }
-
   
 template<bool check_bounds, int block_size>
 __launch_bounds__(block_size, 2048/block_size)
 __global__ void gather_bitmask_kernel(
-    const device_table source, 
-    const gdf_size_type gather_map[], 
-    device_table destination,
-    gdf_size_type* d_count)
+    const bit_mask_t* const * source_valid, 
+    gdf_size_type num_source_rows,
+    const gdf_index_type* gather_map, 
+    bit_mask_t** destination_valid,
+    gdf_size_type num_destination_rows,
+    gdf_size_type* d_count,
+    gdf_size_type num_columns
+)
 {
-  const gdf_index_type num_source_rows = source.num_rows();
-  const gdf_index_type num_destination_rows = destination.num_rows();
-  for(gdf_index_type i = 0; i < destination.num_columns(); i++){
+//  const gdf_index_type num_source_rows = source.num_rows();
+//  const gdf_index_type num_destination_rows = destination.num_rows();
+  for(gdf_index_type i = 0; i < num_columns; i++){
     // bitmask part  
     gdf_index_type destination_row_base = blockIdx.x * blockDim.x;
-
+/**
     // Before bit_mask_t is used in device_table we will do the cast here.
     // TODO: modify device_table to use bit_mask_t
     bit_mask_t* __restrict__ src_valid =
@@ -122,14 +125,14 @@ __global__ void gather_bitmask_kernel(
     bit_mask_t* __restrict__ dest_valid =
       reinterpret_cast<bit_mask_t*>(destination.get_column(i)->valid);
     // Gather the bitmasks and do the null count 
-
+*/
     while(destination_row_base < num_destination_rows){
         gdf_index_type destination_row = destination_row_base + threadIdx.x;
         const bool active_threads = destination_row < num_destination_rows;
         gdf_index_type source_row = active_threads ? gather_map[destination_row] : 0;
         
-        gather_bitmask_device<check_bounds>(src_valid, source_row, num_source_rows,
-          dest_valid, destination_row, num_destination_rows, d_count + i);
+        gather_bitmask_device<check_bounds>(source_valid[i], source_row, num_source_rows,
+          destination_valid[i], destination_row, num_destination_rows, d_count + i);
       
         destination_row_base += blockDim.x * gridDim.x; 
     }
@@ -214,10 +217,20 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  
   // We create (n_cols+1) streams for the (n_cols+1) kernels we are gonna launch.
   // std::vector<util::cuda::scoped_stream> v_stream(n_cols+1);
-  std::vector<cudaStream_t> v_stream(2, nullptr);
-  for(int i = 0; i < 2; i++){
+  std::vector<cudaStream_t> v_stream(n_cols+1, nullptr);
+  for(int i = 0; i < n_cols+1; i++){
     CUDA_TRY(cudaStreamCreate(&v_stream[i]));
   }
+  
+  cudaStream_t bit_stream = v_stream[n_cols];
+  
+  // Allocate memory for bitmask reduction
+  gdf_size_type* d_count_p;
+  RMM_TRY(RMM_ALLOC(&d_count_p, sizeof(gdf_size_type)*n_cols, bit_stream));
+  CUDA_TRY(cudaMemsetAsync(d_count_p, 0, sizeof(gdf_size_type)*n_cols, bit_stream));
+ 
+  std::vector<bit_mask_t*> h_bit_src(n_cols);
+  std::vector<bit_mask_t*> h_bit_dest(n_cols);
 
   // Perform sanity checks
   for(gdf_size_type i = 0; i < n_cols; i++){
@@ -247,75 +260,53 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
     // The data gather for n columns will be put on the first n streams
     
     // Somehow putting the following on to one or multiple non-default streams significantly deceases the L2 hit rate.
-    // cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds, v_stream[0]);
-    // cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds);
-  }
-/**  
-  for(int i = 0; i < n_cols; i++){
-    gdf_column* dest_col = destination_table->get_column(i);
-    const gdf_column* src_col = source_table->get_column(i);
+    // cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds, v_stream[i]);
     cudf::type_dispatcher(src_col->dtype, impl::column_gatherer{}, src_col, gather_map, dest_col, check_bounds);
-  }*/
-/**  
-  auto gather_column = [gather_map, check_bounds, v_stream, source_table](
-                           const gdf_column * const source, gdf_column* destination) {
-    // TODO: Each column could be gathered on a separate stream
-    cudf::type_dispatcher(source->dtype, impl::column_gatherer{}, source, gather_map,
-                          destination, check_bounds, v_stream[std::distance(source_table->begin(), &source)]);
+    
+    h_bit_src[i] = reinterpret_cast<bit_mask_t*>(src_col->valid);
+    h_bit_dest[i] = reinterpret_cast<bit_mask_t*>(dest_col->valid);
+  }
 
-    return destination;
-  };
+  rmm::device_vector<bit_mask_t*> d_bit_src(n_cols);
+  rmm::device_vector<bit_mask_t*> d_bit_dest(n_cols);
 
-  // Gather columns one-by-one
-  std::transform(source_table->begin(), source_table->end(),
-                 destination_table->begin(), destination_table->begin(),
-                 gather_column);
-*/
+  CUDA_TRY(cudaMemcpyAsync(d_bit_src.data().get(), h_bit_src.data(), n_cols*sizeof(bit_mask_t*), cudaMemcpyHostToDevice, bit_stream));
+  CUDA_TRY(cudaMemcpyAsync(d_bit_dest.data().get(), h_bit_dest.data(), n_cols*sizeof(bit_mask_t*), cudaMemcpyHostToDevice, bit_stream));
+
   // If the source column has a valid buffer, the destination column must also have one
   CUDF_EXPECTS((src_has_nulls && dest_has_nulls) || (!src_has_nulls),
     "Missing destination validity buffer");
-  
-  // The bitmask part will be put on the n_cols+1'th stream 
-  // Allocate the device_table to be passed into the kernel
-  auto d_source_table = device_table::create(*source_table, v_stream[1]);
-  auto d_destination_table = device_table::create(*destination_table, v_stream[1]);
-  
-  // Allocate memory for bitmask reduction
-  gdf_size_type* d_count_p;
-  RMM_TRY(RMM_ALLOC(&d_count_p, sizeof(gdf_size_type)*n_cols, v_stream[1]));
-  CUDA_TRY(cudaMemsetAsync(d_count_p, 0, sizeof(gdf_size_type)*n_cols, v_stream[1]));
 
   // constexpr gdf_size_type gather_grid_size = 64/(block_size/impl::warp_size)*80;
-  int gather_grid_size = grid_size;
-  // cudaOccupancyMaxActiveBlocksPerMultiprocessor(&gather_grid_size, impl::gather_kernel_sparse<false, true , block_size>, block_size, 0);
-  // printf("grid_size = %d, block_size = %d\n", gather_grid_size, block_size);
+  int gather_grid_size;
+  cudaOccupancyMaxActiveBlocksPerMultiprocessor(&gather_grid_size, impl::gather_bitmask_kernel<false, block_size>, block_size, 0);
+  gather_grid_size /= 2;
 
   if (check_bounds) {
     if(dest_has_nulls){
-//      impl::gather_kernel_sparse<true , true , block_size><<<gather_grid_size, block_size, 0, stream>>>(
-//          *d_source_table, d_vp_src_valid, gather_map, *d_destination_table, d_vp_src_valid, d_count_p);
+      // impl::gather_bitmask_kernel<true , block_size><<<gather_grid_size, block_size, 0, bit_stream>>>(
+      //   *d_source_table, gather_map, *d_destination_table, d_count_p);
     }
   }else{
     if(dest_has_nulls){
-        impl::gather_bitmask_kernel<false, block_size><<<gather_grid_size, block_size, 0, v_stream[1]>>>(
-          *d_source_table, gather_map, *d_destination_table, d_count_p);
+      impl::gather_bitmask_kernel<false, block_size><<<gather_grid_size, block_size, 0, bit_stream>>>(
+        d_bit_src.data().get(), source_table->num_rows(), gather_map, d_bit_dest.data().get(), destination_table->num_rows(), d_count_p, n_cols);
     }
   }
   
   std::vector<gdf_size_type> h_count(n_cols);
-  CUDA_TRY(cudaMemcpyAsync(h_count.data(), d_count_p, sizeof(gdf_size_type)*n_cols, cudaMemcpyDeviceToHost, v_stream[1]));
-  RMM_TRY(RMM_FREE(d_count_p, v_stream[1]));
-  // CUDA_TRY(cudaStreamSynchronize(v_stream[1]));
+  CUDA_TRY(cudaMemcpyAsync(h_count.data(), d_count_p, sizeof(gdf_size_type)*n_cols, cudaMemcpyDeviceToHost, bit_stream));
+  RMM_TRY(RMM_FREE(d_count_p, bit_stream));
+  CUDA_TRY(cudaStreamSynchronize(bit_stream));
   if(dest_has_nulls){  
     for(gdf_size_type i = 0; i < destination_table->num_columns(); i++){
       destination_table->get_column(i)->null_count = destination_table->get_column(i)->size - h_count[i];
     }
   }
 
-  for(int t = 0; t < 2; t++){
-    // CHECK_STREAM(v_stream[t]);
-    // CUDA_TRY(cudaStreamSynchronize(v_stream[t]));
-    // cudaStreamSynchronize(v_stream[t]);
+  for(int t = 0; t < n_cols+1; t++){
+    CHECK_STREAM(v_stream[t]);
+    CUDA_TRY(cudaStreamSynchronize(v_stream[t]));
     CUDA_TRY(cudaStreamDestroy(v_stream[t]));
   }
 }
