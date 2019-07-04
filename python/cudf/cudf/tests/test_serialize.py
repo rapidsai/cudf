@@ -7,14 +7,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from distributed.protocol import deserialize, serialize
-
 import cudf
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
 
-pytest.importorskip("dask.distributed")
-pytest.importorskip("distributed.protocol")
+deserialize = pytest.importorskip("distributed.protocol").deserialize
+serialize = pytest.importorskip("distributed.protocol").serialize
 
 
 cuda_serialize = functools.partial(serialize, serializers=["cuda"])
