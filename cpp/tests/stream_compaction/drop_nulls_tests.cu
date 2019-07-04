@@ -147,7 +147,6 @@ struct DropNullsTableTest : GdfTest {};
  * Runs drop_nulls checking for errors, and compares the result column 
  * to the specified expected result column.
  */
-template <typename T>
 void DropNullsTable(cudf::table const &source,
                     cudf::table const &expected)
 {
@@ -172,3 +171,148 @@ void DropNullsTable(cudf::table const &source,
   }
   result.destroy();
 }
+
+TEST_F(DropNullsTableTest, Identity)
+{
+  cudf::test::column_wrapper<int32_t> int_column(
+      column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<float> float_column(
+      column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(
+      column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return true; });
+    
+  std::vector<gdf_column*> cols;
+  cols.push_back(int_column.get());
+  cols.push_back(float_column.get());
+  cols.push_back(bool_column.get());
+  cudf::table table_source(cols);
+  cudf::table table_expected(cols);
+
+  DropNullsTable(table_source, table_expected);
+}
+
+TEST_F(DropNullsTableTest, AllNull)
+{
+  cudf::test::column_wrapper<int32_t> int_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return false; });
+  cudf::test::column_wrapper<float> float_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return false; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return false; });
+    
+  std::vector<gdf_column*> cols;
+  cols.push_back(int_column.get());
+  cols.push_back(float_column.get());
+  cols.push_back(bool_column.get());
+  cudf::table table_source(cols);
+  cudf::table table_expected(0, column_dtypes(table_source), true, false);
+
+  CHECK_STREAM(0);
+
+  DropNullsTable(table_source, table_expected);
+}
+
+TEST_F(DropNullsTableTest, EvensNull)
+{
+  cudf::test::column_wrapper<int32_t> int_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<float> float_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return row % 2 != 0; });
+
+  std::vector<gdf_column*> cols;
+  cols.push_back(int_column.get());
+  cols.push_back(float_column.get());
+  cols.push_back(bool_column.get());
+  cudf::table table_source(cols);
+
+  cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<float> float_expected(column_size / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
+      [](gdf_index_type row) { return cudf::bool8{true};  },
+      [](gdf_index_type row) { return true; });
+  
+  std::vector<gdf_column*> cols_expected;
+  cols_expected.push_back(int_expected.get());
+  cols_expected.push_back(float_expected.get());
+  cols_expected.push_back(bool_expected.get());
+  cudf::table table_expected(cols_expected);
+
+  DropNullsTable(table_source, table_expected);
+}
+
+TEST_F(DropNullsTableTest, NonalignedGap)
+{
+  const int start{1}, end{column_size / 4};
+
+  cudf::test::column_wrapper<int32_t> int_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return (row < start) || (row >= end); });
+  cudf::test::column_wrapper<float> float_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return (row < start) || (row >= end); });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return (row < start) || (row >= end); });
+
+  std::vector<gdf_column*> cols;
+  cols.push_back(int_column.get());
+  cols.push_back(float_column.get());
+  cols.push_back(bool_column.get());
+  cudf::table table_source(cols);
+
+  cudf::test::column_wrapper<int32_t> int_expected(column_size - (end - start),
+      [](gdf_index_type row) { return (row < start) ? row : row + end - start; },
+      [&](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<float> float_expected(column_size - (end - start),
+      [](gdf_index_type row) { return (row < start) ? row : row + end - start; },
+      [&](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size - (end - start),
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [&](gdf_index_type row) { return true; });
+  
+  std::vector<gdf_column*> cols_expected;
+  cols_expected.push_back(int_expected.get());
+  cols_expected.push_back(float_expected.get());
+  cols_expected.push_back(bool_expected.get());
+  cudf::table table_expected(cols_expected);
+
+  DropNullsTable(table_source, table_expected);
+}
+
+TEST_F(DropNullsTableTest, NoNullMask)
+{
+  cudf::test::column_wrapper<int32_t> int_column(column_size,
+      [](gdf_index_type row) { return row; }, false);
+  cudf::test::column_wrapper<float> float_column(column_size,
+      [](gdf_index_type row) { return row; }, false);
+  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; }, false);
+
+  std::vector<gdf_column*> cols;
+  cols.push_back(int_column.get());
+  cols.push_back(float_column.get());
+  cols.push_back(bool_column.get());
+  cudf::table table_source(cols);
+  cudf::table table_expected(cols);
+
+  DropNullsTable(table_source, table_expected);
+}
+

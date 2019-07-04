@@ -319,6 +319,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   cudf::util::cuda::grid_config_1d grid{input.num_rows(), block_size, per_thread};
 
   // allocate temp storage for block counts and offsets
+  // TODO: use an uninitialized buffer to avoid the initialization kernel
   rmm::device_vector<gdf_size_type> temp_counts(2 * grid.num_blocks);
   gdf_size_type *block_counts = thrust::raw_pointer_cast(temp_counts.data());
   gdf_size_type *block_offsets = block_counts + grid.num_blocks;
