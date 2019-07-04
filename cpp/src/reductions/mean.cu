@@ -20,7 +20,7 @@
 
 void cudf::reduction::mean(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
-    using dispacher = cudf::reduction::detail::compound_reduction_element_type_dispatcher<cudf::reduction::op::mean>;
+    using dispacher = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
     cudf::type_dispatcher(col.dtype, dispacher(), col, scalar,  /* ddof is not used for mean*/ 1, stream);
 }
 

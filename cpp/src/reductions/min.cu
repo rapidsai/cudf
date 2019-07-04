@@ -20,7 +20,7 @@
 
 void cudf::reduction::min(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
 {
-    using dispacher = cudf::reduction::detail::simple_reduction_element_type_dispatcher<cudf::reduction::op::min>;
+    using dispacher = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::min>;
     cudf::type_dispatcher(col.dtype, dispacher(), col, scalar, stream);
 }
 

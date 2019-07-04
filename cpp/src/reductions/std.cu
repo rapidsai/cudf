@@ -24,7 +24,7 @@
 
 void cudf::reduction::standard_deviation(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
 {
-    using dispacher = cudf::reduction::detail::compound_reduction_element_type_dispatcher<cudf::reduction::op::standard_deviation>;
+    using dispacher = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
     cudf::type_dispatcher(col.dtype, dispacher(), col, scalar, ddof, stream);
 }
 

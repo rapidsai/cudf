@@ -21,7 +21,7 @@
 
 namespace cudf {
 namespace reduction {
-namespace detail {
+namespace compound {
 
 /** --------------------------------------------------------------------------*
  * @brief Reduction for mean, var, std
@@ -61,7 +61,7 @@ void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
 
     // reduction by iterator
     auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);
-    reduce(static_cast<IntermediateType*>(dev_result), it, col.size, intermediate,
+    cudf::reduction::detail::reduce(static_cast<IntermediateType*>(dev_result), it, col.size, intermediate,
         typename Op::Op{}, stream);
 
     // read back the dev_result to host memory
@@ -80,9 +80,10 @@ void compound_reduction(gdf_column const& col, gdf_scalar& scalar,
     scalar.is_valid = true;
 };
 
+
 // @brief result type dispatcher for compound reduction (a.k.a. mean, var, std)
 template <typename ElementType, typename Op>
-struct compound_reduction_result_type_dispatcher {
+struct result_type_dispatcher {
 private:
     template <typename ResultType>
     static constexpr bool is_supported_v()
@@ -112,7 +113,7 @@ public:
 
 // @brief input column element dispatcher for compound reduction (a.k.a. mean, var, std)
 template <typename Op>
-struct compound_reduction_element_type_dispatcher {
+struct element_type_dispatcher {
 private:
     // return true if ElementType is arithmetic type or cudf::bool8
     template <typename ElementType>
@@ -127,7 +128,7 @@ public:
     void operator()(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
     {
         cudf::type_dispatcher(scalar.dtype,
-            compound_reduction_result_type_dispatcher<ElementType, Op>(), col, scalar, ddof, stream);
+            result_type_dispatcher<ElementType, Op>(), col, scalar, ddof, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
@@ -138,7 +139,7 @@ public:
     }
 };
 
-} // namespace detail
+} // namespace compound
 } // namespace reduction
 } // namespace cudf
 #endif

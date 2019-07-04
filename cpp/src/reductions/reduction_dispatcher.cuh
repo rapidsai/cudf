@@ -21,7 +21,7 @@
 
 namespace cudf {
 namespace reduction {
-namespace detail {
+namespace simple {
 
 /** --------------------------------------------------------------------------*    
  * @brief Reduction for 'sum', 'product', 'min', 'max', 'sum of squares'
@@ -42,7 +42,7 @@ void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t st
     ResultType identity = Op::Op::template identity<ResultType>();
 
     //  allocate temporary memory for the result
-    void *result = NULL;
+    ResultType *result = NULL;
     RMM_TRY(RMM_ALLOC(&result, sizeof(ResultType), stream));
 
     // initialize output by identity value
@@ -52,7 +52,7 @@ void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t st
 
     // reduction by iterator
     auto it = Op::template make_iterator<has_nulls, ElementType, ResultType>(col);
-    reduce(static_cast<ResultType*>(result), it, col.size, identity,
+    cudf::reduction::detail::reduce(result, it, col.size, identity,
         typename Op::Op{}, stream);
 
     // read back the result to host memory
@@ -69,7 +69,7 @@ void simple_reduction(gdf_column const& col, gdf_scalar& scalar, cudaStream_t st
 
 // @brief result type dispatcher for simple reduction (a.k.a. sum, prod, min...)
 template <typename ElementType, typename Op>
-struct simple_reduction_result_type_dispatcher {
+struct result_type_dispatcher {
 private:
     template <typename ResultType>
     static constexpr bool is_supported_v()
@@ -89,9 +89,9 @@ public:
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         if( cudf::has_nulls(col) ){
-            simple_reduction<ElementType, ResultType, Op, true >(col, scalar, stream);
+          simple_reduction<ElementType, ResultType, Op, true >(col, scalar, stream);
         }else{
-            simple_reduction<ElementType, ResultType, Op, false>(col, scalar, stream);
+          simple_reduction<ElementType, ResultType, Op, false>(col, scalar, stream);
         }
     }
 
@@ -104,7 +104,7 @@ public:
 
 // @brief input column element for simple reduction (a.k.a. sum, prod, min...)
 template <typename Op>
-struct simple_reduction_element_type_dispatcher {
+struct element_type_dispatcher {
 private:
     // return true if ElementType is arithmetic type or bool8, or
     // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
@@ -122,7 +122,7 @@ public:
     void operator()(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
     {
         cudf::type_dispatcher(scalar.dtype,
-            simple_reduction_result_type_dispatcher<ElementType, Op>(), col, scalar, stream);
+            result_type_dispatcher<ElementType, Op>(), col, scalar, stream);
     }
 
     template <typename ElementType, std::enable_if_t<not is_supported_v<ElementType>()>* = nullptr>
@@ -133,7 +133,7 @@ public:
     }
 };
 
-} // namespace detail
+} // namespace simple
 } // namespace reduction
 } // namespace cudf
 #endif
