@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
+#include "cudf.h"
 
 
 namespace cudf {
