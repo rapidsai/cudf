@@ -618,18 +618,30 @@ table reader::Impl::read()
     }
   }
   else {
-    const bool is_dict = std::all_of(args_.dtype.begin(), args_.dtype.end(),
-                                     [](const auto& s) { return s.find(':') != std::string::npos; });
+    const bool is_dict = std::all_of(
+        args_.dtype.begin(), args_.dtype.end(),
+        [](const auto &s) { return s.find(':') != std::string::npos; });
+
     if (!is_dict) {
-      CUDF_EXPECTS(static_cast<int>(args_.dtype.size()) >= num_actual_cols,
-                   "Must specify data types for all columns");
-      for (int col = 0; col < num_actual_cols; col++) {
-        if (h_column_flags[col] & column_parse::enabled) {
-          // dtype is an array of types, assign types to active columns in the given order
-          const auto dtype_info = get_dtype_info(args_.dtype[col]);
-          dtypes.push_back(dtype_info.first);
+      if (args_.dtype.size() == 1) {
+        // If it's a single dtype, assign that dtype to all active columns
+        const auto dtype_info = get_dtype_info(args_.dtype[0]);
+        dtypes.resize(num_active_cols, dtype_info.first);
+        for (int col = 0; col < num_actual_cols; col++) {
           h_column_flags[col] |= dtype_info.second;
-          CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
+        }
+        CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
+      } else {
+        // If it's a list, assign dtypes to active columns in the given order
+        CUDF_EXPECTS(static_cast<int>(args_.dtype.size()) >= num_actual_cols,
+                     "Must specify data types for all columns");
+        for (int col = 0; col < num_actual_cols; col++) {
+          if (h_column_flags[col] & column_parse::enabled) {
+            const auto dtype_info = get_dtype_info(args_.dtype[col]);
+            dtypes.push_back(dtype_info.first);
+            h_column_flags[col] |= dtype_info.second;
+            CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
+          }
         }
       }
     } else {

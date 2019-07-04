@@ -116,8 +116,7 @@ cpdef cpp_read_csv(
             for col_dtype in dtype:
                 args.dtype.push_back(str(col_dtype).encode())
         else:
-            msg = '''dtype must be 'list like' or 'dict' '''
-            raise TypeError(msg)
+            args.dtype.push_back(str(dtype).encode())
 
     if usecols is not None:
         all_int = True

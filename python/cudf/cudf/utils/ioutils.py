@@ -567,9 +567,12 @@ skipinitialspace : bool, default False
     Skip spaces after delimiter.
 names : list of str, default None
     List of column names to be used.
-dtype : list of str or dict of {col: dtype}, default None
-    List of data types in the same order of the column names
-    or a dictionary with column_name:dtype (pandas style).
+dtype : type, list of types, or dict of column -> type, default None
+    Data type(s) for data or columns. If list, types are applied in the same
+    order as the column names. If dict, types are mapped to the column names.
+    E.g. {‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}
+    If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
+    and not infer or interpret to dtype.
 quotechar : char, default '"'
     Character to indicate start and end of quote item.
 quoting : str or int, default 0
