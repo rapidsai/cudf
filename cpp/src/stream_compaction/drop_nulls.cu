@@ -49,23 +49,35 @@ struct valid_column_filter
 // pointer on the host side, which we can't do with a lambda.
 struct valid_table_filter
 {
-  valid_table_filter(cudf::table const & table, bit_mask_t **masks) :
-    num_rows(table.num_rows()), num_columns(table.num_columns()), d_masks(masks) {}
+  valid_table_filter(cudf::table const & table,
+                     bit_mask_t **masks,
+                     cudf::any_or_all drop_if) 
+  : num_rows(table.num_rows()),
+    num_columns(table.num_columns()),
+    d_masks(masks),
+    drop_if(drop_if) {}
 
   __device__ inline 
   bool operator()(gdf_index_type i)
   {
     if (i < num_rows) {
-      bool valid = true;
+      
       int c = 0;
-      while (valid && c < num_columns) {
-        valid = valid and bit_mask::is_valid(d_masks[c++], i);
+      if (drop_if == cudf::ALL) {
+        while (c < num_columns)
+          if (bit_mask::is_valid(d_masks[c++], i)) return true;
+        return false;
       }
-      return valid;
+      else { // drop_if == cudf::ANY => all columns must be valid
+        while (c < num_columns)
+          if (not bit_mask::is_valid(d_masks[c++], i)) return false;
+        return true;
+      }
     }
     return false;
   }
 
+  cudf::any_or_all drop_if;
   gdf_size_type num_rows;
   gdf_size_type num_columns;
   bit_mask_t **d_masks;
@@ -90,9 +102,12 @@ bit_mask_t** get_bitmasks(cudf::table const &table,
   return d_masks;
 }
 
-valid_table_filter make_valid_table_filter(cudf::table const &table, cudaStream_t stream=0)
+valid_table_filter make_valid_table_filter(cudf::table const &table, 
+                                           cudf::any_or_all drop_if,
+                                           cudaStream_t stream=0)
 {
-  return valid_table_filter(table, get_bitmasks(table, stream));
+  return valid_table_filter(table, get_bitmasks(table, stream),
+                            drop_if);
 }
 
 void destroy_valid_table_filter(valid_table_filter const& filter,
@@ -117,9 +132,10 @@ gdf_column drop_nulls(gdf_column const &input) {
 /*
  * Filters a table to remove null elements.
  */
-table drop_nulls(table const &input) {
+table drop_nulls(table const &input, any_or_all drop_if) {
   if (cudf::has_nulls(input)) {
-    valid_table_filter filter = make_valid_table_filter(input);
+    valid_table_filter filter =
+      make_valid_table_filter(input, drop_if);
     table result = detail::copy_if(input, filter);
     destroy_valid_table_filter(filter);
     return result;

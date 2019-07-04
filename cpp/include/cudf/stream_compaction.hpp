@@ -104,6 +104,12 @@ table apply_boolean_mask(table const &input,
  */
 gdf_column drop_nulls(gdf_column const &input);
 
+
+enum any_or_all {
+  ANY = 0,
+  ALL
+};
+
 /**
  * @brief Filters a table to remove null elements.
  *
@@ -121,9 +127,11 @@ gdf_column drop_nulls(gdf_column const &input);
  * is returned
  *
  * @param[in] input The input table to filter
+ * @param[in] drop_if If ANY, drop rows that have a null in any column.
+ *                    If ALL, drop rows that have a null in all columns.
  * @return cudf::table Table containing all non-null rows of the input table
  */
-table drop_nulls(table const &input);
+table drop_nulls(table const &input, any_or_all drop_if);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows

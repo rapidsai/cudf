@@ -148,15 +148,16 @@ struct DropNullsTableTest : GdfTest {};
  * to the specified expected result column.
  */
 void DropNullsTable(cudf::table const &source,
-                    cudf::table const &expected)
+                    cudf::table const &expected,
+                    cudf::any_or_all drop_if = cudf::ANY)
 {
   cudf::table result;
-  EXPECT_NO_THROW(result = cudf::drop_nulls(source));
+  EXPECT_NO_THROW(result = cudf::drop_nulls(source, drop_if));
 
   for (int c = 0; c < result.num_columns(); c++) {
     gdf_column *res = result.get_column(c);
     gdf_column const *exp = expected.get_column(c);
-    EXPECT_EQ(res->null_count, 0);
+    EXPECT_EQ(res->null_count, exp->null_count);
     bool columns_equal{false};
     EXPECT_TRUE(columns_equal = gdf_equal_columns(*res, *exp));
 
@@ -216,8 +217,6 @@ TEST_F(DropNullsTableTest, AllNull)
   cudf::table table_source(cols);
   cudf::table table_expected(0, column_dtypes(table_source), true, false);
 
-  CHECK_STREAM(0);
-
   DropNullsTable(table_source, table_expected);
 }
 
@@ -256,6 +255,47 @@ TEST_F(DropNullsTableTest, EvensNull)
   cudf::table table_expected(cols_expected);
 
   DropNullsTable(table_source, table_expected);
+}
+
+TEST_F(DropNullsTableTest, OneColumnEvensNull)
+{
+  cudf::test::column_wrapper<int32_t> int_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<float> float_column(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return row % 2 != 0; });
+  cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
+      [](gdf_index_type row) { return cudf::bool8{true}; },
+      [](gdf_index_type row) { return true; });
+
+  std::vector<gdf_column*> cols;
+  cols.push_back(int_column.get());
+  cols.push_back(float_column.get());
+  cols.push_back(bool_column.get());
+  cudf::table table_source(cols);
+
+  cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<float> float_expected(column_size / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
+      [](gdf_index_type row) { return cudf::bool8{true};  },
+      [](gdf_index_type row) { return true; });
+  
+  std::vector<gdf_column*> cols_expected;
+  cols_expected.push_back(int_expected.get());
+  cols_expected.push_back(float_expected.get());
+  cols_expected.push_back(bool_expected.get());
+  cudf::table table_expected(cols_expected);
+
+  DropNullsTable(table_source, table_expected, cudf::ANY);
+
+  // nothing dropped if cudf::ALL is used for drop criteria since all columns
+  // must be NULL to drop a row.
+  DropNullsTable(table_source, table_source, cudf::ALL);
 }
 
 TEST_F(DropNullsTableTest, NonalignedGap)
