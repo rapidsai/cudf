@@ -62,7 +62,7 @@ def make_numpy_mixed_dataframe():
     return df
 
 
-def make_all_numeric_dtypes_dataframe():
+def make_all_numeric_dataframe():
     df = pd.DataFrame()
 
     gdf_dtypes = [
@@ -205,43 +205,36 @@ def test_csv_reader_mixed_data_delimiter_sep(tmpdir, pandas_arg, cudf_arg):
     assert_eq(gdf1, gdf2)
 
 
-def test_csv_reader_dict_dtypes_no_names(tmpdir):
+@pytest.mark.parametrize("use_list", [False, True])
+def test_csv_reader_dtype_list(use_list):
+    df = make_numeric_dataframe(10, dtype=np.float32)
+    buffer = df.to_csv(index=False, header=False)
 
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
-    df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
+    # PANDAS doesn't list but cudf does (treated as implied ordered dict)
+    # Select first column's dtype if non-list; expect the same dtype for all
+    if use_list:
+        dtypes = [df[k].dtype for k in df.columns]
+    else:
+        dtypes = df[df.columns[0]].dtype
 
-    # need to save the file along with the column header
-    # in order to infer from dict_dtypes
-    df.to_csv(fname, sep=",", index=False, header=True)
+    gdf = read_csv(StringIO(buffer), dtype=dtypes, names=df.columns)
 
-    out = read_csv(str(fname), delimiter=",", dtype=gdf_dict)
-    df_out = pd.read_csv(fname, delimiter=",", dtype=pd_dict, dayfirst=True)
-
-    assert len(out.columns) == len(df_out.columns)
-    assert_eq(df_out, out)
+    assert_eq(gdf, df)
 
 
-def test_csv_reader_all_numeric_dtypes(tmpdir):
+@pytest.mark.parametrize("use_names", [False, True])
+def test_csv_reader_dtype_dict(use_names):
+    # Save with the column header if not explicitly specifying a list of names
+    df, gdf_dtypes, pdf_dtypes = make_all_numeric_dataframe()
+    buffer = df.to_csv(index=False, header=(not use_names))
 
-    # fname = os.path.abspath('cudf/tests/data/tmp_csvreader_file4.csv')
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file4.csv")
+    gdf_names = list(gdf_dtypes.keys()) if use_names else None
+    pdf_names = list(pdf_dtypes.keys()) if use_names else None
 
-    df, gdf_dict, pd_dict = make_all_numeric_dtypes_dataframe()
-    df.to_csv(fname, sep=",", index=False, header=False)
+    gdf = read_csv(StringIO(buffer), dtype=gdf_dtypes, names=gdf_names)
+    pdf = pd.read_csv(StringIO(buffer), dtype=pdf_dtypes, names=pdf_names)
 
-    out = read_csv(
-        str(fname), delimiter=",", names=list(gdf_dict.keys()), dtype=gdf_dict
-    )
-    df_out = pd.read_csv(
-        fname,
-        delimiter=",",
-        names=list(pd_dict.keys()),
-        dtype=pd_dict,
-        dayfirst=True,
-    )
-
-    assert len(out.columns) == len(df_out.columns)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(gdf, pdf)
 
 
 def test_csv_reader_skiprows_skipfooter(tmpdir):
