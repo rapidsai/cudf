@@ -5,10 +5,9 @@ import itertools
 
 import cudf
 from cudf import MultiIndex
-from cudf.utils.utils import is_single_value
-
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
+from cudf.utils.utils import is_single_value
 
 
 def columns_from_dataframe(df):
