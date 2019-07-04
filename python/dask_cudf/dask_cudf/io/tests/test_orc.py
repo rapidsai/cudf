@@ -1,12 +1,10 @@
 import os
 
-import pytest
-
+import dask_cudf
 import dask.dataframe as dd
-
 import cudf
 
-import dask_cudf
+import pytest
 
 # import pyarrow.orc as orc
 
@@ -17,6 +15,14 @@ sample_orc = os.path.join(cur_dir, "sample.orc")
 def test_read_orc_defaults():
     df1 = cudf.read_orc(sample_orc)
     df2 = dask_cudf.read_orc(sample_orc)
+    df2.head().to_pandas()
+    dd.assert_eq(df1, df2, check_index=False)
+
+
+def test_filepath_read_orc_defaults():
+    path = "file://%s" % sample_orc
+    df1 = cudf.read_orc(path)
+    df2 = dask_cudf.read_orc(path)
     df2.head().to_pandas()
     dd.assert_eq(df1, df2, check_index=False)
 
