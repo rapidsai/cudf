@@ -22,29 +22,76 @@
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief Find indices in sorted column where values should be inserted to
- *  maintain order
+ * @brief Find smallest indices in sorted column where values should be 
+ *  inserted to maintain order
  * 
  * @note The @p column is required to be sorted in ascending order otherwise
  *  the behaviour is undefined
  * 
  * @param column        Column to search in. Must be sorted in ascending order
  * @param values        Values to search insert locations for
- * @param find_first    If true, for each value, the index of the first suitable
- *  insert location is produced. If false, the *last* such index is produced
+ * @param nulls_as_largest If true, nulls are considered larger than valid
+ *  values, otherwise, nulls are considered smaller than valid values
  * 
  * @return gdf_column   Insertion points with the same shape as values
  *---------------------------------------------------------------------------**/
-gdf_column search_ordered(gdf_column const& column,
-                          gdf_column const& values,
-                          bool find_first = true,
-                          bool nulls_as_largest = true);
+gdf_column lower_bound(gdf_column const& column,
+                       gdf_column const& values,
+                       bool nulls_as_largest = true);
 
-// TODO: docs but after finalizing what all it can do
-gdf_column search_ordered(table const& t,
-                          table const& values,
-                          bool find_first = true,
-                          bool nulls_as_largest = true);
+/**---------------------------------------------------------------------------*
+ * @brief Find largest indices in sorted column where values should be 
+ *  inserted to maintain order
+ * 
+ * @note The @p column is required to be sorted in ascending order otherwise
+ *  the behaviour is undefined
+ * 
+ * @param column        Column to search in. Must be sorted in ascending order
+ * @param values        Values to search insert locations for
+ * @param nulls_as_largest If true, nulls are considered larger than valid
+ *  values, otherwise, nulls are considered smaller than valid values
+ * 
+ * @return gdf_column   Insertion points with the same shape as values
+ *---------------------------------------------------------------------------**/
+gdf_column upper_bound(gdf_column const& column,
+                       gdf_column const& values,
+                       bool nulls_as_largest = true);
+
+/**---------------------------------------------------------------------------*
+ * @brief Find smallest indices in sorted table where values should be 
+ *  inserted to maintain order
+ * 
+ * @note The table @p t is required to be sorted in ascending order otherwise
+ *  the behaviour is undefined
+ * 
+ * @param t             Table to search in. Must be sorted in ascending order
+ * @param values        Values to search insert locations for
+ * @param nulls_as_largest If true, nulls are considered larger than valid
+ *  values, otherwise, nulls are considered smaller than valid values
+ * 
+ * @return gdf_column   Insertion points with the same shape as values
+ *---------------------------------------------------------------------------**/
+gdf_column lower_bound(table const& t,
+                       table const& values,
+                       bool nulls_as_largest = true);
+
+/**---------------------------------------------------------------------------*
+ * @brief Find largest indices in sorted table where values should be 
+ *  inserted to maintain order
+ * 
+ * @note The table @p t is required to be sorted in ascending order otherwise
+ *  the behaviour is undefined
+ * 
+ * @param column        Column to search in. Must be sorted in ascending order
+ * @param values        Values to search insert locations for
+ * @param nulls_as_largest If true, nulls are considered larger than valid
+ *  values, otherwise, nulls are considered smaller than valid values
+ * 
+ * @return gdf_column   Insertion points with the same shape as values
+ *---------------------------------------------------------------------------**/
+gdf_column upper_bound(table const& t,
+                       table const& values,
+                       bool nulls_as_largest = true);
 
 } // namespace cudf
 

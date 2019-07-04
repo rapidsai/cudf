@@ -160,20 +160,32 @@ gdf_column search_ordered(table const& t,
 
 } // namespace detail
 
-gdf_column search_ordered(gdf_column const& column,
-                          gdf_column const& values,
-                          bool find_first,
-                          bool nulls_as_largest)
+gdf_column lower_bound(gdf_column const& column,
+                       gdf_column const& values,
+                       bool nulls_as_largest)
 {
-  return detail::search_ordered(column, values, find_first, nulls_as_largest);
+  return detail::search_ordered(column, values, true, nulls_as_largest);
 }
 
-gdf_column search_ordered(table const& t,
-                          table const& values,
-                          bool find_first,
-                          bool nulls_as_largest)
+gdf_column upper_bound(gdf_column const& column,
+                       gdf_column const& values,
+                       bool nulls_as_largest)
 {
-  return detail::search_ordered(t, values, find_first, nulls_as_largest);
+  return detail::search_ordered(column, values, false, nulls_as_largest);
+}
+
+gdf_column lower_bound(table const& t,
+                       table const& values,
+                       bool nulls_as_largest)
+{
+  return detail::search_ordered(t, values, true, nulls_as_largest);
+}
+
+gdf_column upper_bound(table const& t,
+                       table const& values,
+                       bool nulls_as_largest)
+{
+  return detail::search_ordered(t, values, false, nulls_as_largest);
 }
 
 } // namespace cudf

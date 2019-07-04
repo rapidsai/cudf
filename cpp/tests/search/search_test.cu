@@ -33,10 +33,9 @@ TEST_F(SearchTest, non_null_column__find_first)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::lower_bound(
             *(column.get()),
-            *(values.get()),
-            true)
+            *(values.get()))
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -56,10 +55,9 @@ TEST_F(SearchTest, non_null_column__find_last)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::upper_bound(
             *(column.get()),
-            *(values.get()),
-            false)
+            *(values.get()))
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -89,10 +87,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::upper_bound(
             *(column.get()),
             *(values.get()),
-            false,  // find_first
             false)  // nulls_as_largest
     );
 
@@ -123,10 +120,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::lower_bound(
             *(column.get()),
             *(values.get()),
-            true,   // find_first
             false)  // nulls_as_largest
     );
 
@@ -157,10 +153,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::upper_bound(
             *(column.get()),
             *(values.get()),
-            false, // find_first
             true)  // nulls_as_largest
     );
 
@@ -191,10 +186,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::lower_bound(
             *(column.get()),
             *(values.get()),
-            true,  // find_first
             true)  // nulls_as_largest
     );
 
@@ -226,7 +220,7 @@ TEST_F(SearchTest, table__find_first)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::lower_bound(
             input_table,
             values_table)
     );
@@ -259,10 +253,9 @@ TEST_F(SearchTest, table__find_last)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::upper_bound(
             input_table,
-            values_table,
-            false) // find_first
+            values_table)
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -319,10 +312,9 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::lower_bound(
             input_table,
             values_table,
-            true,   // find_first
             false)  // nulls_as_largest
     );
 
@@ -380,10 +372,9 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::upper_bound(
             input_table,
             values_table,
-            false,   // find_first
             false)   // nulls_as_largest
     );
 
@@ -441,10 +432,9 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::lower_bound(
             input_table,
             values_table,
-            true,   // find_first
             true)   // nulls_as_largest
     );
 
@@ -502,10 +492,9 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
-        result_column = cudf::search_ordered(
+        result_column = cudf::upper_bound(
             input_table,
             values_table,
-            false,   // find_first
             true)    // nulls_as_largest
     );
 
