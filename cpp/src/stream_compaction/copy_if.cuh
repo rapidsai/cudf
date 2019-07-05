@@ -216,11 +216,12 @@ struct scatter_functor
                   gdf_column const & input_column,
                   gdf_size_type  *block_offsets,
                   Filter filter,
-                  bool has_valid,
                   cudaStream_t stream = 0) {
     cudf::util::cuda::grid_config_1d grid{input_column.size,
                                           block_size, per_thread};
     
+    bool has_valid = cudf::is_nullable(input_column);
+
     auto scatter = (has_valid) ?
       scatter_kernel<T, Filter, block_size, per_thread, true> :
       scatter_kernel<T, Filter, block_size, per_thread, false>;
@@ -301,18 +302,8 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
     return empty_like(input);
   
   CUDF_EXPECTS(std::all_of(input.begin(), input.end(), 
-                           [](gdf_column const* c) { return c->data != nullptr; }), 
+                [](gdf_column const* c) { return c->data != nullptr; }), 
                "Null input data"); // nonzero size but null
-
-  bool has_valid = false;
-
-  if (std::any_of(input.begin(), input.end(),
-                  [](gdf_column const* c) { return c->valid != nullptr; })) {
-    has_valid = true;
-    CUDF_EXPECTS(std::all_of(input.begin(), input.end(), 
-                 [](gdf_column const* c) { return c->valid != nullptr; }), 
-                 "If any input column is nullable, all must be nullable");
-  }
 
   constexpr int block_size = 256;
   constexpr int per_thread = 32;
@@ -355,16 +346,19 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   gdf_size_type output_size = 
     get_output_size(block_counts, block_offsets, grid.num_blocks, stream);
 
-  if (output_size > 0) {
+  if (output_size == input.num_rows()) {
+    return cudf::copy(input);
+  }
+  else if (output_size > 0) {
     // Allocate/initialize output columns
-    table output(output_size, column_dtypes(input), has_valid, 0, stream);
+    table output = cudf::allocate_like(input, output_size, true, stream);
 
     // 4. Scatter the output data and valid mask
     for (int col = 0; col < input.num_columns(); col++) {
       cudf::type_dispatcher(output.get_column(col)->dtype,
                             scatter_functor<Filter, block_size, per_thread>{},
                             *output.get_column(col), *input.get_column(col), 
-                            block_offsets, filter, has_valid, stream);
+                            block_offsets, filter, stream);
     }
 
     CHECK_STREAM(stream);

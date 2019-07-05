@@ -27,11 +27,12 @@ struct valid_column_filter
   valid_column_filter(gdf_column const & column) :
     size{column.size},
     bitmask{reinterpret_cast<bit_mask_t *>(column.valid)}
-    { CUDF_EXPECTS(nullptr != column.valid, "Null valid bitmask");}
+    {}
 
   __device__ inline 
   bool operator()(gdf_index_type i)
   {
+    if (bitmask == nullptr) return true;
     if (i < size) {
       bool valid = bit_mask::is_valid(bitmask, i);
       return valid;
@@ -39,6 +40,7 @@ struct valid_column_filter
     return false;
   }
 
+  bool all_true;
   gdf_size_type size;
   bit_mask_t const  * __restrict__ bitmask;
 };
@@ -61,16 +63,19 @@ struct valid_table_filter
   bool operator()(gdf_index_type i)
   {
     if (i < num_rows) {
-      
       int c = 0;
       if (drop_if == cudf::ALL) {
-        while (c < num_columns)
-          if (bit_mask::is_valid(d_masks[c++], i)) return true;
+        while (c < num_columns) {
+          bit_mask_t *mask = d_masks[c++];
+          if (mask == nullptr || bit_mask::is_valid(mask, i)) return true;
+        }
         return false;
       }
       else { // drop_if == cudf::ANY => all columns must be valid
-        while (c < num_columns)
-          if (not bit_mask::is_valid(d_masks[c++], i)) return false;
+        while (c < num_columns) {
+          bit_mask_t *mask = d_masks[c++];
+          if (mask != nullptr && !bit_mask::is_valid(mask, i)) return false;
+        }
         return true;
       }
     }
@@ -81,7 +86,6 @@ struct valid_table_filter
   gdf_size_type num_rows;
   gdf_size_type num_columns;
   bit_mask_t **d_masks;
-
 };
 
 bit_mask_t** get_bitmasks(cudf::table const &table,
@@ -106,8 +110,7 @@ valid_table_filter make_valid_table_filter(cudf::table const &table,
                                            cudf::any_or_all drop_if,
                                            cudaStream_t stream=0)
 {
-  return valid_table_filter(table, get_bitmasks(table, stream),
-                            drop_if);
+  return valid_table_filter(table, get_bitmasks(table, stream), drop_if);
 }
 
 void destroy_valid_table_filter(valid_table_filter const& filter,
