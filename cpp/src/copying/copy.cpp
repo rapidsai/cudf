@@ -70,6 +70,28 @@ gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists, 
 }
 
 /*
+ * Allocates a new column of specified size of the same type as the input.
+ * Does not copy data.
+ */
+gdf_column allocate_like(gdf_column const& input, gdf_size_type size,
+                         bool allocate_mask_if_exists, cudaStream_t stream)
+{
+  gdf_column output = empty_like(input);
+  
+  output.size = size;
+  const auto byte_width = (input.dtype == GDF_STRING)
+                        ? sizeof(std::pair<const char *, size_t>)
+                        : cudf::size_of(input.dtype);
+  RMM_TRY(RMM_ALLOC(&output.data, size * byte_width, stream));
+  if ((input.valid != nullptr) && allocate_mask_if_exists) {
+    size_t valid_size = gdf_valid_allocation_size(size);
+    RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
+  }
+  
+  return output;
+}
+
+/*
  * Creates a new column that is a copy of input
  */
 gdf_column copy(gdf_column const& input, cudaStream_t stream)
@@ -89,6 +111,8 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
       CUDA_TRY(cudaMemcpyAsync(output.valid, input.valid, valid_size,
                                cudaMemcpyDefault, stream));
     }
+
+    output.null_count = input.null_count;
   }
 
   if (input.dtype == GDF_STRING_CATEGORY) {
@@ -103,11 +127,11 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
 table empty_like(table const& t) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-                 [](gdf_column* out_col, gdf_column const* in_col) {
-                   out_col = new gdf_column{};
-                   *out_col = empty_like(*in_col);
-                   return out_col;
-                 });
+    [](gdf_column* out_col, gdf_column const* in_col) {
+      out_col = new gdf_column{};
+      *out_col = empty_like(*in_col);
+      return out_col;
+    });
 
   return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }
@@ -115,11 +139,24 @@ table empty_like(table const& t) {
 table allocate_like(table const& t, bool allocate_mask_if_exists, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-                 [allocate_mask_if_exists,stream](gdf_column* out_col, gdf_column const* in_col) {
-                   out_col = new gdf_column{};
-                   *out_col = allocate_like(*in_col,allocate_mask_if_exists,stream);
-                   return out_col;
-                 });
+    [allocate_mask_if_exists,stream](gdf_column* out_col, gdf_column const* in_col) {
+      out_col = new gdf_column{};
+      *out_col = allocate_like(*in_col,allocate_mask_if_exists,stream);
+      return out_col;
+    });
+
+  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+}
+
+table allocate_like(table const& t, gdf_size_type size, 
+                    bool allocate_mask_if_exists, cudaStream_t stream) {
+  std::vector<gdf_column*> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+    [size,allocate_mask_if_exists,stream](gdf_column* out_col, gdf_column const* in_col) {
+      out_col = new gdf_column{};
+      *out_col = allocate_like(*in_col,size,allocate_mask_if_exists,stream);
+      return out_col;
+    });
 
   return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }
@@ -127,11 +164,11 @@ table allocate_like(table const& t, bool allocate_mask_if_exists, cudaStream_t s
 table copy(table const& t, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-                 [stream](gdf_column* out_col, gdf_column const* in_col) {
-                   out_col = new gdf_column{};
-                   *out_col = copy(*in_col, stream);
-                   return out_col;
-                 });
+    [stream](gdf_column* out_col, gdf_column const* in_col) {
+      out_col = new gdf_column{};
+      *out_col = copy(*in_col, stream);
+      return out_col;
+    });
 
   return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }

@@ -114,14 +114,14 @@ enum any_or_all {
  * @brief Filters a table to remove null elements.
  *
  * Given an input table row `i` from the input columns is copied to the
- * output if the row is non-null. Non-null means that there are not nulls in
- * any of the columns at that row.
+ * output if the row is not null. Null means:
+ *  - If @p drop_if is ANY, that there is a null in any of the columns at that row.
+ *  - If @p drop_if is ALL, that there are is a null in all columns at that row.
  *
  * Note that the memory for the columns of the output table is allocated by this
  * function but must be freed by the caller when finished.
  *
- * If the input table columns are not nullable, this function just returns a
- * copy of the input.
+ * Any non-nullable column in the input is treated as all non-null.
  *
  * @note if @p input.num_rows() is zero, there is no error, and an empty table
  * is returned
