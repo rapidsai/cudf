@@ -363,6 +363,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
 
     CHECK_STREAM(stream);
 
+    nvcategory_gather_table(input, output);
     return output;
   }
   return empty_like(input);
