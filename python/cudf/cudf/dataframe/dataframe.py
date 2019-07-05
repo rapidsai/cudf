@@ -2163,8 +2163,10 @@ class DataFrame(object):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
+
             def set_categories(col, cats):
                 return col.cat._set_categories(cats, True).fillna(-1)
+
             if how == "left":
                 cats = lcats
                 rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)

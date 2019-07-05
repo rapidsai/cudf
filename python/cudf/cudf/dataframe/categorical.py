@@ -3,7 +3,6 @@
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import nvstrings
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf.bindings.copying as cpp_copying
@@ -121,7 +120,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         categories = kwargs.pop('categories', [])
         # Default to String dtype if len(categories) == 0, like pandas does
         categories = columnops.as_column(categories) if len(categories) > 0 \
-            else columnops.column_empty(0, dtype=np.dtype('object'), masked=False)
+            else columnops.column_empty(0, np.dtype('object'), masked=False)
 
         dtype = CategoricalDtype(ordered=ordered)
         kwargs.update({'dtype': dtype})

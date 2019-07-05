@@ -44,7 +44,6 @@ class Column(object):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
-        from cudf.dataframe.columnops import as_column
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
