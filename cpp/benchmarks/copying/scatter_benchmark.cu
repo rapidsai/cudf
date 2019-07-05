@@ -30,9 +30,16 @@
 #include <random>
 #include <algorithm>
 
+#include "../fixture/benchmark_fixture.hpp"
 
-template<class TypeParam, bool opt>
-void scatter_inverse(benchmark::State& state){
+template<typename T, bool opt_, bool coalesce_>
+class Scatter: public cudf::benchmark {
+public:
+  using TypeParam = T;
+};
+
+template<class TypeParam, bool opt, bool coalesce>
+void BM_scatter(benchmark::State& state){
   const gdf_size_type source_size{(gdf_size_type)state.range(0)};
   const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
 
@@ -53,89 +60,27 @@ void scatter_inverse(benchmark::State& state){
   // Create scatter_map that reverses order of source_column
   std::vector<gdf_index_type> host_scatter_map(source_size);
   std::iota(host_scatter_map.begin(), host_scatter_map.end(), 0);
-  std::reverse(host_scatter_map.begin(), host_scatter_map.end());
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
-
-  std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
-    n_cols,
-    { source_size, 
-      [](gdf_index_type row){return static_cast<TypeParam>(row);},
-      [](gdf_index_type row) { return true; }
-    }
-  );
-  std::vector<gdf_column*> vp_dest (n_cols);
-  for(size_t i = 0; i < v_src.size(); i++){
-    vp_dest[i] = v_dest[i].get();  
-  }
- 
-  cudf::table source_table{ vp_src };
-  cudf::table destination_table{ vp_dest };
-
-  for(auto _ : state){
-    if(opt){
-      cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table, 128);
-    }else{
-      cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
-    }
-  }
-  
-  state.SetBytesProcessed(
-      static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
-}
-BENCHMARK_TEMPLATE(scatter_inverse,double,false)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
-BENCHMARK_TEMPLATE(scatter_inverse,double, true)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
-
-template<class TypeParam, bool opt>
-void scatter_random_(benchmark::State& state){
-  const gdf_size_type source_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
-  
-  const gdf_size_type n_cols = (gdf_size_type)state.range(1);
-
-  std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
-    n_cols,
-    { source_size, 
-      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }
-    }
-  );
-  std::vector<gdf_column*> vp_src (n_cols);
-  for(size_t i = 0; i < v_src.size(); i++){
-    vp_src[i] = v_src[i].get();  
-  }
-  
-  // Create scatter_map that reverses order of source_column
-  std::vector<gdf_index_type> host_scatter_map(source_size);
-  std::iota(host_scatter_map.begin(), host_scatter_map.end(), 0);
-  std::random_shuffle(host_scatter_map.begin(), host_scatter_map.end());
-  
-//  std::set<int> s;
-//  for(int i = 0; i < 256; i++){
-//    s.insert(host_scatter_map[i] / 32);
-//  }
-//  printf("%lu\n", s.size());
-  
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
-
-  std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
-    n_cols,
-    { source_size, 
-      [](gdf_index_type row){return static_cast<TypeParam>(row);},
-      [](gdf_index_type row) { return true; }
-    }
-  );
-  std::vector<gdf_column*> vp_dest (n_cols);
-  for(size_t i = 0; i < v_src.size(); i++){
-    vp_dest[i] = v_dest[i].get();  
-  }
- 
-  cudf::table source_table{ vp_src };
-  cudf::table destination_table{ vp_dest };
-  if(opt){
-    cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table, 128);
+  if(coalesce){
+    std::reverse(host_scatter_map.begin(), host_scatter_map.end());
   }else{
-    cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
+    std::random_shuffle(host_scatter_map.begin(), host_scatter_map.end());
   }
+  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+
+  std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
+    n_cols,
+    { source_size, 
+      [](gdf_index_type row){return static_cast<TypeParam>(row);},
+      [](gdf_index_type row) { return true; }
+    }
+  );
+  std::vector<gdf_column*> vp_dest (n_cols);
+  for(size_t i = 0; i < v_src.size(); i++){
+    vp_dest[i] = v_dest[i].get();  
+  }
+ 
+  cudf::table source_table{ vp_src };
+  cudf::table destination_table{ vp_dest };
 
   for(auto _ : state){
     if(opt){
@@ -148,6 +93,17 @@ void scatter_random_(benchmark::State& state){
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
-BENCHMARK_TEMPLATE(scatter_random_,double,false)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
-BENCHMARK_TEMPLATE(scatter_random_,double, true)->RangeMultiplier(2)->Ranges({{1<<10,1<<27},{1,4}});
 
+#define SBM_BENCHMARK_DEFINE(name, type, opt, coalesce)                   \
+BENCHMARK_TEMPLATE_DEFINE_F(Scatter, name, type, opt, coalesce)            \
+(::benchmark::State& st) {                                                \
+  BM_scatter<TypeParam, opt, coalesce>(st);                                \
+}
+
+SBM_BENCHMARK_DEFINE(double_opt_x_coa_x,double, true, true);
+SBM_BENCHMARK_DEFINE(double_opt_o_coa_x,double,false, true);
+SBM_BENCHMARK_DEFINE(double_opt_x_coa_o,double, true,false);
+SBM_BENCHMARK_DEFINE(double_opt_o_coa_o,double,false,false);
+
+BENCHMARK_REGISTER_F(Scatter, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_REGISTER_F(Scatter, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});

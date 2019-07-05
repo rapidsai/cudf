@@ -168,9 +168,9 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
 namespace opt {
 void gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table, int block_size = 256, int grid_size = 320);
+               table* destination_table);
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
-                table* destination_table, int block_size = 256); 
+                table* destination_table); 
 }
 /**
  * @brief Slices a column (including null values) into a set of columns

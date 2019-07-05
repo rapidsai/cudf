@@ -81,16 +81,10 @@ void BM_gather(benchmark::State& state){
  
   cudf::table source_table{ vp_src };
   cudf::table destination_table{ vp_dest };
-  
-//  if(opt){
-//    cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table, 128);
-//  }else{
-//    cudf::gather(&source_table, gather_map.data().get(), &destination_table);
-//  }
 
   for(auto _ : state){
     if(opt){
-      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table, state.range(2), state.range(3));
+      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table);
     }else{
       cudf::gather(&source_table, gather_map.data().get(), &destination_table);
     }
@@ -103,7 +97,7 @@ void BM_gather(benchmark::State& state){
 #define GBM_BENCHMARK_DEFINE(name, type, opt, coalesce)                   \
 BENCHMARK_TEMPLATE_DEFINE_F(Gather, name, type, opt, coalesce)            \
 (::benchmark::State& st) {                                                \
-  BM_gather<TypeParam, opt, coalesce>(st);                        \
+  BM_gather<TypeParam, opt, coalesce>(st);                                \
 }
 
 GBM_BENCHMARK_DEFINE(double_opt_x_coa_x,double, true, true);
@@ -111,15 +105,5 @@ GBM_BENCHMARK_DEFINE(double_opt_o_coa_x,double,false, true);
 GBM_BENCHMARK_DEFINE(double_opt_x_coa_o,double, true,false);
 GBM_BENCHMARK_DEFINE(double_opt_o_coa_o,double,false,false);
 
-// BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,128},{640,640}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{320,320}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{400,400}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{480,480}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{560,560}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{640,640}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{720,720}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{800,800}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{128,256},{1280,1280}});
-// BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{4,4},{256,256},{640,640}});
-// BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<26,1<<26},{1,4},{256},{}});
-
+BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
