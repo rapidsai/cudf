@@ -22,7 +22,7 @@
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
-
+- PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
 
 # cuDF 0.8.0 (27 June 2019)
 
