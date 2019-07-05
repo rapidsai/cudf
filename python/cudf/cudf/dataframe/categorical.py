@@ -130,12 +130,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def serialize(self, serialize):
         header, frames = super(CategoricalColumn, self).serialize(serialize)
-        assert 'dtype' not in header
         header['ordered'] = self._ordered
-        header['dtype'] = serialize(self.data.dtype)
         header['categories'], category_frames = serialize(self._categories)
-        if 'dtype' not in header['categories']:
-            header['categories']['dtype'] = serialize(self._categories._dtype)
         header['category_frame_count'] = len(category_frames)
         frames.extend(category_frames)
         return header, frames
@@ -145,24 +141,20 @@ class CategoricalColumn(columnops.TypedColumnBase):
         data, mask = super(CategoricalColumn, cls).deserialize(
             deserialize, header, frames
         )
-        dtype = deserialize(*header["dtype"])
         if 'category_frame_count' not in header:
             # Handle data from before categories was a cudf.Column
             categories = header['categories']
         else:
             # Handle categories that were serialized as a cudf.Column
-            category_dtype = deserialize(*header['categories']['dtype'])
             categories = frames[len(frames) - header['category_frame_count']:]
             categories = deserialize(header['categories'], categories)
-            categories = columnops.as_column(categories, dtype=category_dtype)
+            categories = columnops.as_column(categories)
 
         return cls(
             data=data,
             mask=mask,
-            dtype=dtype,
             categories=categories,
-            ordered=header["ordered"],
-            null_count=header["null_count"],
+            ordered=header["ordered"]
         )
 
     def _replace_defaults(self):
