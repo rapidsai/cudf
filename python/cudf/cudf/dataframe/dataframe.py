@@ -1335,16 +1335,20 @@ class DataFrame(object):
 
         """
         data_cols = _columns_from_dataframe(self)
+
         index_cols = []
         if isinstance(self.index, cudf.MultiIndex):
             index_cols.extend(_columns_from_dataframe(self.index._source_data))
         else:
             index_cols.append(self.index.as_column())
+
         result_cols = cpp_drop_nulls(index_cols + data_cols)
+
         result_index_cols, result_data_cols = (
             result_cols[: len(index_cols)],
             result_cols[len(index_cols) :],
         )
+
         if isinstance(self.index, cudf.MultiIndex):
             result_index = cudf.MultiIndex.from_frame(
                 _dataframe_from_columns(result_index_cols),
@@ -1352,6 +1356,7 @@ class DataFrame(object):
             )
         else:
             result_index = cudf.dataframe.index.as_index(result_index_cols[0])
+
         df = _dataframe_from_columns(
             result_data_cols, index=result_index, columns=self.columns
         )

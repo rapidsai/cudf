@@ -41,7 +41,18 @@ def test_dropna_series(data, nulls):
     assert_eq(psr.dropna(), gsr.dropna(), check_dtype=check_dtype)
 
 
-@pytest.mark.parametrize("data", [{"a": [1, 2, None]}])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [1, 2, None]},
+        {"a": [1, 2, None], "b": [3, 4, 5]},
+        {"a": [1, 2, None], "b": [3, 4, None]},
+        {"a": [None, 1, 2], "b": [1, 2, None]},
+        {"a": [None, 1, None], "b": [None, 2, None]},
+        {"a": [None, None, 1], "b": [1, 2, None]},
+        {"a": ["d", "e", "f"], "b": ["a", None, "c"]},
+    ],
+)
 def test_dropna_dataframe(data):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
