@@ -23,7 +23,6 @@ def test_filepath_read_orc_defaults():
     path = "file://%s" % sample_orc
     df1 = cudf.read_orc(path)
     df2 = dask_cudf.read_orc(path)
-    df2.head().to_pandas()
     dd.assert_eq(df1, df2, check_index=False)
 
 
