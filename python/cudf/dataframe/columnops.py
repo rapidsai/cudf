@@ -307,6 +307,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None):
         elif arbitrary.dtype.kind in ('O', 'U'):
             data = as_column(pa.Array.from_pandas(arbitrary))
         else:
+            if dtype is not None:
+                arbitrary = arbitrary.astype(dtype)
             data = as_column(rmm.to_device(arbitrary), nan_as_null=nan_as_null)
 
     elif isinstance(arbitrary, pa.Array):
