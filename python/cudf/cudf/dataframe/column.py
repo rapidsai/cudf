@@ -157,7 +157,7 @@ class Column(object):
 
         self._update_null_count(null_count)
 
-    def __eq__(self, other):
+    def equals(self, other):
         if self is other:
             return True
         if other is None or len(self) != len(other):

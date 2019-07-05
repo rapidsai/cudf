@@ -56,6 +56,16 @@ class TypedColumnBase(Column):
         remove_base(mine)
         remove_base(theirs)
 
+        # Check categories via Column.equals(). Pop them off the
+        # dicts so the == below doesn't try to invoke `__eq__()`
+        if ('categories' in mine) or ('categories' in theirs):
+            if 'categories' not in mine:
+                return False
+            if 'categories' not in theirs:
+                return False
+            if not mine.pop('categories').equals(theirs.pop('categories')):
+                return False
+
         return type(self) == type(other) and mine == theirs
 
     def _replace_defaults(self):
