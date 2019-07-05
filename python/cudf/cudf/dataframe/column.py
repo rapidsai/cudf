@@ -81,10 +81,8 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            cats = [o.cat().categories for o in objs]
-            cats = [as_column(cats) for cats in cats]
-            cats = Column._concat(cats).unique()
-            objs = [o.cat()._set_categories(cats) for o in objs]
+            cats = Column._concat([o.categories for o in objs]).unique()
+            objs = [o.cat()._set_categories(cats, True) for o in objs]
 
         head = objs[0]
         for obj in objs:

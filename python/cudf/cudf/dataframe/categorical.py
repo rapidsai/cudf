@@ -52,7 +52,7 @@ class CategoricalAccessor(object):
         col = self._set_categories(new_categories)
         return Series(data=col)
 
-    def _set_categories(self, new_categories):
+    def _set_categories(self, new_categories, is_unique=False):
         """Returns a new CategoricalColumn with the categories set to the
         specified *new_categories*.
 
@@ -69,8 +69,11 @@ class CategoricalAccessor(object):
         # old to new codes, inserting na_sentinel for any old
         # categories that don't exist in the new categories
 
+        new_cats = columnops.as_column(new_categories)
+
         # Ensure new_categories is unique first
-        new_cats = columnops.as_column(new_categories).unique()
+        if not is_unique:
+            new_cats = new_cats.unique()
 
         new = DataFrame({'cats': new_cats,
                          'new': cudautils.arange(len(new_cats))})
@@ -330,7 +333,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
-            fill_value = fill_value.cat()._set_categories(self._categories)
+            fill_value = fill_value.cat()._set_categories(
+                self._categories, is_unique=True
+            )
             fill_value = columnops.as_column(fill_value.data).astype(
                 self.data.dtype
             )

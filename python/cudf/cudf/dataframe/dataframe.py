@@ -2163,27 +2163,21 @@ class DataFrame(object):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
+            def set_categories(col, cats):
+                return col.cat._set_categories(cats, True).fillna(-1)
             if how == "left":
                 cats = lcats
-                rhs[idx_col_name] = (
-                    rhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
             elif how == "right":
                 cats = rcats
-                lhs[idx_col_name] = (
-                    lhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
                 cats = sorted(set(lcats) | set(rcats))
 
-                lhs[idx_col_name] = (
-                    lhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
-                rhs[idx_col_name] = (
-                    rhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
         if lsuffix == "":
