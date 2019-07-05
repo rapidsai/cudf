@@ -17,7 +17,7 @@ from cudf.tests.utils import assert_eq
     ],
 )
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
-def test_dropna(data, nulls):
+def test_dropna_series(data, nulls):
 
     psr = pd.Series(data)
 
@@ -39,3 +39,11 @@ def test_dropna(data, nulls):
         check_dtype = False
 
     assert_eq(psr.dropna(), gsr.dropna(), check_dtype=check_dtype)
+
+
+@pytest.mark.parametrize("data", [{"a": [1, 2, None]}])
+def test_dropna_dataframe(data):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.dropna(), gdf.dropna())

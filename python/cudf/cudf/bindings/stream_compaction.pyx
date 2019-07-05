@@ -5,13 +5,18 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from libc.stdlib cimport free
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-
+from cudf.bindings.utils cimport *
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
 from cudf.dataframe.column import Column
-from cudf.bindings.stream_compaction import *
+from cudf.dataframe.buffer import Buffer
+
+from cudf.bindings.stream_compaction cimport *
+
 
 def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     """
@@ -33,7 +38,7 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols+in_index)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count+1)
 
-    cdef duplicate_keep_option keep_first;
+    cdef duplicate_keep_option keep_first
     if keep == 'first':
         keep_first = duplicate_keep_option.KEEP_FIRST
     elif keep == 'last':
@@ -55,7 +60,9 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
 
     cdef cudf_table out_table
     with nogil:
-        out_table = drop_duplicates(c_in_table[0], key_table[0], keep_first)
+        out_table = drop_duplicates(
+            c_in_table[0], key_table[0], keep_first
+        )
 
     free_table(key_table, key_cols)
     free_table(c_in_table, c_in_cols)
@@ -65,24 +72,66 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     return (out_cols[:-1], out_cols[-1])
 
 
-def cpp_apply_boolean_mask(inp, mask):
+def apply_boolean_mask_column(col, mask):
+    """
+    Apply the given boolean mask ``mask`` to the Column ``col``
+    """
     from cudf.dataframe.columnops import column_empty_like
 
-    cdef gdf_column *inp_col = column_view_from_column(inp)
-    cdef gdf_column *mask_col = column_view_from_column(mask)
-    cdef gdf_column result
+    cdef gdf_column *c_col = column_view_from_column(col)
+    cdef gdf_column *c_mask = column_view_from_column(mask)
+    cdef gdf_column c_result
     with nogil:
-        result = apply_boolean_mask(inp_col[0], mask_col[0])
-    if result.data is NULL:
-        return column_empty_like(inp, newsize=0)
-    data, mask = gdf_column_to_column_mem(&result)
+        c_result = apply_boolean_mask(c_col[0], c_mask[0])
+    free(c_col)
+    free(c_mask)
+    if c_result.data is NULL:
+        return column_empty_like(col, newsize=0)
+    data, mask = gdf_column_to_column_mem(&c_result)
     return Column.from_mem_views(data, mask)
 
 
-def cpp_drop_nulls(inp):
-    cdef gdf_column *inp_col = column_view_from_column(inp)
-    cdef gdf_column result
+def drop_nulls_column(col):
+    cdef gdf_column *c_col = column_view_from_column(col)
+    cdef gdf_column c_result
     with nogil:
-        result = drop_nulls(inp_col[0])
-    data, mask = gdf_column_to_column_mem(&result)
+        c_result = drop_nulls(c_col[0])
+    free(c_col)
+    data, mask = gdf_column_to_column_mem(&c_result)
     return Column.from_mem_views(data, mask)
+
+
+def apply_boolean_mask_table(cols, mask):
+    pass
+
+
+def drop_nulls_table(cols, how='any'):
+    cdef cudf_table c_out_table
+    cdef cudf_table* c_in_table = table_from_columns(cols)
+
+    cdef any_or_all drop_if
+    if how == 'any':
+        drop_if = ANY
+    else:
+        drop_if = ALL
+
+    with nogil:
+        c_out_table = drop_nulls(c_in_table[0], drop_if)
+
+    free(c_in_table)
+
+    return columns_from_table(&c_out_table)
+
+
+def apply_apply_boolean_mask(inp, mask):
+    if isinstance(inp, Column):
+        return apply_boolean_mask_column(inp, mask)
+    else:
+        return apply_boolean_mask_table(inp, mask)
+
+
+def apply_drop_nulls(inp):
+    if isinstance(inp, Column):
+        return drop_nulls_column(inp)
+    else:
+        return drop_nulls_table(inp)

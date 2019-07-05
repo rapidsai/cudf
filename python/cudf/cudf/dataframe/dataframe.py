@@ -28,6 +28,7 @@ from cudf.bindings import copying as cpp_copying
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
+    apply_drop_nulls as cpp_drop_nulls,
 )
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
@@ -1327,6 +1328,34 @@ class DataFrame(object):
                 outdf[k] = new_col
             outdf = outdf.set_index(new_index)
             return outdf
+
+    def dropna(self, how="any"):
+        """
+
+
+        """
+        data_cols = _columns_from_dataframe(self)
+        index_cols = []
+        if isinstance(self.index, cudf.MultiIndex):
+            index_cols.extend(_columns_from_dataframe(self.index._source_data))
+        else:
+            index_cols.append(self.index.as_column())
+        result_cols = cpp_drop_nulls(index_cols + data_cols)
+        result_index_cols, result_data_cols = (
+            result_cols[: len(index_cols)],
+            result_cols[len(index_cols) :],
+        )
+        if isinstance(self.index, cudf.MultiIndex):
+            result_index = cudf.MultiIndex.from_frame(
+                _dataframe_from_columns(result_index_cols),
+                names=self.index.names,
+            )
+        else:
+            result_index = cudf.dataframe.index.as_index(result_index_cols[0])
+        df = _dataframe_from_columns(
+            result_data_cols, index=result_index, columns=self.columns
+        )
+        return df
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
@@ -3437,3 +3466,24 @@ def _align_indices(lhs, rhs):
                 rhs_out[col] = df[col]
 
     return lhs_out, rhs_out
+
+
+def _columns_from_dataframe(df, keep_names=False):
+    """
+    Get a list of Column objects backing the given DataFrame
+    """
+    cols = [sr._column for sr in df._cols.values()]
+    if not keep_names:
+        for col in cols:
+            col.name = None
+    return cols
+
+
+def _dataframe_from_columns(cols, index=None, columns=None):
+    """
+
+    """
+    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
+    if columns is not None:
+        df.columns = columns
+    return df
