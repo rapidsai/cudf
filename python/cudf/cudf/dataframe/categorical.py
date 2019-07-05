@@ -131,9 +131,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def serialize(self, serialize):
         header, frames = super(CategoricalColumn, self).serialize(serialize)
         assert 'dtype' not in header
-        header['dtype'] = serialize(self._dtype)
-        header['categories'] = self._categories.to_array()
         header['ordered'] = self._ordered
+        header['dtype'] = serialize(self._dtype)
+        header['categories'], category_frames = serialize(self._categories)
+        if 'dtype' not in header['categories']:
+            header['categories']['dtype'] = serialize(self._categories._dtype)
+        header['category_frame_count'] = len(category_frames)
+        frames.extend(category_frames)
         return header, frames
 
     @classmethod
@@ -142,17 +146,24 @@ class CategoricalColumn(columnops.TypedColumnBase):
             deserialize, header, frames
         )
         dtype = deserialize(*header["dtype"])
-        categories = header["categories"]
-        ordered = header["ordered"]
-        col = cls(
+        if 'category_frame_count' not in header:
+            # Handle data from before categories was a cudf.Column
+            categories = header['categories']
+        else:
+            # Handle categories that were serialized as a cudf.Column
+            category_dtype = deserialize(*header['categories']['dtype'])
+            categories = frames[len(frames) - header['category_frame_count']:]
+            categories = deserialize(header['categories'], categories)
+            categories = columnops.as_column(categories, dtype=category_dtype)
+
+        return cls(
             data=data,
             mask=mask,
-            null_count=header["null_count"],
             dtype=dtype,
             categories=categories,
-            ordered=ordered,
+            ordered=header["ordered"],
+            null_count=header["null_count"],
         )
-        return col
 
     def _replace_defaults(self):
         params = super(CategoricalColumn, self)._replace_defaults()
