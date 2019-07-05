@@ -110,6 +110,24 @@ class Rolling:
         self.center = center
         self._normalize()
 
+    def __getattr__(self, key):
+        if key == "obj":
+            raise AttributeError()
+        return self.obj[key].rolling(
+            window=self.window,
+            min_periods=self.min_periods,
+            center=self.center,
+        )
+
+    def __getitem__(self, arg):
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        return self.obj[arg].rolling(
+            window=self.window,
+            min_periods=self.min_periods,
+            center=self.center,
+        )
+
     def _apply_agg_series(self, sr, agg_name):
         result_col = apply_rolling(
             sr._column, self.window, self.min_periods, self.center, agg_name
