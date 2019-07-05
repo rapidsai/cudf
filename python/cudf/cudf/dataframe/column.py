@@ -168,8 +168,7 @@ class Column(object):
             if isinstance(val, np.ndarray):
                 return val.all()
             return bool(val)
-        from cudf.dataframe.series import Series
-        return Series(self).equals(other)
+        return self.unordered_compare('eq', other).min()
 
     def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0
