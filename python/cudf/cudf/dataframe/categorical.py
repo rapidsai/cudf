@@ -253,7 +253,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return segs, sortedvals
 
     def unique(self, method=None):
-        codes = Buffer(cudautils.arange(len(self._categories)))
+        codes = self.as_numerical.unique(method).data
         return CategoricalColumn(data=codes,
                                  categories=self._categories,
                                  ordered=self._ordered)
