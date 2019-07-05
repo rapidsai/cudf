@@ -132,7 +132,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         header, frames = super(CategoricalColumn, self).serialize(serialize)
         assert 'dtype' not in header
         header['ordered'] = self._ordered
-        header['dtype'] = serialize(self._dtype)
+        header['dtype'] = serialize(self.data.dtype)
         header['categories'], category_frames = serialize(self._categories)
         if 'dtype' not in header['categories']:
             header['categories']['dtype'] = serialize(self._categories._dtype)
