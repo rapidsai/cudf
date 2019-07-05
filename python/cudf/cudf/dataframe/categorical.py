@@ -116,13 +116,12 @@ class CategoricalColumn(columnops.TypedColumnBase):
         ordered : bool
             whether the categorical has a logical ordering (e.g. less than)
         """
-        from cudf.dataframe.string import StringColumn
 
         ordered = bool(kwargs.pop('ordered'))
         categories = kwargs.pop('categories', [])
         # Default to String dtype if len(categories) == 0, like pandas does
         categories = columnops.as_column(categories) if len(categories) > 0 \
-            else StringColumn(data=nvstrings.to_device([]), null_count=0)
+            else columnops.column_empty(0, dtype=np.dtype('object'), masked=False)
 
         dtype = CategoricalDtype(ordered=ordered)
         kwargs.update({'dtype': dtype})
