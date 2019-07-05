@@ -7,6 +7,7 @@
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 
 ## Improvements
@@ -14,6 +15,7 @@
 - PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
+- PR #2088 Refactor of Python groupby code
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
@@ -29,6 +31,7 @@
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
 - PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
+- PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
 
 
 # cuDF 0.8.0 (27 June 2019)

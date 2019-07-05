@@ -402,11 +402,19 @@ def test_groupby_column_numeral():
     gxx = g[0].sum()
     assert_eq(pxx, gxx)
 
+    pdf = pd.DataFrame({0.5: [1.0, 2.0, 3.0], 1.5: [1, 2, 3]})
+    gdf = DataFrame.from_pandas(pdf)
+    p = pdf.groupby(1.5)
+    g = gdf.groupby(1.5)
+    pxx = p[0.5].sum()
+    gxx = g[0.5].sum()
+    assert_eq(pxx, gxx)
+
 
 @pytest.mark.parametrize(
     "series",
     [[0, 1, 0], [1, 1, 1], [0, 1, 1], [1, 2, 3], [4, 3, 2], [0, 2, 0]],
-)
+)  # noqa: E501
 def test_groupby_external_series(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
@@ -417,7 +425,8 @@ def test_groupby_external_series(series):
 
 @pytest.mark.xfail(
     raises=NotImplementedError,
-    reason="CUDF doesn't support arbitrary series index lengths" "for groupby",
+    reason="cuDF does not support arbitrary series "
+    "index lengths for groupby",
 )
 @pytest.mark.parametrize("series", [[0, 1], [1, 1, 1, 1]])
 def test_groupby_external_series_incorrect_length(series):
@@ -426,6 +435,16 @@ def test_groupby_external_series_incorrect_length(series):
     pxx = pdf.groupby(pd.Series(series)).x.sum()
     gxx = gdf.groupby(cudf.Series(series)).x.sum()
     assert_eq(pxx, gxx)
+
+
+@pytest.mark.parametrize(
+    "level", [0, 1, "a", "b", [0, 1], ["a", "b"], ["a", 1], -1, [-1, -2]]
+)
+def test_groupby_levels(level):
+    idx = pd.MultiIndex.from_tuples([(1, 1), (1, 2), (2, 2)], names=("a", "b"))
+    pdf = pd.DataFrame({"c": [1, 2, 3], "d": [2, 3, 4]}, index=idx)
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(pdf.groupby(level=level).sum(), gdf.groupby(level=level).sum())
 
 
 def test_advanced_groupby_levels():
@@ -472,7 +491,8 @@ def test_advanced_groupby_levels():
     raises.match("Too many levels")
     with pytest.raises(IndexError) as raises:
         gdh = gdg.groupby(level=2).sum()
-    raises.match("Too many levels")
+    # we use a different error message
+    raises.match("Invalid level number")
     assert_eq(pdh, gdh)
 
 
@@ -617,11 +637,6 @@ def test_groupby_multi_agg_multi_groupby():
     pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
     gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
     assert_eq(pdg, gdg)
-
-
-def test_groupby_empty_dataframe():
-    gdf = cudf.DataFrame({"x": [], "y": [], "z": []})
-    gdf.groupby(level=[0, 1])  # it doesn't crash
 
 
 @pytest.mark.parametrize("agg", ["min", "max", "sum", "count", "mean"])

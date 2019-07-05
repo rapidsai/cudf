@@ -77,11 +77,19 @@ class Series(object):
             if name is None:
                 name = data.name
             index = as_index(data.index)
+        elif isinstance(data, pd.Index):
+            name = data.name
+            data = data.values
+        elif isinstance(data, Index):
+            name = data.name
+            data = data.as_column()
+
         if isinstance(data, Series):
             index = data._index if index is None else index
             if name is None:
                 name = data.name
             data = data._column
+
         if data is None:
             data = {}
 
@@ -2118,7 +2126,12 @@ class Series(object):
         return Series(output_dary, name=self.name, index=self.index)
 
     def groupby(
-        self, group_series=None, level=None, sort=True, group_keys=True
+        self,
+        by=None,
+        group_series=None,
+        level=None,
+        sort=True,
+        group_keys=True,
     ):
         if group_keys is not True:
             raise NotImplementedError(
@@ -2127,7 +2140,7 @@ class Series(object):
 
         from cudf.groupby.groupby import SeriesGroupBy
 
-        return SeriesGroupBy(self, group_series, level, sort)
+        return SeriesGroupBy(self, by=by, level=level, sort=sort)
 
     @copy_docstring(Rolling)
     def rolling(self, window, min_periods=None, center=False):

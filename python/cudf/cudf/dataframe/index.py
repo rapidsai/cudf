@@ -711,7 +711,7 @@ class StringIndex(GenericIndex):
         return self._values.categories
 
     def to_pandas(self):
-        result = pd.Index(self.values, name=self.name)
+        result = pd.Index(self.values, name=self.name, dtype="object")
         return result
 
     def take(self, indices):
