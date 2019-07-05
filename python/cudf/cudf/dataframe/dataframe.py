@@ -2174,7 +2174,7 @@ class DataFrame(object):
                 cats = rcats
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
-                cats = sorted(set(lcats) | set(rcats))
+                cats = columnops.as_column(lcats).append(rcats).unique()
 
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
