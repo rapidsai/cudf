@@ -99,6 +99,11 @@ ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 
+set(GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_test.cu")
+
+ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
+
 set(HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_count.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_sum.cu"

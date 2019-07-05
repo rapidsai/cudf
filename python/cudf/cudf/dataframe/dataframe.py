@@ -274,7 +274,7 @@ class DataFrame(object):
             self.columns, cudf.dataframe.multiindex.MultiIndex
         ) and isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if isinstance(arg, (str, numbers.Number)) or isinstance(arg, tuple):
+        if utils.is_single_value(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -871,7 +871,7 @@ class DataFrame(object):
                 raise ValueError(msg)
             self._index = _index
             for k in self.columns:
-                self[k].index = _index
+                self[k]._index = _index
             return
 
         new_length = len(_index)
@@ -889,7 +889,7 @@ class DataFrame(object):
         idx = as_index(_index)
         self._index = idx
         for k in self.columns:
-            self[k] = self[k].set_index(idx)
+            self[k]._index = idx
 
     def reindex(
         self, labels=None, axis=0, index=None, columns=None, copy=True
@@ -2263,12 +2263,13 @@ class DataFrame(object):
             result = Groupby(self, by=by)
             return result
         else:
-            from cudf.groupby.groupby import Groupby
+            from cudf.groupby.groupby import DataFrameGroupBy
 
+            # The corresponding pop() is in
+            # DataFrameGroupBy._apply_aggregation()
             nvtx_range_push("CUDF_GROUPBY", "purple")
-            # The matching `pop` for this range is inside LibGdfGroupby
-            # __apply_agg
-            result = Groupby(
+
+            result = DataFrameGroupBy(
                 self,
                 by=by,
                 method=method,
@@ -3221,7 +3222,7 @@ class DataFrame(object):
         result_columns = OrderedDict({})
         for col in columns:
             result_columns[col] = self[col]
-        return DataFrame(result_columns)
+        return DataFrame(result_columns, index=self.index)
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
