@@ -85,7 +85,7 @@ class CategoricalAccessor(object):
         # old -> new code, e.g. codemap[old_code] = new_code
         pos = pos.sort_values('old').reset_index(drop=True)
 
-        codes = self._parent.data.to_gpu_array()
+        codes = self._parent.data.mem
         na_sentinel = self._parent.default_na_value()
         old_to_new_codes_map = pos['new'].to_gpu_array(fillna=na_sentinel)
         # Finally, recode the data buffer with the new codes
