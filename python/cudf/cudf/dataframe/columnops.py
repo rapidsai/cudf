@@ -313,6 +313,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         # CUDF assumes values are always contiguous
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
+
+        if dtype is not None:
+            arbitrary = arbitrary.astype(dtype)
+
         if arbitrary.dtype.kind == "M":
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ("O", "U"):
