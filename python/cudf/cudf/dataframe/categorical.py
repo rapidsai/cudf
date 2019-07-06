@@ -59,7 +59,10 @@ class CategoricalAccessor(object):
         -----
         Assumes ``new_categories`` is the same dtype as the current categories
         """
-        if new_categories is self.categories:
+
+        cur_cats = self.categories
+
+        if cur_cats.equals(new_categories):
             return self._parent.copy()
 
         from cudf import DataFrame
@@ -74,26 +77,24 @@ class CategoricalAccessor(object):
         if not is_unique:
             new_cats = new_cats.unique()
 
-        new = DataFrame({'cats': new_cats,
-                         'new': cudautils.arange(len(new_cats))})
-        old = DataFrame({'cats': self.categories,
-                         'old': cudautils.arange(len(self.categories))})
+        cur_codes = self.codes
+        new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
+        old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
+
+        cur_df = DataFrame({'old_codes': cur_codes})
+        old_df = DataFrame({'old_codes': old_codes, 'cats': cur_cats})
+        new_df = DataFrame({'new_codes': new_codes, 'cats': new_cats})
 
         # Join the old and new categories and line up their codes
-        pos = old.merge(new, on='cats', how='left').drop('cats')
-        # Sort by the old codes so the new col is a map from
-        # old -> new code, e.g. codemap[old_code] = new_code
-        pos = pos.sort_values('old').reset_index(drop=True)
+        df = old_df.merge(new_df, on='cats', how='left')
+        # Join the old and new codes to "recode" the codes data buffer
+        df = cur_df.merge(df, on='old_codes', how='left')
 
-        codes = self._parent.data.mem
-        na_sentinel = self._parent.default_na_value()
-        old_to_new_codes_map = pos['new'].to_gpu_array(fillna=na_sentinel)
-        # Finally, recode the data buffer with the new codes
-        codes = cudautils.recode(codes, old_to_new_codes_map, na_sentinel)
-
+        kwargs = df['new_codes']._column._replace_defaults()
+        kwargs.update(categories=new_cats)
         new_cats._name = None
 
-        return self._parent.replace(data=Buffer(codes), categories=new_cats)
+        return self._parent.replace(**kwargs)
 
 
 class CategoricalColumn(columnops.TypedColumnBase):
