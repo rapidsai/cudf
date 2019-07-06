@@ -80,10 +80,8 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            new_cats = tuple(
-                set([val for o in objs for val in o.cat().categories])
-            )
-            objs = [o.cat()._set_categories(new_cats) for o in objs]
+            cats = Column._concat([o.categories for o in objs]).unique()
+            objs = [o.cat()._set_categories(cats, True) for o in objs]
 
         head = objs[0]
         for obj in objs:
@@ -158,6 +156,19 @@ class Column(object):
             assert mask.size * utils.mask_bitsize >= len(self)
 
         self._update_null_count(null_count)
+
+    def equals(self, other):
+        if self is other:
+            return True
+        if other is None or len(self) != len(other):
+            return False
+        if len(self) == 1:
+            val = self[0] == other[0]
+            # when self is multiindex we need to checkall
+            if isinstance(val, np.ndarray):
+                return val.all()
+            return bool(val)
+        return self.unordered_compare('eq', other).min()
 
     def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0

@@ -866,6 +866,10 @@ class Series(object):
         return self._unordered_compare(other, "eq")
 
     def equals(self, other):
+        if self is other:
+            return True
+        if other is None or len(self) != len(other):
+            return False
         return self._unordered_compare(other, "eq").min()
 
     def ne(self, other, fill_value=None):

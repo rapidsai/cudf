@@ -20,6 +20,7 @@
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
+- PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 
 ## Bug Fixes
 

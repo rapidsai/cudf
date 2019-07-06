@@ -148,11 +148,8 @@ def melt(
     if not var_name:
         var_name = "variable"
 
-    mdata[var_name] = Series(
-        CategoricalColumn(
-            categories=tuple(value_vars), data=temp._column.data, ordered=False
-        )
-    )
+    mdata[var_name] = Series(CategoricalColumn(
+        categories=value_vars, data=temp._column.data, ordered=False))
 
     # Step 3: add values
     mdata[value_name] = Series._concat(
