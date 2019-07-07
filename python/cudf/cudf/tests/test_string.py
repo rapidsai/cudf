@@ -162,6 +162,8 @@ def test_string_repr(ps_gs, item):
 @pytest.mark.parametrize(
     "dtype",
     [
+        "str",
+        "object",
         "int8",
         "int16",
         "int32",
@@ -187,6 +189,8 @@ def test_string_astype(dtype):
             "2019-05-04T00:00:00Z",
             "2018-06-04T00:00:00Z",
         ]
+    elif dtype == "str" or dtype == "object":
+        data = ["ab", "cd", "ef", "gh", "ij"]
     ps = pd.Series(data)
     gs = Series(data)
 
@@ -204,6 +208,8 @@ def test_string_astype(dtype):
     "dtype",
     [
         "int8",
+        "str",
+        "object",
         "int16",
         "int32",
         "int64",

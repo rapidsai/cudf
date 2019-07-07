@@ -123,3 +123,35 @@ def test_rolling_with_offset(agg):
         getattr(gsr.rolling("2s"), agg)().fillna(-1),
         check_dtype=False,
     )
+
+
+def test_rolling_getattr():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.rolling(2).a.sum().fillna(-1),
+        gdf.rolling(2).a.sum().fillna(-1),
+        check_dtype=False,
+    )
+
+
+def test_rolling_getitem():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [1, 2, 3, 4]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.rolling(2)["a"].sum().fillna(-1),
+        gdf.rolling(2)["a"].sum().fillna(-1),
+        check_dtype=False,
+    )
+    assert_eq(
+        pdf.rolling(2)["a", "b"].sum().fillna(-1),
+        gdf.rolling(2)["a", "b"].sum().fillna(-1),
+        check_dtype=False,
+    )
+    assert_eq(
+        pdf.rolling(2)[["a", "b"]].sum().fillna(-1),
+        gdf.rolling(2)["a", "b"].sum().fillna(-1),
+        check_dtype=False,
+    )

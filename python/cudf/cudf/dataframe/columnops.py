@@ -56,6 +56,16 @@ class TypedColumnBase(Column):
         remove_base(mine)
         remove_base(theirs)
 
+        # Check categories via Column.equals(). Pop them off the
+        # dicts so the == below doesn't try to invoke `__eq__()`
+        if ('categories' in mine) or ('categories' in theirs):
+            if 'categories' not in mine:
+                return False
+            if 'categories' not in theirs:
+                return False
+            if not mine.pop('categories').equals(theirs.pop('categories')):
+                return False
+
         return type(self) == type(other) and mine == theirs
 
     def _replace_defaults(self):
@@ -313,6 +323,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         # CUDF assumes values are always contiguous
         if not arbitrary.flags["C_CONTIGUOUS"]:
             arbitrary = np.ascontiguousarray(arbitrary)
+
+        if dtype is not None:
+            arbitrary = arbitrary.astype(dtype)
+
         if arbitrary.dtype.kind == "M":
             data = datetime.DatetimeColumn.from_numpy(arbitrary)
         elif arbitrary.dtype.kind in ("O", "U"):
@@ -371,7 +385,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 data=padata,
                 mask=pamask,
                 null_count=arbitrary.null_count,
-                categories=arbitrary.dictionary.to_pylist(),
+                categories=arbitrary.dictionary,
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):

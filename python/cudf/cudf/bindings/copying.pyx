@@ -28,9 +28,10 @@ def clone_columns_with_size(in_cols, row_size):
     from cudf.dataframe import columnops
     out_cols = []
     for col in in_cols:
-        o_col = columnops.column_empty(row_size,
-                                       dtype = col.dtype,
-                                       masked = col.has_null_mask)
+        o_col = columnops.column_empty_like(col,
+                                            dtype = col.dtype,
+                                            masked = col.has_null_mask,
+                                            newsize = row_size)
         out_cols.append(o_col)
 
     return out_cols
@@ -118,7 +119,7 @@ def apply_gather_column(in_col, maps, out_col=None):
     """
 
     in_cols = [in_col]
-    out_cols = None if out_col == None else [out_col]
+    out_cols = None if out_col is None else [out_col]
 
     out_cols = apply_gather(in_cols, maps, out_cols)
 
@@ -209,7 +210,7 @@ def apply_scatter_column(in_col, maps, out_col=None):
     """
 
     in_cols = [in_col]
-    out_cols = None if out_col == None else [out_col]
+    out_cols = None if out_col is None else [out_col]
 
     out_cols = apply_scatter(in_cols, maps, out_cols)
 
