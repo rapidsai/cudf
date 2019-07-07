@@ -538,7 +538,8 @@ class StringColumn(columnops.TypedColumnBase):
         return self.element_indexing(arg)
 
     def astype(self, dtype):
-        if self.dtype == dtype:
+        if self.dtype == dtype or \
+           (dtype in ('str', 'object') and self.dtype in ('str', 'object')):
             return self
         elif dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
