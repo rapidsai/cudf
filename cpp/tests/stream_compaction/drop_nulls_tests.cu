@@ -62,16 +62,17 @@ void DropNulls(column_wrapper<T> const& source,
   gdf_column result{};
   EXPECT_NO_THROW(result = cudf::drop_nulls(source));
   EXPECT_EQ(result.null_count, 0);
-  EXPECT_TRUE(expected == result);
+  bool columns_equal{false};
+  EXPECT_TRUE(columns_equal = (expected == result));
 
-  /*if (!(expected == result)) {
+  if (!columns_equal) {
     std::cout << "expected\n";
     expected.print();
     std::cout << expected.get()->null_count << "\n";
     std::cout << "result\n";
     print_gdf_column(&result);
     std::cout << result.null_count << "\n";
-  }*/
+  }
 
   gdf_column_free(&result);
 }
@@ -148,11 +149,12 @@ struct DropNullsTableTest : GdfTest {};
  * to the specified expected result column.
  */
 void DropNullsTable(cudf::table const &source,
+                    std::vector<gdf_index_type> const &column_indices,
                     cudf::table const &expected,
                     cudf::any_or_all drop_if = cudf::ANY)
 {
   cudf::table result;
-  EXPECT_NO_THROW(result = cudf::drop_nulls(source, drop_if));
+  EXPECT_NO_THROW(result = cudf::drop_nulls(source, column_indices, drop_if));
 
   for (int c = 0; c < result.num_columns(); c++) {
     gdf_column *res = result.get_column(c);
@@ -162,6 +164,7 @@ void DropNullsTable(cudf::table const &source,
     EXPECT_TRUE(columns_equal = gdf_equal_columns(*res, *exp));
 
     if (!columns_equal) {
+      std:: cout << "Column " << c << "\n";
       std::cout << "expected\n";
       print_gdf_column(exp);
       std::cout << exp->null_count << "\n";
@@ -195,7 +198,9 @@ TEST_F(DropNullsTableTest, Identity)
   cudf::table table_source(cols);
   cudf::table table_expected(cols);
 
-  DropNullsTable(table_source, table_expected);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
+
+  DropNullsTable(table_source, column_indices, table_expected);
 }
 
 TEST_F(DropNullsTableTest, AllNull)
@@ -217,7 +222,9 @@ TEST_F(DropNullsTableTest, AllNull)
   cudf::table table_source(cols);
   cudf::table table_expected(0, column_dtypes(table_source), true, false);
 
-  DropNullsTable(table_source, table_expected);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
+
+  DropNullsTable(table_source, column_indices, table_expected);
 }
 
 TEST_F(DropNullsTableTest, EvensNull)
@@ -254,7 +261,9 @@ TEST_F(DropNullsTableTest, EvensNull)
   cols_expected.push_back(bool_expected.get());
   cudf::table table_expected(cols_expected);
 
-  DropNullsTable(table_source, table_expected);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
+
+  DropNullsTable(table_source, column_indices, table_expected);
 }
 
 TEST_F(DropNullsTableTest, OneColumnEvensNull)
@@ -291,11 +300,13 @@ TEST_F(DropNullsTableTest, OneColumnEvensNull)
   cols_expected.push_back(bool_expected.get());
   cudf::table table_expected(cols_expected);
 
-  DropNullsTable(table_source, table_expected, cudf::ANY);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
+
+  DropNullsTable(table_source, column_indices, table_expected, cudf::ANY);
 
   // nothing dropped if cudf::ALL is used for drop criteria since all columns
   // must be NULL to drop a row.
-  DropNullsTable(table_source, table_source, cudf::ALL);
+  DropNullsTable(table_source, column_indices, table_source, cudf::ALL);
 }
 
 TEST_F(DropNullsTableTest, SomeNullMasks)
@@ -328,11 +339,19 @@ TEST_F(DropNullsTableTest, SomeNullMasks)
   cols_expected.push_back(bool_expected.get());
   cudf::table table_expected(cols_expected);
 
-  DropNullsTable(table_source, table_expected, cudf::ANY);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
 
-  // nothing dropped if cudf::ALL is used for drop criteria since all columns
-  // must be NULL to drop a row.
-  DropNullsTable(table_source, table_source, cudf::ALL);
+  DropNullsTable(table_source, column_indices, table_expected, cudf::ANY);
+
+  // nothing dropped if cudf::ALL is used since all columns must be NULL to drop
+  DropNullsTable(table_source, column_indices, table_source, cudf::ALL);
+
+  // Test a subset of columns
+  std::vector<gdf_index_type> subset_columns{1, 2};
+
+  DropNullsTable(table_source, subset_columns, table_expected, cudf::ANY);
+  // nothing dropped if cudf::ALL is used since all columns must be NULL to drop
+  DropNullsTable(table_source, subset_columns, table_source, cudf::ALL);
 }
 
 TEST_F(DropNullsTableTest, NonalignedGap)
@@ -371,7 +390,9 @@ TEST_F(DropNullsTableTest, NonalignedGap)
   cols_expected.push_back(bool_expected.get());
   cudf::table table_expected(cols_expected);
 
-  DropNullsTable(table_source, table_expected);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
+
+  DropNullsTable(table_source, column_indices, table_expected);
 }
 
 TEST_F(DropNullsTableTest, NoNullMask)
@@ -390,5 +411,8 @@ TEST_F(DropNullsTableTest, NoNullMask)
   cudf::table table_source(cols);
   cudf::table table_expected(cols);
 
-  DropNullsTable(table_source, table_expected);
+  std::vector<gdf_index_type> column_indices{0, 1, 2};
+
+  DropNullsTable(table_source, column_indices, table_expected);
 }
+

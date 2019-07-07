@@ -113,25 +113,35 @@ enum any_or_all {
 /**
  * @brief Filters a table to remove null elements.
  *
- * Given an input table row `i` from the input columns is copied to the
+ * Filters the rows of the input table considering only specified columns for
+ * validity / null values.
+ * 
+ * Given an input table, row `i` from the input columns is copied to the
  * output if the row is not null. Null means:
- *  - If @p drop_if is ANY, that there is a null in any of the columns at that row.
- *  - If @p drop_if is ALL, that there are is a null in all columns at that row.
+ *  - If @p drop_if is ANY, that there is a null in any column indexed by @p
+ *    column_indices at that row.
+ *  - If @p drop_if is ALL, that there are is a null in all columns indexed by
+ *    @p column_indices at that row.
  *
+ * This operation is stable: the input order is preserved in the output.
+ * 
  * Note that the memory for the columns of the output table is allocated by this
  * function but must be freed by the caller when finished.
  *
  * Any non-nullable column in the input is treated as all non-null.
  *
- * @note if @p input.num_rows() is zero, there is no error, and an empty table
- * is returned
+ * @note if @p input.num_rows() is zero, or column_indices is empty, there is no
+ * error, and an empty table is returned
  *
  * @param[in] input The input table to filter
+ * @param[in] column_indices The indices of the columns to check for nulls
  * @param[in] drop_if If ANY, drop rows that have a null in any column.
  *                    If ALL, drop rows that have a null in all columns.
  * @return cudf::table Table containing all non-null rows of the input table
  */
-table drop_nulls(table const &input, any_or_all drop_if);
+table drop_nulls(table const &input, 
+                 std::vector<gdf_index_type> const& column_indices,
+                 any_or_all drop_if);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
