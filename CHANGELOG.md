@@ -33,6 +33,7 @@
 - PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
 - PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
 - PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
+- PR #2190 Fix issue in astype conversion of string column to 'str'
 
 
 # cuDF 0.8.0 (27 June 2019)
