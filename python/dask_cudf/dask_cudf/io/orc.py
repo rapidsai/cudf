@@ -2,7 +2,6 @@ from glob import glob
 
 from dask.base import tokenize
 from dask.bytes import open_files
-from dask.delayed import delayed
 from dask.compatibility import apply
 import dask.dataframe as dd
 
@@ -34,7 +33,10 @@ def read_orc(path, **kwargs):
         with files[0] as f:
             meta = cudf.read_orc(f, **kwargs)
 
-        dsk = {(name, i): (apply, _read_orc, [f], kwargs) for i, f in enumerate(files)}
+        dsk = {
+            (name, i): (apply, _read_orc, [f], kwargs)
+            for i, f in enumerate(files)
+        }
     else:
         filenames = sorted(glob(str(path)))
         meta = cudf.read_orc(filenames[0], **kwargs)
