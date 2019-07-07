@@ -645,19 +645,20 @@ class CategoricalIndex(GenericIndex):
     """
 
     def __init__(self, values, name=None):
-        if isinstance(values, pd.Series) and pd.api.types.is_categorical_dtype(
-            values.dtype
-        ):
+        if isinstance(values, CategoricalColumn):
+            values = values
+        elif isinstance(values, pd.Series) and \
+                pd.api.types.is_categorical_dtype(values.dtype):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
-                categories=values.cat.categories.tolist(),
-                ordered=values.cat.ordered,
+                categories=values.cat.categories,
+                ordered=values.cat.ordered
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             values = CategoricalColumn(
                 data=Buffer(values.codes),
-                categories=values.categories.tolist(),
-                ordered=values.ordered,
+                categories=values.categories,
+                ordered=values.ordered
             )
         elif isinstance(values, (list, tuple)):
             values = columnops.as_column(
@@ -675,7 +676,7 @@ class CategoricalIndex(GenericIndex):
 
     @property
     def categories(self):
-        return self._values.categories
+        return self._values.cat().categories
 
 
 class StringIndex(GenericIndex):
@@ -693,7 +694,7 @@ class StringIndex(GenericIndex):
         elif isinstance(values, StringIndex):
             if name is None:
                 name = values.name
-            self._values = values.values.copy()
+            self._values = values._values.copy()
         else:
             self._values = columnops.build_column(
                 nvstrings.to_device(values), dtype="object"
@@ -710,7 +711,7 @@ class StringIndex(GenericIndex):
         return self._values.categories
 
     def to_pandas(self):
-        result = pd.Index(self.values, name=self.name)
+        result = pd.Index(self.values, name=self.name, dtype="object")
         return result
 
     def take(self, indices):

@@ -888,28 +888,6 @@ def value_count(arr, total_size):
 
 
 @cuda.jit
-def gpu_recode(newdata, data, record_table, na_value):
-    for i in range(cuda.threadIdx.x, data.size, cuda.blockDim.x):
-        val = data[i]
-        newval = (
-            record_table[val] if 0 <= val < record_table.size else na_value
-        )
-        newdata[i] = newval
-
-
-def recode(data, recode_table, na_value):
-    """Recode data with the given recode table.
-    And setting out-of-range values to *na_value*
-    """
-    newdata = rmm.device_array_like(data)
-    recode_table = to_device(recode_table)
-    blksz = 32 * 4
-    blkct = min(16, max(1, data.size // blksz))
-    gpu_recode[blkct, blksz](newdata, data, recode_table, na_value)
-    return newdata
-
-
-@cuda.jit
 def gpu_row_matrix(rowmatrix, col, nrow, ncol):
     i = cuda.grid(1)
     if i < rowmatrix.size:

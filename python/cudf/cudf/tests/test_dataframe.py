@@ -2722,11 +2722,6 @@ def test_series_to_gpu_array(nan_value):
     )
 
 
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason="Our describe result is a DataFrame, not a Series. "
-    "Our quantile values do not perfectly match Pandas.",
-)
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
@@ -2790,10 +2785,6 @@ def test_dataframe_describe_include():
     )
 
 
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason="Quantile interpolation does not currently tightly match pandas.",
-)
 def test_dataframe_describe_default():
     np.random.seed(12)
     data_length = 10000
@@ -2805,9 +2796,7 @@ def test_dataframe_describe_default():
     gdf_results = df.describe().to_pandas()
     pdf_results = pdf.describe()
 
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
-    )
+    assert_eq(pdf_results, gdf_results)
 
 
 @pytest.mark.xfail(
@@ -2833,10 +2822,6 @@ def test_series_describe_include_all():
     )
 
 
-@pytest.mark.xfail(
-    raises=AssertionError,
-    reason="Quantile interpolation does not currently tightly match pandas.",
-)
 def test_dataframe_describe_percentiles():
     np.random.seed(12)
     data_length = 10000
@@ -2849,9 +2834,7 @@ def test_dataframe_describe_percentiles():
     gdf_results = df.describe(percentiles=sample_percentiles).to_pandas()
     pdf_results = pdf.describe(percentiles=sample_percentiles)
 
-    np.testing.assert_array_almost_equal(
-        gdf_results.values, pdf_results.values, decimal=4
-    )
+    assert_eq(pdf_results, gdf_results)
 
 
 def test_get_numeric_data():
@@ -3157,3 +3140,16 @@ def test_empty_dataframe_describe():
     actual = gdf.describe()
 
     assert_eq(expected, actual)
+
+
+def test_as_column_types():
+    from cudf.dataframe import columnops
+    pds = pd.Series(np.array([1, 2, 3]), dtype='float32')
+    gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype='float32'))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1, 2, 3], dtype='float32')
+    gds = Series([1, 2, 3], dtype='float32')
+
+    assert_eq(pds, gds)

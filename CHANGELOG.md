@@ -15,10 +15,13 @@
 - PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
+- PR #2088 Refactor of Python groupby code
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
 - PR #2184 handle remote orc files for dask-cudf
+- PR #2186 Add `getitem` and `getattr` style access to Rolling objects
+- PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 
 ## Bug Fixes
 
@@ -30,6 +33,8 @@
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
 - PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
 - PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
+- PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
+- PR #2190 Fix issue in astype conversion of string column to 'str'
 
 
 # cuDF 0.8.0 (27 June 2019)

@@ -3,6 +3,7 @@
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
@@ -16,19 +17,17 @@ class CategoricalAccessor(object):
     """
     This mimicks pandas `df.cat` interface.
     """
-
-    def __init__(self, parent, categories, ordered):
+    def __init__(self, parent):
         self._parent = parent
-        self._categories = tuple(categories)
-        self._ordered = ordered
 
     @property
     def categories(self):
-        return self._categories
+        from cudf.dataframe.index import as_index
+        return as_index(self._parent._categories)
 
     @property
     def ordered(self):
-        return self._ordered
+        return self._parent._ordered
 
     @property
     def codes(self):
@@ -52,25 +51,50 @@ class CategoricalAccessor(object):
         col = self._set_categories(new_categories)
         return Series(data=col)
 
-    def _set_categories(self, new_categories):
+    def _set_categories(self, new_categories, is_unique=False):
         """Returns a new CategoricalColumn with the categories set to the
-        specified *new_categories*."""
-        if new_categories is self._categories:
+        specified *new_categories*.
+
+        Notes
+        -----
+        Assumes ``new_categories`` is the same dtype as the current categories
+        """
+
+        cur_cats = self.categories
+
+        if cur_cats.equals(new_categories):
             return self._parent.copy()
-        codemap = {v: i for i, v in enumerate(new_categories)}
-        h_recoder = np.zeros(
-            len(self.categories), dtype=self._parent.data.dtype
-        )
-        for i, catval in enumerate(self.categories):
-            h_recoder[i] = codemap.get(catval, self._parent.default_na_value())
-        # recode the data buffer
-        recoded = cudautils.recode(
-            self._parent.data.to_gpu_array(),
-            h_recoder,
-            self._parent.default_na_value(),
-        )
-        buf_rec = Buffer(recoded)
-        return self._parent.replace(data=buf_rec, categories=new_categories)
+
+        from cudf import DataFrame
+
+        # Join the old and new categories to build a map from
+        # old to new codes, inserting na_sentinel for any old
+        # categories that don't exist in the new categories
+
+        new_cats = columnops.as_column(new_categories)
+
+        # Ensure new_categories is unique first
+        if not is_unique:
+            new_cats = new_cats.unique()
+
+        cur_codes = self.codes
+        new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
+        old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
+
+        cur_df = DataFrame({'old_codes': cur_codes})
+        old_df = DataFrame({'old_codes': old_codes, 'cats': cur_cats})
+        new_df = DataFrame({'new_codes': new_codes, 'cats': new_cats})
+
+        # Join the old and new categories and line up their codes
+        df = old_df.merge(new_df, on='cats', how='left')
+        # Join the old and new codes to "recode" the codes data buffer
+        df = cur_df.merge(df, on='old_codes', how='left')
+
+        kwargs = df['new_codes']._column._replace_defaults()
+        kwargs.update(categories=new_cats)
+        new_cats._name = None
+
+        return self._parent.replace(**kwargs)
 
 
 class CategoricalColumn(columnops.TypedColumnBase):
@@ -92,20 +116,25 @@ class CategoricalColumn(columnops.TypedColumnBase):
         ordered : bool
             whether the categorical has a logical ordering (e.g. less than)
         """
-        categories = kwargs.pop("categories")
-        ordered = kwargs.pop("ordered")
-        dtype = pd.core.dtypes.dtypes.CategoricalDtype(categories, ordered)
-        kwargs.update({"dtype": dtype})
+
+        ordered = bool(kwargs.pop('ordered'))
+        categories = kwargs.pop('categories', [])
+        # Default to String dtype if len(categories) == 0, like pandas does
+        categories = columnops.as_column(categories) if len(categories) > 0 \
+            else columnops.column_empty(0, np.dtype('object'), masked=False)
+
+        dtype = CategoricalDtype(ordered=ordered)
+        kwargs.update({'dtype': dtype})
         super(CategoricalColumn, self).__init__(**kwargs)
-        self._categories = tuple(categories)
-        self._ordered = bool(ordered)
+        self._categories = categories
+        self._ordered = ordered
 
     def serialize(self, serialize):
         header, frames = super(CategoricalColumn, self).serialize(serialize)
-        assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
-        header["categories"] = self._categories
-        header["ordered"] = self._ordered
+        header['ordered'] = self._ordered
+        header['categories'], category_frames = serialize(self._categories)
+        header['category_frame_count'] = len(category_frames)
+        frames.extend(category_frames)
         return header, frames
 
     @classmethod
@@ -113,18 +142,21 @@ class CategoricalColumn(columnops.TypedColumnBase):
         data, mask = super(CategoricalColumn, cls).deserialize(
             deserialize, header, frames
         )
-        dtype = deserialize(*header["dtype"])
-        categories = header["categories"]
-        ordered = header["ordered"]
-        col = cls(
+        if 'category_frame_count' not in header:
+            # Handle data from before categories was a cudf.Column
+            categories = header['categories']
+        else:
+            # Handle categories that were serialized as a cudf.Column
+            categories = frames[len(frames) - header['category_frame_count']:]
+            categories = deserialize(header['categories'], categories)
+            categories = columnops.as_column(categories)
+
+        return cls(
             data=data,
             mask=mask,
-            null_count=header["null_count"],
-            dtype=dtype,
             categories=categories,
-            ordered=ordered,
+            ordered=header["ordered"]
         )
-        return col
 
     def _replace_defaults(self):
         params = super(CategoricalColumn, self)._replace_defaults()
@@ -137,10 +169,12 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
         return self.view(numerical.NumericalColumn, dtype=self.data.dtype)
 
+    @property
+    def categories(self):
+        return self._categories
+
     def cat(self):
-        return CategoricalAccessor(
-            self, categories=self._categories, ordered=self._ordered
-        )
+        return CategoricalAccessor(self)
 
     def binary_operator(self, binop, rhs, reflect=False):
         msg = (
@@ -196,20 +230,18 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def to_pandas(self, index=None):
         codes = self.cat().codes.fillna(-1).to_array()
-        data = pd.Categorical.from_codes(
-            codes, categories=self._categories, ordered=self._ordered
-        )
+        categories = self._categories.to_pandas()
+        data = pd.Categorical.from_codes(codes,
+                                         categories=categories,
+                                         ordered=self._ordered)
         return pd.Series(data, index=index)
 
     def to_arrow(self):
-        indices = self.cat().codes.to_arrow()
-        ordered = self.cat()._ordered
-        dictionary = pa.array(self.cat().categories)
         return pa.DictionaryArray.from_arrays(
-            indices=indices,
-            dictionary=dictionary,
             from_pandas=True,
-            ordered=ordered,
+            ordered=self._ordered,
+            indices=self.as_numerical.to_arrow(),
+            dictionary=self._categories.to_arrow()
         )
 
     def _unique_segments(self):
@@ -224,13 +256,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return segs, sortedvals
 
     def unique(self, method=None):
-        return CategoricalColumn(
-            data=Buffer(
-                list(range(0, len(self._categories))), categorical=True
-            ),
-            categories=self._categories,
-            ordered=self._ordered,
-        )
+        codes = self.as_numerical.unique(method).data
+        return CategoricalColumn(data=codes,
+                                 categories=self._categories,
+                                 ordered=self._ordered)
 
     def unique_count(self, method="sort", dropna=True):
         if method != "sort":
@@ -254,10 +283,10 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return out_vals, out_counts
 
     def _encode(self, value):
-        return self._categories.index(value)
+        return self._categories.find_first_value(value)
 
     def _decode(self, value):
-        return self._categories[value]
+        return self._categories.element_indexing(value)
 
     def default_na_value(self):
         return -1
@@ -298,11 +327,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
                 fill_value = self.data.dtype.type(fill_value)
             else:
                 try:
-                    fill_value = self._encode(
-                        pd.Categorical(
-                            fill_value, categories=self.cat().categories
-                        )
-                    )
+                    fill_value = self._encode(fill_value)
                     fill_value = self.data.dtype.type(fill_value)
                 except (ValueError) as err:
                     err_msg = "fill value must be in categories"
@@ -311,7 +336,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
             # TODO: only required if fill_value has a subset of the categories:
             fill_value = fill_value.cat()._set_categories(
-                self.cat().categories
+                self._categories, is_unique=True
             )
             fill_value = columnops.as_column(fill_value.data).astype(
                 self.data.dtype
@@ -323,7 +348,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             result.data,
             "category",
             result.mask,
-            categories=self.cat().categories,
+            categories=self._categories,
         )
 
         return self._mimic_inplace(result.replace(mask=None), inplace)
@@ -332,17 +357,13 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         Returns offset of first value that matches
         """
-        value = pd.Categorical(value, categories=self.cat().categories)
-        value = value.codes[0].astype("int32")
-        return self.as_numerical.astype("int32").find_first_value(value)
+        return self.as_numerical.find_first_value(self._encode(value))
 
     def find_last_value(self, value):
         """
-        Returns offset of first value that matches
+        Returns offset of last value that matches
         """
-        value = pd.Categorical(value, categories=self.cat().categories)
-        value = value.codes[0].astype("int32")
-        return self.as_numerical.astype("int32").find_first_value(value)
+        return self.as_numerical.find_last_value(self._encode(value))
 
 
 def pandas_categorical_as_column(categorical, codes=None):

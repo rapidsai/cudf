@@ -411,6 +411,21 @@ class MultiIndex(Index):
             df.columns = name
         return df
 
+    def get_level_values(self, level):
+        colnames = list(self._source_data.columns)
+        if level not in colnames:
+            if isinstance(level, int):
+                if level < 0:
+                    level = level + len(colnames)
+                if level < 0 or level >= len(colnames):
+                    raise IndexError(f"Invalid level number: '{level}'")
+                level_idx = level
+                level = colnames[level_idx]
+            else:
+                raise KeyError(f"Level not found: '{level}'")
+        level_values = self._source_data[level]
+        return level_values
+
     def _to_frame(self):
         from cudf import DataFrame, Series
 

@@ -274,7 +274,7 @@ class DataFrame(object):
             self.columns, cudf.dataframe.multiindex.MultiIndex
         ) and isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if isinstance(arg, (str, numbers.Number)) or isinstance(arg, tuple):
+        if utils.is_single_value(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -871,7 +871,7 @@ class DataFrame(object):
                 raise ValueError(msg)
             self._index = _index
             for k in self.columns:
-                self[k].index = _index
+                self[k]._index = _index
             return
 
         new_length = len(_index)
@@ -889,7 +889,7 @@ class DataFrame(object):
         idx = as_index(_index)
         self._index = idx
         for k in self.columns:
-            self[k] = self[k].set_index(idx)
+            self[k]._index = idx
 
     def reindex(
         self, labels=None, axis=0, index=None, columns=None, copy=True
@@ -942,6 +942,7 @@ class DataFrame(object):
 
         df = self
         cols = columns
+        original_cols = df._cols
         dtypes = OrderedDict(df.dtypes)
         idx = labels if index is None and axis in (0, "index") else index
         cols = labels if cols is None and axis in (1, "columns") else cols
@@ -968,7 +969,11 @@ class DataFrame(object):
                 cols[name] = df[name].copy(deep=copy)
             else:
                 dtype = dtypes.get(name, np.float64)
-                col = columnops.column_empty(length, dtype, True)
+                col = original_cols.get(name, Series(dtype=dtype))._column
+                col = columnops.column_empty_like(col,
+                                                  dtype=dtype,
+                                                  masked=True,
+                                                  newsize=length)
                 cols[name] = Series(data=col, index=idx)
 
         return DataFrame(cols, idx)
@@ -2158,27 +2163,23 @@ class DataFrame(object):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
+
+            def set_categories(col, cats):
+                return col.cat._set_categories(cats, True).fillna(-1)
+
             if how == "left":
                 cats = lcats
-                rhs[idx_col_name] = (
-                    rhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
             elif how == "right":
                 cats = rcats
-                lhs[idx_col_name] = (
-                    lhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
-                cats = sorted(set(lcats) | set(rcats))
+                cats = columnops.as_column(lcats).append(rcats).unique()
 
-                lhs[idx_col_name] = (
-                    lhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
 
-                rhs[idx_col_name] = (
-                    rhs[idx_col_name].cat._set_categories(cats).fillna(-1)
-                )
+                rhs[idx_col_name] = set_categories(rhs[idx_col_name], cats)
                 rhs[idx_col_name] = rhs[idx_col_name]._column.as_numerical
 
         if lsuffix == "":
@@ -2263,12 +2264,13 @@ class DataFrame(object):
             result = Groupby(self, by=by)
             return result
         else:
-            from cudf.groupby.groupby import Groupby
+            from cudf.groupby.groupby import DataFrameGroupBy
 
+            # The corresponding pop() is in
+            # DataFrameGroupBy._apply_aggregation()
             nvtx_range_push("CUDF_GROUPBY", "purple")
-            # The matching `pop` for this range is inside LibGdfGroupby
-            # __apply_agg
-            result = Groupby(
+
+            result = DataFrameGroupBy(
                 self,
                 by=by,
                 method=method,
@@ -3221,7 +3223,7 @@ class DataFrame(object):
         result_columns = OrderedDict({})
         for col in columns:
             result_columns[col] = self[col]
-        return DataFrame(result_columns)
+        return DataFrame(result_columns, index=self.index)
 
     def select_dtypes(self, include=None, exclude=None):
         """Return a subset of the DataFrame’s columns based on the column dtypes.
