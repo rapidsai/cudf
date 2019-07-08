@@ -1875,6 +1875,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Calculate the quantile of this ColumnVector
    * @param method   the method used to calculate the quantile
    * @param quantile the quantile value [0,1]
+   * @return the quantile as double. The type can be changed in future
    */
   public Scalar exactQuantile(QuantileMethod method, double quantile) {
     return exactQuantile(this.getNativeCudfColumnAddress(), method.nativeId, quantile);
@@ -1883,6 +1884,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   /**
    * Calculate the approximate quantile of this ColumnVector
    * @param quantile the quantile value [0,1]
+   * @return the quantile, with the same type as this object
    */
   public Scalar approxQuantile(double quantile) {
     return approxQuantile(this.getNativeCudfColumnAddress(), quantile);

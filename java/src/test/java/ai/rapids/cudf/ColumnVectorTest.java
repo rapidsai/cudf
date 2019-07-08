@@ -20,6 +20,7 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import static ai.rapids.cudf.QuantileMethod.*;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
@@ -245,26 +246,28 @@ public class ColumnVectorTest {
     }
   }
 
+  static QuantileMethod[] methods = {LINEAR, LOWER, HIGHER, MIDPOINT, NEAREST};
+  static double[] quantiles = {0.0, 0.25, 0.33, 0.5, 1.0};
+
   @Test
-  void testIntegerQuantiles() {
+  void testQuantilesOnIntegerInput() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
-    int[] approxExpected = {-1, 1, 1, 2, 7};
+    int[] approxExpected = {-1, 1, 1, 2, 9};
     double[][] exactExpected = {
-        {-1.0,   1.0,   1.0,   2.0,   7.0},
-        {  -1,     1,     1,     2,     7},
-        {  -1,     1,     1,     2,     7},
-        {-1.0,   1.0,   1.0,   2.0,   7.0},
-        {  -1,     1,     1,     2,     7}};
-    double[] q = {0.0, 0.25, 0.33, 0.5, 1.0};
+        {-1.0,   1.0,   1.0,   2.5,   9.0},  // LINEAR
+        {  -1,     1,     1,     2,     9},  // LOWER
+        {  -1,     1,     1,     3,     9},  // HIGHER
+        {-1.0,   1.0,   1.0,   2.5,   9.0},  // MIDPOINT
+        {  -1,     1,     1,     2,     9}}; // NEAREST
 
-    try (ColumnVector cv = ColumnVector.fromBoxedInts(7, 0, 3, 4, 2, 1, -1, 1, 6)) {
-      for (int j = 0 ; j < q.length ; j++) {
-        Scalar result = cv.approxQuantile(q[j]);
-        assertEquals(approxExpected[j], result.getDouble(), 0.000000001);
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(7, 0, 3, 4, 2, 1, -1, 1, 6, 9)) {
+      // sorted: -1, 0, 1, 1, 2, 3, 4, 6, 7, 9
+      for (int j = 0 ; j < quantiles.length ; j++) {
+        Scalar result = cv.approxQuantile(quantiles[j]);
+        assertEquals(approxExpected[j], result.getInt());
 
-        for (int i = 0 ; i < QuantileMethod.values().length ; i++) {
-          QuantileMethod method = QuantileMethod.values()[i];
-          result = cv.exactQuantile(method, q[j]);
+        for (int i = 0 ; i < methods.length ; i++) {
+          result = cv.exactQuantile(methods[i], quantiles[j]);
           assertEquals(exactExpected[i][j], result.getDouble(), 0.000000001);
         }
       }
@@ -272,25 +275,24 @@ public class ColumnVectorTest {
   }
 
   @Test
-  void testDoubleQuantiles() {
+  void testQuantilesOnDoubleInput() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     double[] approxExpected = {-1.01, 0.8, 0.8, 2.13, 6.8};
     double[][] exactExpected = {
-        {-1.01, 0.8, 0.9984, 2.13, 6.8},
-        {-1.01, 0.8,    0.8, 2.13, 6.8},
-        {-1.01, 0.8,   1.11, 2.13, 6.8},
-        {-1.01, 0.8,  0.955, 2.13, 6.8},
-        {-1.01, 0.8,   1.11, 2.13, 6.8}};
-    double[] q = {0.0, 0.25, 0.33, 0.5, 1.0};
+        {-1.01, 0.8, 0.9984, 2.13, 6.8},  // LINEAR
+        {-1.01, 0.8,    0.8, 2.13, 6.8},  // LOWER
+        {-1.01, 0.8,   1.11, 2.13, 6.8},  // HIGHER
+        {-1.01, 0.8,  0.955, 2.13, 6.8},  // MIDPOINT
+        {-1.01, 0.8,   1.11, 2.13, 6.8}}; // NEAREST
 
     try (ColumnVector cv = ColumnVector.fromBoxedDoubles(6.8, 0.15, 3.4, 4.17, 2.13, 1.11, -1.01, 0.8, 5.7)) {
-      for (int j = 0 ; j < q.length ; j++) {
-        Scalar result = cv.approxQuantile(q[j]);
+      // sorted: -1.01, 0.15, 0.8, 1.11, 2.13, 3.4, 4.17, 5.7, 6.8
+      for (int j = 0; j < quantiles.length ; j++) {
+        Scalar result = cv.approxQuantile(quantiles[j]);
         assertEquals(approxExpected[j], result.getDouble(), 0.000000001);
 
-        for (int i = 0 ; i < QuantileMethod.values().length ; i++) {
-          QuantileMethod method = QuantileMethod.values()[i];
-          result = cv.exactQuantile(method, q[j]);
+        for (int i = 0 ; i < methods.length ; i++) {
+          result = cv.exactQuantile(methods[i], quantiles[j]);
           assertEquals(exactExpected[i][j], result.getDouble(), 0.000000001);
         }
       }
