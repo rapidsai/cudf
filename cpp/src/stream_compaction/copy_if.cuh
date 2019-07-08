@@ -19,7 +19,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/stream_compaction.hpp>
 
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 #include <table/device_table.cuh>
 
 #include <utilities/device_atomics.cuh>

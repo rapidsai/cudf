@@ -971,10 +971,9 @@ class DataFrame(object):
             else:
                 dtype = dtypes.get(name, np.float64)
                 col = original_cols.get(name, Series(dtype=dtype))._column
-                col = columnops.column_empty_like(col,
-                                                  dtype=dtype,
-                                                  masked=True,
-                                                  newsize=length)
+                col = columnops.column_empty_like(
+                    col, dtype=dtype, masked=True, newsize=length
+                )
                 cols[name] = Series(data=col, index=idx)
 
         return DataFrame(cols, idx)
@@ -1347,7 +1346,11 @@ class DataFrame(object):
         else:
             index_cols.append(self.index.as_column())
 
-        result_cols = cpp_drop_nulls(index_cols + data_cols)
+        input_cols = index_cols + data_cols
+
+        result_cols = cpp_drop_nulls(
+            input_cols, how=how, subset=range(1, len(input_cols))
+        )
 
         result_index_cols, result_data_cols = (
             result_cols[: len(index_cols)],

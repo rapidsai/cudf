@@ -6,6 +6,7 @@
 # cython: language_level = 3
 
 from libc.stdlib cimport free
+from libcpp.vector cimport vector
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
@@ -105,18 +106,25 @@ def apply_boolean_mask_table(cols, mask):
     pass
 
 
-def drop_nulls_table(cols, how='any'):
+def drop_nulls_table(cols, how="any", subset=None):
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
 
     cdef any_or_all drop_if
-    if how == 'any':
+    if how == "any":
         drop_if = ANY
     else:
         drop_if = ALL
 
+    cdef vector[gdf_index_type] column_indices
+    if subset is not None:
+        column_indices = subset
+    else:
+        column_indices = range(len(cols))
+
+    print(column_indices)
     with nogil:
-        c_out_table = drop_nulls(c_in_table[0], drop_if)
+        c_out_table = drop_nulls(c_in_table[0], column_indices, drop_if)
 
     free(c_in_table)
 
@@ -130,8 +138,8 @@ def apply_apply_boolean_mask(inp, mask):
         return apply_boolean_mask_table(inp, mask)
 
 
-def apply_drop_nulls(inp):
+def apply_drop_nulls(inp, how="any", subset=None):
     if isinstance(inp, Column):
         return drop_nulls_column(inp)
     else:
-        return drop_nulls_table(inp)
+        return drop_nulls_table(inp, how=how, subset=subset)

@@ -53,8 +53,9 @@ def test_dropna_series(data, nulls):
         {"a": ["d", "e", "f"], "b": ["a", None, "c"]},
     ],
 )
-def test_dropna_dataframe(data):
+@pytest.mark.parametrize("how", ["all", "any"])
+def test_dropna_dataframe(data, how):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(pdf.dropna(), gdf.dropna())
+    assert_eq(pdf.dropna(how=how), gdf.dropna(how=how))
