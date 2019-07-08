@@ -35,7 +35,7 @@
 class Gather: public cudf::benchmark {
 };
 
-template<class TypeParam, bool opt, bool coalesce>
+template<class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state){
   const gdf_size_type source_size{(gdf_size_type)state.range(0)};
   const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
@@ -80,29 +80,20 @@ void BM_gather(benchmark::State& state){
   cudf::table destination_table{ vp_dest };
 
   for(auto _ : state){
-    if(opt){
-      cudf::opt::gather(&source_table, gather_map.data().get(), &destination_table);
-    }else{
-      cudf::gather(&source_table, gather_map.data().get(), &destination_table);
-    }
+    cudf::gather(&source_table, gather_map.data().get(), &destination_table);
   }
   
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
-#define GBM_BENCHMARK_DEFINE(name, type, opt, coalesce)                   \
-BENCHMARK_DEFINE_F(Gather, name)                                          \
-(::benchmark::State& st) {                                                \
-  BM_gather<type, opt, coalesce>(st);                                     \
+#define GBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
+BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State& state) {           \
+  BM_gather<type, coalesce>(state);                                     \
 }
 
-GBM_BENCHMARK_DEFINE(double_opt_x_coa_x,double, true, true);
-GBM_BENCHMARK_DEFINE(double_opt_o_coa_x,double,false, true);
-GBM_BENCHMARK_DEFINE(double_opt_x_coa_o,double, true,false);
-GBM_BENCHMARK_DEFINE(double_opt_o_coa_o,double,false,false);
+GBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
+GBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);
 
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
-BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
-BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Gather, double_coalesce_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Gather, double_coalesce_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});

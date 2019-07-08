@@ -32,13 +32,10 @@
 
 #include "../fixture/benchmark_fixture.hpp"
 
-template<typename T, bool opt_, bool coalesce_>
 class Scatter: public cudf::benchmark {
-public:
-  using TypeParam = T;
 };
 
-template<class TypeParam, bool opt, bool coalesce>
+template<class TypeParam, bool coalesce>
 void BM_scatter(benchmark::State& state){
   const gdf_size_type source_size{(gdf_size_type)state.range(0)};
   const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
@@ -82,28 +79,19 @@ void BM_scatter(benchmark::State& state){
   cudf::table source_table{ vp_src };
   cudf::table destination_table{ vp_dest };
 
-  for(auto _ : state){
-    if(opt){
-      cudf::opt::scatter(&source_table, scatter_map.data().get(), &destination_table);
-    }else{
-      cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
-    }
-  }
+  cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
   
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
-#define SBM_BENCHMARK_DEFINE(name, type, opt, coalesce)                   \
-BENCHMARK_TEMPLATE_DEFINE_F(Scatter, name, type, opt, coalesce)            \
-(::benchmark::State& st) {                                                \
-  BM_scatter<TypeParam, opt, coalesce>(st);                                \
+#define SBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
+BENCHMARK_DEFINE_F(Scatter, name)(::benchmark::State& state) {          \
+  BM_scatter<type, coalesce>(state);                                    \
 }
 
-SBM_BENCHMARK_DEFINE(double_opt_x_coa_x,double, true, true);
-SBM_BENCHMARK_DEFINE(double_opt_o_coa_x,double,false, true);
-SBM_BENCHMARK_DEFINE(double_opt_x_coa_o,double, true,false);
-SBM_BENCHMARK_DEFINE(double_opt_o_coa_o,double,false,false);
+SBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
+SBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);
 
-BENCHMARK_REGISTER_F(Scatter, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
-BENCHMARK_REGISTER_F(Scatter, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Scatter, double_coalesce_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Scatter, double_coalesce_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});

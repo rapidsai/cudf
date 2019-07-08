@@ -324,7 +324,6 @@ add_library(cudf SHARED
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
             src/copying/gather.cu
-            src/copying/gather_opt.cu
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu

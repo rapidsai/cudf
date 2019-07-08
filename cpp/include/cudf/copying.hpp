@@ -133,6 +133,9 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  * according to a scatter map such that row "i" from the source columns will be
  * scattered to row "scatter_map[i]" in the destination columns.
  *
+ * `data` and `valid` of a specific row of the destination_column is kept 
+ * unchanged if the `scatter_map` does not map to that row.
+ * 
  * The datatypes between coresponding columns in the source and destination
  * columns must be the same.
  *
@@ -190,12 +193,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
-namespace opt {
-void gather(table const* source_table, gdf_index_type const gather_map[],
-               table* destination_table);
-void scatter(table const* source_table, gdf_index_type const scatter_map[],
-                table* destination_table); 
-}
+
 /**
  * @brief Slices a column (including null values) into a set of columns
  * according to a set of indices.

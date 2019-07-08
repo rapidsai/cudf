@@ -301,12 +301,6 @@ set(COPYING_TEST_SRC
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
-set(COPYING_OPT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_opt_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_opt_tests.cu")
-
-ConfigureTest(COPYING_OPT_TEST "${COPYING_OPT_TEST_SRC}")
-
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
 
