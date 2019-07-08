@@ -15,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cassert>
 #include <cudf/copying.hpp>
 #include <cudf/table.hpp>

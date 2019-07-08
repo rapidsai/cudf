@@ -23,7 +23,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 /**---------------------------------------------------------------------------*
- * @file bitmask_ops.hpp
+ * @file legacy/bitmask_ops.hpp
  * @brief Internal functions for bitmask operations.
 *---------------------------------------------------------------------------**/
 
