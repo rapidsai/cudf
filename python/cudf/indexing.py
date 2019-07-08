@@ -1,3 +1,4 @@
+import numbers
 import numpy as np
 import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
@@ -67,19 +68,31 @@ class _SeriesIlocIndexer(object):
 class _DataFrameIndexer(object):
 
     def __getitem__(self, arg):
-        if type(arg) is not tuple:
-            arg = (arg, slice(None, None))
-
-        if self._is_multiindex_arg(arg):
-            return self._getitem_multiindex_arg(arg)
-        elif self._is_scalar_access(arg):
-            return self._getitem_scalar(arg)
-
+        arg = self._create_valid_tuple(arg)
         df = self._getitem_tuple_arg(arg)
 
-        if self._can_downcast_to_series(df, arg):
-            return self._downcast_to_series(df, arg)
         return df
+
+    def _create_valid_tuple(self, arg):
+        if isinstance(arg, (str, numbers.Number)):
+            return (arg, slice(None))
+        if type(arg) is not tuple:
+            arg = (arg, slice(None))
+        if isinstance(self._df.columns, cudf.MultiIndex):
+            # the second arg can be: single value, tuple of valid keys, slice,
+            # or None
+            if not isinstance(arg, tuple) or len(arg) == 1:
+                arg = (arg, slice(None))
+            elif not self._df.columns._is_valid_index_key(arg[1]):
+                raise KeyError("Column index not recognized as valid tuple.")
+        if isinstance(self._df.index, cudf.MultiIndex):
+            # the first arg can be: single value, tuple of valid keys, or slice
+            if not self._df.index._is_valid_index_key(arg[0]):
+                raise KeyError("Row index not recognized as valid tuple.")
+            if not isinstance(arg[0], (slice, tuple)) or len(arg) == 1:
+                arg = (arg, slice(None))
+        return arg
+
 
     def _is_scalar_access(self, arg):
         """
@@ -93,15 +106,6 @@ class _DataFrameIndexer(object):
             if not is_single_value(obj):
                 return False
         return True
-
-    def _is_multiindex_arg(self, arg):
-        """
-        Determine if we are indexing with a MultiIndex
-        """
-        return (
-            isinstance(self._df.index, cudf.dataframe.multiindex.MultiIndex)
-            and isinstance(arg, tuple)
-        )
 
     def _can_downcast_to_series(self, df, arg):
         """
@@ -171,15 +175,26 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
-        columns = self._get_column_selection(arg[1])
-        df = DataFrame()
-        for col in columns:
-            df.add_column(name=col, data=self._df[col].loc[arg[0]])
+        from cudf import MultiIndex
+        if isinstance(self._df.columns, MultiIndex):
+            df = self._df.columns._get_column_major(self._df, arg[1])
+        else:
+            columns = self._get_column_selection(arg[1])
+            df = DataFrame()
+            for col in columns:
+                df.add_column(name=col, data=self._df[col])
+        if isinstance(df.index, MultiIndex):
+            return df.index._get_row_major(df, arg[0])
+        else:
+            for col in df.columns:
+                df[col] = df[col].iloc[arg[0]]
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):
                 df.index = as_index(arg[0].start)
             else:
                 df.index = as_index(arg[0])
+        if self._can_downcast_to_series(df, arg):
+            return self._downcast_to_series(df, arg)
         return df
 
     def _getitem_multiindex_arg(self, arg):
@@ -226,16 +241,25 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         self._df = df
 
     def _getitem_tuple_arg(self, arg):
+        from cudf import MultiIndex
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
         columns = self._get_column_selection(arg[1])
-
-        if isinstance(arg[0], slice):
-            df = DataFrame()
-            for col in columns:
-                df.add_column(name=col, data=self._df[col].iloc[arg[0]])
+        if isinstance(self._df.columns, MultiIndex):
+            df = self._df.columns._get_column_major(self._df, arg)
         else:
-            df = self._df._columns_view(columns).take(arg[0])
+            if isinstance(arg[1], slice):
+                df = DataFrame()
+                for col in columns:
+                    df.add_column(name=col, data=self._df[col])
+            else:
+                df = self._df._columns_view(columns).take(arg[0])
+        print(arg)
+        if isinstance(df.index, MultiIndex):
+            return df.index._get_row_major(df, arg[0])
+        else:
+            for col in df.columns:
+                df[col] = df[col].iloc[arg[0]]
 
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):

@@ -189,31 +189,30 @@ def test_multiindex_getitem(pdf, gdf, pdfIndex):
     assert_eq(pdf.index[0], gdf.index[0])
 
 
-def test_multiindex_loc(pdf, gdf, pdfIndex):
+@pytest.mark.parametrize(
+    "key_tuple",
+    [
+        # return 2 rows, 0 remaining keys = dataframe with entire index
+        (('a', 'store', 'clouds', 'fire'), slice(None)),
+        # return 2 rows, 1 remaining key = dataframe with n-k index columns
+        ('a', 'store', 'storm'),
+        # return 2 rows, 2 remaining keys = dataframe with n-k index columns
+        ('a', 'store'),
+        # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
+        ('a',),
+        # return 1 row, 0 remaining keys = dataframe with entire index
+        ('a', 'store', 'storm', 'smoke'),
+        # return 1 row and 1 remaining key = series
+        ('c', 'forest', 'clear'),
+    ],
+)
+def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    # return 2 rows, 0 remaining keys = dataframe with entire index
-    assert_eq(pdf.loc[('a', 'store', 'clouds', 'fire'), :],
-              gdf.loc[('a', 'store', 'clouds', 'fire'), :])
-    # return 2 rows, 1 remaining key = dataframe with n-k index columns
-    assert_eq(pdf.loc[('a', 'store', 'storm')],
-              gdf.loc[('a', 'store', 'storm')])
-    # return 2 rows, 2 remaining keys = dataframe with n-k index columns
-    assert_eq(pdf.loc[('a', 'store')],
-              gdf.loc[('a', 'store')])
-    assert_eq(pdf.loc[('b', 'house')],
-              gdf.loc[('b', 'house')])
-    # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
-    assert_eq(pdf.loc[('a',)],
-              gdf.loc[('a',)])
-    # return 1 row, 0 remaining keys = dataframe with entire index
-    assert_eq(pdf.loc[('a', 'store', 'storm', 'smoke')],
-              gdf.loc[('a', 'store', 'storm', 'smoke')])
-    # return 1 row and 1 remaining key = series
-    assert_eq(pdf.loc[('c', 'forest', 'clear')],
-              gdf.loc[('c', 'forest', 'clear')])
+    assert_eq(pdf.loc[key_tuple],
+              gdf.loc[key_tuple])
 
 
 @pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet")
@@ -418,65 +417,24 @@ def test_multiindex_equality():
     mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
                           codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                           names=['x', 'y'])
-    mi2 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
+    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
                           codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                           names=['x', 'y'])
     assert_eq(mi1, mi2)
 
     # mi made from different groupbys are they not equal?
     mi1 = gdf.groupby(['x', 'y']).mean().index
-    mi2 = gdf.groupby(['x', 'z']).mean().index
+    mi1 = gdf.groupby(['x', 'z']).mean().index
     assert_neq(mi1, mi2)
 
     # mi made from different manuals are they not equal?
     mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
                           codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                           names=['x', 'y'])
-    mi2 = cudf.MultiIndex(levels=[[0, 3, 4, 5], [1, 2, 5]],
+    mi1 = cudf.MultiIndex(levels=[[0, 3, 4, 5], [1, 2, 5]],
                           codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
                           names=['x', 'y'])
     assert_neq(mi1, mi2)
-
-
-def test_multiindex_equals():
-    # mi made from groupby
-    # mi made manually to be identical
-    # are they equal?
-    gdf = cudf.DataFrame({'x': [1, 5, 3, 4, 1],
-                          'y': [1, 1, 2, 2, 5],
-                          'z': [0, 1, 0, 1, 0]})
-    mi1 = gdf.groupby(['x', 'y']).mean().index
-    mi2 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
-                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-                          names=['x', 'y'])
-    assert_eq(mi1.equals(mi2), True)
-
-    # mi made from two groupbys, are they equal?
-    mi2 = gdf.groupby(['x', 'y']).max().index
-    assert_eq(mi1.equals(mi2), True)
-
-    # mi made manually twice are they equal?
-    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
-                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-                          names=['x', 'y'])
-    mi2 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
-                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-                          names=['x', 'y'])
-    assert_eq(mi1.equals(mi2), True)
-
-    # mi made from different groupbys are they not equal?
-    mi1 = gdf.groupby(['x', 'y']).mean().index
-    mi2 = gdf.groupby(['x', 'z']).mean().index
-    assert_eq(mi1.equals(mi2), False)
-
-    # mi made from different manuals are they not equal?
-    mi1 = cudf.MultiIndex(levels=[[1, 3, 4, 5], [1, 2, 5]],
-                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-                          names=['x', 'y'])
-    mi2 = cudf.MultiIndex(levels=[[0, 3, 4, 5], [1, 2, 5]],
-                          codes=[[0, 0, 1, 2, 3], [0, 2, 1, 1, 0]],
-                          names=['x', 'y'])
-    assert_eq(mi1.equals(mi2), False)
 
 
 def test_multiindex_copy():
@@ -505,20 +463,29 @@ def test_multiindex_copy():
     assert_eq(mi1, mi2)
 
 
-def test_multiindex_iloc(pdf, gdf, pdfIndex):
+@pytest.mark.parametrize(
+    "iloc_range",
+    [
+        0,
+        1,
+        slice(None, 0),
+        slice(None, 1),
+        slice(0, 1),
+        slice(1, 2),
+        slice(0, 2),
+        slice(0, None),
+        slice(1, None),
+    ],
+)
+def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_range):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.iloc[0], gdf.iloc[0])
-    assert_eq(pdf.iloc[1], gdf.iloc[1])
-    assert_eq(pdf.iloc[:0], gdf.iloc[:0], check_index_type=False)
-    assert_eq(pdf.iloc[:1], gdf.iloc[:1])
-    assert_eq(pdf.iloc[0:1], gdf.iloc[0:1])
-    assert_eq(pdf.iloc[1:2], gdf.iloc[1:2])
-    assert_eq(pdf.iloc[0:2], gdf.iloc[0:2])
-    assert_eq(pdf.iloc[0:], gdf.iloc[0:])
-    assert_eq(pdf.iloc[1:], gdf.iloc[1:])
+    assert_eq(pdf.iloc[iloc_range],
+              gdf.iloc[iloc_range],
+              check_index_type=False
+    )
 
 
 def test_multiindex_to_frame(pdfIndex):

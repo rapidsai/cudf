@@ -235,8 +235,9 @@ class MultiIndex(Index):
                                                                  row_tuple)
             valid_indices = arange(start, stop, step)
             row_tuple = [row_tuple]
-        elif isinstance(row_tuple[0], numbers.Number):
-            valid_indices = row_tuple[0]
+        elif isinstance(row_tuple, numbers.Number):
+            valid_indices = row_tuple
+            row_tuple = [row_tuple]
         else:
             valid_indices = self._compute_validity_mask(df.index, row_tuple)
         from cudf import Series
@@ -321,6 +322,19 @@ class MultiIndex(Index):
             return tuples
         else:
             return tuples, slice(None)
+
+    def _is_valid_index_key(self, arg):
+        """
+        Determines by reflecting on each level if a value or tuple of values
+        is a valid key indexing into the MultiIndex
+        """
+        arg = [arg] if isinstance(arg, (str, numbers.Number, slice)) else list(arg)
+        if isinstance(arg[0], (numbers.Number, slice)):
+            return True
+        for idx, key in enumerate(arg):
+            if key not in self.levels[idx]:
+                return False
+        return True
 
     def __len__(self):
         return len(self._source_data)
