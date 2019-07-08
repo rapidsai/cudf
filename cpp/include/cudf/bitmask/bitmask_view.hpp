@@ -44,9 +44,6 @@ namespace cudf {
  * bit index:  7 6 5 4 3 2 1 0
  * bits: (MSB) 0 1 0 1 1 1 1 1 (LSB)
  * ```
- *
- * Provides `__device__` functions for accessing and modifying the state of
- * elements and individual bits within the bitmask.
  *---------------------------------------------------------------------------**/
 class mutable_bitmask_view {
  public:
@@ -125,9 +122,6 @@ class mutable_bitmask_view {
  * bit index:  7 6 5 4 3 2 1 0
  * bits: (MSB) 0 1 0 1 1 1 1 1 (LSB)
  * ```
- *
- * Provides `__device__` functions for accessing the state of
- * elements and individual bits within the bitmask.
  *---------------------------------------------------------------------------**/
 class bitmask_view {
  public:

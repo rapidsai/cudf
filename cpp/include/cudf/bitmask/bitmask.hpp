@@ -15,8 +15,8 @@
  */
 #pragma once
 
-#include "bitmask_view.hpp"
 #include <cudf/types.hpp>
+#include "bitmask_view.hpp"
 
 #include <rmm/device_buffer.hpp>
 
@@ -30,7 +30,22 @@ device_memory_resource* get_default_resource();
 }  // namespace rmm
 
 namespace cudf {
-
+/**---------------------------------------------------------------------------*
+ * @brief A memory owning bitmask class.
+ *
+ *  A `bitmask` is a contiguous set of `size` bits in device memory. The bits in
+ * the range `[0, size)` are the "represented bits". Bits outside this range are
+ * undefined.
+ *
+ * The `bitmask` uses LSB ordering, e.g., `bit_index` 0 refers to the
+ * *least* significant bit of the *first* element in the `bitmask`.
+ *
+ * For example:
+ * ```
+ * bit index:  7 6 5 4 3 2 1 0
+ * bits: (MSB) 0 1 0 1 1 1 1 1 (LSB)
+ * ```
+ *---------------------------------------------------------------------------**/
 class bitmask {
  public:
   bitmask() = default;
@@ -47,8 +62,8 @@ class bitmask {
    * @note Bits outside the range [0,size) are undefined.
    *
    * @param size[in] The minimum number of bits in the bitmask
-   * @param padding_boundary[in]  optional, specifies the quantum, in bytes, of
-   * the amount of memory allocated (i.e. the allocation size is padded to a
+   * @param padding_boundary[in]  optional, specifies the quantum, in bytes,
+   *of the amount of memory allocated (i.e. the allocation size is padded to a
    * multiple of this value).
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
@@ -62,7 +77,8 @@ class bitmask {
    *
    * Copies the contents of a `device_buffer` to use a bitmask.
    *
-   * Requires that `buffer` contain sufficient storage to represent `size` bits.
+   * Requires that `buffer` contain sufficient storage to represent `size`
+   *bits.
    *
    * @param size The number of bits represented by the bitmask
    * @param buffer The `device_buffer` to be copied from
@@ -74,7 +90,8 @@ class bitmask {
    *
    * Moves the contents from a `device_buffer` to use a bitmask.
    *
-   * Requires that `buffer` contain sufficient storage to represent `size` bits.
+   * Requires that `buffer` contain sufficient storage to represent `size`
+   *bits.
    *
    * @param size The number of bits represented by the bitmask
    * @param mask The `device_buffer` to move from
@@ -82,7 +99,8 @@ class bitmask {
   bitmask(size_type size, rmm::device_buffer&& mask) noexcept;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new bitmask by copying from an existing `bitmask_view`.
+   * @brief Construct a new bitmask by copying from an existing
+   *`bitmask_view`.
    *
    * @param view[in]  The `bitmask_view` to copy from.
    * @param mr[in] optional, the `device_memory_resource` to use for device
@@ -99,7 +117,8 @@ class bitmask {
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
-  explicit bitmask( mutable_bitmask_view view,
+  explicit bitmask(
+      mutable_bitmask_view view,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
@@ -108,38 +127,52 @@ class bitmask {
   size_type size() const noexcept { return _size; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Constructs an immutable, zero-copy `bitmask_view` with device-level
-   * accessors for the contents of the bitmask.
+   * @brief Constructs an immutable, zero-copy view of the bitmask
    *
    * @return bitmask_view The view of the bitmask data
    *---------------------------------------------------------------------------**/
-  bitmask_view view() const noexcept { return this->operator bitmask_view(); }
+  bitmask_view view() const noexcept;
 
   /**---------------------------------------------------------------------------*
-   * @brief Constructs a mutable, zero-copy view of the bitmask with
-   * device-level accessors and functions for modifying the contents of the
-   * bitmask.
+   * @brief Constructs a mutable, zero-copy view of the bitmask
    *
    * @return mutable_bitmask_view The mutable view of the bitmask data
    *---------------------------------------------------------------------------**/
-  mutable_bitmask_view mutable_view() noexcept {
-    return this->operator mutable_bitmask_view();
-  }
+  mutable_bitmask_view mutable_view() noexcept;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructs a zero-copy immutable view of a "slice" of the bitmask
+   * with the specified offset and size.
+   *
+   * @param offset The bit index of the first bit in the slice
+   * @param size optional, the number of bits in the slice. If zero, slices from
+   * the offset to the size of the source bitmask
+   * @return bitmask_view
+   *---------------------------------------------------------------------------**/
+  bitmask_view slice(size_type offset, size_type size = 0) const noexcept;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructs a zero-copy mutable view of a "slice" of the bitmask
+   * with the specified offset and size.
+   *
+   * @param offset The bit index of the first bit in the slice
+   * @param size optional, the number of bits in the slice. If zero, slices from
+   * the offset to the size of the source bitmask
+   * @return bitmask_view
+   *---------------------------------------------------------------------------**/
+  mutable_bitmask_view mutable_slice(size_type offset, size_type size = 0) const
+      noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a zero-copy `mutable_bitmask_view` from this `bitmask`
    *---------------------------------------------------------------------------**/
-  operator mutable_bitmask_view() noexcept {
-    return mutable_bitmask_view{static_cast<bitmask_type*>(_data.data()),
-                                _size};
-  }
+  operator mutable_bitmask_view() noexcept;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a zero-copy immutable `bitmask_view` from this `bitmask`.
+   * @brief Construct a zero-copy immutable `bitmask_view` from this
+   *`bitmask`.
    *---------------------------------------------------------------------------**/
-  operator bitmask_view() const noexcept {
-    return bitmask_view{static_cast<bitmask_type const*>(_data.data()), _size};
-  }
+  operator bitmask_view() const noexcept;
 
  private:
   rmm::device_buffer _data{};
