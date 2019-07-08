@@ -475,18 +475,6 @@ class RangeIndex(Index):
     def is_monotonic_decreasing(self):
         return self._start >= self._stop
 
-    @property
-    def is_unique(self):
-        return True
-
-    @property
-    def is_monotonic_increasing(self):
-        return self._start <= self._stop
-
-    @property
-    def is_monotonic_decreasing(self):
-        return self._start >= self._stop
-
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
