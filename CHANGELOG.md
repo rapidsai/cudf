@@ -24,6 +24,7 @@
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
+- PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 
 ## Bug Fixes
 
