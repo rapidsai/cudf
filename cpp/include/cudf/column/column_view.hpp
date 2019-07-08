@@ -15,7 +15,8 @@
  */
 #pragma once
 
-#include "types.hpp"
+#include <cudf/bitmask/bitmask_view.hpp>
+#include <cudf/types.hpp>
 
 namespace cudf {
 struct column_view {
@@ -24,23 +25,21 @@ struct column_view {
       : _data{data}, _type{type}, _size{size}, _bitmask{bitmask} {}
 
   template <typename T>
-  __host__ __device__ T const* typed_data() const noexcept {
+  T const* typed_data() const noexcept {
     return static_cast<T const*>(_data);
   }
 
-  __host__ __device__ void const* data() const noexcept { return _data; }
+  void const* data() const noexcept { return _data; }
 
-  __device__ bool is_valid(size_type i) const noexcept {
-    return _bitmask.bit_is_set(i);
-  }
+  //__device__ bool is_valid(size_type i) const noexcept {
+  //  return _bitmask.bit_is_set(i);
+  //}
 
-  __device__ bool is_null(size_type i) const noexcept {
-    return not is_valid(i);
-  }
+  //__device__ bool is_null(size_type i) const noexcept {
+  //  return not is_valid(i);
+  //}
 
-  __host__ __device__ bool nullable() const noexcept {
-    return nullptr != _bitmask.data();
-  }
+  bool nullable() const noexcept { return nullptr != _bitmask.data(); }
 
   /*
     __host__ __device__ size_type null_count() const noexcept {
@@ -48,17 +47,13 @@ struct column_view {
     }
     */
 
-  __host__ __device__ size_type size() const noexcept { return _size; }
+  size_type size() const noexcept { return _size; }
 
-  __host__ __device__ data_type type() const noexcept { return _type; }
+  data_type type() const noexcept { return _type; }
 
-  __host__ __device__ bitmask_view const bitmask() const noexcept {
-    return _bitmask;
-  }
+  bitmask_view const bitmask() const noexcept { return _bitmask; }
 
-  __host__ __device__ column_view const* other() const noexcept {
-    return _other;
-  }
+  column_view const* other() const noexcept { return _other; }
 
  private:
   void const* _data{nullptr};

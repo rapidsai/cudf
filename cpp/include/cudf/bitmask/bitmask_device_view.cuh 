@@ -13,7 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "types.hpp"
+#pragma once 
+
+#include <cudf/types.hpp>
 
 #include <cassert>
 #include <climits>
@@ -23,6 +25,7 @@ namespace cudf {
 namespace detail {
 template <typename T>
 constexpr inline std::size_t size_in_bits() {
+  static_assert(CHAR_BIT == 8, "Size of a byte must be 8 bits.");
   return sizeof(T) * CHAR_BIT;
 }
 }  // namespace detail
@@ -69,18 +72,21 @@ constexpr __host__ __device__ inline size_type intra_element_index(
  * Provides `__device__` functions for accessing and modifying the state of
  * elements and individual bits within the bitmask.
  *---------------------------------------------------------------------------**/
-class mutable_bitmask_view {
+class mutable_bitmask_device_view {
  public:
-  mutable_bitmask_view() = default;
-  ~mutable_bitmask_view() = default;
-  mutable_bitmask_view(mutable_bitmask_view const& other) = default;
-  mutable_bitmask_view(mutable_bitmask_view&& other) = default;
-  mutable_bitmask_view& operator=(mutable_bitmask_view const& other) = default;
-  mutable_bitmask_view& operator=(mutable_bitmask_view&& other) = default;
+  mutable_bitmask_device_view() = default;
+  ~mutable_bitmask_device_view() = default;
+  mutable_bitmask_device_view(mutable_bitmask_device_view const& other) =
+      default;
+  mutable_bitmask_device_view(mutable_bitmask_device_view&& other) = default;
+  mutable_bitmask_device_view& operator=(
+      mutable_bitmask_device_view const& other) = default;
+  mutable_bitmask_device_view& operator=(mutable_bitmask_device_view&& other) =
+      default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a `mutable_bitmask_view` from a raw device memory pointer
-   * and a size.
+   * @brief Construct a `mutable_bitmask_device_view` from a raw device memory
+   *pointer and a size.
    *
    * Optionally accepts an `offset` (defaults to zero) to allow zero-copy
    * slicing. The `offset` indicates the bit index of the first represented bit
@@ -94,8 +100,8 @@ class mutable_bitmask_view {
    * @param offset optional, the bit index of the first represented bit.
    * Defaults to 0
    *---------------------------------------------------------------------------**/
-  mutable_bitmask_view(bitmask_type* mask, size_type size,
-                       size_type offset = 0);
+  mutable_bitmask_device_view(bitmask_type* mask, size_type size,
+                              size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the specified bit is set to `1`
@@ -107,8 +113,9 @@ class mutable_bitmask_view {
   __device__ bool bit_is_set(size_type bit_index) const noexcept {
     assert(bit_index >= 0);
     assert(bit_index < _size);
-    return _mask[element_index(bit_index)] &
-           (bitmask_type{1} << intra_element_index(bit_index));
+    auto element_index = element_index(bit_index);
+    auto intra_element_index = intra_element_index(bit_index);
+    return _mask[element_index] & (bitmask_type{1} << intra_element_index);
   }
 
   /**---------------------------------------------------------------------------*
@@ -126,8 +133,9 @@ class mutable_bitmask_view {
   __device__ void set_bit(size_type bit_index) noexcept {
     assert(bit_index >= 0);
     assert(bit_index < _size);
-    atomicOr(&_mask[element_index(bit_index)],
-             (bitmask_type{1} << intra_element_index(bit_index)));
+    auto element_index = element_index(bit_index);
+    auto intra_element_index = intra_element_index(bit_index);
+    atomicOr(&_mask[element_index], (bitmask_type{1} << intra_element_index));
   }
 
   /**---------------------------------------------------------------------------*
@@ -145,8 +153,9 @@ class mutable_bitmask_view {
   __device__ void clear_bit(size_type bit_index) noexcept {
     assert(bit_index >= 0);
     assert(bit_index < _size);
-    atomicAnd(&_mask[element_index(bit_index)],
-              ~(bitmask_type{1} << intra_element_index(bit_index)));
+    auto element_index = element_index(bit_index);
+    auto intra_element_index = intra_element_index(bit_index);
+    atomicAnd(&_mask[element_index], ~(bitmask_type{1} << intra_element_index));
   }
 
   /**---------------------------------------------------------------------------*
@@ -235,17 +244,17 @@ class mutable_bitmask_view {
  * Provides `__device__` functions for accessing the state of
  * elements and individual bits within the bitmask.
  *---------------------------------------------------------------------------**/
-class bitmask_view {
+class bitmask_device_view {
  public:
-  bitmask_view() = default;
-  ~bitmask_view() = default;
-  bitmask_view(bitmask_view const& other) = default;
-  bitmask_view(bitmask_view&& other) = default;
-  bitmask_view& operator=(bitmask_view const& other) = default;
-  bitmask_view& operator=(bitmask_view&& other) = default;
+  bitmask_device_view() = default;
+  ~bitmask_device_view() = default;
+  bitmask_device_view(bitmask_device_view const& other) = default;
+  bitmask_device_view(bitmask_device_view&& other) = default;
+  bitmask_device_view& operator=(bitmask_device_view const& other) = default;
+  bitmask_device_view& operator=(bitmask_device_view&& other) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a `bitmask_view` from a raw device memory pointer
+   * @brief Construct a `bitmask_device_view` from a raw device memory pointer
    * and a size.
    *
    * Optionally accepts an `offset` (defaults to zero) to allow zero-copy
@@ -260,17 +269,19 @@ class bitmask_view {
    * @param offset optional, the bit index of the first represented bit.
    * Defaults to 0
    *---------------------------------------------------------------------------**/
-  bitmask_view(bitmask_type const* mask, size_type size, size_type offset = 0);
+  bitmask_device_view(bitmask_type const* mask, size_type size,
+                      size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a `bitmask_view` from a `mutable_bitmask_view`
+   * @brief Construct a `bitmask_device_view` from a
+   *`mutable_bitmask_device_view`
    *
    * Provides an immutable view from a mutable view.
    *
-   * @param m_view The `mutable_bitmask_view` from which to construct an
+   * @param m_view The `mutable_bitmask_device_view` from which to construct an
    * immutable view
    *---------------------------------------------------------------------------**/
-  bitmask_view(mutable_bitmask_view m_view);
+  bitmask_device_view(mutable_bitmask_device_view m_view);
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the specified bit is set to `1`
@@ -304,7 +315,7 @@ class bitmask_view {
   }
 
  private:
-  mutable_bitmask_view const mutable_view{};
+  mutable_bitmask_device_view const mutable_view{};
 };
 
 }  // namespace cudf

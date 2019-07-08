@@ -13,8 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#include "bitmask_view.cuh"
-#include "types.hpp"
+#pragma once
+
+#include "bitmask_view.hpp"
+#include <cudf/types.hpp>
 
 #include <rmm/device_buffer.hpp>
 

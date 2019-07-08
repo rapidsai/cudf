@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column.hpp>
+#include <cudf/column/column.hpp>
 
 
 #include <gmock/gmock.h>

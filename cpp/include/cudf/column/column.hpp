@@ -15,9 +15,9 @@
  */
 #pragma once
 
-#include "bitmask.cuh"
+#include <cudf/bitmask/bitmask.hpp>
+#include <cudf/types.hpp>
 #include "column_view.hpp"
-#include "types.hpp"
 
 #include <rmm/device_buffer.hpp>
 
