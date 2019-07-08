@@ -44,6 +44,7 @@ typedef enum {
   GDF_LOGICAL_AND,    ///< operator &&
   GDF_LOGICAL_OR,     ///< operator ||
   GDF_COALESCE,       ///< operator x,y  x is null ? y : x
+  GDF_GENERIC_OP,     ///< generic binary operator to be generated with input ptx code
   GDF_INVALID_BINARY  ///< invalid operation
 } gdf_binary_operator;
 
@@ -106,6 +107,26 @@ void binary_operation(gdf_column*           out,
                       gdf_column*           rhs,
                       gdf_binary_operator   ope);
 
+
+/**
+ * @brief Performs a binary operation between two gdf_columns using a user-defined PTX function.
+ *
+ * Accepts a user-defined PTX function to apply between the `lhs` and `rhs`.
+ *
+ * The desired output type must be specified in out->dtype.
+ *
+ * If the valid field in the gdf_column output is not nullptr, then it will be
+ * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
+ *
+ * @param out (gdf_column) Output of the operation.
+ * @param lhs (gdf_column) First operand of the operation.
+ * @param rhs (gdf_column) Second operand of the operation.
+ * @param ptx String containing the PTX of a binary function to apply between `lhs` and `rhs`
+ */
+void binary_operation(gdf_column*           out,
+                      gdf_column*           lhs,
+                      gdf_column*           rhs,
+                      const std::string&    ptx);
 
 } // namespace cudf
 
