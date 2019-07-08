@@ -110,12 +110,15 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * @param[in] dtype Data type of the column.
  * @param[in] null_count The number of non-valid elements in the validity bitmask.
  * @param[in] extra_info see gdf_dtype_extra_info. Extra data for column description.
+ * @param[in] name (optional) column name
  * 
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
-gdf_error gdf_column_view_augmented(gdf_column *column, void *data, gdf_valid_type *valid,
-                          gdf_size_type size, gdf_dtype dtype, gdf_size_type null_count,
-                          gdf_dtype_extra_info extra_info);
+gdf_error gdf_column_view_augmented(gdf_column *column, void *data,
+                                    gdf_valid_type *valid, gdf_size_type size,
+                                    gdf_dtype dtype, gdf_size_type null_count,
+                                    gdf_dtype_extra_info extra_info,
+                                    const char *name = nullptr);
 
 /** 
  * @brief Free the CUDA device memory of a gdf_column
