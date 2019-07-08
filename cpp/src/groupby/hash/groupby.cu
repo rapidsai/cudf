@@ -15,8 +15,8 @@
  */
 
 #include <cudf/cudf.h>
-#include <bitmask/bit_mask.cuh>
-#include <cudf/bitmask.hpp>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/table.hpp>
@@ -198,7 +198,6 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
   // an upper bound
   gdf_size_type const output_size_estimate{input_keys.num_rows()};
 
-
   cudf::table sparse_output_values{
       output_size_estimate, target_dtypes(column_dtypes(input_values), ops),
       values_have_nulls, false, stream};
@@ -352,8 +351,8 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
                  });
 
   // Some aggregations are "compound", meaning they need be satisfied via the
-  // composition of 1 or more "simple" aggregation requests. For example, MEAN is
-  // satisfied via the division of the SUM by the COUNT aggregation. We
+  // composition of 1 or more "simple" aggregation requests. For example, MEAN
+  // is satisfied via the division of the SUM by the COUNT aggregation. We
   // translate these compound requests into simple requests, and compute the
   // groupby operation for these simple requests. Later, we translate the simple
   // requests back to compound request results.
@@ -374,12 +373,11 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
 
   // Step 1: Build hash map
   auto result = build_aggregation_map<keys_have_nulls, values_have_nulls>(
-      keys, simple_values_table, *d_input_keys, *d_input_values, simple_operators, options,
-      stream);
+      keys, simple_values_table, *d_input_keys, *d_input_values,
+      simple_operators, options, stream);
 
   auto const map{std::move(result.first)};
-  cudf::table const sparse_output_values{result.second};
-
+  cudf::table sparse_output_values{result.second};
 
   // Step 2: Extract non-empty entries
   cudf::table output_keys;
@@ -387,6 +385,9 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   std::tie(output_keys, simple_output_values) =
       extract_results<keys_have_nulls, values_have_nulls>(
           keys, values, *d_input_keys, sparse_output_values, map.get(), stream);
+
+  // Delete intermediate results storage
+  sparse_output_values.destroy();
 
   // If any of the original requests were compound, compute them from the
   // results of simple aggregation requests

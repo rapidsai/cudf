@@ -24,7 +24,7 @@
 
 struct JitCacheTest : public ::testing::Test
                     , public cudf::jit::cudfJitCache {
-    JitCacheTest() {
+    JitCacheTest() : grid(1), block(1) {
     }
 
     virtual ~JitCacheTest() {
@@ -63,7 +63,7 @@ struct JitCacheTest : public ::testing::Test
         auto kernel = getKernelInstantiation("my_kernel",
                                                     program,
                                                     {"3", "int"});
-        (*std::get<1>(kernel)).configure_1d_max_occupancy()
+        (*std::get<1>(kernel)).configure(grid, block)
                  .launch(column.get()->data);
 
         ASSERT_TRUE(expect == column) << "Expected col: " << expect.to_str()
@@ -92,6 +92,19 @@ struct JitCacheTest : public ::testing::Test
         "    }\n"
         "}\n";
 
+    const char* program3_source =
+        "my_program\n"
+        "template<int N, typename T>\n"
+        "__global__\n"
+        "void my_kernel(T* data, T* out) {\n"
+        "    T data0 = data[0];\n"
+        "    for( int i=0; i<N; ++i ) {\n"
+        "        out[0] *= data0;\n"
+        "    }\n"
+        "}\n";
+
+    dim3 grid;
+    dim3 block;
 };
 
 /**---------------------------------------------------------------------------*
