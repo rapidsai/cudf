@@ -153,21 +153,21 @@ struct DeviceNot {
 
 
 template<typename T, typename F>
-static gdf_error launch(gdf_column *input, gdf_column *output) {
-    return cudf::unary::Launcher<T, T, F>::launch(input, output);
+static void launch(gdf_column *input, gdf_column *output) {
+    cudf::unary::Launcher<T, T, F>::launch(input, output);
 }
 
 
 template <typename F>
 struct MathOpDispatcher {
     template <typename T>
-    typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
+    typename std::enable_if_t<std::is_arithmetic<T>::value, void>
     operator()(gdf_column *input, gdf_column *output) {
         launch<T, F>(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
+    typename std::enable_if_t<!std::is_arithmetic<T>::value, void>
     operator()(gdf_column *input, gdf_column *output) {
         CUDF_FAIL("Unsupported datatype for operation");
     }
@@ -177,13 +177,13 @@ struct MathOpDispatcher {
 template <typename F>
 struct BitwiseOpDispatcher {
     template <typename T>
-    typename std::enable_if_t<std::is_integral<T>::value, gdf_error>
+    typename std::enable_if_t<std::is_integral<T>::value, void>
     operator()(gdf_column *input, gdf_column *output) {
         launch<T, F>(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!std::is_integral<T>::value, gdf_error>
+    typename std::enable_if_t<!std::is_integral<T>::value, void>
     operator()(gdf_column *input, gdf_column *output) {
         CUDF_FAIL("Unsupported datatype for operation");
     }
@@ -204,13 +204,13 @@ private:
 
 public:
     template <typename T>
-    typename std::enable_if_t<is_supported<T>(), gdf_error>
+    typename std::enable_if_t<is_supported<T>(), void>
     operator()(gdf_column *input, gdf_column *output) {
         cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!is_supported<T>(), gdf_error>
+    typename std::enable_if_t<!is_supported<T>(), void>
     operator()(gdf_column *input, gdf_column *output) {
         CUDF_FAIL("Unsupported datatype for operation");
     }
