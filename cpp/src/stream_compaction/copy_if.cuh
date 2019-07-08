@@ -319,6 +319,8 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   compute_block_counts<Filter, block_size, per_thread>
     <<<grid.num_blocks, block_size, 0, stream>>>(block_counts, filter);
 
+  CHECK_STREAM(stream);
+
   // 2. Find the offset for each block's output using a scan of block counts
   if (grid.num_blocks > 1) {
     // Determine and allocate temporary device storage

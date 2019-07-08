@@ -7,6 +7,8 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
+from libcpp.vector cimport vector
+
 cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
 
     #defined in cpp/include/stream_compaction.hpp
@@ -29,6 +31,7 @@ cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
     cdef gdf_column drop_nulls(const gdf_column &input) except +
 
     cdef cudf_table drop_nulls(const cudf_table &input,
+                               const vector[gdf_index_type]& column_indices,
                                const any_or_all drop_if) except +
 
     cdef cudf_table drop_duplicates(const cudf_table& input_table,
