@@ -11,6 +11,7 @@
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 
 ## Improvements
+
 - PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
 
 - PR #2109 added name to Python column classes
