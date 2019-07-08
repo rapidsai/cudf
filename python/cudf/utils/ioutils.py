@@ -1,10 +1,10 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+from cudf.utils.docutils import docfmt_partial
+
 from io import BytesIO
 import os
 import urllib
-
-from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
