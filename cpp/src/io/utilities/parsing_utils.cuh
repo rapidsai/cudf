@@ -68,7 +68,7 @@ __device__ __inline__ void setBitmapBit(gdf_valid_type *bitmap, long bit_idx) {
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  */
-__device__ __inline__ bool isDigit(char c, bool is_hex) {
+__device__ __inline__ bool isDigit(char c, bool is_hex = false) {
   if (c >= '0' && c <= '9')
     return true;
   if (is_hex) {

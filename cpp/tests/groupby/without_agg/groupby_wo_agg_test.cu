@@ -39,7 +39,7 @@
 #include "../groupby_test_helpers.cuh"
 
 // See this header for all valid handling
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
