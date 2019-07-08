@@ -234,7 +234,7 @@ gdf_column gdf_unaryop(gdf_column &input, unary_op op) {
 
     if (input.size == 0) return output;
 
-    cudf::unary::handleChecksAndValidity(&input, &output);
+    cudf::unary::handleChecksAndValidity(input, output);
 
     switch(op){
         case GDF_SIN:

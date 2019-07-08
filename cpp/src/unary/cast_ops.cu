@@ -261,7 +261,7 @@ gdf_column col_cast(gdf_column& input, gdf_dtype out_type,
     auto output = cudf::allocate_column(out_type, input.size,
                                         has_mask, out_info);
 
-    cudf::unary::handleChecksAndValidity(&input, &output);
+    cudf::unary::handleChecksAndValidity(input, output);
 
     cudf::type_dispatcher(input.dtype,
                           detail::CastFrom_Dispatcher{},
