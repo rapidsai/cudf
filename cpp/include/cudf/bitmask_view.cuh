@@ -48,17 +48,21 @@ constexpr __host__ __device__ inline size_type intra_element_index(
  * "bitmask".
  *
  * A `bitmask` is a contiguous set of `m` `bitmask_type`"element"s. The
- * `size` of a bitmask refers to the number of bits it represents, i.e., the
- * bits in the range `[0, size)` are the "represented bits". The device memory
- * allocation may be larger than what is required to represent `size` bits, and
- * bits outside of the range `[0,size)` are undefined.
+ * `size` of a bitmask refers to the number of bits it represents. Each bitmask
+ * `view` has an `offset` that indicates the bit index of the first represented
+ * bit in the mask (by default, the `offset` is zero).
+ *
+ * The "represented bits" are the contiguous set of bits in the range `[offset,
+ * size+offset)`. The device memory allocation may be larger than what is
+ * required to represent `size` bits, and bits outside of the represented bit
+ * range are undefined.
  *
  * The `bitmask` uses LSB ordering, e.g., `bit_index` 0 refers to the
  * *least* significant bit of the *first* element in the `bitmask`.
- * 
+ *
  * For example:
  * ```
- * bit index:  7 6 5 4 3 2 1 0       
+ * bit index:  7 6 5 4 3 2 1 0
  * bits: (MSB) 0 1 0 1 1 1 1 1 (LSB)
  * ```
  *
@@ -78,11 +82,20 @@ class mutable_bitmask_view {
    * @brief Construct a `mutable_bitmask_view` from a raw device memory pointer
    * and a size.
    *
+   * Optionally accepts an `offset` (defaults to zero) to allow zero-copy
+   * slicing. The `offset` indicates the bit index of the first represented bit
+   * in the mask.
+   *
+   * Requires that `mask` have 256B or greater power of two alignment.
+   *
    * @param mask Pointer to an existing device memory allocation of sufficient
-   * size to hold `size` bits.
+   * size to hold `offset + size` bits.
    * @param size The number of bits represented by the bitmask
+   * @param offset optional, the bit index of the first represented bit.
+   * Defaults to 0
    *---------------------------------------------------------------------------**/
-  mutable_bitmask_view(bitmask_type* mask, size_type size);
+  mutable_bitmask_view(bitmask_type* mask, size_type size,
+                       size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the specified bit is set to `1`
@@ -94,9 +107,8 @@ class mutable_bitmask_view {
   __device__ bool bit_is_set(size_type bit_index) const noexcept {
     assert(bit_index >= 0);
     assert(bit_index < _size);
-    auto element_index = element_index(bit_index);
-    auto intra_element_index = intra_element_index(bit_index);
-    return _mask[element_index] & (bitmask_type{1} << intra_element_index);
+    return _mask[element_index(bit_index)] &
+           (bitmask_type{1} << intra_element_index(bit_index));
   }
 
   /**---------------------------------------------------------------------------*
@@ -114,9 +126,8 @@ class mutable_bitmask_view {
   __device__ void set_bit(size_type bit_index) noexcept {
     assert(bit_index >= 0);
     assert(bit_index < _size);
-    auto element_index = element_index(bit_index);
-    auto intra_element_index = intra_element_index(bit_index);
-    atomicOr(&_mask[element_index], (bitmask_type{1} << intra_element_index));
+    atomicOr(&_mask[element_index(bit_index)],
+             (bitmask_type{1} << intra_element_index(bit_index)));
   }
 
   /**---------------------------------------------------------------------------*
@@ -134,9 +145,8 @@ class mutable_bitmask_view {
   __device__ void clear_bit(size_type bit_index) noexcept {
     assert(bit_index >= 0);
     assert(bit_index < _size);
-    auto element_index = element_index(bit_index);
-    auto intra_element_index = intra_element_index(bit_index);
-    atomicAnd(&_mask[element_index], ~(bitmask_type{1} << intra_element_index));
+    atomicAnd(&_mask[element_index(bit_index)],
+              ~(bitmask_type{1} << intra_element_index(bit_index)));
   }
 
   /**---------------------------------------------------------------------------*
@@ -157,7 +167,8 @@ class mutable_bitmask_view {
   /**---------------------------------------------------------------------------*
    * @brief Sets the element at the specified index with a new element
    *
-   * This function is *not* thread safe.
+   * This function is *not* thread safe, i.e., undefined behavior results if two
+   * threads attempt to concurrently read/write an element.
    *
    * @param new_element The new element to be stored at the specified index
    * @param element_index The index of the element to be updated
@@ -172,7 +183,13 @@ class mutable_bitmask_view {
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of represented bits.
    *---------------------------------------------------------------------------**/
-  __host__ __device__ size_type size() { return _size; }
+  __host__ __device__ size_type size() const noexcept { return _size; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the bit index offset of the first represented bit in the
+   * mask
+   *---------------------------------------------------------------------------**/
+  __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**---------------------------------------------------------------------------*
    * @brief Return raw pointer to the mask's device memory
@@ -189,24 +206,29 @@ class mutable_bitmask_view {
  private:
   bitmask_type* _mask{nullptr};  ///< Pointer to device memory holding the bits
   size_type _size{0};            ///< The number of represented bits
+  size_type _offset{0};          ///< Beginning bit index of the bitmask
 };
 
 /**---------------------------------------------------------------------------*
  * @brief An immutable, non-owning view of a device memory allocation as a
  * "bitmask".
  *
- * A `bitmask` is a contiguous set of `m` `bitmask_type` "element"s. The
- * `size` of a bitmask refers to the number of bits it represents, i.e., the
- * bits in the range `[0, size)` are the "represented bits". The device memory
- * allocation may be larger than what is required to represent `size` bits, and
- * bits outside of the range `[0,size)` are undefined.
- * 
+ * A `bitmask` is a contiguous set of `m` `bitmask_type`"element"s. The
+ * `size` of a bitmask refers to the number of bits it represents. Each bitmask
+ * `view` has an `offset` that indicates the bit index of the first represented
+ * bit in the mask (by default, the `offset` is zero).
+ *
+ * The "represented bits" are the contiguous set of bits in the range `[offset,
+ * size+offset)`. The device memory allocation may be larger than what is
+ * required to represent `size` bits, and bits outside of the represented bit
+ * range are undefined.
+ *
  * The `bitmask` uses LSB ordering, e.g., `bit_index` 0 refers to the
  * *least* significant bit of the *first* element in the `bitmask`.
- * 
+ *
  * For example:
  * ```
- * bit index:  7 6 5 4 3 2 1 0       
+ * bit index:  7 6 5 4 3 2 1 0
  * bits: (MSB) 0 1 0 1 1 1 1 1 (LSB)
  * ```
  *
@@ -226,14 +248,19 @@ class bitmask_view {
    * @brief Construct a `bitmask_view` from a raw device memory pointer
    * and a size.
    *
-   * Requires the device memory allocation `mask` to be aligned to at least 256B
-   * boundary.
+   * Optionally accepts an `offset` (defaults to zero) to allow zero-copy
+   * slicing. The `offset` indicates the bit index of the first represented bit
+   * in the mask.
+   *
+   * Requires that `mask` have 256B or greater power of two alignment.
    *
    * @param mask Pointer to an existing device memory allocation of sufficient
    * size to hold `size` bits.
    * @param size The number of bits represented by the bitmask
+   * @param offset optional, the bit index of the first represented bit.
+   * Defaults to 0
    *---------------------------------------------------------------------------**/
-  bitmask_view(bitmask_type const* mask, size_type size);
+  bitmask_view(bitmask_type const* mask, size_type size, size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a `bitmask_view` from a `mutable_bitmask_view`

@@ -86,8 +86,8 @@ class bitmask {
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
-  bitmask(bitmask_view view, rmm::mr::device_memory_resource* mr =
-                                 rmm::mr::get_default_resource());
+  explicit bitmask(bitmask_view view, rmm::mr::device_memory_resource* mr =
+                                          rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by copying from an existing
@@ -97,8 +97,8 @@ class bitmask {
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
-  bitmask(mutable_bitmask_view view, rmm::mr::device_memory_resource* mr =
-                                         rmm::mr::get_default_resource());
+  explicit bitmask( mutable_bitmask_view view,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of bits represented by the bitmask.
