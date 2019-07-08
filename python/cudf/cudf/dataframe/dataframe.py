@@ -1333,10 +1333,30 @@ class DataFrame(object):
             outdf = outdf.set_index(new_index)
             return outdf
 
-    def dropna(self, how="any"):
+    def dropna(self, axis=0, how="any"):
         """
+        Drops rows (or columns) containing nulls from a Column.
 
 
+        Parameters
+        ----------
+        axis : {0, 1}, optional
+            Whether to drop rows (axis=0, default) or columns (axis=1)
+            containing nulls.
+        how : {"any", "all"}, optional
+            Specifies how to decide whether to drop a row (or column).
+            any (default) drops rows (or columns) containing at least
+            one null value. all drops only rows (or columns) containing
+            *all* null values.
+        """
+        if axis == 0:
+            return self._drop_na_columns(how=how)
+        else:
+            return self._drop_na_rows(how=how)
+
+    def _drop_na_rows(self, how="any"):
+        """
+        Drop rows containing nulls.
         """
         data_cols = _columns_from_dataframe(self)
 
@@ -1369,6 +1389,21 @@ class DataFrame(object):
             result_data_cols, index=result_index, columns=self.columns
         )
         return df
+
+    def _drop_na_columns(self, how="any", subset=None):
+        """
+        Drop columns containing nulls
+        """
+        out_cols = []
+        for col in self.columns:
+            if how == "any":
+                if self[col].null_count > 0:
+                    continue
+            else:
+                if self[col].null_count == len(self):
+                    continue
+            out_cols.append(col)
+        return self[out_cols]
 
     def pop(self, item):
         """Return a column and drop it from the DataFrame.

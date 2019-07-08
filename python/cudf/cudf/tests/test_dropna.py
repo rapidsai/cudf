@@ -51,6 +51,8 @@ def test_dropna_series(data, nulls):
         {"a": [None, 1, None], "b": [None, 2, None]},
         {"a": [None, None, 1], "b": [1, 2, None]},
         {"a": ["d", "e", "f"], "b": ["a", None, "c"]},
+        {"a": [None, None, None], "b": [None, 1, 2]},
+        {"a": [None, None, None]},
     ],
 )
 @pytest.mark.parametrize("how", ["all", "any"])
