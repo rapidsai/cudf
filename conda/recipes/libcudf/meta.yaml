@@ -36,7 +36,8 @@ requirements:
 test:
   commands:
     - test -f $PREFIX/lib/libcudf.so
-    - test -f $PREFIX/include/cudf/bitmask.hpp
+    - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
+    - test -f $PREFIX/include/cudf/legacy/column.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
     - test -f $PREFIX/include/cudf/rolling.hpp
     - test -f $PREFIX/include/cudf/convert_types.h
