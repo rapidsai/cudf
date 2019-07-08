@@ -447,6 +447,11 @@ TEST(gdf_csv_test, Writer)
     outfile << "false,3,3.50,three" << '\n';
     outfile << "true,4,4.75,four" << '\n';
     outfile << "false,5,5.0,five" << '\n';
+    outfile << "false,6,6.125,six" << '\n';
+    outfile << "false,7,7.25,seven" << '\n';
+    outfile << "true,8,8.5,eight" << '\n';
+    outfile << "true,9,9.75,nine" << '\n';
+    outfile << "false,10,10.5,ten" << '\n';
     outfile.close();
 
     cudf::csv_read_arg rargs(cudf::source_info{fname});
@@ -461,8 +466,10 @@ TEST(gdf_csv_test, Writer)
     wargs.filepath = ofname.c_str();
     wargs.num_cols = df.num_columns();
     wargs.delimiter = ',';
+    wargs.na_rep = "";
     wargs.line_terminator = "\n";
     wargs.include_header = true;
+    wargs.rows_per_chunk = 8;
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
@@ -474,6 +481,11 @@ TEST(gdf_csv_test, Writer)
         "false,2,2.25,\"two\"\n"
         "false,3,3.5,\"three\"\n"
         "true,4,4.75,\"four\"\n"
-        "false,5,5.0,\"five\"\n";
+        "false,5,5.0,\"five\"\n"
+        "false,6,6.125,\"six\"\n"
+        "false,7,7.25,\"seven\"\n"
+        "true,8,8.5,\"eight\"\n"
+        "true,9,9.75,\"nine\"\n"
+        "false,10,10.5,\"ten\"\n";
     EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }

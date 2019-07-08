@@ -2,15 +2,41 @@
 
 ## New Features
 
+- PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
+- PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2160 Merge `dask-cudf` codebase into `cudf` repo
+- PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
+- PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 
 ## Improvements
 
+- PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
+- PR #2127 Add in java Scalar tests
+- PR #2088 Refactor of Python groupby code
 - PR #2130 Java serialization and deserialization of tables.
+- PR #2131 Chunk rows logic added to csv_writer
+- PR #2129 Add functions in the Java API to support nullable column filtering
+- PR #2165 made changes to get_dummies api for it to be available in MethodCache
+- PR #2186 Add `getitem` and `getattr` style access to Rolling objects
+- PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 
 ## Bug Fixes
+
+- PR #2086 Fixed quantile api behavior mismatch in series & dataframe
+- PR #2128 Add offset param to host buffer readers in java API.
+- PR #2145 Work around binops validity checks for java
+- PR #2146 Work around unary_math validity checks for java
+- PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
+- PR #2139 matching to pandas describe behavior & fixing nan values issue
+- PR #2154 CSV Reader: Fix bools misdetected as strings dtype
+- PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
+- PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
+- PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
+- PR #2190 Fix issue in astype conversion of string column to 'str'
 
 
 # cuDF 0.8.0 (27 June 2019)
