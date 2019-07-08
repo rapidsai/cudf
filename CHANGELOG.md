@@ -24,6 +24,7 @@
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
+- PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
 
 ## Bug Fixes
 
