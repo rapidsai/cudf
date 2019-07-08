@@ -690,12 +690,14 @@ header : bool, default True
     Write out the column names
 index : bool, default True
     Write out the index as a column
-line_terminator: char, default '\\n'
+line_terminator : char, default '\\n'
+chunksize : int or None, default None
+    Rows to write at a time
 
 Notes
 -----
 Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
-
+If `to_csv` leads to memory errors consider setting the `chunksize` parameter.
 Examples
 --------
 
