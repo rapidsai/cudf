@@ -269,10 +269,7 @@ def test_validity_add(nelem, lhs_nulls, rhs_nulls):
     np.testing.assert_array_equal(expect, got)
 
 
-_dtypes = [
-    np.int16, np.int32, np.int64,
-    np.float32, np.float64,
-]
+_dtypes = [np.int16, np.int32, np.int64, np.float32, np.float64]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -599,21 +596,21 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize('func', _operator_funcs + _operator_funcs_series)
-@pytest.mark.parametrize('rhs', [0, 1, 2, 128])
+@pytest.mark.parametrize("func", _operator_funcs + _operator_funcs_series)
+@pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
-    if func == 'rmod' or func == 'rfloordiv':
+    if func == "rmod" or func == "rfloordiv":
         return
     # TODO: remove this once issue #2173 is resolved
-    if func == 'mod' or func == 'floordiv':
+    if func == "mod" or func == "floordiv":
         if rhs == 0:
             return
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
-    utils.assert_eq(getattr(psr, func)(rhs),
-                    getattr(gsr, func)(rhs),
-                    check_dtype=False)
+    utils.assert_eq(
+        getattr(psr, func)(rhs), getattr(gsr, func)(rhs), check_dtype=False
+    )
 
 
 def test_series_misc_binop():
@@ -632,4 +629,3 @@ def test_series_misc_binop():
     utils.assert_eq(pds1 + pds, gds1 + gds)
 
     utils.assert_eq(pds1 + pds + 5, gds1 + gds + 5)
->>>>>>> 6a4f5e70b347a08a5ead8f6f1061ecc0fe67a25c:python/cudf/cudf/tests/test_binops.py
