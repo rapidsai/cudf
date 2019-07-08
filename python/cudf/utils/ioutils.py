@@ -6,6 +6,7 @@ from io import BytesIO
 import os
 import urllib
 
+
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
 
