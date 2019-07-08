@@ -20,7 +20,7 @@
 #include <string>
 #include <limits>
 #include <type_traits>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <tests/utilities/valid_vectors.h>
 
 //Terminating call

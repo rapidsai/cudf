@@ -26,7 +26,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 #include <string/nvcategory_util.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cuda_runtime_api.h>
 #include <algorithm>
 #include <nvstrings/NVCategory.h>
