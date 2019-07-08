@@ -51,10 +51,10 @@ logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
 
 logger "Install Openjdk"
-conda install -c anaconda openjdk
+conda install openjdk
 
 logger "Install maven"
-conda install --no-deps -c conda-forge maven
+conda install --no-deps maven
 
 logger "Check versions..."
 python --version
