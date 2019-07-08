@@ -59,10 +59,10 @@ private:
   int num_actual_cols = 0; ///< Number of columns in the file --- based on the number of columns in header.
 
   // Parsing options
-  ParseOptions opts{};                  ///< Options to control parsing behavior
-  thrust::host_vector<bool> h_parseCol; ///< Array of booleans stating if column should be parsed in reading.
-                                        // process: parseCol[x]=false means that the column x needs to be filtered out.
-  rmm::device_vector<bool> d_parseCol;  ///< device : array of booleans stating if column should be parsed in reading
+  ParseOptions opts{};                            ///< Whole dataset parsing options
+  thrust::host_vector<column_parse::flags> h_column_flags;  ///< Per-column parsing flags
+  rmm::device_vector<column_parse::flags> d_column_flags;   ///< Per-column parsing flags (device memory)
+
   rmm::device_vector<SerialTrieNode> d_trueTrie;  ///< device: serialized trie of values to recognize as true
   rmm::device_vector<SerialTrieNode> d_falseTrie; ///< device: serialized trie of values to recognize as false
   rmm::device_vector<SerialTrieNode> d_naTrie;    ///< device: serialized trie of NA values
