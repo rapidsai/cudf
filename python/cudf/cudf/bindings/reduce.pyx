@@ -72,7 +72,9 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
             return col.dtype.type(1)
         return np.nan
 
-    col_dtype = dtype if dtype != None else col.dtype
+    col_dtype = col.dtype if dtype is None else dtype
+    if reduction_op in ['sum', 'sum_of_squares', 'product']:
+        col_dtype = np.find_common_type([col_dtype], [np.int64])
 
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
