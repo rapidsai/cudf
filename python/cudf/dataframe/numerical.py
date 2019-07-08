@@ -83,12 +83,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=unaryop,
-                                      out_dtype=self.dtype)
-
-    def unary_logic_op(self, unaryop):
-        return numeric_column_unaryop(self, op=unaryop,
-                                      out_dtype=np.bool_)
+        return numeric_column_unaryop(self, op=unaryop)
 
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
@@ -409,9 +404,9 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     return result
 
 
-def numeric_column_unaryop(operand, op, out_dtype):
+def numeric_column_unaryop(operand, op):
     out = cpp_unaryops.apply_unary_op(operand, op)
-    return out.view(NumericalColumn, dtype=out_dtype)
+    return out.view(NumericalColumn, dtype=out.dtype)
 
 
 def numeric_column_compare(lhs, rhs, op):

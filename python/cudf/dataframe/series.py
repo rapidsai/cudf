@@ -764,8 +764,7 @@ class Series(object):
         return ser.astype(np.bool_)
 
     def logical_not(self):
-        outcol = self._column.unary_logic_op('not')
-        return self._copy_construct(data=outcol)
+        return self._unaryop('not')
 
     def _normalize_binop_value(self, other):
         """Returns a *column* (not a Series) or scalar for performing
