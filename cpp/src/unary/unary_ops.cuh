@@ -83,6 +83,7 @@ struct Launcher {
 };
 
 // TODO: remove checks from output
+// and make input const ref and output just ref
 inline void handleChecksAndValidity(gdf_column *input, gdf_column *output) {
     // Check for null pointers in input
     CUDF_EXPECTS((input != nullptr), "Pointer to input column is null");

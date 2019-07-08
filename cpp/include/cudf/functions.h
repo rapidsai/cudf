@@ -558,20 +558,6 @@ gdf_error gdf_hash(int num_cols,
                    gdf_column *output);
 
 
-/**
- * @brief  Casts data from dtype specified in input to dtype specified in output
- * 
- * The desired dtype for output should be set in output->dtype.
- * In case of conversion from GDF_DATE32/GDF_DATE64/GDF_TIMESTAMP to GDF_TIMESTAMP,
- * the time unit for output should be set in output->dtype_info.time_unit
- *
- * @param[in] gdf_column of the input
- *
- * @returns gdf_column Result of the cast operation
- */
-gdf_error gdf_cast(gdf_column *input, gdf_column *output);
-
-
 /* datetime extract*/
 
 /**

@@ -46,12 +46,29 @@ enum unary_op{
 /**
  * @brief  Performs unary op on all values in column
  * 
- * @param[in] gdf_column of the input
- * @param[in] unary_op operation to perform
+ * @param gdf_column Input column
+ * @param unary_op operation to perform
  *
  * @returns gdf_column Result of the operation
  */
 gdf_column gdf_unaryop(gdf_column& input, unary_op op);
+
+
+/**
+ * @brief  Casts data from dtype specified in input to dtype specified in output
+ * 
+ * @note In case of conversion from GDF_DATE32/GDF_DATE64/GDF_TIMESTAMP to
+ *  GDF_TIMESTAMP, the time unit for output should be set in out_info.time_unit
+ *
+ * @param gdf_column Input column
+ * @param out_type Desired datatype of output column
+ * @param out_info Extra info for output column in case of convertion to types
+ *  that require extra info
+ *
+ * @returns gdf_column Result of the cast operation
+ */
+gdf_column col_cast(gdf_column& input, gdf_dtype out_type,
+                    gdf_dtype_extra_info out_info = gdf_dtype_extra_info{});
 
 
 } // namespace cudf
