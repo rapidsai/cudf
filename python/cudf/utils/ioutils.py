@@ -1,51 +1,10 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf.utils.docutils import docfmt_partial
-
-from io import BytesIO
 import os
 import urllib
+from io import BytesIO, TextIOWrapper
 
-
-_docstring_read_avro = """
-Load an Avro dataset into a DataFrame
-
-Parameters
-----------
-filepath_or_buffer : str, path object, bytes, or file-like object
-    Either a path to a file (a `str`, `pathlib.Path`, or
-    `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
-    Python bytes of raw binary data, or any object with a `read()` method
-    (such as builtin `open()` file handler function or `BytesIO`).
-engine : { 'cudf', 'fastavro' }, default 'cudf'
-    Parser engine to use.
-columns : list, default None
-    If not None, only these columns will be read.
-skip_rows : int, default None
-    If not None, the nunber of rows to skip from the start of the file.
-num_rows : int, default None
-    If not None, the total number of rows to read.
-
-Returns
--------
-DataFrame
-
-Examples
---------
->>> import cudf
->>> df = cudf.read_avro(filename)
->>> df
-  num1                datetime text
-0  123 2018-11-13T12:00:00.000 5451
-1  456 2018-11-14T12:35:01.000 5784
-2  789 2018-11-15T18:02:59.000 6117
-
-See Also
---------
-cudf.io.csv.read_csv
-cudf.io.json.read_json
-"""
-doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
+from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
@@ -608,9 +567,12 @@ skipinitialspace : bool, default False
     Skip spaces after delimiter.
 names : list of str, default None
     List of column names to be used.
-dtype : list of str or dict of {col: dtype}, default None
-    List of data types in the same order of the column names
-    or a dictionary with column_name:dtype (pandas style).
+dtype : type, list of types, or dict of column -> type, default None
+    Data type(s) for data or columns. If list, types are applied in the same
+    order as the column names. If dict, types are mapped to the column names.
+    E.g. {‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}
+    If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
+    and not infer or interpret to dtype.
 quotechar : char, default '"'
     Character to indicate start and end of quote item.
 quoting : str or int, default 0
@@ -790,7 +752,7 @@ def is_file_like(obj):
     is_file_like : bool
         If `obj` is file-like returns True otherwise False
     """
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
+    if not (hasattr(obj, "read") or hasattr(obj, "write")):
         return False
     elif not hasattr(obj, "__iter__"):
         return False
@@ -821,12 +783,14 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     """
     if is_url(path_or_data):
         with urllib.request.urlopen(path_or_data) as url:
-            compression = url.headers.get('Content-Encoding', None)
+            compression = url.headers.get("Content-Encoding", None)
             buffer = BytesIO(url.read())
         return buffer, compression
     elif isinstance(path_or_data, str):
         return os.path.expanduser(path_or_data), compression
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
+        if isinstance(path_or_data, TextIOWrapper):
+            path_or_data = path_or_data.buffer
         return BytesIO(path_or_data.read()), compression
     else:
         return path_or_data, compression
