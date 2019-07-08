@@ -163,13 +163,13 @@ struct MathOpDispatcher {
     template <typename T>
     typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return launch<T, F>(input, output);
+        launch<T, F>(input, output);
     }
 
     template <typename T>
     typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return GDF_UNSUPPORTED_DTYPE;
+        CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
@@ -179,13 +179,13 @@ struct BitwiseOpDispatcher {
     template <typename T>
     typename std::enable_if_t<std::is_integral<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return launch<T, F>(input, output);
+        launch<T, F>(input, output);
     }
 
     template <typename T>
     typename std::enable_if_t<!std::is_integral<T>::value, gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return GDF_UNSUPPORTED_DTYPE;
+        CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
@@ -206,13 +206,13 @@ public:
     template <typename T>
     typename std::enable_if_t<is_supported<T>(), gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
+        cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
     }
 
     template <typename T>
     typename std::enable_if_t<!is_supported<T>(), gdf_error>
     operator()(gdf_column *input, gdf_column *output) {
-        return GDF_UNSUPPORTED_DTYPE;
+        CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
@@ -235,6 +235,8 @@ gdf_column gdf_unaryop(gdf_column &input, unary_op op) {
     }
     else
         output = cudf::allocate_like(input);
+
+    if (input.size == 0) return output;
 
     cudf::unary::handleChecksAndValidity(&input, &output);
 
