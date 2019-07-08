@@ -228,7 +228,7 @@ class MultiIndex(Index):
             if row == slice(None):
                 continue
             try:
-                lookup[index.names[idx]] = Series(
+                lookup[index.codes.columns[idx]] = Series(
                     list(index.levels[idx]).index(row)
                 ).astype(index.codes.dtypes[0])
             except ValueError:
