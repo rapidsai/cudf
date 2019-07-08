@@ -6,6 +6,7 @@ import shutil
 from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
+import csv
 
 import numpy as np
 import pandas as pd
@@ -1346,8 +1347,6 @@ def test_csv_writer_datetime_data(tmpdir):
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
-    import csv
-
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
@@ -1397,6 +1396,31 @@ def test_csv_writer_multiindex(tmpdir):
     pdg = gdg.to_pandas()
     pdg.to_csv(pdf_df_fname)
     gdg.to_csv(gdf_df_fname)
+
+    assert os.path.exists(pdf_df_fname)
+    assert os.path.exists(gdf_df_fname)
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("chunksize", [None, 9, 1000])
+def test_csv_writer_chunksize(chunksize, tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_4.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_4.csv")
+
+    pdf = make_numpy_mixed_dataframe()
+    pdf["Date"] = pdf["Date"].astype("datetime64")
+    # Increase the df len as chunked logic only gets applied from chunksize >=8
+    pdf = pd.concat([pdf] * 5)
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.to_csv(pdf_df_fname,
+               date_format="%Y-%m-%dT%H:%M:%SZ",
+               quoting=csv.QUOTE_NONNUMERIC,
+               chunksize=chunksize)
+    gdf.to_csv(gdf_df_fname, chunksize=chunksize)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
