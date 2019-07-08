@@ -155,7 +155,7 @@ public class ShortColumnVectorTest {
     try (HostMemoryBuffer mockDataBuffer = spy(HostMemoryBuffer.allocate(4 * 8));
          HostMemoryBuffer mockValidBuffer = spy(HostMemoryBuffer.allocate(8))) {
       try (ColumnVector.Builder builder = new ColumnVector.Builder(DType.INT16, TimeUnit.NONE, 4,
-          mockDataBuffer, mockValidBuffer)) {
+          mockDataBuffer, mockValidBuffer, null)) {
         builder.appendArray(new short[]{2, 3, 5}).appendNull();
       }
       Mockito.verify(mockDataBuffer).doClose();

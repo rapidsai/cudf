@@ -21,7 +21,6 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.sql.Time;
 import java.util.Random;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -167,7 +166,7 @@ public class FloatColumnVectorTest {
     try (HostMemoryBuffer mockDataBuffer = spy(HostMemoryBuffer.allocate(4 * 8));
          HostMemoryBuffer mockValidBuffer = spy(HostMemoryBuffer.allocate(8))) {
       try (ColumnVector.Builder builder = new ColumnVector.Builder(DType.FLOAT32, TimeUnit.NONE,
-          4, mockDataBuffer, mockValidBuffer)) {
+          4, mockDataBuffer, mockValidBuffer, null)) {
         builder.appendArray(2.1f, 3.02f, 5.004f).appendNull();
       }
       Mockito.verify(mockDataBuffer).doClose();

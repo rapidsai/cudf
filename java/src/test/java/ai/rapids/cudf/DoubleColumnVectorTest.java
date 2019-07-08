@@ -150,7 +150,7 @@ public class DoubleColumnVectorTest {
     try (HostMemoryBuffer mockDataBuffer = spy(HostMemoryBuffer.allocate(4 * 8));
          HostMemoryBuffer mockValidBuffer = spy(HostMemoryBuffer.allocate(8))) {
       try (ColumnVector.Builder builder = new ColumnVector.Builder(DType.FLOAT64, TimeUnit.NONE,
-          4, mockDataBuffer, mockValidBuffer)) {
+          4, mockDataBuffer, mockValidBuffer, null)) {
         builder.appendArray(new double[]{2.1, 3.02, 5.004}).appendNull();
       }
       Mockito.verify(mockDataBuffer).doClose();
