@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>

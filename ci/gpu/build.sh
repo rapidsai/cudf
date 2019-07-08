@@ -41,7 +41,14 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL"
+conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
+              "dask>=2.0" "distributed>=2.0"
+
+# Install the master version of dask and distributed
+logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps" 
+pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
+logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
+pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
 
 logger "Check versions..."
 python --version
@@ -54,7 +61,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libcudf cudf
+$WORKSPACE/build.sh clean libcudf cudf dask_cudf
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf and cuDF
@@ -62,24 +69,30 @@ $WORKSPACE/build.sh clean libcudf cudf
 
 if hasArg --skip-tests; then
     logger "Skipping Tests..."
-    exit 0
+else
+    logger "Check GPU usage..."
+    nvidia-smi
+
+    logger "GoogleTest for libcudf..."
+    cd $WORKSPACE/cpp/build
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
+
+    # Install the master version of distributed for serialization testing
+    logger "pip install git+https://github.com/dask/distributed.git"
+    pip install "git+https://github.com/dask/distributed.git"
+
+    # Temporarily install feather and cupy for testing
+    logger "conda install feather-format"
+    conda install "feather-format" "cupy>=6.0.0"
+
+    logger "Python py.test for cuDF..."
+    cd $WORKSPACE/python/cudf
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
+    
+    cd $WORKSPACE/python/dask_cudf
+    logger "Python py.test for dask-cudf..."
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
+
+    conda install codecov
+    codecov -t $CODECOV_TOKEN
 fi
-
-logger "Check GPU usage..."
-nvidia-smi
-
-logger "GoogleTest for libcudf..."
-cd $WORKSPACE/cpp/build
-GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
-
-# Install the master version of distributed for serialization testing
-logger "pip install git+https://github.com/dask/distributed.git"
-pip install "git+https://github.com/dask/distributed.git"
-
-# Temporarily install feather and cupy for testing
-logger "conda install feather-format"
-conda install "feather-format" "cupy>=6.0.0"
-
-logger "Python py.test for cuDF..."
-cd $WORKSPACE/python
-py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/cudf-coverage.xml --cov-report term

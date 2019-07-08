@@ -31,8 +31,8 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <bitmask/legacy_bitmask.hpp>
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/legacy_bitmask.hpp>
+#include <bitmask/legacy/bit_mask.cuh>
 
 using bit_mask::bit_mask_t;
 
