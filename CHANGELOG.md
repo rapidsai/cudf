@@ -12,6 +12,8 @@
 
 ## Improvements
 
+- PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
+
 - PR #2109 added name to Python column classes
 - PR #1947 Cleanup serialization code
 - PR #2125 More aggregate in java API
