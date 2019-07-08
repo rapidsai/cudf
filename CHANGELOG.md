@@ -22,6 +22,7 @@
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
+- PR #2184 handle remote orc files for dask-cudf
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 
@@ -72,8 +73,8 @@
 - PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
-- PR #1652 Added `Series.where()` feature 
-- PR #2074 Java Aggregates, logical ops, and better RMM support 
+- PR #1652 Added `Series.where()` feature
+- PR #2074 Java Aggregates, logical ops, and better RMM support
 
 ## Improvements
 
@@ -126,7 +127,7 @@
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
 - PR #2005 Use HTML5 details tag in bug report issue template
-- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
 - PR #1944 Groupby design improvements
 - PR #2017 Convert `read_orc()` into a C++ API
 - PR #2011 Convert `read_parquet()` into a C++ API
@@ -190,7 +191,7 @@
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
 - PR #1991 Parquet reader: fix decoding of NULLs
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
-- PR #1978 Fix for values being filled in an empty dataframe 
+- PR #1978 Fix for values being filled in an empty dataframe
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
@@ -215,7 +216,7 @@
 ## New Features
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
-- PR #1741 Add MultiIndex concatenation 
+- PR #1741 Add MultiIndex concatenation
 
 ## Bug Fixes
 
