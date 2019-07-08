@@ -3,7 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
-{% set py_version=environ.get('CONDA_PY', 35) %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
 
 package:
   name: cudf

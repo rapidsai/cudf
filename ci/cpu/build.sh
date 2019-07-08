@@ -68,6 +68,9 @@ source ci/cpu/libcudf/build_libcudf.sh
 logger "Build conda pkg for cudf..."
 source ci/cpu/cudf/build_cudf.sh
 
+logger "Build conda pkg for dask-cudf..."
+source ci/cpu/dask-cudf/build_dask_cudf.sh
+
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################
