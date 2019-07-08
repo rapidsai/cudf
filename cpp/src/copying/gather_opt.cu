@@ -219,7 +219,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   gdf_size_type* d_count_p;
   RMM_TRY(RMM_ALLOC(&d_count_p, sizeof(gdf_size_type)*n_cols, bit_stream));
   CUDA_TRY(cudaMemsetAsync(d_count_p, 0, sizeof(gdf_size_type)*n_cols, bit_stream));
- 
+  
   std::vector<bit_mask_t*> h_bit_src(n_cols);
   std::vector<bit_mask_t*> h_bit_dest(n_cols);
 
@@ -255,11 +255,16 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   // valid bits. An alternative is to embed these into the 
   //`device_table` class but then we would allocate a bunch of
   // device_memory that is not used in this function.
-  rmm::device_vector<bit_mask_t*> d_bit_src(n_cols);
-  rmm::device_vector<bit_mask_t*> d_bit_dest(n_cols);
-
-  CUDA_TRY(cudaMemcpyAsync(d_bit_src.data().get(), h_bit_src.data(), n_cols*sizeof(bit_mask_t*), cudaMemcpyHostToDevice, bit_stream));
-  CUDA_TRY(cudaMemcpyAsync(d_bit_dest.data().get(), h_bit_dest.data(), n_cols*sizeof(bit_mask_t*), cudaMemcpyHostToDevice, bit_stream));
+  // rmm::device_vector<bit_mask_t*> d_bit_src(n_cols);
+  // rmm::device_vector<bit_mask_t*> d_bit_dest(n_cols);
+  
+  bit_mask_t** d_bit_src;
+  bit_mask_t** d_bit_dest;
+  RMM_TRY(RMM_ALLOC(&d_bit_src, sizeof(bit_mask_t*)*n_cols, bit_stream));
+  RMM_TRY(RMM_ALLOC(&d_bit_dest, sizeof(bit_mask_t*)*n_cols, bit_stream));
+ 
+  CUDA_TRY(cudaMemcpyAsync(d_bit_src, h_bit_src.data(), n_cols*sizeof(bit_mask_t*), cudaMemcpyHostToDevice, bit_stream));
+  CUDA_TRY(cudaMemcpyAsync(d_bit_dest, h_bit_dest.data(), n_cols*sizeof(bit_mask_t*), cudaMemcpyHostToDevice, bit_stream));
 
   // If the source column has a valid buffer, the destination column must also have one
   CUDF_EXPECTS((src_has_nulls && dest_has_nulls) || (!src_has_nulls),
@@ -273,10 +278,10 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
   if(dest_has_nulls){
     f<<<gather_grid_size, gather_block_size, 0, bit_stream>>>(
-      d_bit_src.data().get(), 
+      d_bit_src, 
       source_table->num_rows(), 
       gather_map, 
-      d_bit_dest.data().get(), 
+      d_bit_dest, 
       destination_table->num_rows(), 
       d_count_p, 
       n_cols);
@@ -284,13 +289,13 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   
   std::vector<gdf_size_type> h_count(n_cols);
   CUDA_TRY(cudaMemcpyAsync(h_count.data(), d_count_p, sizeof(gdf_size_type)*n_cols, cudaMemcpyDeviceToHost, bit_stream));
-  RMM_TRY(RMM_FREE(d_count_p, bit_stream));
   CUDA_TRY(cudaStreamSynchronize(bit_stream));
   if(dest_has_nulls){  
     for(gdf_size_type i = 0; i < destination_table->num_columns(); i++){
       destination_table->get_column(i)->null_count = destination_table->get_column(i)->size - h_count[i];
     }
   }
+  RMM_TRY(RMM_FREE(d_count_p, bit_stream));
 }
 
 }  // namespace detail

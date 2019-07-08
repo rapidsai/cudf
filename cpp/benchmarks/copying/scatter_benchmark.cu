@@ -105,5 +105,5 @@ SBM_BENCHMARK_DEFINE(double_opt_o_coa_x,double,false, true);
 SBM_BENCHMARK_DEFINE(double_opt_x_coa_o,double, true,false);
 SBM_BENCHMARK_DEFINE(double_opt_o_coa_o,double,false,false);
 
-BENCHMARK_REGISTER_F(Scatter, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
-BENCHMARK_REGISTER_F(Scatter, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_REGISTER_F(Scatter, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Scatter, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});

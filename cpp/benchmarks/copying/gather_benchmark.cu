@@ -32,10 +32,7 @@
 
 #include "../fixture/benchmark_fixture.hpp"
 
-template<typename T, bool opt_, bool coalesce_>
 class Gather: public cudf::benchmark {
-public:
-  using TypeParam = T;
 };
 
 template<class TypeParam, bool opt, bool coalesce>
@@ -95,9 +92,9 @@ void BM_gather(benchmark::State& state){
 }
 
 #define GBM_BENCHMARK_DEFINE(name, type, opt, coalesce)                   \
-BENCHMARK_TEMPLATE_DEFINE_F(Gather, name, type, opt, coalesce)            \
+BENCHMARK_DEFINE_F(Gather, name)                                          \
 (::benchmark::State& st) {                                                \
-  BM_gather<TypeParam, opt, coalesce>(st);                                \
+  BM_gather<type, opt, coalesce>(st);                                     \
 }
 
 GBM_BENCHMARK_DEFINE(double_opt_x_coa_x,double, true, true);
@@ -105,5 +102,7 @@ GBM_BENCHMARK_DEFINE(double_opt_o_coa_x,double,false, true);
 GBM_BENCHMARK_DEFINE(double_opt_x_coa_o,double, true,false);
 GBM_BENCHMARK_DEFINE(double_opt_o_coa_o,double,false,false);
 
-BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
-BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,4}});
+BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Gather, double_opt_x_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
+BENCHMARK_REGISTER_F(Gather, double_opt_o_coa_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
