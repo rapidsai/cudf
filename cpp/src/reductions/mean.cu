@@ -18,10 +18,10 @@
 #include "reduction_functions.cuh"
 #include "reduction_dispatcher_multistep.cuh"
 
-void cudf::reduction::mean(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream)
+gdf_scalar cudf::reduction::mean(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
 {
     using dispacher = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::mean>;
-    cudf::type_dispatcher(col.dtype, dispacher(), col, scalar,  /* ddof is not used for mean*/ 1, stream);
+    return cudf::type_dispatcher(col.dtype, dispacher(), col, output_dtype,  /* ddof is not used for mean*/ 1, stream);
 }
 
 

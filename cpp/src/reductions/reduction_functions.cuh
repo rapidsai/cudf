@@ -22,15 +22,15 @@
 namespace cudf {
 namespace reduction {
 
-void sum(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
-void min(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
-void max(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
-void product(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
-void sum_of_squares(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
+gdf_scalar sum(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
+gdf_scalar min(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
+gdf_scalar max(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
+gdf_scalar product(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
+gdf_scalar sum_of_squares(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
 
-void mean(gdf_column const& col, gdf_scalar& scalar, cudaStream_t stream=0);
-void variance(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream=0);
-void standard_deviation(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream=0);
+gdf_scalar mean(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream=0);
+gdf_scalar variance(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream=0);
+gdf_scalar standard_deviation(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream=0);
 
 } // namespace reduction
 } // namespace cudf

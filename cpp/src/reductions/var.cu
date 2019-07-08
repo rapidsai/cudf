@@ -23,10 +23,10 @@
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
 //                 The divisor used in calculations is N - ddof, where N represents the number of elements.
 
-void cudf::reduction::variance(gdf_column const& col, gdf_scalar& scalar, gdf_size_type ddof, cudaStream_t stream)
+gdf_scalar cudf::reduction::variance(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
 {
     using dispacher = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::variance>;
-    cudf::type_dispatcher(col.dtype, dispacher(), col, scalar, ddof, stream);
+    return cudf::type_dispatcher(col.dtype, dispacher(), col, output_dtype, ddof, stream);
 }
 
 
