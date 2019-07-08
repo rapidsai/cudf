@@ -220,8 +220,8 @@ class MultiIndex(Index):
         lookup = DataFrame()
         if isinstance(row_tuple, slice):
             start, stop, step, sln = utils.standard_python_slice(
-                    len(index.codes),
-                    row_tuple
+                len(index.codes),
+                row_tuple
             )
             return Series(arange(start, stop, step))
         for idx, row in enumerate(row_tuple):
@@ -229,13 +229,13 @@ class MultiIndex(Index):
                 continue
             try:
                 lookup[index.names[idx]] = Series(
-                        list(index.levels[idx]).index(row)
+                    list(index.levels[idx]).index(row)
                 ).astype(index.codes.dtypes[0])
             except ValueError:
                 raise KeyError(row)
             codes_table = concat([
-                    index.codes,
-                    DataFrame({'idx': Series(arange(len(index.codes)))})
+                index.codes,
+                DataFrame({'idx': Series(arange(len(index.codes)))})
             ], axis=1)
         return lookup.merge(codes_table)['idx']
 
