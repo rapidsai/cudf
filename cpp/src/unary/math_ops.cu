@@ -226,12 +226,8 @@ gdf_column gdf_unaryop(gdf_column &input, unary_op op) {
     {
         // TODO: replace this with a proper column constructor once
         // cudf::column is implemented
-        gdf_column output_like{};
-        output_like.dtype = GDF_BOOL8;
-        output_like.size = input.size;
-        output_like.valid = input.valid;
-        output_like.data = input.data;
-        output = cudf::allocate_like(output_like);
+        bool allocate_mask = (input.valid != nullptr);
+        output = cudf::allocate_column(GDF_BOOL8, input.size, allocate_mask);
     }
     else
         output = cudf::allocate_like(input);
