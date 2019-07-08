@@ -35,13 +35,16 @@ TYPED_TEST_CASE(FillingTest, test_types);
 
 constexpr gdf_size_type column_size{1000};
 
-template <typename T>
+auto all_valid = [](gdf_index_type row) { return true; };
+
+template <typename T, typename BitInitializerType = decltype(all_valid)>
 void FillTest(gdf_index_type begin, gdf_index_type end,
-              T value, bool value_is_valid = true)
+              T value, bool value_is_valid = true, 
+              BitInitializerType source_validity = all_valid)
 {
   column_wrapper<T> source(column_size, 
     [](gdf_index_type row) { return static_cast<T>(row); },
-    [](gdf_index_type row) { return true; });
+    [&](gdf_index_type row) { return source_validity(row); });
 
   scalar_wrapper<T> val(value, value_is_valid);
 
@@ -52,7 +55,7 @@ void FillTest(gdf_index_type begin, gdf_index_type end,
     },
     [&](gdf_index_type row) { 
       return (row >= begin && row < end) ? 
-        value_is_valid : true; 
+        value_is_valid : source_validity(row); 
     });
 
   EXPECT_NO_THROW(cudf::fill(source.get(), *val.get(), begin, end));
@@ -100,6 +103,36 @@ TYPED_TEST(FillingTest, SetRange)
   FillTest(begin, end, val, true);
   // Next set it as invalid
   FillTest(begin, end, val, false);
+}
+
+TYPED_TEST(FillingTest, SetRangeNullCount)
+{
+  gdf_index_type begin = 10;
+  gdf_index_type end = 50;
+  TypeParam val = TypeParam{1};
+
+  auto some_valid = [](gdf_index_type row) { 
+    return row % 2 != 0;
+  };
+
+  auto all_invalid = [](gdf_index_type row) { 
+    return false;
+  };
+
+  // First set it as valid value
+  FillTest(begin, end, val, true, some_valid);
+
+  // Next set it as invalid
+  FillTest(begin, end, val, false, some_valid);
+
+  // All invalid column should have some valid
+  FillTest(begin, end, val, true, all_invalid);
+
+  // All should be invalid
+  FillTest(begin, end, val, false, all_invalid);
+
+  // All should be valid
+  FillTest(0, column_size, val, true, some_valid);
 }
 
 struct FillingErrorTest : GdfTest {};
