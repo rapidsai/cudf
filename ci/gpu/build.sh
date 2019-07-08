@@ -54,7 +54,7 @@ logger "Install Openjdk"
 conda install openjdk
 
 logger "Install maven"
-conda install --no-deps maven
+conda install maven
 
 logger "Check versions..."
 python --version
