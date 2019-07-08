@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once 
+#pragma once
 
 #include <cudf/types.hpp>
 
@@ -159,6 +159,17 @@ class bitmask_view {
    * immutable view
    *---------------------------------------------------------------------------**/
   bitmask_view(mutable_bitmask_view m_view);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of represented bits.
+   *---------------------------------------------------------------------------**/
+  size_type size() const noexcept { return mutable_view.size(); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the bit index offset of the first represented bit in the
+   * mask
+   *---------------------------------------------------------------------------**/
+  size_type offset() const noexcept { return mutable_view.offset(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Return raw pointer to the mask's device memory

@@ -62,14 +62,12 @@ class bitmask {
    * @note Bits outside the range [0,size) are undefined.
    *
    * @param size[in] The minimum number of bits in the bitmask
-   * @param padding_boundary[in]  optional, specifies the quantum, in bytes,
-   *of the amount of memory allocated (i.e. the allocation size is padded to a
-   * multiple of this value).
+   * @param stream[in] optional, CUDA stream used for memory allocation/copy
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
   explicit bitmask(
-      size_type size, size_type padding_boundary = 64,
+      size_type size, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
@@ -78,12 +76,18 @@ class bitmask {
    * Copies the contents of a `device_buffer` to use a bitmask.
    *
    * Requires that `buffer` contain sufficient storage to represent `size`
-   *bits.
+   * bits.
+   *
+   * @note Uses `other`'s stream and device memory resource for memory
+   * allocation.
    *
    * @param size The number of bits represented by the bitmask
-   * @param buffer The `device_buffer` to be copied from
+   * @param other The `device_buffer` to copy from
+   * @param stream optional, CUDA stream to use for memory allocation/copy
+   * @param mr optional, the device memory resource to use for allocation of new
+   * bitmask
    *---------------------------------------------------------------------------**/
-  bitmask(size_type size, rmm::device_buffer const& buffer);
+  bitmask(size_type size, rmm::device_buffer const& other);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by moving from an existing device_buffer.
@@ -94,31 +98,34 @@ class bitmask {
    *bits.
    *
    * @param size The number of bits represented by the bitmask
-   * @param mask The `device_buffer` to move from
+   * @param other The `device_buffer` to move from
    *---------------------------------------------------------------------------**/
-  bitmask(size_type size, rmm::device_buffer&& mask) noexcept;
+  bitmask(size_type size, rmm::device_buffer&& other);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by copying from an existing
    *`bitmask_view`.
    *
    * @param view[in]  The `bitmask_view` to copy from.
+   * @param stream[in] optional, CUDA stream to use for memory allocation/copy
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
-  explicit bitmask(bitmask_view view, rmm::mr::device_memory_resource* mr =
-                                          rmm::mr::get_default_resource());
+  explicit bitmask(
+      bitmask_view view, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by copying from an existing
    * `mutable_bitmask_view`
    *
-   * @param view The `mutable_bitmask_view` to copy from.
+   * @param view[in] The `mutable_bitmask_view` to copy from.
+   * @param stream[in] optional, CUDA stream to use for memory allocation/copy
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
   explicit bitmask(
-      mutable_bitmask_view view,
+      mutable_bitmask_view view, cudaStream_t stream = 0;
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
@@ -131,25 +138,30 @@ class bitmask {
    *
    * @return bitmask_view The view of the bitmask data
    *---------------------------------------------------------------------------**/
-  bitmask_view view() const noexcept;
+  bitmask_view view() const noexcept {
+    return bitmask_view{static_cast<bitmask_type const*>(_data->data()), _size};
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Constructs a mutable, zero-copy view of the bitmask
    *
    * @return mutable_bitmask_view The mutable view of the bitmask data
    *---------------------------------------------------------------------------**/
-  mutable_bitmask_view mutable_view() noexcept;
+  mutable_bitmask_view mutable_view() noexcept {
+    return mutable_bitmask_view{static_cast<bitmask_type*>(_data->data()),
+                                _size};
+  }
 
   /**---------------------------------------------------------------------------*
    * @brief Constructs a zero-copy immutable view of a "slice" of the bitmask
    * with the specified offset and size.
    *
    * @param offset The bit index of the first bit in the slice
-   * @param size optional, the number of bits in the slice. If zero, slices from
-   * the offset to the size of the source bitmask
+   * @param slice_size optional, the number of bits in the slice. If zero,
+   *slices from the offset to the size of the source bitmask
    * @return bitmask_view
    *---------------------------------------------------------------------------**/
-  bitmask_view slice(size_type offset, size_type size = 0) const noexcept;
+  bitmask_view slice(size_type offset, size_type slice_size = 0) const;
 
   /**---------------------------------------------------------------------------*
    * @brief Constructs a zero-copy mutable view of a "slice" of the bitmask
@@ -160,22 +172,32 @@ class bitmask {
    * the offset to the size of the source bitmask
    * @return bitmask_view
    *---------------------------------------------------------------------------**/
-  mutable_bitmask_view mutable_slice(size_type offset, size_type size = 0) const
-      noexcept;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a zero-copy `mutable_bitmask_view` from this `bitmask`
-   *---------------------------------------------------------------------------**/
-  operator mutable_bitmask_view() noexcept;
+  mutable_bitmask_view mutable_slice(size_type offset, size_type size = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a zero-copy immutable `bitmask_view` from this
    *`bitmask`.
    *---------------------------------------------------------------------------**/
-  operator bitmask_view() const noexcept;
+  operator bitmask_view() const noexcept { return this->view(); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a zero-copy `mutable_bitmask_view` from this `bitmask`
+   *---------------------------------------------------------------------------**/
+  operator mutable_bitmask_view() noexcept { return this->mutable_view(); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a `std::unique_ptr` to the underlying `device_buffer` and
+   * releases ownership.
+   *
+   * @return A `std::unique_ptr` to the underlying `device_buffer`.
+   *---------------------------------------------------------------------------**/
+  std::unique_ptr<rmm::device_buffer> release() noexcept {
+    _size = 0;
+    return std::move(_data);
+  }
 
  private:
-  rmm::device_buffer _data{};
+  std::unique_ptr<rmm::device_buffer> _data{};
   size_type _size{};
 };
 

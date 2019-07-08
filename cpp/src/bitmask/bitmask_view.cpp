@@ -13,23 +13,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-#pragma once
-
-#include <cudf/bitmask_view.hpp>
+#include <cudf/bitmask/bitmask_view.hpp>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
 
-mutable_bitmask_view::mutable_bitmask_view(bitmask_type* mask, size_type size)
-    : _mask{mask}, _size{size} {
-  if (nullptr == mask) {
-    CUDF_EXPECTS(0 == size, "Null mask for non-empty bitmask.");
+mutable_bitmask_view::mutable_bitmask_view(bitmask_type* mask, size_type size,
+                                           size_type offset)
+    : _mask{mask}, _size{size}, _offset{offset} {
+  if (size > 0) {
+    CUDF_EXPECTS(nullptr != mask, "Null mask for non-empty bitmask.");
   }
+  CUDF_EXPECTS(offset >= 0, "Invalid offset.");
 }
 
-bitmask_view::bitmask_view(bitmask_type const* mask, size_type size)
-    : mutable_view{const_cast<bitmask_type*>(mask), size} {}
+bitmask_view::bitmask_view(bitmask_type const* mask, size_type size,
+                           size_type offset)
+    : mutable_view{const_cast<bitmask_type*>(mask), size, offset} {}
 
 bitmask_view::bitmask_view(mutable_bitmask_view m_view)
     : mutable_view{m_view} {}
