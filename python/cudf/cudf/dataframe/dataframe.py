@@ -970,10 +970,9 @@ class DataFrame(object):
             else:
                 dtype = dtypes.get(name, np.float64)
                 col = original_cols.get(name, Series(dtype=dtype))._column
-                col = columnops.column_empty_like(col,
-                                                  dtype=dtype,
-                                                  masked=True,
-                                                  newsize=length)
+                col = columnops.column_empty_like(
+                    col, dtype=dtype, masked=True, newsize=length
+                )
                 cols[name] = Series(data=col, index=idx)
 
         return DataFrame(cols, idx)

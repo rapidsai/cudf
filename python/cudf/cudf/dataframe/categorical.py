@@ -17,12 +17,14 @@ class CategoricalAccessor(object):
     """
     This mimicks pandas `df.cat` interface.
     """
+
     def __init__(self, parent):
         self._parent = parent
 
     @property
     def categories(self):
         from cudf.dataframe.index import as_index
+
         return as_index(self._parent._categories)
 
     @property
@@ -81,16 +83,16 @@ class CategoricalAccessor(object):
         new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
         old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
 
-        cur_df = DataFrame({'old_codes': cur_codes})
-        old_df = DataFrame({'old_codes': old_codes, 'cats': cur_cats})
-        new_df = DataFrame({'new_codes': new_codes, 'cats': new_cats})
+        cur_df = DataFrame({"old_codes": cur_codes})
+        old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})
+        new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
 
         # Join the old and new categories and line up their codes
-        df = old_df.merge(new_df, on='cats', how='left')
+        df = old_df.merge(new_df, on="cats", how="left")
         # Join the old and new codes to "recode" the codes data buffer
-        df = cur_df.merge(df, on='old_codes', how='left')
+        df = cur_df.merge(df, on="old_codes", how="left")
 
-        kwargs = df['new_codes']._column._replace_defaults()
+        kwargs = df["new_codes"]._column._replace_defaults()
         kwargs.update(categories=new_cats)
         new_cats._name = None
 
@@ -117,23 +119,26 @@ class CategoricalColumn(columnops.TypedColumnBase):
             whether the categorical has a logical ordering (e.g. less than)
         """
 
-        ordered = bool(kwargs.pop('ordered'))
-        categories = kwargs.pop('categories', [])
+        ordered = bool(kwargs.pop("ordered"))
+        categories = kwargs.pop("categories", [])
         # Default to String dtype if len(categories) == 0, like pandas does
-        categories = columnops.as_column(categories) if len(categories) > 0 \
-            else columnops.column_empty(0, np.dtype('object'), masked=False)
+        categories = (
+            columnops.as_column(categories)
+            if len(categories) > 0
+            else columnops.column_empty(0, np.dtype("object"), masked=False)
+        )
 
         dtype = CategoricalDtype(ordered=ordered)
-        kwargs.update({'dtype': dtype})
+        kwargs.update({"dtype": dtype})
         super(CategoricalColumn, self).__init__(**kwargs)
         self._categories = categories
         self._ordered = ordered
 
     def serialize(self, serialize):
         header, frames = super(CategoricalColumn, self).serialize(serialize)
-        header['ordered'] = self._ordered
-        header['categories'], category_frames = serialize(self._categories)
-        header['category_frame_count'] = len(category_frames)
+        header["ordered"] = self._ordered
+        header["categories"], category_frames = serialize(self._categories)
+        header["category_frame_count"] = len(category_frames)
         frames.extend(category_frames)
         return header, frames
 
@@ -142,20 +147,20 @@ class CategoricalColumn(columnops.TypedColumnBase):
         data, mask = super(CategoricalColumn, cls).deserialize(
             deserialize, header, frames
         )
-        if 'category_frame_count' not in header:
+        if "category_frame_count" not in header:
             # Handle data from before categories was a cudf.Column
-            categories = header['categories']
+            categories = header["categories"]
         else:
             # Handle categories that were serialized as a cudf.Column
-            categories = frames[len(frames) - header['category_frame_count']:]
-            categories = deserialize(header['categories'], categories)
+            categories = frames[len(frames) - header["category_frame_count"] :]
+            categories = deserialize(header["categories"], categories)
             categories = columnops.as_column(categories)
 
         return cls(
             data=data,
             mask=mask,
             categories=categories,
-            ordered=header["ordered"]
+            ordered=header["ordered"],
         )
 
     def _replace_defaults(self):
@@ -231,9 +236,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def to_pandas(self, index=None):
         codes = self.cat().codes.fillna(-1).to_array()
         categories = self._categories.to_pandas()
-        data = pd.Categorical.from_codes(codes,
-                                         categories=categories,
-                                         ordered=self._ordered)
+        data = pd.Categorical.from_codes(
+            codes, categories=categories, ordered=self._ordered
+        )
         return pd.Series(data, index=index)
 
     def to_arrow(self):
@@ -241,7 +246,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             from_pandas=True,
             ordered=self._ordered,
             indices=self.as_numerical.to_arrow(),
-            dictionary=self._categories.to_arrow()
+            dictionary=self._categories.to_arrow(),
         )
 
     def _unique_segments(self):
@@ -257,9 +262,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def unique(self, method=None):
         codes = self.as_numerical.unique(method).data
-        return CategoricalColumn(data=codes,
-                                 categories=self._categories,
-                                 ordered=self._ordered)
+        return CategoricalColumn(
+            data=codes, categories=self._categories, ordered=self._ordered
+        )
 
     def unique_count(self, method="sort", dropna=True):
         if method != "sort":
@@ -345,10 +350,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         result = cpp_replace.apply_replace_nulls(self, fill_value)
 
         result = columnops.build_column(
-            result.data,
-            "category",
-            result.mask,
-            categories=self._categories,
+            result.data, "category", result.mask, categories=self._categories
         )
 
         return self._mimic_inplace(result.replace(mask=None), inplace)

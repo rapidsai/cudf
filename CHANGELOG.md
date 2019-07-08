@@ -34,6 +34,7 @@
 - PR #2146 Work around unary_math validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
+- PR #2161 Implicitly convert unsigned to signed integer types in binops
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
 - PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
 - PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
