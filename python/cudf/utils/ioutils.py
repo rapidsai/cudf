@@ -1,10 +1,9 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+from io import BytesIO
 import os
 import urllib
-from io import BytesIO, TextIOWrapper
 
-from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_parquet_metadata = """
 Read a Parquet file's metadata and schema
@@ -37,8 +36,7 @@ See Also
 cudf.io.parquet.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
-    docstring=_docstring_read_parquet_metadata
-)
+    docstring=_docstring_read_parquet_metadata)
 
 _docstring_read_parquet = """
 Load a Parquet dataset into a DataFrame
@@ -567,12 +565,9 @@ skipinitialspace : bool, default False
     Skip spaces after delimiter.
 names : list of str, default None
     List of column names to be used.
-dtype : type, list of types, or dict of column -> type, default None
-    Data type(s) for data or columns. If list, types are applied in the same
-    order as the column names. If dict, types are mapped to the column names.
-    E.g. {‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}
-    If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
-    and not infer or interpret to dtype.
+dtype : list of str or dict of {col: dtype}, default None
+    List of data types in the same order of the column names
+    or a dictionary with column_name:dtype (pandas style).
 quotechar : char, default '"'
     Character to indicate start and end of quote item.
 quoting : str or int, default 0
@@ -752,7 +747,7 @@ def is_file_like(obj):
     is_file_like : bool
         If `obj` is file-like returns True otherwise False
     """
-    if not (hasattr(obj, "read") or hasattr(obj, "write")):
+    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
         return False
     elif not hasattr(obj, "__iter__"):
         return False
@@ -783,14 +778,12 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     """
     if is_url(path_or_data):
         with urllib.request.urlopen(path_or_data) as url:
-            compression = url.headers.get("Content-Encoding", None)
+            compression = url.headers.get('Content-Encoding', None)
             buffer = BytesIO(url.read())
         return buffer, compression
     elif isinstance(path_or_data, str):
         return os.path.expanduser(path_or_data), compression
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
-        if isinstance(path_or_data, TextIOWrapper):
-            path_or_data = path_or_data.buffer
         return BytesIO(path_or_data.read()), compression
     else:
         return path_or_data, compression
