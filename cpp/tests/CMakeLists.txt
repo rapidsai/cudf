@@ -153,6 +153,14 @@ set(ORDERBY_TEST_SRC
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 
 ###################################################################################################
+# - bitmask tests ---------------------------------------------------------------------------------
+
+set(BITMASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_test.cu")
+
+ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
+
+###################################################################################################
 # - legacy bitmask tests ---------------------------------------------------------------------------------
 
 set(LEGACY_BITMASK_TEST_SRC
