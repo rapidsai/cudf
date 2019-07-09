@@ -27,10 +27,7 @@
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
-<<<<<<< HEAD
 - PR #2176 Added column dtype support for datetime, int8, int16 to csv_writer
-=======
->>>>>>> branch-0.9
 
 ## Bug Fixes
 
