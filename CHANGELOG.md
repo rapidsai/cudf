@@ -26,6 +26,7 @@
 - PR #2184 handle remote orc files for dask-cudf
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
+- PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
 
 ## Bug Fixes
