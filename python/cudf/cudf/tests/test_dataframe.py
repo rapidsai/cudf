@@ -3154,3 +3154,13 @@ def test_as_column_types():
     gds = Series([1, 2, 3], dtype="float32")
 
     assert_eq(pds, gds)
+
+
+def test_one_row_head():
+    gdf = DataFrame({'name':['carl'],'score':[100]})
+    pdf = gdf.to_pandas()
+
+    head_gdf = gdf.head()
+    head_pdf = pdf.head()
+
+    assert_eq(head_pdf, head_gdf)
