@@ -2322,8 +2322,10 @@ register_distributed_serializer(Series)
 
 
 truediv_int_dtype_corrections = {
-    "int64": "float64",
+    "int16": "float32",
     "int32": "float32",
+    "int64": "float64",
+    "bool": "float32",
     "int": "float",
 }
 

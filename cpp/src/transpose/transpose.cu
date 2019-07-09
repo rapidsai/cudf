@@ -3,7 +3,7 @@
 #include <utilities/nvtx/nvtx_utils.h>
 #include <utilities/type_dispatcher.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 #include <cub/cub.cuh>
 #include <memory>

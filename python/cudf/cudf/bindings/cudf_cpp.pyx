@@ -107,7 +107,7 @@ cpdef get_column_valid_ptr(obj):
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
-cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
+cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     """
     Returns a gdf_scalar* constructed from the numpy scalar ``val``.
     """
@@ -118,6 +118,7 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
         raise MemoryError
 
     set_scalar_value(s, val)
+
     if dtype is not None:
         s[0].dtype = dtypes[dtype.type]
     else:
