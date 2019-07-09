@@ -15,8 +15,11 @@
  */
 
 #include <cudf/bitmask/bitmask.hpp>
+#include <cudf/bitmask/bitmask_device_view.cuh>
 #include <cudf/bitmask/bitmask_view.hpp>
 #include <cudf/types.hpp>
+
+#include <thrust/logical.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -31,12 +34,25 @@ TEST_F(BitmaskTest, DefaultConstructor) {
   EXPECT_EQ(nullptr, bitmask->data());
 }
 
+namespace {
+struct bit_is_set {
+  cudf::bitmask_device_view _view;
+  bit_is_set(cudf::bitmask_device_view view) : _view{view} {}
+  __device__ bool operator()(cudf::size_type bit_index) {
+    return _view.bit_is_set(bit_index);
+  }
+};
+}  // namespace
+
 TEST_F(BitmaskTest, SizeConstructorWithDefaults) {
   cudf::size_type size{100};
   EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
   EXPECT_EQ(size, bitmask->size());
   EXPECT_NE(nullptr, bitmask->data());
-  // TODO Check contents of device memory
+
+  EXPECT_TRUE(thrust::all_of(thrust::device, thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(size),
+                             bit_is_set{*bitmask}));
 }
 
 TEST_F(BitmaskTest, SizeConstructorAllOn) {
@@ -45,7 +61,9 @@ TEST_F(BitmaskTest, SizeConstructorAllOn) {
       bitmask = std::make_unique<cudf::bitmask>(size, cudf::bit_state::ON));
   EXPECT_EQ(size, bitmask->size());
   EXPECT_NE(nullptr, bitmask->data());
-  // TODO Check contents of device memory
+  EXPECT_TRUE(thrust::all_of(thrust::device, thrust::make_counting_iterator(0),
+                             thrust::make_counting_iterator(size),
+                             bit_is_set{*bitmask}));
 }
 
 TEST_F(BitmaskTest, SizeConstructorAllOff) {
@@ -54,7 +72,9 @@ TEST_F(BitmaskTest, SizeConstructorAllOff) {
       bitmask = std::make_unique<cudf::bitmask>(size, cudf::bit_state::OFF));
   EXPECT_EQ(size, bitmask->size());
   EXPECT_NE(nullptr, bitmask->data());
-  // TODO Check contents of device memory
+  EXPECT_FALSE(thrust::all_of(thrust::device, thrust::make_counting_iterator(0),
+                              thrust::make_counting_iterator(size),
+                              bit_is_set{*bitmask}));
 }
 
 TEST_F(BitmaskTest, CopyConstructor) {
