@@ -92,6 +92,7 @@ def to_csv(
     header=True,
     index=True,
     line_terminator="\n",
+    chunksize=None
 ):
     """{docstring}"""
     if index:
@@ -104,6 +105,7 @@ def to_csv(
                 columns = columns.copy()
                 columns.insert(0, df.index.name)
         df = df.reset_index()
+    rows_per_chunk = chunksize if chunksize else len(df)
 
     return cpp_write_csv(
         cols=df._cols,
@@ -113,4 +115,5 @@ def to_csv(
         columns=columns,
         header=header,
         line_terminator=line_terminator,
+        rows_per_chunk=rows_per_chunk
     )

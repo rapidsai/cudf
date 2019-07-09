@@ -235,7 +235,8 @@ cpdef cpp_read_csv(
 cpdef cpp_write_csv(
     cols, path=None,
     sep=',', na_rep='',
-    columns=None, header=True, line_terminator='\n'):
+    columns=None, header=True,
+    line_terminator='\n', rows_per_chunk=8):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
@@ -262,7 +263,8 @@ cpdef cpp_write_csv(
     false_value = 'False'.encode()
     csv_writer.false_value = false_value
     csv_writer.include_header = header
-    csv_writer.rows_per_chunk = 10240000
+    # Minimum rows per chunk allowed by csvwriter is 8
+    csv_writer.rows_per_chunk = rows_per_chunk if rows_per_chunk > 8 else 8
 
     cdef vector[gdf_column*] list_cols
     # Variable for storing col name list that does not get garbage collected
