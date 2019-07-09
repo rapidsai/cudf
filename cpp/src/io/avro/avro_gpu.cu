@@ -60,7 +60,7 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
     // Fetch schema into shared mem if possible
     if (schema_len <= MAX_SHARED_SCHEMA_LEN)
     {
-        for (int i = threadIdx.y * 32 + threadIdx.x; i < schema_len; i += NWARPS * 32)
+        for (int i = threadIdx.y * 32 + threadIdx.x; i < schema_len * sizeof(schemadesc_s) / sizeof(uint32_t); i += NWARPS * 32)
         {
             reinterpret_cast<uint32_t *>(&g_shared_schema)[i] = reinterpret_cast<const uint32_t *>(schema_g)[i];
         }
@@ -259,6 +259,7 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
                     {
                         skip += schema[i].count;
                     }
+                    ++i;
                     --skip;
                 }
             }

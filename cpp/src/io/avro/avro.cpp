@@ -93,6 +93,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
         }
         if (object_count > first_row)
         {
+            uint32_t block_row = static_cast<uint32_t>(total_object_count);
             max_block_size = std::max(max_block_size, block_size);
             total_object_count += object_count;
             if (!md->block_list.size())
@@ -101,7 +102,7 @@ bool container::parse(file_metadata *md, size_t max_num_rows, size_t first_row)
                 total_object_count -= first_row;
                 first_row = 0;
             }
-            md->block_list.emplace_back(m_cur - m_base, block_size, static_cast<uint32_t>(total_object_count), object_count);
+            md->block_list.emplace_back(m_cur - m_base, block_size, block_row, object_count);
         }
         else
         {
