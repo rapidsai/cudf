@@ -68,6 +68,8 @@ gdf_column upper_bound(gdf_column const& column,
  * 
  * @param t             Table to search in. Must be sorted in ascending order
  * @param values        Values to search insert locations for
+ * @param desc_flags    Vector of whether corresponding column is sorted in
+ *  descending. If false, the column is considered sorted ascending
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
@@ -75,6 +77,7 @@ gdf_column upper_bound(gdf_column const& column,
  *---------------------------------------------------------------------------**/
 gdf_column lower_bound(table const& t,
                        table const& values,
+                       std::vector<bool>& desc_flags,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
@@ -86,6 +89,8 @@ gdf_column lower_bound(table const& t,
  * 
  * @param column        Column to search in. Must be sorted in ascending order
  * @param values        Values to search insert locations for
+ * @param desc_flags    Vector of whether corresponding column is sorted in
+ *  descending. If false, the column is considered sorted ascending
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
@@ -93,6 +98,7 @@ gdf_column lower_bound(table const& t,
  *---------------------------------------------------------------------------**/
 gdf_column upper_bound(table const& t,
                        table const& values,
+                       std::vector<bool>& desc_flags,
                        bool nulls_as_largest = true);
 
 } // namespace cudf

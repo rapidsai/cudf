@@ -266,13 +266,15 @@ TEST_F(SearchTest, table__find_first)
 
     auto input_table  = cudf::table(columns);
     auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>(3, false);
 
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
             input_table,
-            values_table)
+            values_table,
+            desc_flags)
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -299,13 +301,84 @@ TEST_F(SearchTest, table__find_last)
 
     auto input_table  = cudf::table(columns);
     auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>(3, false);
 
     gdf_column result_column{};
 
     EXPECT_NO_THROW(
         result_column = cudf::upper_bound(
             input_table,
-            values_table)
+            values_table,
+            desc_flags)
+    );
+
+    auto result = column_wrapper<gdf_index_type>(result_column);
+    
+    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
+                              << "Expected:" << expect.to_str();
+}
+
+TEST_F(SearchTest, table_partial_desc__find_first)
+{
+    auto column_0 = column_wrapper<int32_t> {  50,  20,  20,  20,  20,  20,  10 };
+    auto column_1 = column_wrapper<float>   {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
+    auto column_2 = column_wrapper<int8_t>  {  41,  78,  77,  63,  62,  61,  90 };
+
+    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+
+    auto expect = column_wrapper<gdf_index_type>
+                                            { 7,  7,  7,  7,  6,  7,  6,  6,  7,  7,  7,  7,  6,  1,  3,  2,  1,  3,  3,  3,  3,  3,  4,  3,  1,  0,  0 };
+    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
+    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+
+    auto input_table  = cudf::table(columns);
+    auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>{true, false, true};
+
+    gdf_column result_column{};
+
+    EXPECT_NO_THROW(
+        result_column = cudf::lower_bound(
+            input_table,
+            values_table,
+            desc_flags)
+    );
+
+    auto result = column_wrapper<gdf_index_type>(result_column);
+    
+    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
+                              << "Expected:" << expect.to_str();
+}
+
+TEST_F(SearchTest, table_partial_desc__find_last)
+{
+    auto column_0 = column_wrapper<int32_t> {  50,  20,  20,  20,  20,  20,  10 };
+    auto column_1 = column_wrapper<float>   {  .7,  .5,  .5,  .7,  .7,  .7, 5.0 };
+    auto column_2 = column_wrapper<int8_t>  {  41,  78,  77,  63,  62,  61,  90 };
+
+    auto values_0 = column_wrapper<int32_t> { 0,  0,  0,  0, 10, 10, 10, 10, 10, 10, 10, 10, 11, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 20, 30, 50, 60 };
+    auto values_1 = column_wrapper<float>   { 0,  0,  6,  5,  0,  5,  5,  5,  5,  6,  6,  6,  9,  0, .5, .5, .5, .5, .6, .6, .6, .7, .7, .7, .7, .7, .5 };
+    auto values_2 = column_wrapper<int8_t>  { 0, 91,  0, 91,  0, 79, 90, 91, 77, 80, 90, 91, 91,  0, 76, 77, 78, 30, 65, 77, 78, 80, 62, 78, 64, 41, 20 };
+
+    auto expect = column_wrapper<gdf_index_type>
+                                            { 7,  7,  7,  7,  6,  7,  7,  6,  7,  7,  7,  7,  6,  1,  3,  3,  2,  3,  3,  3,  3,  3,  5,  3,  1,  1,  0 };
+
+    std::vector<gdf_column*> columns{column_0.get(), column_1.get(), column_2.get()};
+    std::vector<gdf_column*> values {values_0.get(), values_1.get(), values_2.get()};
+
+    auto input_table  = cudf::table(columns);
+    auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>{true, false, true};
+
+    gdf_column result_column{};
+
+    EXPECT_NO_THROW(
+        result_column = cudf::upper_bound(
+            input_table,
+            values_table,
+            desc_flags)
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -358,6 +431,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
 
     auto input_table  = cudf::table(columns);
     auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>(3, false);
 
     gdf_column result_column{};
 
@@ -365,6 +439,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_smallest)
         result_column = cudf::lower_bound(
             input_table,
             values_table,
+            desc_flags,
             false)  // nulls_as_largest
     );
 
@@ -418,6 +493,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
 
     auto input_table  = cudf::table(columns);
     auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>(3, false);
 
     gdf_column result_column{};
 
@@ -425,6 +501,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_smallest)
         result_column = cudf::upper_bound(
             input_table,
             values_table,
+            desc_flags,
             false)   // nulls_as_largest
     );
 
@@ -478,6 +555,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
 
     auto input_table  = cudf::table(columns);
     auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>(3, false);
 
     gdf_column result_column{};
 
@@ -485,6 +563,7 @@ TEST_F(SearchTest, table__find_first__nulls_as_largest)
         result_column = cudf::lower_bound(
             input_table,
             values_table,
+            desc_flags,
             true)   // nulls_as_largest
     );
 
@@ -538,6 +617,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
 
     auto input_table  = cudf::table(columns);
     auto values_table = cudf::table(values);
+    auto desc_flags   = std::vector<bool>(3, false);
 
     gdf_column result_column{};
 
@@ -545,6 +625,7 @@ TEST_F(SearchTest, table__find_last__nulls_as_largest)
         result_column = cudf::upper_bound(
             input_table,
             values_table,
+            desc_flags,
             true)    // nulls_as_largest
     );
 

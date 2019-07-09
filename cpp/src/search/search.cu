@@ -26,7 +26,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/binary_search.h>
-
+#include <thrust/device_vector.h>
 
 namespace cudf {
 
@@ -77,8 +77,8 @@ struct search_functor {
       auto it_val = cudf::make_iterator<true, T>(values, null_substitute);
 
       if (ascending)
-      launch_search(it_col, it_val, column.size, values.size, result.data,
-                    thrust::less<T>(), find_first, stream);
+        launch_search(it_col, it_val, column.size, values.size, result.data,
+                      thrust::less<T>(), find_first, stream);
       else
         launch_search(it_col, it_val, column.size, values.size, result.data,
                       thrust::greater<T>(), find_first, stream);
@@ -88,8 +88,8 @@ struct search_functor {
       auto it_val = cudf::make_iterator<false, T>(values);
 
       if (ascending)
-      launch_search(it_col, it_val, column.size, values.size, result.data,
-                    thrust::less<T>(), find_first, stream);
+        launch_search(it_col, it_val, column.size, values.size, result.data,
+                      thrust::less<T>(), find_first, stream);
       else
         launch_search(it_col, it_val, column.size, values.size, result.data,
                       thrust::greater<T>(), find_first, stream);
@@ -130,6 +130,7 @@ gdf_column search_ordered(gdf_column const& column,
 gdf_column search_ordered(table const& t,
                           table const& values,
                           bool find_first,
+                          std::vector<bool>& desc_flags,
                           bool nulls_as_largest,
                           cudaStream_t stream = 0)
 {
@@ -147,19 +148,22 @@ gdf_column search_ordered(table const& t,
   auto d_t      = device_table::create(t, stream);
   auto d_values = device_table::create(values, stream);
   auto count_it = thrust::make_counting_iterator(0);
+
+  thrust::device_vector<int8_t, rmm_allocator<int8_t>> dv_desc_flags(desc_flags);
+  auto d_desc_flags = thrust::raw_pointer_cast(dv_desc_flags.data());
   
   if ( has_nulls(t) ) {
     auto ineq_op = (find_first)
-                 ? row_inequality_comparator<true>(*d_t, *d_values, !nulls_as_largest)
-                 : row_inequality_comparator<true>(*d_values, *d_t, !nulls_as_largest);
+                 ? row_inequality_comparator<true>(*d_t, *d_values, !nulls_as_largest, d_desc_flags)
+                 : row_inequality_comparator<true>(*d_values, *d_t, !nulls_as_largest, d_desc_flags);
 
     launch_search(count_it, count_it, t.num_rows(), values.num_rows(), result.data,
                   ineq_op, find_first, stream);
   }
   else {
     auto ineq_op = (find_first)
-                 ? row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest)
-                 : row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest);
+                 ? row_inequality_comparator<false>(*d_t, *d_values, !nulls_as_largest, d_desc_flags)
+                 : row_inequality_comparator<false>(*d_values, *d_t, !nulls_as_largest, d_desc_flags);
 
     launch_search(count_it, count_it, t.num_rows(), values.num_rows(), result.data,
                   ineq_op, find_first, stream);
@@ -188,16 +192,18 @@ gdf_column upper_bound(gdf_column const& column,
 
 gdf_column lower_bound(table const& t,
                        table const& values,
+                       std::vector<bool>& desc_flags,
                        bool nulls_as_largest)
 {
-  return detail::search_ordered(t, values, true, nulls_as_largest);
+  return detail::search_ordered(t, values, true, desc_flags, nulls_as_largest);
 }
 
 gdf_column upper_bound(table const& t,
                        table const& values,
+                       std::vector<bool>& desc_flags,
                        bool nulls_as_largest)
 {
-  return detail::search_ordered(t, values, false, nulls_as_largest);
+  return detail::search_ordered(t, values, false, desc_flags, nulls_as_largest);
 }
 
 } // namespace cudf
