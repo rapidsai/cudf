@@ -122,7 +122,6 @@ def drop_nulls_table(cols, how="any", subset=None):
     else:
         column_indices = range(len(cols))
 
-    print(column_indices)
     with nogil:
         c_out_table = drop_nulls(c_in_table[0], column_indices, drop_if)
 

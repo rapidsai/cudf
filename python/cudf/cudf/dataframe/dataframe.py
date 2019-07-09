@@ -1350,9 +1350,9 @@ class DataFrame(object):
             *all* null values.
         """
         if axis == 0:
-            return self._drop_na_columns(how=how)
-        else:
             return self._drop_na_rows(how=how)
+        else:
+            return self._drop_na_columns(how=how)
 
     def _drop_na_rows(self, how="any"):
         """
