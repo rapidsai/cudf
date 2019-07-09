@@ -20,8 +20,8 @@
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
-#include <bitmask/bit_mask.cuh>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
 #include <cudf/table.hpp>

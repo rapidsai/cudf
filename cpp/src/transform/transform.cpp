@@ -18,8 +18,8 @@
 #include <jit/type.h>
 #include <nvstrings/NVCategory.h>
 #include <utilities/cudf_utils.h>
-#include <bitmask/bitmask_ops.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/bitmask_ops.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <string/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>

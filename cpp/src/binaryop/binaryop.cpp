@@ -17,17 +17,22 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
-#include <nvstrings/NVCategory.h>
+#include "jit/core/launcher.h"
+#include "jit/util/operator.h"
+#include "compiled/binary_ops.hpp"
+#include <bitmask/legacy/bitmask_ops.hpp>
+#include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
-#include <bitmask/bitmask_ops.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <cudf/cudf.h>
+#include <bitmask/legacy/legacy_bitmask.hpp>
+#include <string/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
 #include <string/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>
 #include "compiled/binary_ops.hpp"
 #include "jit/core/launcher.h"
 #include "jit/util/operator.h"
+#include <nvstrings/NVCategory.h>
 
 namespace cudf {
 namespace binops {

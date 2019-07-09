@@ -1,3 +1,47 @@
+# cuDF 0.9.0 (Date TBD)
+
+## New Features
+
+- PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
+- PR #2012 Add `reindex()` to DataFrame and Series
+- PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2160 Merge `dask-cudf` codebase into `cudf` repo
+- PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
+- PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+
+## Improvements
+
+- PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
+
+- PR #2109 added name to Python column classes
+- PR #1947 Cleanup serialization code
+- PR #2125 More aggregate in java API
+- PR #2127 Add in java Scalar tests
+- PR #2088 Refactor of Python groupby code
+- PR #2131 Chunk rows logic added to csv_writer
+- PR #2129 Add functions in the Java API to support nullable column filtering
+- PR #2165 made changes to get_dummies api for it to be available in MethodCache
+- PR #2184 handle remote orc files for dask-cudf
+- PR #2186 Add `getitem` and `getattr` style access to Rolling objects
+- PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
+
+## Bug Fixes
+
+- PR #2086 Fixed quantile api behavior mismatch in series & dataframe
+- PR #2128 Add offset param to host buffer readers in java API.
+- PR #2145 Work around binops validity checks for java
+- PR #2146 Work around unary_math validity checks for java
+- PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
+- PR #2139 matching to pandas describe behavior & fixing nan values issue
+- PR #2161 Implicitly convert unsigned to signed integer types in binops
+- PR #2154 CSV Reader: Fix bools misdetected as strings dtype
+- PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
+- PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them
+- PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
+- PR #2190 Fix issue in astype conversion of string column to 'str'
+
+
 # cuDF 0.8.0 (27 June 2019)
 
 ## New Features
@@ -73,7 +117,8 @@
 - PR #1915 Improve iloc performance for non-contiguous row selection
 - PR #1859 Convert read_json into a C++ API
 - PR #1919 Rename libcudf namespace gdf to namespace cudf
-- PR #1850 Support left_on and right_on for DataFrame merge operator  
+- PR #1850 Support left_on and right_on for DataFrame merge operator
+- PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1938 Add default constructor for `column_wrapper`
 - PR #1930 Specialize constructor for `cudf::bool8` to cast argument to `bool`
 - PR #1952 consolidate libcudf public API headers in include/cudf
@@ -84,7 +129,7 @@
 - PR #1868 ORC Reader: Support row index for speed up on small/medium datasets
 - PR #1964 Added support for list-like types in Series.str.cat
 - PR #2005 Use HTML5 details tag in bug report issue template
-- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat 
+- PR #2003 Removed few redundant unit-tests from test_string.py::test_string_cat
 - PR #1944 Groupby design improvements
 - PR #2017 Convert `read_orc()` into a C++ API
 - PR #2011 Convert `read_parquet()` into a C++ API
@@ -148,7 +193,7 @@
 - PR #1985 Implement `GDF_PYMOD`, a special modulo that follows python's sign rules
 - PR #1991 Parquet reader: fix decoding of NULLs
 - PR #1990 Fixes a rendering bug in the `apply_grouped` documentation
-- PR #1978 Fix for values being filled in an empty dataframe 
+- PR #1978 Fix for values being filled in an empty dataframe
 - PR #2001 Correctly create MultiColumn from Pandas MultiColumn
 - PR #2006 Handle empty dataframe groupby construction for dask
 - PR #1965 Parquet Reader: Fix duplicate index column when it's already in `use_cols`
@@ -161,8 +206,11 @@
 - PR #2071 Fix bug with unfound transitive dependencies for GTests in Ubuntu 18.04
 - PR #2089 Configure Sphinx to render params correctly
 - PR #2091 Fix another bug with unfound transitive dependencies for `cudftestutils` in Ubuntu 18.04
+- PR #2115 Just apply `--disable-new-dtags` instead of trying to define all the transitive dependencies
 - PR #2106 Fix errors in JitCache tests caused by sharing of device memory between processes
+- PR #2120 Fix errors in JitCache tests caused by running multiple threads on the same data
 - PR #2102 Fix memory leak in groupby
+- PR #2113 fixed typo in to_csv code example
 
 
 # cudf 0.7.2 (16 May 2019)
@@ -170,7 +218,7 @@
 ## New Features
 
 - PR #1735 Added overload for atomicAdd on int64. Streamlined implementation of custom atomic overloads.
-- PR #1741 Add MultiIndex concatenation 
+- PR #1741 Add MultiIndex concatenation
 
 ## Bug Fixes
 

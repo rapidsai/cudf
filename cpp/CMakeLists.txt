@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.7.2 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.9.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -82,6 +82,10 @@ if(CMAKE_BUILD_TYPE MATCHES Debug)
     message(STATUS "Building with debugging flags")
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -G -Xcompiler -rdynamic")
 endif(CMAKE_BUILD_TYPE MATCHES Debug)
+
+# To apply RUNPATH to transitive dependencies (this is a temporary solution)
+set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
+set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 
 option(BUILD_TESTS "Configure CMake to build tests"
        ON)
@@ -256,8 +260,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 add_library(cudf SHARED
             src/comms/ipc/ipc.cu
-            src/column/column.cpp
-            src/column/context.cpp
+            src/column/legacy/column.cpp
+            src/column/legacy/context.cpp
             src/table/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
@@ -283,7 +287,7 @@ add_library(cudf SHARED
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/jit/core/launcher.cpp
-            src/bitmask/bitmask_ops.cu
+            src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
@@ -327,7 +331,7 @@ add_library(cudf SHARED
             src/copying/scatter.cu
             src/copying/slice.cu
             src/copying/split.cu
-            src/bitmask/legacy_bitmask.cpp
+            src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu)
@@ -345,7 +349,7 @@ execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 
 add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h "const cudf_types_h" >> ${CMAKE_BINARY_DIR}/include/types.h.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h "const cudf_types_h" > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
