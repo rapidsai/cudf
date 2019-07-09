@@ -8,6 +8,7 @@
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
+- PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #1744 cudf::apply_boolean_mask and cudf::drop_nulls support for cudf::table inputs (multi-column)
 
@@ -26,6 +27,7 @@
 - PR #2184 handle remote orc files for dask-cudf
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
+- PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
 
 ## Bug Fixes
 
@@ -35,6 +37,7 @@
 - PR #2146 Work around unary_math validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
+- PR #2161 Implicitly convert unsigned to signed integer types in binops
 - PR #2154 CSV Reader: Fix bools misdetected as strings dtype
 - PR #2178 Fix bug in rolling bindings where a view of an ephemeral column was being taken
 - PR #2180 Fix issue with isort reordering `importorskip` below imports depending on them

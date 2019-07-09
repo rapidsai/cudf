@@ -33,6 +33,7 @@ def read_csv(
     nrows=None,
     byte_range=None,
     skip_blank_lines=True,
+    parse_dates=None,
     comment=None,
     na_values=None,
     keep_default_na=True,
@@ -71,6 +72,7 @@ def read_csv(
         nrows=nrows,
         byte_range=byte_range,
         skip_blank_lines=skip_blank_lines,
+        parse_dates=parse_dates,
         comment=comment,
         na_values=na_values,
         keep_default_na=keep_default_na,
@@ -90,6 +92,7 @@ def to_csv(
     header=True,
     index=True,
     line_terminator="\n",
+    chunksize=None
 ):
     """{docstring}"""
     if index:
@@ -102,6 +105,7 @@ def to_csv(
                 columns = columns.copy()
                 columns.insert(0, df.index.name)
         df = df.reset_index()
+    rows_per_chunk = chunksize if chunksize else len(df)
 
     return cpp_write_csv(
         cols=df._cols,
@@ -111,4 +115,5 @@ def to_csv(
         columns=columns,
         header=header,
         line_terminator=line_terminator,
+        rows_per_chunk=rows_per_chunk
     )
