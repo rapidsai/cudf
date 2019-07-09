@@ -30,7 +30,7 @@ using bit_mask::bit_mask_t;
 /**
  * @brief Source table identifier to copy data from.
  */
-enum side_value { LEFT_TABLE = 0, RIGHT_TABLE };
+enum class side : bool { LEFT, RIGHT };
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -39,11 +39,13 @@ enum side_value { LEFT_TABLE = 0, RIGHT_TABLE };
  * according to `merged_table_indices` and `merged_row_indices` maps such
  * that bit `i` in `destination_mask` will be equal to bit 
  * `merged_row_indices[i]` from `source_left_mask` if `merged_table_indices[i]`
- * equals `LEFT_TABLE`; otherwise, from `source_right_mask`.
+ * equals `side::LEFT`; otherwise, from `source_right_mask`.
  *
  * `source_left_mask`, `source_right_mask` and `destination_mask` must not
  * overlap.
  *
+ * @tparam left_have_valids Indicates whether source_left_mask is null
+ * @tparam right_have_valids Indicates whether source_right_mask is null
  * @param[in] source_left_mask The left mask whose bits will be merged
  * @param[in] source_right_mask The right mask whose bits will be merged
  * @param[out] destination_mask The output mask after merging the left and right masks
@@ -54,12 +56,13 @@ enum side_value { LEFT_TABLE = 0, RIGHT_TABLE };
  * mask (indicated by `merged_table_indices`) will be copied to the output. Length
  * must be equal to `num_destination_rows`
  */
+template <bool left_have_valids, bool right_have_valids>
 __global__ void materialize_merged_bitmask_kernel(
     bit_mask_t const* const __restrict__ source_left_mask,
     bit_mask_t const* const __restrict__ source_right_mask,
     bit_mask_t* const destination_mask,
     gdf_size_type const num_destination_rows,
-    gdf_size_type const* const __restrict__ merged_table_indices,
+    side const* const __restrict__ merged_table_indices,
     gdf_size_type const* const __restrict__ merged_row_indices) {
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
@@ -68,9 +71,14 @@ __global__ void materialize_merged_bitmask_kernel(
       __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
   while (destination_row < num_destination_rows) {
-    bit_mask_t const* source_mask = merged_table_indices[destination_row] == LEFT_TABLE ? source_left_mask : source_right_mask;
-    bool const source_bit_is_valid{
-        source_mask ? bit_mask::is_valid(source_mask, merged_row_indices[destination_row]) : true};
+    bool const from_left{merged_table_indices[destination_row] == side::LEFT};
+    bool source_bit_is_valid{true};
+    if (left_have_valids && from_left) {
+        source_bit_is_valid = bit_mask::is_valid(source_left_mask, merged_row_indices[destination_row]);
+    }
+    else if (right_have_valids && !from_left) {
+        source_bit_is_valid = bit_mask::is_valid(source_right_mask, merged_row_indices[destination_row]);
+    }
     
     // Use ballot to find all valid bits in this warp and create the output
     // bitmask element
@@ -93,26 +101,41 @@ __global__ void materialize_merged_bitmask_kernel(
 void materialize_bitmask(gdf_column const* left_col,
                         gdf_column const* right_col,
                         gdf_column* out_col,
-                        gdf_size_type const* table_indices,
+                        side const* table_indices,
                         gdf_size_type const* row_indices,
                         cudaStream_t stream) {
     constexpr gdf_size_type BLOCK_SIZE{256};
     cudf::util::cuda::grid_config_1d grid_config {out_col->size, BLOCK_SIZE };
-    // TODO: cant use just one template flag for valids, so need to test for null explicitly
-    // or make the kernel receive just one input col and call it twice one for each input column
-    materialize_merged_bitmask_kernel
-    <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
-    (reinterpret_cast<bit_mask_t*>(left_col->valid),
-     reinterpret_cast<bit_mask_t*>(right_col->valid),
-     reinterpret_cast<bit_mask_t*>(out_col->valid),
-     out_col->size,
-     table_indices,
-     row_indices);
+
+    bit_mask_t* left_valid = reinterpret_cast<bit_mask_t*>(left_col->valid);
+    bit_mask_t* right_valid = reinterpret_cast<bit_mask_t*>(right_col->valid);
+    bit_mask_t* out_valid = reinterpret_cast<bit_mask_t*>(out_col->valid);
+    if (left_valid) {
+        if (right_valid) {
+            materialize_merged_bitmask_kernel<true, true>
+            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+            (left_valid, right_valid, out_valid, out_col->size, table_indices, row_indices);
+        } else {
+            materialize_merged_bitmask_kernel<true, false>
+            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+            (left_valid, right_valid, out_valid, out_col->size, table_indices, row_indices);
+        }
+    } else {
+        if (right_valid) {
+            materialize_merged_bitmask_kernel<false, true>
+            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+            (left_valid, right_valid, out_valid, out_col->size, table_indices, row_indices);
+        } else {
+            materialize_merged_bitmask_kernel<false, false>
+            <<<grid_config.num_blocks, grid_config.num_threads_per_block, 0, stream>>>
+            (left_valid, right_valid, out_valid, out_col->size, table_indices, row_indices);
+        }
+    }
 
     CHECK_STREAM(stream);
 }
 
-std::pair<rmm::device_vector<gdf_size_type>, rmm::device_vector<gdf_size_type>>
+std::pair<rmm::device_vector<side>, rmm::device_vector<gdf_size_type>>
 generate_merged_indices(device_table const& left_table,
                         device_table const& right_table,
                         rmm::device_vector<int8_t> const& asc_desc,
@@ -123,8 +146,8 @@ generate_merged_indices(device_table const& left_table,
     const gdf_size_type right_size = right_table.num_rows();
     const gdf_size_type total_size = left_size + right_size;
 
-    auto left_side = thrust::make_constant_iterator(static_cast<gdf_size_type>(LEFT_TABLE));
-    auto right_side = thrust::make_constant_iterator(static_cast<gdf_size_type>(RIGHT_TABLE));
+    thrust::constant_iterator<side> left_side(side::LEFT);
+    thrust::constant_iterator<side> right_side(side::RIGHT);
 
     auto left_indices = thrust::make_counting_iterator(static_cast<gdf_size_type>(0));
     auto right_indices = thrust::make_counting_iterator(static_cast<gdf_size_type>(0));
@@ -135,7 +158,7 @@ generate_merged_indices(device_table const& left_table,
     auto left_end_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(left_side + left_size, left_indices + left_size));
     auto right_end_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(right_side + right_size, right_indices + right_size));
 
-    rmm::device_vector<gdf_size_type> out_table_indices(total_size);
+    rmm::device_vector<side> out_table_indices(total_size);
     rmm::device_vector<gdf_size_type> out_row_indices(total_size);
     auto output_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(out_table_indices.begin(), out_row_indices.begin()));
 
@@ -148,8 +171,8 @@ generate_merged_indices(device_table const& left_table,
                     right_begin_zip_iterator,
                     right_end_zip_iterator,
                     output_zip_iterator,
-                    [=] __device__ (thrust::tuple<gdf_size_type, gdf_size_type> const & right_tuple,
-                                    thrust::tuple<gdf_size_type, gdf_size_type> const & left_tuple) {
+                    [=] __device__ (thrust::tuple<side, gdf_size_type> const & right_tuple,
+                                    thrust::tuple<side, gdf_size_type> const & left_tuple) {
                         return ineq_op(thrust::get<1>(right_tuple), thrust::get<1>(left_tuple));
                     });			        
     } else {
@@ -160,8 +183,8 @@ generate_merged_indices(device_table const& left_table,
                     right_begin_zip_iterator,
                     right_end_zip_iterator,
                     output_zip_iterator,
-                    [=] __device__ (thrust::tuple<gdf_size_type, gdf_size_type> const & right_tuple,
-                                    thrust::tuple<gdf_size_type, gdf_size_type> const & left_tuple) {
+                    [=] __device__ (thrust::tuple<side, gdf_size_type> const & right_tuple,
+                                    thrust::tuple<side, gdf_size_type> const & left_tuple) {
                         return ineq_op(thrust::get<1>(right_tuple), thrust::get<1>(left_tuple));
                     });					        
     }
@@ -255,7 +278,7 @@ table merge(table const& left_table,
     auto right_key_table = device_table::create(right_key_cols_vect.size(), right_key_cols_vect.data());
     rmm::device_vector<int8_t> asc_desc_d(asc_desc);
 
-    rmm::device_vector<gdf_size_type> merged_table_indices;
+    rmm::device_vector<side> merged_table_indices;
     rmm::device_vector<gdf_size_type> merged_row_indices;
     std::tie(merged_table_indices, merged_row_indices) = generate_merged_indices(*left_key_table, *right_key_table, asc_desc_d, nulls_are_smallest, stream);
 
@@ -295,8 +318,11 @@ table merge(table const& left_table,
                     index_start_it,
                     index_end_it,
                     [=] __device__ (auto const & idx_tuple){
-                        device_table const & sourceDeviceTable = thrust::get<1>(idx_tuple) == LEFT_TABLE ? left_device_table : right_device_table;
-                        copy_row<false>(output_device_table, thrust::get<0>(idx_tuple), sourceDeviceTable, thrust::get<2>(idx_tuple));
+                        gdf_size_type dest_row = thrust::get<0>(idx_tuple);
+                        side          src_side = thrust::get<1>(idx_tuple);
+                        gdf_size_type src_row  = thrust::get<2>(idx_tuple);
+                        device_table const & src_device_table = src_side == side::LEFT ? left_device_table : right_device_table;
+                        copy_row<false>(output_device_table, dest_row, src_device_table, src_row);
                     });
     
     CHECK_STREAM(0);
