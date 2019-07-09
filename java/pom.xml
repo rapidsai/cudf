@@ -21,10 +21,85 @@
 
     <groupId>ai.rapids</groupId>
     <artifactId>cudf</artifactId>
-    <version>0.8</version>
+    <version>0.9-SNAPSHOT</version>
 
     <name>cudfjni</name>
+    <description>
+        This project provides java bindings for cudf, to be able to process large amounts of data on a GPU.
+        This is still a work in progress so some APIs may change until the 1.0 release.
+    </description>
     <url>http://ai.rapids</url>
+
+    <licenses>
+        <license>
+            <name>Apache License, Version 2.0</name>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <distribution>repo</distribution>
+            <comments>A business-friendly OSS license</comments>
+        </license>
+    </licenses>
+    <scm>
+        <connection>scm:git:https://github.com/rapidsai/cudf.git</connection>
+        <developerConnection>scm:git:git@github.com:rapidsai/cudf.git</developerConnection>
+        <tag>HEAD</tag>
+        <url>https://github.com/rapidsai/cudf</url>
+    </scm>
+    <developers>
+        <developer>
+            <id>revans2</id>
+            <name>Robert Evans</name>
+            <email>bobby@apache.org</email>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <timezone>-6</timezone>
+        </developer>
+        <developer>
+            <id>jlowe</id>
+            <name>Jason Lowe</name>
+            <email>jlowe@nvidia.com</email>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <timezone>-6</timezone>
+        </developer>
+        <developer>
+            <id>abellina</id>
+            <name>Alessandro Bellina</name>
+            <email>abellina@nvidia.com</email>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <timezone>-6</timezone>
+        </developer>
+        <developer>
+            <id>tgraves</id>
+            <name>Thomas Graves</name>
+            <email>tgraves@nvidia.com</email>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <timezone>-6</timezone>
+        </developer>
+        <developer>
+            <id>rjafri</id>
+            <name>Raza Jafri</name>
+            <email>rjafri@nvidia.com</email>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <timezone>-8</timezone>
+        </developer>
+        <developer>
+            <id>nartal</id>
+            <name>Niranjan Artal</name>
+            <email>nartal@nvidia.com</email>
+            <roles>
+                <role>Committer</role>
+            </roles>
+            <timezone>-8</timezone>
+        </developer>
+    </developers>
 
     <dependencies>
         <dependency>
@@ -67,7 +142,87 @@
         <ai.rapids.refcount.debug>false</ai.rapids.refcount.debug>
         <native.build.path>${basedir}/target/cmake-build</native.build.path>
         <skipNativeCopy>false</skipNativeCopy>
+        <cxx11.abi.value>ON</cxx11.abi.value>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>abiOff</id>
+            <properties>
+                <cxx11.abi.value>OFF</cxx11.abi.value>
+            </properties>
+        </profile>
+        <profile>
+            <id>release</id>
+            <distributionManagement>
+                <snapshotRepository>
+                    <id>ossrh</id>
+                    <url>https://oss.sonatype.org/content/repositories/snapshots</url>
+                </snapshotRepository>
+            </distributionManagement>
+            <properties>
+                <gpg.passphrase>${GPG_PASSPHRASE}</gpg.passphrase>
+            </properties>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>2.2.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>2.9.1</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                                <configuration>
+                                    <additionalparam>-Xdoclint:none</additionalparam>
+                                </configuration>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-gpg-plugin</artifactId>
+                        <version>1.5</version>
+                        <executions>
+                            <execution>
+                                <id>sign-artifacts</id>
+                                <phase>verify</phase>
+                                <goals>
+                                    <goal>sign</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+                    <plugin>
+                        <groupId>org.sonatype.plugins</groupId>
+                        <artifactId>nexus-staging-maven-plugin</artifactId>
+                        <version>1.6.7</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <serverId>ossrh</serverId>
+                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
+                            <autoReleaseAfterClose>false</autoReleaseAfterClose>
+                        </configuration>
+                        </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 
     <build>
         <resources>
@@ -156,7 +311,7 @@
                                       failonerror="true"
                                       executable="cmake">
                                     <arg value="${basedir}/src/main/native"/>
-                                    <arg value="-DCMAKE_CXX11_ABI=ON"/>
+                                    <arg value="-DCMAKE_CXX11_ABI=${cxx11.abi.value}"/>
                                     <!--<arg value="-DUSE_NVTX"/>-->
                                 </exec>
                                 <exec dir="${native.build.path}"

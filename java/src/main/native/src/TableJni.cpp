@@ -443,13 +443,16 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByCount(
-    JNIEnv *env, jclass clazz, jlong input_table, jintArray j_group_by_columns) {
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
+    JNIEnv *env, jclass clazz, jlong input_table, jintArray j_group_by_columns,
+    jint agg_column_index, jint agg_type) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
+  JNI_NULL_CHECK(env, j_group_by_columns, "j_group_by_columns is null", NULL);
 
   try {
     cudf::table *n_input_table = reinterpret_cast<cudf::table *>(input_table);
     cudf::jni::native_jintArray n_group_by_columns(env, j_group_by_columns);
+    gdf_agg_op op = static_cast<gdf_agg_op>(agg_type);
     std::vector<gdf_column *> group_by_vector;
     for (int i = 0; i < n_group_by_columns.size(); i++) {
       group_by_vector.push_back(n_input_table->get_column(n_group_by_columns[i]));
@@ -457,16 +460,53 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByCount(
 
     cudf::table n_group_by_table(group_by_vector);
     cudf::jni::output_table n_output_table(env, &n_group_by_table);
-    // with count the agg_column doesn't mean much, grab the first column as
-    // agg_column
-    gdf_column *agg_column = n_input_table->get_column(0);
-    cudf::jni::gdf_column_wrapper output_agg_column(agg_column->size, GDF_INT32, false);
+    gdf_column *agg_column = n_input_table->get_column(agg_column_index);
+    gdf_dtype agg_dtype;
+    if (op == GDF_COUNT || op == GDF_COUNT_DISTINCT) {
+      agg_dtype = GDF_INT32;
+    } else if (op == GDF_AVG) {
+      agg_dtype = GDF_FLOAT64;
+    } else {
+      agg_dtype = agg_column->dtype;
+    }
+    cudf::jni::gdf_column_wrapper output_agg_column(agg_column->size, agg_dtype, false);
     gdf_context ctxt{0, GDF_SORT, 0, 0};
     std::vector<gdf_column *> cols = n_output_table.get_gdf_columns();
-    JNI_GDF_TRY(env, NULL,
-                gdf_group_by_count(n_group_by_table.num_columns(), n_group_by_table.begin(),
-                                   agg_column, nullptr, cols.data(), output_agg_column.get(),
-                                   &ctxt));
+    switch (op) {
+      case GDF_COUNT:
+        JNI_GDF_TRY(env, NULL,
+                    gdf_group_by_count(n_group_by_table.num_columns(), n_group_by_table.begin(),
+                                       agg_column, nullptr, cols.data(), output_agg_column.get(),
+                                       &ctxt));
+        break;
+      case GDF_MAX:
+        JNI_GDF_TRY(env, NULL,
+                    gdf_group_by_max(n_group_by_table.num_columns(), n_group_by_table.begin(),
+                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
+                                     &ctxt));
+        break;
+
+      case GDF_MIN:
+        JNI_GDF_TRY(env, NULL,
+                    gdf_group_by_min(n_group_by_table.num_columns(), n_group_by_table.begin(),
+                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
+                                     &ctxt));
+        break;
+
+      case GDF_SUM:
+        JNI_GDF_TRY(env, NULL,
+                    gdf_group_by_sum(n_group_by_table.num_columns(), n_group_by_table.begin(),
+                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
+                                     &ctxt));
+        break;
+
+      case GDF_AVG:
+        JNI_GDF_TRY(env, NULL,
+                    gdf_group_by_avg(n_group_by_table.num_columns(), n_group_by_table.begin(),
+                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
+                                     &ctxt));
+        break;
+    }
 
     cols.push_back(output_agg_column.get());
 

@@ -76,16 +76,16 @@ namespace csv {
 
 using string_pair = std::pair<const char*,size_t>;
 
-
 __global__ void convertCsvToGdf(char *csv, const ParseOptions opts,
                                 gdf_size_type num_records, int num_columns,
-                                bool *parseCol, uint64_t *recStart,
-                                gdf_dtype *dtype, void **gdf_data,
+                                column_parse::flags *flags, uint64_t *recStart,
+                                gdf_dtype *dtype, void **data,
                                 gdf_valid_type **valid,
                                 gdf_size_type *num_valid);
 __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
                                   gdf_size_type num_records, int num_columns,
-                                  bool *parseCol, uint64_t *recStart,
+                                  column_parse::flags *flags,
+                                  uint64_t *recStart,
                                   column_data_t *d_columnData);
 
 /**---------------------------------------------------------------------------*
@@ -112,6 +112,29 @@ __global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
 		return base_padding + num_columns * column_bytes; 
 	}
 }
+
+/**
+ * @brief Translates a dtype string and returns its dtype enumeration and any 
+ * extended dtype flags that are supported by cuIO. Often, this is a column
+ * with the same underlying dtype the basic types, but with different parsing
+ * interpretations.
+ *
+ * @param[in] dtype String containing the basic or extended dtype
+ *
+ * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
+ */
+std::pair<gdf_dtype, column_parse::flags> get_dtype_info(
+    const std::string &dtype) {
+  if (dtype == "hex" || dtype == "hex64") {
+    return std::make_pair(GDF_INT64, column_parse::as_hexadecimal);
+  }
+  if (dtype == "hex32") {
+    return std::make_pair(GDF_INT32, column_parse::as_hexadecimal);
+  }
+
+  return std::make_pair(convertStringToDtype(dtype), column_parse::as_default);
+}
+
 /**
 * @brief Removes the first and Last quote in the string
 */
@@ -476,68 +499,77 @@ table reader::Impl::read()
 	//-----------------------------------------------------------------------------
 	//-- Populate the header
 
-	// Check if the user gave us a list of column names
-	if(args_.names.empty()) {
-		setColumnNamesFromCsv();
+  // Check if the user gave us a list of column names
+  if (not args_.names.empty()) {
+    h_column_flags.resize(args_.names.size(), column_parse::enabled);
+    col_names = args_.names;
+  } else {
+    setColumnNamesFromCsv();
 
-		num_actual_cols = num_active_cols = col_names.size();
+    num_actual_cols = num_active_cols = col_names.size();
 
-		// Initialize a boolean array that states if a column needs to read or filtered.
-		h_parseCol = thrust::host_vector<bool>(num_actual_cols, true);
+    h_column_flags.resize(num_actual_cols, column_parse::enabled);
 
-		// Rename empty column names to "Unnamed: col_index"
-		for (size_t col_idx = 0; col_idx < col_names.size(); ++col_idx) {
-			if (col_names[col_idx].empty()) {
-				col_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
-			}
-		}
+    // Rename empty column names to "Unnamed: col_index"
+    for (size_t col_idx = 0; col_idx < col_names.size(); ++col_idx) {
+      if (col_names[col_idx].empty()) {
+        col_names[col_idx] = string("Unnamed: ") + std::to_string(col_idx);
+      }
+    }
 
-		// Looking for duplicates
-		std::unordered_map<string, int> col_names_histogram;
-		for (auto& col_name: col_names){
-			// Operator [] inserts a default-initialized value if the given key is not present
-			if (++col_names_histogram[col_name] > 1){
-				if (args_.mangle_dupe_cols) {
-					// Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
-					col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
-				}
-				else {
-					// All duplicate columns will be ignored; First appearance is parsed
-					const auto idx = &col_name - col_names.data();
-					h_parseCol[idx] = false;
-				}
-			}
-		}
+    // Looking for duplicates
+    std::unordered_map<string, int> col_names_histogram;
+    for (auto& col_name: col_names){
+      // Operator [] inserts a default-initialized value if the given key is not present
+      if (++col_names_histogram[col_name] > 1){
+        if (args_.mangle_dupe_cols) {
+          // Rename duplicates of column X as X.1, X.2, ...; First appearance stays as X
+          col_name += "." + std::to_string(col_names_histogram[col_name] - 1);
+        }
+        else {
+          // All duplicate columns will be ignored; First appearance is parsed
+          const auto idx = &col_name - col_names.data();
+          h_column_flags[idx] = column_parse::disabled;
+        }
+      }
+    }
 
-		// Update the number of columns to be processed, if some might have been removed
-		if (!args_.mangle_dupe_cols) {
-			num_active_cols = col_names_histogram.size();
-		}
-	}
-	else {
-		h_parseCol = thrust::host_vector<bool>(args_.names.size(), true);
-		col_names = args_.names;
-	}
+    // Update the number of columns to be processed, if some might have been removed
+    if (!args_.mangle_dupe_cols) {
+      num_active_cols = col_names_histogram.size();
+    }
+  }
 
-	// User can specify which columns should be parsed
-	if (!args_.use_cols_indexes.empty() || !args_.use_cols_names.empty()){
-		thrust::fill(h_parseCol.begin(), h_parseCol.end(), false);
-		for(int col: args_.use_cols_indexes){
-			h_parseCol[col]=true;
-		}
-		num_active_cols = args_.use_cols_indexes.size();
+  // User can specify which columns should be parsed
+  if (not args_.use_cols_indexes.empty() || not args_.use_cols_names.empty()) {
+    std::fill(h_column_flags.begin(), h_column_flags.end(), column_parse::disabled);
 
-		std::set<string> use_cols_set(args_.use_cols_names.begin(), args_.use_cols_names.end());
-		for(const std::string &col: col_names) {
-			if(use_cols_set.find(col) != use_cols_set.end()){
-				const auto pos = &col - col_names.data();
-				h_parseCol[pos] = true;
-				num_active_cols++;
-			}
-		}
-	}
+    for (const auto index : args_.use_cols_indexes) {
+      h_column_flags[index] = column_parse::enabled;
+    }
+    num_active_cols = args_.use_cols_indexes.size();
 
-	d_parseCol = h_parseCol;
+    for (const auto name : args_.use_cols_names) {
+      const auto it = std::find(col_names.begin(), col_names.end(), name);
+      if (it != col_names.end()) {
+        h_column_flags[it - col_names.begin()] = column_parse::enabled;
+        num_active_cols++;
+      }
+    }
+  }
+
+  // User can specify which columns should be inferred as datetime
+  if (not args_.infer_date_indexes.empty() || not args_.infer_date_names.empty()) {
+    for (auto index : args_.infer_date_indexes) {
+      h_column_flags[index] |= column_parse::as_datetime;
+    }
+    for (auto name : args_.infer_date_names) {
+      auto it = std::find(col_names.begin(), col_names.end(), name);
+      if (it != col_names.end()) {
+        h_column_flags[it - col_names.begin()] |= column_parse::as_datetime;
+      }
+    }
+  }
 
 	//-----------------------------------------------------------------------------
 	//--- Auto detect types of the vectors
@@ -549,6 +581,7 @@ table reader::Impl::read()
       vector<column_data_t> h_ColumnData(num_active_cols);
       device_buffer<column_data_t> d_ColumnData(num_active_cols);
       CUDA_TRY(cudaMemset(d_ColumnData.data(), 0, sizeof(column_data_t) * num_active_cols));
+      d_column_flags = h_column_flags;
 
       launch_dataTypeDetection(d_ColumnData.data());
       CUDA_TRY(cudaMemcpy(h_ColumnData.data(), d_ColumnData.data(), sizeof(column_data_t) * num_active_cols, cudaMemcpyDeviceToHost));
@@ -585,36 +618,51 @@ table reader::Impl::read()
     }
   }
   else {
-    const bool is_dict = std::all_of(args_.dtype.begin(), args_.dtype.end(),
-                                     [](const auto& s) { return s.find(':') != std::string::npos; });
+    const bool is_dict = std::all_of(
+        args_.dtype.begin(), args_.dtype.end(),
+        [](const auto &s) { return s.find(':') != std::string::npos; });
+
     if (!is_dict) {
-      CUDF_EXPECTS(static_cast<int>(args_.dtype.size()) >= num_actual_cols,
-                   "Must specify data types for all columns");
-      for (int col = 0; col < num_actual_cols; col++) {
-        if (h_parseCol[col]) {
-          // dtype is an array of types, assign types to active columns in the given order
-          dtypes.push_back(convertStringToDtype(args_.dtype[col]));
-          CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
+      if (args_.dtype.size() == 1) {
+        // If it's a single dtype, assign that dtype to all active columns
+        const auto dtype_info = get_dtype_info(args_.dtype[0]);
+        dtypes.resize(num_active_cols, dtype_info.first);
+        for (int col = 0; col < num_actual_cols; col++) {
+          h_column_flags[col] |= dtype_info.second;
+        }
+        CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
+      } else {
+        // If it's a list, assign dtypes to active columns in the given order
+        CUDF_EXPECTS(static_cast<int>(args_.dtype.size()) >= num_actual_cols,
+                     "Must specify data types for all columns");
+        for (int col = 0; col < num_actual_cols; col++) {
+          if (h_column_flags[col] & column_parse::enabled) {
+            const auto dtype_info = get_dtype_info(args_.dtype[col]);
+            dtypes.push_back(dtype_info.first);
+            h_column_flags[col] |= dtype_info.second;
+            CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
+          }
         }
       }
     } else {
-      // dtype is a column name->type dictionary, create a map from the dtype array to speed up processing
-      std::unordered_map<std::string, gdf_dtype> col_type_map;
-      for (const std::string & dtype: args_.dtype) {
-        // Split the dtype elements around the last ':' character
-        const size_t colon_idx = dtype.find_last_of(':');
-        const std::string col(dtype, 0, colon_idx);
-        const std::string type(dtype, colon_idx + 1);
-
-        col_type_map[col] = convertStringToDtype(type);
-        CUDF_EXPECTS(col_type_map[col] != GDF_invalid, "Unsupported data type");
+      // Translate vector of `name : dtype` strings to map
+      // NOTE: Incoming pairs can be out-of-order from column names in dataset
+      std::unordered_map<std::string, std::string> col_type_map;
+      for (const auto& pair : args_.dtype) {
+        const auto pos = pair.find_last_of(':');
+        const auto name = pair.substr(0, pos);
+        const auto dtype = pair.substr(pos + 1, pair.size());
+        col_type_map[name] = dtype;
       }
 
       for (int col = 0; col < num_actual_cols; col++) {
-        if (h_parseCol[col]) {
+        if (h_column_flags[col] & column_parse::enabled) {
           CUDF_EXPECTS(col_type_map.find(col_names[col]) != col_type_map.end(),
-            "Must specify data types for all active columns");
-          dtypes.push_back(col_type_map[col_names[col]]);
+                       "Must specify data types for all active columns");
+          const auto dtype_info = get_dtype_info(col_type_map[col_names[col]]);
+          dtypes.push_back(dtype_info.first);
+          h_column_flags[col] |= dtype_info.second;
+          CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
         }
       }
     }
@@ -622,7 +670,7 @@ table reader::Impl::read()
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
-    if (h_parseCol[col]) {
+    if (h_column_flags[col] & column_parse::enabled) {
       columns.emplace_back(num_records, dtypes[active_col],
                            gdf_dtype_extra_info{TIME_UNIT_NONE},
                            col_names[col]);
@@ -647,6 +695,7 @@ table reader::Impl::read()
     rmm::device_vector<void*> d_data = h_data;
     rmm::device_vector<gdf_valid_type*> d_valid = h_valid;
     rmm::device_vector<gdf_size_type> d_valid_counts(num_active_cols, 0);
+    d_column_flags = h_column_flags;
 
     launch_dataConvertColumns(d_data.data().get(), d_valid.data().get(), d_dtypes.data().get(),
                               d_valid_counts.data().get());
@@ -806,26 +855,24 @@ void reader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp
  * 
  * @param[out] gdf The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
- * @param[out] str_cols The start/end offsets for string data types
+ * @param[in] d_dtypes The data types of the columns
  * @param[out] num_valid The numbers of valid fields in columns
- *
- * @return void
  *---------------------------------------------------------------------------**/
- void reader::Impl::launch_dataConvertColumns(void **gdf,
-                                    gdf_valid_type **valid, gdf_dtype *d_dtypes,
-                                    gdf_size_type *num_valid) {
+void reader::Impl::launch_dataConvertColumns(void **gdf, gdf_valid_type **valid,
+                                             gdf_dtype *d_dtypes,
+                                             gdf_size_type *num_valid) {
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,
                                               convertCsvToGdf));
 
   // Calculate actual block count to use based on records count
-  int gridSize = (num_records + blockSize - 1) / blockSize;
+  const int gridSize = (num_records + blockSize - 1) / blockSize;
 
   convertCsvToGdf <<< gridSize, blockSize >>> (
-      data.data(), opts, num_records,
-      num_actual_cols, d_parseCol.data().get(), recStart.data(),
-      d_dtypes, gdf, valid, num_valid);
+      data.data(), opts, num_records, num_actual_cols,
+      d_column_flags.data().get(), recStart.data(), d_dtypes, gdf, valid,
+      num_valid);
 
   CUDA_TRY(cudaGetLastError());
 }
@@ -846,7 +893,7 @@ struct ConvertFunctor {
             typename std::enable_if_t<std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(
       const char *csvData, void *gdfColumnData, long rowIndex, long start,
-      long end, const ParseOptions &opts) {
+      long end, const ParseOptions &opts, column_parse::flags flags) {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
 
     // Check for user-specified true/false values first, where the output is
@@ -857,7 +904,11 @@ struct ConvertFunctor {
     } else if (serializedTrieContains(opts.falseValuesTrie, csvData + start, field_len)) {
       value = 0;
     } else {
-      value = convertStrToValue<T>(csvData, start, end, opts);
+      if (flags & column_parse::as_hexadecimal) {
+        value = convertStrToValue<T, 16>(csvData, start, end, opts);
+      } else {
+        value = convertStrToValue<T>(csvData, start, end, opts);
+      }
     }
   }
 
@@ -869,7 +920,7 @@ struct ConvertFunctor {
             typename std::enable_if_t<!std::is_integral<T>::value> * = nullptr>
   __host__ __device__ __forceinline__ void operator()(
       const char *csvData, void *gdfColumnData, long rowIndex, long start,
-      long end, const ParseOptions &opts) {
+      long end, const ParseOptions &opts, column_parse::flags flags) {
     T &value{static_cast<T *>(gdfColumnData)[rowIndex]};
     value = convertStrToValue<T>(csvData, start, end, opts);
   }
@@ -884,22 +935,20 @@ struct ConvertFunctor {
  * @param[in] opts A set of parsing options
  * @param[in] num_records The number of lines/rows of CSV data
  * @param[in] num_columns The number of columns of CSV data
- * @param[in] parseCol Whether to parse or skip a column
+ * @param[in] column_flags Per-column parsing behavior flags
  * @param[in] recStart The start the CSV data of interest
  * @param[in] dtype The data type of the column
- * @param[out] gdf_data The output column data
+ * @param[out] data The output column data
  * @param[out] valid The bitmaps indicating whether column fields are valid
  * @param[out] num_valid The numbers of valid fields in columns
- *
- * @return void
  *---------------------------------------------------------------------------**/
 __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
                                 gdf_size_type num_records, int num_columns,
-                                bool *parseCol, uint64_t *recStart,
-                                gdf_dtype *dtype, void **gdf_data,
+                                column_parse::flags *flags, uint64_t *recStart,
+                                gdf_dtype *dtype, void **data,
                                 gdf_valid_type **valid,
-                                gdf_size_type *num_valid)
-{
+                                gdf_size_type *num_valid) {
+
 	// thread IDs range per block, so also need the block id
 	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
 
@@ -921,7 +970,7 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
 
 		pos = seekFieldEnd(raw_csv, opts, pos, stop);
 
-		if(parseCol[col]==true){
+		if (flags[col] & column_parse::enabled) {
 
 			// check if the entire field is a NaN string - consistent with pandas
 			const bool is_na = serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start);
@@ -943,13 +992,13 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
 							end--;
 						}
 					}
-					auto str_list = static_cast<string_pair*>(gdf_data[actual_col]);
+					auto str_list = static_cast<string_pair*>(data[actual_col]);
 					str_list[rec_id].first = raw_csv + start;
 					str_list[rec_id].second = end - start;
 				} else {
 					cudf::type_dispatcher(
 						dtype[actual_col], ConvertFunctor{}, raw_csv,
-						gdf_data[actual_col], rec_id, start, tempPos, opts);
+						data[actual_col], rec_id, start, tempPos, opts, flags[col]);
 				}
 
 				// set the valid bitmap - all bits were set to 0 to start
@@ -957,7 +1006,7 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
 				atomicAdd(&num_valid[actual_col], 1);
 			}
 			else if(dtype[actual_col]==gdf_dtype::GDF_STRING){
-				auto str_list = static_cast<string_pair*>(gdf_data[actual_col]);
+				auto str_list = static_cast<string_pair*>(data[actual_col]);
 				str_list[rec_id].first = nullptr;
 				str_list[rec_id].second = 0;
 			}
@@ -985,12 +1034,11 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
                                               dataTypeDetection));
 
   // Calculate actual block count to use based on records count
-  int gridSize = (num_records + blockSize - 1) / blockSize;
+  const int gridSize = (num_records + blockSize - 1) / blockSize;
 
   dataTypeDetection <<< gridSize, blockSize >>> (
-      data.data(), opts, num_records,
-      num_actual_cols, d_parseCol.data().get(), recStart.data(),
-      d_columnData);
+      data.data(), opts, num_records, num_actual_cols,
+      d_column_flags.data().get(), recStart.data(), d_columnData);
 
   CUDA_TRY(cudaGetLastError());
 }
@@ -1005,172 +1053,147 @@ __global__ void convertCsvToGdf(char *raw_csv, const ParseOptions opts,
  * @param[in] opts A set of parsing options
  * @param[in] num_records The number of lines/rows of CSV data
  * @param[in] num_columns The number of columns of CSV data
- * @param[in] parseCol Whether to parse or skip a column
+ * @param[in] column_flags Per-column parsing behavior flags
  * @param[in] recStart The start the CSV data of interest
  * @param[out] d_columnData The count for each column data type
- *
- * @returns GDF_SUCCESS upon successful computation
  *---------------------------------------------------------------------------**/
-__global__
-void dataTypeDetection(char *raw_csv,
-                       const ParseOptions opts,
-                       gdf_size_type num_records,
-                       int num_columns,
-                       bool *parseCol,
-                       uint64_t *recStart,
-                       column_data_t *d_columnData)
-{
-	// thread IDs range per block, so also need the block id
-	long	rec_id  = threadIdx.x + (blockDim.x * blockIdx.x);		// this is entry into the field array - tid is an elements within the num_entries array
+__global__ void dataTypeDetection(char *raw_csv, const ParseOptions opts,
+                                  gdf_size_type num_records, int num_columns,
+                                  column_parse::flags *flags,
+                                  uint64_t *recStart,
+                                  column_data_t *d_columnData) {
 
-	// we can have more threads than data, make sure we are not past the end of the data
-	if ( rec_id >= num_records)
-		return;
+  // ThreadIds range per block, so also need the blockId
+  // This is entry into the fields; threadId is an element within `num_records`
+  long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
 
-	long start 		= recStart[rec_id];
-	long stop 		= recStart[rec_id + 1];
+  // we can have more threads than data, make sure we are not past the end of the data
+  if (rec_id >= num_records) {
+    return;
+  }
 
-	long pos 		= start;
-	int  col 		= 0;
-	int  actual_col = 0;
+  long start = recStart[rec_id];
+  long stop = recStart[rec_id + 1];
 
-	// Going through all the columns of a given record
-	while(col<num_columns){
+  long pos = start;
+  int col = 0;
+  int actual_col = 0;
 
-		if(start>stop)
-			break;
+  // Going through all the columns of a given record
+  while (col < num_columns) {
+    if (start > stop) {
+      break;
+    }
 
-		pos = seekFieldEnd(raw_csv, opts, pos, stop);
+    pos = seekFieldEnd(raw_csv, opts, pos, stop);
 
-		// Checking if this is a column that the user wants --- user can filter columns
-		if(parseCol[col]==true){
+    // Checking if this is a column that the user wants --- user can filter columns
+    if (flags[col] & column_parse::enabled) {
+      long tempPos = pos - 1;
+      long field_len = pos - start;
 
-			long tempPos=pos-1;
+      if (field_len <= 0 ||
+          serializedTrieContains(opts.naValuesTrie, raw_csv + start,
+                                 field_len)) {
+        atomicAdd(&d_columnData[actual_col].countNULL, 1);
+      } else if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start,
+                                        field_len) ||
+                 serializedTrieContains(opts.falseValuesTrie, raw_csv + start,
+                                        field_len)) {
+        atomicAdd(&d_columnData[actual_col].countBool, 1);
+      } else {
+        long countNumber = 0;
+        long countDecimal = 0;
+        long countSlash = 0;
+        long countDash = 0;
+        long countPlus = 0;
+        long countColon = 0;
+        long countString = 0;
+        long countExponent = 0;
 
-			// Checking if the record is NULL
-			if(start > tempPos ||
-				serializedTrieContains(opts.naValuesTrie, raw_csv + start, pos - start)){
-				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
-				pos++;
-				start=pos;
-				col++;
-				actual_col++;
-				continue;	
-			}
+        // Modify start & end to ignore whitespace and quotechars
+        // This could possibly result in additional empty fields
+        adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
+        field_len = tempPos - start + 1;
 
-			long countNumber=0;
-			long countDecimal=0;
-			long countSlash=0;
-			long countDash=0;
-			long countPlus=0;
-			long countColon=0;
-			long countString=0;
-			long countExponent=0;
+        for (long startPos = start; startPos <= tempPos; startPos++) {
+          if (isDigit(raw_csv[startPos])) {
+            countNumber++;
+            continue;
+          }
+          // Looking for unique characters that will help identify column types.
+          switch (raw_csv[startPos]) {
+            case '.':
+              countDecimal++;
+              break;
+            case '-':
+              countDash++;
+              break;
+            case '+':
+              countPlus++;
+              break;
+            case '/':
+              countSlash++;
+              break;
+            case ':':
+              countColon++;
+              break;
+            case 'e':
+            case 'E':
+              if (startPos > start && startPos < tempPos)
+                countExponent++;
+              break;
+            default:
+              countString++;
+              break;
+          }
+        }
 
-			// Modify start & end to ignore whitespace and quotechars
-			// This could possibly result in additional empty fields
-			adjustForWhitespaceAndQuotes(raw_csv, &start, &tempPos);
+        // Integers have to have the length of the string
+        long int_req_number_cnt = field_len;
+        // Off by one if they start with a minus sign
+        if ((raw_csv[start] == '-' || raw_csv[start] == '+') && field_len > 1) {
+          --int_req_number_cnt;
+        }
 
-			const long strLen = tempPos - start + 1;
-
-			const bool maybe_hex = ((strLen > 2 && raw_csv[start] == '0' && raw_csv[start + 1] == 'x') ||
-				(strLen > 3 && raw_csv[start] == '-' && raw_csv[start + 1] == '0' && raw_csv[start + 2] == 'x'));
-
-			for(long startPos=start; startPos<=tempPos; startPos++){
-				if(isDigit(raw_csv[startPos], maybe_hex)){
-					countNumber++;
-					continue;
-				}
-				// Looking for unique characters that will help identify column types.
-				switch (raw_csv[startPos]){
-					case '.':
-						countDecimal++;break;
-					case '-':
-						countDash++; break;
-					case '+':
-						countPlus++; break;
-					case '/':
-						countSlash++;break;
-					case ':':
-						countColon++;break;
-					case 'e':
-					case 'E':
-						if (!maybe_hex && startPos > start && startPos < tempPos) 
-							countExponent++;break;
-					default:
-						countString++;
-						break;	
-				}
-			}
-			const int countSign = countDash + countPlus;
-
-			// Integers have to have the length of the string
-			long int_req_number_cnt = strLen;
-			// Off by one if they start with a minus sign
-			if((raw_csv[start]=='-' || raw_csv[start]=='+') && strLen > 1){
-				--int_req_number_cnt;
-			}
-			// Off by one if they are a hexadecimal number
-			if(maybe_hex) {
-				--int_req_number_cnt;
-			}
-
-			if(strLen==0){ // Removed spaces ' ' in the pre-processing and thus we can have an empty string.
-				atomicAdd(& d_columnData[actual_col].countNULL, 1L);
-			}
-			else if(countNumber==int_req_number_cnt){
-				// Checking to see if we the integer value requires 8,16,32,64 bits.
-				// This will allow us to allocate the exact amount of memory.
-				const auto value = convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
-				const size_t field_len = tempPos - start + 1;
-				if (serializedTrieContains(opts.trueValuesTrie, raw_csv + start, field_len) ||
-						serializedTrieContains(opts.falseValuesTrie, raw_csv + start, field_len)){
-					atomicAdd(& d_columnData[actual_col].countBool, 1);
-				}
-				else if(value >= (1L<<31)){
-					atomicAdd(& d_columnData[actual_col].countInt64, 1);
-				}
-				else if(value >= (1L<<15)){
-					atomicAdd(& d_columnData[actual_col].countInt32, 1);
-				}
-				else if(value >= (1L<<7)){
-					atomicAdd(& d_columnData[actual_col].countInt16, 1);
-				}
-				else{
-					atomicAdd(& d_columnData[actual_col].countInt8, 1);
-				}
-			}
-			else if(isLikeFloat(strLen, countNumber, countDecimal, countSign, countExponent)){
-					atomicAdd(& d_columnData[actual_col].countFloat, 1);
-			}
-			// The date-time field cannot have more than 3 strings. As such if an entry has more than 3 string characters, it is not 
-			// a data-time field. Also, if a string has multiple decimals, then is not a legit number.
-			else if(countString > 3 || countDecimal > 1){
-				atomicAdd(& d_columnData[actual_col].countString, 1);
-			}
-			else {
-				// A date field can have either one or two '-' or '\'. A legal combination will only have one of them.
-				// To simplify the process of auto column detection, we are not covering all the date-time formation permutations.
-				if((countDash>0 && countDash<=2 && countSlash==0)|| (countDash==0 && countSlash>0 && countSlash<=2) ){
-					if((countColon<=2)){
-						atomicAdd(& d_columnData[actual_col].countDateAndTime, 1);
-					}
-					else{
-						atomicAdd(& d_columnData[actual_col].countString, 1);
-					}
-				}
-				// Default field is string type.
-				else{
-					atomicAdd(& d_columnData[actual_col].countString, 1);
-				}
-			}
-			actual_col++;
-		}
-		pos++;
-		start=pos;
-		col++;	
-
-	}
+        if (field_len == 0) {
+          // Ignoring whitespace and quotes can result in empty fields
+          atomicAdd(&d_columnData[actual_col].countNULL, 1);
+        } else if (flags[col] & column_parse::as_datetime) {
+          // PANDAS uses `object` dtype if the date is unparseable
+          if (isLikeDateTime(countString, countDecimal, countColon, countDash,
+                             countSlash)) {
+            atomicAdd(&d_columnData[actual_col].countDateAndTime, 1);
+          } else {
+            atomicAdd(&d_columnData[actual_col].countString, 1);
+          }
+        } else if (countNumber == int_req_number_cnt) {
+          // Checking to see if we the integer value requires 8,16,32,64 bits.
+          // This will allow us to allocate the exact amount of memory.
+          const auto value =
+              convertStrToValue<int64_t>(raw_csv, start, tempPos, opts);
+          if (value >= (1L << 31)) {
+            atomicAdd(&d_columnData[actual_col].countInt64, 1);
+          } else if (value >= (1L << 15)) {
+            atomicAdd(&d_columnData[actual_col].countInt32, 1);
+          } else if (value >= (1L << 7)) {
+            atomicAdd(&d_columnData[actual_col].countInt16, 1);
+          } else {
+            atomicAdd(&d_columnData[actual_col].countInt8, 1);
+          }
+        } else if (isLikeFloat(field_len, countNumber, countDecimal,
+                               countDash + countPlus, countExponent)) {
+          atomicAdd(&d_columnData[actual_col].countFloat, 1);
+        } else {
+          atomicAdd(&d_columnData[actual_col].countString, 1);
+        }
+      }
+      actual_col++;
+    }
+    pos++;
+    start = pos;
+    col++;
+  }
 }
 
 reader::Impl::Impl(reader_options const &args) : args_(args) {}

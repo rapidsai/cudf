@@ -181,7 +181,8 @@ public final class Table implements AutoCloseable {
                                               String filePath, long address, long length) throws CudfException;
 
 
-  private static native long[] gdfGroupByCount(long inputTable, int[] indices) throws CudfException;
+  private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int aggColumn, 
+                                                   int aggType) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -198,10 +199,23 @@ public final class Table implements AutoCloseable {
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Read a CSV file using the default CSVOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, File path) {
     return readCSV(schema, CSVOptions.DEFAULT, path);
   }
 
+  /**
+   * Read a CSV file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
     return new Table(
         gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
@@ -216,14 +230,36 @@ public final class Table implements AutoCloseable {
             opts.getFalseValues()));
   }
 
+  /**
+   * Read CSV formatted data using the default CSVOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, byte[] buffer) {
     return readCSV(schema, CSVOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
-  public static Table readCSV(Schema schema, CSVOptions options, byte[] buffer) {
-    return readCSV(schema, options, buffer, 0, buffer.length);
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer) {
+    return readCSV(schema, opts, buffer, 0, buffer.length);
   }
 
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
                               long len) {
     if (len <= 0) {
@@ -234,16 +270,30 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
-      return readCSV(schema, opts, newBuf, len);
+      return readCSV(schema, opts, newBuf, 0, len);
     }
   }
 
-  public static Table readCSV(Schema schema, CSVOptions opts, HostMemoryBuffer buffer, long len) {
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readCSV(Schema schema, CSVOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
     assert len > 0;
-    assert len <= buffer.getLength();
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
         opts.getIncludeColumnNames(), null,
-        buffer.getAddress(), len,
+        buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
         opts.getQuote(),
@@ -253,38 +303,84 @@ public final class Table implements AutoCloseable {
         opts.getFalseValues()));
   }
 
+  /**
+   * Read a Parquet file using the default ParquetOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readParquet(File path) {
     return readParquet(ParquetOptions.DEFAULT, path);
   }
 
+  /**
+   * Read a Parquet file.
+   * @param opts various parquet parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0));
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(byte[] buffer) {
-    return readParquet(ParquetOptions.DEFAULT, buffer, buffer.length);
+    return readParquet(ParquetOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, byte[] buffer) {
-    return readParquet(opts, buffer, buffer.length);
+    return readParquet(opts, buffer, 0, buffer.length);
   }
 
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long len) {
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
     if (len <= 0) {
-      len = buffer.length;
+      len = buffer.length - offset;
     }
     assert len > 0;
-    assert len <= buffer.length;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
-      newBuf.setBytes(0, buffer, 0, len);
-      return readParquet(opts, newBuf, len);
+      newBuf.setBytes(0, buffer, offset, len);
+      return readParquet(opts, newBuf, 0, len);
     }
   }
 
-  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer, long len) {
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer,
+                                  long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress(), len));
+        null, buffer.getAddress() + offset, len));
   }
 
   /**
@@ -344,6 +440,22 @@ public final class Table implements AutoCloseable {
 
   public static Aggregate count() {
     return Aggregate.count();
+  }
+
+  public static Aggregate max(int index) {
+    return Aggregate.max(index);
+  }
+
+  public static Aggregate min(int index) {
+    return Aggregate.min(index);
+  }
+
+  public static Aggregate sum(int index) {
+    return Aggregate.sum(index);
+  }
+
+  public static Aggregate avg(int index) {
+    return Aggregate.avg(index);
   }
 
   public AggregateOperation groupBy(int... indices) {
@@ -424,19 +536,27 @@ public final class Table implements AutoCloseable {
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
       long[][] aggregateTables = new long[aggregates.length][];
-      for (int i = 0 ; i < aggregates.length ; i++) {
-        if (aggregates[i].isCount()) {
-          aggregateTables[i] = gdfGroupByCount(operation.table.nativeHandle, operation.indices);
-        } else {
-          IntStream.rangeClosed(0, i).forEach(index -> {
-            Arrays.stream(aggregateTables[index]).forEach(e -> {
-              //Being defensive
-              if (e != 0) {
-                ColumnVector.freeCudfColumn(e, true);
+      for (int aggregateIndex = 0 ; aggregateIndex < aggregates.length ; aggregateIndex++) {
+        try {
+          aggregateTables[aggregateIndex] = gdfGroupByAggregate(operation.table.nativeHandle,
+                  operation.indices, aggregates[aggregateIndex].getIndex(),
+                  aggregates[aggregateIndex].getNativeId());
+        } catch (Throwable t) {
+          for (int cleanupAggregateIndex = 0;
+                  cleanupAggregateIndex <= cleanupAggregateIndex;
+                  cleanupAggregateIndex++) {
+            if (aggregateTables[cleanupAggregateIndex] != null) {
+              for (int aggregateColumnIndex = 0;
+                      aggregateColumnIndex < aggregateTables[cleanupAggregateIndex].length;
+                      aggregateColumnIndex++) {
+                long e = aggregateTables[cleanupAggregateIndex][aggregateColumnIndex];
+                if (e != 0) {
+                  ColumnVector.freeCudfColumn(aggregateColumnIndex, true);
+                }
               }
-            });
-          });
-          throw new UnsupportedOperationException("Invalid aggregate function");
+            }
+          }
+          throw t;
         }
       }
 
@@ -445,9 +565,10 @@ public final class Table implements AutoCloseable {
        * tables that we have to now merge into a single one
        */
       // copy the grouped columns to the new table
-      long[] finalAggregateTable = Arrays.copyOf(aggregateTables[0], operation.indices.length + aggregates.length);
-      // now copy the aggregated columns from each one of the aggregated tables to the end of the final table that
-      // has all the grouped columns
+      long[] finalAggregateTable = Arrays.copyOf(aggregateTables[0],
+              operation.indices.length + aggregates.length);
+      // now copy the aggregated columns from each one of the aggregated tables to the end of
+      // the final table that has all the grouped columns
       IntStream.range(1, aggregateTables.length).forEach(i -> {
         IntStream.range(0, operation.indices.length).forEach(j -> {
           //Being defensive
@@ -456,7 +577,8 @@ public final class Table implements AutoCloseable {
             ColumnVector.freeCudfColumn(e, true);
           }
         });
-        finalAggregateTable[i + operation.indices.length] = aggregateTables[i][operation.indices.length];
+        finalAggregateTable[i + operation.indices.length] =
+            aggregateTables[i][operation.indices.length];
       });
       return new Table(finalAggregateTable);
     }

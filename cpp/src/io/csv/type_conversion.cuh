@@ -169,71 +169,67 @@ struct ParseOptions {
 };
 
 /**
-* @brief Specialization of determineBase for integral types. Checks if the
-* string represents a hex value and updates the starting position if it does.
-*/
-template <typename T,
-          typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ int determineBase(const char* data, long* start,
-                                             long end) {
-  // check if this is a hex number
-  if (end - *start >= 2 && data[*start] == '0' && data[*start + 1] == 'x') {
-    *start += 2;
-    return 16;
-  }
-  return 10;
-}
+ * @brief Per-column parsing flags used for dtype detection and data conversion
+ **/
+namespace column_parse {
+enum : uint8_t {
+  disabled = 0,       ///< data is not read
+  enabled = 1,        ///< data is read and parsed as usual
+  inferred = 2,       ///< infer the dtype
+  as_default = 4,     ///< no special decoding
+  as_hexadecimal = 8, ///< decode with base-16
+  as_datetime = 16,   ///< decode as date and/or time
+};
+using flags = uint8_t;
+} // namespace column_parse
 
 /**
- * @brief Specialization of determineBase for non-integral numeric types.
- * Always returns 10, only decimal floating-point numbers are supported.
- */
-template <typename T,
-          typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ int determineBase(const char* data, long* start,
-                                             long end) {
-  return 10;
-}
-
-/**
- * @brief Specialization of decodeAsciiDigit for integral types.
- * Handles hexadecimal digits, both uppercase and lowercase.
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for integral types. Handles hexadecimal digits, both uppercase and lowercase.
+ * If the character is not a valid numeric digit then `0` is returned.
+ *
+ * @param[in] c ASCII or UTF-8 character
+ *
+ * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T,
           typename std::enable_if_t<std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
-  if (base == 16) {
-    if (d >= 'a' && d <= 'f') return d - 'a' + 10;
-    if (d >= 'A' && d <= 'F') return d - 'A' + 10;
-  }
-  return d - '0';
+__device__ __forceinline__ uint8_t decode_digit(char c) {
+  if (c >= '0' && c <= '9') return c - '0';
+  if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+  if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+  return 0;
 }
 
 /**
- * @brief Specialization of decodeAsciiDigit for non-integral numeric types.
- * Only handles decimal digits.
+ * @brief Returns the numeric value of an ASCII/UTF-8 character. Specialization
+ * for non-integral types. Handles only decimal digits. Does not check if
+ * character is a valid numeric value.
+ *
+ * @param[in] c ASCII or UTF-8 character
+ *
+ * @return uint8_t Numeric value of the character, or `0`
  */
 template <typename T,
           typename std::enable_if_t<!std::is_integral<T>::value>* = nullptr>
-__device__ __forceinline__ char decodeAsciiDigit(char d, int base) {
-  return d - '0';
+__device__ __forceinline__ uint8_t decode_digit(char c) {
+  return c - '0';
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Default function for extracting a data value from a character string.
- * Handles all arithmetic data types; other data types are handled in
- * specialized template functions.
+ * @brief Parses a character string and returns its numeric value.
  *
  * @param[in] data The character string for parse
  * @param[in] start The index within data to start parsing from
  * @param[in] end The end index within data to end parsing
- * @param[in] opts The various parsing behavior options and settings
+ * @param[in] opts The global parsing behavior options
+ * @param[in] base Base (radix) to use for conversion
  *
  * @return The parsed and converted value
  *---------------------------------------------------------------------------**/
 template <typename T>
-__inline__ __device__ T convertStrToValue(const char* data, long start, long end,
-                               const ParseOptions& opts) {
+__inline__ __device__ T parse_numeric(const char* data, long start, long end,
+                                      const ParseOptions& opts, int base = 10) {
   T value = 0;
 
   // Handle negative values if necessary
@@ -243,19 +239,16 @@ __inline__ __device__ T convertStrToValue(const char* data, long start, long end
     start++;
   }
 
-  const int base = determineBase<T>(data, &start, end);
-
   // Handle the whole part of the number
   long index = start;
   while (index <= end) {
     if (data[index] == opts.decimal) {
       ++index;
       break;
-    } else if (base == 10 && 
-        (data[index] == 'e' || data[index] == 'E')) {
+    } else if (base == 10 && (data[index] == 'e' || data[index] == 'E')) {
       break;
     } else if (data[index] != opts.thousands && data[index] != '+') {
-      value = (value * base) + decodeAsciiDigit<T>(data[index], base);
+      value = (value * base) + decode_digit<T>(data[index]);
     }
     ++index;
   }
@@ -269,7 +262,7 @@ __inline__ __device__ T convertStrToValue(const char* data, long start, long end
         break;
       } else if (data[index] != opts.thousands && data[index] != '+') {
         divisor /= base;
-        value += decodeAsciiDigit<T>(data[index], base) * divisor;
+        value += decode_digit<T>(data[index]) * divisor;
       }
       ++index;
     }
@@ -295,6 +288,18 @@ __inline__ __device__ T convertStrToValue(const char* data, long start, long end
   return value * sign;
 }
 
+template <typename T, int base>
+__inline__ __device__ T convertStrToValue(const char* data, long start,
+                                          long end, const ParseOptions& opts) {
+  return parse_numeric<T>(data, start, end, opts, base);
+}
+
+template <typename T>
+__inline__ __device__ T convertStrToValue(const char* data, long start,
+                                          long end, const ParseOptions& opts) {
+  return parse_numeric<T>(data, start, end, opts);
+}
+
 template <>
 __inline__ __device__ cudf::date32 convertStrToValue<cudf::date32>(
     const char* data, long start, long end, const ParseOptions& opts) {
@@ -317,7 +322,7 @@ __inline__ __device__ cudf::category convertStrToValue<cudf::category>(
 template <>
 __inline__ __device__ cudf::timestamp convertStrToValue<cudf::timestamp>(
     const char* data, long start, long end, const ParseOptions& opts) {
-  return cudf::timestamp{convertStrToValue<int64_t>(data, start, end, opts)};
+  return cudf::timestamp{parse_numeric<int64_t>(data, start, end, opts)};
 }
 
 //The purpose of this is merely to allow compilation
@@ -342,9 +347,8 @@ __inline__ __device__ cudf::bool8 convertStrToValue<cudf::bool8>(
                                     end - start + 1)) {
     return_value = cudf::false_v;
   } else {
-    // Expect 'false_v' or 'true_v' in data, but clamp any non-zero value to 1
-    // in case
-    if (convertStrToValue<typename cudf::bool8::value_type>(
+    // Expect 'false_v' or 'true_v', but clamp any false value to 1
+    if (parse_numeric<typename cudf::bool8::value_type>(
             data, start, end, opts) != cudf::detail::unwrap(cudf::false_v)) {
       return_value = cudf::true_v;
     } else {

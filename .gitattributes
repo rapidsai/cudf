@@ -1,1 +1,1 @@
-cudf/_version.py export-subst
+python/cudf/cudf/_version.py export-subst
