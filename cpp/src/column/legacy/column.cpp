@@ -170,11 +170,19 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
                                     gdf_size_type size,
                                     gdf_dtype dtype,
                                     gdf_size_type null_count,
-                                    gdf_dtype_extra_info extra_info)
+                                    gdf_dtype_extra_info extra_info,
+                                    const char* name)
 {
   gdf_column_view(column, data, valid, size, dtype);
   column->null_count = null_count;
   column->dtype_info = extra_info;
+  if (name != nullptr) {
+    size_t len = strlen(name);
+    if (len > 0) {
+      column->col_name = (char *)malloc(strlen(name) + 1);
+      std::strcpy(column->col_name, name);
+    }
+  }
   return GDF_SUCCESS;
 }
 

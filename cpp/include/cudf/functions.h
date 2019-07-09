@@ -76,8 +76,6 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 
-
-
 /* context operations */
 
 /**
