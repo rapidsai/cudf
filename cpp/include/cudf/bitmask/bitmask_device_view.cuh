@@ -101,9 +101,8 @@ class mutable_bitmask_device_view {
    * Defaults to 0
    *---------------------------------------------------------------------------**/
   mutable_bitmask_device_view(bitmask_type* mask, size_type size,
-                              size_type offset = 0) {
-    // TODO Implement
-  }
+                              size_type offset = 0)
+      : _mask{mask}, _size{size}, _bit_offset{offset} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a mutable, device view of a bitmask from a
@@ -111,9 +110,10 @@ class mutable_bitmask_device_view {
    *
    * @param source_view The view from which to construct a device view
    *---------------------------------------------------------------------------**/
-  mutable_bitmask_device_view(mutable_bitmask_view source_view) {
-    // TODO Implement
-  }
+  mutable_bitmask_device_view(mutable_bitmask_view source_view)
+      : _mask{source_view.data()},
+        _size{source_view.size()},
+        _bit_offset{source_view.offset()} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the specified bit is set to `1`
@@ -282,13 +282,16 @@ class bitmask_device_view {
    * Defaults to 0
    *---------------------------------------------------------------------------**/
   bitmask_device_view(bitmask_type const* mask, size_type size,
-                      size_type offset = 0) {
-    // TODO Implement
-  }
+                      size_type offset = 0)
+      : mutable_view{const_cast<bitmask_type*>(mask), size, offset} {}
 
-  bitmask_device_view(bitmask_view source_view) {
-    // TODO Implement
-  }
+  bitmask_device_view(bitmask_view source_view)
+      : mutable_view{const_cast<bitmask_type*>(source_view.data()),
+                     source_view.size()} {}
+
+  bitmask_device_view(bitmask const& source_bitmask)
+      : mutable_view{const_cast<bitmask_type*>(source_bitmask.data()),
+                     source_bitmask.size()} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a `bitmask_device_view` from a
@@ -333,7 +336,7 @@ class bitmask_device_view {
   }
 
  private:
-  mutable_bitmask_device_view const mutable_view{};
+  mutable_bitmask_device_view mutable_view{};
 };
 
 }  // namespace cudf
