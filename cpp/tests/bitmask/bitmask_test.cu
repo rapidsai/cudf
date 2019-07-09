@@ -105,6 +105,54 @@ TEST_F(BitmaskTest, MoveConstructor) {
   EXPECT_EQ(0, bitmask->size());
 }
 
+TEST_F(BitmaskTest, CopyFromBuffer) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, CopyFromBufferTooSmall) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, MoveFromBuffer) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, MoveFromBufferTooSmall) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, CopyFromViewNoOffset) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, CopyFromViewWithOffset) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, CopyFromMutableViewNoOffset) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, CopyFromMutableViewWithOffset) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, SliceToEnd) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, SliceSize) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, MutableSliceToEnd) {
+  // TODO Implement
+}
+
+TEST_F(BitmaskTest, MutableSliceSize) {
+  // TODO Implement
+}
+
 TEST_F(BitmaskTest, TestViews) {
   cudf::size_type size{100};
   EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
