@@ -710,7 +710,6 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[1:2], pdf.iloc[1:2])
     assert_eq(gdf.iloc[nelem - 1 : nelem + 1], pdf.iloc[nelem - 1 : nelem + 1])
     assert_eq(gdf.iloc[nelem : nelem * 2], pdf.iloc[nelem : nelem * 2])
-
     assert_eq(gdf.iloc[-1 * nelem], pdf.iloc[-1 * nelem])
     assert_eq(gdf.iloc[-1], pdf.iloc[-1])
     assert_eq(gdf.iloc[0], pdf.iloc[0])
@@ -718,7 +717,7 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
 
 
-@pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
+@pytest.mark.xfail(raises=IndexError, reason="Series.index are different")
 def test_dataframe_iloc_tuple():
     gdf = DataFrame()
     nelem = 123

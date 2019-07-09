@@ -177,17 +177,18 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         from cudf.dataframe.index import as_index
         from cudf import MultiIndex
         if isinstance(self._df.columns, MultiIndex):
-            df = self._df.columns._get_column_major(self._df, arg[1])
+            columns_df = self._df.columns._get_column_major(self._df, arg[1])
         else:
             columns = self._get_column_selection(arg[1])
-            df = DataFrame()
+            columns_df = DataFrame()
             for col in columns:
-                df.add_column(name=col, data=self._df[col])
-        if isinstance(df.index, MultiIndex):
-            return df.index._get_row_major(df, arg[0])
+                columns_df.add_column(name=col, data=self._df[col])
+        if isinstance(columns_df.index, MultiIndex):
+            return columns_df.index._get_row_major(columns_df, arg[0])
         else:
-            for col in df.columns:
-                df[col] = df[col].iloc[arg[0]]
+            df = DataFrame()
+            for col in columns_df.columns:
+                df[col] = columns_df[col].loc[arg[0]]
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):
                 df.index = as_index(arg[0].start)
@@ -247,26 +248,28 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         columns = self._get_column_selection(arg[1])
         if isinstance(self._df.columns, MultiIndex):
-            df = self._df.columns._get_column_major(self._df, arg)
+            columns_df = self._df.columns._get_column_major(self._df, arg)
         else:
             if isinstance(arg[1], slice):
-                df = DataFrame()
+                columns_df = DataFrame()
                 for col in columns:
-                    df.add_column(name=col, data=self._df[col])
+                    columns_df.add_column(name=col, data=self._df[col])
             else:
-                df = self._df._columns_view(columns).take(arg[0])
-        print(arg)
-        if isinstance(df.index, MultiIndex):
-            return df.index._get_row_major(df, arg[0])
+                columns_df = self._df._columns_view(columns).take(arg[0])
+        if isinstance(columns_df.index, MultiIndex):
+            return columns_df.index._get_row_major(columns_df, arg[0])
         else:
-            for col in df.columns:
-                df[col] = df[col].iloc[arg[0]]
+            df = DataFrame()
+            for col in columns_df.columns:
+                df[col] = columns_df[col].iloc[arg[0]]
 
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
                 df.index = as_index(self._df.index[arg[0].start])
             elif not hasattr(df.index, 'labels'):
                 df.index = as_index(self._df.index[arg[0]])
+        if self._can_downcast_to_series(df, arg):
+            return self._downcast_to_series(df, arg)
         return df
 
     def _getitem_scalar(self, arg):
