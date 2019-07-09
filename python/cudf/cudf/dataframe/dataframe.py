@@ -1338,7 +1338,7 @@ class DataFrame(object):
             outdf = outdf.set_index(new_index)
             return outdf
 
-    def dropna(self, axis=0, how="any"):
+    def dropna(self, axis=0, how="any", nan_as_null=False):
         """
         Drops rows (or columns) containing nulls from a Column.
 
@@ -1354,10 +1354,13 @@ class DataFrame(object):
             one null value. all drops only rows (or columns) containing
             *all* null values.
         """
+        df = self
+        if nan_as_null:
+            df = utils.convert_nans_to_nulls(df)
         if axis == 0:
-            return self._drop_na_rows(how=how)
+            return df._drop_na_rows(how=how)
         else:
-            return self._drop_na_columns(how=how)
+            return df._drop_na_columns(how=how)
 
     def _drop_na_rows(self, how="any"):
         """

@@ -83,3 +83,24 @@ def test_dropna_with_all_nulls(how, data, axis):
     pdf = gdf.to_pandas()
 
     assert_eq(pdf.dropna(axis=axis, how=how), gdf.dropna(axis=axis, how=how))
+
+
+def test_dropna_nan_as_null():
+    sr = cudf.Series([1.0, 2.0, np.nan, None], nan_as_null=False)
+    assert_eq(sr.dropna(nan_as_null=False), sr[:3])
+    assert_eq(sr.dropna(nan_as_null=True), sr[:2])
+
+    df = cudf.DataFrame(
+        {
+            "a": cudf.Series([1.0, 2.0, np.nan, None], nan_as_null=False),
+            "b": cudf.Series([1, 2, 3, 4]),
+        }
+    )
+
+    got = df.dropna(nan_as_null=False)
+    expected = df[:3]
+    assert_eq(expected, got)
+
+    got = df.dropna(nan_as_null=True)
+    expected = df[:2]
+    assert_eq(expected, got)

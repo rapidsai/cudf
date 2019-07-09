@@ -1041,15 +1041,18 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def dropna(self):
+    def dropna(self, nan_as_null=False):
         """
         Return a Series with null values removed.
         """
+        sr = self
+        if nan_as_null:
+            sr = utils.convert_nans_to_nulls(sr)
         if self.null_count == 0:
-            return self
-        data = self._column.dropna()
-        index = self.index.loc[~self.isna()]
-        return self._copy_construct(data=data, index=index)
+            return sr
+        data = sr._column.dropna()
+        index = sr.index.loc[~sr.isna()]
+        return sr._copy_construct(data=data, index=index)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
