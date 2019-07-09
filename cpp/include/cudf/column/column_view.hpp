@@ -61,6 +61,6 @@ struct column_view {
   cudf::size_type _size{0};
   bitmask_view _bitmask;
   // cudf::size_type _null_count{0};
-  column_view* _other{nullptr};
+  column_view** children{nullptr};
 };
 }  // namespace cudf
