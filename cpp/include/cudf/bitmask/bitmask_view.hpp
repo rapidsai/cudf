@@ -82,22 +82,22 @@ class mutable_bitmask_view {
    * @brief Returns the bit index offset of the first represented bit in the
    * mask
    *---------------------------------------------------------------------------**/
-  size_type offset() const noexcept { return _offset; }
+  size_type offset() const noexcept { return _bit_offset; }
 
   /**---------------------------------------------------------------------------*
    * @brief Return raw pointer to the mask's device memory
    *---------------------------------------------------------------------------**/
-  bitmask_type* data() noexcept { return _mask; }
+  bitmask_type* data() noexcept { return _mask + _bit_offset; }
 
   /**---------------------------------------------------------------------------*
    * @brief Return raw pointer to the mask's device memory
    *---------------------------------------------------------------------------**/
-  bitmask_type const* data() const noexcept { return _mask; }
+  bitmask_type const* data() const noexcept { return _mask + _bit_offset; }
 
  private:
   bitmask_type* _mask{nullptr};  ///< Pointer to device memory holding the bits
   size_type _size{0};            ///< The number of represented bits
-  size_type _offset{0};          ///< Beginning bit index of the bitmask
+  size_type _bit_offset{0};      ///< Beginning bit index of the bitmask
 };
 
 /**---------------------------------------------------------------------------*

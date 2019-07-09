@@ -14,8 +14,10 @@
  * limitations under the License.
  */
 #include <cudf/bitmask/bitmask.hpp>
+#include <cudf/bitmask/bitmask_device_view.hpp>
 #include <cudf/bitmask/bitmask_view.hpp>
 #include <cudf/types.hpp>
+#include <utilities/cuda_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/integer_utils.hpp>
 
@@ -45,7 +47,7 @@ bitmask::bitmask(size_type size, cudaStream_t stream,
   CUDF_EXPECTS(size >= 0, "Invalid size.");
   CUDF_EXPECTS(nullptr != mr, "Null memory resource.");
 
-  _data = std::make_unique<rmm::device_buffer>(bitmask_allocation_size(size),
+  _data = std::make_unique<rmm::device_buffer>(bitmask_allocation_size(_size),
                                                stream, mr);
 }
 
@@ -66,19 +68,52 @@ bitmask::bitmask(size_type size, rmm::device_buffer&& other) : _size{size} {
   _data = std::make_unique<rmm::device_buffer>(other);
 }
 
+__global__ void copy_offset_bitmask(mutable_bitmask_device_view output,
+                                    bitmask_device_view input, size_type offset,
+                                    size_type size) {
+  constexpr size_type warp_size{32};
+  size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+
+  auto active_mask = __ballot_sync(0xFFFF'FFFF, output_index < size);
+
+  while (output_index < size) {
+    auto new_mask_element =
+        __ballot_sync(active_mask, input.bit_is_set(offset + output_index));
+
+    if (threadIdx.x % warp_size == 0) {
+      output.set_element(element_index(output_index), new_mask_element);
+    }
+
+    output_index += blockDim.x * gridDim.x;
+    active_mask = __ballot_sync(active_mask, output_index < size);
+  }
+}
+
 // Copy from a view
-bitmask::bitmask(bitmask_view view, cudaStream_t stream,
+bitmask::bitmask(bitmask_view source_view, cudaStream_t stream,
                  rmm::mr::device_memory_resource* mr)
-    : _size{view.size()} {
-  // TODO Implement
+    : _size{source_view.size()} {
+  if (source_view.offset() == 0) {
+    // If there's no offset, do a simple copy
+    _data = std::make_unique<rmm::device_buffer>(
+        static_cast<void const*>(source_view.data()), _size);
+  } else {
+    _data = std::make_unique<rmm::device_buffer>(bitmask_allocation_size(_size),
+                                                 stream, mr);
+
+    cudf::util::cuda::grid_config_1d config(_size, 256);
+    copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
+                          stream>>>(this->mutable_view(), source_view,
+                                    source_view.offset(), _size);
+
+    CHECK_STREAM(stream);
+  }
 }
 
 // Copy from a mutable view
-bitmask::bitmask(mutable_bitmask_view view, cudaStream_t stream,
+bitmask::bitmask(mutable_bitmask_view source_view, cudaStream_t stream,
                  rmm::mr::device_memory_resource* mr)
-    : _size{view.size()} {
-  // TODO Implement
-}
+    : bitmask{bitmask_view(source_view), stream, mr} {}
 
 // Zero-copy slice
 bitmask_view bitmask::slice(size_type offset, size_type slice_size) const {

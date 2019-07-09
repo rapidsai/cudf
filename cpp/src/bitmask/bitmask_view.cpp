@@ -21,7 +21,7 @@ namespace cudf {
 
 mutable_bitmask_view::mutable_bitmask_view(bitmask_type* mask, size_type size,
                                            size_type offset)
-    : _mask{mask}, _size{size}, _offset{offset} {
+    : _mask{mask}, _size{size}, _bit_offset{offset} {
   if (size > 0) {
     CUDF_EXPECTS(nullptr != mask, "Null mask for non-empty bitmask.");
   }

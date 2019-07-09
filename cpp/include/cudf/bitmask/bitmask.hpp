@@ -125,7 +125,7 @@ class bitmask {
    * memory allocation
    *---------------------------------------------------------------------------**/
   explicit bitmask(
-      mutable_bitmask_view view, cudaStream_t stream = 0;
+      mutable_bitmask_view view, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
