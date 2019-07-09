@@ -212,10 +212,9 @@ TYPED_TEST(GatherTest, MultiColInPlaceTest) {
 
   cudf::table source_table{ vp_src };
 
-  EXPECT_THROW(
-      cudf::gather(&source_table, gather_map.data().get(), &source_table),
-      cudf::logic_error);
-/**
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &source_table));
+
   for(size_t c = 0; c < n_cols; c++){
     // Copy result of source column to host
     std::vector<TypeParam> result_data;
@@ -238,7 +237,7 @@ TYPED_TEST(GatherTest, MultiColInPlaceTest) {
             << "Value at index " << i << " should be null!\n";
       }
     }
-  }*/
+  }
 }
 
 TYPED_TEST(GatherTest, DtypeMistach){

@@ -441,7 +441,7 @@ struct NVCategoryGroupByTest : public GdfTest
 		}
 	}
 };
-
+/**
 TEST_F(NVCategoryGroupByTest, TEST_NVCATEGORY_GROUPBY)
 {
 	bool print = false;
@@ -472,7 +472,7 @@ TEST_F(NVCategoryGroupByTest, TEST_NVCATEGORY_GROUPBY)
 
 	this->compare_gdf_result(reference_map);
 }
-
+*/
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 {
 	bool print = false;

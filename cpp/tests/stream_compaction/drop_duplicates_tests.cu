@@ -219,8 +219,8 @@ TYPED_TEST(DropDuplicatesDoubleTest, Distinct)
 {
   auto lamda_type0 = [](gdf_index_type row) { return typename TypeParam::Type0(row); };
   auto lamda_type1 = [](gdf_index_type row) { return typename TypeParam::Type1(row); };
-  cudf::test::column_wrapper<typename TypeParam::Type0> col1{column_size, lamda_type0};
-  cudf::test::column_wrapper<typename TypeParam::Type1> col2{column_size, lamda_type1};
+  cudf::test::column_wrapper<typename TypeParam::Type0> col1{column_size, lamda_type0, lamda_valid};
+  cudf::test::column_wrapper<typename TypeParam::Type1> col2{column_size, lamda_type1, lamda_valid};
   TypedDropDuplicatesTest<TypeParam>(
     col1,
     col2,
@@ -247,8 +247,8 @@ TYPED_TEST(DropDuplicatesDoubleTest, Duplicate)
 {
   auto lamda_type0 = [](gdf_index_type row) { return typename TypeParam::Type0(row%100); };
   auto lamda_type1 = [](gdf_index_type row) { return typename TypeParam::Type1(row%7); };
-  cudf::test::column_wrapper<typename TypeParam::Type0> col1{column_size, lamda_type0};
-  cudf::test::column_wrapper<typename TypeParam::Type1> col2{column_size, lamda_type1};
+  cudf::test::column_wrapper<typename TypeParam::Type0> col1{column_size, lamda_type0, lamda_valid};
+  cudf::test::column_wrapper<typename TypeParam::Type1> col2{column_size, lamda_type1, lamda_valid};
   TypedDropDuplicatesTest<TypeParam>(
     col1,
     col2,
