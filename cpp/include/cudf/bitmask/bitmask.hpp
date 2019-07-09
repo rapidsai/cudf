@@ -158,6 +158,17 @@ class bitmask {
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Construct a zero-copy immutable `bitmask_view` from this
+   *`bitmask`.
+   *---------------------------------------------------------------------------**/
+  operator bitmask_view() const noexcept { return this->view(); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a zero-copy `mutable_bitmask_view` from this `bitmask`
+   *---------------------------------------------------------------------------**/
+  operator mutable_bitmask_view() noexcept { return this->mutable_view(); }
+
+  /**---------------------------------------------------------------------------*
    * @brief Constructs a zero-copy immutable view of a "slice" of the bitmask
    * with the specified offset and size.
    *
@@ -178,17 +189,6 @@ class bitmask {
    * @return bitmask_view
    *---------------------------------------------------------------------------**/
   mutable_bitmask_view mutable_slice(size_type offset, size_type size = 0);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a zero-copy immutable `bitmask_view` from this
-   *`bitmask`.
-   *---------------------------------------------------------------------------**/
-  operator bitmask_view() const noexcept { return this->view(); }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a zero-copy `mutable_bitmask_view` from this `bitmask`
-   *---------------------------------------------------------------------------**/
-  operator mutable_bitmask_view() noexcept { return this->mutable_view(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a `std::unique_ptr` to the underlying `device_buffer` and

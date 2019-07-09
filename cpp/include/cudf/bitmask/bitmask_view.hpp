@@ -28,12 +28,12 @@ namespace cudf {
  *
  * A `bitmask` is a contiguous set of `m` `bitmask_type`"element"s. The
  * `size` of a bitmask refers to the number of bits it represents. Each bitmask
- * `view` has an `offset` that indicates the bit index of the first represented
+ * `view` has an `offset` that indicates the bit index of the first constituent
  * bit in the mask (by default, the `offset` is zero).
  *
- * The "represented bits" are the contiguous set of bits in the range `[offset,
+ * The "constituent bits" are the contiguous set of bits in the range `[offset,
  * size+offset)`. The device memory allocation may be larger than what is
- * required to represent `size` bits, and bits outside of the represented bit
+ * required to represent `size` bits, and bits outside of the constituent bit
  * range are undefined.
  *
  * The `bitmask` uses LSB ordering, e.g., `bit_index` 0 refers to the
@@ -59,27 +59,27 @@ class mutable_bitmask_view {
    * and a size.
    *
    * Optionally accepts an `offset` (defaults to zero) to allow zero-copy
-   * slicing. The `offset` indicates the bit index of the first represented bit
+   * slicing. The `offset` indicates the bit index of the first constituent bit
    * in the mask.
    *
    * Requires that `mask` have 256B or greater power of two alignment.
    *
    * @param mask Pointer to an existing device memory allocation of sufficient
    * size to hold `offset + size` bits.
-   * @param size The number of bits represented by the bitmask
-   * @param offset optional, the bit index of the first represented bit.
+   * @param size The number of bits constituent by the bitmask
+   * @param offset optional, the bit index of the first constituent bit.
    * Defaults to 0
    *---------------------------------------------------------------------------**/
   mutable_bitmask_view(bitmask_type* mask, size_type size,
                        size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the number of represented bits.
+   * @brief Returns the number of constituent bits.
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return _size; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the bit index offset of the first represented bit in the
+   * @brief Returns the bit index offset of the first constituent bit in the
    * mask
    *---------------------------------------------------------------------------**/
   size_type offset() const noexcept { return _bit_offset; }
@@ -96,7 +96,7 @@ class mutable_bitmask_view {
 
  private:
   bitmask_type* _mask{nullptr};  ///< Pointer to device memory holding the bits
-  size_type _size{0};            ///< The number of represented bits
+  size_type _size{0};            ///< The number of constituent bits
   size_type _bit_offset{0};      ///< Beginning bit index of the bitmask
 };
 
@@ -106,12 +106,12 @@ class mutable_bitmask_view {
  *
  * A `bitmask` is a contiguous set of `m` `bitmask_type`"element"s. The
  * `size` of a bitmask refers to the number of bits it represents. Each bitmask
- * `view` has an `offset` that indicates the bit index of the first represented
+ * `view` has an `offset` that indicates the bit index of the first constituent
  * bit in the mask (by default, the `offset` is zero).
  *
- * The "represented bits" are the contiguous set of bits in the range `[offset,
+ * The "constituent bits" are the contiguous set of bits in the range `[offset,
  * size+offset)`. The device memory allocation may be larger than what is
- * required to represent `size` bits, and bits outside of the represented bit
+ * required to represent `size` bits, and bits outside of the constituent bit
  * range are undefined.
  *
  * The `bitmask` uses LSB ordering, e.g., `bit_index` 0 refers to the
@@ -137,15 +137,15 @@ class bitmask_view {
    * and a size.
    *
    * Optionally accepts an `offset` (defaults to zero) to allow zero-copy
-   * slicing. The `offset` indicates the bit index of the first represented bit
+   * slicing. The `offset` indicates the bit index of the first constituent bit
    * in the mask.
    *
    * Requires that `mask` have 256B or greater power of two alignment.
    *
    * @param mask Pointer to an existing device memory allocation of sufficient
    * size to hold `size` bits.
-   * @param size The number of bits represented by the bitmask
-   * @param offset optional, the bit index of the first represented bit.
+   * @param size The number of bits constituent by the bitmask
+   * @param offset optional, the bit index of the first constituent bit.
    * Defaults to 0
    *---------------------------------------------------------------------------**/
   bitmask_view(bitmask_type const* mask, size_type size, size_type offset = 0);
@@ -161,12 +161,12 @@ class bitmask_view {
   bitmask_view(mutable_bitmask_view m_view);
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the number of represented bits.
+   * @brief Returns the number of constituent bits.
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return mutable_view.size(); }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the bit index offset of the first represented bit in the
+   * @brief Returns the bit index offset of the first constituent bit in the
    * mask
    *---------------------------------------------------------------------------**/
   size_type offset() const noexcept { return mutable_view.offset(); }
