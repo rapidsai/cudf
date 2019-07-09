@@ -3144,12 +3144,13 @@ def test_empty_dataframe_describe():
 
 def test_as_column_types():
     from cudf.dataframe import columnops
-    pds = pd.Series(np.array([1, 2, 3]), dtype='float32')
-    gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype='float32'))
+
+    pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
+    gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype="float32"))
 
     assert_eq(pds, gds)
 
-    pds = pd.Series([1, 2, 3], dtype='float32')
-    gds = Series([1, 2, 3], dtype='float32')
+    pds = pd.Series([1, 2, 3], dtype="float32")
+    gds = Series([1, 2, 3], dtype="float32")
 
     assert_eq(pds, gds)
