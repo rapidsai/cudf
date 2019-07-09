@@ -366,11 +366,15 @@ class MultiIndex(Index):
         Determines by reflecting on each level if a value or tuple of values
         is a valid key indexing into the MultiIndex
         """
-        arg = [arg] if isinstance(arg, (str, numbers.Number, slice)) else list(arg)
+        arg = [arg] if isinstance(arg, (
+            str,
+            numbers.Number,
+            slice
+        )) else list(arg)
         if isinstance(arg[0], (numbers.Number, slice)):
             return True
         for idx, key in enumerate(arg):
-            if key not in self.levels[idx]:
+            if key not in self.levels[idx] and not isinstance(key, slice):
                 return False
         return True
 
