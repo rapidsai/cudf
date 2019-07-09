@@ -236,11 +236,20 @@ def is_list_like(obj):
 
 
 def min_scalar_type(a, min_size=8):
-    # Get smallest type to represent the category size
-    sizeof = np.min_scalar_type(a).itemsize
-    # Normalize the size to at least `min_size` bytes
-    sizeof = max(max(min_size, 8) // 8, sizeof)
-    return getattr(np, "int" + str(sizeof * 8))
+    return min_signed_type(a, min_size=min_size)
+
+
+def min_signed_type(x, min_size=8):
+    """
+    Return the smallest *signed* integer dtype
+    that can represent the integer ``x``
+    """
+    for int_dtype in np.sctypes["int"]:
+        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+            if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
+                return int_dtype
+    # resort to using `int64` and let numpy raise appropriate exception:
+    return np.int64(x).dtype
 
 
 def get_result_name(left, right):
