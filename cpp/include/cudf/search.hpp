@@ -37,6 +37,7 @@ namespace cudf {
  *---------------------------------------------------------------------------**/
 gdf_column lower_bound(gdf_column const& column,
                        gdf_column const& values,
+                       bool ascending = true,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
@@ -55,6 +56,7 @@ gdf_column lower_bound(gdf_column const& column,
  *---------------------------------------------------------------------------**/
 gdf_column upper_bound(gdf_column const& column,
                        gdf_column const& values,
+                       bool ascending = true,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*

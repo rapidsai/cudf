@@ -63,6 +63,7 @@ struct search_functor {
   void operator()(gdf_column const& column,
                   gdf_column const& values,
                   bool find_first,
+                  bool ascending,
                   bool nulls_as_largest,
                   cudaStream_t stream,
                   gdf_column& result)
@@ -75,15 +76,23 @@ struct search_functor {
       auto it_col = cudf::make_iterator<true, T>(column, null_substitute);
       auto it_val = cudf::make_iterator<true, T>(values, null_substitute);
 
+      if (ascending)
       launch_search(it_col, it_val, column.size, values.size, result.data,
                     thrust::less<T>(), find_first, stream);
+      else
+        launch_search(it_col, it_val, column.size, values.size, result.data,
+                      thrust::greater<T>(), find_first, stream);
     }
     else {
       auto it_col = cudf::make_iterator<false, T>(column);
       auto it_val = cudf::make_iterator<false, T>(values);
 
+      if (ascending)
       launch_search(it_col, it_val, column.size, values.size, result.data,
                     thrust::less<T>(), find_first, stream);
+      else
+        launch_search(it_col, it_val, column.size, values.size, result.data,
+                      thrust::greater<T>(), find_first, stream);
     }
   }
 };
@@ -95,6 +104,7 @@ namespace detail {
 gdf_column search_ordered(gdf_column const& column,
                           gdf_column const& values,
                           bool find_first,
+                          bool ascending,
                           bool nulls_as_largest,
                           cudaStream_t stream = 0)
 {
@@ -112,7 +122,7 @@ gdf_column search_ordered(gdf_column const& column,
 
   type_dispatcher(column.dtype,
                   search_functor{},
-                  column, values, find_first, nulls_as_largest, stream, result);
+                  column, values, find_first, ascending, nulls_as_largest, stream, result);
 
   return result;
 }
@@ -162,16 +172,18 @@ gdf_column search_ordered(table const& t,
 
 gdf_column lower_bound(gdf_column const& column,
                        gdf_column const& values,
+                       bool ascending,
                        bool nulls_as_largest)
 {
-  return detail::search_ordered(column, values, true, nulls_as_largest);
+  return detail::search_ordered(column, values, true, ascending, nulls_as_largest);
 }
 
 gdf_column upper_bound(gdf_column const& column,
                        gdf_column const& values,
+                       bool ascending,
                        bool nulls_as_largest)
 {
-  return detail::search_ordered(column, values, false, nulls_as_largest);
+  return detail::search_ordered(column, values, false, ascending, nulls_as_largest);
 }
 
 gdf_column lower_bound(table const& t,
