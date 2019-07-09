@@ -3157,7 +3157,7 @@ def test_as_column_types():
 
 
 def test_one_row_head():
-    gdf = DataFrame({'name':['carl'],'score':[100]})
+    gdf = DataFrame({"name": ["carl"], "score": [100]})
     pdf = gdf.to_pandas()
 
     head_gdf = gdf.head()
