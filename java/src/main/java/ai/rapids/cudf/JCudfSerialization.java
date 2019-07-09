@@ -29,13 +29,21 @@ import java.io.OutputStream;
  * Serialize and deserialize CUDF tables and columns using a custom format.  The goal of this is
  * to provide a way to efficiently serialize and deserialize cudf data for distributed
  * processing within a single application. Typically after a partition like operation has happened.
- * It is not intended for interprocess communication or for long term storage of data, there are
- * much better standards based formats for all of that.
+ * It is not intended for inter-application communication or for long term storage of data, there
+ * are much better standards based formats for all of that.
  * <p>
  * The goal is to transfer data from a local GPU to a remote GPU as quickly and efficiently as
  * possible using build in java communication channels.  There is no guarantee of compatibility
  * between different releases of CUDF.  This is to allow us to adapt if internal memory layouts
  * and formats change.
+ * <p>
+ * This version optimizes for reduced memory transfers, and as such will try to do the fewest number
+ * of transfers possible when putting the data back onto the GPU.  This means that it will slice
+ * a single large memory buffer into smaller buffers used by the resulting ColumnVectors.  The
+ * downside of this is that generally none of the memory can be released until all of the
+ * ColumnVectors are closed.  It is assumed that this will not be a problem because for processing
+ * efficiency after the data is transferred it will likely be combined with other similar batches
+ * from other processes into a single larger buffer.
  */
 public class JCudfSerialization {
   /**

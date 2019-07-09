@@ -133,6 +133,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param type the type of the vector
    * @param tsTimeUnit the unit of time for this vector
    * @param rows the number of rows in this vector.
+   * @param nullCount the number of nulls in the dataset.
    * @param dataBuffer the data stored on the device.  The column vector takes ownership of the
    *                   buffer.  Do not use the buffer after calling this.
    * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0. The
@@ -141,6 +142,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param offsetBuffer a host buffer required for strings and string categories. The column
    *                    vector takes ownership of the buffer. Do not use the buffer after calling
    *                    this.
+   * @param resetOffsetsFromFirst if true and type is a string or a string_category then when
+   *                              unpacking the offsets, the initial offset will be reset to
+   *                              0 and all other offsets will be updated to be relative to that
+   *                              new 0.  This is used after serializing a partition, when the
+   *                              offsets were not updated prior to the serialization.
    */
   ColumnVector(DType type, TimeUnit tsTimeUnit, long rows,
                long nullCount, DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
@@ -1306,13 +1312,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Translate the host side string representation of strings into the device side representation
    * and populate the cudfColumn with it.
    * @param cudfColumnHandle native handle of gdf_column.
-   * @param dataPtr          Pointer to string data either on the host, or the device.
+   * @param dataPtr          Pointer to string data either on the host or the device.
    * @param dataPtrOnHost    true if dataPtr is on the host. false if it is on the device.
    * @param hostOffsetsPtr   Pointer to offsets data on the host.
    * @param resetOffsetsToZero true if the offsets should be reset to start at 0.
    * @param deviceValidPtr   Pointer to validity bitmask on the device.
    * @param deviceOutputDataPtr Pointer to where the int category data will be stored for
-   *                            STRING_CATEGORY.Should be 0 for STRING
+   *                            STRING_CATEGORY. Should be 0 for STRING.
    * @param numRows          Number of rows in the column.
    * @param dtype            Data type of the column. In this case must be STRING or
    *                         STRING_CATEGORY

@@ -82,7 +82,7 @@ class DeviceMemoryBuffer extends MemoryBuffer {
    * Slice off a part of the device buffer.
    * @param offset where to start the slice at.
    * @param len how many bytes to slice
-   * @return a device vector that will need to be closed independently from this buffer.
+   * @return a device buffer that will need to be closed independently from this buffer.
    */
   final DeviceMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
@@ -95,7 +95,7 @@ class DeviceMemoryBuffer extends MemoryBuffer {
    * Slice off a part of the device buffer, copying it instead of reference counting it.
    * @param offset where to start the slice at.
    * @param len how many bytes to slice
-   * @return a device vector that will need to be closed independently from this buffer.
+   * @return a device buffer that will need to be closed independently from this buffer.
    */
   final DeviceMemoryBuffer sliceWithCopy(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
