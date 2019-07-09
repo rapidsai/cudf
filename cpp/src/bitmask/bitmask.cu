@@ -55,6 +55,18 @@ bitmask::bitmask(size_type size, bit_state initial_state, cudaStream_t stream,
       cudaMemset(_data->data(), fill_value, bitmask_allocation_size(_size)));
 }
 
+// Copy constructor
+bitmask::bitmask(bitmask const& other)
+    : _size{other.size()},
+      _data{std::make_unique<rmm::device_buffer>(*(other._data))} {}
+
+// Move constructor
+bitmask::bitmask(bitmask&& other)
+    : _size{other.size()},
+      _data{std::make_unique<rmm::device_buffer>(std::move(*(other._data)))} {
+  other._size = 0;
+}
+
 // Copy from existing buffer
 bitmask::bitmask(size_type size, rmm::device_buffer const& other)
     : _size{size} {

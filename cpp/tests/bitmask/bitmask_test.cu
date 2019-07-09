@@ -36,18 +36,53 @@ TEST_F(BitmaskTest, SizeConstructorWithDefaults) {
   EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
   EXPECT_EQ(size, bitmask->size());
   EXPECT_NE(nullptr, bitmask->data());
+  // TODO Check contents of device memory
 }
 
-// TEST_F(BitmaskTest, CopyConstructor){
-//  cudf::size_type size{100};
-//  EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
-//  cudf::bitmask copy{*bitmask};
-//}
+TEST_F(BitmaskTest, SizeConstructorAllOn) {
+  cudf::size_type size{100};
+  EXPECT_NO_THROW(
+      bitmask = std::make_unique<cudf::bitmask>(size, cudf::bit_state::ON));
+  EXPECT_EQ(size, bitmask->size());
+  EXPECT_NE(nullptr, bitmask->data());
+  // TODO Check contents of device memory
+}
+
+TEST_F(BitmaskTest, SizeConstructorAllOff) {
+  cudf::size_type size{100};
+  EXPECT_NO_THROW(
+      bitmask = std::make_unique<cudf::bitmask>(size, cudf::bit_state::OFF));
+  EXPECT_EQ(size, bitmask->size());
+  EXPECT_NE(nullptr, bitmask->data());
+  // TODO Check contents of device memory
+}
+
+TEST_F(BitmaskTest, CopyConstructor) {
+  cudf::size_type size{100};
+  EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
+
+  std::unique_ptr<cudf::bitmask> copy;
+  EXPECT_NO_THROW(copy = std::make_unique<cudf::bitmask>(*bitmask));
+
+  EXPECT_EQ(bitmask->size(), copy->size());
+  EXPECT_NE(nullptr, copy->data());
+  EXPECT_NE(bitmask->data(), copy->data());
+  // TODO Ensure contents of device memory are equal
+}
 
 TEST_F(BitmaskTest, MoveConstructor) {
   cudf::size_type size{100};
   EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
-  cudf::bitmask copy{std::move(*bitmask)};
+
+  auto original_data = bitmask->data();
+  auto original_size = bitmask->size();
+
+  std::unique_ptr<cudf::bitmask> move;
+  EXPECT_NO_THROW(move = std::make_unique<cudf::bitmask>(std::move(*bitmask)));
+  EXPECT_EQ(original_data, move->data());
+  EXPECT_EQ(original_size, move->size());
+  EXPECT_EQ(nullptr, bitmask->data());
+  EXPECT_EQ(0, bitmask->size());
 }
 
 TEST_F(BitmaskTest, TestViews) {

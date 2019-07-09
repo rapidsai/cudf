@@ -51,12 +51,14 @@ enum bit_state { ON, OFF };
  *---------------------------------------------------------------------------**/
 class bitmask {
  public:
-  bitmask() = default;
   ~bitmask() = default;
-  bitmask(bitmask const& other) = default;
-  bitmask(bitmask&& other) = default;
   bitmask& operator=(bitmask const& other) = delete;
   bitmask& operator=(bitmask&& other) = delete;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new, empty bitmask
+   *---------------------------------------------------------------------------**/
+  bitmask() = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask with a sufficiently sized device memory
@@ -74,6 +76,21 @@ class bitmask {
   explicit bitmask(
       size_type size, bit_state initial_state = ON, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new bitmask by copying from another bitmask.
+   *
+   * @param other The bitmask to copy from
+   *---------------------------------------------------------------------------**/
+  bitmask(bitmask const& other);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new bitmask by moving from another bitmask.
+   *
+   * @param other The bitmask whose contents will be moved into the newly
+   * constructed bitmas
+   *---------------------------------------------------------------------------**/
+  bitmask(bitmask&& other);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by copying from an existing device_buffer.
