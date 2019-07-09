@@ -199,6 +199,12 @@ table reader::Impl::read(int skip_rows, int num_rows) {
       auto decomp_block_data = decompress_data(block_data);
       block_data = std::move(decomp_block_data);
     }
+    else {
+      auto dst_ofs = md_->block_list[0].offset;
+      for (size_t i = 0; i < md_->block_list.size(); i++) {
+        md_->block_list[i].offset -= dst_ofs;
+      }
+    }
 
     size_t total_dictionary_entries = 0;
     size_t dictionary_data_size = 0;
@@ -211,6 +217,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
             columns[i]->data, 0,
             columns[i]->size * sizeof(std::pair<const char *, size_t>)));
       }
+      CUDA_TRY(cudaMemsetAsync(columns[i]->valid, -1, gdf_valid_allocation_size(columns[i]->size)));
 
       auto col_idx = selected_cols_[i].first;
       auto &col_schema = md_->schema[md_->columns[col_idx].schema_data_idx];
@@ -220,6 +227,26 @@ table reader::Impl::read(int skip_rows, int num_rows) {
       for (const auto &sym : col_schema.symbols) {
         dictionary_data_size += sym.length();
       }
+    }
+
+    hostdevice_vector<uint8_t> global_dictionary(total_dictionary_entries * sizeof(gpu::nvstrdesc_s) + dictionary_data_size);
+    if (total_dictionary_entries > 0) {
+      size_t dict_pos = total_dictionary_entries * sizeof(gpu::nvstrdesc_s);
+      for (size_t i = 0; i < columns.size(); ++i) {
+        auto col_idx = selected_cols_[i].first;
+        auto &col_schema = md_->schema[md_->columns[col_idx].schema_data_idx];
+        gpu::nvstrdesc_s *index = &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr() + dict_pos))[dict[i].first];
+        for (size_t j = 0; j < dict[i].second; j++) {
+          size_t len = col_schema.symbols[j].length();
+          char *ptr = reinterpret_cast<char *>(global_dictionary.device_ptr() + dict_pos);
+          index[j].ptr = ptr;
+          index[j].count = len;
+          memcpy(global_dictionary.host_ptr() + dict_pos, col_schema.symbols[j].c_str(), len);
+          dict_pos += len;
+        }
+      }
+      CUDA_TRY(cudaMemcpyAsync(global_dictionary.device_ptr(), global_dictionary.host_ptr(),
+               global_dictionary.memory_size(), cudaMemcpyHostToDevice, 0));
     }
 
     //TODO: `decode_data(block_data, columns)` to write out columns
