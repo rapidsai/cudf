@@ -51,7 +51,7 @@ enum unary_op{
  *
  * @returns gdf_column Result of the operation
  */
-gdf_column gdf_unaryop(gdf_column& input, unary_op op);
+gdf_column gdf_unaryop(gdf_column const& input, unary_op op);
 
 
 /**
@@ -67,7 +67,7 @@ gdf_column gdf_unaryop(gdf_column& input, unary_op op);
  *
  * @returns gdf_column Result of the cast operation
  */
-gdf_column col_cast(gdf_column& input, gdf_dtype out_type,
+gdf_column col_cast(gdf_column const& input, gdf_dtype out_type,
                     gdf_dtype_extra_info out_info = gdf_dtype_extra_info{});
 
 

@@ -45,7 +45,7 @@ void gpu_op_kernel(const T *data, gdf_size_type size,
 template<typename T, typename Tout, typename F>
 struct Launcher {
     static
-    gdf_error launch(gdf_column *input, gdf_column *output) {
+    gdf_error launch(gdf_column const* input, gdf_column *output) {
 
         // Return immediately for empty inputs
         if((0==input->size))
