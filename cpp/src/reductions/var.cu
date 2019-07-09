@@ -17,7 +17,7 @@
 // The translation unit for reduction `variance`
 
 #include "reduction_functions.cuh"
-#include "reduction_dispatcher_multistep.cuh"
+#include "compound.cuh"
 
 
 // @param[in] ddof Delta Degrees of Freedom used for `std`, `var`.
@@ -25,8 +25,8 @@
 
 gdf_scalar cudf::reduction::variance(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
 {
-    using dispacher = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::variance>;
-    return cudf::type_dispatcher(col.dtype, dispacher(), col, output_dtype, ddof, stream);
+    using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::variance>;
+    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, ddof, stream);
 }
 
 

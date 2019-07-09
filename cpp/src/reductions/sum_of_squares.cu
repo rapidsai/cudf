@@ -16,12 +16,12 @@
 // The translation unit for reduction `sum of squares`
 
 #include "reduction_functions.cuh"
-#include "reduction_dispatcher.cuh"
+#include "simple.cuh"
 
 gdf_scalar cudf::reduction::sum_of_squares(gdf_column const& col, gdf_dtype const output_dtype, cudaStream_t stream)
 {
-    using dispacher = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::sum_of_squares>;
-    return cudf::type_dispatcher(col.dtype, dispacher(), col, output_dtype, stream);
+    using reducer = cudf::reduction::simple::element_type_dispatcher<cudf::reduction::op::sum_of_squares>;
+    return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, stream);
 }
 
 
