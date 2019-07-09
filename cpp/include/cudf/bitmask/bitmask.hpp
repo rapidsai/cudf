@@ -140,6 +140,20 @@ class bitmask {
   size_type size() const noexcept { return _size; }
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns raw pointer to the underlying device memory
+   *---------------------------------------------------------------------------**/
+  bitmask_type* data() noexcept {
+    return static_cast<bitmask_type*>(_data->data());
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns raw pointer to the underlying device memory
+   *---------------------------------------------------------------------------**/
+  bitmask_type const* data() const noexcept {
+    return static_cast<bitmask_type const*>(_data->data());
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Constructs an immutable, zero-copy view of the bitmask
    *
    * @return bitmask_view The view of the bitmask data
@@ -203,7 +217,7 @@ class bitmask {
   }
 
  private:
-  std::unique_ptr<rmm::device_buffer> _data{};
+  std::unique_ptr<rmm::device_buffer> _data{new rmm::device_buffer{}};
   size_type _size{};
 };
 
