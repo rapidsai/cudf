@@ -30,11 +30,14 @@ device_memory_resource* get_default_resource();
 }  // namespace rmm
 
 namespace cudf {
+
+enum bit_state { ON, OFF };
+
 /**---------------------------------------------------------------------------*
  * @brief A memory owning bitmask class.
  *
  *  A `bitmask` is a contiguous set of `size` bits in device memory. The bits in
- * the range `[0, size)` are the "represented bits". Bits outside this range are
+ * the range `[0, size)` are the "constituent bits". Bits outside this range are
  * undefined.
  *
  * The `bitmask` uses LSB ordering, e.g., `bit_index` 0 refers to the
@@ -62,12 +65,14 @@ class bitmask {
    * @note Bits outside the range [0,size) are undefined.
    *
    * @param size[in] The minimum number of bits in the bitmask
+   * @param initial_state[in] optional, the initial state for all of the
+   * constituent bits
    * @param stream[in] optional, CUDA stream used for memory allocation/copy
    * @param mr[in] optional, the `device_memory_resource` to use for device
    * memory allocation
    *---------------------------------------------------------------------------**/
   explicit bitmask(
-      size_type size, cudaStream_t stream = 0,
+      size_type size, bit_state initial_state = ON, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
@@ -81,7 +86,7 @@ class bitmask {
    * @note Uses `other`'s stream and device memory resource for memory
    * allocation.
    *
-   * @param size The number of bits represented by the bitmask
+   * @param size The number of constiuent bits
    * @param other The `device_buffer` to copy from
    * @param stream optional, CUDA stream to use for memory allocation/copy
    * @param mr optional, the device memory resource to use for allocation of new
@@ -97,7 +102,7 @@ class bitmask {
    * Requires that `buffer` contain sufficient storage to represent `size`
    *bits.
    *
-   * @param size The number of bits represented by the bitmask
+   * @param size The number of constiuent bits 
    * @param other The `device_buffer` to move from
    *---------------------------------------------------------------------------**/
   bitmask(size_type size, rmm::device_buffer&& other);
@@ -129,7 +134,7 @@ class bitmask {
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the number of bits represented by the bitmask.
+   * @brief Returns the number of constituent bits
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return _size; }
 

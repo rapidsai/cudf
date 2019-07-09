@@ -41,7 +41,7 @@ constexpr std::size_t bitmask_allocation_size(size_type number_of_bits) {
 }  // namespace
 
 // Allocate new device memory
-bitmask::bitmask(size_type size, cudaStream_t stream,
+bitmask::bitmask(size_type size, bit_state initial_state, cudaStream_t stream,
                  rmm::mr::device_memory_resource* mr)
     : _size(size) {
   CUDF_EXPECTS(size >= 0, "Invalid size.");
@@ -49,6 +49,10 @@ bitmask::bitmask(size_type size, cudaStream_t stream,
 
   _data = std::make_unique<rmm::device_buffer>(bitmask_allocation_size(_size),
                                                stream, mr);
+
+  auto fill_value = (initial_state == ON) ? 0xFF : 0x00;
+  CUDA_TRY(
+      cudaMemset(_data->data(), fill_value, bitmask_allocation_size(_size)));
 }
 
 // Copy from existing buffer
