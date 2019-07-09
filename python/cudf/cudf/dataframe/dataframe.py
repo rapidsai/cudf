@@ -288,6 +288,11 @@ class DataFrame(object):
         elif isinstance(
             arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
         ):
+            if len(arg) == 0:
+                df = DataFrame()
+                df._size = len(self.index)
+                df._index = self.index
+                return df
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -3422,14 +3427,21 @@ class DataFrame(object):
         header=True,
         index=True,
         line_terminator="\n",
-        chunksize=None
+        chunksize=None,
     ):
         """{docstring}"""
         import cudf.io.csv as csv
 
         return csv.to_csv(
-            self, path, sep, na_rep, columns, header, index, line_terminator,
-            chunksize
+            self,
+            path,
+            sep,
+            na_rep,
+            columns,
+            header,
+            index,
+            line_terminator,
+            chunksize,
         )
 
 

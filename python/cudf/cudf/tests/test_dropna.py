@@ -51,13 +51,35 @@ def test_dropna_series(data, nulls):
         {"a": [None, 1, None], "b": [None, 2, None]},
         {"a": [None, None, 1], "b": [1, 2, None]},
         {"a": ["d", "e", "f"], "b": ["a", None, "c"]},
-        {"a": [None, None, None], "b": [None, 1, 2]},
-        {"a": [None, None, None]},
     ],
 )
 @pytest.mark.parametrize("how", ["all", "any"])
-def test_dropna_dataframe(data, how):
+@pytest.mark.parametrize("axis", [0, 1])
+def test_dropna_dataframe(data, how, axis):
     pdf = pd.DataFrame(data)
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(pdf.dropna(how=how), gdf.dropna(how=how))
+    assert_eq(pdf.dropna(axis=axis, how=how), gdf.dropna(axis=axis, how=how))
+
+
+@pytest.mark.parametrize("how", ["all", "any"])
+@pytest.mark.parametrize(
+    "data",
+    [
+        {
+            "a": cudf.Series([None, None, None], dtype="float64"),
+            "b": cudf.Series([1, 2, None]),
+        },
+        {
+            "a": cudf.Series([np.nan, np.nan, np.nan], dtype="float64"),
+            "b": cudf.Series([1, 2, None]),
+        },
+        cudf.Series([None, None, None], dtype="object"),
+    ],
+)
+@pytest.mark.parametrize("axis", [0, 1])
+def test_dropna_with_all_nulls(how, data, axis):
+    gdf = cudf.DataFrame({"a": data})
+    pdf = gdf.to_pandas()
+
+    assert_eq(pdf.dropna(axis=axis, how=how), gdf.dropna(axis=axis, how=how))
