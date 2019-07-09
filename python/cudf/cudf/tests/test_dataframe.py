@@ -2666,12 +2666,14 @@ def test_column_assignment():
 
 def test_select_dtype():
     gdf = gd.datasets.randomdata(
-        nrows=20, dtypes={"a": "category", "b": int, "c": float}
+        nrows=20, dtypes={"a": "category", "b": int, "c": float, "d": str}
     )
 
     assert_eq(gdf[["c"]], gdf.select_dtypes("float64"))
     assert_eq(gdf[["c"]], gdf.select_dtypes(np.float64))
     assert_eq(gdf[["c"]], gdf.select_dtypes(include=["float64"]))
+    assert_eq(gdf[["a", "b", "d"]],
+              gdf.select_dtypes(include=['object', 'int', 'category']))
 
     assert_eq(gdf[["b", "c"]], gdf.select_dtypes(include=["int64", "float64"]))
     assert_eq(gdf[["b", "c"]], gdf.select_dtypes(include=np.number))
@@ -2680,13 +2682,19 @@ def test_select_dtype():
     )
 
     assert_eq(gdf[["a"]], gdf.select_dtypes(include=["category"]))
-    assert_eq(gdf[["a"]], gdf.select_dtypes(exclude=np.number))
+    assert_eq(gdf[["a", "d"]], gdf.select_dtypes(exclude=np.number))
 
     with pytest.raises(TypeError):
         assert_eq(gdf[["a"]], gdf.select_dtypes(include=["Foo"]))
 
     with pytest.raises(ValueError):
         gdf.select_dtypes(exclude=np.number, include=np.number)
+
+    gdf = DataFrame({'A': [3, 4, 5],
+                     'C': [1, 2, 3],
+                     'D': ['a', 'b', 'c']})
+    assert_eq(gdf[["A", "C", "D"]],
+              gdf.select_dtypes(include=['object', 'int', 'category']))
 
 
 def test_select_dtype_datetime():

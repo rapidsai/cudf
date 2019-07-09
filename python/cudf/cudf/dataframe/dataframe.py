@@ -3271,8 +3271,7 @@ class DataFrame(object):
                 # category handling
                 if i_dtype is cat_type:
                     include_subtypes.add(i_dtype)
-                    break
-                if issubclass(dtype.type, i_dtype):
+                elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
 
         # exclude all subtypes
@@ -3282,8 +3281,7 @@ class DataFrame(object):
                 # category handling
                 if e_dtype is cat_type:
                     exclude_subtypes.add(e_dtype)
-                    break
-                if issubclass(dtype.type, e_dtype):
+                elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
         include_all = set(
