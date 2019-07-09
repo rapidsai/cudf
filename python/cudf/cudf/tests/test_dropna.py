@@ -106,3 +106,43 @@ def test_dropna_nan_as_null():
     got = df.dropna()
     expected = df[:2]
     assert_eq(expected, got)
+
+
+@pytest.mark.parametrize(
+    "data,subset",
+    [
+        ({"a": [1, None], "b": [1, 2]}, ["a"]),
+        ({"a": [1, None], "b": [1, 2]}, ["b"]),
+        ({"a": [1, None], "b": [1, 2]}, []),
+        ({"a": [1, 2], "b": [1, 2]}, ["b"]),
+        ({"a": [1, 2, None], "b": [1, None, 2]}, ["a"]),
+        ({"a": [1, 2, None], "b": [1, None, 2]}, ["b"]),
+        ({"a": [1, 2, None], "b": [1, None, 2]}, ["a", "b"]),
+    ],
+)
+def test_dropna_subset_rows(data, subset):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.dropna(subset=subset), gdf.dropna(subset=subset))
+
+
+@pytest.mark.parametrize(
+    "data, subset",
+    [
+        ({"a": [1, None], "b": [1, 2]}, [0]),
+        ({"a": [1, None], "b": [1, 2]}, [1]),
+        ({"a": [1, None], "b": [1, 2]}, []),
+        ({"a": [1, 2], "b": [1, 2]}, [0]),
+        ({"a": [1, 2], "b": [None, 2], "c": [3, None]}, [0]),
+        ({"a": [1, 2], "b": [None, 2], "c": [3, None]}, [1]),
+        ({"a": [1, 2], "b": [None, 2], "c": [3, None]}, [0, 1]),
+    ],
+)
+def test_dropna_subset_cols(data, subset):
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.dropna(axis=1, subset=subset), gdf.dropna(axis=1, subset=subset)
+    )

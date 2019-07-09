@@ -1338,7 +1338,7 @@ class DataFrame(object):
             outdf = outdf.set_index(new_index)
             return outdf
 
-    def dropna(self, axis=0, how="any"):
+    def dropna(self, axis=0, how="any", subset=None):
         """
         Drops rows (or columns) containing nulls from a Column.
 
@@ -1352,13 +1352,17 @@ class DataFrame(object):
             any (default) drops rows (or columns) containing at least
             one null value. all drops only rows (or columns) containing
             *all* null values.
+        subset : list, optional
+            List of columns to consider when dropping rows (all columns
+            are considered by default). Alternatively, when dropping
+            columns, subset is a list of rows to consider.
         """
         if axis == 0:
-            return self._drop_na_rows(how=how)
+            return self._drop_na_rows(how=how, subset=subset)
         else:
-            return self._drop_na_columns(how=how)
+            return self._drop_na_columns(how=how, subset=subset)
 
-    def _drop_na_rows(self, how="any"):
+    def _drop_na_rows(self, how="any", subset=None):
         """
         Drop rows containing nulls.
         """
@@ -1372,8 +1376,18 @@ class DataFrame(object):
 
         input_cols = index_cols + data_cols
 
+        if subset is None:
+            subset_indices = range(len(index_cols), len(input_cols))
+        else:
+            subset_indices = []
+            # TODO: there are better ways to do this
+            for i, col in enumerate(self.columns):
+                for subset_col in subset:
+                    if col == subset_col:
+                        subset_indices.append(i + len(index_cols))
+
         result_cols = cpp_drop_nulls(
-            input_cols, how=how, subset=range(1, len(input_cols))
+            input_cols, how=how, subset=subset_indices
         )
 
         result_index_cols, result_data_cols = (
@@ -1399,14 +1413,20 @@ class DataFrame(object):
         Drop columns containing nulls
         """
         out_cols = []
+
+        if subset is None:
+            df = self
+        else:
+            df = self.take(subset)
         for col in self.columns:
             if how == "any":
-                if self[col].null_count > 0:
+                if df[col].null_count > 0:
                     continue
             else:
-                if self[col].null_count == len(self):
+                if df[col].null_count == len(df):
                     continue
             out_cols.append(col)
+
         return self[out_cols]
 
     def pop(self, item):
