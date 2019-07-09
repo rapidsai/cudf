@@ -117,7 +117,6 @@ class column {
    *
    * @param other The other column to copy
    *---------------------------------------------------------------------------**/
-  // This won't work because of the unique_ptr member
   column(column const& other) = default;
 
   /**---------------------------------------------------------------------------*

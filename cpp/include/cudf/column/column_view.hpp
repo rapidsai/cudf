@@ -24,20 +24,10 @@ struct column_view {
               bitmask_view bitmask)
       : _data{data}, _type{type}, _size{size}, _bitmask{bitmask} {}
 
-  template <typename T>
-  T const* typed_data() const noexcept {
+  template <typename T = void>
+  T const* data() const noexcept {
     return static_cast<T const*>(_data);
   }
-
-  void const* data() const noexcept { return _data; }
-
-  //__device__ bool is_valid(size_type i) const noexcept {
-  //  return _bitmask.bit_is_set(i);
-  //}
-
-  //__device__ bool is_null(size_type i) const noexcept {
-  //  return not is_valid(i);
-  //}
 
   bool nullable() const noexcept { return nullptr != _bitmask.data(); }
 
@@ -53,7 +43,9 @@ struct column_view {
 
   bitmask_view const bitmask() const noexcept { return _bitmask; }
 
-  column_view const* other() const noexcept { return _other; }
+  column_view child(size_type child_index) const noexcept {
+    return children[child_index];
+  }
 
  private:
   void const* _data{nullptr};
@@ -61,6 +53,6 @@ struct column_view {
   cudf::size_type _size{0};
   bitmask_view _bitmask;
   // cudf::size_type _null_count{0};
-  column_view** children{nullptr};
+  column_view* children{nullptr};
 };
 }  // namespace cudf
