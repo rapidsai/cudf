@@ -359,10 +359,18 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
 
     // 4. Scatter the output data and valid mask
     for (int col = 0; col < input.num_columns(); col++) {
-      cudf::type_dispatcher(output.get_column(col)->dtype,
+      gdf_column *out = output.get_column(col);
+      gdf_column const *in = input.get_column(col);
+      cudf::type_dispatcher(out->dtype,
                             scatter_functor<Filter, block_size, per_thread>{},
-                            *output.get_column(col), *input.get_column(col), 
-                            block_offsets, filter, stream);
+                            *out, *in, block_offsets, filter, stream);
+
+      if (out->dtype == GDF_STRING_CATEGORY) {
+	      CUDF_EXPECTS(GDF_SUCCESS ==
+	        nvcategory_gather(out,
+	                          static_cast<NVCategory *>(in->dtype_info.category)),
+	        "could not set nvcategory");
+      }
     }
   }
   else {
@@ -371,9 +379,6 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   
   CHECK_STREAM(stream);
 
-  gdf_error err = nvcategory_gather_table(input, output);
-  CHECK_STREAM(0);
-  CUDF_EXPECTS(err == GDF_SUCCESS, "Error updating nvcategory in copy_if");
   return output;
 }
 
