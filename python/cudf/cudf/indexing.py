@@ -180,7 +180,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             if isinstance(arg[0], slice):
                 start = arg[0].start
                 if start is None:
-                    start = 0
+                    start = self._df.self._df.index[0]
                 df.index = as_index(start)
             else:
                 df.index = as_index(arg[0])
