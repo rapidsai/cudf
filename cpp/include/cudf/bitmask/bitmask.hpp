@@ -97,12 +97,13 @@ class bitmask {
   /**---------------------------------------------------------------------------*
    * @brief Construct a new bitmask by moving from an existing device_buffer.
    *
-   * Moves the contents from a `device_buffer` to use a bitmask.
+   * Moves the contents from a `device_buffer` to use as the contents of a
+   * bitmask.
    *
    * Requires that `buffer` contain sufficient storage to represent `size`
-   *bits.
+   * bits.
    *
-   * @param size The number of constiuent bits 
+   * @param size The number of constiuent bits
    * @param other The `device_buffer` to move from
    *---------------------------------------------------------------------------**/
   bitmask(size_type size, rmm::device_buffer&& other);

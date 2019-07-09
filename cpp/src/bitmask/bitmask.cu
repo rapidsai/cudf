@@ -72,26 +72,44 @@ bitmask::bitmask(size_type size, rmm::device_buffer&& other) : _size{size} {
   _data = std::make_unique<rmm::device_buffer>(other);
 }
 
-__global__ void copy_offset_bitmask(mutable_bitmask_device_view output,
-                                    bitmask_device_view input, size_type offset,
-                                    size_type size) {
+namespace {
+
+/**---------------------------------------------------------------------------*
+ * @brief Copies the bits starting at the specified offset from a source
+ * bitmask into the destination bitmask.
+ *
+ * Bit `i` in `destination` will be equal to bit `i + offset` from `source`.
+ *
+ * @param destination The mask to copy into
+ * @param source The mask to copy from
+ * @param bit_offset The offset into `source` from which to begin the copy
+ * @param number_of_bits The number of bits to copy
+ *---------------------------------------------------------------------------**/
+__global__ void copy_offset_bitmask(mutable_bitmask_device_view destination,
+                                    bitmask_device_view source,
+                                    size_type bit_offset,
+                                    size_type number_of_bits) {
   constexpr size_type warp_size{32};
-  size_type output_index = threadIdx.x + blockIdx.x * blockDim.x;
+  size_type destination_index = threadIdx.x + blockIdx.x * blockDim.x;
 
-  auto active_mask = __ballot_sync(0xFFFF'FFFF, output_index < size);
+  auto active_mask =
+      __ballot_sync(0xFFFF'FFFF, destination_index < number_of_bits);
 
-  while (output_index < size) {
-    auto new_mask_element =
-        __ballot_sync(active_mask, input.bit_is_set(offset + output_index));
+  while (destination_index < number_of_bits) {
+    bitmask_type const new_mask_element = __ballot_sync(
+        active_mask, source.bit_is_set(bit_offset + destination_index));
 
     if (threadIdx.x % warp_size == 0) {
-      output.set_element(element_index(output_index), new_mask_element);
+      destination.set_element(element_index(destination_index),
+                              new_mask_element);
     }
 
-    output_index += blockDim.x * gridDim.x;
-    active_mask = __ballot_sync(active_mask, output_index < size);
+    destination_index += blockDim.x * gridDim.x;
+    active_mask =
+        __ballot_sync(active_mask, destination_index < number_of_bits);
   }
 }
+}  // namespace
 
 // Copy from a view
 bitmask::bitmask(bitmask_view source_view, cudaStream_t stream,
@@ -102,6 +120,7 @@ bitmask::bitmask(bitmask_view source_view, cudaStream_t stream,
     _data = std::make_unique<rmm::device_buffer>(
         static_cast<void const*>(source_view.data()), _size);
   } else {
+    // If there's a non-zero offset, need to handle offset bitmask elements
     _data = std::make_unique<rmm::device_buffer>(bitmask_allocation_size(_size),
                                                  stream, mr);
 
