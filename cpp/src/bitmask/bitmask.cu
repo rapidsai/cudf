@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/bitmask/bitmask.hpp>
-#include <cudf/bitmask/bitmask_device_view.hpp>
+#include <cudf/bitmask/bitmask_device_view.cuh>
 #include <cudf/bitmask/bitmask_view.hpp>
 #include <cudf/types.hpp>
 #include <utilities/cuda_utils.hpp>
