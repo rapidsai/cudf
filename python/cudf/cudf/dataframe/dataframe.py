@@ -970,10 +970,9 @@ class DataFrame(object):
             else:
                 dtype = dtypes.get(name, np.float64)
                 col = original_cols.get(name, Series(dtype=dtype))._column
-                col = columnops.column_empty_like(col,
-                                                  dtype=dtype,
-                                                  masked=True,
-                                                  newsize=length)
+                col = columnops.column_empty_like(
+                    col, dtype=dtype, masked=True, newsize=length
+                )
                 cols[name] = Series(data=col, index=idx)
 
         return DataFrame(cols, idx)
@@ -3350,12 +3349,14 @@ class DataFrame(object):
         header=True,
         index=True,
         line_terminator="\n",
+        chunksize=None
     ):
         """{docstring}"""
         import cudf.io.csv as csv
 
         return csv.to_csv(
-            self, path, sep, na_rep, columns, header, index, line_terminator
+            self, path, sep, na_rep, columns, header, index, line_terminator,
+            chunksize
         )
 
 
