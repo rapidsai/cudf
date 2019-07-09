@@ -41,11 +41,21 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
   const gdf_size_type num_source_rows = source_table->num_rows();
   const gdf_size_type num_destination_rows = destination_table->num_rows();
   // Turn the scatter_map[] into a gather_map[] and then call gather(...).
-  // We are initializing the result gather_map with `num_destination_rows`
+  // We are initializing the result gather_map with `num_source_rows`
   // so if at the end the value is not modified we know the original 
   // scatter map does not map to this row, and we should keep whatever is 
   // there originally
-  rmm::device_vector<gdf_index_type> v_gather_map(num_destination_rows, num_destination_rows);
+  
+  CUDF_EXPECTS(nullptr != source_table, "source table is null");
+  CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
+  
+  if (0 == source_table->num_rows()) {
+    return;
+  }
+  
+  CUDF_EXPECTS(nullptr != scatter_map, "scatter_map is null");
+  
+  rmm::device_vector<gdf_index_type> v_gather_map(num_destination_rows, -1);
  
   constexpr int block_size = 256;
 
