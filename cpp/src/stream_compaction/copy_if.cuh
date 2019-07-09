@@ -348,12 +348,14 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   gdf_size_type output_size = 
     get_output_size(block_counts, block_offsets, grid.num_blocks, stream);
 
+  table output;
+
   if (output_size == input.num_rows()) {
-    return cudf::copy(input);
+    output = cudf::copy(input);
   }
   else if (output_size > 0) {
     // Allocate/initialize output columns
-    table output = cudf::allocate_like(input, output_size, true, stream);
+    output = cudf::allocate_like(input, output_size, true, stream);
 
     // 4. Scatter the output data and valid mask
     for (int col = 0; col < input.num_columns(); col++) {
@@ -362,12 +364,17 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
                             *output.get_column(col), *input.get_column(col), 
                             block_offsets, filter, stream);
     }
-
-    CHECK_STREAM(stream);
-
-    return output;
   }
-  return empty_like(input);
+  else {
+    output = empty_like(input);
+  }
+  
+  CHECK_STREAM(stream);
+
+  gdf_error err = nvcategory_gather_table(input, output);
+  CHECK_STREAM(0);
+  CUDF_EXPECTS(err == GDF_SUCCESS, "Error updating nvcategory in copy_if");
+  return output;
 }
 
 /*
@@ -395,17 +402,7 @@ gdf_column copy_if(gdf_column const &input, Filter filter,
   cols[0] = const_cast<gdf_column*>(&input);
   const table input_table(cols, 1);
   table output_table = copy_if(input_table, filter, stream);
-  gdf_column * out = output_table.get_column(0);
-    
-  // synchronize nvcategory after filtering
-  if (out->dtype == GDF_STRING_CATEGORY) {
-    CUDF_EXPECTS(
-    GDF_SUCCESS ==
-      nvcategory_gather(out,
-                        static_cast<NVCategory *>(input.dtype_info.category)),
-      "could not set nvcategory");
-  }
-  return *out;
+  return *output_table.get_column(0);
 }
 
 } // namespace detail

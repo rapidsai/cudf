@@ -244,6 +244,8 @@ TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
 
 struct ApplyBooleanMaskTableTest : GdfTest {};
 
+static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factory;
+
 void BooleanMaskTableTest(cudf::table const &source,
                           cudf::test::column_wrapper<cudf::bool8> const &mask,
                           cudf::table &expected)
@@ -284,6 +286,10 @@ TEST_F(ApplyBooleanMaskTableTest, Identity)
       column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
+    string_factory.make(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; });
 
   cudf::test::column_wrapper<cudf::bool8> mask(
       column_size,
@@ -294,8 +300,9 @@ TEST_F(ApplyBooleanMaskTableTest, Identity)
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
-  cudf::table table_source(cols.data(), 3);
-  cudf::table table_expected(cols.data(), 3);
+  cols.push_back(string_column.get());
+  cudf::table table_source(cols);
+  cudf::table table_expected(cols);
 
   BooleanMaskTableTest(table_source, mask, table_expected);
 }
@@ -311,12 +318,17 @@ TEST_F(ApplyBooleanMaskTableTest, MaskAllNullOrFalse)
   cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
+    string_factory.make(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; });
     
   std::vector<gdf_column*> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
-  cudf::table table_source(cols.data(), 3);
+  cols.push_back(string_column.get());
+  cudf::table table_source(cols);
   cudf::table table_expected(0, column_dtypes(table_source), true, false);
 
   BooleanMaskTableTest(table_source, 
@@ -343,12 +355,17 @@ TEST_F(ApplyBooleanMaskTableTest, MaskEvensFalseOrNull)
   cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return row % 2 == 0; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
+    string_factory.make(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return row % 2 == 0; });
 
   std::vector<gdf_column*> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
-  cudf::table table_source(cols.data(), 3);
+  cols.push_back(string_column.get());
+  cudf::table table_source(cols);
 
   cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
       [](gdf_index_type row) { return 2 * row + 1;  },
@@ -359,12 +376,17 @@ TEST_F(ApplyBooleanMaskTableTest, MaskEvensFalseOrNull)
   cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
       [](gdf_index_type row) { return cudf::bool8{true};  },
       [](gdf_index_type row) { return false; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_expected = 
+    string_factory.make(column_size / 2,
+      [](gdf_index_type row) { return 2 * row + 1;  },
+      [](gdf_index_type row) { return false; });
   
   std::vector<gdf_column*> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
-  cudf::table table_expected(cols_expected.data(), 3);
+  cols_expected.push_back(string_expected.get());
+  cudf::table table_expected(cols_expected);
 
   BooleanMaskTableTest(table_source, 
     cudf::test::column_wrapper<cudf::bool8>(column_size,
@@ -392,12 +414,17 @@ TEST_F(ApplyBooleanMaskTableTest, NonalignedGap)
   cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
+    string_factory.make(column_size,
+      [](gdf_index_type row) { return row; },
+      [](gdf_index_type row) { return true; });
 
   std::vector<gdf_column*> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
-  cudf::table table_source(cols.data(), 3);
+  cols.push_back(string_column.get());
+  cudf::table table_source(cols);
 
   cudf::test::column_wrapper<int32_t> int_expected(column_size - (end - start),
       [](gdf_index_type row) { return (row < start) ? row : row + end - start; },
@@ -408,12 +435,17 @@ TEST_F(ApplyBooleanMaskTableTest, NonalignedGap)
   cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size - (end - start),
       [](gdf_index_type row) { return cudf::bool8{true}; },
       [&](gdf_index_type row) { return true; });
+  cudf::test::column_wrapper<cudf::nvstring_category> string_expected = 
+    string_factory.make(column_size - (end - start),
+      [](gdf_index_type row) { return (row < start) ? row : row + end - start; },
+      [&](gdf_index_type row) { return true; });
   
   std::vector<gdf_column*> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
-  cudf::table table_expected(cols_expected.data(), 3);
+  cols_expected.push_back(string_expected.get());
+  cudf::table table_expected(cols_expected);
 
   BooleanMaskTableTest(table_source, 
     cudf::test::column_wrapper<cudf::bool8>(column_size,
@@ -430,11 +462,15 @@ TEST_F(ApplyBooleanMaskTableTest, NoNullMask)
       [](gdf_index_type row) { return row; }, false);
   cudf::test::column_wrapper<cudf::bool8> bool_column(column_size,
       [](gdf_index_type row) { return cudf::bool8{true}; }, false);
+  cudf::test::column_wrapper<cudf::nvstring_category> string_column =
+    string_factory.make(column_size,
+      [](gdf_index_type row) { return row; });
 
   std::vector<gdf_column*> cols;
   cols.push_back(int_column.get());
   cols.push_back(float_column.get());
   cols.push_back(bool_column.get());
+  cols.push_back(string_column.get());
   cudf::table table_source(cols);
 
   cudf::test::column_wrapper<int32_t> int_expected(column_size / 2,
@@ -443,11 +479,15 @@ TEST_F(ApplyBooleanMaskTableTest, NoNullMask)
       [](gdf_index_type row) { return 2 * row + 1;  }, false);
   cudf::test::column_wrapper<cudf::bool8> bool_expected(column_size / 2,
       [](gdf_index_type row) { return cudf::bool8{true}; }, false);
+  cudf::test::column_wrapper<cudf::nvstring_category> string_expected =
+    string_factory.make(column_size / 2,
+      [](gdf_index_type row) { return 2 * row + 1; });
 
   std::vector<gdf_column*> cols_expected;
   cols_expected.push_back(int_expected.get());
   cols_expected.push_back(float_expected.get());
   cols_expected.push_back(bool_expected.get());
+  cols_expected.push_back(string_expected.get());
   cudf::table table_expected(cols_expected);
 
   BooleanMaskTableTest(table_source,
