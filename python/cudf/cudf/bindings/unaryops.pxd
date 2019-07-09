@@ -38,3 +38,7 @@ cdef extern from "unary.hpp" namespace "cudf" nogil:
         GDF_INVALID_UNARY
 
     cdef gdf_column gdf_unaryop(const gdf_column& input, unary_op op) except +
+
+    cdef gdf_column col_cast(const gdf_column& input, gdf_dtype out_type,
+                             gdf_dtype_extra_info out_info) except +
+
