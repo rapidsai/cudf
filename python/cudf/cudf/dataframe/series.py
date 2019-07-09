@@ -1041,18 +1041,15 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
-    def dropna(self, nan_as_null=False):
+    def dropna(self):
         """
         Return a Series with null values removed.
         """
-        sr = self
-        if nan_as_null:
-            sr = utils.convert_nans_to_nulls(sr)
         if self.null_count == 0:
-            return sr
-        data = sr._column.dropna()
-        index = sr.index.loc[~sr.isna()]
-        return sr._copy_construct(data=data, index=index)
+            return self
+        data = self._column.dropna()
+        index = self.index.loc[~self.isna()]
+        return self._copy_construct(data=data, index=index)
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1193,6 +1190,18 @@ class Series(object):
 
         mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
         return Series(mask, name=self.name, index=self.index)
+
+    def nans_to_nulls(self):
+        """
+        Convert nans (if any) to nulls
+        """
+        from cudf.utils.cudautils import mask_from_devary
+
+        if self.dtype.kind == "f":
+            sr = self.fillna(np.nan)
+            newmask = mask_from_devary(sr._column.data.mem)
+            return sr.set_mask(newmask)
+        return self
 
     def all(self, axis=0, skipna=True, level=None):
         """

@@ -306,26 +306,3 @@ def compare_and_get_name(a, b):
     elif b_has:
         return b.name
     return None
-
-
-def convert_nans_to_nulls(obj):
-    """
-    Convert nans to nulls in the provided object
-    """
-    from cudf.utils.cudautils import mask_from_devary
-
-    if isinstance(obj, cudf.Series) and obj.dtype.kind == "f":
-        obj = obj.fillna(np.nan)
-        newmask = mask_from_devary(obj._column.data.mem)
-        return obj.set_mask(newmask)
-    elif isinstance(obj, cudf.DataFrame):
-        df = obj.copy()
-        for col in df.columns:
-            df[col] = convert_nans_to_nulls(df[col])
-            return df
-    else:
-        raise TypeError(
-            "Cannot convert nans_to_nulls in object of type {}".format(
-                type(obj).__name__
-            )
-        )
