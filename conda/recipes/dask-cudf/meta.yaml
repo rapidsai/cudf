@@ -1,0 +1,39 @@
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
+
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
+{% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
+
+package:
+  name: dask-cudf
+  version: {{ version }}
+
+source:
+  path: ../../..
+
+build:
+  number: {{ git_revision_count }}
+  string: py{{ py_version }}_{{ git_revision_count }}
+
+requirements:
+  host:
+    - python
+    - cudf {{ version }}
+    - dask >=2.0.0
+    - distributed >=2.0.0
+  run:
+    - python
+    - cudf {{ version }}
+    - dask >=2.0.0
+    - distributed >=2.0.0
+test:
+  imports:
+    - dask_cudf
+
+about:
+  home: http://rapids.ai/
+  license: Apache-2.0
+  license_family: Apache
+  license_file: LICENSE
+  summary: dask-cudf library
