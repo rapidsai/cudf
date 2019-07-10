@@ -2725,6 +2725,18 @@ def test_select_dtype():
               gdf.select_dtypes(exclude=['object']))
     assert_eq(pdf.select_dtypes(include=['int'], exclude=['object']),
               gdf.select_dtypes(include=['int'], exclude=['object']))
+    with pytest.raises(ValueError):
+        pdf.select_dtypes()
+    with pytest.raises(ValueError):
+        gdf.select_dtypes()
+
+    gdf = gd.DataFrame({'a': gd.Series([], dtype='int'),
+                        'b': gd.Series([], dtype='str')})
+    pdf = gdf.to_pandas()
+    assert_eq(pdf.select_dtypes(exclude=['object']),
+              gdf.select_dtypes(exclude=['object']))
+    assert_eq(pdf.select_dtypes(include=['int'], exclude=['object']),
+              gdf.select_dtypes(include=['int'], exclude=['object']))
 
 
 def test_select_dtype_datetime():

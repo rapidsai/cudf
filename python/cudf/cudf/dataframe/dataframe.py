@@ -3212,6 +3212,11 @@ class DataFrame(object):
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
+
+        if not any(selection):
+            raise ValueError('at least one of include or exclude must be \
+                             nonempty')
+
         include, exclude = map(
             lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
