@@ -26,10 +26,9 @@
  *
  *---------------------------------------------------------------------------**/
 
-
 /**---------------------------------------------------------------------------*
- * @brief Forward declaration of cudaStream_t 
-*---------------------------------------------------------------------------**/
+ * @brief Forward declaration of cudaStream_t
+ *---------------------------------------------------------------------------**/
 using cudaStream_t = struct CUstream_st*;
 
 namespace bit_mask {
@@ -56,7 +55,10 @@ enum data_type {
   BOOL8,
   DATE32,
   DATE64,
-  TIMESTAMP,
+  TIMESTAMP_NS,
+  TIMESTAMP_US,
+  TIMESTAMP_MS,
+  TIMESTAMP_S,
   CATEGORY,
   STRING,
   STRING_CATEGORY
