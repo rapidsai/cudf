@@ -664,13 +664,9 @@ class Column(object):
 
         # TODO: Handle errors/missing keys correctly
         #       Not currently using `kind` argument.
-        try:
-            if side == 'left':
-                return self.find_first_value(label)
-            if side == 'right':
-                return (self.find_last_value(label) + 1)
-        except ValueError:
-            return 0
-
+        if side == 'left':
+            return self.find_first_value(label)
+        if side == 'right':
+            return (self.find_last_value(label) + 1)
 
 register_distributed_serializer(Column)

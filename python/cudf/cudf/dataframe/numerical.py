@@ -369,8 +369,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         found = cudautils.find_first(self.data.mem, value)
         if found == -1:
-            if self.is_monotonic and value > self.max():
-                return len(self)
             raise ValueError("value not found")
         return found
 
@@ -380,8 +378,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         found = cudautils.find_last(self.data.mem, value)
         if found == -1:
-            if self.is_monotonic and value > self.max():
-                return len(self)
             raise ValueError("value not found")
         return found
 
