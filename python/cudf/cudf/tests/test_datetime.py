@@ -39,6 +39,20 @@ def test_series(data):
     np.testing.assert_equal(np.array(pd_data), np.array(gdf_data))
 
 
+def test_datetime_series_binops():
+    pd_data_1 = pd.Series(pd.date_range("20010101", "20020215", freq="400h", name="times"))
+    pd_data_2 = pd.Series(pd.date_range("20010101", "20020215", freq="401h", name="times"))
+    gdf_data_1 = Series(pd_data_1)
+    gdf_data_2 = Series(pd_data_2)
+    np.testing.assert_equal(np.array(pd_data_1), np.array(gdf_data_1))
+    np.testing.assert_equal(np.array(pd_data_2), np.array(gdf_data_2))
+    assert_eq(pd_data_1 < pd_data_2, gdf_data_1 < gdf_data_2)
+    assert_eq(pd_data_1 > pd_data_2, gdf_data_1 > gdf_data_2)
+    assert_eq(pd_data_1 == pd_data_2, gdf_data_1 == gdf_data_2)
+    assert_eq(pd_data_1 <= pd_data_2, gdf_data_1 <= gdf_data_2)
+    assert_eq(pd_data_1 >= pd_data_2, gdf_data_1 >= gdf_data_2)
+
+
 @pytest.mark.parametrize("data", [data1(), data2()])
 def test_dt_ops(data):
     pd_data = pd.Series(data.copy())
@@ -144,7 +158,7 @@ def test_issue_165():
 )
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
-    np_data = np.array(pd_data).astype("datetime64[ms]")
+    np_data = np.array(pd_data)
     gdf_data = Series(pd_data)
 
     np_casted = np_data.astype(dtype)
@@ -170,13 +184,13 @@ def test_typecast_to_datetime(data, dtype):
 @pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 def test_to_from_pandas_nulls(data, nulls):
-    pd_data = pd.Series(data.copy().astype("datetime64[ms]"))
+    pd_data = pd.Series(data.copy())
     if nulls == "some":
         # Fill half the values with NaT
-        pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat")
+        pd_data[list(range(0, len(pd_data), 2))] = np.datetime64("nat", "ns")
     elif nulls == "all":
         # Fill all the values with NaT
-        pd_data[:] = np.datetime64("nat")
+        pd_data[:] = np.datetime64("nat", "ns")
     gdf_data = Series.from_pandas(pd_data)
 
     expect = pd_data
