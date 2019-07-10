@@ -40,7 +40,7 @@ def test_array_func_cudf_series(np_ar, func):
 
 
 # TODO: Make it future proof
-# by adding check if these functions were implementedy
+# by adding check if these functions were implemented
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "np_ar",
