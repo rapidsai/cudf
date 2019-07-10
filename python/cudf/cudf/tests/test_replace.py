@@ -247,7 +247,6 @@ def test_fillna_dataframe(fill_type, inplace):
     pdf = pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]})
     gdf = DataFrame.from_pandas(pdf)
 
-
     if fill_type == 'scalar':
         fill_value_pd = 5
         fill_value_cudf = fill_value_pd
@@ -257,7 +256,7 @@ def test_fillna_dataframe(fill_type, inplace):
     else:
         fill_value_pd = {'a': 5, 'b': pd.Series([3, 4, 5])}
         fill_value_cudf = {'a': fill_value_pd['a'],
-                           'b':  Series.from_pandas(fill_value_pd['b'])}
+                           'b': Series.from_pandas(fill_value_pd['b'])}
 
     # https://github.com/pandas-dev/pandas/issues/27197
     # pandas df.fill_value with series is not working
