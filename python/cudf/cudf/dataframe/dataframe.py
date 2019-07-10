@@ -3207,7 +3207,7 @@ class DataFrame(object):
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        df = DataFrame()
+        df = DataFrame(index=self.index)
 
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
@@ -3251,12 +3251,14 @@ class DataFrame(object):
             [utils.cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
         )
 
+        if include:
+            inclusion = include_all & include_subtypes
+        elif exclude:
+            inclusion = include_all
+        else:
+            inclusion = set()
         # remove all exclude types
-        inclusion = include_all - exclude_subtypes
-
-        # keep only those included
-        if include_subtypes:
-            inclusion = inclusion & include_subtypes
+        inclusion = inclusion - exclude_subtypes
 
         for x in self._cols.values():
             infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)

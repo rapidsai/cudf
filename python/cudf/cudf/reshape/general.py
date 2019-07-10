@@ -185,7 +185,7 @@ def get_dummies(
         mapping column names to prefixes, or sequence of prefixes to apply with
         the same length as the number of columns. If not supplied, defaults
         to the empty string
-    prefix_sep : str, optional
+    prefix_sep : str, dict, or sequence, optional, default '_'
         separator to use when appending prefixes
     dummy_na : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
@@ -202,7 +202,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtype, default 'int64'
+        output dtype, default 'uint8'
     """
     if dummy_na:
         raise NotImplementedError("dummy_na is not supported yet")
