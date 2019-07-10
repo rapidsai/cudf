@@ -43,7 +43,7 @@ public final class Aggregate {
   }
 
   static Aggregate avg(int index) {
-    return new Aggregate(AggregateOp.AVG, index);
+    return new Aggregate(AggregateOp.MEAN, index);
   }
 
   static Aggregate sum(int index) {

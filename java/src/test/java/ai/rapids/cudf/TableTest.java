@@ -26,9 +26,8 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
@@ -708,73 +707,6 @@ public class TableTest {
   }
 
   @Test
-  void testGroupByCountMulti() {
-    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
-                                           .column(   1,    3,    3,    5,    5,    0)
-                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
-                                           .build()) {
-      try (Table t2 = t1.groupBy(0, 1, 2).aggregate(count(), count())) {
-        // verify t2
-        assertEquals(5, t2.getRowCount());
-
-        HashMap<Object, Integer>[] expectedResults = new HashMap[3];
-        expectedResults[0] = new HashMap<Object, Integer>() {{
-          put(1, 5);
-        }};
-        expectedResults[1] = new HashMap<Object, Integer>() {{
-          put(1, 1);
-          put(3, 2);
-          put(5, 1);
-          put(0, 1);
-        }};
-        expectedResults[2] = new HashMap<Object, Integer>() {{
-          put(12.0, 1);
-          put(14.0, 1);
-          put(13.0, 1);
-          put(17.0, 2);
-        }};
-
-        //verify grouped columns
-        ColumnVector[] cv = new ColumnVector[3];
-
-        IntStream.range(0, 3).forEach(i -> {
-          cv[i] = t2.getColumn(i);
-          cv[i].ensureOnHost();
-        });
-
-        try (Table t4 = new Table(cv)) {
-          assertTablesHaveSameValues(expectedResults, t4);
-        }
-
-        ColumnVector[] aggOut = new ColumnVector[2];
-        aggOut[0] = t2.getColumn(3);
-        aggOut[1] = t2.getColumn(4);
-        aggOut[0].ensureOnHost();
-        aggOut[1].ensureOnHost();
-
-        Map<Integer, Integer> expectedAggregateResult = new HashMap() {
-          {
-            // value, count
-            put(1, 4);
-            put(2, 1);
-          }
-        };
-        for (int i = 0; i < 4; ++i) {
-          int key = aggOut[0].getInt(i);
-          assertEquals(key, aggOut[1].getInt(i));
-          assertTrue(expectedAggregateResult.containsKey(key));
-          Integer count = expectedAggregateResult.get(key);
-          if (count == 1) {
-            expectedAggregateResult.remove(key);
-          } else {
-            expectedAggregateResult.put(key, count - 1);
-          }
-        }
-      }
-    }
-  }
-
-  @Test
   void testGroupByCount() {
     try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
                                            .column(   1,    3,    3,    5,    5,    0)
@@ -915,7 +847,7 @@ public class TableTest {
                                            .column( 1,  3,  3,  5,  5,  0)
                                            .column(12, 14, 13,  1, 17, 17)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(avg(2))) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(mean(2))) {
         // verify t3
         assertEquals(4, t3.getRowCount());
         ColumnVector aggOut1 = t3.getColumn(2);
@@ -950,7 +882,7 @@ public class TableTest {
                                            .column(5.0, 2.3, 3.4, 2.3, 1.3, 12.2)
                                            .column(  3,   1,   7,  -1,   9,    0)
                                            .build()) {
-      try (Table t2 = t1.groupBy(0, 1).aggregate(count(), max(3), min(2), avg(2), sum(2))) {
+      try (Table t2 = t1.groupBy(0, 1).aggregate(count(), max(3), min(2), mean(2), sum(2))) {
         assertEquals(2, t2.getRowCount());
         ColumnVector countOut = t2.getColumn(2);
         ColumnVector maxOut = t2.getColumn(3);
@@ -969,21 +901,49 @@ public class TableTest {
         assertEquals(3, countOut.getInt(0));
         assertEquals(3, countOut.getInt(1));
 
-        // verify avg
-        assertEquals(3.5666f, avgOut.getDouble(0), 0.0001);
-        assertEquals(5.2666f, avgOut.getDouble(1), 0.0001);
+        // verify mean
+        List<Double> sortedMean = new ArrayList<>();
+        sortedMean.add(avgOut.getDouble(0));
+        sortedMean.add(avgOut.getDouble(1));
+        sortedMean = sortedMean.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(3.5666f, sortedMean.get(0), 0.0001);
+        assertEquals(5.2666f, sortedMean.get(1), 0.0001);
 
         // verify sum
-        assertEquals(10.7f, sumOut.getDouble(0), 0.0001);
-        assertEquals(15.8f, sumOut.getDouble(1), 0.0001);
+        List<Double> sortedSum = new ArrayList<>();
+        sortedSum.add(sumOut.getDouble(0));
+        sortedSum.add(sumOut.getDouble(1));
+        sortedSum = sortedSum.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(10.7f, sortedSum.get(0), 0.0001);
+        assertEquals(15.8f, sortedSum.get(1), 0.0001);
 
         // verify min
-        assertEquals(2.3f, minOut.getDouble(0), 0.0001);
-        assertEquals(1.3f, minOut.getDouble(1), 0.0001);
+        List<Double> sortedMin = new ArrayList<>();
+        sortedMin.add(minOut.getDouble(0));
+        sortedMin.add(minOut.getDouble(1));
+        sortedMin = sortedMin.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(1.3f, sortedMin.get(0), 0.0001);
+        assertEquals(2.3f, sortedMin.get(1), 0.0001);
 
         // verify max
-        assertEquals(7, maxOut.getInt(0));
-        assertEquals(9, maxOut.getInt(1));
+        List<Integer> sortedMax = new ArrayList<>();
+        sortedMax.add(maxOut.getInt(0));
+        sortedMax.add(maxOut.getInt(1));
+        sortedMax = sortedMax.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(7, sortedMax.get(0));
+        assertEquals(9, sortedMax.get(1));
       }
     }
   }

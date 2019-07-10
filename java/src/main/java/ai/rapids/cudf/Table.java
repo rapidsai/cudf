@@ -22,7 +22,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.IntStream;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -189,8 +188,8 @@ public final class Table implements AutoCloseable {
                                               String filePath, long address, long length) throws CudfException;
 
 
-  private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int aggColumn, 
-                                                   int aggType) throws CudfException;
+  private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int[] aggColumns,
+                                                   int[] aggType) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -462,7 +461,7 @@ public final class Table implements AutoCloseable {
     return Aggregate.sum(index);
   }
 
-  public static Aggregate avg(int index) {
+  public static Aggregate mean(int index) {
     return Aggregate.avg(index);
   }
 
@@ -544,52 +543,16 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      long[][] aggregateTables = new long[aggregates.length][];
-      for (int aggregateIndex = 0 ; aggregateIndex < aggregates.length ; aggregateIndex++) {
-        try {
-          aggregateTables[aggregateIndex] = gdfGroupByAggregate(operation.table.nativeHandle,
-                  operation.indices, aggregates[aggregateIndex].getIndex(),
-                  aggregates[aggregateIndex].getNativeId());
-        } catch (Throwable t) {
-          for (int cleanupAggregateIndex = 0;
-                  cleanupAggregateIndex <= cleanupAggregateIndex;
-                  cleanupAggregateIndex++) {
-            if (aggregateTables[cleanupAggregateIndex] != null) {
-              for (int aggregateColumnIndex = 0;
-                      aggregateColumnIndex < aggregateTables[cleanupAggregateIndex].length;
-                      aggregateColumnIndex++) {
-                long e = aggregateTables[cleanupAggregateIndex][aggregateColumnIndex];
-                if (e != 0) {
-                  ColumnVector.freeCudfColumn(aggregateColumnIndex, true);
-                }
-              }
-            }
-          }
-          throw t;
-        }
+      int[] values = new int[aggregates.length];
+      int[] ops = new int[aggregates.length];
+      for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
+        values[aggregateIndex] = aggregates[aggregateIndex].getIndex();
+        ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
       }
 
-      /**
-       * Currently Cudf calculates one aggregate at a time due to which we have multiple aggregate
-       * tables that we have to now merge into a single one
-       */
-      // copy the grouped columns to the new table
-      long[] finalAggregateTable = Arrays.copyOf(aggregateTables[0],
-              operation.indices.length + aggregates.length);
-      // now copy the aggregated columns from each one of the aggregated tables to the end of
-      // the final table that has all the grouped columns
-      IntStream.range(1, aggregateTables.length).forEach(i -> {
-        IntStream.range(0, operation.indices.length).forEach(j -> {
-          //Being defensive
-          long e = aggregateTables[i][j];
-          if (e != 0) {
-            ColumnVector.freeCudfColumn(e, true);
-          }
-        });
-        finalAggregateTable[i + operation.indices.length] =
-            aggregateTables[i][operation.indices.length];
-      });
-      return new Table(finalAggregateTable);
+      Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
+          operation.indices, values, ops));
+      return aggregate;
     }
   }
 
