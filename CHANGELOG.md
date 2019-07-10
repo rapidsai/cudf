@@ -10,6 +10,7 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2179 Added quantiles
 
 ## Improvements
 
@@ -81,7 +82,6 @@
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
 - PR #1652 Added `Series.where()` feature
 - PR #2074 Java Aggregates, logical ops, and better RMM support
-- PR #2179 Added quantiles
 
 ## Improvements
 
