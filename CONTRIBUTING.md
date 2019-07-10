@@ -164,7 +164,7 @@ NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
 - To run Python tests (Optional):
 ```bash
 $ cd $CUDF_HOME/python
-$ py.test -v       # run python tests on cudf and dask-cudf python bindings
+$ py.test -v                           # run python tests on cudf and dask-cudf python bindings
 ```
 
 - Other `build.sh` options:
