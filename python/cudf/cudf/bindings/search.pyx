@@ -9,8 +9,8 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-
-from cudf.bindings.search import *
+from cudf.bindings.search cimport *
+from libc.stdlib cimport free
 
 from cudf.dataframe.column import Column
 
@@ -38,5 +38,8 @@ def search_sorted(column, values, side):
         with nogil:
             result = upper_bound(c_column[0], c_values[0], True)
 
+    free(c_column)
+    free(c_values)
+    
     data, mask = gdf_column_to_column_mem(&result)
     return Column.from_mem_views(data, mask)
