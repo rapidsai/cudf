@@ -46,6 +46,18 @@ Please see the [Demo Docker Repository](https://hub.docker.com/r/rapidsai/rapids
 ### Conda
 
 cuDF can be installed with conda ([miniconda](https://conda.io/miniconda.html), or the full [Anaconda distribution](https://www.anaconda.com/download)) from the `rapidsai` channel:
+
+For `cudf version == 0.8` :
+```bash
+# for CUDA 9.2
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
+    cudf=0.8 python=3.6 cudatoolkit=9.2
+
+# or, for CUDA 10.0
+conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
+    cudf=0.8 python=3.6 cudatoolkit=10.0
+```
+
 For `cudf version == 0.7` :
 ```bash
 # for CUDA 9.2
@@ -55,16 +67,6 @@ conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
 # or, for CUDA 10.0
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
     cudf=0.7 python=3.6 cudatoolkit=10.0
-```
-
-For `cudf version == 0.6` :
-```bash
-
-# CUDA 9.2
-conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults cudf=0.6
-
-# CUDA 10.0
-conda install -c nvidia/label/cuda10.0 -c rapidsai/label/cuda10.0 -c numba -c conda-forge -c defaults cudf=0.6
 ```
 We also provide [nightly conda packages](https://anaconda.org/rapidsai-nightly) built from the tip of our latest development branch.
 
