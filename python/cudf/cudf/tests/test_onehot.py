@@ -109,7 +109,7 @@ def test_get_dummies(data):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])
@@ -126,7 +126,7 @@ def test_onehot_get_dummies_multicol(n_cols):
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("prefix", [
@@ -157,7 +157,7 @@ def test_get_dummies_prefix_sep(prefix, prefix_sep):
                                       prefix=prefix,
                                       prefix_sep=prefix_sep)
 
-    utils.assert_eq(encoded_expected, encoded_actual)
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
 
 if __name__ == "__main__":
