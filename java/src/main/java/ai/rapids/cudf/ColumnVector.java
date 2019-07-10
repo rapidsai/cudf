@@ -39,6 +39,10 @@ import java.util.stream.StreamSupport;
  */
 public final class ColumnVector implements AutoCloseable, BinaryOperable {
   static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
+  /**
+   * The size in bytes of an offset entry
+   */
+  static final int OFFSET_SIZE = DType.INT32.sizeInBytes;
   private static final Logger log = LoggerFactory.getLogger(ColumnVector.class);
 
   static {
@@ -603,8 +607,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   public String getJavaString(long index) {
     assert type == DType.STRING || type == DType.STRING_CATEGORY;
     assertsForGet(index);
-    int start = offHeap.hostData.offsets.getInt(index * 4); // size of an int
-    int size = offHeap.hostData.offsets.getInt((index + 1) * 4) - start;
+    int start = offHeap.hostData.offsets.getInt(index * OFFSET_SIZE);
+    int size = offHeap.hostData.offsets.getInt((index + 1) * OFFSET_SIZE) - start;
     byte[] rawData = new byte[size];
     offHeap.hostData.data.getBytes(rawData, 0, start, size);
     return new String(rawData, StandardCharsets.UTF_8);
@@ -1452,8 +1456,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new Builder to hold the specified number of rows, and with enough space to hold the
-   * give amount of string data.  Be sure to close the builder when done with it. Please try to
+   * Create a new Builder to hold the specified number of rows and with enough space to hold the
+   * given amount of string data. Be sure to close the builder when done with it. Please try to
    * use {@see #build(int, int, Consumer)} instead to avoid needing to close the builder.
    * @param type the type of vector to build.
    * @param rows the number of rows this builder can hold
@@ -1855,7 +1859,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
         this.data = HostMemoryBuffer.allocate(stringBufferSize);
         // The offsets are ints and there is 1 more than the number of rows.
-        this.offsets = HostMemoryBuffer.allocate((rows + 1) * 4);
+        this.offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
         // The first offset is always 0
         this.offsets.setInt(0, 0);
         this.stringBufferSize = stringBufferSize;
@@ -1871,6 +1875,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
      * @param rows       number of rows to allocate.
      * @param testData   a buffer to hold the data (should be large enough to hold rows entries).
      * @param testValid  a buffer to hold the validity vector (should be large enough to hold
+     *                   rows entries or is null).
      * @param testOffsets a buffer to hold the offsets for strings and string categories.
      */
     Builder(DType type, TimeUnit tsTimeUnit, long rows, HostMemoryBuffer testData,
@@ -1947,7 +1952,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     public final Builder append(String value) {
-      assert value != null;
+      assert value != null : "appendNull must be used to append null strings";
       return appendUTF8String(value.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -1956,7 +1961,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
 
     private Builder appendUTF8String(byte[] value, int offset, int length) {
-      assert value != null;
+      assert value != null : "appendNull must be used to append null strings";
       assert offset >= 0;
       assert length >= 0;
       assert value.length + offset <= length;
@@ -1965,8 +1970,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert (currentStringByteIndex + length) <= stringBufferSize;
       data.setBytes(currentStringByteIndex, value, offset, length);
       currentStringByteIndex += length;
-      offsets.setInt((currentIndex + 1) * 4, currentStringByteIndex);
       currentIndex++;
+      offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
       return this;
     }
 
@@ -2165,7 +2170,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert columnVector.offHeap.hostData != null;
 
       if (type == DType.STRING_CATEGORY || type == DType.STRING) {
-        throw new IllegalStateException("Appending a string column vector client side is not currently supported");
+        throw new UnsupportedOperationException(
+            "Appending a string column vector client side is not currently supported");
       } else {
         data.copyFromHostBuffer(currentIndex * type.sizeInBytes, columnVector.offHeap.hostData.data,
             0L,
@@ -2196,10 +2202,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
      */
     public final Builder appendNull() {
       setNullAt(currentIndex);
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        offsets.setInt((currentIndex + 1) * 4, currentStringByteIndex);
-      }
       currentIndex++;
+      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+        offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
+      }
       return this;
     }
 
