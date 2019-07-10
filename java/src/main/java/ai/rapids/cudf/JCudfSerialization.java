@@ -44,6 +44,12 @@ import java.io.OutputStream;
  * ColumnVectors are closed.  It is assumed that this will not be a problem because for processing
  * efficiency after the data is transferred it will likely be combined with other similar batches
  * from other processes into a single larger buffer.
+ * <p>
+ * There is a known bug in this where the null count of a range of values is lost, and replaced with
+ * a 0 if it is known that there can be no nulls in the data, or a 1 if there is the possibility of
+ * a null being in the data.  This is not likely to cause issues if the data is processed using cudf
+ * as the null count is only used as a flag to check if a validity buffer is needed or not.
+ * Processing outside of cudf should be careful.
  */
 public class JCudfSerialization {
   /**
@@ -127,7 +133,7 @@ public class JCudfSerialization {
   }
 
   private static void writeToDataStream(ColumnVector[] columns, DataOutputStream out, long rowOffset,
-                                long numRows) throws IOException {
+                                        long numRows) throws IOException {
     assert rowOffset >= 0;
     assert numRows >= 0;
     for (int i = 0; i < columns.length; i++) {
@@ -169,33 +175,13 @@ public class JCudfSerialization {
     // We are using host based data, because reducing the number of data transfers
     // had a bigger impact on performance than reducing the computation/memory usage on the host.
     column.ensureOnHost();
-    DType type = column.getType();
 
-    // First we need to allocate a buffer to help transfer data from offheap to something the
-    // OutputStream can get access to.  the size of the buffer is should be based off of the
-    // largest buffer.  For most buffers this is the data buffer itself, as validity will be
-    // 1/8th the size at the most.  For STRING and STRING_CATEGORY this may be either the
-    // offsets or the data.
-    //
-    // If we have to shift the validity bits when outputting a subsection of a column, we need
-    // the buffer to hold at least 2 bytes (because one output byte has bits from 2 input bytes).
-    long bufferSize = Math.max(2, type.sizeInBytes * numRows);
-    if (type == DType.STRING_CATEGORY || type == DType.STRING) {
-      // Check if the offsets would be bigger.
-      bufferSize = Math.max(bufferSize, numRows * 4);
-      // Check if the string data would be bigger.
-      long start = column.getStartStringOffset(rowOffset);
-      long end = column.getEndStringOffset(rowOffset + numRows - 1);
-      bufferSize = Math.max(bufferSize, end - start);
-    }
-    // But try to keep the data so it is large but cacheable.
-    bufferSize = Math.min(1024 * 128, bufferSize);
-
-    byte[] arrayBuffer = new byte[(int) bufferSize];
+    byte[] arrayBuffer = new byte[1024 * 128];
     if (column.getNullCount() > 0) {
       copyValidityData(out, column, rowOffset, numRows, arrayBuffer);
     }
 
+    DType type = column.getType();
     if (type == DType.STRING || type == DType.STRING_CATEGORY) {
       copyStringOffsets(out, column, rowOffset, numRows, arrayBuffer);
       copyStringData(out, column, rowOffset, numRows, arrayBuffer);
@@ -242,8 +228,8 @@ public class JCudfSerialization {
   }
 
   private static long copyAndPad(DataOutputStream out, ColumnVector column,
-                                       ColumnVector.BufferType buffer, long offset,
-                                       long length, byte[] tmpBuffer) throws IOException {
+                                 ColumnVector.BufferType buffer, long offset,
+                                 long length, byte[] tmpBuffer) throws IOException {
     long left = length;
     long at = offset;
     while (left > 0) {
@@ -290,64 +276,62 @@ public class JCudfSerialization {
     long combinedBufferOffset = 0;
     ColumnVector[] vectors = new ColumnVector[numColumns];
     boolean tableSuccess = false;
+    DeviceMemoryBuffer validity = null;
+    DeviceMemoryBuffer data = null;
+    HostMemoryBuffer offsets = null;
     try {
       for (int column = 0; column < numColumns; column++) {
         DType type = dataTypes[column];
         long nullCount = nullCounts[column];
         TimeUnit tu = timeUnits[column];
-        DeviceMemoryBuffer validity = null;
-        DeviceMemoryBuffer data = null;
-        HostMemoryBuffer offsets = null;
-        boolean columnSuccess = false;
-        try {
-          if (nullCount > 0) {
-            long len = padFor64bitAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
-            validity = combinedBuffer.slice(combinedBufferOffset, len);
-            combinedBufferOffset += len;
-          }
 
-          if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-            long offsetsLen = padFor64bitAlignment((numRows + 1) * 4);
-            offsets = combinedBufferOnHost.slice(combinedBufferOffset, offsetsLen);
-            combinedBufferOffset += offsetsLen;
-            int startStringOffset = offsets.getInt(0);
-            int endStringOffset = offsets.getInt(numRows * 4);
-            long deviceDataLen = padFor64bitAlignment(endStringOffset - startStringOffset);
-
-            if (deviceDataLen == 0) {
-              // The vector is full of null strings, this is a rare corner case, but here is the
-              // simplest place to work around it
-              data = DeviceMemoryBuffer.allocate(1);
-            } else {
-              data = combinedBuffer.slice(combinedBufferOffset, deviceDataLen);
-            }
-            combinedBufferOffset += deviceDataLen;
-          } else {
-            long deviceDataLen = padFor64bitAlignment(type.sizeInBytes * numRows);
-            data = combinedBuffer.slice(combinedBufferOffset, deviceDataLen);
-            combinedBufferOffset += deviceDataLen;
-          }
-          vectors[column] = new ColumnVector(type, tu, numRows, nullCount, data, validity, offsets, true);
-          columnSuccess = true;
-        } finally {
-          if (!columnSuccess) {
-            if (validity != null) {
-              validity.close();
-            }
-
-            if (data != null) {
-              data.close();
-            }
-
-            if(offsets != null) {
-              offsets.close();
-            }
-          }
+        if (nullCount > 0) {
+          long len = padFor64bitAlignment(BitVectorHelper.getValidityLengthInBytes(numRows));
+          validity = combinedBuffer.slice(combinedBufferOffset, len);
+          combinedBufferOffset += len;
         }
+
+        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+          long offsetsLen = padFor64bitAlignment((numRows + 1) * 4);
+          offsets = combinedBufferOnHost.slice(combinedBufferOffset, offsetsLen);
+          combinedBufferOffset += offsetsLen;
+          int startStringOffset = offsets.getInt(0);
+          int endStringOffset = offsets.getInt(numRows * 4);
+          long deviceDataLen = padFor64bitAlignment(endStringOffset - startStringOffset);
+
+          if (deviceDataLen == 0) {
+            // The vector is full of null strings, this is a rare corner case, but here is the
+            // simplest place to work around it
+            data = DeviceMemoryBuffer.allocate(1);
+          } else {
+            data = combinedBuffer.slice(combinedBufferOffset, deviceDataLen);
+          }
+          combinedBufferOffset += deviceDataLen;
+        } else {
+          long deviceDataLen = padFor64bitAlignment(type.sizeInBytes * numRows);
+          data = combinedBuffer.slice(combinedBufferOffset, deviceDataLen);
+          combinedBufferOffset += deviceDataLen;
+        }
+        vectors[column] = new ColumnVector(type, tu, numRows, nullCount, data, validity, offsets, true);
+        validity = null;
+        data = null;
+        offsets = null;
       }
       tableSuccess = true;
       return vectors;
     } finally {
+      if (validity != null) {
+        validity.close();
+      }
+
+      if (data != null) {
+        data.close();
+      }
+
+      if(offsets != null) {
+        offsets.close();
+      }
+
       if (!tableSuccess) {
         for (ColumnVector cv : vectors) {
           if (cv != null) {
@@ -359,7 +343,7 @@ public class JCudfSerialization {
   }
 
   /**
-   * Read a serialize table from teh given InputStream.
+   * Read a serialize table from the given InputStream.
    * @param in the stream to read the table data from.
    * @return the deserialized table in device memory.
    */
@@ -373,7 +357,8 @@ public class JCudfSerialization {
 
     int num = din.readInt();
     if (num != SER_FORMAT_MAGIC_NUMBER) {
-      throw new IllegalStateException("THIS DOES NOT LOOK LIKE CUDF SERIALIZED DATA");
+      throw new IllegalStateException("THIS DOES NOT LOOK LIKE CUDF SERIALIZED DATA. " +
+          "Expected magic number " + SER_FORMAT_MAGIC_NUMBER + " Found " + num);
     }
     short version = din.readShort();
     if (version != VERSION_NUMBER) {
