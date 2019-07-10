@@ -389,13 +389,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
-            arbitrary = arbitrary.cast(pa.timestamp("ms"))
-            pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
+            dtype = np.dtype('M8[{}]'.format(arbitrary.type.unit))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
                 null_count=arbitrary.null_count,
-                dtype=np.dtype("M8[ms]"),
+                dtype=dtype,
             )
         elif isinstance(arbitrary, pa.Date64Array):
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
@@ -406,14 +406,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 dtype=np.dtype("M8[ms]"),
             )
         elif isinstance(arbitrary, pa.Date32Array):
-            # No equivalent np dtype and not yet supported
-            warnings.warn(
-                "Date32 values are not yet supported so this will "
-                "be typecast to a Date64 value",
-                UserWarning,
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[D]")
+            data = datetime.DatetimeColumn(
+                data=padata,
+                mask=pamask,
+                null_count=arbitrary.null_count,
+                dtype=np.dtype("M8[D]"),
             )
-            arbitrary = arbitrary.cast(pa.date64())
-            data = as_column(arbitrary)
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
@@ -465,7 +464,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
-        arbitrary = arbitrary.ceil("ms")
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
@@ -473,10 +471,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, "dtype"):
             data_type = np_to_pa_dtype(arbitrary.dtype)
-            if data_type in (pa.date64(), pa.date32()):
-                # PyArrow can't construct date64 or date32 arrays from np
-                # datetime types
+            # PyArrow can't construct date64 or date32 arrays from np
+            # datetime types
+            if pa.is_date64(data_type):
                 arbitrary = arbitrary.astype("int64")
+            elif pa.is_date32(data_type):
+                arbitrary = arbitrary.astype("int32")
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
             data = as_column(pa.array([arbitrary]), nan_as_null=nan_as_null)
@@ -500,7 +500,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = np_to_pa_dtype(np.dtype(dtype).type)
+                            pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     nan_as_null=nan_as_null,
