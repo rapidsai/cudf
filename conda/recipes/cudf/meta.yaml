@@ -28,7 +28,7 @@ requirements:
     - pandas >=0.23.4
     - numba >=0.41
     - pyarrow 0.12.1.*
-    - fastavro >=0.21.0
+    - fastavro >=0.22.0
     - rmm {{ minor_version }}.*
     - nvstrings {{ minor_version }}.*
     - cython >=0.29,<0.30
