@@ -48,18 +48,6 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
   return padded_bytes;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Returns the minimum number of bytes required to represent the
- * specified number of bits.
- *
- * @param number_of_bits The number of bits that need to be represented
- * @return cudf::size_type The minimum number of bytes required to represent
- *`number_of_bits` bits
- *---------------------------------------------------------------------------**/
-std::size_t minimum_bitmask_size_bytes(size_type number_of_bits) {
-  return bitmask_allocation_size_bytes(number_of_bits, sizeof(bitmask_type));
-}
-
 }  // namespace
 
 // Allocate new device memory
@@ -93,15 +81,16 @@ bitmask::bitmask(bitmask&& other)
 bitmask::bitmask(size_type size, rmm::device_buffer const& source_buffer)
     : _size{size} {
   CUDF_EXPECTS(size >= 0, "Invalid size.");
-  CUDF_EXPECTS(source_buffer.size() >= minimum_bitmask_size_bytes(size),
+  CUDF_EXPECTS(source_buffer.size() >= bitmask_allocation_size_bytes(size),
                "Insufficiently sized buffer");
   _data = std::make_unique<rmm::device_buffer>(source_buffer);
 }
 
 // Move from existing buffer
-bitmask::bitmask(size_type size, rmm::device_buffer&& source_buffer) : _size{size} {
+bitmask::bitmask(size_type size, rmm::device_buffer&& source_buffer)
+    : _size{size} {
   CUDF_EXPECTS(size >= 0, "Invalid size.");
-  CUDF_EXPECTS(source_buffer.size() >= minimum_bitmask_size_bytes(size),
+  CUDF_EXPECTS(source_buffer.size() >= bitmask_allocation_size_bytes(size),
                "Insufficiently sized buffer");
   _data = std::make_unique<rmm::device_buffer>(source_buffer);
 }
@@ -156,7 +145,7 @@ bitmask::bitmask(bitmask_view source_view, cudaStream_t stream,
   } else {
     // If there's a non-zero offset, need to handle offset bitmask elements
     _data = std::make_unique<rmm::device_buffer>(
-        minimum_bitmask_size_bytes(_size), stream, mr);
+        bitmask_allocation_size_bytes(_size), stream, mr);
 
     cudf::util::cuda::grid_config_1d config(_size, 256);
     copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
