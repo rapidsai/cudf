@@ -18,23 +18,33 @@ from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils
 from cudf.utils.utils import is_single_value
 
+# nanoseconds per time_unit
+_numpy_to_pandas_conversion = {
+    'ns': 1,
+    'us': 1e3,
+    'ms': 1e6,
+    's':  1e9,
+    'D':  1e9 * 86400,
+}
 
 class DatetimeColumn(columnops.TypedColumnBase):
-    # TODO - we only support milliseconds (date64)
-    # we should support date32 and timestamp, but perhaps
-    # only after we move to arrow
-    # we also need to support other formats besides Date64
-    _npdatetime64_dtype = np.dtype("datetime64[ms]")
 
-    def __init__(
-        self, data, mask=None, null_count=None, dtype=None, name=None
-    ):
-        super(DatetimeColumn, self).__init__(
-            data=data, mask=mask, null_count=null_count, dtype=dtype, name=name
-        )
-        self._precision = 1e-3
-        self._inverse_precision = 1e3
-        self._pandas_conversion_factor = 1e9 * self._precision
+    def __init__(self, **kwargs):
+        """
+        Parameters
+        ----------
+        data : Buffer
+            The datetime values
+        mask : Buffer; optional
+            The validity mask
+        null_count : int; optional
+            The number of null values in the mask.
+        dtype : np.dtype
+            Data type
+        name : str
+            The Column name
+        """
+        super(DatetimeColumn, self).__init__(**kwargs)
 
     def serialize(self, serialize):
         header, frames = super(DatetimeColumn, self).serialize(serialize)
@@ -57,10 +67,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @classmethod
     def from_numpy(cls, array):
-        array = array.astype(cls._npdatetime64_dtype)
+        array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
         buf = Buffer(array)
         return cls(data=buf, dtype=buf.dtype)
+
+    @property
+    def time_unit(self):
+        return np.datetime_data(self.dtype)[0]
 
     @property
     def year(self):
@@ -97,32 +111,25 @@ class DatetimeColumn(columnops.TypedColumnBase):
             other = np.datetime64(other)
 
         if isinstance(other, pd.Timestamp):
-            ary = utils.scalar_broadcast_to(
-                other.value * self._pandas_conversion_factor,
-                shape=len(self),
-                dtype=self._npdatetime64_dtype,
-            )
+            m = _numpy_to_pandas_conversion[self.time_unit]
+            ary = utils.scalar_broadcast_to(other.value * m,
+                                            shape=len(self),
+                                            dtype=self.dtype)
         elif isinstance(other, np.datetime64):
-            other = other.astype(self._npdatetime64_dtype)
-            ary = utils.scalar_broadcast_to(
-                other, shape=len(self), dtype=self._npdatetime64_dtype
-            )
+            other = other.astype(self.dtype)
+            ary = utils.scalar_broadcast_to(other,
+                                            shape=len(self),
+                                            dtype=self.dtype)
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-        buf = Buffer(ary)
-        result = self.replace(data=buf, dtype=self.dtype)
-        return result
+        return self.replace(data=Buffer(ary), dtype=self.dtype)
 
     @property
     def as_numerical(self):
-        from cudf.dataframe import numerical
-
-        return self.view(
-            numerical.NumericalColumn,
-            dtype="int64",
-            data=self.data.astype("int64"),
-        )
+        from cudf.dataframe.numerical import NumericalColumn
+        data = self.data.astype(utils.datetime_to_numerical_dtype(self.dtype))
+        return self.view(NumericalColumn, dtype=data.dtype, data=data)
 
     def astype(self, dtype):
         from cudf.dataframe import string
@@ -142,7 +149,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
                     "count": len(self),
                     "nulls": null_ptr,
                     "bdevmem": True,
-                    "units": "ms",
+                    "units": self.time_unit,
                 }
                 data = string._numeric_to_str_typecast_functions[
                     np.dtype(self.dtype)
@@ -172,7 +179,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         mask = None
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
-        data = pa.py_buffer(self.data.mem.copy_to_host().view("int64"))
+        data = pa.py_buffer(self.as_numerical.data.mem.copy_to_host())
         pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,
@@ -186,7 +193,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         """
         dkind = self.dtype.kind
         if dkind == "M":
-            return np.datetime64("nat", "ms")
+            return np.datetime64("nat", self.time_unit)
         else:
             raise TypeError(
                 "datetime column of {} has no NaN value".format(self.dtype)
@@ -194,7 +201,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def fillna(self, fill_value, inplace=False):
         if is_single_value(fill_value):
-            fill_value = np.datetime64(fill_value, "ms")
+            fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
 
