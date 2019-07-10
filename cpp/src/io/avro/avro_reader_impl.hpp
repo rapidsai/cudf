@@ -63,6 +63,20 @@ class reader::Impl {
   device_buffer<uint8_t> decompress_data(
       const device_buffer<uint8_t> &comp_block_data);
 
+  /**
+   * @brief Convert the avro row-based block data and outputs to gdf_columns
+   *
+   * @param[in] block_data Uncompressed block data
+   *
+   **/
+  void decode_data(
+      const device_buffer<uint8_t> &block_data,
+      std::vector<gdf_column_wrapper> &columns,
+      std::vector<std::pair<uint32_t, uint32_t>> &dict,
+      hostdevice_vector<uint8_t> &global_dictionary,
+      size_t total_dictionary_entries
+    );
+
  private:
   std::unique_ptr<DataSource> source_;
   std::unique_ptr<avro_metadata> md_;

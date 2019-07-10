@@ -94,15 +94,15 @@ class avro_metadata : public avro::file_metadata {
   auto select_columns(std::vector<std::string> use_names) {
     std::vector<std::pair<int, std::string>> selection;
 
+    const int num_avro_columns = static_cast<int>(columns.size());
     if (not use_names.empty()) {
-      const int num_avro_columns = static_cast<int>(columns.size());
       for (int i = 0, column_id = 0; i < (int)use_names.size(); i++) {
         for (int j = 0; j < num_avro_columns; j++, column_id++) {
           if (column_id >= num_avro_columns) {
             column_id = 0;
           }
           if (columns[column_id].name == use_names[i] &&
-              GDF_invalid != to_dtype(&schema[columns[i].schema_data_idx])) {
+              GDF_invalid != to_dtype(&schema[columns[column_id].schema_data_idx])) {
             selection.emplace_back(column_id, columns[column_id].name);
             column_id++;
             break;
@@ -111,10 +111,10 @@ class avro_metadata : public avro::file_metadata {
       }
     } else {
       // Iterate backwards as fastavro returns from last-to-first?!
-      for (auto it = columns.rbegin(); it != columns.rend(); ++it) {
-        const auto dtype = to_dtype(&schema[it->schema_data_idx]);
+      for (int i = num_avro_columns - 1; i >= 0; --i) {
+        const auto dtype = to_dtype(&schema[columns[i].schema_data_idx]);
         CUDF_EXPECTS(dtype != GDF_invalid, "Unsupported data type");
-        selection.emplace_back(selection.size(), it->name);
+        selection.emplace_back(i, columns[i].name);
       }
     }
     CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
@@ -187,9 +187,8 @@ table reader::Impl::read(int skip_rows, int num_rows) {
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
   }
 
+  device_buffer<uint8_t> block_data(md_->total_data_size);
   if (md_->total_data_size > 0) {
-    device_buffer<uint8_t> block_data(md_->total_data_size);
-
     const auto buffer =
         source_->get_buffer(md_->block_list[0].offset, md_->total_data_size);
     CUDA_TRY(cudaMemcpyAsync(block_data.data(), buffer->data(), buffer->size(),
@@ -217,8 +216,17 @@ table reader::Impl::read(int skip_rows, int num_rows) {
             columns[i]->data, 0,
             columns[i]->size * sizeof(std::pair<const char *, size_t>)));
       }
-      CUDA_TRY(cudaMemsetAsync(columns[i]->valid, -1, gdf_valid_allocation_size(columns[i]->size)));
-
+      size_t valid_bytes = columns[i]->size >> 3;
+      size_t valid_size = gdf_valid_allocation_size(columns[i]->size);
+      uint8_t *valid = reinterpret_cast<uint8_t *>(columns[i]->valid);
+      CUDA_TRY(cudaMemsetAsync(valid, -1, valid_bytes));
+      if (columns[i]->size & 7) {
+        CUDA_TRY(cudaMemsetAsync(valid + valid_bytes, (1 << (columns[i]->size & 7)) - 1, 1));
+        valid_bytes++;
+      }
+      if (valid_bytes < valid_size) {
+        CUDA_TRY(cudaMemsetAsync(valid + valid_bytes, 0, valid_size - valid_bytes));
+      }
       auto col_idx = selected_cols_[i].first;
       auto &col_schema = md_->schema[md_->columns[col_idx].schema_data_idx];
       dict[i].first = static_cast<uint32_t>(total_dictionary_entries);
@@ -235,7 +243,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
       for (size_t i = 0; i < columns.size(); ++i) {
         auto col_idx = selected_cols_[i].first;
         auto &col_schema = md_->schema[md_->columns[col_idx].schema_data_idx];
-        gpu::nvstrdesc_s *index = &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr() + dict_pos))[dict[i].first];
+        gpu::nvstrdesc_s *index = &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr()))[dict[i].first];
         for (size_t j = 0; j < dict[i].second; j++) {
           size_t len = col_schema.symbols[j].length();
           char *ptr = reinterpret_cast<char *>(global_dictionary.device_ptr() + dict_pos);
@@ -249,7 +257,8 @@ table reader::Impl::read(int skip_rows, int num_rows) {
                global_dictionary.memory_size(), cudaMemcpyHostToDevice, 0));
     }
 
-    //TODO: `decode_data(block_data, columns)` to write out columns
+    // Write out columns
+    decode_data(block_data, columns, dict, global_dictionary, total_dictionary_entries);
 
   } else {
     for (auto &column : columns) {
@@ -390,6 +399,71 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
   }
 
   return decomp_block_data;
+}
+
+void reader::Impl::decode_data(
+    const device_buffer<uint8_t> &block_data,
+    std::vector<gdf_column_wrapper> &columns,
+    std::vector<std::pair<uint32_t, uint32_t>> &dict,
+    hostdevice_vector<uint8_t> &global_dictionary,
+    size_t total_dictionary_entries) {
+  // Build gpu schema
+  hostdevice_vector<gpu::schemadesc_s> schema_desc(md_->schema.size());
+  for (size_t i = 0; i < md_->schema.size(); i++) {
+    type_kind_e kind = md_->schema[i].kind;
+    if (kind == type_enum && !md_->schema[i].symbols.size()) {
+      kind = type_int;
+    }
+    schema_desc[i].kind = kind;
+    schema_desc[i].count = (kind == type_enum) ? 0 : (uint32_t)md_->schema[i].num_children;
+    schema_desc[i].dataptr = nullptr;
+    CUDF_EXPECTS(kind != type_union || md_->schema[i].num_children < 2 || 
+        (md_->schema[i].num_children == 2 && (md_->schema[i+1].kind == type_null || md_->schema[i+2].kind == type_null)),
+        "Union with non-null type not currently supported");
+  }
+  std::vector<void*> valid_alias(columns.size(), nullptr);
+  for (size_t i = 0; i < columns.size(); i++) {
+    auto col_idx = selected_cols_[i].first;
+    int schema_data_idx = md_->columns[col_idx].schema_data_idx;
+    int schema_null_idx = md_->columns[col_idx].schema_null_idx;
+    schema_desc[schema_data_idx].dataptr = columns[i]->data;
+    if (schema_null_idx >= 0) {
+      if (!schema_desc[schema_null_idx].dataptr) {
+        schema_desc[schema_null_idx].dataptr = columns[i]->valid;
+      }
+      else {
+        valid_alias[i] = schema_desc[schema_null_idx].dataptr;
+      }
+    }
+    if (md_->schema[schema_data_idx].kind == type_enum) {
+      schema_desc[schema_data_idx].count = dict[i].first;
+    }
+  }
+  device_buffer<block_desc_s> block_list(md_->block_list.size());
+  CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(), schema_desc.host_ptr(),
+           schema_desc.memory_size(), cudaMemcpyHostToDevice, 0));
+  CUDA_TRY(cudaMemcpyAsync(block_list.data(), md_->block_list.data(),
+           md_->block_list.size() * sizeof(block_desc_s), cudaMemcpyHostToDevice, 0));
+  // Decode data blocks
+  DecodeAvroColumnData(block_list.data(), schema_desc.device_ptr(),
+                       reinterpret_cast<gpu::nvstrdesc_s*>(global_dictionary.device_ptr()),
+                       block_data.data(), (uint32_t)block_list.size(), (uint32_t)schema_desc.size(),
+                       (uint32_t)total_dictionary_entries, md_->num_rows, md_->skip_rows, 0);
+  // Copy valid bits that are shared between columns
+  for (size_t i = 0; i < columns.size(); i++) {
+    if (valid_alias[i] != nullptr) {
+      CUDA_TRY(cudaMemcpyAsync(columns[i]->valid, valid_alias[i],
+               gdf_valid_allocation_size(columns[i]->size), cudaMemcpyHostToDevice, 0));
+    }
+  }
+  CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(), schema_desc.device_ptr(),
+           schema_desc.memory_size(), cudaMemcpyDeviceToHost, 0));
+  CUDA_TRY(cudaStreamSynchronize(0));
+  for (size_t i = 0; i < columns.size(); i++) {
+    auto col_idx = selected_cols_[i].first;
+    int schema_null_idx = md_->columns[col_idx].schema_null_idx;
+    columns[i]->null_count = (schema_null_idx >= 0) ? schema_desc[schema_null_idx].count : 0;
+  }
 }
 
 reader::reader(std::string filepath, reader_options const &options)
