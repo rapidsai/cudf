@@ -168,7 +168,7 @@ class Column(object):
             if isinstance(val, np.ndarray):
                 return val.all()
             return bool(val)
-        return self.unordered_compare('eq', other).min()
+        return self.unordered_compare("eq", other).min()
 
     def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0
@@ -644,6 +644,33 @@ class Column(object):
     @property
     def is_monotonic_decreasing(self):
         raise(NotImplementedError)
+
+    def get_slice_bound(self, label, side, kind):
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+        Parameters
+        ----------
+        label : object
+        side : {'left', 'right'}
+        kind : {'ix', 'loc', 'getitem'}
+        """
+        assert kind in ['ix', 'loc', 'getitem', None]
+        if side not in ('left', 'right'):
+            raise ValueError("Invalid value for side kwarg,"
+                             " must be either 'left' or 'right': %s" %
+                             (side, ))
+
+        # TODO: Handle errors/missing keys correctly
+        #       Not currently using `kind` argument.
+        try:
+            if side == 'left':
+                return self.find_first_value(label)
+            if side == 'right':
+                return (self.find_last_value(label) + 1)
+        except ValueError:
+            return 0
 
 
 register_distributed_serializer(Column)

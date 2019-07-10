@@ -538,8 +538,9 @@ class StringColumn(columnops.TypedColumnBase):
         return self.element_indexing(arg)
 
     def astype(self, dtype):
-        if self.dtype == dtype or \
-           (dtype in ('str', 'object') and self.dtype in ('str', 'object')):
+        if self.dtype == dtype or (
+            dtype in ("str", "object") and self.dtype in ("str", "object")
+        ):
             return self
         elif dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
@@ -572,7 +573,7 @@ class StringColumn(columnops.TypedColumnBase):
         nbuf = pa.py_buffer(nbuf)
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b''))], self.null_count
+                pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
             )
         else:
             return pa.StringArray.from_buffers(

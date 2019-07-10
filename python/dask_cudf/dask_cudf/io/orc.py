@@ -2,6 +2,7 @@ from glob import glob
 
 import dask.dataframe as dd
 from dask.base import tokenize
+from dask.bytes import open_files
 from dask.compatibility import apply
 
 import cudf
@@ -23,16 +24,31 @@ def read_orc(path, **kwargs):
     cudf.read_orc
     """
 
-    filenames = sorted(glob(str(path)))
     name = "read-orc-" + tokenize(path, **kwargs)
+    dsk = {}
+    if "://" in str(path):
+        files = open_files(path)
 
-    meta = cudf.read_orc(filenames[0], **kwargs)
+        # An `OpenFile` should be used in a Context
+        with files[0] as f:
+            meta = cudf.read_orc(f, **kwargs)
 
-    graph = {
-        (name, i): (apply, cudf.read_orc, [fn], kwargs)
-        for i, fn in enumerate(filenames)
-    }
+        dsk = {
+            (name, i): (apply, _read_orc, [f], kwargs)
+            for i, f in enumerate(files)
+        }
+    else:
+        filenames = sorted(glob(str(path)))
+        meta = cudf.read_orc(filenames[0], **kwargs)
+        dsk = {
+            (name, i): (apply, cudf.read_orc, [fn], kwargs)
+            for i, fn in enumerate(filenames)
+        }
 
-    divisions = [None] * (len(filenames) + 1)
+    divisions = [None] * (len(dsk) + 1)
+    return dd.core.new_dd_object(dsk, name, meta, divisions)
 
-    return dd.core.new_dd_object(graph, name, meta, divisions)
+
+def _read_orc(file_obj, **kwargs):
+    with file_obj as f:
+        return cudf.read_orc(f, **kwargs)

@@ -215,3 +215,24 @@ def test_multiindex_tuples(testarr):
     assert index.is_monotonic == index_pd.is_monotonic
     assert index.is_monotonic_increasing == index_pd.is_monotonic_increasing
     assert index.is_monotonic_decreasing == index_pd.is_monotonic_decreasing
+
+
+@pytest.mark.parametrize(
+    "testlist",
+    [
+        [10, 9, 8, 8, 7],
+        [2.0, 5.0, 4.0, 3.0, 7.0],
+        ['b', 'd', 'e', 'a', 'c'],
+        ['frog', 'cat', 'bat', 'dog'],
+    ],
+)
+def test_get_slice_bound(testlist):
+    index = GenericIndex(testlist)
+    index_pd = pd.Index(testlist)
+    for label in testlist:
+        for side in ['left', 'right']:
+            for kind in ['ix', 'loc', 'getitem', None]:
+                assert(
+                    index.get_slice_bound(label, side, kind)
+                    == index_pd.get_slice_bound(label, side, kind)
+                )

@@ -306,7 +306,7 @@ class Index(object):
 
     @property
     def is_unique(self):
-        return False
+        raise(NotImplementedError)
 
     @property
     def is_monotonic(self):
@@ -314,11 +314,14 @@ class Index(object):
 
     @property
     def is_monotonic_increasing(self):
-        return False
+        raise(NotImplementedError)
 
     @property
     def is_monotonic_decreasing(self):
-        return False
+        raise(NotImplementedError)
+
+    def get_slice_bound(self, label, side, kind):
+        raise(NotImplementedError)
 
 
 class RangeIndex(Index):
@@ -475,6 +478,10 @@ class RangeIndex(Index):
     def is_monotonic_decreasing(self):
         return self._start >= self._stop
 
+    def get_slice_bound(self, label, side, kind):
+        # TODO: Range-specific implementation here
+        raise(NotImplementedError)
+
 
 def index_from_range(start, stop=None, step=None):
     vals = cudautils.arange(start, stop, step, dtype=np.int64)
@@ -609,6 +616,9 @@ class GenericIndex(Index):
     def is_monotonic_decreasing(self):
         return self._values.is_monotonic_decreasing
 
+    def get_slice_bound(self, label, side, kind):
+        return self._values.get_slice_bound(label, side, kind)
+
 
 class DatetimeIndex(GenericIndex):
     # TODO this constructor should take a timezone or something to be
@@ -686,18 +696,19 @@ class CategoricalIndex(GenericIndex):
     def __init__(self, values, name=None):
         if isinstance(values, CategoricalColumn):
             values = values
-        elif isinstance(values, pd.Series) and \
-                pd.api.types.is_categorical_dtype(values.dtype):
+        elif isinstance(
+            values, pd.Series
+        ) and pd.api.types.is_categorical_dtype(values.dtype):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
                 categories=values.cat.categories,
-                ordered=values.cat.ordered
+                ordered=values.cat.ordered,
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             values = CategoricalColumn(
                 data=Buffer(values.codes),
                 categories=values.categories,
-                ordered=values.ordered
+                ordered=values.ordered,
             )
         elif isinstance(values, (list, tuple)):
             values = columnops.as_column(

@@ -101,7 +101,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
-
+            if other_dtype.kind in "u":
+                other_dtype = utils.min_signed_type(other)
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
                 return other
@@ -368,6 +369,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         found = cudautils.find_first(self.data.mem, value)
         if found == -1:
+            if self.is_monotonic and value > self.max():
+                return len(self)
             raise ValueError("value not found")
         return found
 
@@ -377,6 +380,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         found = cudautils.find_last(self.data.mem, value)
         if found == -1:
+            if self.is_monotonic and value > self.max():
+                return len(self)
             raise ValueError("value not found")
         return found
 
