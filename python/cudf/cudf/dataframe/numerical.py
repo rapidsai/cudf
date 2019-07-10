@@ -392,8 +392,6 @@ class NumericalColumn(columnops.TypedColumnBase):
             else:
                 found = cudautils.find_last(self.data.mem, value, binop="lt")
                 if found == -1:
-                    print(self._data.mem.copy_to_host())
-                    print(value)
                     raise ValueError("value not found")
         return found
 
