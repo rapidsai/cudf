@@ -1145,7 +1145,7 @@ def test_csv_reader_aligned_byte_range(tmpdir):
 
     df = cudf.read_csv(str(fname), byte_range=(0, 4096))
     # read_csv call above used to crash; the assert below is not crucial
-    assert np.count_nonzero(df["zeros"]) == 0
+    assert np.count_nonzero(df["zeros"].to_pandas().values) == 0
 
 
 @pytest.mark.parametrize(
