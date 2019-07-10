@@ -11,10 +11,8 @@ from librmm_cffi import librmm as rmm
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
-    check_gt_float,
-    check_gt_int,
-    check_lt_float,
-    check_lt_int,
+    check_gt,
+    check_lt,
     make_mask,
     mask_bitsize,
     mask_get,
@@ -781,38 +779,18 @@ def gpu_mark_found_float(arr, val, out, not_found):
 
 
 @cuda.jit
-def gpu_mark_gt_int(arr, val, out, not_found):
+def gpu_mark_gt(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_gt_int(arr[i], val):
+        if check_gt(arr[i], val):
             out[i] = i
-
-
-@cuda.jit
-def gpu_mark_gt_float(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if check_gt_float(arr[i], val):
-            out[i] = i
-        else:
-            out[i] = not_found
 
 
 @cuda.jit
 def gpu_mark_lt_int(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_lt_int(arr[i], val):
-            out[i] = i
-        else:
-            out[i] = not_found
-
-
-@cuda.jit
-def gpu_mark_lt_float(arr, val, out, not_found):
-    i = cuda.grid(1)
-    if i < arr.size:
-        if check_lt_float(arr[i], val):
+        if check_lt(arr[i], val):
             out[i] = i
         else:
             out[i] = not_found
@@ -830,20 +808,15 @@ def find_first(arr, val, binop='eq'):
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if arr.dtype in ("float32", "float64"):
-            if binop == 'gt':
-                gpu_mark_gt_float.forall(found.size)(arr, val, found, arr.size)
-            elif binop == 'lt':
-                gpu_mark_lt_float.forall(found.size)(arr, val, found, arr.size)
-            else:
+        if binop == 'gt':
+            gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
+        elif binop == 'lt':
+            gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
+        else:
+            if arr.dtype in ("float32", "float64"):
                 gpu_mark_found_float.forall(found.size)(
                     arr, val, found, arr.size
                 )
-        else:
-            if binop == 'gt':
-                gpu_mark_gt_int.forall(found.size)(arr, val, found, arr.size)
-            elif binop == 'lt':
-                gpu_mark_lt_int.forall(found.size)(arr, val, found, arr.size)
             else:
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size

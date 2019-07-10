@@ -59,22 +59,12 @@ def check_equals_int(a, b):
 
 
 @njit
-def check_gt_float(a, b):
+def check_gt(a, b):
     return a > b
 
 
 @njit
-def check_gt_int(a, b):
-    return a > b
-
-
-@njit
-def check_lt_float(a, b):
-    return a < b
-
-
-@njit
-def check_lt_int(a, b):
+def check_lt(a, b):
     return a < b
 
 

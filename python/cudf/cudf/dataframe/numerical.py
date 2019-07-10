@@ -377,6 +377,8 @@ class NumericalColumn(columnops.TypedColumnBase):
                 found = cudautils.find_first(self.data.mem, value, binop="gt")
                 if found == -1:
                     raise ValueError("value not found")
+        elif found == -1:
+            raise ValueError("value not found")
         return found
 
     def find_last_value(self, value):
@@ -393,6 +395,8 @@ class NumericalColumn(columnops.TypedColumnBase):
                 found = cudautils.find_last(self.data.mem, value, binop="lt")
                 if found == -1:
                     raise ValueError("value not found")
+        elif found == -1:
+            raise ValueError("value not found")
         return found
 
     @property
