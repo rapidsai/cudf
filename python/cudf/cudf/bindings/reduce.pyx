@@ -78,7 +78,7 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     col_dtype = col_dtype if dtype is None else dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
-    cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
+    cdef operators c_op = _REDUCTION_OP[reduction_op]
     cdef gdf_dtype c_out_dtype = get_dtype(col_dtype.type if dtype is None else col_dtype)
     cdef gdf_scalar c_result
     cdef gdf_size_type c_ddof = ddof

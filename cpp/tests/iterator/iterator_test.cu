@@ -338,7 +338,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
     // compare with cudf::reduce
     cudf::test::scalar_wrapper<T> result =
-        cudf::reduce(w_col, SUM, GDF_INT32);
+        cudf::reduce(w_col, cudf::reduction::SUM, GDF_INT32);
 
     EXPECT_EQ(expected_value, result.value());
 }

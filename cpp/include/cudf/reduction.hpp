@@ -20,21 +20,6 @@
 #include "cudf.h"
 
 /**
- * @brief These enums indicate the supported reduction operations that can be
- * performed on a column
- */
-enum gdf_reduction_op {
-  SUM = 0,        ///< Computes the sum of all values in the column
-  MIN,            ///< Computes the minimum of all values in the column
-  MAX,            ///< Computes the maximum of all values in the column
-  PRODUCT,        ///< Computes the multiplicative product of all values in the column
-  SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
-  MEAN,           ///< Computes the arithmetic mean of the values in the column
-  VAR,            ///< Computes the variance of the values in the column
-  STD,            ///< Computes the standard deviation of the values in the column
-};
-
-/**
  * @brief These enums indicate the supported operations of prefix scan that can be
  * performed on a column
  */
@@ -46,6 +31,25 @@ typedef enum {
 } gdf_scan_op;
 
 namespace cudf {
+
+namespace reduction {
+/**
+ * @brief These enums indicate the supported reduction operations that can be
+ * performed on a column
+ */
+enum operators {
+  SUM = 0,        ///< Computes the sum of all values in the column
+  MIN,            ///< Computes the minimum of all values in the column
+  MAX,            ///< Computes the maximum of all values in the column
+  PRODUCT,        ///< Computes the multiplicative product of all values in the column
+  SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
+  MEAN,           ///< Computes the arithmetic mean of the values in the column
+  VAR,            ///< Computes the variance of the values in the column
+  STD,            ///< Computes the standard deviation of the values in the column
+};
+}  // namespace reduction
+
+
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column
  * This function does not detect overflows in reductions.
@@ -71,7 +75,7 @@ namespace cudf {
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduce(const gdf_column *col, gdf_reduction_op op,
+gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
                         gdf_dtype output_dtype,
                         gdf_size_type ddof = 1);
 

@@ -19,7 +19,7 @@
 namespace cudf{
 
 gdf_scalar reduce(const gdf_column *col,
-                  gdf_reduction_op op, gdf_dtype output_dtype,
+                  cudf::reduction::operators op, gdf_dtype output_dtype,
                   gdf_size_type ddof)
 {
     gdf_scalar scalar;
@@ -31,29 +31,29 @@ gdf_scalar reduce(const gdf_column *col,
     if( col->size <= col->null_count )return scalar;
 
     switch(op){
-    case SUM:
+      case cudf::reduction::SUM:
         scalar = cudf::reduction::sum(*col, output_dtype);
         break;
-    case MIN:
+    case cudf::reduction::MIN:
         scalar = cudf::reduction::min(*col, output_dtype);
         break;
-    case MAX:
+    case cudf::reduction::MAX:
         scalar = cudf::reduction::max(*col, output_dtype);
         break;
-    case PRODUCT:
+    case cudf::reduction::PRODUCT:
         scalar = cudf::reduction::product(*col, output_dtype);
         break;
-    case SUMOFSQUARES:
+    case cudf::reduction::SUMOFSQUARES:
         scalar = cudf::reduction::sum_of_squares(*col, output_dtype);
         break;
 
-    case MEAN:
+    case cudf::reduction::MEAN:
         scalar = cudf::reduction::mean(*col, output_dtype);
         break;
-    case VAR:
+    case cudf::reduction::VAR:
         scalar = cudf::reduction::variance(*col, output_dtype, ddof);
         break;
-    case STD:
+    case cudf::reduction::STD:
         scalar = cudf::reduction::standard_deviation(*col, output_dtype, ddof);
         break;
     default:
