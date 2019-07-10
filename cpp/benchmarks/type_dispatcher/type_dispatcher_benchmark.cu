@@ -54,14 +54,13 @@ struct Functor{
   static __device__ T f(T x){
     if(ft == BANDWIDTH_BOUND){
       return x + static_cast<T>(1);
-    }else if(ft == COMPUTE_BOUND){
+    }else{
       #pragma unroll
-      for(int i = 0; i < 100; i++){
-        x += static_cast<T>(1);
+      for(int i = 0; i < 1000; i++){
+        x = (x*x + static_cast<T>(1)) - x*x;
       }
       return x;
     }
-    return static_cast<T>(0);
   }
 };
 
@@ -292,13 +291,31 @@ TBM_BENCHMARK_DEFINE(fp64_loop_bndwdth_devc, double, GRID_STRIDE_LOOP_KERNEL, BA
 TBM_BENCHMARK_DEFINE(fp64_mono_bndwdth___no, double, MONOLITHIC_KERNEL, BANDWIDTH_BOUND, NO_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_loop_bndwdth___no, double, GRID_STRIDE_LOOP_KERNEL, BANDWIDTH_BOUND, NO_DISPATCHING);
 
+TBM_BENCHMARK_DEFINE(fp64_mono_compute_host, double, MONOLITHIC_KERNEL, COMPUTE_BOUND, HOST_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_loop_compute_host, double, GRID_STRIDE_LOOP_KERNEL, COMPUTE_BOUND, HOST_DISPATCHING);
 
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bndwdth_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,1}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bndwdth_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,1}});
+TBM_BENCHMARK_DEFINE(fp64_mono_compute_devc, double, MONOLITHIC_KERNEL, COMPUTE_BOUND, DEVICE_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_loop_compute_devc, double, GRID_STRIDE_LOOP_KERNEL, COMPUTE_BOUND, DEVICE_DISPATCHING);
 
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bndwdth_devc)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,1}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bndwdth_devc)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,1}});
+TBM_BENCHMARK_DEFINE(fp64_mono_compute___no, double, MONOLITHIC_KERNEL, COMPUTE_BOUND, NO_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_loop_compute___no, double, GRID_STRIDE_LOOP_KERNEL, COMPUTE_BOUND, NO_DISPATCHING);
 
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bndwdth___no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,1}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bndwdth___no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,1}});
+
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bndwdth_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bndwdth_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bndwdth_devc)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bndwdth_devc)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bndwdth___no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bndwdth___no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_devc)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_devc)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute___no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute___no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,4}});
 
