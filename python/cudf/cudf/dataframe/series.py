@@ -323,6 +323,11 @@ class Series(object):
 
         fname = func.__name__
 
+        handled_types = [cudf_series_module]
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
         if hasattr(cudf_series_module, fname):
             cudf_func = getattr(cudf_series_module, fname)
             # Handle case if cudf_func is same as numpy function

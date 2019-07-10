@@ -366,6 +366,8 @@ class DataFrame(object):
     def __array_function__(self, func, types, args, kwargs):
 
         cudf_df_module = DataFrame
+        cudf_series_module = Series
+
         for submodule in func.__module__.split(".")[1:]:
             # point cudf to the correct submodule
             if hasattr(cudf_df_module, submodule):
@@ -374,6 +376,12 @@ class DataFrame(object):
                 return NotImplemented
 
         fname = func.__name__
+
+        handled_types = [cudf_df_module, cudf_series_module]
+
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
 
         if hasattr(cudf_df_module, fname):
             cudf_func = getattr(cudf_df_module, fname)
