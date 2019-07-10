@@ -5,7 +5,7 @@ import pandas as pd
 
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 
 
 def melt(
@@ -171,7 +171,7 @@ def get_dummies(
     cats={},
     sparse=False,
     drop_first=False,
-    dtype="float64",
+    dtype="int8",
 ):
     """ Returns a dataframe whose columns are the one hot encodings of all
     columns in `df`
@@ -185,7 +185,7 @@ def get_dummies(
         mapping column names to prefixes, or sequence of prefixes to apply with
         the same length as the number of columns. If not supplied, defaults
         to the empty string
-    prefix_sep : str, optional
+    prefix_sep : str, dict, or sequence, optional, default '_'
         separator to use when appending prefixes
     dummy_na : boolean, optional
         Right now this is NON-FUNCTIONAL argument in rapids.
@@ -202,7 +202,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtype, default 'float64'
+        output dtype, default 'int8'
     """
     if dummy_na:
         raise NotImplementedError("dummy_na is not supported yet")
@@ -215,31 +215,55 @@ def get_dummies(
 
     from cudf.multi import concat
 
+    encode_fallback_dtypes = ['object', 'category']
+
     if columns is None or len(columns) == 0:
-        columns = df.columns
+        columns = df.select_dtypes(include=encode_fallback_dtypes).columns
+
+    def length_check(obj, name):
+        err_msg = ("Length of '{name}' ({len_obj}) did not match the "
+                   "length of the columns being encoded ({len_required}).")
+
+        if utils.is_list_like(obj):
+            if len(obj) != len(columns):
+                err_msg = err_msg.format(name=name, len_obj=len(obj),
+                                         len_required=len(columns))
+                raise ValueError(err_msg)
+
+    length_check(prefix, 'prefix')
+    length_check(prefix_sep, 'prefix_sep')
 
     if prefix is None:
-        prefix_map = {}
-        prefix = ""
-    elif isinstance(prefix, str):
+        prefix = columns
+
+    if isinstance(prefix, str):
         prefix_map = {}
     elif isinstance(prefix, dict):
         prefix_map = prefix
     else:
         prefix_map = dict(zip(columns, prefix))
 
-    return concat(
-        [
-            df.one_hot_encoding(
+    if isinstance(prefix_sep, str):
+        prefix_sep_map = {}
+    elif isinstance(prefix_sep, dict):
+        prefix_sep_map = prefix_sep
+    else:
+        prefix_sep_map = dict(zip(columns, prefix_sep))
+
+    # If we have no columns to encode, we need to drop fallback columns(if any)
+    if len(columns) == 0:
+        return df.select_dtypes(exclude=encode_fallback_dtypes)
+    else:
+        df_list = []
+
+        for name in columns:
+            col_enc_df = df.one_hot_encoding(
                 name,
-                prefix=name
-                + (prefix_sep if prefix else "")
-                + prefix_map.get(name, prefix),
+                prefix=prefix_map.get(name, prefix),
                 cats=cats.get(name, df[name].unique()),
-                prefix_sep=prefix_sep,
+                prefix_sep=prefix_sep_map.get(name, prefix_sep),
                 dtype=dtype,
             )
-            for name in columns
-        ],
-        axis=1,
-    )
+            df_list.append(col_enc_df)
+
+        return concat(df_list, axis=1).drop(labels=columns)

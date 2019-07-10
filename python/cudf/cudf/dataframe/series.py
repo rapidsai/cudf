@@ -1516,8 +1516,6 @@ class Series(object):
         A sequence of new series for each category.  Its length is determined
         by the length of ``cats``.
         """
-        if self.dtype.kind not in "iuf":
-            raise TypeError("expecting integer or float dtype")
 
         dtype = np.dtype(dtype)
         return ((self == cat).fillna(False).astype(dtype) for cat in cats)
