@@ -836,14 +836,18 @@ def find_first(arr, val, binop='eq'):
             elif binop == 'lt':
                 gpu_mark_lt_float.forall(found.size)(arr, val, found, arr.size)
             else:
-                gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
+                gpu_mark_found_float.forall(found.size)(
+                    arr, val, found, arr.size
+                )
         else:
             if binop == 'gt':
                 gpu_mark_gt_int.forall(found.size)(arr, val, found, arr.size)
             elif binop == 'lt':
                 gpu_mark_lt_int.forall(found.size)(arr, val, found, arr.size)
             else:
-                gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
+                gpu_mark_found_int.forall(found.size)(
+                    arr, val, found, arr.size
+                )
     from cudf.dataframe.columnops import as_column
 
     found_col = as_column(found)

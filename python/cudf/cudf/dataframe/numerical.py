@@ -388,7 +388,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             if value < self.min():
                 found = -1
             elif value > self.max():
-                found = len(self)-1
+                found = len(self) - 1
             else:
                 found = cudautils.find_last(self.data.mem, value, binop="lt")
                 if found == -1:
