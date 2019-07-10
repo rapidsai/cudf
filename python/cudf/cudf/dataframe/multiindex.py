@@ -304,9 +304,6 @@ class MultiIndex(Index):
                 # directly
                 result = result.T
                 result = result[result.columns[0]]
-                if len(result) == 1 and len(df) > 1:
-                    # Pandas returns a numpy scalar in this case
-                    return result[0][0]
                 # convert to Series
                 series_name = []
                 for idx, code in enumerate(result.columns.codes):

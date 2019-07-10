@@ -248,8 +248,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 columns_df = self._df._columns_view(columns).take(arg[0])
         if isinstance(columns_df.index, MultiIndex):
             df = columns_df.index._get_row_major(columns_df, arg[0])
-            if isinstance(df, numbers.Number):
-                return df
+            if (len(df) == 1 and len(columns_df) == 1) and not\
+                    (isinstance(arg[0], slice) or isinstance(arg[1], slice)):
+                # Pandas returns a numpy scalar in this case
+                return df[0]
             if self._can_downcast_to_series(df, arg):
                 return self._downcast_to_series(df, arg)
             return df
