@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import csv
 import gzip
 import os
 import shutil
@@ -23,7 +24,7 @@ def make_numeric_dataframe(nrows, dtype):
     return df
 
 
-def make_datetime_dataframe():
+def make_datetime_dataframe(include_non_standard=False):
     df = pd.DataFrame()
     df["col1"] = np.array(
         [
@@ -45,6 +46,18 @@ def make_datetime_dataframe():
             "2007-4-30 1:6:40.000PM",
         ]
     )
+    if include_non_standard:
+        # Last column contains non-standard date formats
+        df["col3"] = np.array(
+            [
+                "1 Jan",
+                "2 January 1994",
+                "Feb 2002",
+                "31-01-2000",
+                "1-1-1996",
+                "15-May-2009",
+            ]
+        )
     return df
 
 
@@ -149,23 +162,25 @@ def test_csv_reader_numeric_data(dtype, nelem, tmpdir):
     pd.util.testing.assert_frame_equal(df, out.to_pandas())
 
 
-def test_csv_reader_datetime_data(tmpdir):
+@pytest.mark.parametrize("parse_dates", [["date2"], [0], ["date1", 1, "bad"]])
+def test_csv_reader_datetime(parse_dates):
+    df = make_datetime_dataframe(include_non_standard=True)
+    buffer = df.to_csv(index=False, header=False)
 
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file2.csv")
-
-    df = make_datetime_dataframe()
-    df.to_csv(fname, index=False, header=False)
-
-    df_out = pd.read_csv(
-        fname, names=["col1", "col2"], parse_dates=[0, 1], dayfirst=True
+    gdf = read_csv(
+        StringIO(buffer),
+        names=["date1", "date2", "bad"],
+        parse_dates=parse_dates,
+        dayfirst=True,
     )
-    dtypes = ["date", "date"]
-    out = read_csv(
-        str(fname), names=list(df.columns.values), dtype=dtypes, dayfirst=True
+    pdf = pd.read_csv(
+        StringIO(buffer),
+        names=["date1", "date2", "bad"],
+        parse_dates=parse_dates,
+        dayfirst=True,
     )
 
-    assert len(out.columns) == len(df_out.columns)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(gdf, pdf)
 
 
 @pytest.mark.parametrize("pandas_arg", [{"delimiter": "|"}, {"sep": "|"}])
@@ -351,22 +366,6 @@ def test_csv_reader_strings_quotechars(tmpdir):
     assert df["text"][3] == "f,,!.,"
 
 
-def test_csv_reader_auto_column_detection(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file9.csv")
-    df = make_numpy_mixed_dataframe()
-    df.to_csv(
-        fname, columns=["Integer", "Date", "Float"], index=False, header=False
-    )
-
-    df_out = pd.read_csv(fname, parse_dates=[1], dayfirst=True)
-    out = read_csv(str(fname), dayfirst=True)
-    assert len(out.columns) == len(df_out.columns)
-    assert len(out) == len(df_out)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
-    # Check dtypes
-    assert list(df_out.dtypes) == list(out.to_pandas().dtypes)
-
-
 def test_csv_reader_usecols_int_char(tmpdir):
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file10.csv")
     df = make_numpy_mixed_dataframe()
@@ -377,10 +376,8 @@ def test_csv_reader_usecols_int_char(tmpdir):
         header=False,
     )
 
-    df_out = pd.read_csv(
-        fname, usecols=[0, 1, 3], parse_dates=[1], dayfirst=True
-    )
-    out = read_csv(str(fname), usecols=[0, 1, 3], dayfirst=True)
+    df_out = pd.read_csv(fname, usecols=[0, 1, 3])
+    out = read_csv(fname, usecols=[0, 1, 3])
 
     assert len(out.columns) == len(df_out.columns)
     assert len(out) == len(df_out)
@@ -581,26 +578,15 @@ def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
 
     fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_compression" + ext)
 
-    df = make_datetime_dataframe()
+    df = make_numpy_mixed_dataframe()
     df.to_csv(fname, index=False, header=False, compression=out_comp)
 
-    df_out = pd.read_csv(
-        fname,
-        names=["col1", "col2"],
-        parse_dates=[0, 1],
-        dayfirst=True,
-        compression=in_comp,
-    )
-    out = read_csv(
-        str(fname),
-        names=list(df.columns.values),
-        dtype=["date", "date"],
-        dayfirst=True,
-        compression=in_comp,
+    gdf = read_csv(fname, names=list(df.columns.values), compression=in_comp)
+    pdf = pd.read_csv(
+        fname, names=list(df.columns.values), compression=in_comp
     )
 
-    assert len(out.columns) == len(df_out.columns)
-    pd.util.testing.assert_frame_equal(df_out, out.to_pandas())
+    assert_eq(gdf, pdf)
 
 
 @pytest.mark.parametrize(
@@ -921,7 +907,7 @@ def test_csv_reader_tabs():
     ]
     buffer = "\n".join(lines)
 
-    df = read_csv(StringIO(buffer))
+    df = read_csv(StringIO(buffer), parse_dates=["date"])
 
     assert df.shape == (4, 3)
 
@@ -1346,8 +1332,6 @@ def test_csv_writer_datetime_data(tmpdir):
 def test_csv_writer_mixed_data(
     sep, columns, header, index, line_terminator, tmpdir
 ):
-    import csv
-
     pdf_df_fname = tmpdir.join("pdf_df_3.csv")
     gdf_df_fname = tmpdir.join("gdf_df_3.csv")
 
@@ -1397,6 +1381,33 @@ def test_csv_writer_multiindex(tmpdir):
     pdg = gdg.to_pandas()
     pdg.to_csv(pdf_df_fname)
     gdg.to_csv(gdf_df_fname)
+
+    assert os.path.exists(pdf_df_fname)
+    assert os.path.exists(gdf_df_fname)
+
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("chunksize", [None, 9, 1000])
+def test_csv_writer_chunksize(chunksize, tmpdir):
+    pdf_df_fname = tmpdir.join("pdf_df_4.csv")
+    gdf_df_fname = tmpdir.join("gdf_df_4.csv")
+
+    pdf = make_numpy_mixed_dataframe()
+    pdf["Date"] = pdf["Date"].astype("datetime64")
+    # Increase the df len as chunked logic only gets applied from chunksize >=8
+    pdf = pd.concat([pdf] * 5)
+    gdf = cudf.from_pandas(pdf)
+
+    pdf.to_csv(
+        pdf_df_fname,
+        date_format="%Y-%m-%dT%H:%M:%SZ",
+        quoting=csv.QUOTE_NONNUMERIC,
+        chunksize=chunksize,
+    )
+    gdf.to_csv(gdf_df_fname, chunksize=chunksize)
 
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
