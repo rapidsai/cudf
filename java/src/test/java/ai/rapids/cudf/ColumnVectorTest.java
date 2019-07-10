@@ -26,6 +26,9 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class ColumnVectorTest {
+
+  public static final double DELTA = 0.0001;
+
   @Test
   void testRefCountLeak() throws InterruptedException {
     assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
@@ -268,7 +271,7 @@ public class ColumnVectorTest {
 
         for (int i = 0 ; i < methods.length ; i++) {
           result = cv.exactQuantile(methods[i], quantiles[j]);
-          assertEquals(exactExpected[i][j], result.getDouble(), 0.000000001);
+          assertEquals(exactExpected[i][j], result.getDouble(), DELTA);
         }
       }
     }
@@ -289,11 +292,11 @@ public class ColumnVectorTest {
       // sorted: -1.01, 0.15, 0.8, 1.11, 2.13, 3.4, 4.17, 5.7, 6.8
       for (int j = 0; j < quantiles.length ; j++) {
         Scalar result = cv.approxQuantile(quantiles[j]);
-        assertEquals(approxExpected[j], result.getDouble(), 0.000000001);
+        assertEquals(approxExpected[j], result.getDouble(), DELTA);
 
         for (int i = 0 ; i < methods.length ; i++) {
           result = cv.exactQuantile(methods[i], quantiles[j]);
-          assertEquals(exactExpected[i][j], result.getDouble(), 0.000000001);
+          assertEquals(exactExpected[i][j], result.getDouble(), DELTA);
         }
       }
     }
