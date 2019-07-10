@@ -20,6 +20,8 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -58,50 +60,56 @@ public class TableTest {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
-  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertEquals(expected.getType(), cv.getType(), "Column " + colName);
-    assertEquals(expected.getRowCount(), cv.getRowCount(), "Column " + colName);
-    assertEquals(expected.getNullCount(), cv.getNullCount(), "Column " + colName);
+  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName) {
+    assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
+    assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
+    if (rowOffset == 0 && length == expected.getRowCount()) {
+      assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
+    } else {
+      // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    assertEquals(expected.getTimeUnit(), cv.getTimeUnit(), "TimeUnit for Column " + colName);
     expected.ensureOnHost();
     cv.ensureOnHost();
     DType type = expected.getType();
-    for (long row = 0; row < expected.getRowCount(); row++) {
-      assertEquals(expected.isNull(row), cv.isNull(row), "NULL EQUALS Column " + colName + " Row "
-          + row);
-      if (!expected.isNull(row)) {
+    for (long expectedRow = rowOffset; expectedRow < (rowOffset + length); expectedRow++) {
+      long tableRow = expectedRow - rowOffset;
+      assertEquals(expected.isNull(expectedRow), cv.isNull(tableRow),
+          "NULL for Column " + colName + " Row " + tableRow);
+      if (!expected.isNull(expectedRow)) {
         switch (type) {
           case BOOL8: // fall through
           case INT8:
-            assertEquals(expected.getByte(row), cv.getByte(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getByte(expectedRow), cv.getByte(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT16:
-            assertEquals(expected.getShort(row), cv.getShort(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getShort(expectedRow), cv.getShort(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT32: // fall through
           case DATE32:
-            assertEquals(expected.getInt(row), cv.getInt(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
           case DATE64: // fall through
           case TIMESTAMP:
-            assertEquals(expected.getLong(row), cv.getLong(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
-            assertEquals(expected.getFloat(row), cv.getFloat(row), 0.0001,
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
+                "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT64:
-            assertEquals(expected.getDouble(row), cv.getDouble(row), 0.0001,
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
+                "Column " + colName + " Row " + tableRow);
             break;
           case STRING: // fall through
           case STRING_CATEGORY:
-            assertEquals(expected.getJavaString(row), cv.getJavaString(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getJavaString(expectedRow), cv.getJavaString(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
@@ -110,14 +118,26 @@ public class TableTest {
     }
   }
 
-  public static void assertTablesAreEqual(Table expected, Table table) {
+  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName);
+  }
+
+  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
-    assertEquals(expected.getRowCount(), table.getRowCount());
+    assertEquals(length, table.getRowCount());
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
       ColumnVector expect = expected.getColumn(col);
       ColumnVector cv = table.getColumn(col);
-      assertColumnsAreEqual(expect, cv, String.valueOf(col));
+      String name = String.valueOf(col);
+      if (rowOffset != 0 || length != expected.getRowCount()) {
+        name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
+      }
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name);
     }
+  }
+
+  public static void assertTablesAreEqual(Table expected, Table table) {
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -653,6 +673,36 @@ public class TableTest {
           assertEquals(fromA / 2, fromB);
         }
         assertTrue(expected.isEmpty());
+      }
+    }
+  }
+
+  @Test
+  void testSerializationRoundTripSliced() throws IOException {
+    try (Table t = new Table.TestBuilder()
+        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .build()) {
+      for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
+        for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
+          ByteArrayOutputStream bout = new ByteArrayOutputStream();
+          int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
+          JCudfSerialization.writeToStream(t, bout, i, len);
+          ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+          try (Table found = JCudfSerialization.readTableFrom(bin)) {
+            assertPartialTablesAreEqual(t, i, len, found);
+          }
+        }
       }
     }
   }

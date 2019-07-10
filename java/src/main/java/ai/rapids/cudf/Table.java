@@ -51,7 +51,7 @@ public final class Table implements AutoCloseable {
     for (ColumnVector columnVector : columns) {
       assert (null != columnVector) : "ColumnVectors can't be null";
       assert (rows == columnVector.getRowCount()) : "All columns should have the same number of " +
-          "rows";
+          "rows " + columnVector.getType();
     }
 
     // Since Arrays are mutable objects make a copy
@@ -85,6 +85,14 @@ public final class Table implements AutoCloseable {
       }
       throw t;
     }
+  }
+
+  /**
+   * Provides a faster way to get access to the columns. Only to be used internally, and it should
+   * never be modified in anyway.
+   */
+  ColumnVector[] getColumns() {
+    return columns;
   }
 
   /**
@@ -477,6 +485,7 @@ public final class Table implements AutoCloseable {
     }
     return operationIndicesArray;
   }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
