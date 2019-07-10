@@ -44,7 +44,9 @@ gdf_dtypes = {
     GDF_INT16:             np.int16,
     GDF_INT8:              np.int8,
     GDF_BOOL8:             np.bool_,
+    GDF_DATE32:            np.datetime64,
     GDF_DATE64:            np.datetime64,
+    GDF_TIMESTAMP:         np.datetime64,
     GDF_CATEGORY:          np.int32,
     GDF_STRING_CATEGORY:   np.object_,
     GDF_STRING:            np.object_,
@@ -74,15 +76,50 @@ agg_ops = {
     'count_distinct': GDF_COUNT_DISTINCT,
 }
 
-def gdf_to_np_dtype(dtype):
-    """Util to convert gdf dtype to numpy dtype.
-    """
-    return np.dtype(gdf_dtypes[dtype])
+np_to_gdf_time_unit = {
+    's':  TIME_UNIT_s,
+    'ms': TIME_UNIT_ms,
+    'us': TIME_UNIT_us,
+    'ns': TIME_UNIT_ns,
+}
+
+gdf_to_np_time_unit = {
+    TIME_UNIT_s:  's',
+    TIME_UNIT_ms: 'ms',
+    TIME_UNIT_us: 'us',
+    TIME_UNIT_ns: 'ns',
+}
 
 def np_to_pa_dtype(dtype):
-    """Util to convert numpy dtype to PyArrow dtype
+    """Util to convert numpy dtype to PyArrow dtype.
     """
+    # special case when dtype is np.datetime64
+    if dtype.kind == 'M':
+        time_unit, _ = np.datetime_data(dtype)
+        if time_unit in np_to_gdf_time_unit:
+            # return a pa.Timestamp of the appropriate unit
+            return pa.timestamp(time_unit)
+        # return pa.date32() if time_unit is UNIX days,
+        # else pa.date64() since default is int64_t UNIX ms
+        return pa.date32() if time_unit == 'D' else pa.date64()
     return np_pa_dtypes[np.dtype(dtype).type]
+
+
+cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit):
+    """Util to convert gdf_time_unit to numpy datetime64 dtype.
+    """
+    np_time_unit = gdf_to_np_time_unit.get(time_unit, 'ms')
+    return np.dtype('datetime64[{}]'.format(np_time_unit))
+
+
+cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype):
+    """Util to convert numpy datetime64 dtype to gdf_time_unit.
+    """
+    if dtype.kind != 'M':
+        return TIME_UNIT_NONE
+    np_time_unit, _ = np.datetime_data(dtype)
+    return np_to_gdf_time_unit.get(np_time_unit, TIME_UNIT_NONE)
+
 
 def check_gdf_compatibility(col):
     """
@@ -98,14 +135,68 @@ cpdef get_ctype_ptr(obj):
     else:
         return obj.device_ctypes_pointer.value
 
+
 cpdef get_column_data_ptr(obj):
     return get_ctype_ptr(obj._data.mem)
+
 
 cpdef get_column_valid_ptr(obj):
     return get_ctype_ptr(obj._mask.mem)
 
-cdef gdf_dtype get_dtype(dtype):
-    return dtypes[dtype]
+
+cdef np_dtype_from_gdf_column(gdf_column* col):
+    """Util to convert a gdf_column's dtype to a numpy dtype.
+
+    Parameters
+    ----------
+    col : gdf_column
+        The gdf_column from which to infer a numpy.dtype.
+    """
+    dtype = col.dtype
+    if dtype == GDF_DATE32:
+        return np.dtype('datetime64[D]')
+    if dtype == GDF_DATE64:
+        return np.dtype('datetime64[ms]')
+    if dtype == GDF_TIMESTAMP:
+        return gdf_time_unit_to_np_dtype(col.dtype_info.time_unit)
+    if dtype in gdf_dtypes:
+        return gdf_dtypes[dtype]
+    raise TypeError('cannot convert gdf_dtype `%s` to numpy dtype' % (dtype))
+
+
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
+    """Util to convert a column's or np.scalar's dtype to gdf dtype.
+
+    Parameters
+    ----------
+    col : Column, Buffer, np.scalar
+        The column, buffer, or np.scalar from which to infer the gdf_dtype.
+    dtype : numpy.dtype; optional
+        The dtype to convert to a gdf_dtype.  Defaults to *col.dtype*.
+    """
+    dtype = col.dtype if dtype is None else np.dtype(dtype)
+    # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
+    if pd.api.types.is_categorical_dtype(dtype):
+        if col is None:
+            return dtypes[np.int8]
+        if hasattr(col, 'data') and col.data is not None:
+            return gdf_dtype_from_value(col.data)
+        return gdf_dtype_from_value(col, col.dtype)
+    # if dtype is np.datetime64, interrogate the dtype's time_unit resolution
+    # to determine if the gdf_type is GDF_DATE32, GDF_DATE64, or GDF_TIMESTAMP
+    if dtype.kind == 'M':
+        time_unit, _ = np.datetime_data(dtype)
+        if time_unit in np_to_gdf_time_unit:
+            # time_unit is valid so must be a GDF_TIMESTAMP
+            return GDF_TIMESTAMP
+        # return GDF_DATE32 if time_unit is UNIX days,
+        # else GDF_DATE64 since default is int64_t UNIX ms
+        return GDF_DATE32 if time_unit == 'D' else GDF_DATE64
+    # everything else is a 1-1 mapping
+    if dtype.type in dtypes:
+        return dtypes[dtype.type]
+    raise TypeError('cannot convert numpy dtype `%s` to gdf_dtype' % (dtype))
+
 
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     """
@@ -119,30 +210,39 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
 
     set_scalar_value(s, val)
 
-    if dtype is not None:
-        s[0].dtype = dtypes[dtype.type]
-    else:
-        s[0].dtype = dtypes[val.dtype.type]
     s[0].is_valid = is_valid
+    s[0].dtype = gdf_dtype_from_value(val, dtype)
+
     return s
 
-cdef get_scalar_value(gdf_scalar scalar):
+
+cdef get_scalar_value(gdf_scalar scalar, dtype):
     """
     Returns typed value from a gdf_scalar
     0-dim array is retuned if dtype is date32/64, timestamp
     """
-    return {
-        GDF_FLOAT64: scalar.data.fp64,
-        GDF_FLOAT32: scalar.data.fp32,
-        GDF_INT64:   scalar.data.si64,
-        GDF_INT32:   scalar.data.si32,
-        GDF_INT16:   scalar.data.si16,
-        GDF_INT8:    scalar.data.si08,
-        GDF_BOOL8:   scalar.data.b08,
-        GDF_DATE32:  np.array(scalar.data.dt32).astype('datetime64[D]'),
-        GDF_DATE64:  np.array(scalar.data.dt64).astype('datetime64[ms]'),
-        GDF_TIMESTAMP: np.array(scalar.data.tmst).astype('datetime64[ns]'),
-    }[scalar.dtype]
+    if scalar.dtype == GDF_FLOAT64:
+        return scalar.data.fp64
+    if scalar.dtype == GDF_FLOAT32:
+        return scalar.data.fp32
+    if scalar.dtype == GDF_INT64:
+        return scalar.data.si64
+    if scalar.dtype == GDF_INT32:
+        return scalar.data.si32
+    if scalar.dtype == GDF_INT16:
+        return scalar.data.si16
+    if scalar.dtype == GDF_INT8:
+        return scalar.data.si08
+    if scalar.dtype == GDF_BOOL8:
+        return scalar.data.b08
+    if scalar.dtype == GDF_DATE32:
+        return np.array(scalar.data.dt32).astype(dtype)
+    if scalar.dtype == GDF_DATE64:
+        return np.array(scalar.data.dt64).astype(dtype)
+    if scalar.dtype == GDF_TIMESTAMP:
+        return np.array(scalar.data.tmst).astype(dtype)
+    raise ValueError("Cannot convert gdf_scalar of dtype {}",
+                     "to numpy scalar".format(scalar.dtype))
 
 
 cdef set_scalar_value(gdf_scalar *scalar, val):
@@ -163,8 +263,14 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.si08 = val
     elif val.dtype.type == np.bool or val.dtype.type == np.bool_:
         scalar.data.b08 = val
-    elif val.dtype.name == 'datetime64[ms]':
-        scalar.data.dt64 = np.datetime64(val, 'ms').astype(int)
+    elif val.dtype.type == np.datetime64:
+        time_unit, _ = np.datetime_data(val.dtype)
+        if time_unit in np_to_gdf_time_unit:
+            scalar.data.tmst = np.datetime64(val, time_unit).astype(int)
+        elif time_unit == 'D':
+            scalar.data.dt32 = np.datetime64(val, time_unit).astype(int)
+        else:
+            scalar.data.dt64 = np.datetime64(val, time_unit).astype(int)
     else:
         raise ValueError("Cannot convert numpy scalar of dtype {}"
                          "to gdf_scalar".format(val.dtype.name))
@@ -192,13 +298,9 @@ cdef gdf_column* column_view_from_column(col, col_name=None):
     cdef uintptr_t data_ptr
     cdef uintptr_t valid_ptr
     cdef uintptr_t category
+    cdef gdf_dtype c_dtype = gdf_dtype_from_value(col)
 
-    if pd.api.types.is_categorical_dtype(col.dtype):
-        g_dtype = dtypes[col.data.dtype.type]
-    else:
-        g_dtype = dtypes[col.dtype.type]
-
-    if g_dtype == GDF_STRING_CATEGORY:
+    if c_dtype == GDF_STRING_CATEGORY:
         category = col.nvcategory.get_cpointer()
         if len(col) > 0:
             data_ptr = get_ctype_ptr(col.indices.mem)
@@ -217,11 +319,11 @@ cdef gdf_column* column_view_from_column(col, col_name=None):
     else:
         valid_ptr = 0
 
-    cdef gdf_dtype c_dtype = g_dtype
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
+    cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(col.dtype)
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit = TIME_UNIT_NONE,
+        time_unit = c_time_unit,
         category = <void*> category
     )
 
@@ -272,25 +374,17 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     else:
         valid_ptr = 0
 
-    if dtype is not None:
-        if pd.api.types.is_categorical_dtype(dtype):
-            if data is None:
-                g_dtype = dtypes[np.int8]
-            else:
-                g_dtype = dtypes[data.dtype.type]
-        else:
-            g_dtype = dtypes[dtype.type]
-    else:
-        g_dtype = dtypes[data.dtype]
-
     if null_count is None:
         null_count = 0
 
-    cdef gdf_dtype c_dtype = g_dtype
+    dtype = data.dtype if dtype is None else dtype
+
+    cdef gdf_dtype c_dtype = gdf_dtype_from_value(data, dtype)
     cdef gdf_size_type c_size = size
     cdef gdf_size_type c_null_count = null_count
+    cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(dtype)
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit = TIME_UNIT_NONE,
+        time_unit = c_time_unit,
         category = <void*> 0
     )
 
@@ -336,7 +430,7 @@ cdef gdf_column_to_column_mem(gdf_column* input_col):
         data = rmm.device_array_from_ptr(
             data_ptr,
             nelem=input_col.size,
-            dtype=gdf_to_np_dtype(input_col.dtype),
+            dtype=np_dtype_from_gdf_column(input_col),
             finalizer=rmm._make_finalizer(data_ptr, 0)
         )
 
