@@ -717,7 +717,6 @@ def test_dataframe_iloc(nelem):
     assert_eq(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
 
 
-@pytest.mark.xfail(raises=IndexError, reason="Series.index are different")
 def test_dataframe_iloc_tuple():
     gdf = DataFrame()
     nelem = 123
@@ -730,11 +729,10 @@ def test_dataframe_iloc_tuple():
     pdf["a"] = ha
     pdf["b"] = hb
 
-    # We don't support passing the column names into the index quite yet
     got = gdf.iloc[1, [1]]
     expect = pdf.iloc[1, [1]]
 
-    assert_eq(got, expect)
+    assert_eq(got, expect, check_dtype=False)
 
 
 @pytest.mark.xfail(
