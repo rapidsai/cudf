@@ -15,6 +15,7 @@ from cudf.utils.utils import (
     mask_bitsize,
     mask_get,
     mask_set,
+    datetime_to_numerical_dtype
 )
 
 
@@ -113,20 +114,34 @@ def gpu_copy(inp, out):
 
 
 def astype(ary, dtype):
-    if ary.dtype == np.dtype(dtype):
+
+    dtype = np.dtype(dtype)
+
+    if ary.dtype == dtype:
         return ary
-    elif (
-        ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")
-    ) and (dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")):
-        return ary.view(dtype)
-    elif ary.size == 0:
+
+    # if converting to or from a datetime *and* to or from
+    # an integer array of the same width, return a view of
+    # the input array of the output dtype
+    to_datetime = dtype.type is np.datetime64
+    if to_datetime or ary.dtype.type is np.datetime64:
+        # this will the datetime dtype
+        a = dtype if to_datetime else ary.dtype
+        # this will be the opposite dtype
+        b = ary.dtype if to_datetime else dtype
+        # if the datetime's numeric dtype matches the
+        # other dtype, it's safe to cast between them
+        if datetime_to_numerical_dtype(a) == b:
+            return ary.view(dtype)
+
+    if ary.size == 0:
         return rmm.device_array(shape=ary.shape, dtype=dtype)
-    else:
-        out = rmm.device_array(shape=ary.shape, dtype=dtype)
-        if out.size > 0:
-            configured = gpu_copy.forall(out.size)
-            configured(ary, out)
-        return out
+
+    out = rmm.device_array(shape=ary.shape, dtype=dtype)
+    if out.size > 0:
+        configured = gpu_copy.forall(out.size)
+        configured(ary, out)
+    return out
 
 
 def copy_array(arr, out=None):
