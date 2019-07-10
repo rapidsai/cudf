@@ -27,6 +27,7 @@
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
+- PR #2209 Matching get_dummies & select_dtypes behavior to pandas
 
 ## Bug Fixes
 
