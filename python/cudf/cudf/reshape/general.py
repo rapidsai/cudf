@@ -202,7 +202,7 @@ def get_dummies(
         columns. Note this is different from pandas default behavior, which
         encodes all columns with dtype object or categorical
     dtype : str, optional
-        output dtype, default 'uint8'
+        output dtype, default 'int8'
     """
     if dummy_na:
         raise NotImplementedError("dummy_na is not supported yet")
