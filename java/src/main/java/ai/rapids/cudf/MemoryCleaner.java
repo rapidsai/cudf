@@ -55,7 +55,7 @@ import java.util.stream.StreamSupport;
  * later the Cleaner itself will be released.
  */
 class MemoryCleaner {
-  static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
+  private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
   private static Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
 
   /**

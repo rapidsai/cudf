@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 
@@ -95,11 +96,14 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
     addressOutOfBoundsCheck(address + destOffset, byteLength, "copy from stream");
-    byte[] arrayBuffer = new byte[(int) Math.min(1024 * 64, byteLength)];
+    byte[] arrayBuffer = new byte[(int) Math.min(1024 * 128, byteLength)];
     long left = byteLength;
     while (left > 0) {
       int amountToCopy = (int) Math.min(arrayBuffer.length, left);
       int amountRead = in.read(arrayBuffer, 0, amountToCopy);
+      if (amountRead < 0) {
+        throw new EOFException();
+      }
       setBytes(destOffset, arrayBuffer, 0, amountRead);
       destOffset += amountRead;
       left -= amountRead;
@@ -389,7 +393,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * Slice off a part of the host buffer.
    * @param offset where to start the slice at.
    * @param len how many bytes to slice
-   * @return a host vector that will need to be closed independently from this buffer.
+   * @return a host buffer that will need to be closed independently from this buffer.
    */
   final HostMemoryBuffer slice(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
@@ -402,7 +406,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * Slice off a part of the host buffer, actually making a copy of the data.
    * @param offset where to start the slice at.
    * @param len how many bytes to slice
-   * @return a host vector that will need to be closed independently from this buffer.
+   * @return a host buffer that will need to be closed independently from this buffer.
    */
   final HostMemoryBuffer sliceWithCopy(long offset, long len) {
     addressOutOfBoundsCheck(address + offset, len, "slice");
