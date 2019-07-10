@@ -3349,14 +3349,21 @@ class DataFrame(object):
         header=True,
         index=True,
         line_terminator="\n",
-        chunksize=None
+        chunksize=None,
     ):
         """{docstring}"""
         import cudf.io.csv as csv
 
         return csv.to_csv(
-            self, path, sep, na_rep, columns, header, index, line_terminator,
-            chunksize
+            self,
+            path,
+            sep,
+            na_rep,
+            columns,
+            header,
+            index,
+            line_terminator,
+            chunksize,
         )
 
 

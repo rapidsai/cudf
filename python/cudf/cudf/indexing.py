@@ -178,7 +178,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             df.add_column(name=col, data=self._df[col].loc[arg[0]])
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):
-                df.index = as_index(arg[0].start)
+                start = arg[0].start
+                if start is None:
+                    start = self._df.index[0]
+                df.index = as_index(start)
             else:
                 df.index = as_index(arg[0])
         return df
@@ -234,7 +237,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
-                df.index = as_index(self._df.index[arg[0].start])
+                start = arg[0].start
+                if start is None:
+                    start = 0
+                df.index = as_index(self._df.index[start])
             else:
                 df.index = as_index(self._df.index[arg[0]])
         return df
