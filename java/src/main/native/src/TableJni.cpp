@@ -262,6 +262,56 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
   CATCH_STD(env, NULL);
 }
 
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
+    JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
+    jlong buffer, jlong buffer_length) {
+  bool read_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+    read_buffer = false;
+  } else if (inputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an inputfilepath", NULL);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
+                  NULL);
+  }
+
+  try {
+    cudf::jni::native_jstring filename(env, inputfilepath);
+    if (!read_buffer && filename.is_empty()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
+                    NULL);
+    }
+
+    cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+
+    std::unique_ptr<cudf::source_info> source;
+    if (read_buffer) {
+      source.reset(new cudf::source_info(reinterpret_cast<char *>(buffer), buffer_length));
+    } else {
+      source.reset(new cudf::source_info(filename.get()));
+    }
+
+    cudf::orc_read_arg read_arg{*source};
+
+    read_arg.columns = n_filter_col_names.as_cpp_vector();
+
+    read_arg.stripe = -1;
+    read_arg.skip_rows = -1;
+    read_arg.num_rows = -1;
+    read_arg.use_index = false;
+
+    cudf::table result = read_orc(read_arg);
+    std::vector<gdf_column*> ptrs(result.begin(), result.end());
+
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
+                                                ptrs.size());
+    return native_handles.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     JNIEnv *env, jclass clazz, jlong left_table, jintArray left_col_join_indices, jlong right_table,
     jintArray right_col_join_indices) {

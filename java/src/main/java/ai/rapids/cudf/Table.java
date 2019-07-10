@@ -188,6 +188,16 @@ public final class Table implements AutoCloseable {
   private static native long[] gdfReadParquet(String[] filterColumnNames,
                                               String filePath, long address, long length) throws CudfException;
 
+  /**
+   * Read in ORC formatted data.
+   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
+   *                          all of them
+   * @param filePath          the path of the file to read, or null if no path should be read.
+   * @param address           the address of the buffer to read from or 0 if we should not.
+   * @param length            the length of the buffer to read from.
+   */
+  private static native long[] gdfReadORC(String[] filterColumnNames,
+                                              String filePath, long address, long length) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int aggColumn, 
                                                    int aggType) throws CudfException;
@@ -389,6 +399,84 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
         null, buffer.getAddress() + offset, len));
+  }
+
+  /**
+   * Read a ORC file using the default ParquetOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readORC(File path) { return readORC(ORCOptions.DEFAULT, path); }
+
+  /**
+   * Read a ORC file.
+   * @param opts various parquet parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, File path) {
+    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+            path.getAbsolutePath(), 0, 0));
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param buffer raw ORC formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(byte[] buffer) {
+    return readORC(ORCOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, byte[] buffer) {
+    return readORC(opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readORC(opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, HostMemoryBuffer buffer,
+                                  long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+            null, buffer.getAddress() + offset, len));
   }
 
   /**
