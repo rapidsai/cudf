@@ -664,6 +664,8 @@ class Column(object):
 
         # TODO: Handle errors/missing keys correctly
         #       Not currently using `kind` argument.
+        #if self.is_monotonic and label > self.max():
+        #    return len(self)
         if side == 'left':
             return self.find_first_value(label)
         if side == 'right':

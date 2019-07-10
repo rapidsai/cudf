@@ -236,3 +236,16 @@ def test_get_slice_bound(testlist):
                     index.get_slice_bound(label, side, kind)
                     == index_pd.get_slice_bound(label, side, kind)
                 )
+
+
+@pytest.mark.parametrize("testlabel", [1, 3, 5, 7, 9, 11])
+def test_get_slice_bound_missing(testlabel):
+    mylist = [2, 4, 6, 8, 10]
+    index = GenericIndex(mylist)
+    index_pd = pd.Index(mylist)
+    for side in ['left', 'right']:
+        for kind in ['ix', 'loc', 'getitem', None]:
+            assert(
+                index.get_slice_bound(testlabel, side, kind)
+                == index_pd.get_slice_bound(testlabel, side, kind)
+            )

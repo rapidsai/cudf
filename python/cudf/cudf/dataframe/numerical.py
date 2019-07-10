@@ -368,8 +368,15 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns offset of first value that matches
         """
         found = cudautils.find_first(self.data.mem, value)
-        if found == -1:
-            raise ValueError("value not found")
+        if found == -1 and self.is_monotonic:
+            if value < self.min():
+                found = 0
+            elif value > self.max():
+                found = len(self)
+            else:
+                found = cudautils.find_first(self.data.mem, value, binop="gt")
+                if found == -1:
+                    raise ValueError("value not found")
         return found
 
     def find_last_value(self, value):
@@ -377,8 +384,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns offset of last value that matches
         """
         found = cudautils.find_last(self.data.mem, value)
-        if found == -1:
-            raise ValueError("value not found")
+        if found == -1 and self.is_monotonic:
+            if value < self.min():
+                found = -1
+            elif value > self.max():
+                found = len(self)-1
+            else:
+                found = cudautils.find_last(self.data.mem, value, binop="lt")
+                if found == -1:
+                    print(self._data.mem.copy_to_host())
+                    print(value)
+                    raise ValueError("value not found")
         return found
 
     @property

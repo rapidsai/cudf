@@ -11,6 +11,10 @@ from librmm_cffi import librmm as rmm
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
+    check_gt_float,
+    check_gt_int,
+    check_lt_float,
+    check_lt_int,
     make_mask,
     mask_bitsize,
     mask_get,
@@ -776,7 +780,45 @@ def gpu_mark_found_float(arr, val, out, not_found):
             out[i] = not_found
 
 
-def find_first(arr, val):
+@cuda.jit
+def gpu_mark_gt_int(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_gt_int(arr[i], val):
+            out[i] = i
+
+
+@cuda.jit
+def gpu_mark_gt_float(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_gt_float(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+@cuda.jit
+def gpu_mark_lt_int(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_lt_int(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+@cuda.jit
+def gpu_mark_lt_float(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if check_lt_float(arr[i], val):
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+def find_first(arr, val, binop='eq'):
     """
     Returns the index of the first occurrence of *val* in *arr*.
     Otherwise, returns -1.
@@ -789,9 +831,19 @@ def find_first(arr, val):
     found = rmm.device_array_like(arr)
     if found.size > 0:
         if arr.dtype in ("float32", "float64"):
-            gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
+            if binop == 'gt':
+                gpu_mark_gt_float.forall(found.size)(arr, val, found, arr.size)
+            elif binop == 'lt':
+                gpu_mark_lt_float.forall(found.size)(arr, val, found, arr.size)
+            else:
+                gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
         else:
-            gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
+            if binop == 'gt':
+                gpu_mark_gt_int.forall(found.size)(arr, val, found, arr.size)
+            elif binop == 'lt':
+                gpu_mark_lt_int.forall(found.size)(arr, val, found, arr.size)
+            else:
+                gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
     from cudf.dataframe.columnops import as_column
 
     found_col = as_column(found)
@@ -802,7 +854,7 @@ def find_first(arr, val):
         return min_index
 
 
-def find_last(arr, val):
+def find_last(arr, val, binop='eq'):
     """
     Returns the index of the last occurrence of *val* in *arr*.
     Otherwise, returns -1.
@@ -815,9 +867,19 @@ def find_last(arr, val):
     found = rmm.device_array_like(arr)
     if found.size > 0:
         if arr.dtype in ("float32", "float64"):
-            gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+            if binop == 'gt':
+                gpu_mark_gt_float.forall(found.size)(arr, val, found, -1)
+            if binop == 'lt':
+                gpu_mark_lt_float.forall(found.size)(arr, val, found, -1)
+            else:
+                gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
         else:
-            gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
+            if binop == 'gt':
+                gpu_mark_gt_int.forall(found.size)(arr, val, found, -1)
+            if binop == 'lt':
+                gpu_mark_lt_int.forall(found.size)(arr, val, found, -1)
+            else:
+                gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
     from cudf.dataframe.columnops import as_column
 
     found_col = as_column(found)
