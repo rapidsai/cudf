@@ -541,7 +541,7 @@ def test_multiindex_copy():
 
 
 @pytest.mark.parametrize(
-    "iloc_range",
+    "iloc_rows",
     [
         0,
         1,
@@ -554,16 +554,40 @@ def test_multiindex_copy():
         slice(1, None),
     ],
 )
-def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_range):
+@pytest.mark.parametrize(
+    "iloc_columns",
+    [
+        0,
+        1,
+        slice(None, 0),
+        slice(None, 1),
+        slice(0, 1),
+        slice(1, 2),
+        slice(0, 2),
+        slice(0, None),
+        slice(1, None),
+    ],
+)
+def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(
-        pdf.iloc[iloc_range],
-        gdf.iloc[iloc_range],
-        check_index_type=False
-    )
+    presult = pdf.iloc[iloc_rows, iloc_columns]
+    gresult = gdf.iloc[iloc_rows, iloc_columns]
+    if isinstance(gresult, cudf.DataFrame):
+        assert_eq(
+            presult,
+            gresult,
+            check_index_type=False,
+            check_column_type=False,
+        )
+    else:
+        assert_eq(
+            presult,
+            gresult,
+            check_index_type=False,
+        )
 
 
 def test_multiindex_to_frame(pdfIndex):

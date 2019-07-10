@@ -304,6 +304,9 @@ class MultiIndex(Index):
                 # directly
                 result = result.T
                 result = result[result.columns[0]]
+                if len(result) == 1 and len(df) > 1:
+                    # Pandas returns a numpy scalar in this case
+                    return result[0][0]
                 # convert to Series
                 series_name = []
                 for idx, code in enumerate(result.columns.codes):
@@ -316,11 +319,26 @@ class MultiIndex(Index):
                     list(result._cols.values())[0], name=series_name
                 )
                 result.name = tuple(series_name)
+            elif len(result) == 0 and len(result.columns) == 0:
+                if slice_access is False:
+                    # Pandas returns a Series with a stringified index for
+                    # the one expected result column
+                    series_name = []
+                    for idx, code in enumerate(result.index.codes):
+                        series_name.append(
+                            result.index.levels[idx][
+                                result.index.codes[code][0]
+                            ]
+                        )
+                    result = Series([], name=series_name)
+                    result.name = tuple(series_name)
+                else:
+                    result._index._codes = result._index._codes[row_tuple[0]]
             elif (len(out_index.columns)) > 0:
                 # Otherwise pop the leftmost levels, names, and codes from the
                 # source index until it has the correct number of columns (n-k)
                 result.reset_index(drop=True)
-                result.index = result.index._popn(size)
+                result._index = result._index._popn(size)
         return result
 
     def _get_column_major(self, df, row_tuple):
@@ -371,11 +389,12 @@ class MultiIndex(Index):
             numbers.Number,
             slice
         )) else list(arg)
-        if isinstance(arg[0], (numbers.Number, slice)):
-            return True
-        for idx, key in enumerate(arg):
-            if key not in self.levels[idx] and not isinstance(key, slice):
-                return False
+        try:
+            for idx, key in enumerate(arg):
+                if key not in self.levels[idx]:
+                    return False
+        except ValueError:
+            return False
         return True
 
     def __len__(self):

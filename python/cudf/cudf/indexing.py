@@ -82,15 +82,15 @@ class _DataFrameIndexer(object):
         if isinstance(self._df.columns, cudf.MultiIndex):
             # the second arg can be: single value, tuple of valid keys, slice,
             # or None
-            if not isinstance(arg, tuple) or len(arg) == 1:
-                arg = (arg, slice(None))
-            elif not self._df.columns._is_valid_index_key(arg[1]):
-                raise KeyError("Column index not recognized as valid tuple.")
+            if self._df.columns._is_valid_index_key(arg):
+                arg = (slice(None), arg)
+            elif not isinstance(arg, tuple) or len(arg) == 1:
+                arg = (slice(None), arg)
         if isinstance(self._df.index, cudf.MultiIndex):
             # the first arg can be: single value, tuple of valid keys, or slice
-            if not self._df.index._is_valid_index_key(arg[0]):
-                raise KeyError("Row index not recognized as valid tuple.")
-            if not isinstance(arg[0], (slice, tuple)) or len(arg) == 1:
+            if self._df.index._is_valid_index_key(arg):
+                arg = (arg, slice(None))
+            elif not isinstance(arg, (slice, tuple)) or len(arg) == 1:
                 arg = (arg, slice(None))
         return arg
 
@@ -114,6 +114,8 @@ class _DataFrameIndexer(object):
         operation should be "downcasted" from a DataFrame to a
         Series
         """
+        if isinstance(df, cudf.Series):
+            return False
         nrows, ncols = df.shape
         if nrows == 1:
             if type(arg[0]) is slice:
@@ -198,19 +200,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
         return df
 
-    def _getitem_multiindex_arg(self, arg):
-        from cudf.dataframe.dataframe import DataFrame
-        row_tuple, column_tuple = self._df._index._split_tuples(arg)
-        columns = self._get_column_selection(column_tuple)
-        df = DataFrame()
-        try:
-            for col in columns:
-                df.add_column(name=col, data=self._df[col])
-        except KeyError:
-            df = self._df.copy(deep=False)
-        df._index = self._df._index
-        return df._index._get_row_major(df, row_tuple)
-
     def _get_column_selection(self, arg):
         if is_single_value(arg):
             return [arg]
@@ -250,14 +239,20 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg)
         else:
-            if isinstance(arg[1], slice):
+            if isinstance(arg[0], slice):
                 columns_df = DataFrame()
                 for col in columns:
                     columns_df.add_column(name=col, data=self._df[col])
+                columns_df._index = self._df._index
             else:
                 columns_df = self._df._columns_view(columns).take(arg[0])
         if isinstance(columns_df.index, MultiIndex):
-            return columns_df.index._get_row_major(columns_df, arg[0])
+            df = columns_df.index._get_row_major(columns_df, arg[0])
+            if isinstance(df, numbers.Number):
+                return df
+            if self._can_downcast_to_series(df, arg):
+                return self._downcast_to_series(df, arg)
+            return df
         else:
             df = DataFrame()
             for col in columns_df.columns:
@@ -275,14 +270,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_scalar(self, arg):
         col = self._df.columns[arg[1]]
         return self._df[col].iloc[arg[0]]
-
-    def _getitem_multiindex_arg(self, arg):
-        row_tuple, column_tuple = self._df._index._split_tuples(arg)
-        columns = self._get_column_selection(column_tuple)
-
-        result_df = self._df[columns]
-        df = result_df.index._get_row_major(result_df, row_tuple)
-        return df
 
     def _get_column_selection(self, arg):
         cols = self._df.columns
