@@ -33,6 +33,11 @@ def get_numeric_type_info(dtype):
         raise TypeError(dtype)
 
 
+def datetime_to_numerical_dtype(dtype):
+    time_unit, _ = np.datetime_data(dtype)
+    return np.dtype('int32' if time_unit == 'D' else 'int64')
+
+
 @njit
 def mask_get(mask, pos):
     return (mask[pos // mask_bitsize] >> (pos % mask_bitsize)) & 1
