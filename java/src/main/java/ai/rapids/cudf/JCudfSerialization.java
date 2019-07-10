@@ -67,6 +67,10 @@ public class JCudfSerialization {
     return paddedBytes;
   }
 
+  public static long getSerializedSizeInBytes(ColumnVector[] columns, long rowOffset, long numRows) {
+    return getSerializedDataSizeInBytes(columns, rowOffset, numRows) + (4 * 3) + 2; // The header size
+  }
+
   private static long getSerializedDataSizeInBytes(ColumnVector[] columns, long rowOffset, long numRows) {
     long total = 0;
     for (int i = 0; i < columns.length; i++) {
