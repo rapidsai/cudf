@@ -32,6 +32,8 @@
 namespace cudf {
 namespace jni {
 
+jobject jscalar_from_scalar(JNIEnv *env, const gdf_scalar &scalar, gdf_time_unit time_unit);
+
 /**
  * @brief indicates that a JNI error of some kind was thrown and the main
  * function should return.
@@ -65,60 +67,54 @@ inline void check_java_exception(JNIEnv *const env) {
   }
 }
 
-
 class native_jlongArray_accessor {
 public:
-  jlong * getArrayElements(JNIEnv *const env, jlongArray arr) const {
+  jlong *getArrayElements(JNIEnv *const env, jlongArray arr) const {
     return env->GetLongArrayElements(arr, NULL);
   }
 
-  jlongArray newArray(JNIEnv *const env, int len) const {
-    return env->NewLongArray(len);
-  }
+  jlongArray newArray(JNIEnv *const env, int len) const { return env->NewLongArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong * arr) const {
+  void setArrayRegion(JNIEnv *const env, jlongArray jarr, int start, int len, jlong *arr) const {
     env->SetLongArrayRegion(jarr, start, len, arr);
   }
 
-  void releaseArrayElements(JNIEnv *const env, jlongArray jarr, jlong * arr, jint mode) const {
+  void releaseArrayElements(JNIEnv *const env, jlongArray jarr, jlong *arr, jint mode) const {
     env->ReleaseLongArrayElements(jarr, arr, mode);
   }
 };
 
 class native_jintArray_accessor {
 public:
-  jint * getArrayElements(JNIEnv *const env, jintArray arr) const {
+  jint *getArrayElements(JNIEnv *const env, jintArray arr) const {
     return env->GetIntArrayElements(arr, NULL);
   }
 
-  jintArray newArray(JNIEnv *const env, int len) const {
-    return env->NewIntArray(len);
-  }
+  jintArray newArray(JNIEnv *const env, int len) const { return env->NewIntArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint * arr) const {
+  void setArrayRegion(JNIEnv *const env, jintArray jarr, int start, int len, jint *arr) const {
     env->SetIntArrayRegion(jarr, start, len, arr);
   }
 
-  void releaseArrayElements(JNIEnv *const env, jintArray jarr, jint * arr, jint mode) const {
+  void releaseArrayElements(JNIEnv *const env, jintArray jarr, jint *arr, jint mode) const {
     env->ReleaseIntArrayElements(jarr, arr, mode);
   }
 };
 
 class native_jbooleanArray_accessor {
 public:
-  jboolean * getArrayElements(JNIEnv *const env, jbooleanArray arr) const {
+  jboolean *getArrayElements(JNIEnv *const env, jbooleanArray arr) const {
     return env->GetBooleanArrayElements(arr, NULL);
   }
 
-  jbooleanArray newArray(JNIEnv *const env, int len) const {
-    return env->NewBooleanArray(len);
-  }
+  jbooleanArray newArray(JNIEnv *const env, int len) const { return env->NewBooleanArray(len); }
 
-  void setArrayRegion(JNIEnv *const env, jbooleanArray jarr, int start, int len, jboolean * arr) const {
+  void setArrayRegion(JNIEnv *const env, jbooleanArray jarr, int start, int len,
+                      jboolean *arr) const {
     env->SetBooleanArrayRegion(jarr, start, len, arr);
   }
 
-  void releaseArrayElements(JNIEnv *const env, jbooleanArray jarr, jboolean * arr, jint mode) const {
+  void releaseArrayElements(JNIEnv *const env, jbooleanArray jarr, jboolean *arr, jint mode) const {
     env->ReleaseBooleanArrayElements(jarr, arr, mode);
   }
 };
@@ -129,10 +125,9 @@ public:
  * By default any changes to the array will be committed back when
  * the destructor is called unless cancel is called first.
  */
-template <typename N_TYPE, typename J_ARRAY_TYPE, typename ACCESSOR>
-class native_jArray {
+template <typename N_TYPE, typename J_ARRAY_TYPE, typename ACCESSOR> class native_jArray {
 private:
-  ACCESSOR access {};
+  ACCESSOR access{};
   JNIEnv *const env;
   J_ARRAY_TYPE orig;
   int len;
@@ -169,7 +164,7 @@ public:
     check_java_exception(env);
   }
 
-  native_jArray(JNIEnv *const env, const std::vector<N_TYPE> & arr)
+  native_jArray(JNIEnv *const env, const std::vector<N_TYPE> &arr)
       : env(env), orig(access.newArray(env, arr.size())), len(arr.size()), data_ptr(NULL) {
     check_java_exception(env);
     access.setArrayRegion(env, orig, 0, len, arr.data());
@@ -232,9 +227,7 @@ public:
     }
   }
 
-  ~native_jArray() {
-      commit();
-  }
+  ~native_jArray() { commit(); }
 };
 
 typedef native_jArray<jlong, jlongArray, native_jlongArray_accessor> native_jlongArray;
