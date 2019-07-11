@@ -239,18 +239,6 @@ class MultiIndex(Index):
             ], axis=1)
         return lookup.merge(codes_table)['idx']
 
-        """
-        elif isinstance(row_tuple[0], slice):
-            # 1. empty slice compute
-            if row_tuple[0].stop == 0:
-                valid_indices = []
-            else:
-                slice_access = True
-                start = row_tuple[0].start or 0
-                stop = row_tuple[0].stop or len(df)
-                step = row_tuple[0].step or 1
-                valid_indices = cudautils.arange(start, stop, step)
-        """
     def _get_row_major(self, df, row_tuple):
         from cudf.utils.cudautils import arange
         slice_access = False

@@ -135,11 +135,15 @@ struct reader_options {
   std::vector<int> use_cols_indexes;        ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
   std::vector<std::string> use_cols_names;  ///< Names of columns to be processed and returned; Empty by default - process all columns.
 
+  std::vector<int> infer_date_indexes;      ///< Column indexes to attempt to infer as date
+  std::vector<std::string> infer_date_names;///< Column names to attempt to infer as date
+
   std::vector<std::string> true_values;     ///< List of values to recognize as boolean True; Empty by default.
   std::vector<std::string> false_values;    ///< List of values to recognize as boolean False; Empty by default.
   std::vector<std::string> na_values;       /**< Array of strings that should be considered as NA. By default the following values are interpreted as NA: 
                                             '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
                                             'NaN', 'n/a', 'nan', 'null'. */
+
   bool          keep_default_na = true;     ///< Keep the default NA values; true by default.
   bool          na_filter = true;           ///< Detect missing values (empty strings and the values in na_values); true by default. Passing false can improve performance.
 

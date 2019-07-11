@@ -247,15 +247,28 @@ def test_fillna_dataframe(fill_type, inplace):
     pdf = pd.DataFrame({"a": [1, 2, None], "b": [None, None, 5]})
     gdf = DataFrame.from_pandas(pdf)
 
-    if fill_type == "scalar":
-        fill_value = 5
-    elif fill_type == "series":
-        fill_value = Series([3, 4, 5])
+    if fill_type == 'scalar':
+        fill_value_pd = 5
+        fill_value_cudf = fill_value_pd
+    elif fill_type == 'series':
+        fill_value_pd = pd.Series([3, 4, 5])
+        fill_value_cudf = Series.from_pandas(fill_value_pd)
     else:
-        fill_value = {"a": 5, "b": Series([3, 4, 5])}
+        fill_value_pd = {'a': 5, 'b': pd.Series([3, 4, 5])}
+        fill_value_cudf = {'a': fill_value_pd['a'],
+                           'b': Series.from_pandas(fill_value_pd['b'])}
 
-    expect = pdf.fillna(fill_value)
-    got = gdf.fillna(fill_value, inplace=inplace)
+    # https://github.com/pandas-dev/pandas/issues/27197
+    # pandas df.fill_value with series is not working
+
+    if isinstance(fill_value_pd, pd.Series):
+        expect = pd.DataFrame()
+        for col in pdf.columns:
+            expect[col] = pdf[col].fillna(fill_value_pd)
+    else:
+        expect = pdf.fillna(fill_value_pd)
+
+    got = gdf.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
         got = gdf
@@ -268,15 +281,17 @@ def test_fillna_dataframe(fill_type, inplace):
 def test_fillna_string(fill_type, inplace):
     psr = pd.Series(["z", None, "z", None])
 
-    if fill_type == "scalar":
-        fill_value = "a"
-    elif fill_type == "series":
-        fill_value = Series(["a", "b", "c", "d"])
+    if fill_type == 'scalar':
+        fill_value_pd = 'a'
+        fill_value_cudf = fill_value_pd
+    elif fill_type == 'series':
+        fill_value_pd = pd.Series(['a', 'b', 'c', 'd'])
+        fill_value_cudf = Series.from_pandas(fill_value_pd)
 
     sr = Series.from_pandas(psr)
 
-    expect = psr.fillna(fill_value)
-    got = sr.fillna(fill_value, inplace=inplace)
+    expect = psr.fillna(fill_value_pd)
+    got = sr.fillna(fill_value_cudf, inplace=inplace)
 
     if inplace:
         got = sr

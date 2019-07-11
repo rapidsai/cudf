@@ -178,6 +178,7 @@ enum : uint8_t {
   inferred = 2,       ///< infer the dtype
   as_default = 4,     ///< no special decoding
   as_hexadecimal = 8, ///< decode with base-16
+  as_datetime = 16,   ///< decode as date and/or time
 };
 using flags = uint8_t;
 } // namespace column_parse

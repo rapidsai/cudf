@@ -41,6 +41,9 @@ cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
         vector[int]         use_cols_indexes
         vector[string]      use_cols_names
 
+        vector[int]         infer_date_indexes
+        vector[string]      infer_date_names
+
         vector[string]      true_values
         vector[string]      false_values
         vector[string]      na_values
