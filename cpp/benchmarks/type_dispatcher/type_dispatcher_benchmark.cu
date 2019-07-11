@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <benchmark/benchmark.h>
 
 #include <cudf/copying.hpp>
 #include <cudf/table.hpp>
@@ -30,8 +29,8 @@
 #include <table/device_table.cuh>
 
 #include <random>
-#include "../fixture/benchmark_fixture.hpp"
 
+#include "../synchronization/synchronization.h"
 
 enum DispatchingType {
   HOST_DISPATCHING,
@@ -256,22 +255,24 @@ void type_dispatcher_benchmark(benchmark::State& state){
   TypeParam* d_ptr;
   RMM_TRY(RMM_ALLOC(&d_ptr, sizeof(TypeParam)*source_size*n_cols, 0));
 
-  for(auto _ : state){
+  cudaEvent_t start, stop;
+  cudaEventCreate(&start);
+  cudaEventCreate(&stop);
+
+  CudaState cuda_state(state);
+  for(auto _ : cuda_state){
     launch_kernel<kernel_type, functor_type, dispatching_type>(source_table, d_ptr);
-    CUDA_TRY(cudaDeviceSynchronize());
   }
 
-
-  for(int c = 0; c < n_cols; c++){
-    std::vector<TypeParam> result_data;
-    std::vector<gdf_valid_type> result_bitmask;
-    std::tie(result_data, result_bitmask) = v_src[c].to_host();
-    for (gdf_index_type i = 0; i < source_size; i++) {
-      // assert(static_cast<TypeParam>(12)+static_cast<TypeParam>(i) == result_data[i]);
-      // if(i==100) printf("%.8f vs %.8f\n", static_cast<TypeParam>(12)+static_cast<TypeParam>(i), result_data[i]);
-    }
+/**
+  while(cuda_state.KeepRunning()){
+    launch_kernel<kernel_type, functor_type, dispatching_type>(source_table, d_ptr);
   }
+*/
 
+  cudaEventDestroy(start);
+  cudaEventDestroy(stop);
+  
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
  
   RMM_TRY(RMM_FREE(d_ptr, 0));
@@ -301,19 +302,19 @@ TBM_BENCHMARK_DEFINE(fp64_mono_compute_no, double, MONOLITHIC_KERNEL, COMPUTE_BO
 TBM_BENCHMARK_DEFINE(fp64_loop_compute_no, double, GRID_STRIDE_LOOP_KERNEL, COMPUTE_BOUND, NO_DISPATCHING);
 
 
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bandwidth_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bandwidth_device)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bandwidth_no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bandwidth_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bandwidth_device)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bandwidth_no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_device)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_host)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_device)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
-BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_no)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}});
+BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bandwidth_host)  ->RangeMultiplier(2)->Ranges({{1<<20, 1<<20},{1,1}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bandwidth_device)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_bandwidth_no)    ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// 
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bandwidth_host)  ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bandwidth_device)->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_bandwidth_no)    ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// 
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_host)    ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_device)  ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_mono_compute_no)      ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// 
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_host)    ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_device)  ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
+// BENCHMARK_REGISTER_F(TypeDispatching, fp64_loop_compute_no)      ->RangeMultiplier(2)->Ranges({{1<<16, 1<<26},{1,8}})->UseManualTime();
 
