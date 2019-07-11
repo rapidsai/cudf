@@ -29,7 +29,7 @@ namespace cudf {
 namespace io {
 namespace avro {
 
-#if 1
+#if 0
 #define LOG_PRINTF(...) std::printf(__VA_ARGS__)
 #else
 #define LOG_PRINTF(...) (void)0
