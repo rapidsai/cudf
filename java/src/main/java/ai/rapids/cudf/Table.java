@@ -188,8 +188,8 @@ public final class Table implements AutoCloseable {
                                               String filePath, long address, long length) throws CudfException;
 
 
-  private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int[] aggColumns,
-                                                   int[] aggType) throws CudfException;
+  private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
+                                                   int[] aggTypes) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -543,15 +543,15 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      int[] values = new int[aggregates.length];
+      int[] aggregateColumnIndices = new int[aggregates.length];
       int[] ops = new int[aggregates.length];
       for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
-        values[aggregateIndex] = aggregates[aggregateIndex].getIndex();
+        aggregateColumnIndices[aggregateIndex] = aggregates[aggregateIndex].getIndex();
         ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
       }
 
       Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
-          operation.indices, values, ops));
+          operation.indices, aggregateColumnIndices, ops));
       return aggregate;
     }
   }

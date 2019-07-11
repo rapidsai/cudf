@@ -445,18 +445,17 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
-    JNIEnv *env, jclass clazz, jlong input_table, jintArray keys, jintArray values,
-    jintArray agg_types) {
+    JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
+    jintArray aggregate_column_indices, jintArray agg_types) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
-  JNI_NULL_CHECK(env, values, "input values are null", NULL);
+  JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
   JNI_NULL_CHECK(env, agg_types, "agg_types are null", NULL);
 
   try {
-
     cudf::table *n_input_table = reinterpret_cast<cudf::table *>(input_table);
     cudf::jni::native_jintArray n_keys(env, keys);
-    cudf::jni::native_jintArray n_values(env, values);
+    cudf::jni::native_jintArray n_values(env, aggregate_column_indices);
     cudf::jni::native_jintArray n_ops(env, agg_types);
     std::vector<gdf_column *> n_keys_cols;
     std::vector<gdf_column *> n_values_cols;
@@ -480,14 +479,11 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     std::pair<cudf::table, cudf::table> result =
         cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops);
 
-    std::vector<gdf_column *> output_columns;
     try {
-      for (auto col = result.first.begin(); col != result.first.end(); col++) {
-        output_columns.push_back(*col);
-      }
-      for (auto col = result.second.begin(); col != result.second.end(); col++) {
-        output_columns.push_back(*col);
-      }
+      std::vector<gdf_column *> output_columns;
+      output_columns.reserve(result.first.num_columns() + result.second.num_columns());
+      output_columns.insert(output_columns.end(), result.first.begin(), result.first.end());
+      output_columns.insert(output_columns.end(), result.second.begin(), result.second.end());
       cudf::jni::native_jlongArray native_handles(
           env, reinterpret_cast<jlong *>(output_columns.data()), output_columns.size());
       return native_handles.get_jArray();
