@@ -10,6 +10,7 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2157 Add __array_function__ to DataFrame and Series
 
 ## Improvements
 
@@ -19,6 +20,7 @@
 - PR #2125 More aggregate in java API
 - PR #2127 Add in java Scalar tests
 - PR #2088 Refactor of Python groupby code
+- PR #2130 Java serialization and deserialization of tables.
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
@@ -28,6 +30,7 @@
 - PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
+- PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 - PR #1993 Add iterator driven reduction for mean, var, std
 
 ## Bug Fixes

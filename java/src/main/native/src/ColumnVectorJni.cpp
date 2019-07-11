@@ -129,17 +129,23 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewAugmented(
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
-    JNIEnv *env, jobject, jlong handle, jlong host_data_ptr, jlong host_offsets_ptr,
-    jlong device_valid_ptr, jlong device_data_ptr, jint size, jint jdtype, jint null_count) {
+    JNIEnv *env, jobject, jlong handle, jlong data_ptr, jboolean data_ptr_on_host,
+    jlong host_offsets_ptr, jboolean reset_offsets_to_zero,
+    jlong device_valid_ptr, jlong device_output_data_ptr, jint size,
+    jint jdtype, jint null_count) {
   JNI_NULL_CHECK(env, handle, "column is null", );
-  JNI_NULL_CHECK(env, host_data_ptr, "host data is null", );
+  JNI_NULL_CHECK(env, data_ptr, "string data is null", );
   JNI_NULL_CHECK(env, host_offsets_ptr, "host offsets is null", );
 
   try {
     gdf_column *column = reinterpret_cast<gdf_column *>(handle);
-    char *host_data = reinterpret_cast<char *>(host_data_ptr);
+    char *data = reinterpret_cast<char *>(data_ptr);
     uint32_t *host_offsets = reinterpret_cast<uint32_t *>(host_offsets_ptr);
-    uint32_t host_data_size = host_offsets[size];
+
+    uint32_t data_size = host_offsets[size];
+    if (reset_offsets_to_zero) {
+        data_size -= host_offsets[0];
+    }
 
     gdf_valid_type *valid = reinterpret_cast<gdf_valid_type *>(device_valid_ptr);
     gdf_dtype dtype = static_cast<gdf_dtype>(jdtype);
@@ -149,15 +155,26 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
     // NVCategory::create_from_offsets or NVStrings::create_from_offsets, it's much faster to
     // use create_from_index, block-transferring the host string data to the device first.
 
-    auto device_data = cudf::jni::jni_rmm_alloc<char>(env, host_data_size);
-    JNI_CUDA_TRY(
-        env, ,
-        cudaMemcpyAsync(device_data.get(), host_data, host_data_size, cudaMemcpyHostToDevice));
+    char * device_data = nullptr;
+    cudf::jni::jni_rmm_unique_ptr<char> dev_string_data_holder;
+    if (data_ptr_on_host) {
+        dev_string_data_holder = cudf::jni::jni_rmm_alloc<char>(env, data_size);
+        JNI_CUDA_TRY(
+            env, ,
+            cudaMemcpyAsync(dev_string_data_holder.get(), data, data_size, cudaMemcpyHostToDevice));
+        device_data = dev_string_data_holder.get();
+    } else {
+        device_data = data;
+    }
 
+    uint32_t offset_amount_to_subtract = 0;
+    if (reset_offsets_to_zero) {
+        offset_amount_to_subtract = host_offsets[0];
+    }
     std::vector<std::pair<const char *, size_t>> index{};
     index.reserve(size);
     for (int i = 0; i < size; i++) {
-      index[i].first = device_data.get() + host_offsets[i];
+      index[i].first = device_data + host_offsets[i] - offset_amount_to_subtract;
       index[i].second = host_offsets[i + 1] - host_offsets[i];
     }
 
@@ -169,8 +186,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
           gdf_column_view_augmented(column, strings.get(), valid, size, dtype, null_count, info));
       strings.release();
     } else if (dtype == GDF_STRING_CATEGORY) {
-      JNI_NULL_CHECK(env, device_data_ptr, "device data pointer is null", );
-      int *cat_data = reinterpret_cast<int *>(device_data_ptr);
+      JNI_NULL_CHECK(env, device_output_data_ptr, "device data pointer is null", );
+      int *cat_data = reinterpret_cast<int *>(device_output_data_ptr);
       unique_nvcat_ptr cat(NVCategory::create_from_index(index.data(), size, false),
                            &NVCategory::destroy);
       info.category = cat.get();

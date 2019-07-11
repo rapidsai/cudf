@@ -2185,7 +2185,8 @@ def test_dataframe_boolmask(mask_shape):
 
     assert np.array_equal(gdf.columns, pdf.columns)
     for col in gdf.columns:
-        assert np.array_equal(gdf[col].fillna(-1), pdf[col].fillna(-1))
+        assert np.array_equal(gdf[col].fillna(-1).to_pandas().values,
+                              pdf[col].fillna(-1).values)
 
 
 def test_dataframe_assignment():
