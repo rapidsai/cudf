@@ -2734,6 +2734,33 @@ class DataFrame(object):
 
         return output_frame
 
+    def isnull(self):
+        """Identify missing values in a DataFrame.
+        """
+        return DataFrame(
+            {
+                col: self[col].isnull()
+                for col in self.columns
+            },
+            index=self.index
+        )
+
+    def isna(self):
+        """Identify missing values in a DataFrame. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in a DataFrame.
+        """
+        return DataFrame(
+            {
+                col: self[col].notna()
+                for col in self.columns
+            },
+            index=self.index
+        )
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
