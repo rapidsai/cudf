@@ -43,9 +43,8 @@
 #include <utilities/error_utils.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 
-#include <iterator/iterator.cuh>    // include iterator header
-#include <utilities/device_operators.cuh>
-#include <reductions/reduction_operators.cuh>
+#include <iterator/iterator.cuh>         // include iterator header
+#include <utilities/device_atomics.cuh>  // need for atomics and device operator
 
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
@@ -285,11 +284,11 @@ static constexpr int reduction_block_size = 128;
 /*
 Generic reduction implementation with support for validity mask
 */
-template<typename T_in, typename T_out, typename F, typename Ld>
+template<typename T_in, typename T_out, typename F>
 __global__
 void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
                       gdf_size_type size, T_out *result,
-                      F functor, T_out identity, Ld loader)
+                      F functor, T_out identity)
 {
     typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
     __shared__ typename BlockReduce::TempStorage temp_storage;
@@ -308,7 +307,7 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
         // load
         T_out loaded = identity;
         if (i < size && gdf_is_valid(mask, i))
-            loaded = static_cast<T_out>(loader(data, i));
+            loaded = static_cast<T_out>(data[i]);
 
         // Block reduce
         T_out temp = BlockReduce(temp_storage).Reduce(loaded, functor);
@@ -322,10 +321,10 @@ void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
     }
 }
 
-template<typename T_in, typename T_out, typename Op>
+template<typename T_in, typename T_out>
 void ReduceOp(const gdf_column *input, rmm::device_vector<T_out>& dev_result, int iters)
 {
-    T_out identity = Op::Op::template identity<T_out>();
+    T_out identity{0};
 
     // allocate temporary memory for the result
     T_out* result = dev_result.data().get();
@@ -339,7 +338,7 @@ void ReduceOp(const gdf_column *input, rmm::device_vector<T_out>& dev_result, in
       gpu_reduction_op<<<gridsize, blocksize>>>(
           static_cast<const T_in*>(input->data), input->valid, input->size,
           result,
-          typename Op::Op{}, identity, typename Op::Loader{});
+          typename cudf::DeviceSum{}, identity);
     };
 
     bench(); // warm up
@@ -357,7 +356,7 @@ template <typename T, bool has_null>
 void raw_stream_bench_cub_block(cudf::test::column_wrapper<T>& col, rmm::device_vector<T>& result, int iters)
 {
   std::cout << "raw stream cub::BlockReduce" << ( (has_null) ? "<true>: " : "<false>: " ) << "\t";
-  ReduceOp<T, T, cudf::reductions::ReductionSum>(col, result, iters);
+  ReduceOp<T, T>(col, result, iters);
 }
 
 // -----------------------------------------------------------------------------
