@@ -997,7 +997,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduction(ReductionOp.SUM, outType);
+    return reduce(ReductionOp.SUM, outType);
   }
 
   /**
@@ -1013,7 +1013,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar min(DType outType) {
-    return reduction(ReductionOp.MIN, outType);
+    return reduce(ReductionOp.MIN, outType);
   }
 
   /**
@@ -1029,7 +1029,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar max(DType outType) {
-    return reduction(ReductionOp.MAX, outType);
+    return reduce(ReductionOp.MAX, outType);
   }
 
   /**
@@ -1045,7 +1045,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduction(ReductionOp.PRODUCT, outType);
+    return reduce(ReductionOp.PRODUCT, outType);
   }
 
   /**
@@ -1061,7 +1061,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduction(ReductionOp.SUMOFSQUARES, outType);
+    return reduce(ReductionOp.SUMOFSQUARES, outType);
   }
 
   /**
@@ -1074,8 +1074,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduction(ReductionOp op) {
-    return reduction(op, type);
+  public Scalar reduce(ReductionOp op) {
+    return reduce(op, type);
   }
 
   /**
@@ -1090,8 +1090,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduction(ReductionOp op, DType outType) {
-    return Cudf.reduction(this, op, outType);
+  public Scalar reduce(ReductionOp op, DType outType) {
+    return Cudf.reduce(this, op, outType);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1329,6 +1329,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                                    boolean resetOffsetsToZero, long deviceValidPtr,
                                                    long deviceOutputDataPtr,
                                                    int numRows, int dtype, int nullCount);
+
+  private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+
+  private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
 
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses
@@ -1865,6 +1869,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       columnHandles[i] = columns[i].getNativeCudfColumnAddress();
     }
     return new ColumnVector(concatenate(columnHandles));
+  }
+
+  /**
+   * Calculate the quantile of this ColumnVector
+   * @param method   the method used to calculate the quantile
+   * @param quantile the quantile value [0,1]
+   * @return the quantile as double. The type can be changed in future
+   */
+  public Scalar exactQuantile(QuantileMethod method, double quantile) {
+    return exactQuantile(this.getNativeCudfColumnAddress(), method.nativeId, quantile);
+  }
+
+  /**
+   * Calculate the approximate quantile of this ColumnVector
+   * @param quantile the quantile value [0,1]
+   * @return the quantile, with the same type as this object
+   */
+  public Scalar approxQuantile(double quantile) {
+    return approxQuantile(this.getNativeCudfColumnAddress(), quantile);
   }
 
   /**
