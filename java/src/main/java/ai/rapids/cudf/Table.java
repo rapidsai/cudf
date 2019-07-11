@@ -462,7 +462,7 @@ public final class Table implements AutoCloseable {
   }
 
   public static Aggregate mean(int index) {
-    return Aggregate.avg(index);
+    return Aggregate.mean(index);
   }
 
   public AggregateOperation groupBy(int... indices) {
