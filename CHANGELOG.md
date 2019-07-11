@@ -30,6 +30,7 @@
 - PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
+- PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 
 ## Bug Fixes
 
