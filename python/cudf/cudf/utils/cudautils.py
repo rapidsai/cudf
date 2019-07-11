@@ -787,7 +787,7 @@ def gpu_mark_gt(arr, val, out, not_found):
 
 
 @cuda.jit
-def gpu_mark_lt_int(arr, val, out, not_found):
+def gpu_mark_lt(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
         if check_lt(arr[i], val):
@@ -843,18 +843,13 @@ def find_last(arr, val, binop='eq'):
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if arr.dtype in ("float32", "float64"):
-            if binop == 'gt':
-                gpu_mark_gt_float.forall(found.size)(arr, val, found, -1)
-            if binop == 'lt':
-                gpu_mark_lt_float.forall(found.size)(arr, val, found, -1)
-            else:
-                gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+        if binop == 'gt':
+            gpu_mark_gt.forall(found.size)(arr, val, found, -1)
+        elif binop == 'lt':
+            gpu_mark_lt.forall(found.size)(arr, val, found, -1)
         else:
-            if binop == 'gt':
-                gpu_mark_gt_int.forall(found.size)(arr, val, found, -1)
-            if binop == 'lt':
-                gpu_mark_lt_int.forall(found.size)(arr, val, found, -1)
+            if arr.dtype in ("float32", "float64"):
+                gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
             else:
                 gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
     from cudf.dataframe.columnops import as_column
