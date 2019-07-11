@@ -61,8 +61,13 @@ gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists, 
                           : cudf::size_of(input.dtype);
     RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
     if ((input.valid != nullptr) && allocate_mask_if_exists) {
-      size_t valid_size = gdf_valid_allocation_size(input.size);
+      size_t valid_size = gdf_valid_allocation_size(input.size) * sizeof(gdf_valid_type);
       RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
+      CUDA_TRY(cudaMemsetAsync(
+			     output.valid, 0,
+			     valid_size,
+			     stream));
+
     }
   }
 
@@ -84,8 +89,12 @@ gdf_column allocate_like(gdf_column const& input, gdf_size_type size,
                         : cudf::size_of(input.dtype);
   RMM_TRY(RMM_ALLOC(&output.data, size * byte_width, stream));
   if ((input.valid != nullptr) && allocate_mask_if_exists) {
-    size_t valid_size = gdf_valid_allocation_size(size);
+    size_t valid_size = gdf_valid_allocation_size(size) * sizeof(gdf_valid_type);
     RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
+    CUDA_TRY(cudaMemsetAsync(
+			     output.valid, 0,
+			     valid_size,
+			     stream));
   }
   
   return output;
