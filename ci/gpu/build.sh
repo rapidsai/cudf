@@ -42,7 +42,7 @@ nvidia-smi
 logger "Activate conda env..."
 source activate gdf
 conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
-              "dask>=2.0" "distributed>=2.0"
+              "dask>=2.0" "distributed>=2.0" "numpy>=1.16"
 
 # Install the master version of dask and distributed
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps" 
@@ -84,6 +84,15 @@ else
     # Temporarily install feather and cupy for testing
     logger "conda install feather-format"
     conda install "feather-format" "cupy>=6.0.0"
+
+    # set environment variable for numpy 1.16
+    # will be enabled for later versions by default
+    np_ver=$(python -c "import numpy; print('.'.join(numpy.__version__.split('.')[:-1]))")
+    if [ "$np_ver" == "1.16" ];then
+      logger "export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1"
+      export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
+    fi
+
 
     logger "Python py.test for cuDF..."
     cd $WORKSPACE/python/cudf
