@@ -311,6 +311,34 @@ class Series(object):
         else:
             return NotImplemented
 
+    def __array_function__(self, func, types, args, kwargs):
+
+        cudf_series_module = Series
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_series_module, submodule):
+                cudf_series_module = getattr(cudf_series_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_series_module]
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_series_module, fname):
+            cudf_func = getattr(cudf_series_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -1516,8 +1544,6 @@ class Series(object):
         A sequence of new series for each category.  Its length is determined
         by the length of ``cats``.
         """
-        if self.dtype.kind not in "iuf":
-            raise TypeError("expecting integer or float dtype")
 
         dtype = np.dtype(dtype)
         return ((self == cat).fillna(False).astype(dtype) for cat in cats)
@@ -1697,30 +1723,23 @@ class Series(object):
                 index=self.index,
             )
 
-    def mean(self, axis=None, skipna=True, dtype=None):
+    def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean(dtype=dtype)
+        return self._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return np.sqrt(self.var(ddof=ddof))
+        return self._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        mu, var = self.mean_var(ddof=ddof)
-        return var
-
-    def mean_var(self, ddof=1):
-        """Compute mean and variance at the same time.
-        """
-        mu, var = self._column.mean_var(ddof=ddof)
-        return mu, var
+        return self._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
@@ -2322,8 +2341,10 @@ register_distributed_serializer(Series)
 
 
 truediv_int_dtype_corrections = {
-    "int64": "float64",
+    "int16": "float32",
     "int32": "float32",
+    "int64": "float64",
+    "bool": "float32",
     "int": "float",
 }
 

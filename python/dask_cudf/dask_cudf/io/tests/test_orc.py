@@ -21,6 +21,13 @@ def test_read_orc_defaults():
     dd.assert_eq(df1, df2, check_index=False)
 
 
+def test_filepath_read_orc_defaults():
+    path = "file://%s" % sample_orc
+    df1 = cudf.read_orc(path)
+    df2 = dask_cudf.read_orc(path)
+    dd.assert_eq(df1, df2, check_index=False)
+
+
 # engine pyarrow fails
 # https://github.com/rapidsai/cudf/issues/1595
 @pytest.mark.parametrize("engine", ["cudf"])
