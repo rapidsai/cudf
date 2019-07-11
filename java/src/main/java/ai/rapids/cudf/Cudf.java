@@ -117,11 +117,11 @@ class Cudf {
   private static native void fill(long input, long sIntValues, float sFValue,
                                   double sDValue, boolean sIsValid, int sDtype);
 
-  static Scalar reduction(ColumnVector v, ReductionOp op, DType outType) {
-    return reduction(v.getNativeCudfColumnAddress(), op.nativeId, outType.nativeId);
+  static Scalar reduce(ColumnVector v, ReductionOp op, DType outType) {
+    return reduce(v.getNativeCudfColumnAddress(), op.nativeId, outType.nativeId);
   }
 
-  private static native Scalar reduction(long v, int op, int dtype);
+  private static native Scalar reduce(long v, int op, int dtype);
 
   /* datetime extract*/
 

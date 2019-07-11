@@ -161,7 +161,7 @@ class ReductionTest {
   @MethodSource("createBooleanParams")
   void testBoolean(ReductionOp op, Boolean[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedBooleans(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -170,7 +170,7 @@ class ReductionTest {
   @MethodSource("createByteParams")
   void testByte(ReductionOp op, Byte[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedBytes(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -179,7 +179,7 @@ class ReductionTest {
   @MethodSource("createShortParams")
   void testShort(ReductionOp op, Short[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedShorts(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -188,7 +188,7 @@ class ReductionTest {
   @MethodSource("createIntParams")
   void testInt(ReductionOp op, Integer[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedInts(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -197,7 +197,7 @@ class ReductionTest {
   @MethodSource("createLongParams")
   void testLong(ReductionOp op, Long[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedLongs(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -206,7 +206,7 @@ class ReductionTest {
   @MethodSource("createFloatParams")
   void testFloat(ReductionOp op, Float[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedFloats(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -215,7 +215,7 @@ class ReductionTest {
   @MethodSource("createDoubleParams")
   void testByte(ReductionOp op, Double[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.fromBoxedDoubles(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -224,7 +224,7 @@ class ReductionTest {
   @MethodSource("createDate32Params")
   void testDate32(ReductionOp op, Integer[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.datesFromBoxedInts(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -233,7 +233,7 @@ class ReductionTest {
   @MethodSource("createDate64Params")
   void testDate64(ReductionOp op, Long[] values, Scalar expected) {
     try (ColumnVector v = ColumnVector.datesFromBoxedLongs(values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
@@ -242,7 +242,7 @@ class ReductionTest {
   @MethodSource("createTimestampParams")
   void testTimestamp(ReductionOp op, Long[] values, TimeUnit timeUnit, Scalar expected) {
     try (ColumnVector v = ColumnVector.timestampsFromBoxedLongs(timeUnit, values)) {
-      Scalar result = v.reduction(op);
+      Scalar result = v.reduce(op);
       assertEquals(expected, result);
     }
   }
