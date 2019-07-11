@@ -82,13 +82,27 @@ static void join_benchmark(benchmark::State& state)
 
     // Benchmark the inner join operation
 
+    cudaEvent_t start, stop;
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    float milliseconds;
+
     for (auto _ : state) {
+        cudaEventRecord(start);
+
         CUDF_TRY(gdf_inner_join(
             probe_table.data(), 2, columns_to_join,
             build_table.data(), 2, columns_to_join,
             1, nresult_cols, col_ptrs.data(),
             nullptr, nullptr, &ctxt
         ));
+
+        cudaEventRecord(stop);
+        cudaEventSynchronize(stop);
+
+        cudaEventElapsedTime(&milliseconds, start, stop);
+        state.SetIterationTime(milliseconds / 1000);
     }
 
     // Cleanup
@@ -106,8 +120,10 @@ BENCHMARK_TEMPLATE(join_benchmark, int32_t, int32_t)->Unit(benchmark::kMilliseco
     ->Args({10'000'000, 40'000'000})
     ->Args({10'000'000, 100'000'000})
     ->Args({100'000'000, 100'000'000})
-    ->Args({80'000'000, 240'000'000});
+    ->Args({80'000'000, 240'000'000})
+    ->UseManualTime();
 
 BENCHMARK_TEMPLATE(join_benchmark, int64_t, int64_t)->Unit(benchmark::kMillisecond)
     ->Args({50'000'000, 50'000'000})
-    ->Args({40'000'000, 120'000'000});
+    ->Args({40'000'000, 120'000'000})
+    ->UseManualTime();
