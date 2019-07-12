@@ -226,26 +226,26 @@ def test_multiindex_tuples(testarr):
         ['frog', 'cat', 'bat', 'dog'],
     ],
 )
-def test_get_slice_bound(testlist):
+@pytest.mark.parametrize("side", ['left', 'right'])
+@pytest.mark.parametrize("kind", ['ix', 'loc', 'getitem', None])
+def test_get_slice_bound(testlist, side, kind):
     index = GenericIndex(testlist)
     index_pd = pd.Index(testlist)
     for label in testlist:
-        for side in ['left', 'right']:
-            for kind in ['ix', 'loc', 'getitem', None]:
-                assert(
-                    index.get_slice_bound(label, side, kind)
-                    == index_pd.get_slice_bound(label, side, kind)
-                )
+        assert(
+            index.get_slice_bound(label, side, kind)
+            == index_pd.get_slice_bound(label, side, kind)
+        )
 
 
-@pytest.mark.parametrize("testlabel", [1, 3, 5, 7, 9, 11])
-def test_get_slice_bound_missing(testlabel):
+@pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])
+@pytest.mark.parametrize("side", ['left', 'right'])
+@pytest.mark.parametrize("kind", ['ix', 'loc', 'getitem', None])
+def test_get_slice_bound_missing(label, side, kind):
     mylist = [2, 4, 6, 8, 10]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
-    for side in ['left', 'right']:
-        for kind in ['ix', 'loc', 'getitem', None]:
-            assert(
-                index.get_slice_bound(testlabel, side, kind)
-                == index_pd.get_slice_bound(testlabel, side, kind)
-            )
+    assert(
+        index.get_slice_bound(label, side, kind)
+        == index_pd.get_slice_bound(label, side, kind)
+    )
