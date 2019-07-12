@@ -2940,6 +2940,7 @@ def test_isnull_isna():
     # float & strings some missing
     ps = pd.DataFrame({"a": [0, 1, 2, np.nan, 4, None, 6],
                        "b": [np.nan, None, 'u', 'h', 'd', 'a', 'm']})
+    ps.index = ['q', 'w', 'e', 'r', 't', 'y', 'u']
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())

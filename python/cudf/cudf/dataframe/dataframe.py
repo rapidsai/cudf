@@ -2734,32 +2734,20 @@ class DataFrame(object):
 
         return output_frame
 
-    def isnull(self):
+    def isnull(self, **kwargs):
         """Identify missing values in a DataFrame.
         """
-        return DataFrame(
-            {
-                col: self[col].isnull()
-                for col in self.columns
-            },
-            index=self.index
-        )
+        return self._apply_support_method("isnull", **kwargs)
 
-    def isna(self):
+    def isna(self, **kwargs):
         """Identify missing values in a DataFrame. Alias for isnull.
         """
-        return self.isnull()
+        return self.isnull(**kwargs)
 
-    def notna(self):
+    def notna(self, **kwargs):
         """Identify non-missing values in a DataFrame.
         """
-        return DataFrame(
-            {
-                col: self[col].notna()
-                for col in self.columns
-            },
-            index=self.index
-        )
+        return self._apply_support_method("notna", **kwargs)
 
     def to_pandas(self):
         """
