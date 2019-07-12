@@ -65,7 +65,7 @@ namespace detail {
 gdf_column search_ordered(table const& t,
                           table const& values,
                           bool find_first,
-                          std::vector<bool>& desc_flags,
+                          std::vector<bool> const& desc_flags,
                           bool nulls_as_largest,
                           cudaStream_t stream = 0)
 {
@@ -84,8 +84,8 @@ gdf_column search_ordered(table const& t,
   auto d_values = device_table::create(values, stream);
   auto count_it = thrust::make_counting_iterator(0);
 
-  thrust::device_vector<int8_t, rmm_allocator<int8_t>> dv_desc_flags(desc_flags);
-  auto d_desc_flags = thrust::raw_pointer_cast(dv_desc_flags.data());
+  rmm::device_vector<int8_t> dv_desc_flags(desc_flags);
+  auto d_desc_flags = dv_desc_flags.data().get();
   
   if ( has_nulls(t) ) {
     auto ineq_op = (find_first)
@@ -110,13 +110,13 @@ gdf_column search_ordered(table const& t,
 gdf_column search_ordered(gdf_column const& column,
                           gdf_column const& values,
                           bool find_first,
-                          bool ascending,
+                          bool descending,
                           bool nulls_as_largest,
                           cudaStream_t stream = 0)
 {
   const table t{const_cast<gdf_column*>(&column)};
   const table val{const_cast<gdf_column*>(&values)};
-  std::vector<bool> desc_flags{!ascending};
+  std::vector<bool> desc_flags{descending};
 
   return search_ordered(t, val, find_first, desc_flags, nulls_as_largest, stream);
 }
@@ -141,7 +141,7 @@ gdf_column upper_bound(gdf_column const& column,
 
 gdf_column lower_bound(table const& t,
                        table const& values,
-                       std::vector<bool>& desc_flags,
+                       std::vector<bool> const& desc_flags,
                        bool nulls_as_largest)
 {
   return detail::search_ordered(t, values, true, desc_flags, nulls_as_largest);
@@ -149,7 +149,7 @@ gdf_column lower_bound(table const& t,
 
 gdf_column upper_bound(table const& t,
                        table const& values,
-                       std::vector<bool>& desc_flags,
+                       std::vector<bool> const& desc_flags,
                        bool nulls_as_largest)
 {
   return detail::search_ordered(t, values, false, desc_flags, nulls_as_largest);

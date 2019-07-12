@@ -80,7 +80,7 @@ TEST_F(SearchTest, non_null_column_desc__find_first)
         result_column = cudf::lower_bound(
             *(column.get()),
             *(values.get()),
-            false)
+            true)   // descending
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -103,7 +103,7 @@ TEST_F(SearchTest, non_null_column_desc__find_last)
         result_column = cudf::upper_bound(
             *(column.get()),
             *(values.get()),
-            false)
+            true)   // descending
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -136,7 +136,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
         result_column = cudf::upper_bound(
             *(column.get()),
             *(values.get()),
-            true,   // ascending
+            false,   // descending
             false)  // nulls_as_largest
     );
 
@@ -170,7 +170,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
         result_column = cudf::lower_bound(
             *(column.get()),
             *(values.get()),
-            true,   // ascending
+            false,   // descending
             false)  // nulls_as_largest
     );
 
@@ -204,7 +204,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
         result_column = cudf::upper_bound(
             *(column.get()),
             *(values.get()),
-            true,  // ascending
+            false,  // descending
             true)  // nulls_as_largest
     );
 
@@ -238,7 +238,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
         result_column = cudf::lower_bound(
             *(column.get()),
             *(values.get()),
-            true,   // ascending
+            false,   // descending
             true)  // nulls_as_largest
     );
 
