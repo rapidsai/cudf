@@ -251,3 +251,20 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
     pdf = pdf[skip_rows : skip_rows + num_rows]
 
     np.testing.assert_allclose(pdf, gdf)
+
+
+def test_orc_reader_uncompressed_block(datadir):
+    path = datadir / "uncompressed_snappy.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    got = cudf.read_orc(path, engine="cudf")
+
+    assert_eq(expect, got, check_categorical=False)
+
