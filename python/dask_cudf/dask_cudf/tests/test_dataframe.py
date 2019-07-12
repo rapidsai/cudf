@@ -56,3 +56,14 @@ def test_get_dummies(data):
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
     dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
                  check_dtype=False)
+
+    gdf = cudf.datasets.randomdata(nrows=200000, dtypes={"C": int, "first": 'category', "b": float, "second": 'category'})
+    df = gdf.to_pandas()
+    ddf = dd.from_pandas(df, npartitions=100)
+    dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(ddf, columns=['C']).compute()
+    gddf = dask_cudf.from_cudf(gdf, npartitions=100)
+    with pytest.raises(NotImplementedError):
+        dd.get_dummies(gddf, columns=['C']).compute()
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),check_dtype=False)
