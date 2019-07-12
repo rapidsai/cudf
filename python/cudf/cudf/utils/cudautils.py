@@ -784,6 +784,8 @@ def gpu_mark_gt(arr, val, out, not_found):
     if i < arr.size:
         if check_gt(arr[i], val):
             out[i] = i
+        else:
+            out[i] = not_found
 
 
 @cuda.jit
