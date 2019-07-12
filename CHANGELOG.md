@@ -57,7 +57,6 @@
 - PR #2235 Fix get_dummies to be compatible with dask
 
 
-
 # cuDF 0.8.0 (27 June 2019)
 
 ## New Features
