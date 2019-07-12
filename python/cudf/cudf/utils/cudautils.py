@@ -798,21 +798,23 @@ def gpu_mark_lt(arr, val, out, not_found):
             out[i] = not_found
 
 
-def find_first(arr, val, binop='eq'):
+def find_first(arr, val, compare='eq'):
     """
-    Returns the index of the first occurrence of *val* in *arr*.
+    Returns the index of the first occurrence of *val* in *arr*..
+    Or the first occurence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
     ----------
     arr : device array
     val : scalar
+    compare: str ('gt', 'lt', or 'eq' (default))
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if binop == 'gt':
+        if compare == 'gt':
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
-        elif binop == 'lt':
+        elif compare == 'lt':
             gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
         else:
             if arr.dtype in ("float32", "float64"):
@@ -833,21 +835,23 @@ def find_first(arr, val, binop='eq'):
         return min_index
 
 
-def find_last(arr, val, binop='eq'):
+def find_last(arr, val, compare='eq'):
     """
     Returns the index of the last occurrence of *val* in *arr*.
+    Or the last occurence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
     ----------
     arr : device array
     val : scalar
+    compare: str ('gt', 'lt', or 'eq' (default))
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if binop == 'gt':
+        if compare == 'gt':
             gpu_mark_gt.forall(found.size)(arr, val, found, -1)
-        elif binop == 'lt':
+        elif compare == 'lt':
             gpu_mark_lt.forall(found.size)(arr, val, found, -1)
         else:
             if arr.dtype in ("float32", "float64"):

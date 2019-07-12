@@ -249,3 +249,18 @@ def test_get_slice_bound_missing(label, side, kind):
         index.get_slice_bound(label, side, kind)
         == index_pd.get_slice_bound(label, side, kind)
     )
+
+
+@pytest.mark.xfail
+@pytest.mark.parametrize("label", ['a', 'c', 'e', 'g'])
+@pytest.mark.parametrize("side", ['left', 'right'])
+def test_get_slice_bound_missing_str(label, side):
+    # Slicing for monotonic string indices not yet supported
+    # when missing values are specified (allowed in pandas)
+    mylist = ['b', 'd', 'f']
+    index = GenericIndex(mylist)
+    index_pd = pd.Index(mylist)
+    assert(
+        index.get_slice_bound(label, side, 'getitem')
+        == index_pd.get_slice_bound(label, side, 'getitem')
+    )

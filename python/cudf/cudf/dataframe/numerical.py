@@ -374,7 +374,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             elif value > self.max():
                 found = len(self)
             else:
-                found = cudautils.find_first(self.data.mem, value, binop="gt")
+                found = cudautils.find_first(
+                    self.data.mem, value, compare="gt"
+                )
                 if found == -1:
                     raise ValueError("value not found")
         elif found == -1:
@@ -392,7 +394,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             elif value > self.max():
                 found = len(self) - 1
             else:
-                found = cudautils.find_last(self.data.mem, value, binop="lt")
+                found = cudautils.find_last(
+                    self.data.mem, value, compare="lt"
+                )
                 if found == -1:
                     raise ValueError("value not found")
         elif found == -1:
