@@ -12,6 +12,7 @@
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
+- PR #2212 Java support for ORC reader
 
 ## Improvements
 
