@@ -36,6 +36,7 @@
 - PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
+- PR #2224 implement isna, isnull, notna as dataframe functions
 
 
 ## Bug Fixes
