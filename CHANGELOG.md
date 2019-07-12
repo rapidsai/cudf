@@ -30,11 +30,13 @@
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 - PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
+- PR #2176 Added column dtype support for datetime, int8, int16 to csv_writer
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
 - PR #2217 Updated Java bindings to use the new groupby API
 - PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
+
 
 ## Bug Fixes
 
