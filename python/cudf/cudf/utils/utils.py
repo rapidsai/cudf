@@ -304,3 +304,19 @@ def compare_and_get_name(a, b):
     elif b_has:
         return b.name
     return None
+
+
+# taken from dask array
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
+def _is_nep18_active():
+    class A:
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()

@@ -20,13 +20,14 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
@@ -58,50 +59,56 @@ public class TableTest {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
-  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertEquals(expected.getType(), cv.getType(), "Column " + colName);
-    assertEquals(expected.getRowCount(), cv.getRowCount(), "Column " + colName);
-    assertEquals(expected.getNullCount(), cv.getNullCount(), "Column " + colName);
+  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName) {
+    assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
+    assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
+    if (rowOffset == 0 && length == expected.getRowCount()) {
+      assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
+    } else {
+      // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    assertEquals(expected.getTimeUnit(), cv.getTimeUnit(), "TimeUnit for Column " + colName);
     expected.ensureOnHost();
     cv.ensureOnHost();
     DType type = expected.getType();
-    for (long row = 0; row < expected.getRowCount(); row++) {
-      assertEquals(expected.isNull(row), cv.isNull(row), "NULL EQUALS Column " + colName + " Row "
-          + row);
-      if (!expected.isNull(row)) {
+    for (long expectedRow = rowOffset; expectedRow < (rowOffset + length); expectedRow++) {
+      long tableRow = expectedRow - rowOffset;
+      assertEquals(expected.isNull(expectedRow), cv.isNull(tableRow),
+          "NULL for Column " + colName + " Row " + tableRow);
+      if (!expected.isNull(expectedRow)) {
         switch (type) {
           case BOOL8: // fall through
           case INT8:
-            assertEquals(expected.getByte(row), cv.getByte(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getByte(expectedRow), cv.getByte(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT16:
-            assertEquals(expected.getShort(row), cv.getShort(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getShort(expectedRow), cv.getShort(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT32: // fall through
           case DATE32:
-            assertEquals(expected.getInt(row), cv.getInt(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
           case DATE64: // fall through
           case TIMESTAMP:
-            assertEquals(expected.getLong(row), cv.getLong(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
-            assertEquals(expected.getFloat(row), cv.getFloat(row), 0.0001,
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
+                "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT64:
-            assertEquals(expected.getDouble(row), cv.getDouble(row), 0.0001,
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
+                "Column " + colName + " Row " + tableRow);
             break;
           case STRING: // fall through
           case STRING_CATEGORY:
-            assertEquals(expected.getJavaString(row), cv.getJavaString(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getJavaString(expectedRow), cv.getJavaString(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
@@ -110,14 +117,26 @@ public class TableTest {
     }
   }
 
-  public static void assertTablesAreEqual(Table expected, Table table) {
+  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName);
+  }
+
+  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
-    assertEquals(expected.getRowCount(), table.getRowCount());
+    assertEquals(length, table.getRowCount());
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
       ColumnVector expect = expected.getColumn(col);
       ColumnVector cv = table.getColumn(col);
-      assertColumnsAreEqual(expect, cv, String.valueOf(col));
+      String name = String.valueOf(col);
+      if (rowOffset != 0 || length != expected.getRowCount()) {
+        name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
+      }
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name);
     }
+  }
+
+  public static void assertTablesAreEqual(Table expected, Table table) {
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -658,66 +677,29 @@ public class TableTest {
   }
 
   @Test
-  void testGroupByCountMulti() {
-    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
-                                           .column(   1,    3,    3,    5,    5,    0)
-                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
-                                           .build()) {
-      try (Table t2 = t1.groupBy(0, 1, 2).aggregate(count(), count())) {
-        // verify t2
-        assertEquals(5, t2.getRowCount());
-
-        HashMap<Object, Integer>[] expectedResults = new HashMap[3];
-        expectedResults[0] = new HashMap<Object, Integer>() {{
-          put(1, 5);
-        }};
-        expectedResults[1] = new HashMap<Object, Integer>() {{
-          put(1, 1);
-          put(3, 2);
-          put(5, 1);
-          put(0, 1);
-        }};
-        expectedResults[2] = new HashMap<Object, Integer>() {{
-          put(12.0, 1);
-          put(14.0, 1);
-          put(13.0, 1);
-          put(17.0, 2);
-        }};
-
-        //verify grouped columns
-        ColumnVector[] cv = new ColumnVector[3];
-
-        IntStream.range(0, 3).forEach(i -> {
-          cv[i] = t2.getColumn(i);
-          cv[i].ensureOnHost();
-        });
-
-        try (Table t4 = new Table(cv)) {
-          assertTablesHaveSameValues(expectedResults, t4);
-        }
-
-        ColumnVector[] aggOut = new ColumnVector[2];
-        aggOut[0] = t2.getColumn(3);
-        aggOut[1] = t2.getColumn(4);
-        aggOut[0].ensureOnHost();
-        aggOut[1].ensureOnHost();
-
-        Map<Integer, Integer> expectedAggregateResult = new HashMap() {
-          {
-            // value, count
-            put(1, 4);
-            put(2, 1);
-          }
-        };
-        for (int i = 0; i < 4; ++i) {
-          int key = aggOut[0].getInt(i);
-          assertEquals(key, aggOut[1].getInt(i));
-          assertTrue(expectedAggregateResult.containsKey(key));
-          Integer count = expectedAggregateResult.get(key);
-          if (count == 1) {
-            expectedAggregateResult.remove(key);
-          } else {
-            expectedAggregateResult.put(key, count - 1);
+  void testSerializationRoundTripSliced() throws IOException {
+    try (Table t = new Table.TestBuilder()
+        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .build()) {
+      for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
+        for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
+          ByteArrayOutputStream bout = new ByteArrayOutputStream();
+          int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
+          JCudfSerialization.writeToStream(t, bout, i, len);
+          ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+          try (Table found = JCudfSerialization.readTableFrom(bin)) {
+            assertPartialTablesAreEqual(t, i, len, found);
           }
         }
       }
@@ -865,7 +847,7 @@ public class TableTest {
                                            .column( 1,  3,  3,  5,  5,  0)
                                            .column(12, 14, 13,  1, 17, 17)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(avg(2))) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(mean(2))) {
         // verify t3
         assertEquals(4, t3.getRowCount());
         ColumnVector aggOut1 = t3.getColumn(2);
@@ -900,7 +882,7 @@ public class TableTest {
                                            .column(5.0, 2.3, 3.4, 2.3, 1.3, 12.2)
                                            .column(  3,   1,   7,  -1,   9,    0)
                                            .build()) {
-      try (Table t2 = t1.groupBy(0, 1).aggregate(count(), max(3), min(2), avg(2), sum(2))) {
+      try (Table t2 = t1.groupBy(0, 1).aggregate(count(), max(3), min(2), mean(2), sum(2))) {
         assertEquals(2, t2.getRowCount());
         ColumnVector countOut = t2.getColumn(2);
         ColumnVector maxOut = t2.getColumn(3);
@@ -919,21 +901,49 @@ public class TableTest {
         assertEquals(3, countOut.getInt(0));
         assertEquals(3, countOut.getInt(1));
 
-        // verify avg
-        assertEquals(3.5666f, avgOut.getDouble(0), 0.0001);
-        assertEquals(5.2666f, avgOut.getDouble(1), 0.0001);
+        // verify mean
+        List<Double> sortedMean = new ArrayList<>();
+        sortedMean.add(avgOut.getDouble(0));
+        sortedMean.add(avgOut.getDouble(1));
+        sortedMean = sortedMean.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(3.5666f, sortedMean.get(0), 0.0001);
+        assertEquals(5.2666f, sortedMean.get(1), 0.0001);
 
         // verify sum
-        assertEquals(10.7f, sumOut.getDouble(0), 0.0001);
-        assertEquals(15.8f, sumOut.getDouble(1), 0.0001);
+        List<Double> sortedSum = new ArrayList<>();
+        sortedSum.add(sumOut.getDouble(0));
+        sortedSum.add(sumOut.getDouble(1));
+        sortedSum = sortedSum.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(10.7f, sortedSum.get(0), 0.0001);
+        assertEquals(15.8f, sortedSum.get(1), 0.0001);
 
         // verify min
-        assertEquals(2.3f, minOut.getDouble(0), 0.0001);
-        assertEquals(1.3f, minOut.getDouble(1), 0.0001);
+        List<Double> sortedMin = new ArrayList<>();
+        sortedMin.add(minOut.getDouble(0));
+        sortedMin.add(minOut.getDouble(1));
+        sortedMin = sortedMin.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(1.3f, sortedMin.get(0), 0.0001);
+        assertEquals(2.3f, sortedMin.get(1), 0.0001);
 
         // verify max
-        assertEquals(7, maxOut.getInt(0));
-        assertEquals(9, maxOut.getInt(1));
+        List<Integer> sortedMax = new ArrayList<>();
+        sortedMax.add(maxOut.getInt(0));
+        sortedMax.add(maxOut.getInt(1));
+        sortedMax = sortedMax.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(7, sortedMax.get(0));
+        assertEquals(9, sortedMax.get(1));
       }
     }
   }

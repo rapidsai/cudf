@@ -363,6 +363,36 @@ class DataFrame(object):
         else:
             return NotImplemented
 
+    def __array_function__(self, func, types, args, kwargs):
+
+        cudf_df_module = DataFrame
+        cudf_series_module = Series
+
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_df_module, submodule):
+                cudf_df_module = getattr(cudf_df_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_df_module, cudf_series_module]
+
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_df_module, fname):
+            cudf_func = getattr(cudf_df_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -1732,43 +1762,6 @@ class DataFrame(object):
         from cudf.reshape.general import melt
 
         return melt(self, **kwargs)
-
-    def get_dummies(self, **kwargs):
-        """ Returns a dataframe whose columns are the one hot encodings of all
-        columns in `df`
-
-        Parameters
-        ----------
-        df : cudf.DataFrame
-            dataframe to encode
-        prefix : str, dict, or sequence, optional
-            prefix to append. Either a str (to apply a constant prefix), dict
-            mapping column names to prefixes, or sequence of prefixes to apply
-            with the same length as the number of columns. If not supplied,
-            defaults to the empty string
-        prefix_sep : str, optional
-            separator to use when appending prefixes
-        dummy_na : boolean, optional
-            Right now this is NON-FUNCTIONAL argument in rapids.
-        cats : dict, optional
-            dictionary mapping column names to sequences of integers
-            representing that column's category.
-            See `cudf.DataFrame.one_hot_encoding` for more information.
-            if not supplied, it will be computed
-        sparse : boolean, optional
-            Right now this is NON-FUNCTIONAL argument in rapids.
-        drop_first : boolean, optional
-            Right now this is NON-FUNCTIONAL argument in rapids.
-        columns : sequence of str, optional
-            Names of columns to encode. If not provided, will attempt to encode
-            all columns. Note this is different from pandas default behavior,
-            which encodes all columns with dtype object or categorical
-        dtype : str, optional
-            output dtype, default 'float64'
-        """
-        from cudf.reshape import get_dummies
-
-        return get_dummies(self, **kwargs)
 
     def merge(
         self,
@@ -3244,11 +3237,16 @@ class DataFrame(object):
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        df = DataFrame()
+        df = DataFrame(index=self.index)
 
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
+
+        if not any(selection):
+            raise ValueError('at least one of include or exclude must be \
+                             nonempty')
+
         include, exclude = map(
             lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
@@ -3271,8 +3269,7 @@ class DataFrame(object):
                 # category handling
                 if i_dtype is cat_type:
                     include_subtypes.add(i_dtype)
-                    break
-                if issubclass(dtype.type, i_dtype):
+                elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
 
         # exclude all subtypes
@@ -3282,20 +3279,21 @@ class DataFrame(object):
                 # category handling
                 if e_dtype is cat_type:
                     exclude_subtypes.add(e_dtype)
-                    break
-                if issubclass(dtype.type, e_dtype):
+                elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
         include_all = set(
             [utils.cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
         )
 
+        if include:
+            inclusion = include_all & include_subtypes
+        elif exclude:
+            inclusion = include_all
+        else:
+            inclusion = set()
         # remove all exclude types
-        inclusion = include_all - exclude_subtypes
-
-        # keep only those included
-        if include_subtypes:
-            inclusion = inclusion & include_subtypes
+        inclusion = inclusion - exclude_subtypes
 
         for x in self._cols.values():
             infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)
@@ -3349,14 +3347,21 @@ class DataFrame(object):
         header=True,
         index=True,
         line_terminator="\n",
-        chunksize=None
+        chunksize=None,
     ):
         """{docstring}"""
         import cudf.io.csv as csv
 
         return csv.to_csv(
-            self, path, sep, na_rep, columns, header, index, line_terminator,
-            chunksize
+            self,
+            path,
+            sep,
+            na_rep,
+            columns,
+            header,
+            index,
+            line_terminator,
+            chunksize,
         )
 
 
