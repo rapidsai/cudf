@@ -288,11 +288,6 @@ class DataFrame(object):
         elif isinstance(
             arg, (list, np.ndarray, pd.Series, Series, Index, pd.Index)
         ):
-            if len(arg) == 0:
-                df = DataFrame()
-                df._size = len(self.index)
-                df._index = self.index
-                return df
             mask = arg
             if isinstance(mask, list):
                 mask = np.array(mask)
@@ -307,6 +302,10 @@ class DataFrame(object):
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
             else:
+                if len(arg) == 0:
+                    df._size = len(self.index)
+                    df._index = self.index
+                    return df
                 for col in arg:
                     df[col] = self[col]
             return df
