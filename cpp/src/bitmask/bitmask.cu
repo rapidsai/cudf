@@ -25,19 +25,10 @@
 
 namespace cudf {
 
-namespace {
-
-/**---------------------------------------------------------------------------*
- * @brief Computes the required bytes neccessary to represent the specified
- * number of bits with a given padding boundary.
- *
- * @param number_of_bits The number of bits that need to be represented
- * @param padding_boundary The value returned will be rounded up to a multiple
- * of this value
- * @return std::size_t The necessary number of bytes
- *---------------------------------------------------------------------------**/
+// Computes the required bytes neccessary to represent the specified
+// number of bits with a given padding boundary.
 std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
-                                          std::size_t padding_boundary = 64) {
+                                          std::size_t padding_boundary) {
   CUDF_EXPECTS(padding_boundary > 0, "Invalid padding boundary");
   auto neccessary_bytes =
       cudf::util::div_rounding_up_safe<size_type>(number_of_bits, CHAR_BIT);
@@ -47,8 +38,6 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
                              neccessary_bytes, padding_boundary);
   return padded_bytes;
 }
-
-}  // namespace
 
 // Allocate new device memory
 bitmask::bitmask(size_type size, bit_state initial_state, cudaStream_t stream,

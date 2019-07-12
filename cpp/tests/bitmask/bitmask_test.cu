@@ -18,6 +18,7 @@
 #include <cudf/bitmask/bitmask_device_view.cuh>
 #include <cudf/bitmask/bitmask_view.hpp>
 #include <cudf/types.hpp>
+#include <rmm/device_buffer.hpp>
 
 #include <thrust/logical.h>
 
@@ -31,6 +32,7 @@ struct BitmaskTest : public ::testing::Test {
 TEST_F(BitmaskTest, DefaultConstructor) {
   EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>());
   EXPECT_EQ(0, bitmask->size());
+  EXPECT_EQ(0u, bitmask->capacity());
   EXPECT_EQ(nullptr, bitmask->data());
 }
 
@@ -48,6 +50,7 @@ TEST_F(BitmaskTest, SizeConstructorWithDefaults) {
   cudf::size_type size{100};
   EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size));
   EXPECT_EQ(size, bitmask->size());
+  EXPECT_EQ(cudf::bitmask_allocation_size_bytes(size), bitmask->capacity());
   EXPECT_NE(nullptr, bitmask->data());
 
   EXPECT_TRUE(thrust::all_of(thrust::device, thrust::make_counting_iterator(0),
@@ -60,6 +63,7 @@ TEST_F(BitmaskTest, SizeConstructorAllOn) {
   EXPECT_NO_THROW(
       bitmask = std::make_unique<cudf::bitmask>(size, cudf::bit_state::ON));
   EXPECT_EQ(size, bitmask->size());
+  EXPECT_EQ(cudf::bitmask_allocation_size_bytes(size), bitmask->capacity());
   EXPECT_NE(nullptr, bitmask->data());
   EXPECT_TRUE(thrust::all_of(thrust::device, thrust::make_counting_iterator(0),
                              thrust::make_counting_iterator(size),
@@ -71,6 +75,7 @@ TEST_F(BitmaskTest, SizeConstructorAllOff) {
   EXPECT_NO_THROW(
       bitmask = std::make_unique<cudf::bitmask>(size, cudf::bit_state::OFF));
   EXPECT_EQ(size, bitmask->size());
+  EXPECT_EQ(cudf::bitmask_allocation_size_bytes(size), bitmask->capacity());
   EXPECT_NE(nullptr, bitmask->data());
   EXPECT_FALSE(thrust::all_of(thrust::device, thrust::make_counting_iterator(0),
                               thrust::make_counting_iterator(size),
@@ -85,6 +90,7 @@ TEST_F(BitmaskTest, CopyConstructor) {
   EXPECT_NO_THROW(copy = std::make_unique<cudf::bitmask>(*bitmask));
 
   EXPECT_EQ(bitmask->size(), copy->size());
+  EXPECT_EQ(cudf::bitmask_allocation_size_bytes(size), bitmask->capacity());
   EXPECT_NE(nullptr, copy->data());
   EXPECT_NE(bitmask->data(), copy->data());
   // TODO Ensure contents of device memory are equal
@@ -96,17 +102,31 @@ TEST_F(BitmaskTest, MoveConstructor) {
 
   auto original_data = bitmask->data();
   auto original_size = bitmask->size();
+  auto original_capacity = bitmask->capacity();
 
   std::unique_ptr<cudf::bitmask> move;
   EXPECT_NO_THROW(move = std::make_unique<cudf::bitmask>(std::move(*bitmask)));
   EXPECT_EQ(original_data, move->data());
   EXPECT_EQ(original_size, move->size());
+  EXPECT_EQ(original_capacity, move->capacity());
   EXPECT_EQ(nullptr, bitmask->data());
   EXPECT_EQ(0, bitmask->size());
 }
 
 TEST_F(BitmaskTest, CopyFromBuffer) {
-  // TODO Implement
+  cudf::size_type size{100};
+  rmm::device_buffer buff(cudf::bitmask_allocation_size_bytes(size));
+
+  thrust::sequence(thrust::device, static_cast<uint8_t*>(buff.data()),
+                   static_cast<uint8_t*>(buff.data()) + buff.size());
+
+  EXPECT_NO_THROW(bitmask = std::make_unique<cudf::bitmask>(size, buff));
+  EXPECT_EQ(size, bitmask->size());
+  EXPECT_EQ(cudf::bitmask_allocation_size_bytes(size), bitmask->capacity());
+  EXPECT_NE(nullptr, bitmask->data());
+  EXPECT_NE(buff.data(), bitmask->data());
+
+  // TODO Ensure contents of device memory are equal
 }
 
 TEST_F(BitmaskTest, CopyFromBufferTooSmall) {

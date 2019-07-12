@@ -31,6 +31,20 @@ device_memory_resource* get_default_resource();
 
 namespace cudf {
 
+/**---------------------------------------------------------------------------*
+ * @brief Computes the required bytes neccessary to represent the specified
+ * number of bits with a given padding boundary.
+ *
+ * @note The Arrow specification requires a 64B padding boundary.
+ *
+ * @param number_of_bits The number of bits that need to be represented
+ * @param padding_boundary The value returned will be rounded up to a multiple
+ * of this value
+ * @return std::size_t The necessary number of bytes
+ *---------------------------------------------------------------------------**/
+std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
+                                          std::size_t padding_boundary = 64);
+
 enum bit_state { ON, OFF };
 
 /**---------------------------------------------------------------------------*
@@ -155,6 +169,11 @@ class bitmask {
    * @brief Returns the number of constituent bits
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return _size; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the size of the underlying device memory allocation
+   *---------------------------------------------------------------------------**/
+  std::size_t capacity() const noexcept { return _data->capacity(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying device memory
