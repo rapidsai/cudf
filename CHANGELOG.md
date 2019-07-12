@@ -53,6 +53,7 @@
 - PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
 - PR #2190 Fix issue in astype conversion of string column to 'str'
 - PR #2208 Fix issue with calling `head()` on one row dataframe
+- PR #2229 Propagate exceptions from Cython cdef functions
 
 
 # cuDF 0.8.0 (27 June 2019)
