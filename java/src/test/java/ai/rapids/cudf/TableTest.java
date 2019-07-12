@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -527,8 +528,6 @@ public class TableTest {
         .column(65536,65536)
         .build();
          Table table = Table.readORC(opts, TEST_ORC_FILE)) {
-      long rows = table.getRowCount();
-      assertEquals(2, rows);
       assertTablesAreEqual(expected, table);
     }
   }
@@ -542,20 +541,15 @@ public class TableTest {
         .includeColumn("int1")
         .build();
 
-    byte[] buffer = new byte[(int) TEST_ORC_FILE.length() + 1024];
     int bufferLen = 0;
-    try (FileInputStream in = new FileInputStream(TEST_ORC_FILE)) {
-      bufferLen = in.read(buffer);
-    }
+    byte[] buffer = Files.readAllBytes(TEST_ORC_FILE.toPath());
+    bufferLen = buffer.length;
     try (Table expected = new Table.TestBuilder()
         .column("hi","bye")
         .column(1.0f,2.0f)
         .column(65536,65536)
         .build();
          Table table = Table.readORC(opts, buffer, 0, bufferLen)) {
-      long rows = table.getRowCount();
-      assertEquals(2, rows);
-      assertTableTypes(new DType[]{DType.STRING, DType.FLOAT32, DType.INT32}, table);
       assertTablesAreEqual(expected, table);
     }
   }
@@ -574,21 +568,7 @@ public class TableTest {
         .column("hi", "bye")
         .build();
          Table table = Table.readORC(TEST_ORC_FILE)) {
-      long rows = table.getRowCount();
-      assertEquals(2, rows);
-
-      DType[] expectedTypes = new DType[]{
-          DType.BOOL8,
-          DType.INT8,
-          DType.INT16,
-          DType.INT32,
-          DType.INT64,
-          DType.FLOAT32,
-          DType.FLOAT64,
-          DType.STRING
-      };
       assertTablesAreEqual(expected,  table);
-      assertTableTypes(expectedTypes, table);
     }
   }
 
