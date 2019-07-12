@@ -365,7 +365,8 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def find_first_value(self, value):
         """
-        Returns offset of first value that matches
+        Returns offset of first value that matches. For monotonic
+        columns, returns the offset of the first larger value.
         """
         found = cudautils.find_first(self.data.mem, value)
         if found == -1 and self.is_monotonic:
@@ -385,7 +386,8 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def find_last_value(self, value):
         """
-        Returns offset of last value that matches
+        Returns offset of last value that matches. For monotonic
+        columns, returns the offset of the last smaller value.
         """
         found = cudautils.find_last(self.data.mem, value)
         if found == -1 and self.is_monotonic:
