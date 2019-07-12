@@ -195,9 +195,13 @@ void type_dispatcher_benchmark(benchmark::State& state){
     RMM_TRY(RMM_ALLOC(&d_ptr, sizeof(TypeParam*)*n_cols, 0));
     for(int c = 0; c < n_cols; c++){
       RMM_TRY(RMM_ALLOC(&h_vec[c], sizeof(TypeParam)*source_size, 0));
+      CUDA_TRY(cudaMemset(h_vec[c], 0, sizeof(TypeParam)*source_size));
     }
     CUDA_TRY(cudaMemcpy(d_ptr, h_vec.data(), sizeof(TypeParam*)*n_cols, cudaMemcpyHostToDevice));
   }
+  
+  // Warm up  
+  launch_kernel<functor_type, dispatching_type>(source_table, d_ptr, work_per_thread);
   
   for(auto _ : state){
     cuda_event_timer raii(state);

@@ -7,9 +7,9 @@ struct cuda_event_timer {
   benchmark::State* p_state;
 
   cuda_event_timer(benchmark::State& state): p_state(&state) {
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-    cudaEventRecord(start);
+    CUDA_TRY(cudaEventCreate(&start));
+    CUDA_TRY(cudaEventCreate(&stop));
+    CUDA_TRY(cudaEventRecord(start));
   }
   
   cuda_event_timer(){
@@ -17,15 +17,15 @@ struct cuda_event_timer {
   }
   
   ~cuda_event_timer(){  
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
+    CUDA_TRY(cudaEventRecord(stop));
+    CUDA_TRY(cudaEventSynchronize(stop));
     
     float milliseconds = 0.0f;
-    cudaEventElapsedTime(&milliseconds, start, stop);
+    CUDA_TRY(cudaEventElapsedTime(&milliseconds, start, stop));
     p_state->SetIterationTime(milliseconds/1000.0f);
     
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+    CUDA_TRY(cudaEventDestroy(start));
+    CUDA_TRY(cudaEventDestroy(stop));
   }
 };
 
