@@ -58,74 +58,9 @@ void launch_search(DataIterator it_data,
   }
 }
 
-struct search_functor {
-  template <typename T>
-  void operator()(gdf_column const& column,
-                  gdf_column const& values,
-                  bool find_first,
-                  bool ascending,
-                  bool nulls_as_largest,
-                  cudaStream_t stream,
-                  gdf_column& result)
-  {
-    if ( is_nullable(column) ) {
-      T null_substitute = (nulls_as_largest) 
-                        ? std::numeric_limits<T>::max()
-                        : std::numeric_limits<T>::lowest();
-
-      auto it_col = cudf::make_iterator<true, T>(column, null_substitute);
-      auto it_val = cudf::make_iterator<true, T>(values, null_substitute);
-
-      if (ascending)
-        launch_search(it_col, it_val, column.size, values.size, result.data,
-                      thrust::less<T>(), find_first, stream);
-      else
-        launch_search(it_col, it_val, column.size, values.size, result.data,
-                      thrust::greater<T>(), find_first, stream);
-    }
-    else {
-      auto it_col = cudf::make_iterator<false, T>(column);
-      auto it_val = cudf::make_iterator<false, T>(values);
-
-      if (ascending)
-        launch_search(it_col, it_val, column.size, values.size, result.data,
-                      thrust::less<T>(), find_first, stream);
-      else
-        launch_search(it_col, it_val, column.size, values.size, result.data,
-                      thrust::greater<T>(), find_first, stream);
-    }
-  }
-};
-
 } // namespace
 
 namespace detail {
-
-gdf_column search_ordered(gdf_column const& column,
-                          gdf_column const& values,
-                          bool find_first,
-                          bool ascending,
-                          bool nulls_as_largest,
-                          cudaStream_t stream = 0)
-{
-  // TODO: allow empty input
-  validate(column);
-  validate(values);
-
-  // Allocate result column
-  gdf_column result_like{};
-  result_like.dtype = GDF_INT32;
-  result_like.size = values.size;
-  result_like.data = values.data;
-  // TODO: let result have nulls? this could be used for records not found
-  auto result = allocate_like(result_like);
-
-  type_dispatcher(column.dtype,
-                  search_functor{},
-                  column, values, find_first, ascending, nulls_as_largest, stream, result);
-
-  return result;
-}
 
 gdf_column search_ordered(table const& t,
                           table const& values,
@@ -170,6 +105,20 @@ gdf_column search_ordered(table const& t,
   }
 
   return result;
+}
+
+gdf_column search_ordered(gdf_column const& column,
+                          gdf_column const& values,
+                          bool find_first,
+                          bool ascending,
+                          bool nulls_as_largest,
+                          cudaStream_t stream = 0)
+{
+  const table t{const_cast<gdf_column*>(&column)};
+  const table val{const_cast<gdf_column*>(&values)};
+  std::vector<bool> desc_flags{!ascending};
+
+  return search_ordered(t, val, find_first, desc_flags, nulls_as_largest, stream);
 }
 
 } // namespace detail
