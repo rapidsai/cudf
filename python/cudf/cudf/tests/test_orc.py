@@ -267,4 +267,3 @@ def test_orc_reader_uncompressed_block(datadir):
     got = cudf.read_orc(path, engine="cudf")
 
     assert_eq(expect, got, check_categorical=False)
-
