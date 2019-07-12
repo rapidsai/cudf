@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from pandas import DataFrame, date_range
+from pandas import DataFrame, date_range, Series
 
 import cudf
 from cudf.multi import concat
@@ -35,8 +35,29 @@ def test_duplicated_with_misspelled_column_name(subset):
         df.drop_duplicates(subset)
 
 
+@pytest.mark.parametrize("keep", [
+    'first',
+    'last',
+    False
+])
+@pytest.mark.parametrize("data", [
+    [1, 2, 4, 5, 6, 6],
+    [],
+    ['a', 'b', 's', 'sd', 'a', 'b'],
+    Series(['aaa'] * 10, dtype='object')
+])
+def test_drop_duplicates_series(data, keep):
+    pds = Series(data)
+    gds = cudf.from_pandas(pds)
+
+    assert_df(pds.drop_duplicates(keep=keep), gds.drop_duplicates(keep=keep))
+    pds.drop_duplicates(keep=keep, inplace=True)
+    gds.drop_duplicates(keep=keep, inplace=True)
+    assert_df(pds, gds)
+
+
 def test_drop_duplicates():
-    df = DataFrame(
+    pdf = DataFrame(
         {
             "AAA": ["foo", "bar", "foo", "bar", "foo", "bar", "bar", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -44,39 +65,40 @@ def test_drop_duplicates():
             "D": range(8),
         }
     )
-    df = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     # single column
-    result = df.copy()
+    result = gdf.copy()
     result.drop_duplicates("AAA", inplace=True)
-    expected = df[:2]
+    expected = pdf.copy()
+    expected.drop_duplicates("AAA", inplace=True)
     assert_df(result, expected)
 
-    result = df.drop_duplicates("AAA", keep="last")
-    expected = df.to_pandas().loc[[6, 7]]
+    result = gdf.drop_duplicates("AAA", keep="last")
+    expected = pdf.drop_duplicates("AAA", keep="last")
     assert_df(result, expected)
 
-    result = df.drop_duplicates("AAA", keep=False)
-    expected = df.to_pandas().loc[[]]
+    result = gdf.drop_duplicates("AAA", keep=False)
+    expected = pdf.drop_duplicates("AAA", keep=False)
     assert_df(result, expected)
     assert len(result) == 0
 
     # multi column
-    expected = df.to_pandas().loc[[0, 1, 2, 3]]
-    result = df.drop_duplicates(np.array(["AAA", "B"]))
+    expected = pdf.loc[[0, 1, 2, 3]]
+    result = gdf.drop_duplicates(np.array(["AAA", "B"]))
     assert_df(result, expected)
-    result = df.drop_duplicates(["AAA", "B"])
-    assert_df(result, expected)
-
-    result = df.drop_duplicates(("AAA", "B"), keep="last")
-    expected = df.to_pandas().loc[[0, 5, 6, 7]]
+    result = pdf.drop_duplicates(np.array(["AAA", "B"]))
     assert_df(result, expected)
 
-    result = df.drop_duplicates(("AAA", "B"), keep=False)
-    expected = df.to_pandas().loc[[0]]
+    result = gdf.drop_duplicates(("AAA", "B"), keep="last")
+    expected = pdf.drop_duplicates(("AAA", "B"), keep="last")
+    assert_df(result, expected)
+
+    result = gdf.drop_duplicates(("AAA", "B"), keep=False)
+    expected = pdf.drop_duplicates(("AAA", "B"), keep=False)
     assert_df(result, expected)
 
     # consider everything
-    df2 = df.to_pandas().loc[:, ["AAA", "B", "C"]]
+    df2 = gdf.loc[:, ["AAA", "B", "C"]]
 
     result = df2.drop_duplicates()
     # in this case only
@@ -92,46 +114,47 @@ def test_drop_duplicates():
     assert_df(result, expected)
 
     # integers
-    result = df.drop_duplicates("C")
-    expected = df.iloc[[0, 2]]
+    result = gdf.drop_duplicates("C")
+    expected = pdf.drop_duplicates("C")
     assert_df(result, expected)
-    result = df.drop_duplicates("C", keep="last")
-    expected = df.to_pandas().iloc[[-2, -1]]
-    assert_df(result, expected)
-
-    df["E"] = df["C"].astype("int8")
-    result = df.drop_duplicates("E")
-    expected = df.iloc[[0, 2]]
-    assert_df(result, expected)
-    result = df.drop_duplicates("E", keep="last")
-    expected = df.to_pandas().iloc[[-2, -1]]
+    result = gdf.drop_duplicates("C", keep="last")
+    expected = pdf.drop_duplicates("C", keep="last")
     assert_df(result, expected)
 
-    df = DataFrame({"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]})
-    expected = df.loc[df.index != 3]
-    df = cudf.DataFrame.from_pandas(df)
-    assert_df(df.drop_duplicates(), expected)
+    gdf["E"] = gdf["C"].astype("int8")
+    result = gdf.drop_duplicates("E")
+    pdf["E"] = pdf["C"].astype("int8")
+    expected = pdf.drop_duplicates("E")
+    assert_df(result, expected)
+    result = gdf.drop_duplicates("E", keep="last")
+    expected = pdf.drop_duplicates("E", keep="last")
+    assert_df(result, expected)
 
-    df = DataFrame([[1, 0], [0, 2]])
-    df = cudf.DataFrame.from_pandas(df)
-    assert_df(df.drop_duplicates(), df)
+    pdf = DataFrame({"x": [7, 6, 3, 3, 4, 8, 0], "y": [0, 6, 5, 5, 9, 1, 2]})
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    df = DataFrame([[-2, 0], [0, -4]])
-    df = cudf.DataFrame.from_pandas(df)
-    assert_df(df.drop_duplicates(), df)
+    pdf = DataFrame([[1, 0], [0, 2]])
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
+
+    pdf = DataFrame([[-2, 0], [0, -4]])
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
     x = np.iinfo(np.int64).max / 3 * 2
-    df = DataFrame([[-x, x], [0, x + 4]])
-    df = cudf.DataFrame.from_pandas(df)
-    assert_df(df.drop_duplicates(), df)
+    pdf = DataFrame([[-x, x], [0, x + 4]])
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    df = DataFrame([[-x, x], [x, x + 4]])
-    df = cudf.DataFrame.from_pandas(df)
-    assert_df(df.drop_duplicates(), df)
+    pdf = DataFrame([[-x, x], [x, x + 4]])
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
-    df = DataFrame([i] * 9 for i in range(16))
-    df = df.append([[1] + [0] * 8], ignore_index=True)
-    df = cudf.DataFrame.from_pandas(df)
+    pdf = DataFrame([i] * 9 for i in range(16))
+    pdf = pdf.append([[1] + [0] * 8], ignore_index=True)
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    assert_df(gdf.drop_duplicates(), pdf.drop_duplicates())
 
 
 @pytest.mark.skip(reason="cudf does not support duplicate column names yet")
@@ -148,7 +171,7 @@ def test_drop_duplicates_with_duplicate_column_names():
 
 
 def test_drop_duplicates_for_take_all():
-    df = DataFrame(
+    pdf = DataFrame(
         {
             "AAA": ["foo", "bar", "baz", "bar", "foo", "bar", "qux", "foo"],
             "B": ["one", "one", "two", "two", "two", "two", "one", "two"],
@@ -156,36 +179,36 @@ def test_drop_duplicates_for_take_all():
             "D": range(8),
         }
     )
-    df = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     # single column
-    result = df.drop_duplicates("AAA")
-    expected = df.iloc[[0, 1, 2, 6]]
+    result = gdf.drop_duplicates("AAA")
+    expected = pdf.drop_duplicates("AAA")
     assert_df(result, expected)
 
-    result = df.drop_duplicates("AAA", keep="last")
-    expected = df.iloc[[2, 5, 6, 7]]
+    result = gdf.drop_duplicates("AAA", keep="last")
+    expected = pdf.drop_duplicates("AAA", keep="last")
     assert_df(result, expected)
 
-    result = df.drop_duplicates("AAA", keep=False)
-    expected = df.iloc[[2, 6]]
+    result = gdf.drop_duplicates("AAA", keep=False)
+    expected = pdf.drop_duplicates("AAA", keep=False)
     assert_df(result, expected)
 
     # multiple columns
-    result = df.drop_duplicates(["AAA", "B"])
-    expected = df.iloc[[0, 1, 2, 3, 4, 6]]
+    result = gdf.drop_duplicates(["AAA", "B"])
+    expected = pdf.drop_duplicates(["AAA", "B"])
     assert_df(result, expected)
 
-    result = df.drop_duplicates(["AAA", "B"], keep="last")
-    expected = df.iloc[[0, 1, 2, 5, 6, 7]]
+    result = gdf.drop_duplicates(["AAA", "B"], keep="last")
+    expected = pdf.drop_duplicates(["AAA", "B"], keep="last")
     assert_df(result, expected)
 
-    result = df.drop_duplicates(["AAA", "B"], keep=False)
-    expected = df.iloc[[0, 1, 2, 6]]
+    result = gdf.drop_duplicates(["AAA", "B"], keep=False)
+    expected = pdf.drop_duplicates(["AAA", "B"], keep=False)
     assert_df(result, expected)
 
 
 def test_drop_duplicates_tuple():
-    df = DataFrame(
+    pdf = DataFrame(
         {
             ("AA", "AB"): [
                 "foo",
@@ -202,24 +225,24 @@ def test_drop_duplicates_tuple():
             "D": range(8),
         }
     )
-    df = cudf.DataFrame.from_pandas(df)
+    gdf = cudf.DataFrame.from_pandas(pdf)
     # single column
-    result = df.drop_duplicates(("AA", "AB"))
-    expected = df[:2]
+    result = gdf.drop_duplicates(("AA", "AB"))
+    expected = pdf.drop_duplicates(("AA", "AB"))
     assert_df(result, expected)
 
-    result = df.drop_duplicates(("AA", "AB"), keep="last")
-    expected = df.to_pandas().loc[[6, 7]]
+    result = gdf.drop_duplicates(("AA", "AB"), keep="last")
+    expected = pdf.drop_duplicates(("AA", "AB"), keep="last")
     assert_df(result, expected)
 
-    result = df.drop_duplicates(("AA", "AB"), keep=False)
-    expected = df.to_pandas().loc[[]]  # empty df
+    result = gdf.drop_duplicates(("AA", "AB"), keep=False)
+    expected = pdf.drop_duplicates(("AA", "AB"), keep=False)  # empty df
     assert len(result) == 0
     assert_df(result, expected)
 
     # multi column
-    expected = df.to_pandas().loc[[0, 1, 2, 3]]
-    result = df.drop_duplicates((("AA", "AB"), "B"))
+    expected = pdf.drop_duplicates((("AA", "AB"), "B"))
+    result = gdf.drop_duplicates((("AA", "AB"), "B"))
     assert_df(result, expected)
 
 
