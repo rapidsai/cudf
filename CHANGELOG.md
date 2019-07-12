@@ -10,6 +10,7 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 
 ## Improvements
@@ -32,6 +33,8 @@
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
 - PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 - PR #1993 Add iterator driven reduction for mean, var, std
+- PR #2220 Update Java bindings for reduction rename
+- PR #2224 implement isna, isnull, notna as dataframe functions
 
 ## Bug Fixes
 
