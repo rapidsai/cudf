@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class TableTest {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
-  private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.test1.orc");
+  private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
@@ -518,14 +518,19 @@ public class TableTest {
   void testReadORC() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     ORCOptions opts = ORCOptions.builder()
-            .includeColumn("float1")
-            .includeColumn("boolean1")
-            .includeColumn("byte1")
-            .build();
-    try (Table table = Table.readORC(opts, TEST_ORC_FILE)) {
+        .includeColumn("string1")
+        .includeColumn("float1")
+        .includeColumn("int1")
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("hi","bye")
+        .column(1.0f,2.0f)
+        .column(65536,65536)
+        .build();
+         Table table = Table.readORC(opts, TEST_ORC_FILE)) {
       long rows = table.getRowCount();
       assertEquals(2, rows);
-      assertTableTypes(new DType[]{DType.FLOAT32, DType.BOOL8, DType.INT8}, table);
+      assertTablesAreEqual(expected, table);
     }
   }
 
@@ -533,49 +538,57 @@ public class TableTest {
   void testReadORCBuffer() throws IOException {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     ORCOptions opts = ORCOptions.builder()
-            .includeColumn("float1")
-            .includeColumn("boolean1")
-            .includeColumn("byte1")
-            .build();
+        .includeColumn("string1")
+        .includeColumn("float1")
+        .includeColumn("int1")
+        .build();
 
     byte[] buffer = new byte[(int) TEST_ORC_FILE.length() + 1024];
     int bufferLen = 0;
     try (FileInputStream in = new FileInputStream(TEST_ORC_FILE)) {
       bufferLen = in.read(buffer);
     }
-    try (Table table = Table.readORC(opts, buffer, 0, bufferLen)) {
+    try (Table expected = new Table.TestBuilder()
+        .column("hi","bye")
+        .column(1.0f,2.0f)
+        .column(65536,65536)
+        .build();
+         Table table = Table.readORC(opts, buffer, 0, bufferLen)) {
       long rows = table.getRowCount();
       assertEquals(2, rows);
-      assertTableTypes(new DType[]{DType.FLOAT32, DType.BOOL8, DType.INT8}, table);
+      assertTableTypes(new DType[]{DType.STRING, DType.FLOAT32, DType.INT32}, table);
+      assertTablesAreEqual(expected, table);
     }
   }
 
   @Test
   void testReadORCFull() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
-    try (Table table = Table.readORC(TEST_ORC_FILE)) {
+    try (Table expected = new Table.TestBuilder()
+        .column(false, true)
+        .column((byte)1, (byte)100)
+        .column((short)1024, (short)2048)
+        .column(65536, 65536)
+        .column(9223372036854775807L,9223372036854775807L)
+        .column(1.0f, 2.0f)
+        .column(-15.0, -5.0)
+        .column("hi", "bye")
+        .build();
+         Table table = Table.readORC(TEST_ORC_FILE)) {
       long rows = table.getRowCount();
       assertEquals(2, rows);
 
       DType[] expectedTypes = new DType[]{
-              DType.BOOL8,
-              DType.INT8,
-              DType.INT16,
-              DType.INT32,
-              DType.INT64,
-              DType.FLOAT32,
-              DType.FLOAT64,
-              DType.STRING,
-              DType.STRING,
-              DType.INT32,
-              DType.STRING,
-              DType.INT32,
-              DType.STRING,
-              DType.STRING,
-              DType.INT32,
-              DType.STRING
+          DType.BOOL8,
+          DType.INT8,
+          DType.INT16,
+          DType.INT32,
+          DType.INT64,
+          DType.FLOAT32,
+          DType.FLOAT64,
+          DType.STRING
       };
-
+      assertTablesAreEqual(expected,  table);
       assertTableTypes(expectedTypes, table);
     }
   }

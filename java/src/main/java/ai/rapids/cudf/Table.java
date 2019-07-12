@@ -193,11 +193,11 @@ public final class Table implements AutoCloseable {
    * @param filterColumnNames name of the columns to read, or an empty array if we want to read
    *                          all of them
    * @param filePath          the path of the file to read, or null if no path should be read.
-   * @param address           the address of the buffer to read from or 0 if we should not.
+   * @param address           the address of the buffer to read from or 0 for no buffer.
    * @param length            the length of the buffer to read from.
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
-                                              String filePath, long address, long length) throws CudfException;
+                                          String filePath, long address, long length) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int aggColumn, 
                                                    int aggType) throws CudfException;
@@ -402,7 +402,7 @@ public final class Table implements AutoCloseable {
   }
 
   /**
-   * Read a ORC file using the default ParquetOptions.
+   * Read a ORC file using the default ORCOptions.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
    */
@@ -410,13 +410,13 @@ public final class Table implements AutoCloseable {
 
   /**
    * Read a ORC file.
-   * @param opts various parquet parsing options.
+   * @param opts ORC parsing options.
    * @param path the local file to read.
    * @return the file parsed as a table on the GPU.
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-            path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0));
   }
 
   /**
@@ -468,7 +468,7 @@ public final class Table implements AutoCloseable {
    * @return the data parsed as a table on the GPU.
    */
   public static Table readORC(ORCOptions opts, HostMemoryBuffer buffer,
-                                  long offset, long len) {
+                              long offset, long len) {
     if (len <= 0) {
       len = buffer.length - offset;
     }
@@ -476,7 +476,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-            null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len));
   }
 
   /**

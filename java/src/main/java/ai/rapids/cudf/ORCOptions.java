@@ -30,8 +30,8 @@ public class ORCOptions extends ColumnFilterOptions {
   }
 
   public static Builder builder() {
-        return new Builder();
-    }
+    return new Builder();
+  }
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     public ORCOptions build() { return new ORCOptions(this); }
