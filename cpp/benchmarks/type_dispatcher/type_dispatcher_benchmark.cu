@@ -218,11 +218,11 @@ void type_dispatcher_benchmark(benchmark::State& state){
 BENCHMARK_DEFINE_F(TypeDispatching, name)(::benchmark::State& state) {                                      \
   type_dispatcher_benchmark<TypeParam, functor_type, dispatching_type>(state);                 \
 }                                                                                                           \
-BENCHMARK_REGISTER_F(TypeDispatching, name)->RangeMultiplier(2)->Ranges({{1<<10, 1<<26},{1, 1},{1, 1}})->UseManualTime();
+BENCHMARK_REGISTER_F(TypeDispatching, name)->RangeMultiplier(2)->Ranges({{1<<10, 1<<26},{1, 8},{1, 1}})->UseManualTime();
 
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_mono_bandwidth_no, double, BANDWIDTH_BOUND, NO_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_bandwidth_no, double, BANDWIDTH_BOUND, NO_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_compute_host, double, COMPUTE_BOUND, HOST_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_compute_device, double, COMPUTE_BOUND, DEVICE_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_compute_no, double, COMPUTE_BOUND, NO_DISPATCHING);
