@@ -1198,7 +1198,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.isnull_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.isnull_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def isna(self):
@@ -1216,7 +1216,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def all(self, axis=0, skipna=True, level=None):

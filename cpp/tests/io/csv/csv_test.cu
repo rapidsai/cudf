@@ -442,22 +442,23 @@ TEST(gdf_csv_test, Writer)
     const std::string fname	= temp_env->get_temp_dir()+"CsvWriteTest.csv";
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "true,1,1.0,one" << '\n';
-    outfile << "false,2,2.25,two" << '\n';
-    outfile << "false,3,3.50,three" << '\n';
-    outfile << "true,4,4.75,four" << '\n';
-    outfile << "false,5,5.0,five" << '\n';
-    outfile << "false,6,6.125,six" << '\n';
-    outfile << "false,7,7.25,seven" << '\n';
-    outfile << "true,8,8.5,eight" << '\n';
-    outfile << "true,9,9.75,nine" << '\n';
-    outfile << "false,10,10.5,ten" << '\n';
+    outfile << "boolean,integer,long,short,byte,float,double,string,datetime" << '\n';
+    outfile << "true,111,1111,11,1,1.0,12.0,one,01/01/2001" << '\n';
+    outfile << "false,222,2222,22,2,2.25,24.0,two,02/02/2002" << '\n';
+    outfile << "false,333,3333,33,3,3.50,32.0,three,03/03/2003" << '\n';
+    outfile << "true,444,4444,44,4,4.75,48.0,four,04/04/2004" << '\n';
+    outfile << "false,555,5555,55,5,5.0,56.0,five,05/05/2005" << '\n';
+    outfile << "false,666,6666,66,6,6.125,64.0,six,06/06/2006" << '\n';
+    outfile << "false,777,7777,77,7,7.25,72.0,seven,07/07/2007" << '\n';
+    outfile << "true,888,8888,88,8,8.5,80.0,eight,08/08/2008" << '\n';
+    outfile << "true,999,9999,99,9,9.75,92.0,nine,09/09/2009 09:09:09.009" << '\n';
+    outfile << "false,1111,11111,111,10,10.5,108.0,ten,10/10/2010 10:10:10.010" << '\n';
     outfile.close();
 
     cudf::csv_read_arg rargs(cudf::source_info{fname});
-    rargs.names = { "boolean", "integer", "float", "string" };
-    rargs.dtype = { "bool", "int32", "float32", "str" };
-    rargs.header = -1;
+    rargs.names = { "boolean", "integer", "long", "short", "byte", "float", "double", "string", "datetime" };
+    rargs.dtype = { "bool", "int32", "int64", "int16", "int8", "float32", "float64", "str", "date" };
+    rargs.header = 0;
     const auto df = cudf::read_csv(rargs);
 
     const std::string ofname = temp_env->get_temp_dir()+"CsvWriteTestOut.csv";
@@ -476,16 +477,16 @@ TEST(gdf_csv_test, Writer)
     std::ifstream infile(ofname);
     std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
     std::string verify =
-        "\"boolean\",\"integer\",\"float\",\"string\"\n"
-        "true,1,1.0,\"one\"\n"
-        "false,2,2.25,\"two\"\n"
-        "false,3,3.5,\"three\"\n"
-        "true,4,4.75,\"four\"\n"
-        "false,5,5.0,\"five\"\n"
-        "false,6,6.125,\"six\"\n"
-        "false,7,7.25,\"seven\"\n"
-        "true,8,8.5,\"eight\"\n"
-        "true,9,9.75,\"nine\"\n"
-        "false,10,10.5,\"ten\"\n";
+        "\"boolean\",\"integer\",\"long\",\"short\",\"byte\",\"float\",\"double\",\"string\",\"datetime\"\n"
+        "true,111,1111,11,1,1.0,12.0,\"one\",\"2001-01-01T00:00:00Z\"\n"
+        "false,222,2222,22,2,2.25,24.0,\"two\",\"2002-02-02T00:00:00Z\"\n"
+        "false,333,3333,33,3,3.5,32.0,\"three\",\"2003-03-03T00:00:00Z\"\n"
+        "true,444,4444,44,4,4.75,48.0,\"four\",\"2004-04-04T00:00:00Z\"\n"
+        "false,555,5555,55,5,5.0,56.0,\"five\",\"2005-05-05T00:00:00Z\"\n"
+        "false,666,6666,66,6,6.125,64.0,\"six\",\"2006-06-06T00:00:00Z\"\n"
+        "false,777,7777,77,7,7.25,72.0,\"seven\",\"2007-07-07T00:00:00Z\"\n"
+        "true,888,8888,88,8,8.5,80.0,\"eight\",\"2008-08-08T00:00:00Z\"\n"
+        "true,999,9999,99,9,9.75,92.0,\"nine\",\"2009-09-09T09:09:09Z\"\n"
+        "false,1111,11111,111,10,10.5,108.0,\"ten\",\"2010-10-10T10:10:10Z\"\n";
     EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }
