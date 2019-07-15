@@ -22,12 +22,14 @@ namespace cudf {
 
 column_view::column_view(data_type type, size_type size, void const* data,
                          bitmask_type const* null_mask, size_type null_count,
+                         size_type offset,
                          std::vector<column_view> const& children)
     : _type{type},
       _size{size},
       _data{data},
       _null_mask{null_mask},
       _null_count{null_count},
+      _offset{offset},
       _children{children} {
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
   if (size > 0) {

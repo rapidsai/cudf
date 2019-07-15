@@ -26,6 +26,10 @@ namespace cudf {
 
 class column {
  public:
+  ~column() = default;
+  column& operator=(column const& other) = delete;
+  column& operator=(column&& other) = delete;
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a size, type, and option to
    * allocate bitmask.
@@ -129,9 +133,19 @@ class column {
    *---------------------------------------------------------------------------**/
   column(column&& other) = default;
 
-  ~column() = default;
-  column& operator=(column const& other) = delete;
-  column& operator=(column&& other) = delete;
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column by deep copying from a `column_view`.
+   *
+   * @param view The `column_view` that will be copied
+   *---------------------------------------------------------------------------**/
+  explicit column(column_view view);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column by deep copying from a `mutable_column_view`.
+   *
+   * @param view The `mutable_column_view` that will be copied
+   *---------------------------------------------------------------------------**/
+  explicit column(mutable_column_view view);
 
   column_view view() const;
 
@@ -146,10 +160,9 @@ class column {
   cudf::size_type _size{};     ///< The number of elements in the column
   rmm::device_buffer _data{};  ///< Dense, contiguous, type erased device memory
                                ///< buffer containing the column elements
-  rmm::device_buffer
-      _null_mask{};         ///< Bitmask used to represent null values. If
-                            ///< `null_count() == 0`, this may be empty
-  size_type _null_count{};  ///< The number of null elements
+  rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
+                                    ///< May be empty if `null_count() == 0`
+  size_type _null_count{};          ///< The number of null elements
   std::vector<column> _children{};  ///< Depending on element type, child
                                     ///< columns may contain additional data
 };

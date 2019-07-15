@@ -28,10 +28,13 @@ column_view column::view() const {
   std::vector<column_view> child_views(_children.size());
   std::copy(begin(_children), end(_children), begin(child_views));
 
-  return column_view{
-      _type,        _size,
-      _data.data(), static_cast<bitmask_type const*>(_null_mask.data()),
-      _null_count,  std::move(child_views)};
+  return column_view{_type,
+                     _size,
+                     _data.data(),
+                     static_cast<bitmask_type const*>(_null_mask.data()),
+                     _null_count,
+                     0,
+                     std::move(child_views)};
 }
 
 }  // namespace cudf
