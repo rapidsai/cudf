@@ -285,13 +285,16 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def isin(self, values):
         mask = None
-        values_dary = rmm.to_device(np.asarray(values))
+
+        if isinstance(values, (list, np.ndarray,)):
+            values = rmm.to_device(np.asarray(values))
+
         output_dary = rmm.device_array(len(self), dtype='bool')
 
         if self.has_null_mask:
             mask = self.nullmask.mem
 
-        res = cudautils.apply_isin(self.data.mem, output_dary, values_dary,
+        res = cudautils.apply_isin(self.data.mem, output_dary, values,
                                    mask)
         return NumericalColumn(data=Buffer(res), mask=None, dtype='bool')
 

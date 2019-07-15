@@ -23,6 +23,7 @@ from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
+from cudf.dataframe.string import StringColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
@@ -1783,8 +1784,16 @@ class Series(object):
         )
 
     def isin(self, values):
+        """Round a Series to a configurable number of decimal places.
         """
-        """
+        if isinstance(self._column, (StringColumn,)):
+            # could hash. how large is the risk of collisions in workflows?
+            raise NotImplementedError
+
+        if isinstance(values, (Series,)):
+            # convert to int64 for simplicity
+            values = values.astype('int64').data.mem
+
         return Series(
             self._column.isin(values),
             name=self.name,
