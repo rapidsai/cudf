@@ -79,6 +79,9 @@ struct column_view {
    *
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
+   * @note It should be rare to need to access the `head<T>()` allocation of a
+   * column, and instead, accessing the elements should be done via `data<T>()`.
+   *
    * @tparam The type to cast to
    * @return T const* Typed pointer to underlying data
    *---------------------------------------------------------------------------**/
