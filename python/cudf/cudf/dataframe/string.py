@@ -775,6 +775,26 @@ class StringColumn(columnops.TypedColumnBase):
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
+    @property
+    def is_unique(self):
+        return len(self.unique()) == len(self)
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, '_is_monotonic_increasing'):
+            self._is_monotonic_increasing = string_column_binop(
+                self[1:], self[:-1], 'ge'
+            ).all()
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, '_is_monotonic_decreasing'):
+            self._is_monotonic_decreasing = string_column_binop(
+                self[1:], self[:-1], 'le'
+            ).all()
+        return self._is_monotonic_decreasing
+
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")

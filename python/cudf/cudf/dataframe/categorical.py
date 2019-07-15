@@ -367,6 +367,24 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         return self.as_numerical.find_last_value(self._encode(value))
 
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, '_is_monotonic_increasing'):
+            self._is_monotonic_increasing = (
+                self._ordered
+                and self.as_numerical.is_monotonic_increasing
+            )
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, '_is_monotonic_decreasing'):
+            self._is_monotonic_decreasing = (
+                self._ordered
+                and self.as_numerical.is_monotonic_decreasing
+            )
+        return self._is_monotonic_decreasing
+
 
 def pandas_categorical_as_column(categorical, codes=None):
     """Creates a CategoricalColumn from a pandas.Categorical
