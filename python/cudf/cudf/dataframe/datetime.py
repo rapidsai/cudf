@@ -45,6 +45,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             The Column name
         """
         super(DatetimeColumn, self).__init__(**kwargs)
+        self._time_unit, _ = np.datetime_data(self.dtype)
 
     def serialize(self, serialize):
         header, frames = super(DatetimeColumn, self).serialize(serialize)
@@ -67,14 +68,23 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @classmethod
     def from_numpy(cls, array):
-        array = array.astype(np.dtype("datetime64[ms]"))
+        cast_dtype = array.dtype.type == np.int64
+        if array.dtype.kind == 'M':
+            time_unit, _ = np.datetime_data(array.dtype)
+            cast_dtype = time_unit == 'D' or (len(array) > 0 and (
+                isinstance(array[0], str) or isinstance(array[0], dt.datetime)
+            ));
+        elif not cast_dtype:
+            raise ValueError('Cannot infer datetime dtype' +
+                             'from np.array dtype `%s`' % (array.dtype))
+        if cast_dtype:
+            array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
-        buf = Buffer(array)
-        return cls(data=buf, dtype=buf.dtype)
+        return cls(data=Buffer(array), dtype=array.dtype)
 
     @property
     def time_unit(self):
-        return np.datetime_data(self.dtype)[0]
+        return self._time_unit
 
     @property
     def year(self):
@@ -154,7 +164,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 data = string._numeric_to_str_typecast_functions[
                     np.dtype(self.dtype)
                 ](dev_ptr, **kwargs)
-
             else:
                 data = []
 
@@ -216,8 +225,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
-            dtype=sort_inds.data.dtype,
-        )
+        ).astype(sort_inds.data.dtype)
         return col_keys, col_inds
 
     def min(self, dtype=None):
