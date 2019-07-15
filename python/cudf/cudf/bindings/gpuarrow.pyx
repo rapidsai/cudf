@@ -57,6 +57,8 @@ def _schema_to_dtype(name, bitwidth):
         ret = getattr(np, 'float{:d}'.format(bitwidth))
     elif name in ('INT', 'INT8', 'INT16', 'INT32', 'INT64'):
         ret = getattr(np, 'int{:d}'.format(bitwidth))
+    elif name == 'DATE64':
+        ret = 'datetime64[ms]'
     elif name == 'DICTIONARY':
         ret = getattr(np, 'int{:d}'.format(bitwidth))
     else:
