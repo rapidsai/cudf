@@ -393,6 +393,10 @@ class RangeIndex(Index):
         return super(type(self), self).__eq__(other)
 
     def equals(self, other):
+        if self is other:
+            return True
+        if len(self) != len(other):
+            return False
         if isinstance(other, cudf.dataframe.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
