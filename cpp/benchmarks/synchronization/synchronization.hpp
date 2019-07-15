@@ -7,11 +7,11 @@ class cuda_event_timer {
  
 public:
   
-  // The two c'tor clear the L2$ by cudaMemset a buffer of L2$ size
+  // The c'tor clears the L2$ by cudaMemset a buffer of L2$ size
   // and start the timer. 
   cuda_event_timer(benchmark::State& state, cudaStream_t stream_ = 0);  
   
-  cuda_event_timer(cudaStream_t stream_ = 0);  
+  cuda_event_timer() = delete;  
   
   // The d'tor stops the timer and perform a synchroniazation. If 
   // a benchmark::State object is provided to the c'tor its time 
@@ -20,14 +20,13 @@ public:
 
 private:
  
-  void init();
-
-  cudaEvent_t start, stop;
+  cudaEvent_t start;
+  cudaEvent_t stop;
   
-  static int l2_cache_bytes;
-  static int current_device;
-  static int* l2_cache_buffer;
- 
+  int l2_cache_bytes = 0;
+  int current_device = 0;
+  int* l2_cache_buffer = nullptr;
+
   cudaStream_t stream;
 
   benchmark::State* p_state = nullptr;
