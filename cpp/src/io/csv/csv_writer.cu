@@ -80,8 +80,29 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
             rtn = NVStrings::dtos((static_cast<const double*>(column->data))+row_offset,rows,valid);
             break;
         case GDF_DATE64:
+        case GDF_TIMESTAMP:
+            NVStrings::timestamp_units units;
+            switch( column->dtype_info.time_unit )
+            {
+                case TIME_UNIT_s:
+                    units = NVStrings::seconds;
+                    break;
+                case TIME_UNIT_ms:
+                    units = NVStrings::ms;
+                    break;
+                case TIME_UNIT_us:
+                    units = NVStrings::us;
+                    break;
+                case TIME_UNIT_ns:
+                    units = NVStrings::ns;
+                    break;
+                case TIME_UNIT_NONE:
+                default:
+                    units = NVStrings::ms;
+                    break;
+            }
             rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data)+row_offset,rows,
-                                            NVStrings::ms,nullptr,valid);
+                                            units,nullptr,valid);
             break;
         default:
             break;
@@ -97,7 +118,7 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
     }
 
     // probably could collapse this more
-    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64);
+    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64 || column->dtype==GDF_TIMESTAMP);
     // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
