@@ -262,7 +262,8 @@ class DatetimeColumn(columnops.TypedColumnBase):
         mask = None
 
         if isinstance(values, (list, np.ndarray,)):
-            values = DatetimeColumn.from_numpy(np.asarray(values)).as_numerical
+            values = DatetimeColumn.from_numpy(
+                np.asarray(values)).as_numerical.data.mem
 
         output_dary = rmm.device_array(len(self), dtype='bool')
 
