@@ -72,9 +72,10 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
             return col.dtype.type(1)
         return np.nan
 
-    col_dtype = col.dtype if dtype is None else dtype
+    col_dtype = col.dtype
     if reduction_op in ['sum', 'sum_of_squares', 'product']:
         col_dtype = np.find_common_type([col_dtype], [np.int64])
+    col_dtype = col_dtype if dtype is None else dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef operators c_op = _REDUCTION_OP[reduction_op]
@@ -91,7 +92,7 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
             )
 
     free(c_col)
-    result = get_scalar_value(c_result, dtype)
+    result = get_scalar_value(c_result, col_dtype)
 
     return result
 
