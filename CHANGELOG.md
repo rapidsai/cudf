@@ -10,6 +10,7 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 
 ## Improvements
 
