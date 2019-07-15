@@ -159,7 +159,7 @@ class _DataFrameIndexer(object):
             return df[df.columns[0]]
         else:
             df = _normalize_dtypes(df)
-            sr = df.T
+            sr = df.transpose()
             return sr[sr.columns[0]]
 
 
@@ -238,9 +238,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
 
+        # Iloc Step 1:
+        # Gather the columns specified by the second tuple arg
         columns = self._get_column_selection(arg[1])
         if isinstance(self._df.columns, MultiIndex):
-            columns_df = self._df.columns._get_column_major(self._df, arg)
+            columns_df = self._df.columns._get_column_major(self._df, arg[1])
         else:
             if isinstance(arg[0], slice):
                 columns_df = DataFrame()
@@ -249,6 +251,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 columns_df._index = self._df._index
             else:
                 columns_df = self._df._columns_view(columns)
+
+        # Iloc Step 2:
+        # Gather the rows specified by the first tuple arg
         if isinstance(columns_df.index, MultiIndex):
             df = columns_df.index._get_row_major(columns_df, arg[0])
             if (len(df) == 1 and len(columns_df) >= 1) and not\
@@ -259,9 +264,22 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 return self._downcast_to_series(df, arg)
             return df
         else:
+            """
+            # convert slice to Series if necessary
+            rows = arg[0]
+            if isinstance(rows, slice):
+                from cudf.utils.cudautils import arange
+                from cudf.utils import utils
+                start, stop, step, sln = utils.standard_python_slice(
+                        len(columns_df),
+                        rows
+                )
+                rows = arange(start, stop, step)
+            """
             df = DataFrame()
-            for col in columns_df.columns:
-                df[col] = columns_df[col].iloc[arg[0]]
+            for key, col in columns_df._cols.items():
+                df[key] = col.iloc[arg[0]]
+            df.columns = columns_df.columns
 
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
@@ -272,6 +290,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             else:
                 df.index = as_index(self._df.index[arg[0]])
         if self._can_downcast_to_series(df, arg):
+            if isinstance(df.columns, MultiIndex):
+                if len(df) > 0 and not\
+                    (isinstance(arg[0], slice) or isinstance(arg[1], slice)):
+                    return list(df._cols.values())[0][0]
+                else:
+                    return list(df._cols.values())[0]
             return self._downcast_to_series(df, arg)
         return df
 
@@ -290,7 +314,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 def _normalize_dtypes(df):
     dtypes = df.dtypes.values.tolist()
     normalized_dtype = np.result_type(*dtypes)
-    for name, col in df.iteritems():
+    for name, col in df._cols.items():
         df[name] = col.astype(normalized_dtype)
     return df
 

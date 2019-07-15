@@ -590,6 +590,61 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
         )
 
 
+@pytest.mark.parametrize(
+    "iloc_rows",
+    [
+        0,
+        1,
+        slice(None, 0),
+        slice(None, 1),
+        slice(0, 1),
+        slice(1, 2),
+        slice(0, 2),
+        slice(0, None),
+        slice(1, None),
+    ],
+)
+@pytest.mark.parametrize(
+    "iloc_columns",
+    [
+        0,
+        1,
+        slice(None, 0),
+        slice(None, 1),
+        slice(0, 1),
+        slice(1, 2),
+        slice(0, 2),
+        slice(0, None),
+        slice(1, None),
+    ],
+)
+def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
+    gdfIndex = cudf.from_pandas(pdfIndex)
+    assert_eq(pdfIndex, gdfIndex)
+    pdf.index = pdfIndex
+    gdf.index = gdfIndex
+    pdf = pdf.T
+    gdf = gdf.T
+    presult = pdf.iloc[iloc_rows, iloc_columns]
+    gresult = gdf.iloc[iloc_rows, iloc_columns]
+    if hasattr(gresult, 'name') and isinstance(gresult.name, tuple):
+        if 'cudf' in gresult.name[len(gresult.name) - 1]:
+            gresult.name = gresult.name[0:len(gresult.name) - 1]
+    if isinstance(presult, cudf.DataFrame):
+        assert_eq(
+            presult,
+            gresult,
+            check_index_type=False,
+            check_column_type=False,
+        )
+    else:
+        assert_eq(
+            presult,
+            gresult,
+            check_index_type=False,
+        )
+
+
 def test_multiindex_to_frame(pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     assert_eq(pdfIndex.to_frame(), gdfIndex.to_frame())

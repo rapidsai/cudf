@@ -1069,6 +1069,17 @@ class DataFrame(object):
             out.index = self.index.take(positions)
         return out
 
+    def take_columns(self, positions):
+        positions = Series(positions)
+        column_names = list(self._cols.keys())
+        column_values = list(self._cols.values())
+        result = DataFrame()
+        for idx in range(len(positions)):
+            result[column_names[positions[idx]]] = column_values[
+                positions[idx]]
+        result._index = self._index
+        return result
+
     def copy(self, deep=True):
         """
         Returns a copy of this dataframe
@@ -1414,7 +1425,7 @@ class DataFrame(object):
             for column in self.columns:
                 if column in mapper:
                     if mapper[column] in out.columns:
-                        out_column = str(mapper[column]) + "_" + str(postfix)
+                        out_column = mapper[column] + ("cudf_" + str(postfix),)
                         postfix += 1
                     else:
                         out_column = mapper[column]
@@ -1729,7 +1740,7 @@ class DataFrame(object):
         result = cpp_transpose(self)
         result = result.rename(dict(zip(result.columns, self.index)))
         index = self.index
-        result = result.set_index(self.columns)
+        result._index = self.columns
         if isinstance(index, cudf.dataframe.multiindex.MultiIndex):
             result.columns = index
         return result

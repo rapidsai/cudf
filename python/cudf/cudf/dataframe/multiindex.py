@@ -239,53 +239,41 @@ class MultiIndex(Index):
             ], axis=1)
         return lookup.merge(codes_table)['idx']
 
-    def _get_row_major(self, df, row_tuple):
-        from cudf.utils.cudautils import arange
-        slice_access = False
-        if isinstance(row_tuple, slice):
-            slice_access = True
-            start, stop, step, sln = utils.standard_python_slice(len(df),
-                                                                 row_tuple)
-            valid_indices = arange(start, stop, step)
-            row_tuple = [row_tuple]
-        elif isinstance(row_tuple, numbers.Number):
-            valid_indices = row_tuple
-            row_tuple = [row_tuple]
-        else:
-            valid_indices = self._compute_validity_mask(df.index, row_tuple)
+    def _index_and_downcast(self, result, index, index_key):
+        from cudf import DataFrame
         from cudf import Series
 
-        result = df.take(Series(valid_indices))
-        # Build new index - INDEX based MultiIndex
-        # ---------------
-        from cudf import DataFrame
-
+        slice_access = False
+        if isinstance(index_key, slice):
+            slice_access = True
         out_index = DataFrame()
         # Select the last n-k columns where n is the number of source
         # levels and k is the length of the indexing tuple
         size = 0
-        if not isinstance(row_tuple[0], (numbers.Number, slice)):
-            size = len(row_tuple)
-        for k in range(size, len(df.index.levels)):
+        if not isinstance(index_key, (numbers.Number, slice)):
+            size = len(index_key)
+        for k in range(size, len(index.levels)):
             out_index.add_column(
-                df.index.names[k], df.index.codes[df.index.codes.columns[k]]
+                index.names[k],
+                index.codes[index.codes.columns[k]]
             )
+
         # If there's only one column remaining in the output index, convert
         # it into an Index and name the final index values according
         # to the proper codes.
         if len(out_index.columns) == 1:
             out_index = []
-            for val in result.index.codes[
-                result.index.codes.columns[len(result.index.codes.columns) - 1]
+            for val in index.codes[
+                index.codes.columns[len(index.codes.columns) - 1]
             ]:
                 out_index.append(
-                    result.index.levels[len(result.index.codes.columns) - 1][
+                    index.levels[len(index.codes.columns) - 1][
                         val
                     ]
                 )
             out_index = as_index(out_index)
-            out_index.name = result.index.names[len(result.index.names) - 1]
-            result.index = out_index
+            out_index.name = index.names[len(index.names) - 1]
+            index = out_index
         else:
             if len(result) == 1 and size == 0 and slice_access is False:
                 # If the final result is one row and it was not mapped into
@@ -301,7 +289,9 @@ class MultiIndex(Index):
                         ]
                     )
                 result = Series(
-                    list(result._cols.values())[0], name=series_name
+                    list(result._cols.values())[0],
+                    name=series_name,
+                    index=result.index
                 )
                 result.name = tuple(series_name)
             elif len(result) == 0 and len(result.columns) == 0:
@@ -309,33 +299,59 @@ class MultiIndex(Index):
                     # Pandas returns a Series with a stringified index for
                     # the one expected result column
                     series_name = []
-                    for idx, code in enumerate(result.index.codes):
+                    for idx, code in enumerate(index.codes):
                         series_name.append(
-                            result.index.levels[idx][
-                                result.index.codes[code][0]
+                            index.levels[idx][
+                                index.codes[code][0]
                             ]
                         )
                     result = Series([], name=series_name)
                     result.name = tuple(series_name)
                 else:
-                    result._index._codes = result._index._codes[row_tuple[0]]
+                    index._codes = index._codes[index_key]
             elif (len(out_index.columns)) > 0:
                 # Otherwise pop the leftmost levels, names, and codes from the
                 # source index until it has the correct number of columns (n-k)
                 result.reset_index(drop=True)
-                result._index = result._index._popn(size)
+                index = index._popn(size)
         return result
 
-    def _get_column_major(self, df, row_tuple):
-        valid_indices = self._compute_validity_mask(df.columns, row_tuple)
-        from cudf import DataFrame
+    def _get_row_major(self, df, row_tuple):
+        from cudf.utils.cudautils import arange
+        if isinstance(row_tuple, slice):
+            start, stop, step, sln = utils.standard_python_slice(len(df),
+                                                                 row_tuple)
+            valid_indices = arange(start, stop, step)
+            row_tuple = [row_tuple]
+        elif isinstance(row_tuple, numbers.Number):
+            valid_indices = row_tuple
+            row_tuple = [row_tuple]
+        else:
+            valid_indices = self._compute_validity_mask(df.index, row_tuple)
 
-        result = DataFrame()
-        for ix, col in enumerate(df.columns):
-            if ix in valid_indices:
-                result[ix] = list(df._cols.values())[ix]
-        # Build new index - COLUMN based MultiIndex
-        # ---------------
+        from cudf import Series
+        result = df.take(Series(valid_indices))
+
+        return self._index_and_downcast(result, result.index, row_tuple[0])
+
+    def _get_column_major(self, df, row_tuple):
+        from cudf.utils.cudautils import arange
+        slice_access = False
+        if isinstance(row_tuple, slice):
+            slice_access = True
+            start, stop, step, sln = utils.standard_python_slice(len(df._cols),
+                                                                 row_tuple)
+            valid_indices = arange(start, stop, step)
+            row_tuple = [row_tuple]
+        elif isinstance(row_tuple, numbers.Number):
+            valid_indices = row_tuple
+            row_tuple = [row_tuple]
+        else:
+            valid_indices = self._compute_validity_mask(df.columns, row_tuple)
+        
+        from cudf import DataFrame
+        result = df.take_columns(valid_indices)
+        
         if len(row_tuple) < len(self.levels):
             columns = self._popn(len(row_tuple))
             result.columns = columns.take(valid_indices)
