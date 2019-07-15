@@ -1346,7 +1346,7 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if len(self.index) == len(new_index) and self.index.equals(new_index):
+        if self.index.equals(new_index):
             new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)

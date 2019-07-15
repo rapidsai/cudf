@@ -15,6 +15,9 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.copying as cpp_copying
 from cudf import formatting
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf.bindings.stream_compaction import (
+    apply_drop_duplicates as cpp_drop_duplicates,
+)
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
@@ -1068,6 +1071,32 @@ class Series(object):
 
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
+
+    def drop_duplicates(self, keep="first", inplace=False):
+        """
+        Return Series with duplicate values removed
+        """
+        in_cols = [self._column]
+        in_index = self.index
+        from cudf.dataframe.multiindex import MultiIndex
+        if isinstance(in_index, MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates(
+            [in_index.as_column()], in_cols, None, keep
+        )
+        new_index = as_index(new_index)
+        if self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, MultiIndex):
+            new_index = self.index.take(new_index)
+
+        if inplace:
+            self._index = new_index
+            self._size = len(new_index)
+            self._column = out_cols[0]
+        else:
+            out = Series(out_cols[0], index=new_index, name=self.name)
+            return out
 
     def dropna(self):
         """
