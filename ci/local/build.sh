@@ -73,7 +73,6 @@ set -e
 WORKSPACE=${REPO_PATH_IN_CONTAINER}
 PREBUILD_SCRIPT=${REPO_PATH_IN_CONTAINER}/ci/gpu/prebuild.sh
 BUILD_SCRIPT=${REPO_PATH_IN_CONTAINER}/ci/gpu/build.sh
-cd ${WORKSPACE}
 if [ -f \${PREBUILD_SCRIPT} ]; then
     source \${PREBUILD_SCRIPT}
 fi

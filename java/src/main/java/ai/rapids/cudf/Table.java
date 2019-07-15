@@ -22,7 +22,6 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
-import java.util.stream.IntStream;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -188,9 +187,19 @@ public final class Table implements AutoCloseable {
   private static native long[] gdfReadParquet(String[] filterColumnNames,
                                               String filePath, long address, long length) throws CudfException;
 
+  /**
+   * Read in ORC formatted data.
+   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
+   *                          all of them
+   * @param filePath          the path of the file to read, or null if no path should be read.
+   * @param address           the address of the buffer to read from or 0 for no buffer.
+   * @param length            the length of the buffer to read from.
+   */
+  private static native long[] gdfReadORC(String[] filterColumnNames,
+                                          String filePath, long address, long length) throws CudfException;
 
-  private static native long[] gdfGroupByAggregate(long inputTable, int[] indices, int aggColumn, 
-                                                   int aggType) throws CudfException;
+  private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
+                                                   int[] aggTypes) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -392,6 +401,84 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Read a ORC file using the default ORCOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readORC(File path) { return readORC(ORCOptions.DEFAULT, path); }
+
+  /**
+   * Read a ORC file.
+   * @param opts ORC parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, File path) {
+    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+        path.getAbsolutePath(), 0, 0));
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param buffer raw ORC formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(byte[] buffer) {
+    return readORC(ORCOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, byte[] buffer) {
+    return readORC(opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readORC(opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+        null, buffer.getAddress() + offset, len));
+  }
+
+  /**
    * Concatenate multiple tables together to form a single table.
    * The schema of each table (i.e.: number of columns and types of each column) must be equal
    * across all tables and will determine the schema of the resulting table.
@@ -462,8 +549,8 @@ public final class Table implements AutoCloseable {
     return Aggregate.sum(index);
   }
 
-  public static Aggregate avg(int index) {
-    return Aggregate.avg(index);
+  public static Aggregate mean(int index) {
+    return Aggregate.mean(index);
   }
 
   public AggregateOperation groupBy(int... indices) {
@@ -544,52 +631,16 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      long[][] aggregateTables = new long[aggregates.length][];
-      for (int aggregateIndex = 0 ; aggregateIndex < aggregates.length ; aggregateIndex++) {
-        try {
-          aggregateTables[aggregateIndex] = gdfGroupByAggregate(operation.table.nativeHandle,
-                  operation.indices, aggregates[aggregateIndex].getIndex(),
-                  aggregates[aggregateIndex].getNativeId());
-        } catch (Throwable t) {
-          for (int cleanupAggregateIndex = 0;
-                  cleanupAggregateIndex <= cleanupAggregateIndex;
-                  cleanupAggregateIndex++) {
-            if (aggregateTables[cleanupAggregateIndex] != null) {
-              for (int aggregateColumnIndex = 0;
-                      aggregateColumnIndex < aggregateTables[cleanupAggregateIndex].length;
-                      aggregateColumnIndex++) {
-                long e = aggregateTables[cleanupAggregateIndex][aggregateColumnIndex];
-                if (e != 0) {
-                  ColumnVector.freeCudfColumn(aggregateColumnIndex, true);
-                }
-              }
-            }
-          }
-          throw t;
-        }
+      int[] aggregateColumnIndices = new int[aggregates.length];
+      int[] ops = new int[aggregates.length];
+      for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
+        aggregateColumnIndices[aggregateIndex] = aggregates[aggregateIndex].getIndex();
+        ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
       }
 
-      /**
-       * Currently Cudf calculates one aggregate at a time due to which we have multiple aggregate
-       * tables that we have to now merge into a single one
-       */
-      // copy the grouped columns to the new table
-      long[] finalAggregateTable = Arrays.copyOf(aggregateTables[0],
-              operation.indices.length + aggregates.length);
-      // now copy the aggregated columns from each one of the aggregated tables to the end of
-      // the final table that has all the grouped columns
-      IntStream.range(1, aggregateTables.length).forEach(i -> {
-        IntStream.range(0, operation.indices.length).forEach(j -> {
-          //Being defensive
-          long e = aggregateTables[i][j];
-          if (e != 0) {
-            ColumnVector.freeCudfColumn(e, true);
-          }
-        });
-        finalAggregateTable[i + operation.indices.length] =
-            aggregateTables[i][operation.indices.length];
-      });
-      return new Table(finalAggregateTable);
+      Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
+          operation.indices, aggregateColumnIndices, ops));
+      return aggregate;
     }
   }
 

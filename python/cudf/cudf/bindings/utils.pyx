@@ -5,7 +5,7 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 
 
-cdef cudf_table* table_from_dataframe(df):
+cdef cudf_table* table_from_dataframe(df) except? NULL:
     cdef cudf_table* c_table
     cdef vector[gdf_column*] c_columns
     for col_name in df:
@@ -45,7 +45,7 @@ cdef columns_from_table(cudf_table* table):
     return columns
 
 
-cdef cudf_table* table_from_columns(columns):
+cdef cudf_table* table_from_columns(columns) except? NULL:
     cdef cudf_table* c_table
     cdef vector[gdf_column*] c_columns
     cdef gdf_column* c_col

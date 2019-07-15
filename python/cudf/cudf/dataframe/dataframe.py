@@ -1345,7 +1345,7 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if len(self.index) == len(new_index) and self.index.equals(new_index):
+        if self.index.equals(new_index):
             new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
@@ -2725,6 +2725,21 @@ class DataFrame(object):
             output_frame = _create_output_frame(included_data, percentiles)
 
         return output_frame
+
+    def isnull(self, **kwargs):
+        """Identify missing values in a DataFrame.
+        """
+        return self._apply_support_method("isnull", **kwargs)
+
+    def isna(self, **kwargs):
+        """Identify missing values in a DataFrame. Alias for isnull.
+        """
+        return self.isnull(**kwargs)
+
+    def notna(self, **kwargs):
+        """Identify non-missing values in a DataFrame.
+        """
+        return self._apply_support_method("notna", **kwargs)
 
     def to_pandas(self):
         """
