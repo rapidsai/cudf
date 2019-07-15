@@ -96,6 +96,8 @@ def np_to_pa_dtype(dtype):
     # special case when dtype is np.datetime64
     if dtype.kind == 'M':
         time_unit, _ = np.datetime_data(dtype)
+        if time_unit == 'ms':
+            return pa.date64()
         if time_unit in np_to_gdf_time_unit:
             # return a pa.Timestamp of the appropriate unit
             return pa.timestamp(time_unit)
@@ -160,7 +162,7 @@ cdef np_dtype_from_gdf_column(gdf_column* col):
     if dtype == GDF_TIMESTAMP:
         return gdf_time_unit_to_np_dtype(col.dtype_info.time_unit)
     if dtype in gdf_dtypes:
-        return gdf_dtypes[dtype]
+        return np.dtype(gdf_dtypes[dtype])
     raise TypeError('cannot convert gdf_dtype `%s` to numpy dtype' % (dtype))
 
 
@@ -186,12 +188,15 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
     # to determine if the gdf_type is GDF_DATE32, GDF_DATE64, or GDF_TIMESTAMP
     if dtype.kind == 'M':
         time_unit, _ = np.datetime_data(dtype)
+        if time_unit == 'ms':
+            return GDF_DATE64
+        if time_unit == 'D':
+            return GDF_DATE32
         if time_unit in np_to_gdf_time_unit:
             # time_unit is valid so must be a GDF_TIMESTAMP
             return GDF_TIMESTAMP
-        # return GDF_DATE32 if time_unit is UNIX days,
-        # else GDF_DATE64 since default is int64_t UNIX ms
-        return GDF_DATE32 if time_unit == 'D' else GDF_DATE64
+        # else default to GDF_DATE64
+        return GDF_DATE64
     # everything else is a 1-1 mapping
     if dtype.type in dtypes:
         return dtypes[dtype.type]
@@ -265,7 +270,9 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.b08 = val
     elif val.dtype.type == np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)
-        if time_unit in np_to_gdf_time_unit:
+        if time_unit == 'ms':
+            scalar.data.dt64 = np.datetime64(val, time_unit).astype(int)
+        elif time_unit in np_to_gdf_time_unit:
             scalar.data.tmst = np.datetime64(val, time_unit).astype(int)
         elif time_unit == 'D':
             scalar.data.dt32 = np.datetime64(val, time_unit).astype(int)

@@ -406,13 +406,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 dtype=np.dtype("M8[ms]"),
             )
         elif isinstance(arbitrary, pa.Date32Array):
-            pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[D]")
-            data = datetime.DatetimeColumn(
-                data=padata,
-                mask=pamask,
-                null_count=arbitrary.null_count,
-                dtype=np.dtype("M8[D]"),
+            # No equivalent np dtype and not yet supported
+            warnings.warn(
+                "Date32 values are not yet supported so this will "
+                "be typecast to a Date64 value",
+                UserWarning,
             )
+            data = as_column(arbitrary.cast(pa.int32())).astype("M8[ms]")
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
@@ -473,10 +473,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data_type = np_to_pa_dtype(arbitrary.dtype)
             # PyArrow can't construct date64 or date32 arrays from np
             # datetime types
-            if pa.is_date64(data_type):
+            if pa.types.is_date64(data_type) or pa.types.is_date32(data_type):
                 arbitrary = arbitrary.astype("int64")
-            elif pa.is_date32(data_type):
-                arbitrary = arbitrary.astype("int32")
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
             data = as_column(pa.array([arbitrary]), nan_as_null=nan_as_null)
