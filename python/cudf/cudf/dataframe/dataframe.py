@@ -3210,8 +3210,7 @@ class DataFrame(object):
 
     def _apply_support_method(self, method, **kwargs):
         result = [
-            getattr(self[col], method)(**kwargs) for col in
-            self._cols.keys()
+            getattr(self[col], method)(**kwargs) for col in self._cols.keys()
         ]
         if isinstance(result[0], Series):
             support_result = result
