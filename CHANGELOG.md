@@ -9,6 +9,7 @@
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2215 `type_dispatcher` benchmark
 
 ## Improvements
 
