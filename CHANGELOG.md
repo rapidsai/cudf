@@ -39,6 +39,8 @@
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
 - PR #2224 implement isna, isnull, notna as dataframe functions
+- PR #2236 Implement drop_duplicates for Series
+- PR #2225 refactor to use libcudf for gathering columns in dataframes
 
 ## Bug Fixes
 
@@ -58,6 +60,7 @@
 - PR #2229 Propagate exceptions from Cython cdef functions
 - PR #2234 Fix issue with local build script not properly building
 - PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
+- PR #2162 Setting is_unique and is_monotonic-related attributes
 
 
 # cuDF 0.8.0 (27 June 2019)

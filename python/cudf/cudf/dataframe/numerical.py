@@ -363,21 +363,61 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def find_first_value(self, value):
         """
-        Returns offset of first value that matches
+        Returns offset of first value that matches. For monotonic
+        columns, returns the offset of the first larger value.
         """
         found = cudautils.find_first(self.data.mem, value)
-        if found == -1:
+        if found == -1 and self.is_monotonic:
+            if value < self.min():
+                found = 0
+            elif value > self.max():
+                found = len(self)
+            else:
+                found = cudautils.find_first(
+                    self.data.mem, value, compare="gt"
+                )
+                if found == -1:
+                    raise ValueError("value not found")
+        elif found == -1:
             raise ValueError("value not found")
         return found
 
     def find_last_value(self, value):
         """
-        Returns offset of last value that matches
+        Returns offset of last value that matches. For monotonic
+        columns, returns the offset of the last smaller value.
         """
         found = cudautils.find_last(self.data.mem, value)
-        if found == -1:
+        if found == -1 and self.is_monotonic:
+            if value < self.min():
+                found = -1
+            elif value > self.max():
+                found = len(self) - 1
+            else:
+                found = cudautils.find_last(
+                    self.data.mem, value, compare="lt"
+                )
+                if found == -1:
+                    raise ValueError("value not found")
+        elif found == -1:
             raise ValueError("value not found")
         return found
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, '_is_monotonic_increasing'):
+            self._is_monotonic_increasing = numeric_column_binop(
+                self[1:], self[:-1], 'ge', 'bool'
+            ).all()
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, '_is_monotonic_decreasing'):
+            self._is_monotonic_decreasing = numeric_column_binop(
+                self[1:], self[:-1], 'le', 'bool'
+            ).all()
+        return self._is_monotonic_decreasing
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
