@@ -11,8 +11,6 @@ from librmm_cffi import librmm as rmm
 from cudf.utils.utils import (
     check_equals_float,
     check_equals_int,
-    check_gt,
-    check_lt,
     make_mask,
     mask_bitsize,
     mask_get,
@@ -782,7 +780,7 @@ def gpu_mark_found_float(arr, val, out, not_found):
 def gpu_mark_gt(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_gt(arr[i], val):
+        if arr[i] > val:
             out[i] = i
         else:
             out[i] = not_found
@@ -792,7 +790,7 @@ def gpu_mark_gt(arr, val, out, not_found):
 def gpu_mark_lt(arr, val, out, not_found):
     i = cuda.grid(1)
     if i < arr.size:
-        if check_lt(arr[i], val):
+        if arr[i] < val:
             out[i] = i
         else:
             out[i] = not_found

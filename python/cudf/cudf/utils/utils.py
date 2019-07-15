@@ -58,16 +58,6 @@ def check_equals_int(a, b):
     return a == b
 
 
-@njit
-def check_gt(a, b):
-    return a > b
-
-
-@njit
-def check_lt(a, b):
-    return a < b
-
-
 def make_mask(size):
     """Create mask to obtain at least *size* number of bits.
     """
