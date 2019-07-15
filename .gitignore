@@ -1,27 +1,57 @@
 ## Common
 __pycache__
-*.pyc
+*.py[cod]
+*$py.class
 *.a
 *.o
 *.so
 *.dylib
 .cache
-.coverage
 .vscode
 *.swp
 *.pytest_cache
 DartConfiguration.tcl
 .DS_Store
+*.manifest
+*.spec
 
 ## Python build directories & artifacts
-htmlcov
 dist/
 cudf.egg-info/
 python/build
-python/cudf/bindings/*.cpp
-python/cudf/bindings/.nfs*
+python/*/build
+python/cudf/*/bindings/**/*.cpp
+python/cudf/*/bindings/.nfs*
 python/*.ipynb
 python/.ipynb_checkpoints
+.Python
+env/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
 
 ## Patching
 *.diff
@@ -53,3 +83,57 @@ cpp/doxygen/html
 
 #Java
 target
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+local_settings.py
+
+# Flask stuff:
+instance/
+.webassets-cache
+
+# Scrapy stuff:
+.scrapy
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# pyenv
+.python-version
+
+# celery beat schedule file
+celerybeat-schedule
+
+# SageMath parsed files
+*.sage.py
+
+# dotenv
+.env
+
+# virtualenv
+.venv
+venv/
+ENV/
+
+# Spyder project settings
+.spyderproject
+.spyproject
+
+# Rope project settings
+.ropeproject
+
+# mkdocs documentation
+/site
+
+# mypy
+.mypy_cache/

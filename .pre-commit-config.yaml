@@ -1,0 +1,15 @@
+repos:
+-   repo: https://github.com/timothycrosley/isort
+    rev: 4.3.21
+    hooks:
+    - id: isort
+-   repo: https://github.com/ambv/black
+    rev: stable
+    hooks:
+    - id: black
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.7.7
+    hooks:
+    - id: flake8
+default_language_version:
+    python: python3

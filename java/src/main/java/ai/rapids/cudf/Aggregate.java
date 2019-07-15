@@ -22,21 +22,39 @@ package ai.rapids.cudf;
  * Class for all the aggregate functions like count, max etc
  */
 public final class Aggregate {
-  enum AggregateType {
-    COUNT
-  }
+  private final AggregateOp type;
+  private final int index;
 
-  private AggregateType type;
-
-  private Aggregate(AggregateType type) {
+  private Aggregate(AggregateOp type, int index) {
     this.type = type;
+    this.index = index;
   }
 
   static Aggregate count() {
-    return new Aggregate(AggregateType.COUNT);
+    return new Aggregate(AggregateOp.COUNT, 0/* for count index doesn't matter*/);
   }
 
-  boolean isCount() {
-    return type == AggregateType.COUNT;
+  static Aggregate max(int index) {
+    return new Aggregate(AggregateOp.MAX, index);
+  }
+
+  static Aggregate min(int index) {
+    return new Aggregate(AggregateOp.MIN, index);
+  }
+
+  static Aggregate mean(int index) {
+    return new Aggregate(AggregateOp.MEAN, index);
+  }
+
+  static Aggregate sum(int index) {
+    return new Aggregate(AggregateOp.SUM, index);
+  }
+
+  int getIndex() {
+    return index;
+  }
+
+  int getNativeId() {
+    return type.nativeId;
   }
 }
