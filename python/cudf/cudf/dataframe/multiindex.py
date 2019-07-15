@@ -242,6 +242,9 @@ class MultiIndex(Index):
     def _index_and_downcast(self, result, index, index_key):
         from cudf import DataFrame
         from cudf import Series
+ 
+        if not self._is_valid_index_key(index_key):
+            index_key = index_key[0]
 
         slice_access = False
         if isinstance(index_key, slice):
@@ -314,6 +317,8 @@ class MultiIndex(Index):
                 # source index until it has the correct number of columns (n-k)
                 result.reset_index(drop=True)
                 index = index._popn(size)
+        if self._is_valid_index_key(index_key):
+            result._index = index
         return result
 
     def _get_row_major(self, df, row_tuple):
@@ -332,7 +337,7 @@ class MultiIndex(Index):
         from cudf import Series
         result = df.take(Series(valid_indices))
 
-        return self._index_and_downcast(result, result.index, row_tuple[0])
+        return self._index_and_downcast(result, result.index, row_tuple)
 
     def _get_column_major(self, df, row_tuple):
         from cudf.utils.cudautils import arange
