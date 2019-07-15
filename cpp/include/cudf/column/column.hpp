@@ -15,9 +15,9 @@
  */
 #pragma once
 
-#include <cudf/bitmask/bitmask.hpp>
 #include <cudf/types.hpp>
 #include "column_view.hpp"
+#include "mutable_column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
 
@@ -66,8 +66,7 @@ class column {
    * @param[in] data The device buffer to copy
    * @param[in] mask The bitmask to copy
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer data,
-         bitmask mask);
+  column(data_type dtype, size_type size, rmm::device_buffer data, column mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, and device_buffers for data and
@@ -85,7 +84,7 @@ class column {
    * @param mask bitmask whose data will be moved into this column
    *---------------------------------------------------------------------------**/
   column(data_type dtype, size_type size, rmm::device_buffer&& data,
-         bitmask&& mask);
+         column&& mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, size, and deep copied device
@@ -97,7 +96,7 @@ class column {
    * @param mask bitmask whose data will be moved into this column
    *---------------------------------------------------------------------------**/
   column(data_type dtype, size_type size, rmm::device_buffer data,
-         bitmask&& mask);
+         column&& mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, size, and moved device
@@ -109,7 +108,7 @@ class column {
    * @param mask bitmask whose data will be deep copied into this column
    *---------------------------------------------------------------------------**/
   column(data_type dtype, size_type size, rmm::device_buffer&& data,
-         bitmask mask);
+         column mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying the device memory of another
@@ -117,7 +116,7 @@ class column {
    *
    * @param other The other column to copy
    *---------------------------------------------------------------------------**/
-  column(column const& other) = default;
+  column(column const& other);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column object by moving the device memory from
@@ -126,28 +125,35 @@ class column {
    * @param other The other column whose device memory will be moved to the new
    * column
    *---------------------------------------------------------------------------**/
-  column(column&& other) = default;
+  column(column&& other);
 
   ~column() = default;
-
   column& operator=(column const& other) = delete;
   column& operator=(column&& other) = delete;
 
   column_view view() const noexcept { return this->operator column_view(); }
 
-  operator column_view() const noexcept {
-    return column_view{_data.data(), _type, _size, _mask};
+  operator column_view() const;
+
+  mutable_column_view mutable_view() noexcept {
+    return this->operator mutable_column_view();
   }
+
+  operator mutable_column_view();
 
  private:
   rmm::device_buffer _data{};  ///< Dense, contiguous, type erased device memory
                                ///< buffer containing the column elements
-  bitmask _mask{};             ///< Validity bitmask for columne elements
-  cudf::size_type _size;       ///< The number of elements in the column
-  data_type _type{INVALID};    ///< Logical type of elements in the column
-  std::vector<column>
-      _children{};  ///< Depending on element type, child columns may contain
-                    ///< additional data, e.g., the dictionary for a dictionary
-                    ///< column
+  std::unique_ptr<column>
+      _null_mask{};         ///< Column of BOOL1 elements
+                            ///< where `true` indicates an element
+                            ///< is valid, `false` indicates "null". Optional if
+                            ///< `null_count() == 0`
+  size_type _null_count{};  ///< The number of null elements
+  cudf::size_type _size{};  ///< The number of elements in the column
+  data_type _type{INVALID};         ///< Logical type of elements in the column
+  std::vector<column> _children{};  ///< Depending on element type, child
+                                    ///< columns may contain additional data
+  std::unique_ptr<column> dictionary{};
 };
 }  // namespace cudf

@@ -18,25 +18,25 @@
 #include <cudf/types.hpp>
 
 namespace cudf {
-struct column_view {
-  column_view() = default;
-  ~column_view() = default;
-  column_view(column_view&&) = default;
-  column_view& operator=(column_view const&) = default;
-  column_view& operator=(column_view&&) = default;
+struct mutable_column_view {
+  mutable_column_view() = default;
+  ~mutable_column_view() = default;
+  mutable_column_view(mutable_column_view&&) = default;
+  mutable_column_view& operator=(mutable_column_view const&) = default;
+  mutable_column_view& operator=(mutable_column_view&&) = default;
 
-  column_view(void const* data, data_type type, size_type size,
-              std::unique_ptr<column_view> null_mask, size_type null_count,
-              std::vector<column_view> const& children);
+  mutable_column_view(void const* data, data_type type, size_type size,
+              std::unique_ptr<mutable_column_view> null_mask, size_type null_count,
+              std::vector<mutable_column_view> const& children);
 
-  column_view(column_view const& other)
+  mutable_column_view(mutable_column_view const& other)
       : _data{other._data},
         _type{other._type},
         _size{other._size},
         _null_count{other._null_count},
         _children{other._children} {
     if (nullptr != other._null_mask.get()) {
-      _null_mask = std::make_unique<column_view>(*(other._null_mask));
+      _null_mask = std::make_unique<mutable_column_view>(*(other._null_mask));
     }
   }
 
@@ -45,9 +45,9 @@ struct column_view {
     return static_cast<T const*>(_data);
   }
 
-  size_type size() const noexcept { return _size; }
+  size_type size() noexcept { return _size; }
 
-  data_type type() const noexcept { return _type; }
+  data_type type() noexcept { return _type; }
 
   bool nullable() const noexcept { return nullptr != _null_mask.get(); }
 
@@ -55,9 +55,9 @@ struct column_view {
 
   bool has_nulls() const noexcept { return _null_count > 0; }
 
-  column_view* null_mask() const noexcept { return _null_mask.get(); }
+  mutable_column_view* null_mask() const noexcept { return _null_mask.get(); }
 
-  column_view child(size_type child_index) const noexcept {
+  mutable_column_view child(size_type child_index) const noexcept {
     return _children[child_index];
   }
 
@@ -65,8 +65,8 @@ struct column_view {
   void const* _data{nullptr};
   data_type _type{INVALID};
   cudf::size_type _size{0};
-  std::unique_ptr<column_view> _null_mask{nullptr};
+  std::unique_ptr<mutable_column_view> _null_mask{nullptr};
   size_type _null_count{0};
-  std::vector<column_view> _children{};
+  std::vector<mutable_column_view> _children{};
 };
 }  // namespace cudf

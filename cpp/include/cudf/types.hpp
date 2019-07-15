@@ -46,22 +46,22 @@ using bitmask_type = uint32_t;
 
 enum data_type {
   INVALID = 0,
-  INT8,
-  INT16,
-  INT32,
-  INT64,
-  FLOAT32,
-  FLOAT64,
-  BOOL8,
+  INT8,     ///< 1 byte signed integer
+  INT16,    ///< 2 byte signed integer
+  INT32,    ///< 4 byte signed integer
+  INT64,    ///< 8 byte signed integer
+  FLOAT32,  ///< 4 byte floating point
+  FLOAT64,  ///< 8 byte floating point
+  BOOL1,    ///< Boolean type using 1 bit per value, 0 == false, 1 == true
+  BOOL8,    ///< Boolean type using one *byte* per value, 0 == false, else true
   DATE32,
   DATE64,
-  TIMESTAMP_NS,
-  TIMESTAMP_US,
-  TIMESTAMP_MS,
-  TIMESTAMP_S,
-  CATEGORY,
+  TIMESTAMP_NS,  ///< Timestamp in nanoseconds
+  TIMESTAMP_US,  ///< Timestamp in microseconds
+  TIMESTAMP_MS,  ///< Timestamp in milliseoncds
+  TIMESTAMP_S,   ///< Timestamp in seconds
+  CATEGORY,  ///< Categorial/Dictionary type composed of two discrete columns
   STRING,
-  STRING_CATEGORY
 };
 
 }  // namespace cudf
