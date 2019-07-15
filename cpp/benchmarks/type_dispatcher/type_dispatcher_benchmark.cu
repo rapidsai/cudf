@@ -29,8 +29,8 @@
 #include <table/device_table.cuh>
 
 #include <random>
-
-#include "../synchronization/synchronization.h"
+#include <utilities/cuda_utils.hpp>
+#include "../synchronization/synchronization.hpp"
 #include "../fixture/benchmark_fixture.hpp"
 
 enum DispatchingType {
@@ -48,11 +48,10 @@ template<class T, FunctorType ft>
 struct Functor{
   static __device__ T f(T x){
     if(ft == BANDWIDTH_BOUND){
-      return x + static_cast<T>(1);
+      return x + static_cast<T>(1) - static_cast<T>(1);
     }else{
-      #pragma unroll
       for(int i = 0; i < 1000; i++){
-        x = (x*x + static_cast<T>(1)) - x*x;
+        x = (x*x + static_cast<T>(1)) - x*x - static_cast<T>(1);
       }
       return x;
     }
@@ -92,13 +91,12 @@ __global__ void host_dispatching_kernel(T* A, gdf_size_type n_rows){
 template<FunctorType functor_type>
 struct ColumnHandle {
   template <typename ColumnType>
-  void operator()(gdf_column* source_column, int work_per_thread) {
+  void operator()(gdf_column* source_column, int work_per_thread, cudaStream_t stream = 0) {
     ColumnType* source_data = static_cast<ColumnType*>(source_column->data);
     gdf_size_type const n_rows = source_column->size;
     int grid_size = launch_configuration(n_rows, work_per_thread);
-    
     // Launch the kernel.
-    host_dispatching_kernel<functor_type><<<grid_size, block_size>>>(source_data, n_rows);
+    host_dispatching_kernel<functor_type><<<grid_size, block_size, 0, stream>>>(source_data, n_rows);
   }
 };
 
@@ -145,6 +143,7 @@ void launch_kernel(cudf::table& input, T** d_ptr, int work_per_thread){
   int grid_size = launch_configuration(n_rows, work_per_thread);
  
   if(dispatching_type == HOST_DISPATCHING){
+    // std::vector<cudf::util::cuda::scoped_stream> v_stream(n_cols);
     for(int c = 0; c < n_cols; c++){
       cudf::type_dispatcher(input.get_column(c)->dtype, ColumnHandle<functor_type>{}, input.get_column(c), work_per_thread);
     }
@@ -160,16 +159,15 @@ void launch_kernel(cudf::table& input, T** d_ptr, int work_per_thread){
   }
 }
 
-class TypeDispatching : public cudf::benchmark{ };
-
 template<class TypeParam, FunctorType functor_type, DispatchingType dispatching_type>
 void type_dispatcher_benchmark(benchmark::State& state){
-  const gdf_size_type source_size = static_cast<gdf_size_type>(state.range(0));
+  const gdf_size_type source_size = static_cast<gdf_size_type>(state.range(1));
   
-  const gdf_size_type n_cols = static_cast<gdf_size_type>(state.range(1));
+  const gdf_size_type n_cols = static_cast<gdf_size_type>(state.range(0));
   
   const gdf_size_type work_per_thread = static_cast<gdf_size_type>(state.range(2));
 
+  
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
       n_cols,
       {
@@ -201,7 +199,23 @@ void type_dispatcher_benchmark(benchmark::State& state){
   }
   
   // Warm up  
+  cudaEvent_t start, stop;
+  CUDA_TRY(cudaEventCreate(&start));
+  CUDA_TRY(cudaEventCreate(&stop));
+  CUDA_TRY(cudaEventRecord(start));
+
   launch_kernel<functor_type, dispatching_type>(source_table, d_ptr, work_per_thread);
+  
+  CUDA_TRY(cudaEventRecord(stop));
+  CUDA_TRY(cudaEventSynchronize(stop));
+ 
+  float milliseconds = 0.0f;
+  CUDA_TRY(cudaEventElapsedTime(&milliseconds, start, stop));
+  
+  CUDA_TRY(cudaEventDestroy(start));
+  CUDA_TRY(cudaEventDestroy(stop));
+  
+  cudaDeviceSynchronize();
   
   for(auto _ : state){
     cuda_event_timer raii(state);
@@ -218,11 +232,13 @@ void type_dispatcher_benchmark(benchmark::State& state){
   }
 }
 
+using namespace cudf;
+
 #define TBM_BENCHMARK_DEFINE(name, TypeParam, functor_type, dispatching_type)                  \
-BENCHMARK_DEFINE_F(TypeDispatching, name)(::benchmark::State& state) {                                      \
+BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {                               \
   type_dispatcher_benchmark<TypeParam, functor_type, dispatching_type>(state);                 \
-}                                                                                                           \
-BENCHMARK_REGISTER_F(TypeDispatching, name)->RangeMultiplier(2)->Ranges({{1<<10, 1<<26},{1, 8},{1, 1}})->UseManualTime();
+}                                                                                              \
+BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
 
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
