@@ -251,6 +251,26 @@ class DatetimeColumn(columnops.TypedColumnBase):
         value = columnops.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value)
 
+    @property
+    def is_unique(self):
+        return self.as_numerical.is_unique
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, '_is_monotonic_increasing'):
+            self._is_monotonic_increasing = binop(
+                self[1:], self[:-1], 'ge', 'bool'
+            ).all()
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, '_is_monotonic_decreasing'):
+            self._is_monotonic_decreasing = binop(
+                self[1:], self[:-1], 'le', 'bool'
+            ).all()
+        return self._is_monotonic_decreasing
+
 
 def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")

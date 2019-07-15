@@ -1,9 +1,9 @@
 from glob import glob
 
+import dask.dataframe as dd
 from dask.base import tokenize
 from dask.bytes import open_files
 from dask.compatibility import apply
-import dask.dataframe as dd
 
 import cudf
 

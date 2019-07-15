@@ -46,8 +46,8 @@ public class TimestampColumnVectorTest {
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TimeUnit.SECONDS,
-        TIMES_S)) {
-      ColumnVector result = timestampColumnVector.year();
+        TIMES_S);
+      ColumnVector result = timestampColumnVector.year()) {
       result.ensureOnHost();
       assertEquals(1965, result.getShort(0));
       assertEquals(2018, result.getShort(1));
@@ -58,9 +58,9 @@ public class TimestampColumnVectorTest {
   @Test
   public void getMonth() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
-    try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS)) {
+    try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TIMES_MS);
+         ColumnVector result = timestampColumnVector.month()) {
       assert timestampColumnVector.getTimeUnit() == TimeUnit.MILLISECONDS;
-      ColumnVector result = timestampColumnVector.month();
       result.ensureOnHost();
       assertEquals(10, result.getShort(0));
       assertEquals(7, result.getShort(1));
@@ -68,8 +68,8 @@ public class TimestampColumnVectorTest {
     }
 
     try (ColumnVector timestampColumnVector = ColumnVector.timestampsFromLongs(TimeUnit.SECONDS,
-        TIMES_S)) {
-      ColumnVector result = timestampColumnVector.month();
+        TIMES_S);
+         ColumnVector result = timestampColumnVector.month()) {
       result.ensureOnHost();
       assertEquals(10, result.getShort(0));
       assertEquals(7, result.getShort(1));

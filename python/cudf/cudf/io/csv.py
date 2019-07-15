@@ -92,7 +92,7 @@ def to_csv(
     header=True,
     index=True,
     line_terminator="\n",
-    chunksize=None
+    chunksize=None,
 ):
     """{docstring}"""
     if index:
@@ -115,5 +115,5 @@ def to_csv(
         columns=columns,
         header=header,
         line_terminator=line_terminator,
-        rows_per_chunk=rows_per_chunk
+        rows_per_chunk=rows_per_chunk,
     )

@@ -791,22 +791,53 @@ def gpu_mark_found_float(arr, val, out, not_found):
             out[i] = not_found
 
 
-def find_first(arr, val):
+@cuda.jit
+def gpu_mark_gt(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if arr[i] > val:
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+@cuda.jit
+def gpu_mark_lt(arr, val, out, not_found):
+    i = cuda.grid(1)
+    if i < arr.size:
+        if arr[i] < val:
+            out[i] = i
+        else:
+            out[i] = not_found
+
+
+def find_first(arr, val, compare='eq'):
     """
-    Returns the index of the first occurrence of *val* in *arr*.
+    Returns the index of the first occurrence of *val* in *arr*..
+    Or the first occurence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
     ----------
     arr : device array
     val : scalar
+    compare: str ('gt', 'lt', or 'eq' (default))
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if arr.dtype in ("float32", "float64"):
-            gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
+        if compare == 'gt':
+            gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
+        elif compare == 'lt':
+            gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
         else:
-            gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
+            if arr.dtype in ("float32", "float64"):
+                gpu_mark_found_float.forall(found.size)(
+                    arr, val, found, arr.size
+                )
+            else:
+                gpu_mark_found_int.forall(found.size)(
+                    arr, val, found, arr.size
+                )
     from cudf.dataframe.columnops import as_column
 
     found_col = as_column(found)
@@ -817,22 +848,29 @@ def find_first(arr, val):
         return min_index
 
 
-def find_last(arr, val):
+def find_last(arr, val, compare='eq'):
     """
     Returns the index of the last occurrence of *val* in *arr*.
+    Or the last occurence of *arr* *compare* *val*, if *compare* is not eq
     Otherwise, returns -1.
 
     Parameters
     ----------
     arr : device array
     val : scalar
+    compare: str ('gt', 'lt', or 'eq' (default))
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if arr.dtype in ("float32", "float64"):
-            gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+        if compare == 'gt':
+            gpu_mark_gt.forall(found.size)(arr, val, found, -1)
+        elif compare == 'lt':
+            gpu_mark_lt.forall(found.size)(arr, val, found, -1)
         else:
-            gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
+            if arr.dtype in ("float32", "float64"):
+                gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
+            else:
+                gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
     from cudf.dataframe.columnops import as_column
 
     found_col = as_column(found)

@@ -19,13 +19,13 @@
 package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.util.Random;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.assumeTrue;
-import static org.mockito.Mockito.spy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class IntColumnVectorTest {
 
@@ -156,19 +156,6 @@ public class IntColumnVectorTest {
           }
         }
       }
-    }
-  }
-
-  @Test
-  void testClose() {
-    try (HostMemoryBuffer mockDataBuffer = spy(HostMemoryBuffer.allocate(4 * 4));
-         HostMemoryBuffer mockValidBuffer = spy(HostMemoryBuffer.allocate(8))) {
-      try (ColumnVector.Builder builder = new ColumnVector.Builder(DType.INT32, TimeUnit.NONE, 4,
-          mockDataBuffer, mockValidBuffer)) {
-        builder.appendArray(new int[]{2, 3, 5}).appendNull();
-      }
-      Mockito.verify(mockDataBuffer).doClose();
-      Mockito.verify(mockValidBuffer).doClose();
     }
   }
 }

@@ -130,16 +130,29 @@ $ ./build.sh libcudf                   # compile the cuDF libraries and install 
 $ make test
 ```
 
-- Build the `cudf` python package, in the `python` folder:
+- Build the `cudf` python package, in the `python/cudf` folder:
 ```bash
-$ cd $CUDF_HOME/python
+$ cd $CUDF_HOME/python/cudf
 $ python setup.py build_ext --inplace
+$ python setup.py install
 ```
 
 - Like the `libcudf` build step above, `build.sh` can also be used to build the `cudf` python package, as shown below:
 ```bash
 $ cd $CUDF_HOME
 $ ./build.sh cudf
+```
+
+- Additionally to build the `dask-cudf` python package, in the `python/dask_cudf` folder:
+```bash
+$ cd $CUDF_HOME/python/dask_cudf
+$ python setup.py install
+```
+
+- The `build.sh` script can also  be used to build the `dask-cudf` python package, as shown below:
+```bash
+$ cd $CUDF_HOME
+$ ./build.sh dask_cudf
 ```
 
 - You will also need the following environment variables, including `$CUDA_HOME`.
@@ -150,7 +163,8 @@ NUMBAPRO_LIBDEVICE=$CUDA_HOME/nvvm/libdevice
 
 - To run Python tests (Optional):
 ```bash
-$ py.test -v                           # run python tests on cudf python bindings
+$ cd $CUDF_HOME/python
+$ py.test -v                           # run python tests on cudf and dask-cudf python bindings
 ```
 
 - Other `build.sh` options:
@@ -164,7 +178,7 @@ $ ./build.sh libcudf -n                # compile libcudf but do not install
 ```
 
 - The `build.sh` script can be customized to support other features:
-  - **ABI version:** The cmake -DCMAKE_CXX11_ABI option can be set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
+  - **ABI version:** The cmake `-DCMAKE_CXX11_ABI` option can be set to ON or OFF depending on the ABI version you want, defaults to ON. When turned ON, ABI compability for C++11 is used. When OFF, pre-C++11 ABI compability is used.
 
 
 Done! You are ready to develop for the cuDF OSS project.

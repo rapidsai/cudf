@@ -25,12 +25,12 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*)
 
 cdef get_scalar_value(gdf_scalar scalar, dtype)
 
-cdef gdf_column* column_view_from_column(col, col_name=*)
-cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count)
+cdef gdf_column* column_view_from_column(col, col_name=*) except? NULL
+cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count) except? NULL
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*) except? NULL
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
-cdef gdf_column* column_view_from_string_column(col, col_name=*)
+cdef gdf_column* column_view_from_string_column(col, col_name=*) except? NULL
 cdef gdf_column** cols_view_from_cols(cols)
 cdef free_table(cudf_table* table0, gdf_column** cols)
 

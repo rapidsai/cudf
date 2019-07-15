@@ -22,11 +22,136 @@
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
+#include <nvstrings/NVCategory.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <fstream>
 #include <algorithm>
+
+// Functor for type-dispatcher converts columns into strings
+struct column_to_strings_fn
+{
+    const gdf_column* column;
+    gdf_valid_type* valid;
+    gdf_size_type row_offset, rows;
+    const char* true_string;
+    const char* false_string;
+    template<typename T>
+    NVStrings* operator()()
+    {
+        throw std::runtime_error("column type not supported");
+    }
+
+    // convert cudf time units to nvstrings timestamp units
+    NVStrings::timestamp_units cudf2nvs( gdf_time_unit time_unit )
+    {
+        if( time_unit==TIME_UNIT_s )
+            return NVStrings::seconds;
+        if( time_unit==TIME_UNIT_us )
+            return NVStrings::us;
+        if( time_unit==TIME_UNIT_ns )
+            return NVStrings::ns;
+        return NVStrings::ms;
+    }
+};
+
+// specialization code for each type
+template<>
+NVStrings* column_to_strings_fn::operator()<int8_t>()
+{
+    auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
+    device_buffer<int32_t> int_buffer(rows);
+    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+        [] __device__(const int8_t value) { return int32_t{value}; });
+    return NVStrings::itos(int_buffer.data(), rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<int16_t>()
+{
+    auto d_src = (static_cast<const int16_t*>(column->data)) + row_offset;
+    device_buffer<int32_t> int_buffer(rows);
+    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+        [] __device__(const int16_t value) { return int32_t{value}; });
+    return NVStrings::itos(int_buffer.data(), rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<int32_t>()
+{
+    return NVStrings::itos((static_cast<const int32_t*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<int64_t>()
+{
+    return NVStrings::ltos((static_cast<const int64_t*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<float>()
+{
+    return NVStrings::ftos((static_cast<const float*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<double>()
+{
+    return NVStrings::dtos((static_cast<const double*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::bool8>()
+{
+    if( sizeof(bool) == sizeof(cudf::bool8) )
+        return NVStrings::create_from_bools((static_cast<const bool*>(column->data)) + row_offset, rows, true_string, false_string, valid);
+    else
+    {
+        auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
+        device_buffer<bool> bool_buffer(rows);
+        thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.data(),
+                [] __device__(const cudf::bool8 value) { return bool{value}; });
+        return NVStrings::create_from_bools(bool_buffer.data(), rows, true_string, false_string, valid);
+    }
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::date32>()
+{
+    NVStrings::timestamp_units units = NVStrings::days;
+    if( column->dtype_info.time_unit != TIME_UNIT_NONE )
+        units = cudf2nvs(column->dtype_info.time_unit);
+    auto d_src = (static_cast<const cudf::date32*>(column->data)) + row_offset;
+    device_buffer<unsigned long> ulong_buffer(rows);
+    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.data(),
+        [] __device__(const cudf::date32 value) { return (unsigned long)(int32_t{value}); });
+    return NVStrings::long2timestamp(ulong_buffer.data(), rows, units, nullptr, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::date64>()
+{
+    return NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data) + row_offset, rows,
+                                     NVStrings::ms, nullptr, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::timestamp>()
+{
+    NVStrings::timestamp_units units = cudf2nvs(column->dtype_info.time_unit);
+    return NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data) + row_offset, rows,
+                                     units, nullptr, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::nvstring_category>()
+{
+    NVCategory* category = reinterpret_cast<NVCategory*>(column->dtype_info.category);
+    CUDF_EXPECTS( category != nullptr, "write_csv: invalid category column");
+    return category->gather_strings((static_cast<const int32_t*>(column->data)) + row_offset, rows);
+}
+
 
 //
 // This is called by the write_csv method below.
@@ -47,66 +172,15 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
 {
     NVStrings* rtn = nullptr;
     // point the null bitmask to the next set of bits associated with this chunk of rows
-    auto valid = column->valid;
+    gdf_valid_type* valid = column->valid;
     if( valid )                                    // normalize row_offset (number of bits here)
         valid += (row_offset / GDF_VALID_BITSIZE); // to appropriate pointer for the bitmask
-    switch( column->dtype )
-    {
-        case GDF_STRING:
-            rtn = (static_cast<NVStrings*>(column->data))->sublist(row_offset,row_offset+rows);
-            break;
-        case GDF_BOOL8:
-            {
-            auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
-            device_buffer<bool> bool_buffer(rows);
-            thrust::transform(
-                rmm::exec_policy()->on(0), d_src, d_src + rows,
-                bool_buffer.data(),
-                [] __device__(const cudf::bool8 value) { return bool{value}; });
-            rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
-                                               true_string, false_string, valid);
-            }
-            break;
-        case GDF_INT32:
-            rtn = NVStrings::itos((static_cast<const int32_t*>(column->data))+row_offset,rows,valid);
-            break;
-        case GDF_INT64:
-            rtn = NVStrings::ltos((static_cast<const int64_t*>(column->data))+row_offset,rows,valid);
-            break;
-        case GDF_FLOAT32:
-            rtn = NVStrings::ftos((static_cast<const float*>(column->data))+row_offset,rows,valid);
-            break;
-        case GDF_FLOAT64:
-            rtn = NVStrings::dtos((static_cast<const double*>(column->data))+row_offset,rows,valid);
-            break;
-        case GDF_DATE64:
-        case GDF_TIMESTAMP:
-            NVStrings::timestamp_units units;
-            switch( column->dtype_info.time_unit )
-            {
-                case TIME_UNIT_s:
-                    units = NVStrings::seconds;
-                    break;
-                case TIME_UNIT_ms:
-                    units = NVStrings::ms;
-                    break;
-                case TIME_UNIT_us:
-                    units = NVStrings::us;
-                    break;
-                case TIME_UNIT_ns:
-                    units = NVStrings::ns;
-                    break;
-                case TIME_UNIT_NONE:
-                default:
-                    units = NVStrings::ms;
-                    break;
-            }
-            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data)+row_offset,rows,
-                                            units,nullptr,valid);
-            break;
-        default:
-            break;
-    }
+
+    if( column->dtype == GDF_STRING )
+        rtn = (static_cast<NVStrings*>(column->data))->sublist(row_offset,row_offset+rows);
+    else
+        rtn = cudf::type_dispatcher(column->dtype, column_to_strings_fn{column,valid,row_offset,rows,true_string,false_string});
+
     CUDF_EXPECTS( rtn != nullptr, "write_csv: unsupported column type");
 
     // replace nulls if specified
