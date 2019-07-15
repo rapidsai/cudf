@@ -7,7 +7,7 @@ import dask_cudf
 import pytest
 
 
-def test_get_dummies(data):
+def test_get_dummies():
     df = pd.DataFrame({"A": ["a", "b", "c", "a", "z"], "C": [1, 2, 3, 4, 5]})
     df["B"] = df["A"].astype('category')
     df["A"] = df["A"].astype('category')
@@ -15,7 +15,7 @@ def test_get_dummies(data):
     dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
     gdf = cudf.from_pandas(df)
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
-    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                  check_dtype=False)
 
     df = pd.DataFrame({"A": ["a", "b", "c", "a", "z"],
@@ -26,7 +26,7 @@ def test_get_dummies(data):
     dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
     gdf = cudf.from_pandas(df)
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
-    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                  check_dtype=False)
 
     df = pd.DataFrame({"C": pd.Series([1, 2, 3, 4, 5])})
@@ -38,7 +38,7 @@ def test_get_dummies(data):
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
     with pytest.raises(NotImplementedError):
         dd.get_dummies(gddf, columns=['C']).compute()
-    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                  check_dtype=False)
 
     df = pd.DataFrame({"C": pd.CategoricalIndex([1, 2, 3, 4, 5])})
@@ -46,7 +46,7 @@ def test_get_dummies(data):
     dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
     gdf = cudf.from_pandas(df)
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
-    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                  check_dtype=False)
 
     df = pd.DataFrame({"C": [], "A": []})
@@ -54,7 +54,7 @@ def test_get_dummies(data):
     dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
     gdf = cudf.from_pandas(df)
     gddf = dask_cudf.from_cudf(gdf, npartitions=10)
-    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                  check_dtype=False)
 
     gdf = cudf.datasets.randomdata(nrows=200000, dtypes={"C": int,
@@ -69,5 +69,5 @@ def test_get_dummies(data):
     gddf = dask_cudf.from_cudf(gdf, npartitions=100)
     with pytest.raises(NotImplementedError):
         dd.get_dummies(gddf, columns=['C']).compute()
-    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf),
+    dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                  check_dtype=False)
