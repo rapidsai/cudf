@@ -40,8 +40,10 @@ def test_series(data):
 
 
 def test_datetime_series_binops():
-    pd_data_1 = pd.Series(pd.date_range("20010101", "20020215", freq="400h", name="times"))
-    pd_data_2 = pd.Series(pd.date_range("20010101", "20020215", freq="401h", name="times"))
+    pd_data_1 = pd.Series(pd.date_range(
+        "20010101", "20020215", freq="400h", name="times"))
+    pd_data_2 = pd.Series(pd.date_range(
+        "20010101", "20020215", freq="401h", name="times"))
     gdf_data_1 = Series(pd_data_1)
     gdf_data_2 = Series(pd_data_2)
     np.testing.assert_equal(np.array(pd_data_1), np.array(gdf_data_1))

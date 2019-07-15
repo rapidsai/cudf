@@ -23,9 +23,10 @@ _numpy_to_pandas_conversion = {
     'ns': 1,
     'us': 1e3,
     'ms': 1e6,
-    's':  1e9,
-    'D':  1e9 * 86400,
+    's': 1e9,
+    'D': 1e9 * 86400,
 }
+
 
 class DatetimeColumn(columnops.TypedColumnBase):
 
@@ -73,10 +74,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
             time_unit, _ = np.datetime_data(array.dtype)
             cast_dtype = time_unit == 'D' or (len(array) > 0 and (
                 isinstance(array[0], str) or isinstance(array[0], dt.datetime)
-            ));
+            ))
         elif not cast_dtype:
-            raise ValueError('Cannot infer datetime dtype' +
-                             'from np.array dtype `%s`' % (array.dtype))
+            raise ValueError(('Cannot infer datetime dtype '
+                             + 'from np.array dtype `%s`') % (array.dtype))
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
