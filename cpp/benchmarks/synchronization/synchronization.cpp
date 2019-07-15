@@ -17,9 +17,11 @@ void cuda_event_timer::init() {
   
   // Invalidate all of L2$
   if(l2_cache_bytes > 0){
-    RMM_TRY(RMM_ALLOC(&l2_cache_buffer, l2_cache_bytes, 0));
-    CUDA_TRY(cudaMemset(l2_cache_buffer, 0, l2_cache_bytes));
-    RMM_TRY(RMM_FREE(l2_cache_buffer, 0));
+    cudaStream_t stream  = 0;
+    const int memset_value = 0;
+    RMM_TRY(RMM_ALLOC(&l2_cache_buffer, l2_cache_bytes, stream));
+    CUDA_TRY(cudaMemset(l2_cache_buffer, memset_value, l2_cache_bytes));
+    RMM_TRY(RMM_FREE(l2_cache_buffer, stream));
   }
  
   CUDA_TRY(cudaEventCreate(&start));

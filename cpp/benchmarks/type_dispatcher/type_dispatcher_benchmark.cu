@@ -101,7 +101,6 @@ struct ColumnHandle {
 };
 
 
-// >>>>>>
 // The following is for DEVICE_DISPATCHING:
 // The dispatching is done on device. The loop loops over
 // each row (across different coluns). Type is dispatched each time 
@@ -132,7 +131,6 @@ __global__ void device_dispatching_kernel(device_table source){
     index += blockDim.x * gridDim.x;
   } // while
 }
-// <<<<<<
 
 template<FunctorType functor_type, DispatchingType dispatching_type, class T>
 void launch_kernel(cudf::table& input, T** d_ptr, int work_per_thread){
@@ -186,7 +184,6 @@ void type_dispatcher_benchmark(benchmark::State& state){
   
   // For no dispatching:
   std::vector<TypeParam*> h_vec(n_cols);
-  
   TypeParam** d_ptr = nullptr;
   
   if(dispatching_type == NO_DISPATCHING){
@@ -199,22 +196,7 @@ void type_dispatcher_benchmark(benchmark::State& state){
   }
   
   // Warm up  
-  cudaEvent_t start, stop;
-  CUDA_TRY(cudaEventCreate(&start));
-  CUDA_TRY(cudaEventCreate(&stop));
-  CUDA_TRY(cudaEventRecord(start));
-
   launch_kernel<functor_type, dispatching_type>(source_table, d_ptr, work_per_thread);
-  
-  CUDA_TRY(cudaEventRecord(stop));
-  CUDA_TRY(cudaEventSynchronize(stop));
- 
-  float milliseconds = 0.0f;
-  CUDA_TRY(cudaEventElapsedTime(&milliseconds, start, stop));
-  
-  CUDA_TRY(cudaEventDestroy(start));
-  CUDA_TRY(cudaEventDestroy(stop));
-  
   cudaDeviceSynchronize();
   
   for(auto _ : state){
