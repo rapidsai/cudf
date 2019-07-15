@@ -25,11 +25,14 @@ from libcpp.string  cimport string as cstring
 
 
 _REDUCTION_OP = {
-  'max': GDF_REDUCTION_MAX,
-  'min': GDF_REDUCTION_MIN,
-  'sum': GDF_REDUCTION_SUM,
-  'product': GDF_REDUCTION_PRODUCT,
-  'sum_of_squares': GDF_REDUCTION_SUMOFSQUARES,
+  'max': MAX,
+  'min': MIN,
+  'sum': SUM,
+  'product': PRODUCT,
+  'sum_of_squares': SUMOFSQUARES,
+  'mean': MEAN,
+  'var':  VAR,
+  'std':  STD,
 }
 
 _SCAN_OP = {
@@ -40,10 +43,24 @@ _SCAN_OP = {
 }
 
 
-def apply_reduce(reduction_op, col, dtype=None):
+def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     """
       Call gdf reductions.
+
+    Args:
+        reduction_op: reduction operator as string. It should be one of 
+        'min', 'max', 'sum', 'product', 'sum_of_squares', 'mean', 'var', 'std'
+        col: input column to apply reduction operation on
+        dtype: output dtype
+        ddof: This parameter is used only for 'std' and 'var'.
+        Delta Degrees of Freedom. The divisor used in calculations is N - ddof,
+        where N represents the number of elements.
+
+    Returns:
+        dtype scalar value of reduction operation on column
+
     """
+
 
     check_gdf_compatibility(col)
 
@@ -55,18 +72,23 @@ def apply_reduce(reduction_op, col, dtype=None):
             return col.dtype.type(1)
         return np.nan
 
-    col_dtype = dtype if dtype != None else col.dtype
+    col_dtype = col.dtype
+    if reduction_op in ['sum', 'sum_of_squares', 'product']:
+        col_dtype = np.find_common_type([col_dtype], [np.int64])
+    col_dtype = col_dtype if dtype is None else dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
-    cdef gdf_reduction_op c_op = _REDUCTION_OP[reduction_op]
+    cdef operators c_op = _REDUCTION_OP[reduction_op]
     cdef gdf_dtype c_out_dtype = get_dtype(col_dtype.type if dtype is None else col_dtype)
     cdef gdf_scalar c_result
+    cdef gdf_size_type c_ddof = ddof
 
     with nogil:    
-        c_result = reduction(
+        c_result = reduce(
             <gdf_column*>c_col,
             c_op,
-            c_out_dtype
+            c_out_dtype,
+            c_ddof
             )
 
     free(c_col)

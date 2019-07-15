@@ -25,8 +25,8 @@ enum AggregateOp {
   SUM(0),
   MIN(1),
   MAX(2),
-  AVG(3),
-  COUNT(4);
+  COUNT(3),
+  MEAN(4);
 
   final int nativeId;
 

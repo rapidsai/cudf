@@ -22,14 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.text.SimpleDateFormat;
-import java.util.Arrays;
-import java.util.Date;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
 
 /**
  * A Column Vector. This class represents the immutable vector of data.  This class holds
@@ -38,7 +31,6 @@ import java.util.stream.StreamSupport;
  * to increment the reference count.
  */
 public final class ColumnVector implements AutoCloseable, BinaryOperable {
-  static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
   /**
    * The size in bytes of an offset entry
    */
@@ -58,22 +50,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private int refCount;
 
   /**
-   * Convert elements in it to a String and join them together. Only use for debug messages
-   * where the code execution itself can be disabled as this is not fast.
-   */
-  private static <T> String stringJoin(String delim, Iterable<T> it) {
-    return String.join(delim,
-        StreamSupport.stream(it.spliterator(), false)
-            .map((i) -> i.toString())
-            .collect(Collectors.toList()));
-  }
-
-  /**
    * Wrap an existing on device gdf_column with the corresponding ColumnVector.
    */
   ColumnVector(long nativePointer) {
     assert nativePointer != 0;
-    ColumnVectorCleaner.register(this, offHeap);
+    MemoryCleaner.register(this, offHeap);
     offHeap.nativeCudfColumnHandle = nativePointer;
     this.type = getDType(nativePointer);
     offHeap.hostData = null;
@@ -141,7 +122,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     } else {
       this.tsTimeUnit = TimeUnit.NONE;
     }
-    ColumnVectorCleaner.register(this, offHeap);
+    MemoryCleaner.register(this, offHeap);
     offHeap.hostData = new BufferEncapsulator(hostDataBuffer, hostValidityBuffer, offsetBuffer);
     offHeap.deviceData = null;
     this.rows = rows;
@@ -152,24 +133,34 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Create a new column vector with data populated on the device.
-   *
-   * This constructor doesn't support STRING or STRING_CATEGORY
-   *
-   * @param type             the type of the vector
-   * @param tsTimeUnit       the time unit, only really applicable for DType.TIMESTAMP
-   * @param rows             the number of rows in the vector.
-   * @param nullCount        the number of nulls in the vector.
-   * @param dataBuffer       The host side data for the vector. In the case of STRING and
-   *                         STRING_CATEGORY this is the string data stored as bytes.
-   * @param validityBuffer   arrow like validity buffer 1 bit per row, with padding for
-   *                         64-bit alignment.
+   * Create a new column vector based off of data already on the device.
+   * @param type the type of the vector
+   * @param tsTimeUnit the unit of time for this vector
+   * @param rows the number of rows in this vector.
+   * @param nullCount the number of nulls in the dataset.
+   * @param dataBuffer the data stored on the device.  The column vector takes ownership of the
+   *                   buffer.  Do not use the buffer after calling this.
+   * @param validityBuffer an optional validity buffer. Must be provided if nullCount != 0. The
+   *                      column vector takes ownership of the buffer. Do not use the buffer
+   *                      after calling this.
+   * @param offsetBuffer a host buffer required for strings and string categories. The column
+   *                    vector takes ownership of the buffer. Do not use the buffer after calling
+   *                    this.
+   * @param resetOffsetsFromFirst if true and type is a string or a string_category then when
+   *                              unpacking the offsets, the initial offset will be reset to
+   *                              0 and all other offsets will be updated to be relative to that
+   *                              new 0.  This is used after serializing a partition, when the
+   *                              offsets were not updated prior to the serialization.
    */
-  ColumnVector(DType type, TimeUnit tsTimeUnit, long rows, long nullCount,
-               DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer) {
-    assert type != DType.STRING && type != DType.STRING_CATEGORY : "STRING AND STRING_CATEGORY " +
-        "NOT SUPPORTED BY THIS CONSTRUCTOR";
-    ColumnVectorCleaner.register(this, offHeap);
+  ColumnVector(DType type, TimeUnit tsTimeUnit, long rows,
+               long nullCount, DeviceMemoryBuffer dataBuffer, DeviceMemoryBuffer validityBuffer,
+               HostMemoryBuffer offsetBuffer, boolean resetOffsetsFromFirst) {
+    if (type == DType.STRING_CATEGORY || type == DType.STRING) {
+      assert offsetBuffer != null : "offsets must be provided for STRING and STRING_CATEGORY";
+    } else {
+      assert offsetBuffer == null : "offsets are only supported for STRING and STRING_CATEGORY";
+    }
+
     if (type == DType.TIMESTAMP) {
       if (tsTimeUnit == TimeUnit.NONE) {
         this.tsTimeUnit = TimeUnit.MILLISECONDS;
@@ -179,11 +170,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     } else {
       this.tsTimeUnit = TimeUnit.NONE;
     }
-    offHeap.deviceData = new BufferEncapsulator(dataBuffer, validityBuffer, null);
+
+    MemoryCleaner.register(this, offHeap);
     offHeap.hostData = null;
     this.rows = rows;
     this.nullCount = nullCount;
     this.type = type;
+
+    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+      if (type == DType.STRING_CATEGORY) {
+        offHeap.deviceData = new BufferEncapsulator(DeviceMemoryBuffer.allocate(rows * type.sizeInBytes), validityBuffer, null);
+      } else {
+        offHeap.deviceData = new BufferEncapsulator(null, validityBuffer, null);
+      }
+      // In the case of STRING and STRING_CATEGORY the gdf_column holds references
+      // to the device data that the java code does not, so we will not be lazy about
+      // creating the gdf_column instance.
+      offHeap.nativeCudfColumnHandle = allocateCudfColumn();
+
+      cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
+          dataBuffer.getAddress(),
+          false,
+          offsetBuffer.getAddress(),
+          resetOffsetsFromFirst,
+          nullCount > 0 ? 0 : offHeap.deviceData.valid.getAddress(),
+          offHeap.deviceData.data == null ? 0 : offHeap.deviceData.data.getAddress(),
+          (int) rows, type.nativeId,
+          (int) getNullCount());
+      dataBuffer.close();
+      offsetBuffer.close();
+    } else {
+      offHeap.deviceData = new BufferEncapsulator(dataBuffer, validityBuffer, null);
+    }
     refCount = 0;
     incRefCount();
   }
@@ -350,8 +368,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         offHeap.nativeCudfColumnHandle = allocateCudfColumn();
         cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
             offHeap.hostData.data.getAddress(),
-            offHeap.hostData.offsets.getAddress(),
-            offHeap.hostData.valid == null ? 0 : offHeap.deviceData.valid.getAddress(),
+            true, offHeap.hostData.offsets.getAddress(),
+            false, offHeap.hostData.valid == null ? 0 : offHeap.deviceData.valid.getAddress(),
             offHeap.deviceData.data == null ? 0 : offHeap.deviceData.data.getAddress(),
             (int) rows, type.nativeId,
             (int) getNullCount());
@@ -439,6 +457,38 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return false;
   }
 
+  enum BufferType {
+    VALIDITY,
+    OFFSET,
+    DATA
+  }
+
+  void copyHostBufferBytes(byte[] dst, int dstOffset, BufferType src, long srcOffset,
+                           int length) {
+    assert dstOffset >= 0;
+    assert srcOffset >= 0;
+    assert length >= 0;
+    assert dstOffset + length <= dst.length;
+    HostMemoryBuffer srcBuffer;
+    switch(src) {
+      case VALIDITY:
+        srcBuffer = offHeap.hostData.valid;
+        break;
+      case OFFSET:
+        srcBuffer = offHeap.hostData.offsets;
+        break;
+      case DATA:
+        srcBuffer = offHeap.hostData.data;
+        break;
+      default:
+        throw new IllegalArgumentException(src + " is not a supported buffer type.");
+    }
+
+    assert srcOffset + length <= srcBuffer.length;
+    UnsafeMemoryAccessor.getBytes(dst, dstOffset,
+        srcBuffer.getAddress() + srcOffset, length);
+  }
+
   /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * TRUE for any entry that is not null, and FALSE for any null entry (as per the validity mask)
@@ -517,7 +567,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       // cleanup
       if (cv != null) {
         if (cv.offHeap.deviceData.data != null) {
-          cv.offHeap.deviceData.data.doClose(); // don't need this anymore
+          cv.offHeap.deviceData.data.close(); // don't need this anymore
         }
         cv.offHeap.deviceData = null; // .valid is managed by the current column vector, so
                                       // don't let it get closed
@@ -562,6 +612,27 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     assert type == DType.INT32 || type == DType.DATE32;
     assertsForGet(index);
     return offHeap.hostData.data.getInt(index * type.sizeInBytes);
+  }
+
+  /**
+   * Get the starting byte offset for the string at index
+   */
+  long getStartStringOffset(long index) {
+    assert type == DType.STRING_CATEGORY || type == DType.STRING;
+    assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
+    assert offHeap.hostData != null : "data is not on the host";
+    return offHeap.hostData.offsets.getInt(index * 4);
+  }
+
+  /**
+   * Get the ending byte offset for the string at index.
+   */
+  long getEndStringOffset(long index) {
+    assert type == DType.STRING_CATEGORY || type == DType.STRING;
+    assert (index >= 0 && index < rows) : "index is out of range 0 <= " + index + " < " + rows;
+    assert offHeap.hostData != null : "data is not on the host";
+    // The offsets has one more entry than there are rows.
+    return offHeap.hostData.offsets.getInt((index + 1) * 4);
   }
 
   /**
@@ -930,7 +1001,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar sum(DType outType) {
-    return reduction(ReductionOp.SUM, outType);
+    return reduce(ReductionOp.SUM, outType);
   }
 
   /**
@@ -946,7 +1017,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar min(DType outType) {
-    return reduction(ReductionOp.MIN, outType);
+    return reduce(ReductionOp.MIN, outType);
   }
 
   /**
@@ -962,7 +1033,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar max(DType outType) {
-    return reduction(ReductionOp.MAX, outType);
+    return reduce(ReductionOp.MAX, outType);
   }
 
   /**
@@ -978,7 +1049,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * of the specified type.
    */
   public Scalar product(DType outType) {
-    return reduction(ReductionOp.PRODUCT, outType);
+    return reduce(ReductionOp.PRODUCT, outType);
   }
 
   /**
@@ -994,7 +1065,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * scalar of the specified type.
    */
   public Scalar sumOfSquares(DType outType) {
-    return reduction(ReductionOp.SUMOFSQUARES, outType);
+    return reduce(ReductionOp.SUMOFSQUARES, outType);
   }
 
   /**
@@ -1007,8 +1078,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduction(ReductionOp op) {
-    return reduction(op, type);
+  public Scalar reduce(ReductionOp op) {
+    return reduce(op, type);
   }
 
   /**
@@ -1023,8 +1094,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * empty or the reduction operation fails then the
    * {@link Scalar#isValid()} method of the result will return false.
    */
-  public Scalar reduction(ReductionOp op, DType outType) {
-    return Cudf.reduction(this, op, outType);
+  public Scalar reduce(ReductionOp op, DType outType) {
+    return Cudf.reduce(this, op, outType);
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -1245,21 +1316,27 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * Translate the host side string representation of strings into the device side representation
    * and populate the cudfColumn with it.
    * @param cudfColumnHandle native handle of gdf_column.
-   * @param hostDataPtr      Pointer to string data on the host.
+   * @param dataPtr          Pointer to string data either on the host or the device.
+   * @param dataPtrOnHost    true if dataPtr is on the host. false if it is on the device.
    * @param hostOffsetsPtr   Pointer to offsets data on the host.
+   * @param resetOffsetsToZero true if the offsets should be reset to start at 0.
    * @param deviceValidPtr   Pointer to validity bitmask on the device.
-   * @param deviceDataPtr    Pointer to where the int category data will be stored for
-   *                         STRING_CATEGORY.
-   *                         Should be 0 for STRING
-   * @param size             Number of rows in the column.
+   * @param deviceOutputDataPtr Pointer to where the int category data will be stored for
+   *                            STRING_CATEGORY. Should be 0 for STRING.
+   * @param numRows          Number of rows in the column.
    * @param dtype            Data type of the column. In this case must be STRING or
    *                         STRING_CATEGORY
    * @param nullCount        The number of non-valid elements in the validity bitmask.
    */
-  private static native void cudfColumnViewStrings(long cudfColumnHandle, long hostDataPtr,
-                                                   long hostOffsetsPtr, long deviceValidPtr,
-                                                   long deviceDataPtr,
-                                                   int size, int dtype, int nullCount);
+  private static native void cudfColumnViewStrings(long cudfColumnHandle, long dataPtr,
+                                                   boolean dataPtrOnHost, long hostOffsetsPtr,
+                                                   boolean resetOffsetsToZero, long deviceValidPtr,
+                                                   long deviceOutputDataPtr,
+                                                   int numRows, int dtype, int nullCount);
+
+  private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
+
+  private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
 
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses
@@ -1343,63 +1420,12 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * When debug is enabled holds information about inc and dec of ref count.
-   */
-  private static final class RefCountDebugItem {
-    final StackTraceElement[] stackTrace;
-    final long timeMs;
-    final String op;
-
-    public RefCountDebugItem(String op) {
-      this.stackTrace = Thread.currentThread().getStackTrace();
-      this.timeMs = System.currentTimeMillis();
-      this.op = op;
-    }
-
-    public String toString() {
-      Date date = new Date(timeMs);
-      // Simple Date Format is horribly expensive only do this when debug is turned on!
-      SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSS z");
-      return dateFormat.format(date) + ": " + op + "\n"
-          + stringJoin("\n", Arrays.asList(stackTrace))
-          + "\n";
-    }
-  }
-
-  /**
    * Holds the off heap state of the column vector so we can clean it up, even if it is leaked.
    */
-  protected static final class OffHeapState implements ColumnVectorCleaner.Cleaner {
-    private final List<RefCountDebugItem> refCountDebug;
+  protected static final class OffHeapState extends MemoryCleaner.Cleaner {
     public BufferEncapsulator<HostMemoryBuffer> hostData;
     public BufferEncapsulator<DeviceMemoryBuffer> deviceData;
     private long nativeCudfColumnHandle = 0;
-
-    public OffHeapState() {
-      if (REF_COUNT_DEBUG) {
-        refCountDebug = new LinkedList<>();
-      } else {
-        refCountDebug = null;
-      }
-    }
-
-    public final void addRef() {
-      if (REF_COUNT_DEBUG) {
-        refCountDebug.add(new RefCountDebugItem("INC"));
-      }
-    }
-
-    public final void delRef() {
-      if (REF_COUNT_DEBUG) {
-        refCountDebug.add(new RefCountDebugItem("DEC"));
-      }
-    }
-
-    public final void logRefCountDebug(String message) {
-      if (REF_COUNT_DEBUG) {
-        log.error("{}: {}", message, stringJoin("\n", refCountDebug));
-      }
-    }
 
     @Override
     public boolean clean(boolean logErrorIfNotClean) {
@@ -1781,7 +1807,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           rows,
           0,
           dataBuffer,
-          validityBuffer);
+          validityBuffer,
+          null, false);
 
       cudfColumnViewAugmented(
           cv.getNativeCudfColumnAddress(),
@@ -1826,6 +1853,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       columnHandles[i] = columns[i].getNativeCudfColumnAddress();
     }
     return new ColumnVector(concatenate(columnHandles));
+  }
+
+  /**
+   * Calculate the quantile of this ColumnVector
+   * @param method   the method used to calculate the quantile
+   * @param quantile the quantile value [0,1]
+   * @return the quantile as double. The type can be changed in future
+   */
+  public Scalar exactQuantile(QuantileMethod method, double quantile) {
+    return exactQuantile(this.getNativeCudfColumnAddress(), method.nativeId, quantile);
+  }
+
+  /**
+   * Calculate the approximate quantile of this ColumnVector
+   * @param quantile the quantile value [0,1]
+   * @return the quantile, with the same type as this object
+   */
+  public Scalar approxQuantile(double quantile) {
+    return approxQuantile(this.getNativeCudfColumnAddress(), quantile);
   }
 
   /**

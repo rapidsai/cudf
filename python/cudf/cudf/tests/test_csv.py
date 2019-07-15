@@ -1,12 +1,12 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import csv
 import gzip
 import os
 import shutil
 from collections import OrderedDict
 from io import BytesIO, StringIO
 from pathlib import Path
-import csv
 
 import numpy as np
 import pandas as pd
@@ -171,13 +171,13 @@ def test_csv_reader_datetime(parse_dates):
         StringIO(buffer),
         names=["date1", "date2", "bad"],
         parse_dates=parse_dates,
-        dayfirst=True
+        dayfirst=True,
     )
     pdf = pd.read_csv(
         StringIO(buffer),
         names=["date1", "date2", "bad"],
         parse_dates=parse_dates,
-        dayfirst=True
+        dayfirst=True,
     )
 
     assert_eq(gdf, pdf)
@@ -581,15 +581,9 @@ def test_csv_reader_compression(tmpdir, ext, out_comp, in_comp):
     df = make_numpy_mixed_dataframe()
     df.to_csv(fname, index=False, header=False, compression=out_comp)
 
-    gdf = read_csv(
-        fname,
-        names=list(df.columns.values),
-        compression=in_comp,
-    )
+    gdf = read_csv(fname, names=list(df.columns.values), compression=in_comp)
     pdf = pd.read_csv(
-        fname,
-        names=list(df.columns.values),
-        compression=in_comp,
+        fname, names=list(df.columns.values), compression=in_comp
     )
 
     assert_eq(gdf, pdf)
@@ -913,7 +907,7 @@ def test_csv_reader_tabs():
     ]
     buffer = "\n".join(lines)
 
-    df = read_csv(StringIO(buffer), parse_dates=['date'])
+    df = read_csv(StringIO(buffer), parse_dates=["date"])
 
     assert df.shape == (4, 3)
 
@@ -1145,7 +1139,7 @@ def test_csv_reader_aligned_byte_range(tmpdir):
 
     df = cudf.read_csv(str(fname), byte_range=(0, 4096))
     # read_csv call above used to crash; the assert below is not crucial
-    assert np.count_nonzero(df["zeros"]) == 0
+    assert np.count_nonzero(df["zeros"].to_pandas().values) == 0
 
 
 @pytest.mark.parametrize(
@@ -1407,10 +1401,12 @@ def test_csv_writer_chunksize(chunksize, tmpdir):
     pdf = pd.concat([pdf] * 5)
     gdf = cudf.from_pandas(pdf)
 
-    pdf.to_csv(pdf_df_fname,
-               date_format="%Y-%m-%dT%H:%M:%SZ",
-               quoting=csv.QUOTE_NONNUMERIC,
-               chunksize=chunksize)
+    pdf.to_csv(
+        pdf_df_fname,
+        date_format="%Y-%m-%dT%H:%M:%SZ",
+        quoting=csv.QUOTE_NONNUMERIC,
+        chunksize=chunksize,
+    )
     gdf.to_csv(gdf_df_fname, chunksize=chunksize)
 
     assert os.path.exists(pdf_df_fname)
