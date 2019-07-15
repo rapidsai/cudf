@@ -18,6 +18,8 @@
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
 
+#include <vector>
+
 namespace cudf {
 
 column_view::column_view(data_type type, size_type size, void const* data,
@@ -37,9 +39,16 @@ column_view::column_view(data_type type, size_type size, void const* data,
     CUDF_EXPECTS(INVALID != type, "Invalid element type.");
   }
 
+  CUDF_EXPECTS(offset >= 0, "Invalid offset.");
+
   if (null_count > 0) {
     CUDF_EXPECTS(nullptr != null_mask,
                  "Invalid null mask for non-zero null count.");
   }
-};
+}
+
+column_view column_view::child(size_type child_index) const {
+  return _children.at(child_index);
+}
+
 }  // namespace cudf
