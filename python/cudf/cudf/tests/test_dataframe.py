@@ -3252,3 +3252,24 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize(
+    "ser",
+    [
+        [],
+        np.random.randint(-100, 100, 100),
+    ])
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        np.random.randint(-100, 100, 10),
+    ])
+def test_isin(ser, values):
+    gs = cudf.Series(ser)
+    ps = pd.Series(ser)
+
+    got = gs.isin(values)
+    expected = ps.isin(values)
+    assert_eq(got, expected)

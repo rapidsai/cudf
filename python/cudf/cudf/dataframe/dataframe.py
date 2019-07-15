@@ -3208,9 +3208,13 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(self, method, **kwargs):
+    def isin(self, values):
+        return self._apply_support_method("isin", values)
+
+    def _apply_support_method(self, method, *args, **kwargs):
         result = [
-            getattr(self[col], method)(**kwargs) for col in self._cols.keys()
+            getattr(self[col], method)(*args, **kwargs) for col in
+            self._cols.keys()
         ]
         if isinstance(result[0], Series):
             support_result = result

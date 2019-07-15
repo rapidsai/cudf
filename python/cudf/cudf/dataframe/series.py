@@ -1782,6 +1782,15 @@ class Series(object):
             index=self.index,
         )
 
+    def isin(self, values):
+        """
+        """
+        return Series(
+            self._column.isin(values),
+            name=self.name,
+            index=self.index,
+        )
+
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
