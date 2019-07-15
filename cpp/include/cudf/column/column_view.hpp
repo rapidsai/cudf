@@ -17,21 +17,19 @@
 
 #include <cudf/types.hpp>
 
-#include <memory>
 #include <vector>
 
 namespace cudf {
 struct column_view {
   column_view() = default;
   ~column_view() = default;
+  column_view(column_view const&) = default;
   column_view(column_view&&) = default;
   column_view& operator=(column_view const&) = default;
   column_view& operator=(column_view&&) = default;
 
-  column_view(column_view const& other);
-
   column_view(data_type type, size_type size, void const* data,
-              std::unique_ptr<column_view> null_mask, size_type null_count,
+              bitmask_type const* null_mask, size_type null_count,
               std::vector<column_view> const& children = {});
 
   template <typename T = void>
@@ -43,23 +41,23 @@ struct column_view {
 
   data_type type() const noexcept { return _type; }
 
-  bool nullable() const noexcept { return nullptr != _null_mask.get(); }
+  bool nullable() const noexcept { return nullptr != _null_mask; }
 
   size_type null_count() const noexcept { return _null_count; }
 
   bool has_nulls() const noexcept { return _null_count > 0; }
 
-  column_view* null_mask() const noexcept { return _null_mask.get(); }
+  bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
   column_view child(size_type child_index) const noexcept {
     return _children[child_index];
   }
 
  private:
-  void const* _data{nullptr};
   data_type _type{INVALID};
   cudf::size_type _size{0};
-  std::unique_ptr<column_view> _null_mask{nullptr};
+  void const* _data{nullptr};
+  bitmask_type const* _null_mask{nullptr};
   size_type _null_count{0};
   std::vector<column_view> _children{};
 };

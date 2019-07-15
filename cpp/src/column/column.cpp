@@ -19,20 +19,19 @@
 
 #include <rmm/device_buffer.hpp>
 
+#include <algorithm>
+#include <vector>
+
 namespace cudf {
 
-column::operator column_view() const {
+column_view column::view() const {
   std::vector<column_view> child_views(_children.size());
   std::copy(begin(_children), end(_children), begin(child_views));
 
-  std::unique_ptr<column_view> null_mask_view{nullptr};
-  if (nullptr != _null_mask.get()) {
-    null_mask_view = std::make_unique<column_view>(_null_mask->view());
-  }
-
-  return column_view{_type,        _size,
-                     _data.data(), std::move(null_mask_view),
-                     _null_count,  std::move(child_views)};
+  return column_view{
+      _type,        _size,
+      _data.data(), static_cast<bitmask_type const*>(_null_mask.data()),
+      _null_count,  std::move(child_views)};
 }
 
 }  // namespace cudf
