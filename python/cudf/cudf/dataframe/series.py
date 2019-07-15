@@ -311,6 +311,34 @@ class Series(object):
         else:
             return NotImplemented
 
+    def __array_function__(self, func, types, args, kwargs):
+
+        cudf_series_module = Series
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_series_module, submodule):
+                cudf_series_module = getattr(cudf_series_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_series_module]
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_series_module, fname):
+            cudf_func = getattr(cudf_series_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+
+        else:
+            return NotImplemented
+
     @property
     def empty(self):
         return not len(self)
@@ -1170,7 +1198,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.isnull_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.isnull_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def isna(self):
@@ -1188,7 +1216,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def all(self, axis=0, skipna=True, level=None):
@@ -1695,30 +1723,23 @@ class Series(object):
                 index=self.index,
             )
 
-    def mean(self, axis=None, skipna=True, dtype=None):
+    def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean(dtype=dtype)
+        return self._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return np.sqrt(self.var(ddof=ddof))
+        return self._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        mu, var = self.mean_var(ddof=ddof)
-        return var
-
-    def mean_var(self, ddof=1):
-        """Compute mean and variance at the same time.
-        """
-        mu, var = self._column.mean_var(ddof=ddof)
-        return mu, var
+        return self._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)

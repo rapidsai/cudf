@@ -19,12 +19,13 @@
 package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.util.Random;
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.mockito.Mockito.spy;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DoubleColumnVectorTest {
 
@@ -142,19 +143,6 @@ public class DoubleColumnVectorTest {
           }
         }
       }
-    }
-  }
-
-  @Test
-  void testClose() {
-    try (HostMemoryBuffer mockDataBuffer = spy(HostMemoryBuffer.allocate(4 * 8));
-         HostMemoryBuffer mockValidBuffer = spy(HostMemoryBuffer.allocate(8))) {
-      try (ColumnVector.Builder builder = new ColumnVector.Builder(DType.FLOAT64, TimeUnit.NONE,
-          4, mockDataBuffer, mockValidBuffer)) {
-        builder.appendArray(new double[]{2.1, 3.02, 5.004}).appendNull();
-      }
-      Mockito.verify(mockDataBuffer).doClose();
-      Mockito.verify(mockValidBuffer).doClose();
     }
   }
 }

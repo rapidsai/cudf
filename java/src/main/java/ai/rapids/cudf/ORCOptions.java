@@ -19,16 +19,21 @@
 package ai.rapids.cudf;
 
 /**
- * Aggregate operations on a column
+ * Options for reading a ORC file
  */
-enum AggregateOp {
-  SUM(0),
-  MIN(1),
-  MAX(2),
-  COUNT(3),
-  MEAN(4);
+public class ORCOptions extends ColumnFilterOptions {
 
-  final int nativeId;
+  public static ORCOptions DEFAULT = new ORCOptions(new Builder());
 
-  AggregateOp(int nativeId) {this.nativeId = nativeId;}
+  private ORCOptions(Builder builder) {
+    super(builder);
+  }
+
+  public static Builder builder() {
+    return new Builder();
+  }
+
+  public static class Builder extends ColumnFilterOptions.Builder<Builder> {
+    public ORCOptions build() { return new ORCOptions(this); }
+  }
 }
