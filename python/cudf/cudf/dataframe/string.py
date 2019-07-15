@@ -25,7 +25,12 @@ _str_to_numeric_typecast_functions = {
     np.dtype("float32"): nvstrings.nvstrings.stof,
     np.dtype("float64"): nvstrings.nvstrings.stod,
     np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    # TODO: support Date32 UNIX days
+    # np.dtype("datetime64[D]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[s]"): nvstrings.nvstrings.timestamp2int,
     np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[us]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[ns]"): nvstrings.nvstrings.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -34,7 +39,12 @@ _numeric_to_str_typecast_functions = {
     np.dtype("float32"): nvstrings.ftos,
     np.dtype("float64"): nvstrings.dtos,
     np.dtype("bool"): nvstrings.from_booleans,
+    # TODO: support Date32 UNIX days
+    # np.dtype("datetime64[D]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[s]"): nvstrings.int2timestamp,
     np.dtype("datetime64[ms]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[us]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[ns]"): nvstrings.int2timestamp,
 }
 
 
