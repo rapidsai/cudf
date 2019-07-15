@@ -3259,12 +3259,16 @@ def test_one_row_head():
     [
         [],
         np.random.randint(-100, 100, 100),
+        np.random.randint(-100, 100, 100),
+        [],
     ])
 @pytest.mark.parametrize(
     "values",
     [
         [],
         np.random.randint(-100, 100, 10),
+        [],
+        np.random.randint(-100, 100, 50),
     ])
 def test_isin(ser, values):
     gs = Series(ser)
