@@ -26,12 +26,12 @@ column::operator column_view() const {
   std::copy(begin(_children), end(_children), begin(child_views));
 
   std::unique_ptr<column_view> null_mask_view{nullptr};
-  if (nullptr != _null_mask) {
+  if (nullptr != _null_mask.get()) {
     null_mask_view = std::make_unique<column_view>(_null_mask->view());
   }
 
-  return column_view{_data.data(), _type,
-                     _size,        std::move(null_mask_view),
+  return column_view{_type,        _size,
+                     _data.data(), std::move(null_mask_view),
                      _null_count,  std::move(child_views)};
 }
 

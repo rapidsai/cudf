@@ -52,8 +52,8 @@ enum data_type {
   INT64,    ///< 8 byte signed integer
   FLOAT32,  ///< 4 byte floating point
   FLOAT64,  ///< 8 byte floating point
-  BOOL1,    ///< Boolean type using 1 bit per value, 0 == false, 1 == true
-  BOOL8,    ///< Boolean type using one *byte* per value, 0 == false, else true
+  BOOL1,    ///< Boolean using 1 bit per value, 0 == false, 1 == true
+  BOOL8,    ///< Boolean using one byte per value, 0 == false, else true
   DATE32,
   DATE64,
   TIMESTAMP_NS,  ///< Timestamp in nanoseconds

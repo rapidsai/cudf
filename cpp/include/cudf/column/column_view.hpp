@@ -25,20 +25,11 @@ struct column_view {
   column_view& operator=(column_view const&) = default;
   column_view& operator=(column_view&&) = default;
 
-  column_view(void const* data, data_type type, size_type size,
-              std::unique_ptr<column_view> null_mask, size_type null_count,
-              std::vector<column_view> const& children);
+  column_view(column_view const& other);
 
-  column_view(column_view const& other)
-      : _data{other._data},
-        _type{other._type},
-        _size{other._size},
-        _null_count{other._null_count},
-        _children{other._children} {
-    if (nullptr != other._null_mask.get()) {
-      _null_mask = std::make_unique<column_view>(*(other._null_mask));
-    }
-  }
+  column_view(data_type type, size_type size, void const* data,
+              std::unique_ptr<column_view> null_mask, size_type null_count,
+              std::vector<column_view> const& children = {});
 
   template <typename T = void>
   T const* data() const noexcept {

@@ -327,8 +327,8 @@ add_library(cudf SHARED
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
-            src/bitmask/bitmask_view.cpp
-            src/bitmask/bitmask.cu)
+            src/column/column.cpp
+            src/column/column_view.cpp)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
