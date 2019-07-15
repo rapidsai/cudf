@@ -68,8 +68,8 @@ def test_get_dummies_large():
                                                              "b": float,
                                                              "second": 'category'})
     df = gdf.to_pandas()
-    ddf = dd.from_pandas(df, npartitions=100)
+    ddf = dd.from_pandas(df, npartitions=25)
     dd.assert_eq(dd.get_dummies(ddf).compute(), pd.get_dummies(df))
-    gddf = dask_cudf.from_cudf(gdf, npartitions=100)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=25)
     dd.assert_eq(dd.get_dummies(ddf).compute(), dd.get_dummies(gddf).compute(),
                      check_dtype=False)
