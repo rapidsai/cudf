@@ -14,12 +14,7 @@ add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
 
-target_link_libraries(cudftestutil cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory
-                      NVStrings nvrtc)
-
-if(USE_NVTX)
-    target_link_libraries(cudftestutil ${NVTX_LIBRARY})
-endif(USE_NVTX)
+target_link_libraries(cudftestutil cudf)
 
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
@@ -28,12 +23,7 @@ function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
                    ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
-    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf
-                          cudftestutil rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory
-                          NVStrings nvrtc)
-    if(USE_NVTX)
-        target_link_libraries(${CMAKE_TEST_NAME} ${NVTX_LIBRARY})
-    endif(USE_NVTX)
+    target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread cudf cudftestutil)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
@@ -91,12 +81,12 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 ###################################################################################################
 
 ###################################################################################################
-# - column tests ----------------------------------------------------------------------------------
+# - legacy column tests ----------------------------------------------------------------------------------
 
-set(COLUMN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
+set(LEGACY_COLUMN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/legacy/column_test.cu")
 
-ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
+ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
@@ -145,20 +135,20 @@ set(ORDERBY_TEST_SRC
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 
 ###################################################################################################
-# - bitmask tests ---------------------------------------------------------------------------------
+# - legacy bitmask tests ---------------------------------------------------------------------------------
 
-set(BITMASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bitmask_ops_test.cu")
+set(LEGACY_BITMASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/legacy/bitmask_ops_test.cu")
 
-ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
+ConfigureTest(LEGACY_BITMASK_TEST "${LEGACY_BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - bit_mask tests --------------------------------------------------------------------------------
+# - legacy bit_mask tests --------------------------------------------------------------------------------
 
-set(BIT_MASK_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/bit_mask_test.cu")
+set(LEGACY_BIT_MASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/legacy/bit_mask_test.cu")
 
-ConfigureTest(BIT_MASK_TEST "${BIT_MASK_TEST_SRC}")
+ConfigureTest(LEGACY_BIT_MASK_TEST "${LEGACY_BIT_MASK_TEST_SRC}")
 
 ###################################################################################################
 # - datetime tests --------------------------------------------------------------------------------

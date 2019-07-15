@@ -68,7 +68,7 @@ __device__ __inline__ void setBitmapBit(gdf_valid_type *bitmap, long bit_idx) {
  * @brief Returns true is the input character is a valid digit.
  * Supports both decimal and hexadecimal digits (uppercase and lowercase).
  */
-__device__ __inline__ bool isDigit(char c, bool is_hex) {
+__device__ __inline__ bool isDigit(char c, bool is_hex = false) {
   if (c >= '0' && c <= '9')
     return true;
   if (is_hex) {
@@ -108,6 +108,47 @@ __device__ __inline__ bool isLikeFloat(long len, long digit_cnt, long decimal_cn
     return false;
 
   return true;
+}
+
+/**
+ * @brief Checks whether the given character counters indicate a potentially
+ * valid date and/or time field.
+ *
+ * For performance and simplicity, we detect only the most common date
+ * formats. Example formats that are detectable:
+ *
+ *    `2001/02/30`
+ *    `2001-02-30 00:00:00`
+ *    `2/30/2001 T04:05:60.7`
+ *    `2 / 1 / 2011`
+ *    `02/January`
+ *
+ * @param[in] letter_count Number of non special-symbol or numeric characters
+ * @param[in] decimal_count Number of '.' characters
+ * @param[in] colon_count Number of ':' characters
+ * @param[in] dash_count Number of '-' characters
+ * @param[in] slash_count Number of '/' characters
+ *
+ * @return `true` if it is date-like, `false` otherwise
+ */
+__device__ __inline__ bool isLikeDateTime(long letter_count, long decimal_count,
+                                          long colon_count, long dash_count,
+                                          long slash_count) {
+  // Must not exceed count of longest month (September) plus `T` time indicator
+  if (letter_count > 10) {
+    return false;
+  }
+  // Must not exceed more than one decimals or more than two time separators
+  if (decimal_count > 1 || colon_count > 2) {
+    return false;
+  }
+  // Must have one or two '-' or '/' but not both as date separators
+  if ((dash_count > 0 && dash_count < 3 && slash_count == 0) ||
+      (dash_count == 0 && slash_count > 0 && slash_count < 3)) {
+    return true;
+  }
+
+  return false;
 }
 
 /**---------------------------------------------------------------------------*
