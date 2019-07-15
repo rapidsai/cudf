@@ -17,6 +17,9 @@
 
 #include <cudf/types.hpp>
 
+#include <memory>
+#include <vector>
+
 namespace cudf {
 struct column_view {
   column_view() = default;

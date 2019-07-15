@@ -20,6 +20,8 @@
 #include "mutable_column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
+#include <memory>
+#include <vector>
 
 namespace cudf {
 
@@ -154,6 +156,5 @@ class column {
   data_type _type{INVALID};         ///< Logical type of elements in the column
   std::vector<column> _children{};  ///< Depending on element type, child
                                     ///< columns may contain additional data
-  std::unique_ptr<column> dictionary{};
 };
 }  // namespace cudf
