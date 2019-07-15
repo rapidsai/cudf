@@ -1459,35 +1459,13 @@ def test_to_arrow(nelem, data_type):
     pa_df = pa.Table.from_pandas(
         df, preserve_index=False
     ).replace_schema_metadata(None)
-    # Pandas uses ns so need to cast columns to ms
-    if data_type == "datetime64[ms]":
-        pa_df = (
-            pa_df.add_column(
-                0,
-                pa_df.column(1)
-                .cast(pa.timestamp("ms"))
-                .cast(pa.int64())
-                .cast(pa.date64()),
-            )
-            .add_column(
-                0,
-                pa_df.column(0)
-                .cast(pa.timestamp("ms"))
-                .cast(pa.int64())
-                .cast(pa.date64()),
-            )
-            .remove_column(2)
-            .remove_column(2)
-        )
+
     pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
 
     pa_s = pa.Array.from_pandas(df.a)
-    # Pandas uses ns so need to cast columns to ms
-    if data_type == "datetime64[ms]":
-        pa_s = pa_s.cast(pa.timestamp("ms")).cast(pa.int64()).cast(pa.date64())
     pa_gs = gdf["a"].to_arrow()
 
     assert isinstance(pa_gs, pa.Array)
