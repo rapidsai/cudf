@@ -10,7 +10,9 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
+- PR #2212 Java support for ORC reader
 
 ## Improvements
 
@@ -29,9 +31,14 @@
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 - PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
+- PR #2176 Added column dtype support for datetime, int8, int16 to csv_writer
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
+- PR #2217 Updated Java bindings to use the new groupby API
 - PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 - PR #1993 Add iterator driven reduction for mean, var, std
+- PR #2220 Update Java bindings for reduction rename
+- PR #2224 implement isna, isnull, notna as dataframe functions
+
 
 ## Bug Fixes
 
@@ -48,6 +55,7 @@
 - PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
 - PR #2190 Fix issue in astype conversion of string column to 'str'
 - PR #2208 Fix issue with calling `head()` on one row dataframe
+- PR #2234 Fix issue with local build script not properly building
 - PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
 
 
