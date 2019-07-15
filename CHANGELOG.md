@@ -60,6 +60,7 @@
 - PR #2234 Fix issue with local build script not properly building
 - PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
 - PR #2162 Setting is_unique and is_monotonic-related attributes
+- PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 
 
 # cuDF 0.8.0 (27 June 2019)
