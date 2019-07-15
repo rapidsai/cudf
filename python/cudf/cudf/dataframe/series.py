@@ -1085,7 +1085,7 @@ class Series(object):
             [in_index.as_column()], in_cols, None, keep
         )
         new_index = as_index(new_index)
-        if len(self.index) == len(new_index) and self.index.equals(new_index):
+        if self.index.equals(new_index):
             new_index = self.index
         if isinstance(self.index, MultiIndex):
             new_index = self.index.take(new_index)

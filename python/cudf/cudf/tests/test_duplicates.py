@@ -568,3 +568,7 @@ def test_drop_duplicates_multi_index():
     result = gdf.drop_duplicates()
     assert_df(result.to_pandas(), expected)
     # FIXME: to_pandas needed until sort_index support for MultiIndex
+
+    for col in gdf.columns:
+        assert_df(gdf[col].drop_duplicates().to_pandas(),
+                  pdf[col].drop_duplicates())
