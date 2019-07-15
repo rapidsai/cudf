@@ -12,6 +12,7 @@
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
+- PR #2212 Java support for ORC reader
 
 ## Improvements
 
@@ -54,6 +55,9 @@
 - PR #2187 fix to honor dtype when numpy arrays are passed to columnops.as_column
 - PR #2190 Fix issue in astype conversion of string column to 'str'
 - PR #2208 Fix issue with calling `head()` on one row dataframe
+- PR #2229 Propagate exceptions from Cython cdef functions
+- PR #2234 Fix issue with local build script not properly building
+- PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
 - PR #2235 Fix get_dummies to be compatible with dask
 
 
