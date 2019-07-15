@@ -3267,7 +3267,7 @@ def test_one_row_head():
         np.random.randint(-100, 100, 10),
     ])
 def test_isin(ser, values):
-    gs = cudf.Series(ser)
+    gs = Series(ser)
     ps = pd.Series(ser)
 
     got = gs.isin(values)
