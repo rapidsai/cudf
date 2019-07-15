@@ -2734,6 +2734,21 @@ class DataFrame(object):
 
         return output_frame
 
+    def isnull(self, **kwargs):
+        """Identify missing values in a DataFrame.
+        """
+        return self._apply_support_method("isnull", **kwargs)
+
+    def isna(self, **kwargs):
+        """Identify missing values in a DataFrame. Alias for isnull.
+        """
+        return self.isnull(**kwargs)
+
+    def notna(self, **kwargs):
+        """Identify non-missing values in a DataFrame.
+        """
+        return self._apply_support_method("notna", **kwargs)
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.

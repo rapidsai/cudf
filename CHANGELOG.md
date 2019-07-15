@@ -12,6 +12,7 @@
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
+- PR #2212 Java support for ORC reader
 
 ## Improvements
 
@@ -36,6 +37,7 @@
 - PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
+- PR #2224 implement isna, isnull, notna as dataframe functions
 
 
 ## Bug Fixes
@@ -54,6 +56,7 @@
 - PR #2190 Fix issue in astype conversion of string column to 'str'
 - PR #2208 Fix issue with calling `head()` on one row dataframe
 - PR #2229 Propagate exceptions from Cython cdef functions
+- PR #2234 Fix issue with local build script not properly building
 
 
 # cuDF 0.8.0 (27 June 2019)
