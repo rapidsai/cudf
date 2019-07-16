@@ -1079,6 +1079,7 @@ class Series(object):
         in_cols = [self._column]
         in_index = self.index
         from cudf.dataframe.multiindex import MultiIndex
+
         if isinstance(in_index, MultiIndex):
             in_index = RangeIndex(len(in_index))
         out_cols, new_index = cpp_drop_duplicates(
@@ -1380,7 +1381,8 @@ class Series(object):
         values to the given dtype.
         If the dtype is not changed, ``self`` is returned.
         """
-        if dtype == self.dtype:
+
+        if utils.dtype_equals(dtype, self.dtype):
             return self
 
         return self._copy_construct(data=self._column.astype(dtype))
