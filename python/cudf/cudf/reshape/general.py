@@ -215,23 +215,26 @@ def get_dummies(
 
     from cudf.multi import concat
 
-    encode_fallback_dtypes = ['object', 'category']
+    encode_fallback_dtypes = ["object", "category"]
 
     if columns is None or len(columns) == 0:
         columns = df.select_dtypes(include=encode_fallback_dtypes).columns
 
     def length_check(obj, name):
-        err_msg = ("Length of '{name}' ({len_obj}) did not match the "
-                   "length of the columns being encoded ({len_required}).")
+        err_msg = (
+            "Length of '{name}' ({len_obj}) did not match the "
+            "length of the columns being encoded ({len_required})."
+        )
 
         if utils.is_list_like(obj):
             if len(obj) != len(columns):
-                err_msg = err_msg.format(name=name, len_obj=len(obj),
-                                         len_required=len(columns))
+                err_msg = err_msg.format(
+                    name=name, len_obj=len(obj), len_required=len(columns)
+                )
                 raise ValueError(err_msg)
 
-    length_check(prefix, 'prefix')
-    length_check(prefix_sep, 'prefix_sep')
+    length_check(prefix, "prefix")
+    length_check(prefix_sep, "prefix_sep")
 
     if prefix is None:
         prefix = columns

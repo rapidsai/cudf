@@ -29,6 +29,7 @@ from cudf.utils import cudautils, ioutils, utils
 class Index(object):
     """The root interface for all Series indexes.
     """
+
     def serialize(self, serialize):
         """Serialize into pickle format suitable for file storage or network
         transmission.
@@ -306,7 +307,7 @@ class Index(object):
 
     @property
     def is_unique(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     @property
     def is_monotonic(self):
@@ -314,14 +315,14 @@ class Index(object):
 
     @property
     def is_monotonic_increasing(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     @property
     def is_monotonic_decreasing(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     def get_slice_bound(self, label, side, kind):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
 
 class RangeIndex(Index):
@@ -484,7 +485,7 @@ class RangeIndex(Index):
 
     def get_slice_bound(self, label, side, kind):
         # TODO: Range-specific implementation here
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
 
 def index_from_range(start, stop=None, step=None):

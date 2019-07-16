@@ -3251,8 +3251,10 @@ class DataFrame(object):
         selection = tuple(map(frozenset, (include, exclude)))
 
         if not any(selection):
-            raise ValueError('at least one of include or exclude must be \
-                             nonempty')
+            raise ValueError(
+                "at least one of include or exclude must be \
+                             nonempty"
+            )
 
         include, exclude = map(
             lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
