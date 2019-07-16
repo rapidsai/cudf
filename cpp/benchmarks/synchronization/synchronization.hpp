@@ -71,8 +71,8 @@ public:
    *
    * @param[in,out] state  This is the benchmark::State whose timer we are going 
    * to update.
-   * @param[in] whether or not to flush the L2 cache before every iteration
-   * @param[in] The CUDA stream we are measuring time on.
+   * @param[in] flush_l2_cache_ whether or not to flush the L2 cache before every iteration
+   * @param[in] stream_ The CUDA stream we are measuring time on.
    *---------------------------------------------------------------------------**/
   cuda_event_timer(benchmark::State& state, bool flush_l2_cache_, cudaStream_t stream_ = 0);  
  
