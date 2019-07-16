@@ -16,12 +16,15 @@
 
 #include "synchronization.hpp"
 
-cuda_event_timer::cuda_event_timer::cuda_event_timer(benchmark::State& state, cudaStream_t stream_): p_state(&state), stream(stream_) {
+cuda_event_timer::cuda_event_timer(benchmark::State& state, bool flush_l2_cache_, cudaStream_t stream_):
+  p_state(&state), 
+  stream(stream_),
+  flush_l2_cache(flush_l2_cache_){
   
   CUDA_TRY(cudaGetDevice(&current_device));
   CUDA_TRY(cudaDeviceGetAttribute(&l2_cache_bytes, cudaDevAttrL2CacheSize, current_device));
-  // Invalidate all of L2$
-  if(l2_cache_bytes > 0){
+  // flush all of L2$
+  if(flush_l2_cache && l2_cache_bytes > 0){
     const int memset_value = 0;
     RMM_TRY(RMM_ALLOC(&l2_cache_buffer, l2_cache_bytes, stream));
     CUDA_TRY(cudaMemsetAsync(l2_cache_buffer, memset_value, l2_cache_bytes, stream));

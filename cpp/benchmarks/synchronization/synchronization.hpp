@@ -39,8 +39,9 @@
         // benchmark::State object you are using. It measures the time from its 
         // creation to its destruction that is spent on the specified CUDA stream.
         // It also clears the L2 cache by cudaMemset'ing a device buffer that is of
-        // the size of the L2 cache (if there is an L2 cache on the current device).
-        cuda_event_timer raii(state, stream);
+        // the size of the L2 cache (if flush_l2_cache is set to true and there is 
+        // an L2 cache on the current device).
+        cuda_event_timer raii(state, true, stream); // flush_l2_cache = true
         
         // Now perform the operations that is to be benchmarked
         sample_kernel<<<1, 256, 0, stream>>>(); // Possibly launching a CUDA kernel
@@ -70,9 +71,10 @@ public:
    *
    * @param[in,out] state  This is the benchmark::State whose timer we are going 
    * to update.
+   * @param[in] whether or not to flush the L2 cache before every iteration
    * @param[in] The CUDA stream we are measuring time on.
    *---------------------------------------------------------------------------**/
-  cuda_event_timer(benchmark::State& state, cudaStream_t stream_ = 0);  
+  cuda_event_timer(benchmark::State& state, bool flush_l2_cache_, cudaStream_t stream_ = 0);  
  
   // The user will HAVE to provide a benchmark::State object to set 
   // the timer so we disable the default c'tor.
@@ -91,6 +93,8 @@ private:
   int l2_cache_bytes = 0;
   int current_device = 0;
   int* l2_cache_buffer = nullptr;
+
+  bool flush_l2_cache;
 
   cudaStream_t stream;
 

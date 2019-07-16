@@ -60,10 +60,6 @@ struct Functor{
 
 constexpr int block_size = 256;
 
-int launch_configuration(int total_work, int work_per_thread){
-  return (total_work + work_per_thread*block_size - 1) / (work_per_thread*block_size);
-}
-
 // This is for NO_DISPATCHING
 template<FunctorType functor_type, class T>
 __global__ void no_dispatching_kernel(T** A, gdf_size_type n_rows, gdf_size_type n_cols){
@@ -94,7 +90,7 @@ struct ColumnHandle {
   void operator()(gdf_column* source_column, int work_per_thread, cudaStream_t stream = 0) {
     ColumnType* source_data = static_cast<ColumnType*>(source_column->data);
     gdf_size_type const n_rows = source_column->size;
-    int grid_size = launch_configuration(n_rows, work_per_thread);
+    int grid_size = cudf::util::cuda::grid_config_1d(n_rows, block_size).num_blocks;
     // Launch the kernel.
     host_dispatching_kernel<functor_type><<<grid_size, block_size, 0, stream>>>(source_data, n_rows);
   }
@@ -138,7 +134,7 @@ void launch_kernel(cudf::table& input, T** d_ptr, int work_per_thread){
   const gdf_size_type n_rows = input.num_rows();
   const gdf_size_type n_cols = input.num_columns();
     
-  int grid_size = launch_configuration(n_rows, work_per_thread);
+  int grid_size = cudf::util::cuda::grid_config_1d(n_rows, block_size).num_blocks;
  
   if(dispatching_type == HOST_DISPATCHING){
     // std::vector<cudf::util::cuda::scoped_stream> v_stream(n_cols);
@@ -182,36 +178,29 @@ void type_dispatcher_benchmark(benchmark::State& state){
 
   cudf::table source_table{ vp_src };
   
-  // For no dispatching:
-  std::vector<TypeParam*> h_vec(n_cols);
-  TypeParam** d_ptr = nullptr;
+  // For no dispatching
+  std::vector<rmm::device_vector<TypeParam>> h_vec(n_cols, rmm::device_vector<TypeParam>(source_size, 0));
+  std::vector<TypeParam*> h_vec_p(n_cols);
+  for(int c = 0; c < n_cols; c++){
+    h_vec_p[c] = h_vec[c].data().get();
+  }
+  rmm::device_vector<TypeParam*> d_vec(n_cols);
   
   if(dispatching_type == NO_DISPATCHING){
-    RMM_TRY(RMM_ALLOC(&d_ptr, sizeof(TypeParam*)*n_cols, 0));
-    for(int c = 0; c < n_cols; c++){
-      RMM_TRY(RMM_ALLOC(&h_vec[c], sizeof(TypeParam)*source_size, 0));
-      CUDA_TRY(cudaMemset(h_vec[c], 0, sizeof(TypeParam)*source_size));
-    }
-    CUDA_TRY(cudaMemcpy(d_ptr, h_vec.data(), sizeof(TypeParam*)*n_cols, cudaMemcpyHostToDevice));
+    CUDA_TRY(cudaMemcpy(d_vec.data().get(), h_vec_p.data(), sizeof(TypeParam*)*n_cols, cudaMemcpyHostToDevice));
   }
   
   // Warm up  
-  launch_kernel<functor_type, dispatching_type>(source_table, d_ptr, work_per_thread);
+  launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data().get(), work_per_thread);
   cudaDeviceSynchronize();
   
   for(auto _ : state){
-    cuda_event_timer raii(state);
-    launch_kernel<functor_type, dispatching_type>(source_table, d_ptr, work_per_thread);
+    cuda_event_timer raii(state, true); // flush_l2_cache = true
+    launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data().get(), work_per_thread);
   }
 
   state.SetBytesProcessed(static_cast<int64_t>(state.iterations())*source_size*n_cols*2*sizeof(TypeParam));
-  
-  if(dispatching_type == NO_DISPATCHING){
-    for(int c = 0; c < n_cols; c++){
-      RMM_TRY(RMM_FREE(h_vec[c], 0));
-    }
-    RMM_TRY(RMM_FREE(d_ptr, 0));
-  }
+
 }
 
 using namespace cudf;
@@ -222,10 +211,10 @@ BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {                
 }                                                                                              \
 BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
 
-TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
+// TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
+// TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_no, double, BANDWIDTH_BOUND, NO_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_compute_host, double, COMPUTE_BOUND, HOST_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_compute_device, double, COMPUTE_BOUND, DEVICE_DISPATCHING);
-TBM_BENCHMARK_DEFINE(fp64_compute_no, double, COMPUTE_BOUND, NO_DISPATCHING);
+// TBM_BENCHMARK_DEFINE(fp64_compute_host, double, COMPUTE_BOUND, HOST_DISPATCHING);
+// TBM_BENCHMARK_DEFINE(fp64_compute_device, double, COMPUTE_BOUND, DEVICE_DISPATCHING);
+// TBM_BENCHMARK_DEFINE(fp64_compute_no, double, COMPUTE_BOUND, NO_DISPATCHING);
 
