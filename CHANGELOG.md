@@ -31,6 +31,7 @@
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 - PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
+- PR #2199 Better java support for appending strings
 - PR #2176 Added column dtype support for datetime, int8, int16 to csv_writer
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
 - PR #2217 Updated Java bindings to use the new groupby API
@@ -40,6 +41,7 @@
 - PR #2224 implement isna, isnull, notna as dataframe functions
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
+- PR #2300 Create separate dask codeowners for dask-cudf codebase
 
 ## Bug Fixes
 
@@ -62,6 +64,8 @@
 - PR #2162 Setting is_unique and is_monotonic-related attributes
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
+- PR #2302 Fixed java serialization corner case
+
 
 
 # cuDF 0.8.0 (27 June 2019)
