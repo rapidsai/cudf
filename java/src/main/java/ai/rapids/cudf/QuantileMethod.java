@@ -19,16 +19,19 @@
 package ai.rapids.cudf;
 
 /**
- * Aggregate operations on a column
+ * Method used to calculate the quantiles
  */
-enum AggregateOp {
-  SUM(0),
-  MIN(1),
-  MAX(2),
-  COUNT(3),
-  MEAN(4);
+public enum QuantileMethod {
+
+  LINEAR(0),
+  LOWER(1),
+  HIGHER(2),
+  MIDPOINT(3),
+  NEAREST(4);
 
   final int nativeId;
 
-  AggregateOp(int nativeId) {this.nativeId = nativeId;}
+  QuantileMethod(int nativeId) {
+    this.nativeId = nativeId;
+  }
 }

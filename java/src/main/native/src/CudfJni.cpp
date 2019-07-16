@@ -126,7 +126,7 @@ static void release_scalar_jni(JNIEnv *env) {
   }
 }
 
-static jobject jscalar_from_scalar(JNIEnv *env, const gdf_scalar &scalar, gdf_time_unit time_unit) {
+jobject jscalar_from_scalar(JNIEnv *env, const gdf_scalar &scalar, gdf_time_unit time_unit) {
   jobject obj = nullptr;
   if (scalar.is_valid) {
     switch (scalar.dtype) {
@@ -302,7 +302,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfBinaryOpVV(JNIEnv *env, jcla
     gdf_binary_operator op = static_cast<gdf_binary_operator>(int_op);
     cudf::jni::gdf_column_wrapper ret(lhs->size, out_type,
                                       lhs->valid != nullptr || rhs->valid != nullptr);
-    // Should be null count           lhs->null_count > 0 || rhs->null_count > 0);
+    // Should be null count           lhs->null_count > 0 || rhs->null_count >
+    // 0);
 
     cudf::binary_operation(ret.get(), lhs, rhs, op);
     return reinterpret_cast<jlong>(ret.release());
@@ -321,8 +322,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfBinaryOpSV(
     gdf_column *rhs = reinterpret_cast<gdf_column *>(rhs_ptr);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
     gdf_binary_operator op = static_cast<gdf_binary_operator>(int_op);
-    cudf::jni::gdf_column_wrapper ret(rhs->size, out_type, 
-                                      !lhs.is_valid || rhs->valid != nullptr);
+    cudf::jni::gdf_column_wrapper ret(rhs->size, out_type, !lhs.is_valid || rhs->valid != nullptr);
     // Should be null count           !lhs.is_valid || rhs->null_count > 0);
 
     cudf::binary_operation(ret.get(), &lhs, rhs, op);
@@ -342,8 +342,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfBinaryOpVS(
                                rhs_dtype);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
     gdf_binary_operator op = static_cast<gdf_binary_operator>(int_op);
-    cudf::jni::gdf_column_wrapper ret(lhs->size, out_type,
-                                      !rhs.is_valid || lhs->valid != nullptr);
+    cudf::jni::gdf_column_wrapper ret(lhs->size, out_type, !rhs.is_valid || lhs->valid != nullptr);
     // Should be null count           !rhs.is_valid || lhs->null_count > 0);
 
     cudf::binary_operation(ret.get(), lhs, &rhs, op);
@@ -441,7 +440,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
       return cudf::jni::cast_string_cat_to(env, cat, c_dtype, c_time_unit, size, input->null_count,
                                            input->valid);
     } else {
-      // TODO should be but bug in cudf cudf::jni::gdf_column_wrapper output(input->size, c_dtype,
+      // TODO should be but bug in cudf cudf::jni::gdf_column_wrapper
+      // output(input->size, c_dtype,
       // input->null_count != 0);
       cudf::jni::gdf_column_wrapper output(input->size, c_dtype, input->valid != nullptr);
       output.get()->dtype_info.time_unit = c_time_unit;
@@ -496,13 +496,13 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_replaceNulls(JNIEnv *env, jclas
 }
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_fill(JNIEnv *env, jclass, jlong input_jcol,
-                                                      jlong s_int_values, jfloat s_f_value,
-                                                      jdouble s_d_value,
-                                                      jboolean s_is_valid, int s_dtype) {
+                                                     jlong s_int_values, jfloat s_f_value,
+                                                     jdouble s_d_value, jboolean s_is_valid,
+                                                     int s_dtype) {
   JNI_NULL_CHECK(env, input_jcol, "input column is null", );
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_jcol);
-    gdf_scalar fill_value {};
+    gdf_scalar fill_value{};
     cudf::jni::gdf_scalar_init(&fill_value, s_int_values, s_f_value, s_d_value, s_is_valid,
                                s_dtype);
 
@@ -511,14 +511,14 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_fill(JNIEnv *env, jclass, jlong 
   CATCH_STD(env, );
 }
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cudf_reduction(JNIEnv *env, jclass, jlong jcol,
-                                                             jint jop, jint jdtype) {
+JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cudf_reduce(JNIEnv *env, jclass, jlong jcol,
+                                                          jint jop, jint jdtype) {
   JNI_NULL_CHECK(env, jcol, "input column is null", 0);
   try {
     gdf_column *col = reinterpret_cast<gdf_column *>(jcol);
-    gdf_reduction_op op = static_cast<gdf_reduction_op>(jop);
+    cudf::reduction::operators op = static_cast<cudf::reduction::operators>(jop);
     gdf_dtype dtype = static_cast<gdf_dtype>(jdtype);
-    gdf_scalar scalar = cudf::reduction(col, op, dtype);
+    gdf_scalar scalar = cudf::reduce(col, op, dtype);
     return cudf::jni::jscalar_from_scalar(env, scalar, col->dtype_info.time_unit);
   }
   CATCH_STD(env, 0);

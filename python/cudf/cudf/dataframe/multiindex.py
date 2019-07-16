@@ -627,5 +627,30 @@ class MultiIndex(Index):
             )
         return mi
 
+    @property
+    def is_unique(self):
+        if not hasattr(self, '_is_unique'):
+            self._is_unique = (
+                self._source_data._size
+                == self._source_data.drop_duplicates()._size
+            )
+        return self._is_unique
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, '_is_monotonic_increasing'):
+            self._is_monotonic_increasing = self._source_data.argsort(
+                ascending=True
+            ).is_monotonic_increasing
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, '_is_monotonic_decreasing'):
+            self._is_monotonic_decreasing = self._source_data.argsort(
+                ascending=True
+            ).is_monotonic_decreasing
+        return self._is_monotonic_decreasing
+
 
 register_distributed_serializer(MultiIndex)
