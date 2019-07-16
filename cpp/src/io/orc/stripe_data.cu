@@ -725,7 +725,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     // 11wwwwwn.nnnnnnnn.<base>.<delta>: delta encoding
                     uint32_t deltapos = varint_length<T>(bs, pos);
                     deltapos += varint_length<T>(bs, pos + deltapos);
-                    l = (l > 1) ? (l * n + 7) >> 3 : 0;
+                    l = (l > 1 && n > 2) ? (l * (n - 2) + 7) >> 3 : 0;
                     l += deltapos;
                 }
             }

@@ -168,7 +168,7 @@ class Column(object):
             if isinstance(val, np.ndarray):
                 return val.all()
             return bool(val)
-        return self.unordered_compare('eq', other).min()
+        return self.unordered_compare("eq", other).min()
 
     def _update_null_count(self, null_count=None):
         assert null_count is None or null_count >= 0
@@ -628,6 +628,46 @@ class Column(object):
         Return pointer to a view of the underlying data structure
         """
         return column_view_pointer(self)
+
+    @property
+    def is_unique(self):
+        return self.unique_count() == len(self)
+
+    @property
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        raise(NotImplementedError)
+
+    @property
+    def is_monotonic_decreasing(self):
+        raise(NotImplementedError)
+
+    def get_slice_bound(self, label, side, kind):
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+        Parameters
+        ----------
+        label : object
+        side : {'left', 'right'}
+        kind : {'ix', 'loc', 'getitem'}
+        """
+        assert kind in ['ix', 'loc', 'getitem', None]
+        if side not in ('left', 'right'):
+            raise ValueError("Invalid value for side kwarg,"
+                             " must be either 'left' or 'right': %s" %
+                             (side, ))
+
+        # TODO: Handle errors/missing keys correctly
+        #       Not currently using `kind` argument.
+        if side == 'left':
+            return self.find_first_value(label)
+        if side == 'right':
+            return (self.find_last_value(label) + 1)
 
 
 register_distributed_serializer(Column)

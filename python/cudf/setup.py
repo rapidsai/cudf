@@ -3,10 +3,9 @@
 from distutils.sysconfig import get_python_lib
 
 import versioneer
+from Cython.Build import cythonize
 from setuptools import find_packages, setup
 from setuptools.extension import Extension
-
-from Cython.Build import cythonize
 
 install_requires = ["numba", "cython"]
 
@@ -18,6 +17,7 @@ extensions = [
         sources=cython_files,
         include_dirs=[
             "../../cpp/include/cudf",
+            "../../cpp/include",
             "../../cpp/thirdparty/dlpack/include/dlpack/",
         ],
         library_dirs=[get_python_lib()],
