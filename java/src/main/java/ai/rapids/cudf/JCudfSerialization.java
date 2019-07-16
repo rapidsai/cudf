@@ -21,6 +21,7 @@ package ai.rapids.cudf;
 import java.io.BufferedOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
+import java.io.EOFException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -345,7 +346,10 @@ public class JCudfSerialization {
   /**
    * Read a serialize table from the given InputStream.
    * @param in the stream to read the table data from.
-   * @return the deserialized table in device memory.
+   * @return the deserialized table in device memory, or null if the stream has no table to read
+   * from, an end of the stream at the very beginning.
+   * @throws IOException on any error.
+   * @throws EOFException if the data stream ended unexpectedly in the middle of processing.
    */
   public static Table readTableFrom(InputStream in) throws IOException {
     DataInputStream din;
@@ -355,10 +359,16 @@ public class JCudfSerialization {
       din = new DataInputStream(in);
     }
 
-    int num = din.readInt();
-    if (num != SER_FORMAT_MAGIC_NUMBER) {
-      throw new IllegalStateException("THIS DOES NOT LOOK LIKE CUDF SERIALIZED DATA. " +
-          "Expected magic number " + SER_FORMAT_MAGIC_NUMBER + " Found " + num);
+    try {
+      int num = din.readInt();
+      if (num != SER_FORMAT_MAGIC_NUMBER) {
+        throw new IllegalStateException("THIS DOES NOT LOOK LIKE CUDF SERIALIZED DATA. " +
+            "Expected magic number " + SER_FORMAT_MAGIC_NUMBER + " Found " + num);
+      }
+    } catch (EOFException e) {
+      // If we get an EOF at the very beginning don't treat it as an error becasue we may
+      // have finished reading everything...
+      return null;
     }
     short version = din.readShort();
     if (version != VERSION_NUMBER) {
