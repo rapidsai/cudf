@@ -43,7 +43,7 @@
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
-- PR #XXXX Add `black` and `isort` to style checker script
+- PR #2307 Add `black` and `isort` to style checker script
 
 ## Bug Fixes
 
