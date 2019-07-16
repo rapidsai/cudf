@@ -41,6 +41,7 @@
 - PR #2224 implement isna, isnull, notna as dataframe functions
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
+- PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #XXXX Add `black` and `isort` to style checker script
 
 ## Bug Fixes
@@ -63,6 +64,7 @@
 - PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
 - PR #2162 Setting is_unique and is_monotonic-related attributes
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
+- PR #2302 Fixed java serialization corner case
 
 
 # cuDF 0.8.0 (27 June 2019)
