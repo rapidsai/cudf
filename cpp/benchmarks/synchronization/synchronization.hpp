@@ -56,6 +56,9 @@
 
  *---------------------------------------------------------------------------**/
 
+#ifndef CUDF_BENCH_SYNCHRONIZATION_H
+#define CUDF_BENCH_SYNCHRONIZATION_H
+
 // Google Benchmark library
 #include <benchmark/benchmark.h>
 
@@ -102,3 +105,4 @@ private:
 
 };
 
+#endif
