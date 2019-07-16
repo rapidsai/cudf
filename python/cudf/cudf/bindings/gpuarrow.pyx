@@ -52,7 +52,9 @@ def gpu_view_as(arr, dtype, shape=None, strides=None):
                          gpu_data=arr.gpu_data)
 
 
-def _schema_to_dtype(name, bitwidth):
+def _schema_to_dtype(fielddesc, name, bitwidth):
+    ret = None
+    type_ = fielddesc['type']
     if name in ('DOUBLE', 'FLOAT'):
         ret = getattr(np, 'float{:d}'.format(bitwidth))
     elif name in ('INT', 'INT8', 'INT16', 'INT32', 'INT64'):
@@ -61,7 +63,16 @@ def _schema_to_dtype(name, bitwidth):
         ret = 'datetime64[ms]'
     elif name == 'DICTIONARY':
         ret = getattr(np, 'int{:d}'.format(bitwidth))
-    else:
+    elif name == 'TIMESTAMP':
+        if type_['unit'] == 'SECOND':
+            ret = 'datetime64[s]'
+        elif type_['unit'] == 'MILLISECOND':
+            ret = 'datetime64[ms]'
+        elif type_['unit'] == 'MICROSECOND':
+            ret = 'datetime64[us]'
+        elif type_['unit'] == 'NANOSECOND':
+            ret = 'datetime64[ns]'
+    if ret is None:
         fmt = "unsupported type {} {}-bits"
         raise NotImplementedError(fmt.format(name, bitwidth))
     return np.dtype(ret)
@@ -236,7 +247,7 @@ class GpuArrowReader(Sequence):
                 null_count=layout['null_count'],
                 null_buffer=_BufferDesc(**layout['null_buffer']),
                 data_buffer=_BufferDesc(**layout['data_buffer']),
-                dtype=_schema_to_dtype(**layout['dtype']),
+                dtype=_schema_to_dtype(fielddesc, **layout['dtype']),
                 schema=fielddesc,
                 )
             node = GpuArrowNodeReader(schema=schema,
