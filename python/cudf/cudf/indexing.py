@@ -3,7 +3,18 @@ import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
+from cudf.utils.cudautils import arange
 from cudf.utils.utils import is_single_value
+
+
+def indices_from_labels(obj, labels):
+    from cudf.dataframe.columnops import as_column
+
+    if pd.api.types.is_categorical_dtype(obj.index.dtype):
+        labels = 
+    lhs = cudf.DataFrame({}, index=as_column(labels, dtype=obj.index.dtype))
+    rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
+    return lhs.join(rhs)["_"]
 
 
 class _SeriesLocIndexer(object):
@@ -15,6 +26,10 @@ class _SeriesLocIndexer(object):
         self._sr = sr
 
     def __getitem__(self, arg):
+        arg = self._loc_2_iloc(arg)
+        return self._sr.iloc[arg]
+
+    def _loc_2_iloc(self, arg):
         from cudf.dataframe.series import Series
         from cudf.dataframe.index import Index
 
@@ -27,23 +42,17 @@ class _SeriesLocIndexer(object):
                 arg = Series(arg)
         if isinstance(arg, Series):
             if arg.dtype in [np.bool, np.bool_]:
-                return self._sr.iloc[arg]
-            # To do this efficiently we need a solution to
-            # https://github.com/rapidsai/cudf/issues/1087
-            out = Series(
-                [], dtype=self._sr.dtype, index=self._sr.index.__class__([])
-            )
-            for s in arg:
-                out = out.append(self._sr.loc[s:s], ignore_index=False)
-            return out
+                return arg
+            else:
+                return indices_from_labels(self._sr, arg)
         elif is_single_value(arg):
             found_index = self._sr.index.find_label_range(arg, None)[0]
-            return self._sr.iloc[found_index]
+            return found_index
         elif isinstance(arg, slice):
             start_index, stop_index = self._sr.index.find_label_range(
                 arg.start, arg.stop
             )
-            return self._sr.iloc[start_index : stop_index : arg.step]
+            return slice(start_index, stop_index, arg.step)
         else:
             raise NotImplementedError(
                 ".loc not implemented for label type {}".format(
