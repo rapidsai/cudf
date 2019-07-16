@@ -24,6 +24,7 @@
 
 gdf_scalar cudf::reduction::standard_deviation(gdf_column const& col, gdf_dtype const output_dtype, gdf_size_type ddof, cudaStream_t stream)
 {
+    // TODO: add cuda version check when the fix is available
 #if !defined(__CUDACC_DEBUG__)
     using reducer = cudf::reduction::compound::element_type_dispatcher<cudf::reduction::op::standard_deviation>;
     return cudf::type_dispatcher(col.dtype, reducer(), col, output_dtype, ddof, stream);
