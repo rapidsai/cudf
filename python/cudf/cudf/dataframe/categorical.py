@@ -5,8 +5,10 @@ import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
+import cudf
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
+from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
@@ -222,7 +224,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def astype(self, dtype):
         # custom dtype can't be compared with `==`
-        if self.dtype is dtype:
+        if utils.dtype_equals(dtype, self.dtype):
             return self
         return self.as_numerical.astype(dtype)
 

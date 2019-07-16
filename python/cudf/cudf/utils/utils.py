@@ -224,7 +224,7 @@ def is_list_like(obj):
 
     Returns
     -------
-    Boolean: True or False depending on whether the
+    Boolean: aTrue or False depending on whether the
     input `obj` is like-like or not.
     """
     from collections.abc import Sequence
@@ -233,6 +233,31 @@ def is_list_like(obj):
         return True
     else:
         return False
+
+
+def dtype_equals(left, right):
+    """
+    Check that the dtypes `left` and `right` are equal.
+    `right` can be a type or list of types.
+    """
+    if isinstance(right, (list, tuple)):
+        for rdtype in right:
+            rdtype = pd.api.types.pandas_dtype(rdtype)
+            if dtype_equals(left, rdtype):
+                return True
+        return False
+    else:
+        left = pd.api.types.pandas_dtype(left)
+        right = pd.api.types.pandas_dtype(right)
+        if pd.api.types.is_categorical_dtype(
+            left
+        ) or pd.api.types.is_categorical_dtype(right):
+            if pd.api.types.is_categorical_dtype(
+                left
+            ) and pd.api.types.is_categorical_dtype(right):
+                return True
+            return False
+        return left == right
 
 
 def min_scalar_type(a, min_size=8):
