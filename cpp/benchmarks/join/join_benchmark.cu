@@ -21,6 +21,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 
 #include "generate_input_tables.cuh"
+#include "../synchronization/synchronization.hpp"
 
 
 template<typename key_type, typename payload_type>
@@ -82,14 +83,8 @@ static void join_benchmark(benchmark::State& state)
 
     // Benchmark the inner join operation
 
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
-
-    float milliseconds;
-
     for (auto _ : state) {
-        cudaEventRecord(start);
+        cuda_event_timer raii(state, true, 0);
 
         CUDF_TRY(gdf_inner_join(
             probe_table.data(), 2, columns_to_join,
@@ -97,12 +92,6 @@ static void join_benchmark(benchmark::State& state)
             1, nresult_cols, col_ptrs.data(),
             nullptr, nullptr, &ctxt
         ));
-
-        cudaEventRecord(stop);
-        cudaEventSynchronize(stop);
-
-        cudaEventElapsedTime(&milliseconds, start, stop);
-        state.SetIterationTime(milliseconds / 1000);
     }
 
     // Cleanup
