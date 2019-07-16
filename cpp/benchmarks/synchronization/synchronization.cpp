@@ -17,9 +17,7 @@
 #include "synchronization.hpp"
 
 cuda_event_timer::cuda_event_timer(benchmark::State& state, bool flush_l2_cache_, cudaStream_t stream_):
-  p_state(&state), 
-  stream(stream_),
-  flush_l2_cache(flush_l2_cache_){
+  p_state(&state), stream(stream_), flush_l2_cache(flush_l2_cache_){
   
   CUDA_TRY(cudaGetDevice(&current_device));
   CUDA_TRY(cudaDeviceGetAttribute(&l2_cache_bytes, cudaDevAttrL2CacheSize, current_device));
@@ -44,9 +42,7 @@ cuda_event_timer::~cuda_event_timer(){
  
   float milliseconds = 0.0f;
   CUDA_TRY(cudaEventElapsedTime(&milliseconds, start, stop));
-  if(p_state){
-    p_state->SetIterationTime(milliseconds/(1000.0f));
-  }
+  p_state->SetIterationTime(milliseconds/(1000.0f));
   CUDA_TRY(cudaEventDestroy(start));
   CUDA_TRY(cudaEventDestroy(stop));
 
