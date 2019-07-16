@@ -57,16 +57,24 @@ def test_df_slice_empty_index():
 
 
 def test_index_find_label_range():
+    # Monotonic Index
     idx = GenericIndex(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
     assert idx.find_label_range(5, 10) == (1, 4)
+    assert idx.find_label_range(0, 6) == (0, 3)
+    assert idx.find_label_range(4, 11) == (0, 4)
+
+    # Non-monotonic Index
+    idx_nm = GenericIndex(np.asarray([5, 4, 6, 10]))
+    assert idx_nm.find_label_range(4, 6) == (1, 3)
+    assert idx_nm.find_label_range(5, 10) == (0, 4)
     # Last value not found
     with pytest.raises(ValueError) as raises:
-        idx.find_label_range(0, 6)
+        idx_nm.find_label_range(0, 6)
     raises.match("value not found")
     # Last value not found
     with pytest.raises(ValueError) as raises:
-        idx.find_label_range(4, 11)
+        idx_nm.find_label_range(4, 11)
     raises.match("value not found")
 
 

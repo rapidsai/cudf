@@ -17,8 +17,8 @@
 #ifndef BITMASK_HPP
 #define BITMASK_HPP
 
-#include "cudf.h"
-#include "types.hpp"
+#include <cudf/cudf.h>
+#include <cudf/types.hpp>
 
 /**
  * @brief  Counts the number of valid bits for the specified number of rows

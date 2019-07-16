@@ -16,8 +16,8 @@
 
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <bitmask/bit_mask.cuh>
-#include <bitmask/BitMask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <bitmask/legacy/BitMask.cuh>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>

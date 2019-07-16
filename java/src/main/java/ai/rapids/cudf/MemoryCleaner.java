@@ -22,11 +22,18 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.lang.ref.WeakReference;
+import java.text.SimpleDateFormat;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.Date;
 import java.util.Iterator;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.stream.Collectors;
+import java.util.stream.StreamSupport;
 
 /**
  * ColumnVectors may store data off heap, and because of complicated processing the life time of
@@ -47,32 +54,61 @@ import java.util.concurrent.atomic.AtomicLong;
  * ColumnVector's reference count reaches 0 and the resources are released. At some point
  * later the Cleaner itself will be released.
  */
-class ColumnVectorCleaner {
-  private static Logger log = LoggerFactory.getLogger(ColumnVectorCleaner.class);
+class MemoryCleaner {
+  private static final boolean REF_COUNT_DEBUG = Boolean.getBoolean("ai.rapids.refcount.debug");
+  private static Logger log = LoggerFactory.getLogger(MemoryCleaner.class);
 
   /**
    * API that can be used to clean up the resources for a vector, even if there was a leak
    */
-  public interface Cleaner {
+  public static abstract class Cleaner {
+    private final List<RefCountDebugItem> refCountDebug;
+
+    public Cleaner() {
+      if (REF_COUNT_DEBUG) {
+        refCountDebug = new LinkedList<>();
+      } else {
+        refCountDebug = null;
+      }
+    }
+
+    public final void addRef() {
+      if (REF_COUNT_DEBUG) {
+        refCountDebug.add(new MemoryCleaner.RefCountDebugItem("INC"));
+      }
+    }
+
+    public final void delRef() {
+      if (REF_COUNT_DEBUG) {
+        refCountDebug.add(new MemoryCleaner.RefCountDebugItem("DEC"));
+      }
+    }
+
+    public final void logRefCountDebug(String message) {
+      if (REF_COUNT_DEBUG) {
+        log.error("{}: {}", message, MemoryCleaner.stringJoin("\n", refCountDebug));
+      }
+    }
+
     /**
      * Clean up any resources not previously released.
      * @param logErrorIfNotClean if true and there are resources to clean up a leak has happened
      *                           so log it.
      * @return true if resources were cleaned up else false.
      */
-    boolean clean(boolean logErrorIfNotClean);
+    public abstract boolean clean(boolean logErrorIfNotClean);
   }
 
   static final AtomicLong leakCount = new AtomicLong();
   private static final Set<CleanerWeakReference> all =
       Collections.newSetFromMap(new ConcurrentHashMap()); // We want to be thread safe
 
-  private static class CleanerWeakReference extends WeakReference<ColumnVector> {
+  private static class CleanerWeakReference<T> extends WeakReference<T> {
 
     private final Cleaner cleaner;
 
-    public CleanerWeakReference(ColumnVector columnVector, Cleaner cleaner) {
-      super(columnVector);
+    public CleanerWeakReference(T orig, Cleaner cleaner) {
+      super(orig);
       this.cleaner = cleaner;
     }
 
@@ -109,11 +145,11 @@ class ColumnVectorCleaner {
   static {
     t.setDaemon(true);
     t.start();
-    if (ColumnVector.REF_COUNT_DEBUG) {
+    if (REF_COUNT_DEBUG) {
       // If we are debugging things do a best effort to check for leaks at the end
       Runtime.getRuntime().addShutdownHook(new Thread(() -> {
         System.gc();
-        synchronized (ColumnVectorCleaner.class) {
+        synchronized (MemoryCleaner.class) {
           // Avoid issues on shutdown with the cleaner thread.
           doCleanup();
           for (CleanerWeakReference cwr : all) {
@@ -127,5 +163,45 @@ class ColumnVectorCleaner {
   public static synchronized void register(ColumnVector vec, Cleaner cleaner) {
     // It is now registered...
     all.add(new CleanerWeakReference(vec, cleaner));
+  }
+
+  public static synchronized void register(MemoryBuffer buf, Cleaner cleaner) {
+    // It is now registered...
+    all.add(new CleanerWeakReference(buf, cleaner));
+  }
+
+  /**
+   * Convert elements in it to a String and join them together. Only use for debug messages
+   * where the code execution itself can be disabled as this is not fast.
+   */
+  static <T> String stringJoin(String delim, Iterable<T> it) {
+    return String.join(delim,
+        StreamSupport.stream(it.spliterator(), false)
+            .map((i) -> i.toString())
+            .collect(Collectors.toList()));
+  }
+
+  /**
+   * When debug is enabled holds information about inc and dec of ref count.
+   */
+  static final class RefCountDebugItem {
+    final StackTraceElement[] stackTrace;
+    final long timeMs;
+    final String op;
+
+    public RefCountDebugItem(String op) {
+      this.stackTrace = Thread.currentThread().getStackTrace();
+      this.timeMs = System.currentTimeMillis();
+      this.op = op;
+    }
+
+    public String toString() {
+      Date date = new Date(timeMs);
+      // Simple Date Format is horribly expensive only do this when debug is turned on!
+      SimpleDateFormat dateFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSSS z");
+      return dateFormat.format(date) + ": " + op + "\n"
+          + stringJoin("\n", Arrays.asList(stackTrace))
+          + "\n";
+    }
   }
 }

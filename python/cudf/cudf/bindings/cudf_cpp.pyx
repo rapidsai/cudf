@@ -107,7 +107,7 @@ cpdef get_column_valid_ptr(obj):
 cdef gdf_dtype get_dtype(dtype):
     return dtypes[dtype]
 
-cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
+cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     """
     Returns a gdf_scalar* constructed from the numpy scalar ``val``.
     """
@@ -118,6 +118,7 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None):
         raise MemoryError
 
     set_scalar_value(s, val)
+
     if dtype is not None:
         s[0].dtype = dtypes[dtype.type]
     else:
@@ -171,7 +172,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
 
 # gdf_column functions
 
-cdef gdf_column* column_view_from_column(col, col_name=None):
+cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
     """
     Make a column view from a column
 
@@ -242,7 +243,7 @@ cdef gdf_column* column_view_from_column(col, col_name=None):
 
 
 cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
-                                           null_count):
+                                           null_count) except? NULL:
     """
     Make a column view from NDArrays
 
@@ -363,7 +364,8 @@ cdef update_nvstrings_col(col, uintptr_t category_ptr):
     col._data = nvstr_obj
     col._nvcategory = nvcat_obj
 
-cdef gdf_column* column_view_from_string_column(col, col_name=None):
+    
+cdef gdf_column* column_view_from_string_column(col, col_name=None) except? NULL:
     if not isinstance(col.data,nvstrings.nvstrings):
         raise ValueError("Column should be a cudf string column")
 

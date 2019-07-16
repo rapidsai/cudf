@@ -622,6 +622,11 @@ byte_range : list or tuple, default None
 skip_blank_lines : bool, default True
     If True, discard and do not parse empty lines
     If False, interpret empty lines as NaN values
+parse_dates : list of int or names, default None
+    If list of columns, then attempt to parse each entry as a date.
+    Columns may not always be recognized as dates, for instance due to
+    unusual or non-standard formats. To guarantee a date and increase parsing
+    speed, explicitly specify `dtype='date'` for the desired columns.
 comment : char, default None
     Character used as a comments indicator. If found at the beginning of a
     line, the line will be ignored altogether.
@@ -634,8 +639,9 @@ na_filter : bool, default True
     Passing False can improve performance.
 prefix : str, default None
     Prefix to add to column numbers when parsing without a header row
-index_col : int or string, default None
-    Column to use as the row labels
+index_col : int, string or False, default None
+    Column to use as the row labels of the DataFrame. Passing `index_col=False`
+    explicitly disables index column inference and discards the last column.
 
 Returns
 -------
@@ -690,11 +696,14 @@ header : bool, default True
     Write out the column names
 index : bool, default True
     Write out the index as a column
-line_terminator: char, default '\\n'
+line_terminator : char, default '\\n'
+chunksize : int or None, default None
+    Rows to write at a time
 
 Notes
 -----
-Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+- Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+- If `to_csv` leads to memory errors consider setting the `chunksize` argument.
 
 Examples
 --------

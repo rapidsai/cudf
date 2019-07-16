@@ -20,11 +20,11 @@
 #include "jit/core/launcher.h"
 #include "jit/util/operator.h"
 #include "compiled/binary_ops.hpp"
-#include <bitmask/bitmask_ops.hpp>
+#include <bitmask/legacy/bitmask_ops.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <string/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
 #include <nvstrings/NVCategory.h>
