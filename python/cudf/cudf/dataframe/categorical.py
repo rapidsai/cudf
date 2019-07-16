@@ -369,19 +369,17 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     @property
     def is_monotonic_increasing(self):
-        if not hasattr(self, '_is_monotonic_increasing'):
+        if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = (
-                self._ordered
-                and self.as_numerical.is_monotonic_increasing
+                self._ordered and self.as_numerical.is_monotonic_increasing
             )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        if not hasattr(self, '_is_monotonic_decreasing'):
+        if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = (
-                self._ordered
-                and self.as_numerical.is_monotonic_decreasing
+                self._ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
 
