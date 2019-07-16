@@ -69,7 +69,7 @@ class cuda_event_timer {
 public:
 
   /**---------------------------------------------------------------------------*
-   * @brief The c'tor clears the L2$ by cudaMemset'ing a buffer of L2$ size
+   * @brief This c'tor clears the L2$ by cudaMemset'ing a buffer of L2$ size
    * and starts the timer.
    *
    * @param[in,out] state  This is the benchmark::State whose timer we are going 

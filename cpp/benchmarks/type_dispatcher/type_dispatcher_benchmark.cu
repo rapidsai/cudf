@@ -195,7 +195,7 @@ void type_dispatcher_benchmark(benchmark::State& state){
   cudaDeviceSynchronize();
   
   for(auto _ : state){
-    cuda_event_timer raii(state, true); // flush_l2_cache = true
+    cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
     launch_kernel<functor_type, dispatching_type>(source_table, d_vec.data().get(), work_per_thread);
   }
 
@@ -211,10 +211,10 @@ BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {                
 }                                                                                              \
 BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1, 8},{1<<10, 1<<26},{1, 1}})->UseManualTime();
 
-// TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
-// TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_bandwidth_host, double, BANDWIDTH_BOUND, HOST_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_bandwidth_device, double, BANDWIDTH_BOUND, DEVICE_DISPATCHING);
 TBM_BENCHMARK_DEFINE(fp64_bandwidth_no, double, BANDWIDTH_BOUND, NO_DISPATCHING);
-// TBM_BENCHMARK_DEFINE(fp64_compute_host, double, COMPUTE_BOUND, HOST_DISPATCHING);
-// TBM_BENCHMARK_DEFINE(fp64_compute_device, double, COMPUTE_BOUND, DEVICE_DISPATCHING);
-// TBM_BENCHMARK_DEFINE(fp64_compute_no, double, COMPUTE_BOUND, NO_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_compute_host, double, COMPUTE_BOUND, HOST_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_compute_device, double, COMPUTE_BOUND, DEVICE_DISPATCHING);
+TBM_BENCHMARK_DEFINE(fp64_compute_no, double, COMPUTE_BOUND, NO_DISPATCHING);
 
