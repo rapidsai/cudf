@@ -409,8 +409,35 @@ void reader::Impl::decode_data(
     size_t total_dictionary_entries) {
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(md_->schema.size());
+  uint32_t min_row_data_size = 0;
+  int skip_field_cnt = 0;
   for (size_t i = 0; i < md_->schema.size(); i++) {
     type_kind_e kind = md_->schema[i].kind;
+    if (skip_field_cnt != 0) {
+      // Exclude union members from min_row_data_size
+      skip_field_cnt += md_->schema[i].num_children - 1;
+    }
+    else switch (kind) {
+      case type_union:
+        skip_field_cnt = md_->schema[i].num_children;
+        // fall through
+      case type_boolean:
+      case type_int:
+      case type_long:
+      case type_bytes:
+      case type_string:
+      case type_enum:
+        min_row_data_size += 1;
+        break;
+      case type_float:
+        min_row_data_size += 4;
+        break;
+      case type_double:
+        min_row_data_size += 8;
+        break;
+      default:
+        break;
+    }
     if (kind == type_enum && !md_->schema[i].symbols.size()) {
       kind = type_int;
     }
@@ -448,7 +475,7 @@ void reader::Impl::decode_data(
   DecodeAvroColumnData(block_list.data(), schema_desc.device_ptr(),
                        reinterpret_cast<gpu::nvstrdesc_s*>(global_dictionary.device_ptr()),
                        block_data.data(), (uint32_t)block_list.size(), (uint32_t)schema_desc.size(),
-                       (uint32_t)total_dictionary_entries, md_->num_rows, md_->skip_rows, 0);
+                       (uint32_t)total_dictionary_entries, md_->num_rows, md_->skip_rows, min_row_data_size, 0);
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < columns.size(); i++) {
     if (valid_alias[i] != nullptr) {

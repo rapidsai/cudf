@@ -22,8 +22,10 @@ namespace gpu {
 
 #if (__CUDACC_VER_MAJOR__ >= 9)
 #define SYNCWARP()      __syncwarp()
+#define SHFL0(v)        __shfl_sync(~0, v, 0)
 #else
 #define SYNCWARP()
+#define SHFL0(v)        __shfl(v, 0)
 #endif
 
 #define NWARPS                  16
@@ -39,6 +41,7 @@ namespace gpu {
  * @param[in] num_blocks Number of blocks
  * @param[in] schema_len Number of entries in schema
  * @param[in] num_dictionary_entries Number of entries in global dictionary
+ * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  *
@@ -46,7 +49,7 @@ namespace gpu {
 // blockDim {32,NWARPS,1}
 extern "C" __global__ void __launch_bounds__(NWARPS * 32)
 gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
-    uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows, size_t first_row)
+    uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, uint32_t min_row_size, size_t max_rows, size_t first_row)
 {
     __shared__ __align__(8) schemadesc_s g_shared_schema[MAX_SHARED_SCHEMA_LEN];
     __shared__ __align__(8) block_desc_s blk_g;
@@ -87,11 +90,21 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
     end = cur + blk_g.size;
     while (rows_remaining > 0 && cur < end)
     {
-        uint32_t nrows = 1;
+        uint32_t nrows;
+        const uint8_t *start = cur;
 
         if (cur_row > first_row + max_rows)
             break;
-        if (threadIdx.x == 0)
+        if (cur + min_row_size * rows_remaining == end)
+        {
+            nrows = min(rows_remaining, 32);
+            cur += threadIdx.x * min_row_size;
+        }
+        else
+        {
+            nrows = 1;
+        }
+        if (threadIdx.x < nrows)
         {
             for (uint32_t i = 0; i < schema_len; )
             {
@@ -123,7 +136,7 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
                 dataptr = reinterpret_cast<uint8_t *>(schema[i].dataptr);
                 if (dataptr)
                 {
-                    size_t row = cur_row - first_row;
+                    size_t row = cur_row - first_row + threadIdx.x;
                     switch (kind)
                     {
                     case type_null:
@@ -131,16 +144,6 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
                         {
                             atomicAnd(reinterpret_cast<uint32_t *>(dataptr) + (row >> 5), ~(1 << (row & 0x1f)));
                             atomicAdd(&schema_g[i].count, 1);
-                        }
-                        break;
-
-                    case type_boolean:
-                        {
-                            uint8_t v = (cur < end) ? *cur++ : 0;
-                            if (row < max_rows)
-                            {
-                                reinterpret_cast<uint8_t *>(dataptr)[row] = (v) ? 1 : 0;
-                            }
                         }
                         break;
 
@@ -250,6 +253,16 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
                             }
                         }
                         break;
+
+                    case type_boolean:
+                        {
+                            uint8_t v = (cur < end) ? *cur++ : 0;
+                            if (row < max_rows)
+                            {
+                                reinterpret_cast<uint8_t *>(dataptr)[row] = (v) ? 1 : 0;
+                            }
+                        }
+                        break;
                     }
                 }
                 i++;
@@ -263,6 +276,14 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
                     --skip;
                 }
             }
+        }
+        if (nrows <= 1)
+        {
+            cur = start + SHFL0(static_cast<uint32_t>(cur - start));
+        }
+        else
+        {
+            cur = start + nrows * min_row_size;
         }
         SYNCWARP();
         cur_row += nrows;
@@ -283,16 +304,17 @@ gpuDecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema_g, nvstrdesc_
  * @param[in] num_dictionary_entries Number of entries in global dictionary
  * @param[in] max_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
+ * @param[in] min_row_size Minimum size in bytes of a row
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t __host__ DecodeAvroColumnData(block_desc_s *blocks, schemadesc_s *schema, nvstrdesc_s *global_dictionary, uint8_t *avro_data,
-    uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows, size_t first_row, cudaStream_t stream)
+    uint32_t num_blocks, uint32_t schema_len, uint32_t num_dictionary_entries, size_t max_rows, size_t first_row, uint32_t min_row_size, cudaStream_t stream)
 {
     dim3 dim_block(32, NWARPS); // NWARPS warps per threadblock
     dim3 dim_grid((num_blocks + NWARPS - 1) / NWARPS, 1); // 1 warp per datablock, NWARPS datablocks per threadblock
-    gpuDecodeAvroColumnData <<< dim_grid, dim_block, 0, stream >>>(blocks, schema, global_dictionary, avro_data, num_blocks, schema_len, num_dictionary_entries, max_rows, first_row);
+    gpuDecodeAvroColumnData <<< dim_grid, dim_block, 0, stream >>>(blocks, schema, global_dictionary, avro_data, num_blocks, schema_len, num_dictionary_entries, min_row_size, max_rows, first_row);
     return cudaSuccess;
 }
 
