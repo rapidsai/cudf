@@ -14,6 +14,7 @@
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
 - PR #2105 Add google benchmark for hash-based join
+- PR #2293 Improve `compute_join_output_size` performance
 
 ## Improvements
 
