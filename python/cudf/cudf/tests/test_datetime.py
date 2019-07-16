@@ -155,9 +155,14 @@ def test_issue_165():
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
+@pytest.mark.parametrize("dtype", [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64"
+])
 def test_typecast_from_datetime(data, dtype):
     pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data)
@@ -169,16 +174,70 @@ def test_typecast_from_datetime(data, dtype):
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
 
 
+@pytest.mark.parametrize("data", [data1(), data2()])
+@pytest.mark.parametrize("dtype", [
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+])
+def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
+    pd_data = pd.Series(data.copy()).astype(dtype)
+    np_data = np.array(pd_data)
+    gdf_data = Series(pd_data)
+
+    np_casted = np_data.astype(np.int64).astype(dtype)
+    gdf_casted = gdf_data.astype(np.int64).astype(dtype)
+
+    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+
+
 @pytest.mark.parametrize("data", [numerical_data()])
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-def test_typecast_to_datetime(data, dtype):
-    np_data = data.astype(dtype)
+@pytest.mark.parametrize("from_dtype", [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64"
+])
+@pytest.mark.parametrize("to_dtype", [
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+])
+def test_typecast_to_datetime(data, from_dtype, to_dtype):
+    np_data = data.astype(from_dtype)
     gdf_data = Series(np_data)
 
-    np_casted = np_data.astype("datetime64[ms]")
-    gdf_casted = gdf_data.astype("datetime64[ms]")
+    np_casted = np_data.astype(to_dtype)
+    gdf_casted = gdf_data.astype(to_dtype)
+
+    np.testing.assert_equal(np_casted, np.array(gdf_casted))
+
+
+@pytest.mark.parametrize("data", [numerical_data()])
+@pytest.mark.parametrize("from_dtype", [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64"
+])
+@pytest.mark.parametrize("to_dtype", [
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+])
+def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
+    np_data = data.astype(from_dtype)
+    gdf_data = Series(np_data)
+
+    np_casted = np_data.astype(to_dtype).astype(from_dtype)
+    gdf_casted = gdf_data.astype(to_dtype).astype(from_dtype)
 
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
 
@@ -199,3 +258,17 @@ def test_to_from_pandas_nulls(data, nulls):
     got = gdf_data.to_pandas()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype", [
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+])
+def test_datetime_to_arrow(dtype):
+    timestamp = cudf.datasets.timeseries(
+        start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={}
+    ).reset_index()['timestamp'].reset_index(drop=True)
+    gdf = DataFrame({'timestamp': timestamp.astype(dtype)})
+    assert_eq(gdf, DataFrame.from_arrow(gdf.to_arrow(preserve_index=False)))
