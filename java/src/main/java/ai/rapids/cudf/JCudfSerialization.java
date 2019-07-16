@@ -109,7 +109,7 @@ public class JCudfSerialization {
   /**
    * Write all or part of a table out in an internal format.
    * @param t the table to be written.
-   * @param out the stream to write the serialized table out ot.
+   * @param out the stream to write the serialized table out to.
    * @param rowOffset the first row to write out.
    * @param numRows the number of rows to write out.
    */
@@ -121,7 +121,7 @@ public class JCudfSerialization {
   /**
    * Write all or part of a set of columns out in an internal format.
    * @param columns the columns to be written.
-   * @param out the stream to write the serialized table out ot.
+   * @param out the stream to write the serialized table out to.
    * @param rowOffset the first row to write out.
    * @param numRows the number of rows to write out.
    */
@@ -366,7 +366,7 @@ public class JCudfSerialization {
             "Expected magic number " + SER_FORMAT_MAGIC_NUMBER + " Found " + num);
       }
     } catch (EOFException e) {
-      // If we get an EOF at the very beginning don't treat it as an error becasue we may
+      // If we get an EOF at the very beginning don't treat it as an error because we may
       // have finished reading everything...
       return null;
     }
