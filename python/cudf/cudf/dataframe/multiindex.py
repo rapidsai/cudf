@@ -341,6 +341,9 @@ class MultiIndex(Index):
 
     def _get_column_major(self, df, row_tuple):
         from cudf.utils.cudautils import arange
+        from cudf import Series
+        from cudf import DataFrame
+        from cudf.dataframe.index import RangeIndex
         slice_access = False
         if isinstance(row_tuple, slice):
             slice_access = True
@@ -354,10 +357,18 @@ class MultiIndex(Index):
         else:
             valid_indices = self._compute_validity_mask(df.columns, row_tuple)
         
-        from cudf import DataFrame
         result = df.take_columns(valid_indices)
-        
-        if len(row_tuple) < len(self.levels):
+
+        if len(result) == 0 and len(result.columns) == 0:
+            result_columns = df.columns.copy(deep=False)
+            clear_codes = DataFrame()
+            for name in df.columns.names:
+                clear_codes[name] = Series([])
+            result_columns._codes = clear_codes
+            result_columns._source_data = clear_codes
+            result.columns = result_columns
+        elif len(row_tuple) < len(self.levels) and not\
+                isinstance(row_tuple[0], slice):
             columns = self._popn(len(row_tuple))
             result.columns = columns.take(valid_indices)
         else:

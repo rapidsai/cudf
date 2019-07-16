@@ -236,6 +236,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf import MultiIndex
         from cudf.dataframe.dataframe import DataFrame
+        from cudf.dataframe.dataframe import Series
         from cudf.dataframe.index import as_index
 
         # Iloc Step 1:
@@ -243,6 +244,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         columns = self._get_column_selection(arg[1])
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
+            if len(columns_df) == 0 and len(columns_df.columns) == 0 and not\
+                    isinstance(arg[0], slice):
+                result = Series([], name=arg[0])
+                result._index = columns_df.columns.copy(deep=False)
+                return result
         else:
             if isinstance(arg[0], slice):
                 columns_df = DataFrame()
@@ -264,18 +270,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 return self._downcast_to_series(df, arg)
             return df
         else:
-            """
-            # convert slice to Series if necessary
-            rows = arg[0]
-            if isinstance(rows, slice):
-                from cudf.utils.cudautils import arange
-                from cudf.utils import utils
-                start, stop, step, sln = utils.standard_python_slice(
-                        len(columns_df),
-                        rows
-                )
-                rows = arange(start, stop, step)
-            """
             df = DataFrame()
             for key, col in columns_df._cols.items():
                 df[key] = col.iloc[arg[0]]
@@ -294,9 +288,25 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 if len(df) > 0 and not\
                     (isinstance(arg[0], slice) or isinstance(arg[1], slice)):
                     return list(df._cols.values())[0][0]
+                elif df.shape[1] > 1:
+                    result = self._downcast_to_series(df, arg)
+                    result.index = df.columns
+                    return result
+                elif not isinstance(arg[0], slice):
+                    result_series = list(df._cols.values())[0]
+                    result_series.index = df.columns
+                    result_series.name = arg[0]
+                    return result_series
                 else:
                     return list(df._cols.values())[0]
             return self._downcast_to_series(df, arg)
+        if df.shape[0] == 0 and df.shape[1] == 0:
+            from cudf.utils import utils
+            from cudf.dataframe.index import RangeIndex
+            slice_len = arg[0].stop or len(self._df)
+            start, stop, step, sln = utils.standard_python_slice(slice_len,
+                                                                 arg[0])
+            df._index = RangeIndex(start, stop)
         return df
 
     def _getitem_scalar(self, arg):

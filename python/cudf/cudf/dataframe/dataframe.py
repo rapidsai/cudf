@@ -201,7 +201,7 @@ class DataFrame(object):
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
-        return len(self), len(self._cols)
+        return len(self._index), len(self._cols)
 
     @property
     def ndim(self):
@@ -1422,16 +1422,16 @@ class DataFrame(object):
         out = out.set_index(self.index)
         if isinstance(mapper, Mapping):
             postfix = 1
-            for column in self.columns:
-                if column in mapper:
-                    if mapper[column] in out.columns:
-                        out_column = mapper[column] + ("cudf_" + str(postfix),)
+            for key, column in self._cols.items():
+                if key in mapper:
+                    if mapper[key] in out.columns:
+                        out_column = mapper[key] + ("cudf_" + str(postfix),)
                         postfix += 1
                     else:
-                        out_column = mapper[column]
-                    out[out_column] = self[column]
+                        out_column = mapper[key]
+                    out[out_column] = column
                 else:
-                    out[column] = self[column]
+                    out[key] = column
         elif callable(mapper):
             for column in self.columns:
                 out[mapper(column)] = self[column]
@@ -1737,9 +1737,14 @@ class DataFrame(object):
         """
         from cudf.bindings.transpose import transpose as cpp_transpose
 
+        # Never transpose a MultiIndex - remove the existing columns and
+        # replace with a RangeIndex. Afterward, reassign.
+        temp_columns = self.columns.copy(deep=True)
+        self.columns = pd.Index(range(len(self.columns)))
         result = cpp_transpose(self)
+        self.columns = temp_columns
         result = result.rename(dict(zip(result.columns, self.index)))
-        result._index = as_index(self.columns)
+        result._index = as_index(temp_columns)
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             result.columns = self.index
         return result
