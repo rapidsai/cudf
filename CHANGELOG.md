@@ -13,6 +13,7 @@
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
+- PR #2239 gdf_group_by_without_aggregations return gdf_column
 
 ## Improvements
 

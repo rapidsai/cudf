@@ -9,6 +9,8 @@
 #include <groupby/hash_groupby.cuh>
 #include <string/nvcategory_util.hpp>
 #include <table/device_table.cuh>
+#include <utilities/type_dispatcher.hpp>
+#include <rmm/rmm.h>
 
 #include <cassert>
 #include <thrust/fill.h>
@@ -269,7 +271,7 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   return unique_indices;
 }
 
-std::pair<cudf::table, rmm::device_vector<gdf_index_type>> 
+std::pair<cudf::table, gdf_column>
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const * key_col_indices,
@@ -277,9 +279,20 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
 {
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
+  gdf_column unique_indices;
+
+  // Initialize the column with deafult values
+  unique_indices.data = nullptr;
+  unique_indices.valid = nullptr;
+  unique_indices.size = 0;
+  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
+  unique_indices.null_count = 0;
+  gdf_dtype_extra_info extra_info;
+  extra_info.time_unit = TIME_UNIT_NONE;
+  unique_indices.dtype_info = extra_info;
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::table(), rmm::device_vector<gdf_index_type>());
+    return std::make_pair(cudf::table(), unique_indices);
   }
 
   gdf_size_type nrows = input_table.num_rows();
@@ -350,6 +363,12 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect_out.begin(),
                   [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
   cudf::table key_col_sorted_table(key_cols_vect_out.data(), key_cols_vect_out.size());
+
+  // Copy the indices from device vector to gdf_column
+  rmm::device_vector<gdf_index_type> tmp = gdf_unique_indices(key_col_sorted_table, *context);
+  RMM_TRY(RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type)*tmp.size(), nullptr));
+  CUDA_TRY(cudaMemcpy(unique_indices.data, thrust::raw_pointer_cast(&tmp.front()), sizeof(gdf_index_type)*tmp.size(), cudaMemcpyDeviceToDevice));
+  unique_indices.size = tmp.size();
   
-  return std::make_pair(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
+  return std::make_pair(destination_table, unique_indices);
 }
