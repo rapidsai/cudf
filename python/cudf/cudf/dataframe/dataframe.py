@@ -1739,10 +1739,9 @@ class DataFrame(object):
 
         result = cpp_transpose(self)
         result = result.rename(dict(zip(result.columns, self.index)))
-        index = self.index
-        result._index = self.columns
-        if isinstance(index, cudf.dataframe.multiindex.MultiIndex):
-            result.columns = index
+        result._index = as_index(self.columns)
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            result.columns = self.index
         return result
 
     @property
