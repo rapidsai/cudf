@@ -11,7 +11,7 @@
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #2157 Add __array_function__ to DataFrame and Series
-- PR #2164 Use merge for MultiIndex search
+- PR #2221 MultiIndx Full Indexing - Support wildcards for loc and iloc
 
 ## Improvements
 

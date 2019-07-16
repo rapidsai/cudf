@@ -1057,7 +1057,6 @@ class DataFrame(object):
         if len(cols) == 0:
             out._index = self._index
             return out
-            
         result_cols = cpp_copying.apply_gather(cols, positions)
 
         for i, col_name in enumerate(self._cols):

@@ -242,7 +242,7 @@ class MultiIndex(Index):
     def _index_and_downcast(self, result, index, index_key):
         from cudf import DataFrame
         from cudf import Series
- 
+
         if not self._is_valid_index_key(index_key):
             index_key = index_key[0]
 
@@ -343,10 +343,7 @@ class MultiIndex(Index):
         from cudf.utils.cudautils import arange
         from cudf import Series
         from cudf import DataFrame
-        from cudf.dataframe.index import RangeIndex
-        slice_access = False
         if isinstance(row_tuple, slice):
-            slice_access = True
             start, stop, step, sln = utils.standard_python_slice(len(df._cols),
                                                                  row_tuple)
             valid_indices = arange(start, stop, step)
@@ -356,7 +353,7 @@ class MultiIndex(Index):
             row_tuple = [row_tuple]
         else:
             valid_indices = self._compute_validity_mask(df.columns, row_tuple)
-        
+
         result = df.take_columns(valid_indices)
 
         if len(result) == 0 and len(result.columns) == 0:
