@@ -41,6 +41,7 @@
 - PR #2224 implement isna, isnull, notna as dataframe functions
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
+- PR #2300 Create separate dask codeowners for dask-cudf codebase
 
 ## Bug Fixes
 
