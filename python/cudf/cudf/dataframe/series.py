@@ -1798,7 +1798,7 @@ class Series(object):
 
         try:
             values = columnops.as_column(values, dtype=self.dtype)
-        except:
+        except ValueError:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
             return Series(cudautils.zeros(len(self), dtype='bool'))

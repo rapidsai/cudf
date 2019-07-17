@@ -528,17 +528,6 @@ def compute_scale(arr, vmin, vmax):
 #
 
 
-def apply_isin(in_arr, out, values, mask=None):
-    """
-    """
-    if out.size > 0:
-        if mask is not None:
-            gpu_isin_masked.forall(out.size)(in_arr, out, values, mask)
-        else:
-            gpu_isin.forall(out.size)(in_arr, out, values)
-    return out
-
-
 @cuda.jit(device=True)
 def gpu_unique_set_insert(vset, sz, val):
     """
