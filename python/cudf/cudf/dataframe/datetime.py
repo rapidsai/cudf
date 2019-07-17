@@ -139,17 +139,19 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @property
     def as_numerical(self):
         from cudf.dataframe.numerical import NumericalColumn
-        data = self.data.astype(utils.datetime_to_numerical_dtype(self.dtype))
-        return self.view(NumericalColumn, dtype=data.dtype, data=data)
+        return self.view(NumericalColumn,
+                         dtype=np.dtype(np.int64),
+                         data=self.data.astype(np.int64))
 
     def astype(self, dtype):
-        from cudf.dataframe import string
 
-        if self.dtype is dtype:
+        if self.dtype == dtype:
             return self
-        elif dtype == np.dtype("object") or np.issubdtype(
+
+        if dtype == np.dtype("object") or np.issubdtype(
             dtype, np.dtype("U").type
         ):
+            from cudf.dataframe import string
             if len(self) > 0:
                 dev_array = self.data.mem
                 dev_ptr = get_ctype_ptr(dev_array)
@@ -169,6 +171,16 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 data = []
 
             return string.StringColumn(data=data)
+
+        # if converting from one datetime resolution to another,
+        # multiply by the scale factor between the time units and clamp
+        if np.issubdtype(dtype, np.datetime64):
+            from cudf import Series
+            numeric = Series(self.as_numerical)
+            src_d = np.timedelta64(1, np.datetime_data(self.dtype)[0])
+            dst_d = np.timedelta64(1, np.datetime_data(dtype)[0])
+            datetimes = (numeric * (src_d / dst_d)).astype(dtype)
+            return self.replace(data=datetimes.data, dtype=dtype)
 
         return self.as_numerical.astype(dtype)
 

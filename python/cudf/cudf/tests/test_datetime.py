@@ -25,6 +25,14 @@ def data2():
     )
 
 
+def timeseries_us_data():
+    return pd.date_range(
+        '2019-07-16 00:00:00',
+        '2019-07-16 00:00:01',
+        freq="5555us", tz="US/Eastern", name="times"
+    )
+
+
 def numerical_data():
     return np.arange(1, 10)
 
@@ -190,6 +198,20 @@ def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
     gdf_casted = gdf_data.astype(np.int64).astype(dtype)
 
     np.testing.assert_equal(np_casted, np.array(gdf_casted))
+
+
+@pytest.mark.parametrize("data", [timeseries_us_data()])
+@pytest.mark.parametrize("dtype", [
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+])
+def test_typecast_to_different_datetime_resolutions(data, dtype):
+    pd_data = pd.Series(data.copy())
+    np_data = np.array(pd_data).astype(dtype)
+    gdf_series = Series(pd_data).astype(dtype)
+    np.testing.assert_equal(np_data, np.array(gdf_series))
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
