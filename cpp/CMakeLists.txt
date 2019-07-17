@@ -349,7 +349,7 @@ execute_process(WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 
 add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/include/types.h.jit
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include
-                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h "const cudf_types_h" > ${CMAKE_BINARY_DIR}/include/types.h.jit
+                   COMMAND ${CMAKE_BINARY_DIR}/stringify cudf/types.h > ${CMAKE_BINARY_DIR}/include/types.h.jit
                    COMMENT "Run stringify on header types.h to convert it to c-str for use in JIT compiled code"
                    DEPENDS stringify
                    MAIN_DEPENDENCY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf/types.h)
