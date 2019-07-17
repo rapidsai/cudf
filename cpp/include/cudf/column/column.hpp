@@ -19,6 +19,7 @@
 #include "column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 #include <vector>
 
 namespace cudf {
@@ -137,7 +138,9 @@ class column {
    *
    * @param view The `column_view` that will be copied
    *---------------------------------------------------------------------------**/
-  explicit column(column_view view);
+  explicit column(
+      column_view view, cudaStream_t stream = 0,
+      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   column_view const view() const;
 
