@@ -194,11 +194,14 @@ struct GroupByWoAggTest : public GdfTest {
     copy_output_with_array(output_table.begin(), cpu_data_cols_out, (gdf_size_type *)indices_col.data, indices_col.size, this->cpu_out_indices);
 
     // Free results
+    RMM_TRY(RMM_FREE(indices_col.data, 0));
+    indices_col.data = nullptr;
+    indices_col.size = 0;
     std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);
       delete col;
-    });    
+    });
   }
 
   void compare_gdf_result(map_t& reference_map) {
@@ -406,9 +409,12 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
                                                                             groupby_col_indices.data(),
                                                                             &this->context));
     copy_output_with_array_with_nulls(
-            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, (int *)indices_col.data, indices_col.size, this->cpu_out_indices);
+            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, (gdf_size_type *)indices_col.data, indices_col.size, this->cpu_out_indices);
 
     // Free results
+    RMM_TRY(RMM_FREE(indices_col.data, 0));
+    indices_col.data = nullptr;
+    indices_col.size = 0;
     std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);

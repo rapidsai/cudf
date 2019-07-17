@@ -230,7 +230,7 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   return gdf_error_code;
 }
 
-rmm::device_vector<gdf_index_type>
+gdf_column
 gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 {
   gdf_size_type ncols = input_table.num_columns();
@@ -246,7 +246,10 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
 
-  rmm::device_vector<gdf_index_type> unique_indices(nrows);
+  // Allocating memory for GDF column
+  gdf_column unique_indices {};
+  RMM_TRY(RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type)*nrows, nullptr));
+  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
 
   auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
   auto device_input_table = device_table::create(input_table);
@@ -254,16 +257,18 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   if (nullable){
     auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices.data().get(),
+                              (gdf_index_type *)unique_indices.data,
                               comp);
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices.data().get(),
+                              (gdf_index_type *)unique_indices.data,
                               comp);
   }
 
-  unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
+  // size of the GDF column is being resized
+  RMM_TRY(RMM_REALLOC(&unique_indices.data, thrust::distance((gdf_index_type *)unique_indices.data, result_end)*sizeof(gdf_index_type), nullptr));
+  unique_indices.size = thrust::distance((gdf_index_type*)unique_indices.data, result_end);
 
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
@@ -279,20 +284,9 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
 {
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
-  gdf_column unique_indices;
-
-  // Initialize the column with deafult values
-  unique_indices.data = nullptr;
-  unique_indices.valid = nullptr;
-  unique_indices.size = 0;
-  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
-  unique_indices.null_count = 0;
-  gdf_dtype_extra_info extra_info;
-  extra_info.time_unit = TIME_UNIT_NONE;
-  unique_indices.dtype_info = extra_info;
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::table(), unique_indices);
+    return std::make_pair(cudf::table(), gdf_column {});
   }
 
   gdf_size_type nrows = input_table.num_rows();
@@ -364,11 +358,5 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
                   [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
   cudf::table key_col_sorted_table(key_cols_vect_out.data(), key_cols_vect_out.size());
 
-  // Copy the indices from device vector to gdf_column
-  rmm::device_vector<gdf_index_type> tmp = gdf_unique_indices(key_col_sorted_table, *context);
-  RMM_TRY(RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type)*tmp.size(), nullptr));
-  CUDA_TRY(cudaMemcpy(unique_indices.data, thrust::raw_pointer_cast(&tmp.front()), sizeof(gdf_index_type)*tmp.size(), cudaMemcpyDeviceToDevice));
-  unique_indices.size = tmp.size();
-  
-  return std::make_pair(destination_table, unique_indices);
+  return std::make_pair(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
 }
