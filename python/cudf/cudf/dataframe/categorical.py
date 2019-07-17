@@ -226,6 +226,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
         # custom dtype can't be compared with `==`
         if utils.dtype_equals(dtype, self.dtype):
             return self
+        elif utils.dtype_equals(dtype, ("object", "str")):
+            return self._as_string_column()
+
         return self.as_numerical.astype(dtype)
 
     def sort_by_values(self, ascending, na_position="last"):
@@ -384,6 +387,12 @@ class CategoricalColumn(columnops.TypedColumnBase):
                 self._ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
+
+    def _as_string_column(self):
+        gathermap = self.cat().codes.astype("int32")
+        gathermap_ptr = get_ctype_ptr(gathermap.data.mem)
+        data = self._categories.data.gather(gathermap_ptr, len(self))
+        return columnops.build_column(buffer=data, dtype="object")
 
 
 def pandas_categorical_as_column(categorical, codes=None):
