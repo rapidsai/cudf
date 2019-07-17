@@ -10,10 +10,12 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2215 `type_dispatcher` benchmark
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
-- PR #2221 MultiIndex Full Indexing - Support wildcards for loc and iloc
+- PR #2105 Add google benchmark for hash-based join
+- PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
 
 ## Improvements
 
@@ -64,7 +66,9 @@
 - PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
 - PR #2162 Setting is_unique and is_monotonic-related attributes
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
+- PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
+
 
 
 # cuDF 0.8.0 (27 June 2019)
