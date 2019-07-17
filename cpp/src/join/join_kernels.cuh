@@ -128,10 +128,15 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           const gdf_size_type probe_table_num_rows,
                                           gdf_size_type* output_size)
 {
+  // This kernel probes multiple elements in the probe_table and store the number of matches found inside a register.
+  // A block reduction is used at the end to calculate the matches per thread block, and atomically add to the global
+  // 'output_size'.
+  // Compared to probing one element per thread, this implementation improves performance by reducing atomic adds to
+  // the shared memory counter.
 
   gdf_size_type thread_counter {0};
-  const gdf_size_type start_idx {(gdf_size_type) (threadIdx.x + blockIdx.x * blockDim.x)};
-  const gdf_size_type stride {(gdf_size_type) (blockDim.x * gridDim.x)};
+  const gdf_size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  const gdf_size_type stride = blockDim.x * gridDim.x;
   const auto unused_key = multi_map->get_unused_key();
   const auto end = multi_map->end();
 
