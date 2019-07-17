@@ -1488,15 +1488,20 @@ def test_to_arrow(nelem, data_type):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_to_from_arrow_nulls(data_type):
-    if data_type == "datetime64[ms]":
-        data_type = pa.date64()
     if data_type == "bool":
         s1 = pa.array([True, None, False, None, True], type=data_type)
     else:
+        dtype = np.dtype(data_type)
+        if dtype.type == np.datetime64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.timestamp(unit=time_unit)
         s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)

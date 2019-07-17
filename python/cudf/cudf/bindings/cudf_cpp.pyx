@@ -44,7 +44,6 @@ gdf_dtypes = {
     GDF_INT16:             np.int16,
     GDF_INT8:              np.int8,
     GDF_BOOL8:             np.bool_,
-    GDF_DATE32:            np.datetime64,
     GDF_DATE64:            np.datetime64,
     GDF_TIMESTAMP:         np.datetime64,
     GDF_CATEGORY:          np.int32,
@@ -96,14 +95,11 @@ def np_to_pa_dtype(dtype):
     # special case when dtype is np.datetime64
     if dtype.kind == 'M':
         time_unit, _ = np.datetime_data(dtype)
-        if time_unit == 'ms':
-            return pa.date64()
         if time_unit in np_to_gdf_time_unit:
             # return a pa.Timestamp of the appropriate unit
             return pa.timestamp(time_unit)
-        # return pa.date32() if time_unit is UNIX days,
-        # else pa.date64() since default is int64_t UNIX ms
-        return pa.date32() if time_unit == 'D' else pa.date64()
+        # default is int64_t UNIX ms
+        return pa.date64()
     return np_pa_dtypes[np.dtype(dtype).type]
 
 
@@ -155,8 +151,6 @@ cdef np_dtype_from_gdf_column(gdf_column* col):
         The gdf_column from which to infer a numpy.dtype.
     """
     dtype = col.dtype
-    if dtype == GDF_DATE32:
-        return np.dtype('datetime64[D]')
     if dtype == GDF_DATE64:
         return np.dtype('datetime64[ms]')
     if dtype == GDF_TIMESTAMP:
@@ -185,13 +179,8 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
             return gdf_dtype_from_value(col.data)
         return gdf_dtype_from_value(col, col.dtype)
     # if dtype is np.datetime64, interrogate the dtype's time_unit resolution
-    # to determine if the gdf_type is GDF_DATE32, GDF_DATE64, or GDF_TIMESTAMP
     if dtype.kind == 'M':
         time_unit, _ = np.datetime_data(dtype)
-        if time_unit == 'ms':
-            return GDF_DATE64
-        if time_unit == 'D':
-            return GDF_DATE32
         if time_unit in np_to_gdf_time_unit:
             # time_unit is valid so must be a GDF_TIMESTAMP
             return GDF_TIMESTAMP
@@ -240,8 +229,6 @@ cdef get_scalar_value(gdf_scalar scalar, dtype):
         return scalar.data.si08
     if scalar.dtype == GDF_BOOL8:
         return scalar.data.b08
-    if scalar.dtype == GDF_DATE32:
-        return np.array(scalar.data.dt32).astype(dtype)
     if scalar.dtype == GDF_DATE64:
         return np.array(scalar.data.dt64).astype(dtype)
     if scalar.dtype == GDF_TIMESTAMP:
@@ -270,9 +257,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.b08 = val
     elif val.dtype.type == np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)
-        if time_unit == 'ms':
-            scalar.data.dt64 = np.datetime64(val, time_unit).astype(int)
-        elif time_unit in np_to_gdf_time_unit:
+        if time_unit in np_to_gdf_time_unit:
             scalar.data.tmst = np.datetime64(val, time_unit).astype(int)
         elif time_unit == 'D':
             scalar.data.dt32 = np.datetime64(val, time_unit).astype(int)
