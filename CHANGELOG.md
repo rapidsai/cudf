@@ -16,6 +16,8 @@
 - PR #2212 Java support for ORC reader
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
+- PR #2316 Unique, nunique, and value_counts for datetime columns
+
 
 ## Improvements
 
@@ -69,7 +71,7 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
-
+- PR #2311 Fix copy behaviour for GenericIndex
 
 
 # cuDF 0.8.0 (27 June 2019)
