@@ -328,7 +328,8 @@ add_library(cudf SHARED
             src/copying/copy_range.cu
             src/filling/fill.cu
             src/column/column.cpp
-            src/column/column_view.cpp)
+            src/column/column_view.cpp
+            src/column/column_device_view.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
