@@ -26,6 +26,7 @@ import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -38,6 +39,7 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class TableTest {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
+  private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
@@ -513,6 +515,64 @@ public class TableTest {
   }
 
   @Test
+  void testReadORC() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    ORCOptions opts = ORCOptions.builder()
+        .includeColumn("string1")
+        .includeColumn("float1")
+        .includeColumn("int1")
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("hi","bye")
+        .column(1.0f,2.0f)
+        .column(65536,65536)
+        .build();
+         Table table = Table.readORC(opts, TEST_ORC_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadORCBuffer() throws IOException {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    ORCOptions opts = ORCOptions.builder()
+        .includeColumn("string1")
+        .includeColumn("float1")
+        .includeColumn("int1")
+        .build();
+
+    int bufferLen = 0;
+    byte[] buffer = Files.readAllBytes(TEST_ORC_FILE.toPath());
+    bufferLen = buffer.length;
+    try (Table expected = new Table.TestBuilder()
+        .column("hi","bye")
+        .column(1.0f,2.0f)
+        .column(65536,65536)
+        .build();
+         Table table = Table.readORC(opts, buffer, 0, bufferLen)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadORCFull() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (Table expected = new Table.TestBuilder()
+        .column(false, true)
+        .column((byte)1, (byte)100)
+        .column((short)1024, (short)2048)
+        .column(65536, 65536)
+        .column(9223372036854775807L,9223372036854775807L)
+        .column(1.0f, 2.0f)
+        .column(-15.0, -5.0)
+        .column("hi", "bye")
+        .build();
+         Table table = Table.readORC(TEST_ORC_FILE)) {
+      assertTablesAreEqual(expected,  table);
+    }
+  }
+
+  @Test
   void testLeftJoinWithNulls() {
     try (Table leftTable = new Table.TestBuilder()
         .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
@@ -701,6 +761,7 @@ public class TableTest {
           try (Table found = JCudfSerialization.readTableFrom(bin)) {
             assertPartialTablesAreEqual(t, i, len, found);
           }
+          assertNull(JCudfSerialization.readTableFrom(bin));
         }
       }
     }
