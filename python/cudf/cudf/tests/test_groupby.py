@@ -735,7 +735,7 @@ def test_groupby_cat():
     assert_eq(
         pdf.groupby("a").count(), gdf.groupby("a").count(), check_dtype=False
     )
-    
+
 
 def test_groupby_index_type():
     df = cudf.DataFrame()
