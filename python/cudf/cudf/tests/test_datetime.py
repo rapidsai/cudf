@@ -259,7 +259,6 @@ def test_datetime_nunique(data, nulls):
         'none',
         'some',
     ])
-# @pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
 def test_datetime_value_counts(data, nulls):
     psr = pd.Series(data)
 
