@@ -32,7 +32,7 @@ def apply_cast(incol, **kwargs):
 
     npdtype = kwargs.get("dtype", np.float64)
     cdef gdf_dtype dtype = dtypes[npdtype]
-cdef uintptr_t category
+    cdef uintptr_t category
 
     cdef gdf_dtype_extra_info info = gdf_dtype_extra_info(
         time_unit = TIME_UNIT_NONE,

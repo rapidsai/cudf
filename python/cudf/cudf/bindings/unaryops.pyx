@@ -15,20 +15,20 @@ from librmm_cffi import librmm as rmm
 
 
 _UNARY_OP = {
-    'sin'   : GDF_SIN,
-    'cos'   : GDF_COS,
-    'tan'   : GDF_TAN,
-    'asin'  : GDF_ARCSIN,
-    'acos'  : GDF_ARCCOS,
-    'atan'  : GDF_ARCTAN,
-    'exp'   : GDF_EXP,
-    'log'   : GDF_LOG,
-    'sqrt'  : GDF_SQRT,
-    'ceil'  : GDF_CEIL,
-    'floor' : GDF_FLOOR,
-    'abs'   : GDF_ABS,
-    'invert': GDF_BIT_INVERT,
-    'not'   : GDF_NOT,
+    'sin'   : SIN,
+    'cos'   : COS,
+    'tan'   : TAN,
+    'asin'  : ARCSIN,
+    'acos'  : ARCCOS,
+    'atan'  : ARCTAN,
+    'exp'   : EXP,
+    'log'   : LOG,
+    'sqrt'  : SQRT,
+    'ceil'  : CEIL,
+    'floor' : FLOOR,
+    'abs'   : ABS,
+    'invert': BIT_INVERT,
+    'not'   : NOT,
 }
 
 def apply_unary_op(incol, op):
@@ -43,7 +43,7 @@ def apply_unary_op(incol, op):
     cdef gdf_column result
     cdef unary_op c_op = _UNARY_OP[op]
     with nogil:    
-        result = gdf_unaryop(c_incol[0], c_op)
+        result = unary_operation(c_incol[0], c_op)
     
     free(c_incol)
     data, mask = gdf_column_to_column_mem(&result)

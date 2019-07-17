@@ -2390,7 +2390,7 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 	// Use vector to build expected output
 	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
 
-	auto output = cudf::gdf_unaryop(inputCol, cudf::GDF_NOT);
+	auto output = cudf::unary_operation(inputCol, cudf::unary_op::NOT);
 
 	auto outputCol = cudf::test::column_wrapper<cudf::bool8>(output);
 

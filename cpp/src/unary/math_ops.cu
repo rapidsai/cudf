@@ -218,11 +218,11 @@ public:
 
 } // namespace detail
 
-gdf_column gdf_unaryop(gdf_column const& input, unary_op op) {
+gdf_column unary_operation(gdf_column const& input, unary_op op) {
 
     gdf_column output;
 
-    if (op == GDF_NOT)
+    if (op == unary_op::NOT)
     {
         // TODO: replace this with a proper column constructor once
         // cudf::column is implemented
@@ -237,85 +237,85 @@ gdf_column gdf_unaryop(gdf_column const& input, unary_op op) {
     cudf::unary::handleChecksAndValidity(input, output);
 
     switch(op){
-        case GDF_SIN:
+        case unary_op::SIN:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceSin>{},
                 &input, &output);
             break;
-        case GDF_COS:
+        case unary_op::COS:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceCos>{},
                 &input, &output);
             break;
-        case GDF_TAN:
+        case unary_op::TAN:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceTan>{},
                 &input, &output);
             break;
-        case GDF_ARCSIN:
+        case unary_op::ARCSIN:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceArcSin>{},
                 &input, &output);
             break;
-        case GDF_ARCCOS:
+        case unary_op::ARCCOS:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceArcCos>{},
                 &input, &output);
             break;
-        case GDF_ARCTAN:
+        case unary_op::ARCTAN:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceArcTan>{},
                 &input, &output);
             break;
-        case GDF_EXP:
+        case unary_op::EXP:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceExp>{},
                 &input, &output);
             break;
-        case GDF_LOG:
+        case unary_op::LOG:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceLog>{},
                 &input, &output);
             break;
-        case GDF_SQRT:
+        case unary_op::SQRT:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceSqrt>{},
                 &input, &output);
             break;
-        case GDF_CEIL:
+        case unary_op::CEIL:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceCeil>{},
                 &input, &output);
             break;
-        case GDF_FLOOR:
+        case unary_op::FLOOR:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceFloor>{},
                 &input, &output);
             break;
-        case GDF_ABS:
+        case unary_op::ABS:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::MathOpDispatcher<detail::DeviceAbs>{},
                 &input, &output);
             break;
-        case GDF_BIT_INVERT:
+        case unary_op::BIT_INVERT:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::BitwiseOpDispatcher<detail::DeviceInvert>{},
                 &input, &output);
             break;
-        case GDF_NOT:
+        case unary_op::NOT:
             cudf::type_dispatcher(
                 input.dtype,
                 detail::LogicalOpDispatcher<detail::DeviceNot>{},

@@ -25,21 +25,21 @@ namespace cudf
  * @brief Types of unary operations that can be performed on data.
  */
 enum unary_op{
-  GDF_SIN,          ///< Trigonometric sine
-  GDF_COS,          ///< Trigonometric cosine
-  GDF_TAN,          ///< Trigonometric tangent
-  GDF_ARCSIN,       ///< Trigonometric sine inverse
-  GDF_ARCCOS,       ///< Trigonometric cosine inverse
-  GDF_ARCTAN,       ///< Trigonometric tangent inverse
-  GDF_EXP,          ///< Exponential (base e, Euler number)
-  GDF_LOG,          ///< Natural Logarithm (base e)
-  GDF_SQRT,         ///< Square-root (x^0.5)
-  GDF_CEIL,         ///< Smallest integer value not less than arg
-  GDF_FLOOR,        ///< largest integer value not greater than arg
-  GDF_ABS,          ///< Absolute value
-  GDF_BIT_INVERT,   ///< Bitwise Not (~)
-  GDF_NOT,          ///< Logical Not (!)
-  GDF_INVALID_UNARY ///< invalid operation
+  SIN,          ///< Trigonometric sine
+  COS,          ///< Trigonometric cosine
+  TAN,          ///< Trigonometric tangent
+  ARCSIN,       ///< Trigonometric sine inverse
+  ARCCOS,       ///< Trigonometric cosine inverse
+  ARCTAN,       ///< Trigonometric tangent inverse
+  EXP,          ///< Exponential (base e, Euler number)
+  LOG,          ///< Natural Logarithm (base e)
+  SQRT,         ///< Square-root (x^0.5)
+  CEIL,         ///< Smallest integer value not less than arg
+  FLOOR,        ///< largest integer value not greater than arg
+  ABS,          ///< Absolute value
+  BIT_INVERT,   ///< Bitwise Not (~)
+  NOT,          ///< Logical Not (!)
+  INVALID_UNARY ///< invalid operation
 };
 
 
@@ -51,7 +51,7 @@ enum unary_op{
  *
  * @returns gdf_column Result of the operation
  */
-gdf_column gdf_unaryop(gdf_column const& input, unary_op op);
+gdf_column unary_operation(gdf_column const& input, unary_op op);
 
 
 /**

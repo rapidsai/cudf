@@ -21,23 +21,23 @@ cdef extern from "cudf.h" nogil:
 cdef extern from "unary.hpp" namespace "cudf" nogil:
 
     ctypedef enum unary_op:
-        GDF_SIN,
-        GDF_COS,
-        GDF_TAN,
-        GDF_ARCSIN,
-        GDF_ARCCOS,
-        GDF_ARCTAN,
-        GDF_EXP,
-        GDF_LOG,
-        GDF_SQRT,
-        GDF_CEIL,
-        GDF_FLOOR,
-        GDF_ABS,
-        GDF_BIT_INVERT,
-        GDF_NOT,
-        GDF_INVALID_UNARY
+        SIN,
+        COS,
+        TAN,
+        ARCSIN,
+        ARCCOS,
+        ARCTAN,
+        EXP,
+        LOG,
+        SQRT,
+        CEIL,
+        FLOOR,
+        ABS,
+        BIT_INVERT,
+        NOT,
+        INVALID_UNARY
 
-    cdef gdf_column gdf_unaryop(const gdf_column& input, unary_op op) except +
+    cdef gdf_column unary_operation(const gdf_column& input, unary_op op) except +
 
     cdef gdf_column col_cast(const gdf_column& input, gdf_dtype out_type,
                              gdf_dtype_extra_info out_info) except +
