@@ -1062,6 +1062,10 @@ class DataFrame(object):
                 out.index = RangeIndex(len(out))
             else:
                 out.index = self.index.take(positions)
+
+        if isinstance(self.index, cudf.MultiIndex):
+            out._index = self.index.take(positions)
+
         return out
 
     def take_columns(self, positions):

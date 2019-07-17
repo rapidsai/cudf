@@ -311,7 +311,7 @@ class MultiIndex(Index):
                     result = Series([], name=series_name)
                     result.name = tuple(series_name)
                 else:
-                    index._codes = index._codes[index_key]
+                    index._source_data = index._source_data[index_key]
             elif (len(out_index.columns)) > 0:
                 # Otherwise pop the leftmost levels, names, and codes from the
                 # source index until it has the correct number of columns (n-k)
@@ -324,7 +324,8 @@ class MultiIndex(Index):
     def _get_row_major(self, df, row_tuple):
         from cudf.utils.cudautils import arange
         if isinstance(row_tuple, slice):
-            start, stop, step, sln = utils.standard_python_slice(len(df),
+            stop = row_tuple.stop or len(df.index)
+            start, stop, step, sln = utils.standard_python_slice(stop,
                                                                  row_tuple)
             valid_indices = arange(start, stop, step)
             row_tuple = [row_tuple]
@@ -336,8 +337,8 @@ class MultiIndex(Index):
 
         from cudf import Series
         result = df.take(Series(valid_indices))
-
-        return self._index_and_downcast(result, result.index, row_tuple)
+        final = self._index_and_downcast(result, result.index, row_tuple)
+        return final
 
     def _get_column_major(self, df, row_tuple):
         from cudf.utils.cudautils import arange
