@@ -31,10 +31,10 @@ class _SeriesLocIndexer(object):
         self._sr = sr
 
     def __getitem__(self, arg):
-        arg = self._loc_2_iloc(arg)
+        arg = self._loc_to_iloc(arg)
         return self._sr.iloc[arg]
 
-    def _loc_2_iloc(self, arg):
+    def _loc_to_iloc(self, arg):
         from cudf.dataframe.series import Series
         from cudf.dataframe.index import Index
 
