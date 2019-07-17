@@ -546,6 +546,8 @@ class StringColumn(columnops.TypedColumnBase):
         if utils.dtype_equals(dtype, ("int8", "int16")):
             out_dtype = np.dtype(dtype)
             dtype = np.dtype("int32")
+        else:
+            out_dtype = np.dtype(dtype)
 
         out_arr = rmm.device_array(shape=len(self), dtype=dtype)
         out_ptr = get_ctype_ptr(out_arr)
