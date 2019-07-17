@@ -69,7 +69,7 @@
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
 - PR #2311 Fix copy behaviour for GenericIndex
-- PR #2162 Fix groupby on categoricals
+- PR #2323 Fix groupby on categoricals
 
 
 # cuDF 0.8.0 (27 June 2019)
