@@ -543,6 +543,12 @@ def test_dataframe_loc_outbound():
     np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
 
 
+def test_dataframe_loc_empty():
+    pdf = pd.DataFrame({"a": [1, 2]})
+    gdf = gd.from_pandas(pdf)
+    assert_eq(pdf.loc[[]], gdf.loc[[]])
+
+
 def test_series_loc_numerical():
     ps = pd.Series([1, 2, 3, 4, 5], index=[5, 6, 7, 8, 9])
     gs = Series.from_pandas(ps)
