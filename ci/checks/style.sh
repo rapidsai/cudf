@@ -7,6 +7,8 @@
 # Ignore errors and set path
 set +e
 PATH=/conda/bin:$PATH
+LC_ALL=C.UTF-8
+LANG=C.UTF-8
 
 # Activate common conda env
 source activate gdf
