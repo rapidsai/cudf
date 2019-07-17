@@ -389,6 +389,11 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return self._is_monotonic_decreasing
 
     def _as_string_column(self):
+        if self.null_count > 0:
+            raise NotImplementedError(
+                "Converting categorical columns "
+                "containing nulls to strings is not yet supported"
+            )
         gathermap = self.cat().codes.astype("int32")
         gathermap_ptr = get_ctype_ptr(gathermap.data.mem)
         data = self._categories.data.gather(gathermap_ptr, len(self))

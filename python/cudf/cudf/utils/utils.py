@@ -242,22 +242,11 @@ def dtype_equals(left, right):
     """
     if isinstance(right, (list, tuple)):
         for rdtype in right:
-            rdtype = pd.api.types.pandas_dtype(rdtype)
             if dtype_equals(left, rdtype):
                 return True
         return False
     else:
-        left = pd.api.types.pandas_dtype(left)
-        right = pd.api.types.pandas_dtype(right)
-        if pd.api.types.is_categorical_dtype(
-            left
-        ) or pd.api.types.is_categorical_dtype(right):
-            if pd.api.types.is_categorical_dtype(
-                left
-            ) and pd.api.types.is_categorical_dtype(right):
-                return True
-            return False
-        return left == right
+        return pd.api.types.is_dtype_equal(left, right)
 
 
 def min_scalar_type(a, min_size=8):
