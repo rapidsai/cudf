@@ -8,7 +8,7 @@
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 from cudf.bindings.unaryops cimport *
-
+from cudf.dataframe.column import Column
 from libc.stdlib cimport free
 
 import numpy as np
