@@ -27,6 +27,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ReductionTest {
 
+  public static final double DELTA = 0.00001;
+
   private static Stream<Arguments> createBooleanParams() {
     Boolean[] vals = new Boolean[]{true, true, null, false, true, false, null};
     return Stream.of(
@@ -37,7 +39,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromBool(false)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromBool(true)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromBool(false)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromBool(true))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromBool(true)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(0.5477225575051662))
     );
   }
 
@@ -50,7 +53,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromByte((byte) -1)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromByte((byte) 123)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromByte((byte) 160)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromByte((byte) 47))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromByte((byte) 47)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
     );
   }
 
@@ -63,7 +67,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromShort((short) -1)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromShort((short) 123)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromShort((short) -22624)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromShort((short) 31279))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromShort((short) 31279)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
     );
   }
 
@@ -77,7 +82,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromInt(-1)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromInt(123)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromInt(-258300000)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromInt(31279))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromInt(31279)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
     );
   }
 
@@ -90,7 +96,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromLong(-1)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromLong(123)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromLong(-258300000)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromLong(31279))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromLong(31279)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
     );
   }
 
@@ -104,7 +111,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromFloat(-1f)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromFloat(123f)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromFloat(-258300000f)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromFloat(31279f))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromFloat(31279f)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromFloat(49.24530434467839f))
     );
   }
 
@@ -118,7 +126,8 @@ class ReductionTest {
         Arguments.of(ReductionOp.MIN, vals, Scalar.fromDouble(-1.)),
         Arguments.of(ReductionOp.MAX, vals, Scalar.fromDouble(123.)),
         Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromDouble(-258300000.)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromDouble(31279.))
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromDouble(31279.)),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
     );
   }
 

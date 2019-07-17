@@ -1065,6 +1065,26 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns the sample standard deviation of all values in the column,
+   * returning a scalar of the same type as this column. Null's are not
+   * counted as an element of the column when calculating the standard
+   * deviation. Output type is FLOAT64 unless input column is FLOAT32.
+   */
+  public Scalar standardDeviation() {
+    return standardDeviation(type);
+  }
+
+  /**
+   * Returns the sample standard deviation of all values in the column,
+   * returning a scalar of the specified type. Null's are not counted as
+   * an element of the column when calculating the standard deviation.
+   * Output type is FLOAT64 unless input column is FLOAT32 or FLOAT32 specified.
+   */
+  public Scalar standardDeviation(DType outType) {
+    return reduce(ReductionOp.STD, outType);
+  }
+
+  /**
    * Computes the reduction of the values in all rows of a column.
    * Overflows in reductions are not detected. Specifying a higher precision
    * output type may prevent overflow. Only the MIN and MAX ops are
@@ -1091,6 +1111,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * {@link Scalar#isValid()} method of the result will return false.
    */
   public Scalar reduce(ReductionOp op, DType outType) {
+    if(op == ReductionOp.STD && outType != DType.FLOAT32)
+      outType = DType.FLOAT64;
     return Cudf.reduce(this, op, outType);
   }
 
