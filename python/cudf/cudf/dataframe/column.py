@@ -371,13 +371,8 @@ class Column(object):
         copies the references of the data and mask.
         """
         if deep:
-            deep = self.copy_data()
-            if self.has_null_mask:
-                return deep.set_mask(
-                    mask=self.mask.copy(), null_count=self.null_count
-                )
-            else:
-                return deep.allocate_mask()
+            import cudf.bindings.copying as cpp_copy
+            return cpp_copy.copy_column(self)
         else:
             params = self._replace_defaults()
             return type(self)(**params)
