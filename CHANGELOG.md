@@ -14,6 +14,7 @@
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
+- PR #2105 Add google benchmark for hash-based join
 
 ## Improvements
 
@@ -43,6 +44,7 @@
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
+- PR #2309 Java readers: remove redundant copy of result pointers
 
 ## Bug Fixes
 
@@ -66,7 +68,7 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
-
+- PR #2311 Fix copy behaviour for GenericIndex
 
 
 # cuDF 0.8.0 (27 June 2019)

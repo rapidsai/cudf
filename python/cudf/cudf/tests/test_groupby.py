@@ -735,3 +735,11 @@ def test_groupby_cat():
     assert_eq(
         pdf.groupby("a").count(), gdf.groupby("a").count(), check_dtype=False
     )
+    
+
+def test_groupby_index_type():
+    df = cudf.DataFrame()
+    df["string_col"] = ["a", "b", "c"]
+    df["counts"] = [1, 2, 3]
+    res = df.groupby(by="string_col").counts.sum()
+    assert isinstance(res.index, cudf.dataframe.index.StringIndex)
