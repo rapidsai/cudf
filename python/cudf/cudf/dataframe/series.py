@@ -1788,18 +1788,48 @@ class Series(object):
         Check whether values are contained in Series.
         """
         from cudf import DataFrame
+        from cudf.dataframe import CategoricalColumn
 
-        left = self.to_frame(name='key').reset_index()
-        unique_values = values.unique()
+        if self.empty:
+            return self.astype('bool')
+
+        if isinstance(self._column, CategoricalColumn):
+            msg = "isin is not yet supported for CategoricalColumns."
+            raise NotImplementedError(msg)
+
+        try:
+            values = columnops.as_column(values, dtype=self.dtype)
+        except:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return Series(cudautils.zeros(len(self), dtype='bool'))
+
+        # need to typecast again outside of as_column due to
+        # https://github.com/rapidsai/cudf/issues/2319
+        unique_values = values.unique().astype(self.dtype)
+
+        if values.null_count > 0:
+            warnings.warn(
+                "Nulls in the Series are not considered in the values array"
+                "for now, differing from Pandas.",
+                UserWarning,
+            )
 
         # need to coerce to the same name and include a carryover column
         # due to https://github.com/rapidsai/cudf/issues/2299
+        left = self.to_frame(name='key').reset_index()
+
         right = DataFrame(
             {'key': unique_values, 'carryover': unique_values})
-
         got = left.merge(right, on='key', how='left').sort_values('index')[
             'carryover'].notna()
-        got = got.set_index(self.index).rename(self.name)
+        got = got.set_index(self.index)
+
+        if self.name:
+            got = got.rename(self.name)
+        else:
+            got.name = None
+
         return got
 
     def unique_k(self, k):

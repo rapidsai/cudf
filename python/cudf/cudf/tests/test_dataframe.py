@@ -3255,25 +3255,77 @@ def test_one_row_head():
 
 
 @pytest.mark.parametrize(
-    "ser",
+    "data",
     [
         [],
         np.random.randint(-100, 100, 100),
-        np.random.randint(-100, 100, 100),
+        pd.Series([0.0, 1.0, None, 10.0]),
+    ])
+@pytest.mark.parametrize(
+    "values",
+    [
+        np.random.randint(-100, 100, 10),
         [],
+        pytest.param([1.0, 12.0, None, None, 120], marks=pytest.mark.xfail),
+        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        ['0', '12', '14'],
+        pytest.param(['0', '12', '14', 'a'], marks=[pytest.mark.xfail(
+            reason="We don't gracefully handle typecasting errors.")]),
+    ])
+def test_isin_numeric(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(['2018-01-01', '2019-04-03', None, '2019-12-30'],
+                  dtype='datetime64[ns]'),
     ])
 @pytest.mark.parametrize(
     "values",
     [
         [],
-        np.random.randint(-100, 100, 10),
-        [],
-        np.random.randint(-100, 100, 50),
+        pytest.param([1514764800000000000, 1577664000000000000],
+                     marks=[pytest.mark.xfail(
+                         reason="We don't yet support nanoseconds.")]),
+        ['2019-04-03', '2019-12-30', '2012-01-01']
     ])
-def test_isin(ser, values):
-    gs = Series(ser)
-    ps = pd.Series(ser)
+def test_isin_datetime(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
 
-    got = gs.isin(values)
-    expected = ps.isin(values)
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(['this', 'is', None, 'a', 'test']),
+        pd.Series(['0', '12', '14'])
+    ])
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ['this', 'is'],
+        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        pytest.param([12, 14, 19], marks=[pytest.mark.xfail(
+            reason="pandas's failure here seems like a bug given the reverse succeeds")]),
+    ])
+def test_isin_string(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
     assert_eq(got, expected)

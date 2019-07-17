@@ -263,21 +263,6 @@ class NumericalColumn(columnops.TypedColumnBase):
             data=Buffer(rounded), mask=mask, dtype=self.dtype
         )
 
-    def isin(self, values):
-        mask = None
-
-        if isinstance(values, (list, np.ndarray,)):
-            values = rmm.to_device(np.asarray(values))
-
-        output_dary = rmm.device_array(len(self), dtype='bool')
-
-        if self.has_null_mask:
-            mask = self.nullmask.mem
-
-        res = cudautils.apply_isin(self.data.mem, output_dary, values,
-                                   mask)
-        return NumericalColumn(data=Buffer(res), mask=None, dtype='bool')
-
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
 

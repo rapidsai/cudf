@@ -19,8 +19,6 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.utils import cudautils, utils
 from cudf.utils.utils import is_single_value
 
-from librmm_cffi import librmm as rmm
-
 
 class DatetimeColumn(columnops.TypedColumnBase):
     # TODO - we only support milliseconds (date64)
@@ -279,24 +277,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
                 self[1:], self[:-1], 'le', 'bool'
             ).all()
         return self._is_monotonic_decreasing
-
-    def isin(self, values):
-        from cudf.dataframe import numerical
-        mask = None
-
-        if isinstance(values, (list, np.ndarray,)):
-            values = DatetimeColumn.from_numpy(
-                np.asarray(values)).as_numerical.data.mem
-
-        output_dary = rmm.device_array(len(self), dtype='bool')
-
-        if self.has_null_mask:
-            mask = self.nullmask.mem
-
-        res = cudautils.apply_isin(self.as_numerical.data.mem, output_dary,
-                                   values, mask)
-        return numerical.NumericalColumn(data=Buffer(res), mask=None,
-                                         dtype='bool')
 
 
 def binop(lhs, rhs, op, out_dtype):
