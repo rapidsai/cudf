@@ -46,22 +46,47 @@ using bitmask_type = uint32_t;
 
 enum data_type {
   INVALID = 0,
-  INT8,     ///< 1 byte signed integer
-  INT16,    ///< 2 byte signed integer
-  INT32,    ///< 4 byte signed integer
-  INT64,    ///< 8 byte signed integer
-  FLOAT32,  ///< 4 byte floating point
-  FLOAT64,  ///< 8 byte floating point
-  BOOL1,    ///< Boolean using 1 bit per value, 0 == false, 1 == true
-  BOOL8,    ///< Boolean using one byte per value, 0 == false, else true
-  DATE32,
-  DATE64,
-  TIMESTAMP_NS,  ///< Timestamp in nanoseconds
-  TIMESTAMP_US,  ///< Timestamp in microseconds
-  TIMESTAMP_MS,  ///< Timestamp in milliseoncds
-  TIMESTAMP_S,   ///< Timestamp in seconds
+  INT8,          ///< 1 byte signed integer
+  INT16,         ///< 2 byte signed integer
+  INT32,         ///< 4 byte signed integer
+  INT64,         ///< 8 byte signed integer
+  FLOAT32,       ///< 4 byte floating point
+  FLOAT64,       ///< 8 byte floating point
+  BOOL8,         ///< Boolean using one byte per value, 0 == false, else true
+  DATE32,        ///< days since Unix Epoch in int32
+  TIMESTAMP_NS,  ///< nanoseconds since Unix Epoch in int64
+  TIMESTAMP_US,  ///< microseconds since Unix Epoch in int64
+  TIMESTAMP_MS,  ///< milliseconds since Unix Epoch in int64
+  TIMESTAMP_S,   ///< seconds since Unix Epoch in int64
   CATEGORY,  ///< Categorial/Dictionary type composed of two discrete columns
   STRING,
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicator for the logical data type of an element in a column.
+ *
+ * Simple types can be be entirely described by their `id()`, but some types
+ * require additional metadata to fully describe elements of that type. For
+ * example, timestamps require additional timezone information.
+ *
+ *---------------------------------------------------------------------------**/
+class data_type {
+ public:
+  data_type() = default;
+  ~data_type() = default;
+  data_type(data_type const&) = default;
+  data_type(data_type&&) = default;
+  data_type& operator=(data_type const&) = default;
+  data_type& operator=(data_type&&) = default;
+
+  explicit data_type(type id) : _id{id} {}
+
+  type id() const noexcept { return _id; }
+
+ private:
+  type _id{NULL};
+  // Store additional type specific metadata, timezone, decimal precision and
+  // scale, etc.
 };
 
 }  // namespace cudf
