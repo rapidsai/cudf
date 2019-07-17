@@ -47,8 +47,4 @@ column_view::column_view(data_type type, size_type size, void const* data,
   }
 }
 
-column_view column_view::child(size_type child_index) const {
-  return _children.at(child_index);
-}
-
 }  // namespace cudf

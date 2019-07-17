@@ -22,8 +22,8 @@
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief A non-owning view of data as a column of elements, some of which may
- * be null as indicated by a bitmask.
+ * @brief An immutable, non-owning view of device data as a column of elements,
+ * some of which may be null as indicated by a bitmask.
  *
  * A `column_view` can be constructed implicitly from a `cudf::column`, or may
  * be constructed explicitly from a pointer to pre-existing device memory.
@@ -164,7 +164,14 @@ struct column_view {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    *---------------------------------------------------------------------------**/
-  column_view child(size_type child_index) const;
+  column_view child(size_type child_index) const {
+    return _children.at(child_index);
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of child columns.
+   *---------------------------------------------------------------------------**/
+  size_type num_children() const noexcept { return _children.size(); }
 
  private:
   data_type _type{INVALID};  ///< Element type
@@ -178,5 +185,7 @@ struct column_view {
                                      ///< Enables zero-copy slicing
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
+
 };
+
 }  // namespace cudf

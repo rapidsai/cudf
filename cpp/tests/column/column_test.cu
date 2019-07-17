@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column.hpp>
+#include <cudf/column/column_device_view.cuh>
 
 
 #include <gmock/gmock.h>
