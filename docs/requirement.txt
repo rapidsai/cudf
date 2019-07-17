@@ -1,0 +1,6 @@
+sphinx
+sphinx_rtd_theme
+numpydoc
+sphinx-markdown-tables
+nbsphinx
+recommonmark
