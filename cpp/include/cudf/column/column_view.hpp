@@ -22,7 +22,7 @@
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief An immutable, non-owning view of device data as a column of elements,
+ * @brief A non-owning view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
  * A `column_view` can be constructed implicitly from a `cudf::column`, or may
@@ -40,7 +40,7 @@ namespace cudf {
  * memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-struct column_view {
+class column_view {
   column_view() = default;
   ~column_view() = default;
   column_view(column_view const&) = default;
@@ -90,6 +90,11 @@ struct column_view {
     return static_cast<T const*>(_data);
   }
 
+  template <typename T = void>
+  T* head() noexcept {
+    return static_cast<T*>(_data);
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
@@ -103,6 +108,11 @@ struct column_view {
    *---------------------------------------------------------------------------**/
   template <typename T>
   T const* data() const noexcept {
+    return head<T>() + _offset;
+  }
+
+  template <typename T>
+  T* data() noexcept {
     return head<T>() + _offset;
   }
 
@@ -150,6 +160,8 @@ struct column_view {
    *---------------------------------------------------------------------------**/
   bitmask_type const* null_mask() const noexcept { return _null_mask; }
 
+  bitmask_type* null_mask() noexcept { return _null_mask; }
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
@@ -159,13 +171,15 @@ struct column_view {
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
    *
-   * @throws `std::out_of_bounds` If `child_index` is out of bounds.
-   *
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    *---------------------------------------------------------------------------**/
-  column_view child(size_type child_index) const {
-    return _children.at(child_index);
+  column_view const child(size_type child_index) const noexcept {
+    return _children[child_index];
+  }
+
+  column_view child(size_type child_index) noexcept {
+    return _children[child_index];
   }
 
   /**---------------------------------------------------------------------------*
@@ -175,17 +189,16 @@ struct column_view {
 
  private:
   data_type _type{INVALID};  ///< Element type
-  cudf::size_type _size{};   ///< Number of elements
-  void const* _data{};       ///< Pointer to device memory containing elements
-  bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
-                                     ///< bitmask representing null elements.
-                                     ///< Optional if `null_count() == 0`
-  size_type _null_count{};           ///< The number of null elements
-  size_type _offset{};               ///< Index position of the first element.
-                                     ///< Enables zero-copy slicing
+  cudf::size_type _size{};     ///< Number of elements
+  void* _data{};               ///< Pointer to device memory containing elements
+  bitmask_type* _null_mask{};  ///< Pointer to device memory containing
+                               ///< bitmask representing null elements.
+                               ///< Optional if `null_count() == 0`
+  size_type _null_count{};     ///< The number of null elements
+  size_type _offset{};         ///< Index position of the first element.
+                               ///< Enables zero-copy slicing
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
-
 };
 
 }  // namespace cudf
