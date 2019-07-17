@@ -122,7 +122,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
         elif pd.api.types.is_string_dtype(dtype):
             if len(self) > 0:
-                if utils.dtype_equals(dtype, ("int8", "int16")):
+                if utils.dtype_equals(self.dtype, ("int8", "int16")):
                     dev_array = self.astype("int32").data.mem
                 else:
                     dev_array = self.data.mem
