@@ -23,7 +23,7 @@ from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
-from cudf.dataframe.string import StringColumn
+from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
@@ -1788,7 +1788,6 @@ class Series(object):
         Check whether values are contained in Series.
         """
         from cudf import DataFrame
-        from cudf.dataframe import CategoricalColumn
 
         if self.empty:
             return self.astype('bool')
