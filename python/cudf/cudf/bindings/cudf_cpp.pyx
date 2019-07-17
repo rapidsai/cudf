@@ -230,9 +230,11 @@ cdef get_scalar_value(gdf_scalar scalar, dtype):
     if scalar.dtype == GDF_BOOL8:
         return scalar.data.b08
     if scalar.dtype == GDF_DATE64:
-        return np.array(scalar.data.dt64).astype(dtype)
+        time_unit, _ = np.datetime_data(dtype)
+        return dtype.type(scalar.data.dt64, time_unit)
     if scalar.dtype == GDF_TIMESTAMP:
-        return np.array(scalar.data.tmst).astype(dtype)
+        time_unit, _ = np.datetime_data(dtype)
+        return dtype.type(scalar.data.tmst, time_unit)
     raise ValueError("Cannot convert gdf_scalar of dtype {}",
                      "to numpy scalar".format(scalar.dtype))
 
@@ -258,11 +260,9 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
     elif val.dtype.type == np.datetime64:
         time_unit, _ = np.datetime_data(val.dtype)
         if time_unit in np_to_gdf_time_unit:
-            scalar.data.tmst = np.datetime64(val, time_unit).astype(int)
-        elif time_unit == 'D':
-            scalar.data.dt32 = np.datetime64(val, time_unit).astype(int)
+            scalar.data.tmst = np.int64(val)
         else:
-            scalar.data.dt64 = np.datetime64(val, time_unit).astype(int)
+            scalar.data.dt64 = np.int64(val)
     else:
         raise ValueError("Cannot convert numpy scalar of dtype {}"
                          "to gdf_scalar".format(val.dtype.name))
