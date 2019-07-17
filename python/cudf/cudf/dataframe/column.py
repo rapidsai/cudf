@@ -679,7 +679,7 @@ class Column(object):
         # sort the column
         sortcol, _ = densecol.sort_by_values()
         # find segments
-        sortedvals = sortcol.to_gpu_array()
+        sortedvals = sortcol.data.mem
         segs, begins = cudautils.find_segments(sortedvals)
         return segs, sortedvals
 
