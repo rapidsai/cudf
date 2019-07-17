@@ -8,8 +8,6 @@ from cudf.utils.utils import is_single_value
 
 
 def indices_from_labels(obj, labels):
-    from cudf.dataframe.columnops import as_column
-
     if pd.api.types.is_categorical_dtype(obj.index):
         labels = labels.astype("category")
 
