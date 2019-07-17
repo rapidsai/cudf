@@ -1784,21 +1784,23 @@ class Series(object):
         )
 
     def isin(self, values):
-        """Round a Series to a configurable number of decimal places.
         """
-        if isinstance(self._column, (StringColumn,)):
-            # could hash. how large is the risk of collisions in workflows?
-            raise NotImplementedError
+        Check whether values are contained in Series.
+        """
+        from cudf import DataFrame
 
-        if isinstance(values, (Series,)):
-            # convert to int64 for simplicity
-            values = values.astype('int64').data.mem
+        left = self.to_frame(name='key').reset_index()
+        unique_values = values.unique()
 
-        return Series(
-            self._column.isin(values),
-            name=self.name,
-            index=self.index,
-        )
+        # need to coerce to the same name and include a carryover column
+        # due to https://github.com/rapidsai/cudf/issues/2299
+        right = DataFrame(
+            {'key': unique_values, 'carryover': unique_values})
+
+        got = left.merge(right, on='key', how='left').sort_values('index')[
+            'carryover'].notna()
+        got = got.set_index(self.index).rename(self.name)
+        return got
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
