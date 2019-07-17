@@ -21,10 +21,10 @@ from cudf.utils.utils import is_single_value
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
     'ns': 1,
-    'us': 1e3,
-    'ms': 1e6,
-    's': 1e9,
-    'D': 1e9 * 86400,
+    'us': 1000,
+    'ms': 1000000,
+    's': 1000000000,
+    'D': 1000000000 * 86400,
 }
 
 
