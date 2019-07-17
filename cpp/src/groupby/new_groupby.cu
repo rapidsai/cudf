@@ -257,18 +257,17 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   if (nullable){
     auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              (gdf_index_type *)unique_indices.data,
+                              static_cast<gdf_index_type *>(unique_indices.data),
                               comp);
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              (gdf_index_type *)unique_indices.data,
+                              static_cast<gdf_index_type *>(unique_indices.data),
                               comp);
   }
 
   // size of the GDF column is being resized
-  RMM_TRY(RMM_REALLOC(&unique_indices.data, thrust::distance((gdf_index_type *)unique_indices.data, result_end)*sizeof(gdf_index_type), nullptr));
-  unique_indices.size = thrust::distance((gdf_index_type*)unique_indices.data, result_end);
+  unique_indices.size = thrust::distance(static_cast<gdf_index_type *>(unique_indices.data), result_end);
 
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
@@ -284,9 +283,11 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
 {
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
+  gdf_column unique_indices{};
+  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::table(), gdf_column {});
+    return std::make_pair(cudf::table(), unique_indices);
   }
 
   gdf_size_type nrows = input_table.num_rows();
