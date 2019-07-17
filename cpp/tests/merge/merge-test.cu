@@ -232,12 +232,12 @@ TYPED_TEST(MergeTest, Merge1KeyColumns) {
     auto leftColWrap1 = columnFactory.make(inputRows,
                                             [](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 1;
-                                                return 2 * row; 
+                                                else return 2 * row; 
                                             });
     auto leftColWrap2 = columnFactory.make(inputRows,
                                             [](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 0;
-                                                return row;
+                                                else return row;
                                             });
     gdf_column *leftColumn1 = leftColWrap1.get();
     gdf_column *leftColumn2 = leftColWrap2.get();
@@ -245,12 +245,12 @@ TYPED_TEST(MergeTest, Merge1KeyColumns) {
     auto rightColWrap1 = columnFactory.make(inputRows,
                                             [](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 0;
-                                                return 2 * row + 1;
+                                                else return 2 * row + 1;
                                             });
     auto rightColWrap2 = columnFactory.make(inputRows,
                                             [](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 0;
-                                                return row;
+                                                else return row;
                                             });
     gdf_column *rightColumn1 = rightColWrap1.get();
     gdf_column *rightColumn2 = rightColWrap2.get();
@@ -271,12 +271,12 @@ TYPED_TEST(MergeTest, Merge1KeyColumns) {
     auto expectedDataWrap1 = columnFactory.make(outputRows,
                                                 [=](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= outputRows / 2;
-                                                    return row;
+                                                    else return row;
                                                 });
     auto expectedDataWrap2 = columnFactory.make(outputRows,
                                                 [](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 0;
-                                                    return row / 2; 
+                                                    else return row / 2; 
                                                 });
 
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
@@ -292,12 +292,12 @@ TYPED_TEST(MergeTest, Merge2KeyColumns) {
     auto leftColWrap1 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= inputRows / 2;
-                                                return row;
+                                                else return row;
                                             });
     auto leftColWrap2 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (inputRows / 4)) % 2 == 0;
-                                                return 2 * row;
+                                                else return 2 * row;
                                             });
     gdf_column *leftColumn1 = leftColWrap1.get();
     gdf_column *leftColumn2 = leftColWrap2.get();
@@ -305,12 +305,12 @@ TYPED_TEST(MergeTest, Merge2KeyColumns) {
     auto rightColWrap1 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= inputRows / 2;
-                                                return row;
+                                                else return row;
                                             });
     auto rightColWrap2 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (inputRows / 4)) % 2 == 0;
-                                                return 2 * row + 1;
+                                                else return 2 * row + 1;
                                             });
     gdf_column *rightColumn1 = rightColWrap1.get();
     gdf_column *rightColumn2 = rightColWrap2.get();
@@ -331,12 +331,12 @@ TYPED_TEST(MergeTest, Merge2KeyColumns) {
     auto expectedDataWrap1 = columnFactory.make(outputRows,
                                                 [=](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= outputRows / 2;
-                                                    return row / 2;
+                                                    else return row / 2;
                                                 });
     auto expectedDataWrap2 = columnFactory.make(outputRows,
                                                 [=](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (outputRows / 4)) % 2 == 0;
-                                                    return row % 2 == 0 ? row + 1 : row - 1;
+                                                    else return row % 2 == 0 ? row + 1 : row - 1;
                                                 });
 
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
@@ -353,7 +353,7 @@ TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
     auto leftColWrap1 = columnFactory.make(inputRows,
                                             [](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 0;
-                                                return 2 * row;
+                                                else return 2 * row;
                                             },
                                             [=](gdf_index_type row) { return row < inputRows - 1; });
     gdf_column *leftColumn1 = leftColWrap1.get();
@@ -362,7 +362,7 @@ TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
     auto rightColWrap1 = columnFactory.make(inputRows,
                                             [](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return 1;
-                                                return 2 * row + 1;
+                                                else return 2 * row + 1;
                                             },
                                             [=](gdf_index_type row) { return row < inputRows - 1; });
     gdf_column *rightColumn1 = rightColWrap1.get();
@@ -385,7 +385,7 @@ TYPED_TEST(MergeTest, Merge1KeyNullColumns) {
     auto expectedDataWrap1 = columnFactory.make(outputRows,
                                                 [=](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= (outputRows - column1TotalNulls) / 2;
-                                                    return row;
+                                                    else return row;
                                                 },
                                                 [=](gdf_index_type row) { return row < (outputRows - column1TotalNulls); });
 
@@ -402,13 +402,13 @@ TYPED_TEST(MergeTest, Merge2KeyNullColumns) {
     auto leftColWrap1 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= inputRows / 2;
-                                                return row;
+                                                else return row;
                                             });
     // data: 0 2 4 6 | valid: 1 1 1 1
     auto leftColWrap2 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (inputRows / 4)) % 2 == 0;
-                                                return 2 * row;
+                                                else return 2 * row;
                                             },
                                             [](gdf_index_type row) { return true; });
     gdf_column *leftColumn1 = leftColWrap1.get();
@@ -418,13 +418,13 @@ TYPED_TEST(MergeTest, Merge2KeyNullColumns) {
     auto rightColWrap1 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= inputRows / 2;
-                                                return row;
+                                                else return row;
                                             });
     // data: 0 1 2 3 | valid: 0 0 0 0
     auto rightColWrap2 = columnFactory.make(inputRows,
                                             [=](gdf_index_type row)->gdf_index_type {
                                                 if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (inputRows / 4)) % 2 == 0;
-                                                return row;
+                                                else return row;
                                             },
                                             [](gdf_index_type row) { return false; });
     gdf_column *rightColumn1 = rightColWrap1.get();
@@ -447,18 +447,18 @@ TYPED_TEST(MergeTest, Merge2KeyNullColumns) {
     auto expectedDataWrap1 = columnFactory.make(outputRows,
                                                 [=](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return row >= outputRows / 2;
-                                                    return row / 2;
+                                                    else return row / 2;
                                                 },
                                                 [](gdf_index_type row) { return true; });
     // data: 0 0 2 1 4 2 6 3 | valid: 0 1 0 1 0 1 0 1
     auto expectedDataWrap2 = columnFactory.make(outputRows,
                                                 [=](gdf_index_type row)->gdf_index_type {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (outputRows / 8)) % 2 == 0;
-                                                    return row % 2 != 0 ? 2 * (row / 2) : (row / 2);
+                                                    else return row % 2 != 0 ? 2 * (row / 2) : (row / 2);
                                                 },
                                                 [=](gdf_index_type row) {
                                                     if(cudf::gdf_dtype_of<TypeParam>() == GDF_BOOL8) return (row / (outputRows / 4)) % 2 == 1;
-                                                    return row % 2 != 0;
+                                                    else return row % 2 != 0;
                                                 });
 
     EXPECT_TRUE(gdf_equal_columns(*expectedDataWrap1.get(), *outputTable.get_column(0)));
