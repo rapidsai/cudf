@@ -41,6 +41,7 @@ namespace cudf {
  *
  *---------------------------------------------------------------------------**/
 class column_view {
+ public:
   column_view() = default;
   ~column_view() = default;
   column_view(column_view const&) = default;
@@ -54,7 +55,7 @@ class column_view {
    *
    * @throws `cudf::logic_error` if `size < 0`
    * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `size > 0` but `type == INVALID`
+   * @throws `cudf::logic_error` if `size > 0` but `type == EMPTY`
    * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
    * @throws `cudf::logic_error` if `offset < 0`
    *
@@ -68,8 +69,8 @@ class column_view {
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
-  column_view(data_type type, size_type size, void const* data,
-              bitmask_type const* null_mask, size_type null_count,
+  column_view(data_type type, size_type size, void* data,
+              bitmask_type* null_mask, size_type null_count,
               size_type offset = 0,
               std::vector<column_view> const& children = {});
 
@@ -174,11 +175,11 @@ class column_view {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    *---------------------------------------------------------------------------**/
-  column_view const child(size_type child_index) const noexcept {
+  column_view const& child(size_type child_index) const noexcept {
     return _children[child_index];
   }
 
-  column_view child(size_type child_index) noexcept {
+  column_view& child(size_type child_index) noexcept {
     return _children[child_index];
   }
 
@@ -188,7 +189,7 @@ class column_view {
   size_type num_children() const noexcept { return _children.size(); }
 
  private:
-  data_type _type{INVALID};  ///< Element type
+  data_type _type{EMPTY};      ///< Element type
   cudf::size_type _size{};     ///< Number of elements
   void* _data{};               ///< Pointer to device memory containing elements
   bitmask_type* _null_mask{};  ///< Pointer to device memory containing

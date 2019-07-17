@@ -17,7 +17,6 @@
 
 #include <cudf/types.hpp>
 #include "column_view.hpp"
-#include "mutable_column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
 #include <vector>
@@ -140,23 +139,16 @@ class column {
    *---------------------------------------------------------------------------**/
   explicit column(column_view view);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column by deep copying from a `mutable_column_view`.
-   *
-   * @param view The `mutable_column_view` that will be copied
-   *---------------------------------------------------------------------------**/
-  explicit column(mutable_column_view view);
+  column_view const view() const;
 
-  column_view view() const;
+  column_view view();
 
-  operator column_view() const { return this->view(); };
+  operator const column_view() const { return this->view(); };
 
-  mutable_column_view mutable_view();
-
-  operator mutable_column_view() { return this->mutable_view(); };
+  operator column_view() { return this->view(); };
 
  private:
-  data_type _type{INVALID};    ///< Logical type of elements in the column
+  data_type _type{EMPTY};      ///< Logical type of elements in the column
   cudf::size_type _size{};     ///< The number of elements in the column
   rmm::device_buffer _data{};  ///< Dense, contiguous, type erased device memory
                                ///< buffer containing the column elements

@@ -22,8 +22,8 @@
 
 namespace cudf {
 
-column_view::column_view(data_type type, size_type size, void const* data,
-                         bitmask_type const* null_mask, size_type null_count,
+column_view::column_view(data_type type, size_type size, void* data,
+                         bitmask_type* null_mask, size_type null_count,
                          size_type offset,
                          std::vector<column_view> const& children)
     : _type{type},
@@ -34,9 +34,15 @@ column_view::column_view(data_type type, size_type size, void const* data,
       _offset{offset},
       _children{children} {
   CUDF_EXPECTS(size >= 0, "Column size cannot be negative.");
-  if (size > 0) {
+
+  if (type.id() == EMPTY) {
+    CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
+    CUDF_EXPECTS(nullptr == null_mask,
+                 "EMPTY column should have no null mask.");
+    CUDF_EXPECTS(size == null_count, "Invalid null count.");
+    CUDF_EXPECTS(children.size() == 0, "EMPTY column cannot have children.");
+  } else if (size > 0) {
     CUDF_EXPECTS(nullptr != data, "Null data pointer.");
-    CUDF_EXPECTS(INVALID != type, "Invalid element type.");
   }
 
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");

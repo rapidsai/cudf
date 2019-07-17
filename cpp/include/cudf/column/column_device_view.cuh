@@ -166,7 +166,7 @@ class column_device_view {
   }
 
  private:
-  data_type _type{INVALID};  ///< Element type
+  data_type _type{EMPTY};  ///< Element type
   cudf::size_type _size{};   ///< Number of elements
   void const* _data{};       ///< Pointer to device memory containing elements
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing

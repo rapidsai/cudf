@@ -44,8 +44,8 @@ class column;
 using size_type = int32_t;
 using bitmask_type = uint32_t;
 
-enum data_type {
-  INVALID = 0,
+enum type {
+  EMPTY = 0,     ///< Always null with no underlying data
   INT8,          ///< 1 byte signed integer
   INT16,         ///< 2 byte signed integer
   INT32,         ///< 4 byte signed integer
@@ -84,7 +84,7 @@ class data_type {
   type id() const noexcept { return _id; }
 
  private:
-  type _id{NULL};
+  type _id{EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
 };
