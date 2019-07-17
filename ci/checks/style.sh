@@ -25,6 +25,10 @@ BLACK_RETVAL=$?
 FLAKE=`flake8 python`
 FLAKE_RETVAL=$?
 
+# Run flake8-cython and get results/return code
+FLAKE_CYTHON=`flake8 --config=python/cudf/.flake8.cython`
+FLAKE_CYTHON_RETVAL=$?
+
 # Output results if failure otherwise show pass
 if [ "$ISORT_RETVAL" != "0" ]; then
   echo -e "\n\n>>>> FAILED: isort style check; begin output\n\n"
@@ -50,7 +54,15 @@ else
   echo -e "\n\n>>>> PASSED: flake8 style check\n\n"
 fi
 
-RETVALS=($ISORT_RETVAL $BLACK_RETVAL $FLAKE_RETVAL)
+if [ "$FLAKE_CYTHON_RETVAL" != "0" ]; then
+  echo -e "\n\n>>>> FAILED: flake8-cython style check; begin output\n\n"
+  echo -e "$FLAKE_CYTHON"
+  echo -e "\n\n>>>> FAILED: flake8-cython style check; end output\n\n"
+else
+  echo -e "\n\n>>>> PASSED: flake8-cython style check\n\n"
+fi
+
+RETVALS=($ISORT_RETVAL $BLACK_RETVAL $FLAKE_RETVAL $FLAKE_CYTHON_RETVAL)
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
 
