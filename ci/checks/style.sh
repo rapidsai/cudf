@@ -48,7 +48,7 @@ else
   echo -e "\n\n>>>> PASSED: flake8 style check\n\n"
 fi
 
-RETVALS=($ISORT_RETAVL $BLACK_RETVAL $FLAKE_RETVAL)
+RETVALS=($ISORT_RETVAL $BLACK_RETVAL $FLAKE_RETVAL)
 IFS=$'\n'
 RETVAL=`echo "${RETVALS[*]}" | sort -nr | head -n1`
 
