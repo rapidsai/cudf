@@ -231,3 +231,23 @@ def apply_scatter_array(dev_array, maps, out_col=None):
 
     in_col = columnops.as_column(dev_array)
     return apply_scatter_column(in_col, maps, out_col)
+
+
+def copy_column(input_col):
+    """
+        Call cudf::copy
+    """
+    cdef gdf_column* c_input_col = \
+                            column_view_from_column(input_col)
+    cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
+
+    with nogil:
+        output[0] = copy(c_input_col[0])
+
+    data, mask = gdf_column_to_column_mem(output)
+    from cudf.dataframe.column import Column
+
+    free(c_input_col)
+    free(output)
+
+    return Column.from_mem_views(data, mask)
