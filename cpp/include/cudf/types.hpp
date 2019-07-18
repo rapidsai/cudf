@@ -44,7 +44,7 @@ class column;
 using size_type = int32_t;
 using bitmask_type = uint32_t;
 
-enum type {
+enum type_id {
   EMPTY = 0,     ///< Always null with no underlying data
   INT8,          ///< 1 byte signed integer
   INT16,         ///< 2 byte signed integer
@@ -59,15 +59,14 @@ enum type {
   TIMESTAMP_MS,  ///< milliseconds since Unix Epoch in int64
   TIMESTAMP_S,   ///< seconds since Unix Epoch in int64
   CATEGORY,      ///< Categorial/Dictionary type
-  STRING,
+  STRING,        ///< String elements
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Indicator for the logical data type of an element in a column.
  *
  * Simple types can be be entirely described by their `id()`, but some types
- * require additional metadata to fully describe elements of that type. For
- * example, timestamps require additional timezone information.
+ * require additional metadata to fully describe elements of that type.
  *
  *---------------------------------------------------------------------------**/
 class data_type {
@@ -79,12 +78,12 @@ class data_type {
   data_type& operator=(data_type const&) = default;
   data_type& operator=(data_type&&) = default;
 
-  explicit data_type(type id) : _id{id} {}
+  explicit data_type(type_id id) : _id{id} {}
 
-  type id() const noexcept { return _id; }
+  type_id id() const noexcept { return _id; }
 
  private:
-  type _id{EMPTY};
+  type_id _id{EMPTY};
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
 };
