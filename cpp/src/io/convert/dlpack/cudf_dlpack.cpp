@@ -155,7 +155,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
     void *tensor_data = reinterpret_cast<void*>(
       reinterpret_cast<uintptr_t>(tensor->dl_tensor.data) +
       tensor->dl_tensor.byte_offset +
-      col_stride);
+      col_stride * c);
 
     void* col_data = 0;
     RMM_TRY(RMM_ALLOC(&col_data, bytes, 0));
