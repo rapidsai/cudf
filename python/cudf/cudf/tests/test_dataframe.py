@@ -3320,7 +3320,8 @@ def test_isin_datetime(data, values):
         ['this', 'is'],
         pytest.param([None, None, None], marks=pytest.mark.xfail),
         pytest.param([12, 14, 19], marks=[pytest.mark.xfail(
-            reason="pandas's failure here seems like a bug given the reverse succeeds")]),
+            reason="pandas's failure here seems like a bug "
+                   "given the reverse succeeds")]),
     ])
 def test_isin_string(data, values):
     psr = pd.Series(data)
@@ -3329,3 +3330,31 @@ def test_isin_string(data, values):
     got = gsr.isin(values)
     expected = psr.isin(values)
     assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(['this', 'is', None, 'a', 'test'],
+                  index=['a', 'b', 'c', 'd', 'e']),
+        pd.Series([0, 15, 10], index=[0, None, 9]),
+        pd.Series(range(25), index=pd.date_range(
+            start='2019-01-01', end='2019-01-02', freq='H'))
+    ])
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ['this', 'is'],
+        [0, 19, 13],
+        ['2019-01-01 04:00:00', '2019-01-01 06:00:00', '2018-03-02']
+    ])
+def test_isin_index(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.index.isin(values)
+    expected = psr.index.isin(values)
+
+    np.testing.assert_array_equal(got.copy_to_host(), expected)
