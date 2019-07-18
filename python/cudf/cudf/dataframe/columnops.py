@@ -223,17 +223,7 @@ def build_column(buffer, dtype, mask=None, categories=None, name=None,
                  null_count=None):
     from cudf.dataframe import numerical, categorical, datetime, string
 
-    if pd.api.types.is_categorical_dtype(dtype):
-        return categorical.CategoricalColumn(
-            data=buffer,
-            dtype="categorical",
-            categories=categories,
-            ordered=False,
-            mask=mask,
-            name=name,
-            null_count=null_count
-        )
-    elif np.dtype(dtype).type == np.datetime64:
+    if np.dtype(dtype).type == np.datetime64:
         return datetime.DatetimeColumn(
             data=buffer,
             dtype=np.dtype(dtype),
@@ -246,6 +236,24 @@ def build_column(buffer, dtype, mask=None, categories=None, name=None,
             raise TypeError
         return string.StringColumn(
             data=buffer,
+            name=name,
+            null_count=null_count
+        )
+    elif np.issubdtype(dtype, np.number):
+        return numerical.NumericalColumn(
+            data=buffer,
+            dtype=dtype,
+            mask=mask,
+            name=name,
+            null_count=null_count
+        )
+    elif pd.api.types.is_categorical_dtype(dtype):
+        return categorical.CategoricalColumn(
+            data=buffer,
+            dtype="categorical",
+            categories=categories,
+            ordered=False,
+            mask=mask,
             name=name,
             null_count=null_count
         )
