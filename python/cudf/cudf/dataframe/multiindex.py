@@ -207,44 +207,68 @@ class MultiIndex(Index):
     def _compute_validity_mask(self, index, row_tuple, max_length):
         """ Computes the valid set of indices of values in the lookup
         """
+        from cudf import DataFrame
+        from cudf import Series
+        from cudf import concat
+        from cudf.utils.cudautils import arange
+        lookup = DataFrame()
+        for idx, row in enumerate(row_tuple):
+            if row == slice(None):
+                continue
+            lookup[index._source_data.columns[idx]] = Series(row)
+            data_table = concat([
+                index._source_data,
+                DataFrame({'idx': Series(arange(len(index._source_data)))})
+            ], axis=1)
+        result = lookup.merge(data_table)['idx']
+        # Avoid computing levels unless the result of the merge is empty,
+        # which suggests that a KeyError should be raised.
+        if len(result) == 0:
+            for idx, row in enumerate(row_tuple):
+                if row == slice(None):
+                    continue
+                if row not in index.levels[idx]:
+                    raise KeyError(row)
+        return result
+
+    def _get_valid_indices_by_tuple(self, index, row_tuple, max_length):
+        from cudf.utils.cudautils import arange
+        from cudf import Series
         # Instructions for Slicing
         # if tuple, get first and last elements of tuple
         # if open beginning tuple, get 0 to highest valid_index
         # if open ending tuple, get highest valid_index to len()
         # if not open end or beginning, get range lowest beginning index
         # to highest ending index
-        from cudf import DataFrame
-        from cudf import Series
-        from cudf import concat
-        from cudf.utils.cudautils import arange
         if isinstance(row_tuple, slice):
-            stop = row_tuple.stop or max_length
-            start, stop, step, sln = utils.standard_python_slice(stop,
-                                                                 row_tuple)
-            return arange(start, stop, step)
+            if isinstance(row_tuple.start, numbers.Number) or isinstance(
+                    row_tuple.stop, numbers.Number) or row_tuple == slice(None):
+                stop = row_tuple.stop or max_length
+                start, stop, step, sln = utils.standard_python_slice(stop,
+                                                                     row_tuple)
+                return arange(start, stop, step)
+            if self._is_valid_index_key(row_tuple.start):
+                start_values = self._compute_validity_mask(
+                    index,
+                    row_tuple.start,
+                    max_length
+                )
+            if self._is_valid_index_key(row_tuple.stop):
+                stop_values = self._compute_validity_mask(
+                    index,
+                    row_tuple.stop,
+                    max_length
+                )
+            else:
+                return start_values
+            return Series(arange(start_values.min(), stop_values.max()+1))
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
-        lookup = DataFrame()
-        if isinstance(row_tuple, slice):
-            start, stop, step, sln = utils.standard_python_slice(
-                len(index.codes),
-                row_tuple
-            )
-            return Series(arange(start, stop, step))
-        for idx, row in enumerate(row_tuple):
-            if row == slice(None):
-                continue
-            try:
-                lookup[index.codes.columns[idx]] = Series(
-                    list(index.levels[idx]).index(row)
-                ).astype(index.codes.dtypes[0])
-            except ValueError:
-                raise KeyError(row)
-            codes_table = concat([
-                index.codes,
-                DataFrame({'idx': Series(arange(len(index.codes)))})
-            ], axis=1)
-        return lookup.merge(codes_table)['idx']
+        return self._compute_validity_mask(
+            index,
+            row_tuple,
+            max_length
+        )
 
     def _index_and_downcast(self, result, index, index_key):
         from cudf import DataFrame
@@ -317,7 +341,7 @@ class MultiIndex(Index):
 
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
-        valid_indices = self._compute_validity_mask(
+        valid_indices = self._get_valid_indices_by_tuple(
             df.index,
             row_tuple,
             len(df.index)
@@ -331,7 +355,7 @@ class MultiIndex(Index):
     def _get_column_major(self, df, row_tuple):
         from cudf import Series
         from cudf import DataFrame
-        valid_indices = self._compute_validity_mask(
+        valid_indices = self._get_valid_indices_by_tuple(
             df.columns,
             row_tuple,
             len(df._cols)

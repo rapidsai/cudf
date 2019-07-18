@@ -221,7 +221,6 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
               gdf.loc[key_tuple])
 
 
-@pytest.mark.xfail(reason="Slicing MultiIndexes not supported yet")
 def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
     gdf = cudf.from_pandas(pdf)
     gdfIndex = cudf.from_pandas(pdfIndex)
@@ -249,9 +248,9 @@ def test_multiindex_loc_rows_0(pdf, gdf, pdfIndex):
     pdf.index = pdfIndex
     gdf.index = gdfIndex
     with pytest.raises(KeyError):
-        print(pdf.loc[("d",)])
+        print(pdf.loc[("d",)].to_pandas())
     with pytest.raises(KeyError):
-        print(gdf.loc[("d",)])
+        print(gdf.loc[("d",)].to_pandas())
     assert_eq(pdf, gdf)
 
 
