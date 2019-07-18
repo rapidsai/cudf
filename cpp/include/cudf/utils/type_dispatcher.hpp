@@ -28,13 +28,13 @@
 #endif
 #endif
 
-/**
- *
- */
+/**---------------------------------------------------------------------------*
+ * @file type_dispatcher.hpp
+ * @brief Defines the mapping between `cudf::type_id` runtime type information
+ * and concrete C++ types.
+ *---------------------------------------------------------------------------**/
 namespace cudf {
 namespace exp {
-
-
 /**---------------------------------------------------------------------------*
  * @brief Maps a C++ type to it's corresponding `cudf::type` id
  *
