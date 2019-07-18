@@ -70,9 +70,9 @@ class _SeriesIlocIndexer(object):
 class _DataFrameIndexer(object):
     def __getitem__(self, arg):
         arg = self._create_valid_tuple(arg)
-        df = self._getitem_tuple_arg(arg)
+        scalar_series_or_df = self._getitem_tuple_arg(arg)
 
-        return df
+        return scalar_series_or_df
 
     def _create_valid_tuple(self, arg):
         if isinstance(arg, (str, numbers.Number)):

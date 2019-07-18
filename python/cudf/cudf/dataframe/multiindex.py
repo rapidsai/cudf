@@ -204,7 +204,7 @@ class MultiIndex(Index):
         self._levels = levels
         self._codes = codes
 
-    def _compute_validity_mask(self, index, row_tuple):
+    def _compute_validity_mask(self, index, row_tuple, max_length):
         """ Computes the valid set of indices of values in the lookup
         """
         # Instructions for Slicing
@@ -217,6 +217,13 @@ class MultiIndex(Index):
         from cudf import Series
         from cudf import concat
         from cudf.utils.cudautils import arange
+        if isinstance(row_tuple, slice):
+            stop = row_tuple.stop or max_length
+            start, stop, step, sln = utils.standard_python_slice(stop,
+                                                                 row_tuple)
+            return arange(start, stop, step)
+        elif isinstance(row_tuple, numbers.Number):
+            return row_tuple
         lookup = DataFrame()
         if isinstance(row_tuple, slice):
             start, stop, step, sln = utils.standard_python_slice(
@@ -309,41 +316,30 @@ class MultiIndex(Index):
         return result
 
     def _get_row_major(self, df, row_tuple):
-        from cudf.utils.cudautils import arange
-        if isinstance(row_tuple, slice):
-            stop = row_tuple.stop or len(df.index)
-            start, stop, step, sln = utils.standard_python_slice(stop,
-                                                                 row_tuple)
-            valid_indices = arange(start, stop, step)
-            row_tuple = [row_tuple]
-        elif isinstance(row_tuple, numbers.Number):
-            valid_indices = row_tuple
-            row_tuple = [row_tuple]
-        else:
-            valid_indices = self._compute_validity_mask(df.index, row_tuple)
-
         from cudf import Series
+        valid_indices = self._compute_validity_mask(
+                df.index,
+                row_tuple,
+                len(df.index)
+        )
         result = df.take(Series(valid_indices))
+        if isinstance(row_tuple, (numbers.Number, slice)):
+            row_tuple = [row_tuple]
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
 
     def _get_column_major(self, df, row_tuple):
-        from cudf.utils.cudautils import arange
         from cudf import Series
         from cudf import DataFrame
-        if isinstance(row_tuple, slice):
-            start, stop, step, sln = utils.standard_python_slice(len(df._cols),
-                                                                 row_tuple)
-            valid_indices = arange(start, stop, step)
-            row_tuple = [row_tuple]
-        elif isinstance(row_tuple, numbers.Number):
-            valid_indices = row_tuple
-            row_tuple = [row_tuple]
-        else:
-            valid_indices = self._compute_validity_mask(df.columns, row_tuple)
-
+        valid_indices = self._compute_validity_mask(
+                df.columns,
+                row_tuple,
+                len(df._cols)
+        )
         result = df.take_columns(valid_indices)
 
+        if isinstance(row_tuple, (numbers.Number, slice)):
+            row_tuple = [row_tuple]
         if len(result) == 0 and len(result.columns) == 0:
             result_columns = df.columns.copy(deep=False)
             clear_codes = DataFrame()
