@@ -18,5 +18,6 @@ repos:
       alias: flake8-cython
       name: flake8-cython
       args: ['--config=python/cudf/.flake8.cython']
+      types: [cython]
 default_language_version:
     python: python3

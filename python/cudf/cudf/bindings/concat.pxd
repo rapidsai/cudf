@@ -15,4 +15,3 @@ cdef extern from "cudf.h" nogil:
         gdf_column *columns_to_concat[],
         int num_columns
     ) except +
-
