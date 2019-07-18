@@ -28,14 +28,14 @@ def test_generic_ptx(dtype):
 
     @numba.cuda.jit(device=True)
     def generic_function(a, b):
-        return a**3 + b
+        return a ** 3 + b
 
     nb_type = numba.numpy_support.from_dtype(np.dtype(dtype))
     type_signature = (nb_type, nb_type)
 
     result = generic_function.compile(type_signature)
     ptx = generic_function.inspect_ptx(type_signature)
-    ptx_code = ptx.decode('utf-8')
+    ptx_code = ptx.decode("utf-8")
 
     output_type = numba.numpy_support.as_dtype(result.signature.return_type)
 
