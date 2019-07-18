@@ -352,8 +352,7 @@ ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 # - sorted-merge tests -------------------------------------------------------------------------------------
 
 set(MERGE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu")
 
 ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 
