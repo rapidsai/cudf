@@ -74,6 +74,8 @@
 - PR #2311 Fix copy behaviour for GenericIndex
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2326 Fix for bug in DLPack when reading multiple columns
+
 
 
 # cuDF 0.8.0 (27 June 2019)
