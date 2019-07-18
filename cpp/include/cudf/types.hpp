@@ -58,7 +58,7 @@ enum type {
   TIMESTAMP_US,  ///< microseconds since Unix Epoch in int64
   TIMESTAMP_MS,  ///< milliseconds since Unix Epoch in int64
   TIMESTAMP_S,   ///< seconds since Unix Epoch in int64
-  CATEGORY,  ///< Categorial/Dictionary type composed of two discrete columns
+  CATEGORY,      ///< Categorial/Dictionary type
   STRING,
 };
 
