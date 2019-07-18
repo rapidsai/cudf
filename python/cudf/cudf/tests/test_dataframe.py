@@ -3297,3 +3297,25 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_series_astype_numeric_to_numeric(dtype, as_dtype):
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize("as_dtype", ["str", "datetime64[ms]", "category"])
+def test_series_astype_numeric_to_other(dtype, as_dtype):
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))

@@ -1381,7 +1381,7 @@ class Series(object):
         values to the given dtype.
         If the dtype is not changed, ``self`` is returned.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
         return self._copy_construct(data=self._column.astype(dtype))

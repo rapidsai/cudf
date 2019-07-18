@@ -13,6 +13,7 @@ from numba import cuda, njit
 import nvstrings
 from librmm_cffi import librmm as rmm
 
+import cudf
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
@@ -113,7 +114,31 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
+    def astype(self, dtype):
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
+            return self
+
+        elif pd.api.types.is_string_dtype(dtype):
+            if pd.api.types.is_categorical_dtype(dtype):
+                return self.as_categorical_column()
+            return self.as_string_column()
+
+        elif np.issubdtype(dtype, np.datetime64):
+            return self.as_datetime_column(dtype)
+
+        else:
+            return self.as_numerical_column(dtype)
+
     def as_categorical_column(self):
+        sr = cudf.Series(self)
+        labels, cats = sr.factorize()
+        return cudf.dataframe.categorical.CategoricalColumn(
+            data=labels._column.data,
+            mask=self.mask,
+            null_count=self.null_count,
+            categories=cats._column,
+            ordered=True,
+        )
         raise NotImplementedError
 
     def as_numeric_column(self):
