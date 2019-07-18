@@ -20,8 +20,6 @@
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2049 Implemented merge functionality
 
-
-
 ## Improvements
 
 - PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
@@ -53,6 +51,7 @@
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
+- PR #XXXX Add docs on how code formatting works for contributors
 
 ## Bug Fixes
 
