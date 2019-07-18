@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <utilities/error_utils.hpp>
 
 #ifndef CUDA_HOST_DEVICE_CALLABLE
 #ifdef __CUDACC__
@@ -51,7 +52,6 @@ namespace exp {
  *---------------------------------------------------------------------------**/
 template <typename T>
 inline constexpr type_id type_to_id() { return EMPTY; };
-
 
 template <cudf::type_id t> struct id_to_type_impl { using type = void; };
 /**---------------------------------------------------------------------------*
@@ -111,12 +111,12 @@ ADD_MAPPING(double, FLOAT64);
  * dispatched C++ types. However, this mapping may be customized by explicitly
  * specifying a user-defined trait struct for the `IdTypeMap`. For example, to
  * always dispatch `int32_t`
- * 
+ *
  * ```
  * template<cudf::type_id t> struct always_int{ using type = int32_t; }
- * 
+ *
  * // This will always invoke `operator()<int32_t>`
- * cudf::type_dispatcher<always_int>(data_type, f); 
+ * cudf::type_dispatcher<always_int>(data_type, f);
  * ```
  *
  * @tparam id_to_type_impl Maps a `cudf::type_id` its dispatched C++ type
@@ -136,6 +136,7 @@ template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     cudf::data_type dtype, Functor f, Ts&&... args) {
+
   switch (dtype.id()) {
     case INT8:
       return f.template operator()<typename IdTypeMap<INT8>::type>(
@@ -155,8 +156,17 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     case FLOAT64:
       return f.template operator()<typename IdTypeMap<FLOAT64>::type>(
           std::forward<Ts>(args)...);
-    default: { assert(false && "Unsupported type"); }
+    default: { CUDF_FAIL("Unsupported type_id."); }
   }
+  // The following code will never be reached, but the compiler generates a
+  // warning if there isn't a return value.
+
+  // Need to find out what the return type is in order to have a default
+  // return value and solve the compiler warning for lack of a default
+  // return
+  using return_type =
+      decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
+  return return_type();
 }
 
 }  // namespace exp
