@@ -268,11 +268,14 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 
   // size of the GDF column is being resized
   unique_indices.size = thrust::distance(static_cast<gdf_index_type *>(unique_indices.data), result_end);
+  gdf_column resized_unique_indices = cudf::copy(unique_indices);
+  // Free old column, as we have resized (implicitly)
+  gdf_column_free (&unique_indices);
 
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
 
-  return unique_indices;
+  return resized_unique_indices;
 }
 
 std::pair<cudf::table, gdf_column>
