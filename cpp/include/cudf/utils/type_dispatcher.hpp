@@ -90,21 +90,71 @@ ADD_MAPPING(int64_t, INT64);
 ADD_MAPPING(float, FLOAT32);
 ADD_MAPPING(double, FLOAT64);
 
+/**---------------------------------------------------------------------------*
+ * @brief Invokes an `operator()` template with the type instantiation based on
+ * the specified `cudf::data_type`'s `id()`.
+ *
+ * Example usage with a functor that returns the size of the dispatched type:
+ *
+ * ```
+ * struct size_of_functor{
+ *  template <typename T>
+ *  int operator()(){
+ *    return sizeof(T);
+ *  }
+ * };
+ * cudf::data_type t{INT32};
+ * cudf::type_dispatcher(t, size_of_functor{});  // returns 4
+ * ```
+ *
+ * The `type_dispatcher` provides a default mapping of `cudf::type_id`s to
+ * dispatched C++ types. However, this mapping may be customized by explicitly
+ * specifying a user-defined trait struct for the `IdTypeMap`. For example, to
+ * always dispatch `int32_t`
+ * 
+ * ```
+ * template<cudf::type_id t> struct always_int{ using type = int32_t; }
+ * 
+ * // This will always invoke `operator()<int32_t>`
+ * cudf::type_dispatcher<always_int>(data_type, f); 
+ * ```
+ *
+ * @tparam id_to_type_impl Maps a `cudf::type_id` its dispatched C++ type
+ * @tparam Functor The callable object's type
+ * @tparam Ts Variadic parameter pack type
+ * @param dtype The `cudf::data_type` whose `id()` determines which template
+ * instantiation is invoked
+ * @param f The callable whose `operator()` template is invoked
+ * @param args Parameter pack of arguments forwarded to the `operator()`
+ * invocation
+ * @return Whatever is returned by the callable's `operator()`
+ *---------------------------------------------------------------------------**/
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
 #pragma nv_exec_check_disable
-template <template <cudf::type_id> typename Dispatch = id_to_type_impl,
+template <template <cudf::type_id> typename IdTypeMap = id_to_type_impl,
           typename Functor, typename... Ts>
-CUDA_HOST_DEVICE_CALLABLE 
-constexpr decltype(auto) type_dispatcher(
+CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     cudf::data_type dtype, Functor f, Ts&&... args) {
   switch (dtype.id()) {
-    case INT8: return f.template operator()<typename Dispatch<INT8>::type>( std::forward<Ts>(args)...);
-    case INT16: return f.template operator()<typename Dispatch<INT16>::type>( std::forward<Ts>(args)...);
-    case INT32: return f.template operator()<typename Dispatch<INT32>::type>( std::forward<Ts>(args)...);
-    case INT64: return f.template operator()<typename Dispatch<INT64>::type>( std::forward<Ts>(args)...);
-    case FLOAT32: return f.template operator()<typename Dispatch<FLOAT32>::type>( std::forward<Ts>(args)...);
-    case FLOAT64: return f.template operator()<typename Dispatch<FLOAT64>::type>( std::forward<Ts>(args)...);
+    case INT8:
+      return f.template operator()<typename IdTypeMap<INT8>::type>(
+          std::forward<Ts>(args)...);
+    case INT16:
+      return f.template operator()<typename IdTypeMap<INT16>::type>(
+          std::forward<Ts>(args)...);
+    case INT32:
+      return f.template operator()<typename IdTypeMap<INT32>::type>(
+          std::forward<Ts>(args)...);
+    case INT64:
+      return f.template operator()<typename IdTypeMap<INT64>::type>(
+          std::forward<Ts>(args)...);
+    case FLOAT32:
+      return f.template operator()<typename IdTypeMap<FLOAT32>::type>(
+          std::forward<Ts>(args)...);
+    case FLOAT64:
+      return f.template operator()<typename IdTypeMap<FLOAT64>::type>(
+          std::forward<Ts>(args)...);
     default: { assert(false && "Unsupported type"); }
   }
 }
