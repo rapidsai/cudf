@@ -242,13 +242,13 @@ class NumericalColumn(columnops.TypedColumnBase):
         return cpp_reduce.apply_reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return cpp_reduce.apply_reduce('mean', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return cpp_reduce.apply_reduce('var', self, dtype=dtype, ddof=ddof)
+        return cpp_reduce.apply_reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return cpp_reduce.apply_reduce('std', self, dtype=dtype, ddof=ddof)
+        return cpp_reduce.apply_reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return cpp_reduce.apply_reduce("sum_of_squares", self, dtype=dtype)
@@ -374,9 +374,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             elif value > self.max():
                 found = len(self) - 1
             else:
-                found = cudautils.find_last(
-                    self.data.mem, value, compare="lt"
-                )
+                found = cudautils.find_last(self.data.mem, value, compare="lt")
                 if found == -1:
                     raise ValueError("value not found")
         elif found == -1:
@@ -385,17 +383,17 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     @property
     def is_monotonic_increasing(self):
-        if not hasattr(self, '_is_monotonic_increasing'):
+        if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = numeric_column_binop(
-                self[1:], self[:-1], 'ge', 'bool'
+                self[1:], self[:-1], "ge", "bool"
             ).all()
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        if not hasattr(self, '_is_monotonic_decreasing'):
+        if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = numeric_column_binop(
-                self[1:], self[:-1], 'le', 'bool'
+                self[1:], self[:-1], "le", "bool"
             ).all()
         return self._is_monotonic_decreasing
 
