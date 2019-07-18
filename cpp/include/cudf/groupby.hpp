@@ -167,8 +167,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
  * nulls context->flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are
  * treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
  *
- * @returns A gdf_column containing the first index of every unique row.
- * It can return only GDF_INT32 type and cannot contain null values.
+ * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
  */
 gdf_column
 gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
@@ -192,8 +191,7 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
  * @returns A tuple containing:
  *          - A cudf::table containing a set of columns sorted by the key
  * columns.
- *          - A GDF column containing the first index of every unique row
- *            It can return only GDF_INT32 type and cannot contain null values.
+ *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
  */
 std::pair<cudf::table,
           gdf_column>
