@@ -34,6 +34,7 @@
 namespace cudf {
 namespace exp {
 
+
 /**---------------------------------------------------------------------------*
  * @brief Maps a C++ type to it's corresponding `cudf::type` id
  *
@@ -50,20 +51,9 @@ namespace exp {
  *---------------------------------------------------------------------------**/
 template <typename T>
 inline constexpr type_id type_to_id() { return EMPTY; };
-template <> inline constexpr type_id type_to_id<int8_t>() { return INT8; };
-template <> inline constexpr type_id type_to_id<int16_t>() { return INT16; };
-template <> inline constexpr type_id type_to_id<int32_t>() { return INT32; };
-template <> inline constexpr type_id type_to_id<int64_t>() { return INT64; };
-template <> inline constexpr type_id type_to_id<float>() { return FLOAT32; };
-template <> inline constexpr type_id type_to_id<double>() { return FLOAT64; };
+
 
 template <cudf::type_id t> struct id_to_type_impl { using type = void; };
-template <> struct id_to_type_impl<INT8> { using type = int8_t; };
-template <> struct id_to_type_impl<INT16> { using type = int16_t; };
-template <> struct id_to_type_impl<INT32> { using type = int32_t; };
-template <> struct id_to_type_impl<INT64> { using type = int64_t; };
-template <> struct id_to_type_impl<FLOAT32> { using type = float; };
-template <> struct id_to_type_impl<FLOAT64> { using type = double; };
 /**---------------------------------------------------------------------------*
  * @brief Maps a `cudf::type_id` to it's corresponding concrete C++ type
  *
@@ -75,6 +65,30 @@ template <> struct id_to_type_impl<FLOAT64> { using type = double; };
  *---------------------------------------------------------------------------**/
 template <cudf::type_id t>
 using id_to_type = typename id_to_type_impl<t>::type;
+
+/**---------------------------------------------------------------------------*
+ * @brief Macro used to define a mapping between a concrete C++ type and a
+ *`cudf::type_id` enum.
+
+ * @param Type The concrete C++ type
+ * @param Id The `cudf::type_id` enum
+ *---------------------------------------------------------------------------**/
+#ifndef ADD_MAPPING
+#define ADD_MAPPING(Type, Id) \
+template<> constexpr inline type_id type_to_id<Type>() { return Id; } \
+template<> struct id_to_type_impl<Id> { using type = Type; }
+#endif
+
+/**---------------------------------------------------------------------------*
+ * @brief Defines all of the mappings between C++ types and their corresponding
+ * `cudf::type_id` values.
+ *---------------------------------------------------------------------------**/
+ADD_MAPPING(int8_t, INT8);
+ADD_MAPPING(int16_t, INT16);
+ADD_MAPPING(int32_t, INT32);
+ADD_MAPPING(int64_t, INT64);
+ADD_MAPPING(float, FLOAT32);
+ADD_MAPPING(double, FLOAT64);
 
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
