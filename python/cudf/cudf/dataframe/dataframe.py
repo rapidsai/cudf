@@ -1027,8 +1027,8 @@ class DataFrame(object):
             index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
             df._index = index
-            for k in self.columns:
-                df[k] = self[k].set_index(index)
+            for k, c in self._cols.items():
+                df[k] = c.set_index(index)
             return df
 
     def reset_index(self, drop=False):
@@ -1421,6 +1421,9 @@ class DataFrame(object):
         out = out.set_index(self.index)
         if isinstance(mapper, Mapping):
             postfix = 1
+            # It is possible for DataFrames with a MultiIndex columns object
+            # to have columns with the same name. The followig use of
+            # _cols.items and ("cudf_"... allows the use of rename in this case
             for key, column in self._cols.items():
                 if key in mapper:
                     if mapper[key] in out.columns:
@@ -1731,12 +1734,12 @@ class DataFrame(object):
 
         # Never transpose a MultiIndex - remove the existing columns and
         # replace with a RangeIndex. Afterward, reassign.
-        temp_columns = self.columns.copy(deep=True)
+        temp_columns = self.columns.copy(deep=False)
         self.columns = pd.Index(range(len(self.columns)))
         result = cpp_transpose(self)
         self.columns = temp_columns
         result = result.rename(dict(zip(result.columns, self.index)))
-        result._index = as_index(temp_columns)
+        result = result.set_index(as_index(temp_columns))
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             result.columns = self.index
         return result

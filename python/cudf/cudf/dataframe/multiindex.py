@@ -255,25 +255,18 @@ class MultiIndex(Index):
         size = 0
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
-        for k in range(size, len(index.levels)):
+        for k in range(size, len(index._source_data.columns)):
             out_index.add_column(
                 index.names[k],
-                index.codes[index.codes.columns[k]]
+                index._source_data[index._source_data.columns[k]]
             )
 
         # If there's only one column remaining in the output index, convert
         # it into an Index and name the final index values according
         # to the proper codes.
         if len(out_index.columns) == 1:
-            out_index = []
-            for val in index.codes[
-                index.codes.columns[len(index.codes.columns) - 1]
-            ]:
-                out_index.append(
-                    index.levels[len(index.codes.columns) - 1][
-                        val
-                    ]
-                )
+            last_column = index._source_data.columns[-1]
+            out_index = index._source_data[last_column]
             out_index = as_index(out_index)
             out_index.name = index.names[len(index.names) - 1]
             index = out_index
@@ -285,11 +278,9 @@ class MultiIndex(Index):
                 result = result[result.columns[0]]
                 # convert to Series
                 series_name = []
-                for idx, code in enumerate(result.columns.codes):
+                for idx, code in enumerate(index._source_data.columns):
                     series_name.append(
-                        result.columns.levels[idx][
-                            result.columns.codes[code][0]
-                        ]
+                        result.columns._source_data[code][0]
                     )
                 result = Series(
                     list(result._cols.values())[0],
@@ -302,16 +293,12 @@ class MultiIndex(Index):
                     # Pandas returns a Series with a stringified index for
                     # the one expected result column
                     series_name = []
-                    for idx, code in enumerate(index.codes):
+                    for idx, code in enumerate(index._source_data.columns):
                         series_name.append(
-                            index.levels[idx][
-                                index.codes[code][0]
-                            ]
+                            index._source_data[code][0]
                         )
                     result = Series([], name=series_name)
                     result.name = tuple(series_name)
-                else:
-                    index._source_data = index._source_data[index_key]
             elif (len(out_index.columns)) > 0:
                 # Otherwise pop the leftmost levels, names, and codes from the
                 # source index until it has the correct number of columns (n-k)
