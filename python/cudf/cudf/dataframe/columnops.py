@@ -219,7 +219,8 @@ def column_select_by_position(column, positions):
     )
 
 
-def build_column(buffer, dtype, mask=None, categories=None, name=None):
+def build_column(buffer, dtype, mask=None, categories=None, name=None,
+                 null_count=None):
     from cudf.dataframe import numerical, categorical, datetime, string
 
     if pd.api.types.is_categorical_dtype(dtype):
@@ -230,18 +231,31 @@ def build_column(buffer, dtype, mask=None, categories=None, name=None):
             ordered=False,
             mask=mask,
             name=name,
+            null_count=null_count
         )
     elif np.dtype(dtype).type == np.datetime64:
         return datetime.DatetimeColumn(
-            data=buffer, dtype=np.dtype(dtype), mask=mask, name=name
+            data=buffer,
+            dtype=np.dtype(dtype),
+            mask=mask,
+            name=name,
+            null_count=null_count
         )
     elif np.dtype(dtype).type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError
-        return string.StringColumn(data=buffer, name=name)
+        return string.StringColumn(
+            data=buffer,
+            name=name,
+            null_count=null_count
+        )
     else:
         return numerical.NumericalColumn(
-            data=buffer, dtype=dtype, mask=mask, name=name
+            data=buffer,
+            dtype=dtype,
+            mask=mask,
+            name=name,
+            null_count=null_count
         )
 
 

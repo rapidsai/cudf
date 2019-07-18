@@ -114,20 +114,25 @@ class Column(object):
         return col
 
     @staticmethod
-    def from_mem_views(data_mem, mask_mem=None):
+    def from_mem_views(data_mem, mask_mem=None, null_count=None):
         """Create a Column object from a data device array (or nvstrings
            object), and an optional mask device array
         """
         from cudf.dataframe import columnops
 
         if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(data_mem, np.dtype("object"))
+            return columnops.build_column(buffer=data_mem,
+                                          dtype=np.dtype("object"),
+                                          null_count=null_count)
         else:
             data_buf = Buffer(data_mem)
             mask = None
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
-            return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
+            return columnops.build_column(buffer=data_buf,
+                                          dtype=data_mem.dtype,
+                                          mask=mask,
+                                          null_count=null_count)
 
     def __init__(self, data, mask=None, null_count=None, name=None):
         """

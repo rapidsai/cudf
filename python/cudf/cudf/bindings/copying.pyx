@@ -250,4 +250,4 @@ def copy_column(input_col):
     free(c_input_col)
     free(output)
 
-    return Column.from_mem_views(data, mask)
+    return Column.from_mem_views(data, mask, output.null_count)
