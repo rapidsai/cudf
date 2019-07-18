@@ -28,6 +28,8 @@
 #include <utilities/type_dispatcher.hpp>
 #include <string/nvcategory_util.hpp>
 
+#include <bitmask/legacy/bit_mask.cuh>
+
 using bit_mask::bit_mask_t;
 
 namespace cudf {
@@ -62,8 +64,9 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
   }
   
   CUDF_EXPECTS(nullptr != scatter_map, "scatter_map is null");
-  
-  rmm::device_vector<gdf_index_type> v_gather_map(num_destination_rows, -1);
+
+  constexpr gdf_index_type default_index_value = -1;  
+  rmm::device_vector<gdf_index_type> v_gather_map(num_destination_rows, default_index_value);
  
   constexpr int block_size = 256;
 
@@ -90,17 +93,11 @@ __global__ void marking_bitmask_kernel(
   while (row < num_scatter_rows) {
 
     const gdf_index_type output_row = scatter_map[row];
-    
-    auto container_index = util::detail::bit_container_index<bit_mask_t>(output_row);
-    auto intra_container_index = util::detail::intra_container_index<bit_mask_t>(output_row);
-    
-    // Set the according output bit
-    const bit_mask_t output_bit = static_cast<bit_mask_t>(1) << intra_container_index;
 
     if(mark_true){
-      atomicOr(&destination_mask[container_index], output_bit);
+      bit_mask::set_bit_safe(destination_mask, output_row);
     }else{
-      atomicAnd(&destination_mask[container_index], ~output_bit);
+      bit_mask::clear_bit_safe(destination_mask, output_row);
     }
 
     row += blockDim.x * gridDim.x;
@@ -168,11 +165,9 @@ void scalar_scatter(const std::vector<gdf_scalar*>& source_row,
     gdf_column* dest_col = destination_table->get_column(i);
     if(dest_col->valid){
       bit_mask_t* dest_valid = reinterpret_cast<bit_mask_t*>(dest_col->valid);
-      if(source_row[i]->is_valid){
-        marking_bitmask_kernel<true><<<grid_size, block_size, 0, v_streams[i+n_cols]>>>(dest_valid, dest_col->size, scatter_map, num_scatter_rows);
-      }else{
-        marking_bitmask_kernel<false><<<grid_size, block_size, 0, v_streams[i+n_cols]>>>(dest_valid, dest_col->size, scatter_map, num_scatter_rows);
-      }
+      auto f = source_row[i]->is_valid ?
+        marking_bitmask_kernel<true> : marking_bitmask_kernel<false>;
+      f<<<grid_size, block_size, 0, v_streams[i+n_cols]>>>(dest_valid, dest_col->size, scatter_map, num_scatter_rows);
     }else{
       CUDF_EXPECTS(source_row[i]->is_valid, "Scattering a null scalar to a column with NO valid array.");
     }
