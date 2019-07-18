@@ -79,6 +79,7 @@
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2235 Fix get_dummies to be compatible with dask
+- PR #2336 Fix gdf_group_by_without_aggregations return value when input_table num_rows is zero
 
 
 # cuDF 0.8.0 (27 June 2019)
