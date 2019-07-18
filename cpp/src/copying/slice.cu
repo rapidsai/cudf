@@ -24,8 +24,8 @@
 #include <utilities/cuda_utils.hpp>
 #include <utilities/bit_util.cuh>
 #include <rmm/thrust_rmm_allocator.h>
-#include <nvstrings/NVCategory.h>
 #include <bitmask/legacy/bit_mask.cuh> 
+#include <string/nvcategory_util.hpp>
 #include <copying/slice.hpp>
 
 namespace cudf {
@@ -215,9 +215,7 @@ public:
       }
 
       if (output_column->dtype == GDF_STRING_CATEGORY){
-        NVCategory* new_category = static_cast<NVCategory*>(input_column_.dtype_info.category)->gather_and_remap(
-                      static_cast<int*>(output_column->data), (unsigned int)output_column->size);
-        output_column->dtype_info.category = new_category;
+        CUDF_TRY(nvcategory_gather(output_column, static_cast<NVCategory*>(input_column_.dtype_info.category)));
       }
     }
   }

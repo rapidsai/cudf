@@ -551,7 +551,7 @@ class GenericIndex(Index):
         return self._values.__sizeof__()
 
     def __reduce__(self):
-        return GenericIndex, tuple([self._values])
+        return self.__class__, tuple([self._values])
 
     def __len__(self):
         return len(self._values)
