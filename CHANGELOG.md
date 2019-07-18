@@ -78,7 +78,6 @@
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2235 Fix get_dummies to be compatible with dask
-- PR #2311 Fix copy behaviour for GenericIndex
 
 
 # cuDF 0.8.0 (27 June 2019)
