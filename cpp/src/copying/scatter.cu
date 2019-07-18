@@ -22,6 +22,14 @@
 
 #include <copying/gather.hpp>
 
+#include <cudf/types.h>
+#include <utilities/bit_util.cuh>
+#include <utilities/cuda_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <string/nvcategory_util.hpp>
+
+using bit_mask::bit_mask_t;
+
 namespace cudf {
 namespace detail {
   
@@ -69,11 +77,124 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
   detail::gather(source_table, v_gather_map.data().get(), destination_table, true);    
 }
 
+template<bool mark_true>
+__global__ void marking_bitmask_kernel(
+    bit_mask_t* destination_mask,
+    gdf_size_type num_destination_rows,
+    const gdf_index_type scatter_map[],
+    gdf_size_type num_scatter_rows
+){
+  
+  gdf_index_type row = threadIdx.x + blockIdx.x * blockDim.x;
+ 
+  while (row < num_scatter_rows) {
+
+    const gdf_index_type output_row = scatter_map[row];
+    
+    auto container_index = util::detail::bit_container_index<bit_mask_t>(output_row);
+    auto intra_container_index = util::detail::intra_container_index<bit_mask_t>(output_row);
+    
+    // Set the according output bit
+    const bit_mask_t output_bit = static_cast<bit_mask_t>(1) << intra_container_index;
+
+    if(mark_true){
+      atomicOr(&destination_mask[container_index], output_bit);
+    }else{
+      atomicAnd(&destination_mask[container_index], ~output_bit);
+    }
+
+    row += blockDim.x * gridDim.x;
+  }
+}
+
+struct scalar_scatterer {
+  /**---------------------------------------------------------------------------*
+   * @brief Type-dispatched function to scatter from one scalar to a table based
+   * on a `scatter_map`.
+   *
+   * @tparam ColumnType Dispatched type for the column being scattered 
+   * @param source_scalar The scalar to scatter to
+   * @param scatter_map Array of indices that maps the source element to destination
+   * elements
+   * @param destination_column The column to gather into
+   * @param check_bounds Optionally perform bounds checking on the values of
+   * `gather_map`
+   * @param stream Optional CUDA stream on which to execute kernels
+   *---------------------------------------------------------------------------**/
+  template <typename ColumnType>
+  void operator()(gdf_scalar const* source_scalar,
+                  gdf_index_type const scatter_map[], const gdf_size_type num_scatter_rows,
+                  gdf_column* destination_column, cudaStream_t stream = 0) {
+    
+    const ColumnType source_data {
+        *reinterpret_cast<ColumnType const*>(&source_scalar->data) };
+    ColumnType* destination_data {
+        reinterpret_cast<ColumnType*>(destination_column->data) };
+
+    thrust::constant_iterator<ColumnType> const_iter(source_data);
+    thrust::scatter(rmm::exec_policy(stream)->on(stream), const_iter,
+                     const_iter + num_scatter_rows, scatter_map, 
+                     destination_data);
+    
+    CHECK_STREAM(stream);
+  
+  }
+};
+
+void scalar_scatter(const std::vector<gdf_scalar*>& source_row, 
+                    gdf_index_type const scatter_map[],
+                    gdf_size_type num_scatter_rows, table* destination_table){
+ 
+  CUDF_EXPECTS(source_row.size() == (size_t)destination_table->num_columns(),
+    "scalar vector and destination table size mismatch.");
+
+  const int n_cols = source_row.size();
+
+  std::vector<cudf::util::cuda::scoped_stream> v_streams(2*n_cols);
+
+  // data part
+  for(int i = 0; i < n_cols; i++){
+    CUDF_EXPECTS(source_row[i]->dtype == destination_table->get_column(i)->dtype,
+        "source/destination data type mismatch.");
+    type_dispatcher(source_row[i]->dtype, scalar_scatterer{}, source_row[i], 
+        scatter_map, num_scatter_rows, destination_table->get_column(i), v_streams[i]);
+  }
+
+  constexpr int block_size = 256;  
+  const int grid_size = cudf::util::cuda::grid_config_1d(num_scatter_rows, block_size).num_blocks;
+  
+  // bitmask part
+  for(int i = 0; i < n_cols; i++){
+    gdf_column* dest_col = destination_table->get_column(i);
+    if(dest_col->valid){
+      bit_mask_t* dest_valid = reinterpret_cast<bit_mask_t*>(dest_col->valid);
+      if(source_row[i]->is_valid){
+        marking_bitmask_kernel<true><<<grid_size, block_size, 0, v_streams[i+n_cols]>>>(dest_valid, dest_col->size, scatter_map, num_scatter_rows);
+      }else{
+        marking_bitmask_kernel<false><<<grid_size, block_size, 0, v_streams[i+n_cols]>>>(dest_valid, dest_col->size, scatter_map, num_scatter_rows);
+      }
+    }else{
+      CUDF_EXPECTS(source_row[i]->is_valid, "Scattering a null scalar to a column with NO valid array.");
+    }
+    set_null_count(*dest_col);
+  }
+
+}
+
 }  // namespace detail
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table) {
+  // Take care of columns of type `GDF_STRING_CATEGORY`.
+  nvcategory_scatter_table(*const_cast<table*>(source_table), *destination_table);
+  
   detail::scatter(source_table, scatter_map, destination_table);
+}
+
+void scatter(const std::vector<gdf_scalar*>& source_row, 
+              gdf_index_type const scatter_map[],
+              gdf_size_type num_scatter_rows, table* destination_table){
+  detail::scalar_scatter(source_row, scatter_map, num_scatter_rows, destination_table);
 }
 
 }  // namespace cudf

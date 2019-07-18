@@ -156,8 +156,37 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  *
  * @return GDF_SUCCESS upon successful completion
  */
+
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
                   table* destination_table);
+
+/**
+ * @brief Scatters one row (including null values) of gdf_scalar 
+ * into a set of destination columns.
+ * 
+ * The row of the source scalars will be scattered to rows "scatter_map[i]" 
+ * in the destination columns.
+ *
+ * `data` and `valid` of a specific row of the destination_column is kept 
+ * unchanged if the `scatter_map` does not map to that row.
+ * 
+ * The datatypes between coresponding columns in the source and destination
+ * columns must be the same.
+ *
+ * If any index in scatter_map is outside the range of [0, num rows in
+ * destination_columns), the result is undefined.
+ *
+ * If the same index appears more than once in scatter_map, the result is
+ * undefined.
+ *
+ * @Param[in] source_row The row to be scattered
+ * @Param[in] scatter_map An array that maps to rows in the output columns.
+ * @Param[out] destination_table A preallocated set of columns with a number
+ * of rows equal in size to the maximum index contained in scatter_map
+ *
+ */
+void scatter(const std::vector<gdf_scalar*>& source_row, gdf_index_type const scatter_map[],
+                  gdf_size_type num_scatter_rows, table* destination_table);
 
 /**
  * @brief Gathers the rows (including null values) of a set of source columns
