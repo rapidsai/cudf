@@ -639,11 +639,11 @@ class Column(object):
 
     @property
     def is_monotonic_increasing(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     @property
     def is_monotonic_decreasing(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     def get_slice_bound(self, label, side, kind):
         """
@@ -656,18 +656,19 @@ class Column(object):
         side : {'left', 'right'}
         kind : {'ix', 'loc', 'getitem'}
         """
-        assert kind in ['ix', 'loc', 'getitem', None]
-        if side not in ('left', 'right'):
-            raise ValueError("Invalid value for side kwarg,"
-                             " must be either 'left' or 'right': %s" %
-                             (side, ))
+        assert kind in ["ix", "loc", "getitem", None]
+        if side not in ("left", "right"):
+            raise ValueError(
+                "Invalid value for side kwarg,"
+                " must be either 'left' or 'right': %s" % (side,)
+            )
 
         # TODO: Handle errors/missing keys correctly
         #       Not currently using `kind` argument.
-        if side == 'left':
+        if side == "left":
             return self.find_first_value(label)
-        if side == 'right':
-            return (self.find_last_value(label) + 1)
+        if side == "right":
+            return self.find_last_value(label) + 1
 
     def sort_by_values(self):
         raise NotImplementedError

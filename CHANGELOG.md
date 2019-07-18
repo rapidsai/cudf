@@ -17,6 +17,8 @@
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2049 Implemented merge functionality
+
 
 ## Improvements
 
@@ -48,7 +50,9 @@
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #2309 Java readers: remove redundant copy of result pointers
+- PR #2307 Add `black` and `isort` to style checker script
 - PR #2329 using libcudf cudf::copy for column deep copy
+
 
 ## Bug Fixes
 
@@ -77,6 +81,7 @@
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
+- PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
 - PR #2235 Fix get_dummies to be compatible with dask
 
 

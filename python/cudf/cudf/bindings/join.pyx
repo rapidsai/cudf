@@ -7,6 +7,12 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import numpy as np
+
+from librmm_cffi import librmm as rmm
+import nvcategory
+import nvstrings
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.join cimport *
@@ -14,12 +20,6 @@ from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 cimport cython
-
-import numpy as np
-
-from librmm_cffi import librmm as rmm
-import nvcategory
-import nvstrings
 
 
 @cython.boundscheck(False)
@@ -29,7 +29,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
       Returns a list of tuples [(column, valid, name), ...]
     """
 
-    #TODO: `context` leaks if exiting this function prematurely
+    # TODO: `context` leaks if exiting this function prematurely
     cdef gdf_context* context = create_context_view(0, method, 0, 0, 0,
                                                     'null_as_largest')
 
@@ -53,11 +53,27 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         list_lhs.push_back(column_view_from_column(col._column))
 
         if name not in left_on:
-            result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
+            result_cols.push_back(
+                column_view_from_NDArrays(
+                    0,
+                    None,
+                    mask=None,
+                    dtype=col._column.dtype,
+                    null_count=0
+                )
+            )
             result_col_names.append(name)
 
     for name in left_on:
-        result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col_lhs[name]._column.dtype, null_count=0))
+        result_cols.push_back(
+            column_view_from_NDArrays(
+                0,
+                None,
+                mask=None,
+                dtype=col_lhs[name]._column.dtype,
+                null_count=0
+            )
+        )
         result_col_names.append(name)
         left_idx.push_back(list(col_lhs.keys()).index(name))
 
@@ -69,7 +85,15 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         list_rhs.push_back(column_view_from_column(col._column))
 
         if name not in right_on:
-            result_cols.push_back(column_view_from_NDArrays(0, None, mask=None, dtype=col._column.dtype, null_count=0))
+            result_cols.push_back(
+                column_view_from_NDArrays(
+                    0,
+                    None,
+                    mask=None,
+                    dtype=col._column.dtype,
+                    null_count=0
+                )
+            )
             result_col_names.append(name)
 
     cdef gdf_error result = GDF_CUDA_ERROR
@@ -80,7 +104,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     with nogil:
         if how == 'left':
-            result = gdf_left_join(list_lhs.data(),
+            result = gdf_left_join(
+                list_lhs.data(),
                 col_lhs_len,
                 left_idx.data(),
                 list_rhs.data(),
@@ -91,10 +116,12 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 result_cols.data(),
                 <gdf_column*> NULL,
                 <gdf_column*> NULL,
-                context)
+                context
+            )
 
         elif how == 'inner':
-            result = gdf_inner_join(list_lhs.data(),
+            result = gdf_inner_join(
+                list_lhs.data(),
                 col_lhs_len,
                 left_idx.data(),
                 list_rhs.data(),
@@ -105,10 +132,12 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 result_cols.data(),
                 <gdf_column*> NULL,
                 <gdf_column*> NULL,
-                context)
+                context
+            )
 
         elif how == 'outer':
-            result = gdf_full_join(list_lhs.data(),
+            result = gdf_full_join(
+                list_lhs.data(),
                 col_lhs_len,
                 left_idx.data(),
                 list_rhs.data(),
@@ -119,7 +148,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 result_cols.data(),
                 <gdf_column*> NULL,
                 <gdf_column*> NULL,
-                context)
+                context
+            )
 
     check_gdf_error(result)
 
@@ -141,10 +171,11 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
             res.append(nvstr_obj)
             data_ptr = <uintptr_t>result_cols[idx].data
             if data_ptr:
-            # We need to create this just to make sure the memory is properly freed
+                # We need to create this just to make sure the memory is
+                # properly freed
                 tmp_data = rmm.device_array_from_ptr(
                     ptr=data_ptr,
-                    nelem= result_cols[idx].size,
+                    nelem=result_cols[idx].size,
                     dtype='int32',
                     finalizer=rmm._make_finalizer(data_ptr, 0)
                 )
@@ -153,7 +184,10 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 valids.append(
                     rmm.device_array_from_ptr(
                         ptr=valid_ptr,
-                        nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                        nelem=calc_chunk_size(
+                            result_cols[idx].size,
+                            mask_bitsize
+                        ),
                         dtype=mask_dtype,
                         finalizer=rmm._make_finalizer(valid_ptr, 0)
                     )
@@ -166,7 +200,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 res.append(
                     rmm.device_array_from_ptr(
                         ptr=data_ptr,
-                        nelem= result_cols[idx].size,
+                        nelem=result_cols[idx].size,
                         dtype=col_dtype,
                         finalizer=rmm._make_finalizer(data_ptr, 0)
                     )
@@ -183,7 +217,10 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 valids.append(
                     rmm.device_array_from_ptr(
                         ptr=valid_ptr,
-                        nelem=calc_chunk_size(result_cols[idx].size, mask_bitsize),
+                        nelem=calc_chunk_size(
+                            result_cols[idx].size,
+                            mask_bitsize
+                        ),
                         dtype=mask_dtype,
                         finalizer=rmm._make_finalizer(valid_ptr, 0)
                     )
