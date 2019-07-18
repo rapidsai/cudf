@@ -72,14 +72,11 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
-<<<<<<< HEAD
-=======
 - PR #2311 Fix copy behaviour for GenericIndex
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
->>>>>>> upstream/branch-0.9
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2311 Fix copy behaviour for GenericIndex
 
