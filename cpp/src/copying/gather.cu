@@ -31,13 +31,36 @@
 #include <cub/cub.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
-
+#include <string/nvcategory_util.hpp>
+#include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
 using bit_mask::bit_mask_t;
 
 namespace cudf {
 namespace detail {
 
 constexpr int warp_size = 32;
+  
+NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
+  NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
+
+    for(int column_index = 1; column_index < num_columns; column_index++){
+      NVCategory * temp = combined_category;
+      if(input_columns[column_index]->size > 0){
+        combined_category = combined_category->merge_and_remap(
+            * static_cast<NVCategory *>(
+                input_columns[column_index]->dtype_info.category));
+        if(column_index > 1){
+          NVCategory::destroy(temp);
+        }
+      }
+    }
+    if(combined_category == static_cast<NVCategory *>(input_columns[0]->dtype_info.category)){
+      return combined_category->copy();
+    }else{
+      return combined_category;
+    }
+}
 
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
@@ -176,8 +199,8 @@ struct column_gatherer {
   template <typename ColumnType>
   void operator()(gdf_column const* source_column,
                   gdf_index_type const gather_map[],
-                  gdf_column* destination_column, bool check_bounds = false,
-                  cudaStream_t stream = 0) {
+                  gdf_column* destination_column, bool check_bounds,
+                  cudaStream_t stream, bool merge_nvstring_category = false) {
     ColumnType const* const source_data{
         static_cast<ColumnType const*>(source_column->data)};
     ColumnType* destination_data{
@@ -185,14 +208,45 @@ struct column_gatherer {
 
     gdf_size_type const num_destination_rows{destination_column->size};
 
-    // If gathering in-place, allocate temporary buffers to hold intermediate
-    // results
-    bool const in_place{source_data == destination_data};
+    // If gathering in-place or scattering nvstring 
+    // (in which case the merge_nvstring_category should be set to true) allocate 
+    // temporary buffers to hold intermediate results
+    bool const merge_category = std::is_same<ColumnType, nvstring_category>::value && merge_nvstring_category;
+    bool const in_place = !merge_category && (source_data == destination_data);
+    
+    if(merge_category){
+      // merge the categories.
+      gdf_column temp_src = cudf::copy(*source_column);
+      gdf_column copy_src = cudf::copy(*source_column);
+      gdf_column temp_dest = cudf::copy(*destination_column);
+      gdf_column* input_columns[2] = {&temp_src, &temp_dest};
+      gdf_column* output_columns[2] = {&copy_src, destination_column};
+      
+      CUDF_EXPECTS(GDF_SUCCESS ==
+        sync_column_categories(input_columns, output_columns, 2),
+        "Failed to synchronize NVCategory");
+
+      if (check_bounds) {
+        thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
+                        gather_map + num_destination_rows, gather_map,
+                        static_cast<ColumnType*>(copy_src.data), destination_data,
+                        bounds_checker{0, source_column->size});
+      } else {
+        thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
+                     gather_map + num_destination_rows, static_cast<ColumnType*>(copy_src.data),
+                     destination_data);
+      }
+
+      gdf_column_free(&temp_src);
+      gdf_column_free(&copy_src);
+      gdf_column_free(&temp_dest);
+      return;
+    }
+
     if (in_place) {
       RMM_TRY(RMM_ALLOC(&destination_data,
                         sizeof(ColumnType) * num_destination_rows, stream));
     }
-
     if (check_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
                         gather_map + num_destination_rows, gather_map,
@@ -211,12 +265,13 @@ struct column_gatherer {
                    static_cast<ColumnType*>(destination_column->data));
       RMM_TRY(RMM_FREE(destination_data, stream));
     }
+
     CHECK_STREAM(stream);
   }
 };
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
-            table* destination_table, bool check_bounds) {
+            table* destination_table, bool check_bounds, bool merge_nvstring_category) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -249,7 +304,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
     // The data gather for n columns will be put on the first n streams
     cudf::type_dispatcher(src_col->dtype, column_gatherer{}, src_col,
-                          gather_map, dest_col, check_bounds, v_stream[i]);
+                          gather_map, dest_col, check_bounds, v_stream[i], merge_nvstring_category);
 
     const bool src_has_nulls = src_col->valid != nullptr;
     const bool dest_has_nulls = dest_col->valid != nullptr;
@@ -350,7 +405,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table) {
-  detail::gather(source_table, gather_map, destination_table, false);
+  detail::gather(source_table, gather_map, destination_table, false, false);
   nvcategory_gather_table(*source_table, *destination_table);
 }
 

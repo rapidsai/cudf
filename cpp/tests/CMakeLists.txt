@@ -303,6 +303,14 @@ set(COPYING_TEST_SRC
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
 
 ###################################################################################################
+# - nvstring scatter tests ------------------------------------------------------------------------
+
+set(NVSTRING_SCATTER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/nvstring_scatter_tests.cu")
+
+  ConfigureTest(NVSTRING_SCATTER_TEST "${NVSTRING_SCATTER_TEST_SRC}")
+
+###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC

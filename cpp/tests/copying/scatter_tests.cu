@@ -288,38 +288,3 @@ TYPED_TEST(ScatterTest, PreserveDestBitmask) {
   EXPECT_EQ(expect, destination);
 }
 
-TEST(ScatterTest, ScatterNVString)
-{
-  bool print = true;
-  const int rows_size = 8;
-  const size_t length = 1;
-
-  const char** left_string_data = cudf::test::generate_string_data(rows_size, length, print);
-  const char** right_string_data = cudf::test::generate_string_data(rows_size*2, length, print);
-
-  std::vector<std::string> left_host_column (left_string_data, left_string_data + rows_size);
-  std::vector<std::string> right_host_column (right_string_data, right_string_data + rows_size*2);
-
-  gdf_column * left_column = cudf::test::create_nv_category_column_strings(left_string_data, rows_size);
-  gdf_column * right_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size*2);
-
-  if(print){
-    print_gdf_column(left_column);
-    print_gdf_column(right_column);
-  }  
-  
-  std::vector<gdf_index_type> scatter_map({0, 1, 2, 3, 4, 5, 6, 7});
-  rmm::device_vector<gdf_index_type> d_scatter_map = scatter_map;
-
-  cudf::table source_table({left_column});
-  cudf::table destination_table({right_column});
-
-  cudf::scatter(&source_table, d_scatter_map.data().get(), &destination_table);
-  
-  if(print){
-    print_gdf_column(left_column);
-    print_gdf_column(right_column);
-  }  
- 
-}
-

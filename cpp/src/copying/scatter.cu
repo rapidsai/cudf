@@ -74,7 +74,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
   
   // We want to check bounds for scatter since it is possible that
   // some elements of the destination column are not modified. 
-  detail::gather(source_table, v_gather_map.data().get(), destination_table, true);    
+  detail::gather(source_table, v_gather_map.data().get(), destination_table, true, true);    
 }
 
 template<bool mark_true>
@@ -185,9 +185,6 @@ void scalar_scatter(const std::vector<gdf_scalar*>& source_row,
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table) {
-  // Take care of columns of type `GDF_STRING_CATEGORY`.
-  nvcategory_scatter_table(*const_cast<table*>(source_table), *destination_table);
-  
   detail::scatter(source_table, scatter_map, destination_table);
 }
 

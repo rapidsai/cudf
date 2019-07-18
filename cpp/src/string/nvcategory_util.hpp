@@ -53,12 +53,4 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
  */
 gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table);
 
-//TODO: update the following doc
-/**
- * @brief Takes two tables and gathers the destination table's data interpreted as int32 from the dictionary of the source table's NVCategory.
- *
- * @param[in] source_table Contains columns that contain dictionaries used for gathering.
- * @param[in,out] destination_table Contains columns that contain indices that map into source_table dictionaries.
- */
-gdf_error nvcategory_scatter_table(cudf::table source_table, cudf::table destination_table);
 #endif
