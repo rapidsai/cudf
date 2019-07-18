@@ -279,7 +279,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::table(), rmm::device_vector<gdf_index_type>());
+    return std::make_pair(cudf::empty_like(input_table), rmm::device_vector<gdf_index_type>());
   }
 
   gdf_size_type nrows = input_table.num_rows();
