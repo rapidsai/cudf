@@ -46,6 +46,7 @@
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #2309 Java readers: remove redundant copy of result pointers
+- PR #2329 using libcudf cudf::copy for column deep copy
 
 ## Bug Fixes
 
