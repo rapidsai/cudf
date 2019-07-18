@@ -223,30 +223,40 @@ def build_column(buffer, dtype, mask=None, categories=None, name=None,
                  null_count=None):
     from cudf.dataframe import numerical, categorical, datetime, string
 
-    if np.dtype(dtype).type == np.datetime64:
-        return datetime.DatetimeColumn(
-            data=buffer,
-            dtype=np.dtype(dtype),
-            mask=mask,
-            name=name,
-            null_count=null_count
-        )
-    elif np.dtype(dtype).type in (np.object_, np.str_):
-        if not isinstance(buffer, nvstrings.nvstrings):
-            raise TypeError
-        return string.StringColumn(
-            data=buffer,
-            name=name,
-            null_count=null_count
-        )
-    elif np.issubdtype(dtype, np.number):
-        return numerical.NumericalColumn(
-            data=buffer,
-            dtype=dtype,
-            mask=mask,
-            name=name,
-            null_count=null_count
-        )
+    if not (hasattr(dtype, "categories") or hasattr(dtype, "cat")
+            or str(dtype) in ("category", "categorical")):
+        if np.dtype(dtype).type == np.datetime64:
+            return datetime.DatetimeColumn(
+                data=buffer,
+                dtype=np.dtype(dtype),
+                mask=mask,
+                name=name,
+                null_count=null_count
+            )
+        elif np.dtype(dtype).type in (np.object_, np.str_):
+            if not isinstance(buffer, nvstrings.nvstrings):
+                raise TypeError
+            return string.StringColumn(
+                data=buffer,
+                name=name,
+                null_count=null_count
+            )
+        elif np.issubdtype(dtype, np.number):
+            return numerical.NumericalColumn(
+                data=buffer,
+                dtype=dtype,
+                mask=mask,
+                name=name,
+                null_count=null_count
+            )
+        else:
+            return numerical.NumericalColumn(
+                data=buffer,
+                dtype=dtype,
+                mask=mask,
+                name=name,
+                null_count=null_count
+            )
     elif pd.api.types.is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(
             data=buffer,
