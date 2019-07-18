@@ -137,8 +137,7 @@ struct GroupTest : public GdfTest {
     the_column->null_count = n_count;
     the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
-    gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = TIME_UNIT_NONE;
+    gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
     the_column->dtype_info = extra_info;
 
     return the_column;
