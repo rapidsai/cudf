@@ -629,5 +629,68 @@ class Column(object):
         """
         return column_view_pointer(self)
 
+    @property
+    def is_unique(self):
+        return self.unique_count() == len(self)
+
+    @property
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        raise(NotImplementedError)
+
+    @property
+    def is_monotonic_decreasing(self):
+        raise(NotImplementedError)
+
+    def get_slice_bound(self, label, side, kind):
+        """
+        Calculate slice bound that corresponds to given label.
+        Returns leftmost (one-past-the-rightmost if ``side=='right'``) position
+        of given label.
+        Parameters
+        ----------
+        label : object
+        side : {'left', 'right'}
+        kind : {'ix', 'loc', 'getitem'}
+        """
+        assert kind in ['ix', 'loc', 'getitem', None]
+        if side not in ('left', 'right'):
+            raise ValueError("Invalid value for side kwarg,"
+                             " must be either 'left' or 'right': %s" %
+                             (side, ))
+
+        # TODO: Handle errors/missing keys correctly
+        #       Not currently using `kind` argument.
+        if side == 'left':
+            return self.find_first_value(label)
+        if side == 'right':
+            return (self.find_last_value(label) + 1)
+
+    def sort_by_values(self):
+        raise NotImplementedError
+
+    def _unique_segments(self):
+        """ Common code for unique, unique_count and value_counts"""
+        # make dense column
+        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
+        # sort the column
+        sortcol, _ = densecol.sort_by_values()
+        # find segments
+        sortedvals = sortcol.data.mem
+        segs, begins = cudautils.find_segments(sortedvals)
+        return segs, sortedvals
+
+    def unique_count(self, method="sort", dropna=True):
+        if method != "sort":
+            msg = "non sort based unique_count() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs) + 1
+        return len(segs)
+
 
 register_distributed_serializer(Column)
