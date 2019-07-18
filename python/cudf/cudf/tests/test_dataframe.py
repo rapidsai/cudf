@@ -3356,5 +3356,4 @@ def test_isin_index(data, values):
 
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
-
     np.testing.assert_array_equal(got.copy_to_host(), expected)
