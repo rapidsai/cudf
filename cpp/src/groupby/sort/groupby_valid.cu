@@ -20,8 +20,8 @@
 
 #include <cuda_runtime.h>
 
-#include "copying.hpp"
-#include "cudf.h"
+#include "cudf/copying.hpp"
+#include "cudf/cudf.h"
 #include "utilities/error_utils.hpp"
 
 #include "groupby/aggregation_operations.hpp"

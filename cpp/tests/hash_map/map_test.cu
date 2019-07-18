@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <hash/concurrent_unordered_map.cuh>
 #include <groupby/aggregation_operations.hpp>

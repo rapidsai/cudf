@@ -16,12 +16,12 @@
  * limitations under the License.
  */
 
-#include "gtest/gtest.h"
-#include "copying.hpp"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/copying/copying_test_helper.hpp"
-#include "tests/utilities/nvcategory_utils.cuh"
-#include "bitmask/bit_mask.cuh"
+#include <gtest/gtest.h>
+#include <cudf/copying.hpp>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/copying/copying_test_helper.hpp>
+#include <tests/utilities/nvcategory_utils.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 
 void call_slice(gdf_column const*          input_column,
                 gdf_index_type const*      indices,
@@ -51,7 +51,7 @@ TEST_F(SliceInputTest, InputColumnSizeNull) {
   using ColumnType = std::int32_t;
 
   // Create input column
-  gdf_column input_column;
+  gdf_column input_column{};
   input_column.size = 0;
 
   // Create indices
@@ -296,5 +296,3 @@ TEST_F(SliceInputTest, NVCategoryMultipleSlices)  {
     delete output_column_ptrs[i];    
   }
 }
-
-

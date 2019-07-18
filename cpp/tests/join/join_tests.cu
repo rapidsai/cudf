@@ -25,7 +25,7 @@
 #include <join/join_compute_api.h>
 #include <utilities/bit_util.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 
@@ -149,7 +149,7 @@ struct JoinTest : public GdfTest
       RMM_FREE(col->data, 0); 
       RMM_FREE(col->valid, 0); 
     };
-    gdf_col_pointer the_column{new gdf_column, deleter};
+    gdf_col_pointer the_column{new gdf_column{}, deleter};
 
     // Allocate device storage for gdf_column and copy contents from host_vector
     EXPECT_EQ(RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(col_type), 0), RMM_SUCCESS);
@@ -410,8 +410,8 @@ struct JoinTest : public GdfTest
   {
     const int num_columns = std::tuple_size<multi_column_t>::value;
 
-    gdf_column left_result;
-    gdf_column right_result;
+    gdf_column left_result{};
+    gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
 
@@ -833,4 +833,3 @@ TEST(HashTableSizeTest, OverflowTest){
     ASSERT_TRUE(hash_table_size > num_insertions);
     EXPECT_EQ(expected_size, hash_table_size);
 }
-

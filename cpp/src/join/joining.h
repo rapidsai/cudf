@@ -20,8 +20,8 @@
 #include <memory>
 #include <utility>
 
-#include "cudf/functions.h"
-#include "cudf/types.h"
+#include <cudf/functions.h>
+#include <cudf/types.h>
 #include <table/device_table.cuh>
 
 #include "sort_join.cuh"

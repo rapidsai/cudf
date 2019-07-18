@@ -16,15 +16,17 @@
  * limitations under the License.
  */
 
-#include "types.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "utilities/error_utils.hpp"
-#include "utilities/cuda_utils.hpp"
-#include "utilities/bit_util.cuh"
-#include "rmm/thrust_rmm_allocator.h"
+#include <utilities/column_utils.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/types.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/cuda_utils.hpp>
+#include <utilities/bit_util.cuh>
+#include <rmm/thrust_rmm_allocator.h>
 #include <nvstrings/NVCategory.h>
-#include <bitmask/bit_mask.cuh> 
-#include "copying/slice.hpp"
+#include <bitmask/legacy/bit_mask.cuh> 
+#include <copying/slice.hpp>
 
 namespace cudf {
 
@@ -80,8 +82,8 @@ void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
   gdf_index_type input_index_begin = indices[indices_position * 2];
   gdf_index_type input_index_end = indices[indices_position * 2 + 1];
 
-  gdf_index_type input_offset = gdf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
-  gdf_index_type rotate_input = gdf::util::detail::intra_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
+  gdf_index_type input_offset = cudf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
+  gdf_index_type rotate_input = cudf::util::detail::intra_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
   bit_mask_t mask_last = (bit_mask_t{1} << ((input_index_end - input_index_begin) % bit_mask::bits_per_element)) - bit_mask_t{1};
 
   gdf_size_type input_block_length = bit_mask::num_elements(input_size);
@@ -154,8 +156,7 @@ public:
 
       // Allocate Column
       gdf_column* output_column = output_columns_[index];
-      int col_width;
-      get_column_byte_width(output_column, &col_width);
+      auto col_width { cudf::byte_width(*output_column) };
       RMM_TRY( RMM_ALLOC(&(output_column->data), col_width * output_column->size, stream) );
       if(input_column_.valid != nullptr){
         RMM_TRY( RMM_ALLOC(&(output_column->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(output_column->size), stream) );
@@ -264,14 +265,14 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
   // Initialize output_columns
   output_columns.resize(num_indices/2);
   for (gdf_size_type i = 0; i < num_indices/2; i++){
-    output_columns[i] = new gdf_column;
-    output_columns[i]->size = host_indices[2*i + 1] - host_indices[2*i];
-    output_columns[i]->dtype = input_column.dtype;
-    output_columns[i]->dtype_info.time_unit = input_column.dtype_info.time_unit;
-    output_columns[i]->null_count = 0;
-    output_columns[i]->data = nullptr;
-    output_columns[i]->valid = nullptr;
-    output_columns[i]->dtype_info.category = nullptr;
+    output_columns[i] = new gdf_column{};
+    gdf_column_view_augmented(output_columns[i],
+                              nullptr,
+                              nullptr,
+                              host_indices[2*i + 1] - host_indices[2*i],
+                              input_column.dtype,
+                              0,
+                              {input_column.dtype_info.time_unit, nullptr});
   }
 
   // Create slice helper class

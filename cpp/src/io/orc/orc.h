@@ -24,11 +24,12 @@
 #include <algorithm>
 #include <memory>
 
-#include "io/comp/io_uncomp.h"
+#include <io/comp/io_uncomp.h>
 #include "orc_common.h"
 
+namespace cudf {
+namespace io {
 namespace orc {
-
 
 struct PostScript
 {
@@ -183,6 +184,8 @@ protected:
     std::vector<uint8_t> m_buf;
 };
 
-}; // namespace orc
+} // namespace orc
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_ORC_H__

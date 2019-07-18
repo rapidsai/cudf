@@ -17,10 +17,8 @@
 #ifndef AGGREGATION_OPERATIONS_H
 #define AGGREGATION_OPERATIONS_H
 
-#include <utility>
-#include "utilities/cudf_utils.h"
-#include "utilities/wrapper_types.hpp" 
-#include "utilities/release_assert.cuh"
+#include <utilities/release_assert.cuh>
+#include <utilities/wrapper_types.hpp>
 
 
 /* --------------------------------------------------------------------------*/

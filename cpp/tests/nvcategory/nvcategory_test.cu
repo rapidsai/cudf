@@ -18,9 +18,10 @@
  */
 
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#include <cudf.h>
+#include <cudf/binaryop.hpp>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
 #include <cudf/functions.h>
@@ -31,21 +32,21 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 #include <cstring>
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/nvcategory_utils.cuh"
-#include "bitmask/bit_mask.cuh"
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/nvcategory_utils.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
+#include <tests/utilities/valid_vectors.h>
 
-#include "string/nvcategory_util.hpp"
+#include <string/nvcategory_util.hpp>
 
 
 gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
-	gdf_column * column = new gdf_column;
+	gdf_column * column = new gdf_column{};
 	int32_t * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int32_t) , 0), RMM_SUCCESS);
 	CUDA_TRY( cudaMemcpy(data, host_data, sizeof(int32_t) * num_rows, cudaMemcpyHostToDevice) );
@@ -62,7 +63,7 @@ gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
 }
 
 gdf_column * create_column_constant(gdf_size_type num_rows, int value){
-	gdf_column * column = new gdf_column;
+	gdf_column * column = new gdf_column{};
 	int * data;
 	bit_mask::bit_mask_t * valid;
 	bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -94,7 +95,7 @@ int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=
 struct NVCategoryTest : public GdfTest
 {
 	gdf_column * create_boolean_column(gdf_size_type num_rows){
-		gdf_column * column = new gdf_column;
+		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
 		bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -109,7 +110,7 @@ struct NVCategoryTest : public GdfTest
 	}
 
 	gdf_column * create_indices_column(gdf_size_type num_rows){
-		gdf_column * column = new gdf_column;
+		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
 		bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -509,8 +510,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	left_column->dtype_info.category = new_category;
 	right_column->dtype_info.category = new_category;
 
-	gdf_error err = gdf_binary_operation_v_v(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL);
-	EXPECT_EQ(GDF_SUCCESS, err);
+	CUDF_EXPECT_NO_THROW(cudf::binary_operation(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL));
 
 	int8_t * data = new int8_t[rows_size];
 	CUDA_TRY( cudaMemcpy(data, output_column->data, sizeof(int8_t) * rows_size, cudaMemcpyDeviceToHost) );
@@ -751,8 +751,8 @@ struct NVCategoryJoinTest : public GdfTest
     EXPECT_EQ(gdf_raw_left_columns.size(), gdf_raw_right_columns.size()) << "Mismatch columns size";
     EXPECT_EQ(left_join_idx.size(), right_join_idx.size()) << "Mismatch join indexes size";
 
-    gdf_column left_result;
-    gdf_column right_result;
+    gdf_column left_result{};
+    gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
 
@@ -1079,4 +1079,3 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
   }
 
 }
-

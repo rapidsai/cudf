@@ -19,10 +19,10 @@
  *
  */
 
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
-#include "rmm/rmm.h"
-#include "rmm/thrust_rmm_allocator.h"
+#include <cudf/cudf.h>
+#include <utilities/error_utils.hpp>
+#include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/scan.h>
 #include <thrust/execution_policy.h>

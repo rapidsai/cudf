@@ -21,16 +21,16 @@
 #include <iterator>
 #include <type_traits>
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#include <cudf.h>
-#include <reduction.hpp>
+#include <cudf/cudf.h>
+#include <cudf/reduction.hpp>
 
 #include <thrust/device_vector.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/column_wrapper.cuh"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/column_wrapper.cuh>
 
 // This is the main test feature
 template <typename T>

@@ -17,7 +17,7 @@
 
 #pragma once
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include "rmm/thrust_rmm_allocator.h"
 
 gdf_error gdf_group_by_sort_wo_valids(

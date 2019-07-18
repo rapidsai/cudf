@@ -3,7 +3,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/wrapper_types.hpp"
 #include "utilities/bit_util.cuh"
-#include "bitmask/legacy_bitmask.hpp"
+#include "bitmask/legacy/legacy_bitmask.hpp"
 
 
 struct GdfValidToBool {
@@ -20,9 +20,9 @@ struct GdfBoolToValid {
 
   __device__ void operator()(gdf_size_type idx) {
     if (d_bools[idx])
-      gdf::util::turn_bit_on(d_valid, idx);
+      cudf::util::turn_bit_on(d_valid, idx);
     else
-      gdf::util::turn_bit_off(d_valid, idx);
+      cudf::util::turn_bit_off(d_valid, idx);
   }
 };
 

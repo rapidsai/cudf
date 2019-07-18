@@ -1,7 +1,7 @@
 #ifndef NVCATEGORY_UTIL_H
 #define NVCATEGORY_UTIL_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <vector>
 
 // Forward declarations

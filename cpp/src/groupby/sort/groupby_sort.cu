@@ -20,14 +20,14 @@
 #include <thrust/fill.h>
 #include <tuple>
 
-#include "copying.hpp"
-#include "cudf.h"
+#include "cudf/copying.hpp"
+#include "cudf/cudf.h"
 #include "groupby/aggregation_operations.hpp"
 #include "groupby/hash_groupby.cuh"
 #include "groupby/sort/groupby_sort.h"
 #include "string/nvcategory_util.hpp"
 #include "table/device_table.cuh"
-#include "types.hpp"
+#include "cudf/types.hpp"
 #include "utilities/error_utils.hpp"
 #include "utilities/nvtx/nvtx_utils.h"
 
@@ -37,7 +37,7 @@
 #include "groupby_count_wo_valid.h"
 #include "groupby_valid.h"
 #include "groupby_wo_valid.h"
-#include <groupby.hpp>
+#include <cudf/groupby.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -95,7 +95,7 @@ gdf_error verify_columns(gdf_column *cols[], int num_cols) {
 
 gdf_error compute_sort_keys_groupby(gdf_size_type num_groupby_cols,
                                gdf_column *const *in_groupby_columns,
-                               gdf_context *ctxt,
+                               Options options,
                                rmm::device_vector<int32_t> &sorted_indices) {
   bool group_by_keys_contain_nulls = false;
   std::vector<gdf_column *> orderby_cols_vect(num_groupby_cols);
@@ -115,6 +115,9 @@ gdf_error compute_sort_keys_groupby(gdf_size_type num_groupby_cols,
   if (status != GDF_SUCCESS)
     return status;
 
+  gdf_context ctxt;
+  ctxt.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+
   // run order by and get new sort indexes
   status =
       gdf_order_by(&orderby_cols_vect[0], // input columns
@@ -123,7 +126,7 @@ gdf_error compute_sort_keys_groupby(gdf_size_type num_groupby_cols,
                                      // (e.g. number of columsn to sort by)
                    &sorted_indices_col, // a gdf_column that is pre allocated
                                         // for storing sorted indices
-                   ctxt);
+                   &ctxt);
   return status;
 }
 
@@ -164,7 +167,7 @@ struct is_same_functor<T, T> : std::true_type {};
 /* ----------------------------------------------------------------------------*/
 gdf_error sort_keys_groupby(gdf_size_type ncols,
                                 gdf_column *const *in_groupby_columns,
-                                gdf_context *ctxt,
+                                Options options,
                                 rmm::device_vector<int32_t> &sorted_indices) {
 
   // Make sure the inputs are not null
@@ -177,7 +180,7 @@ gdf_error sort_keys_groupby(gdf_size_type ncols,
     return GDF_SUCCESS;
   }
 
-  return compute_sort_keys_groupby(ncols, in_groupby_columns, ctxt, sorted_indices);
+  return compute_sort_keys_groupby(ncols, in_groupby_columns, options, sorted_indices);
 }
 
 } // anonymous namespace
@@ -271,7 +274,7 @@ auto get_pointers(cudf::table const &input) {
 std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
                                              cudf::table const &values,
                                              std::vector<operators> const &ops,
-                                             gdf_context *options) {
+                                             Options options) {
 
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
@@ -284,7 +287,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
   verify_operators(values, ops);
 
   // Ensure inputs aren't null
-  if ((0 == num_key_columns) || (0 == num_aggregation_columns) || (nullptr == options)) {
+  if ((0 == num_key_columns) || (0 == num_aggregation_columns)) {
     CUDF_FAIL("GDF_DATASET_EMPTY");
   }
 
@@ -309,6 +312,10 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
   auto in_aggregation_columns = get_pointers(values);
   auto out_aggregation_columns = get_pointers(output_values);
 
+  gdf_context context;
+  context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+  context.flag_groupby_include_nulls = !options.ignore_null_keys;
+
   for (size_t i = 0; i < ops.size(); i++) {
     auto in_aggregation_column = in_aggregation_columns[0];
     auto out_aggregation_column = out_aggregation_columns[0];
@@ -321,7 +328,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
                                  gdf_agg_op op,
                                  gdf_column *out_key_columns[],
                                  gdf_column *out_aggregation_column,
-                                 gdf_context *options,
+                                 gdf_context *context,
                                  rmm::device_vector<int32_t> &sorted_indices) {
        * */
        gdf_error_code = detail::compute_sort_groupby(num_key_columns,
@@ -330,7 +337,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
                                                      GDF_SUM,
                                                      out_key_columns,
                                                      out_aggregation_column,
-                                                     options,
+                                                     &context,
                                                      sorted_indices);
       CUDF_EXPECTS(GDF_SUCCESS == gdf_error_code, "sort_keys_groupby error: " + std::to_string(gdf_error_code));
 

@@ -14,14 +14,15 @@
  * limitations under the License.
  */
 
-#include "copying.hpp"
-#include "cudf.h"
 #include "gather.hpp"
-#include "rmm/thrust_rmm_allocator.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/type_dispatcher.hpp"
-#include <bitmask/legacy_bitmask.hpp>
-#include <table.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/cudf.h>
+#include <rmm/thrust_rmm_allocator.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/type_dispatcher.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
+#include <cudf/table.hpp>
+#include <string/nvcategory_util.hpp>
 
 #include <algorithm>
 #include <thrust/gather.h>
@@ -382,6 +383,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   std::transform(source_table->begin(), source_table->end(),
                  destination_table->begin(), destination_table->begin(),
                  gather_column);
+
 }
 
 }  // namespace detail
@@ -389,6 +391,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 void gather(table const* source_table, gdf_index_type const gather_map[],
             table* destination_table) {
   detail::gather(source_table, gather_map, destination_table);
+  nvcategory_gather_table(*source_table, *destination_table);
 }
 
 }  // namespace cudf

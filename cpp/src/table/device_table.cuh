@@ -17,13 +17,14 @@
 #ifndef DEVICE_TABLE_H
 #define DEVICE_TABLE_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -125,7 +126,6 @@ class device_table {
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
   __host__ __device__ bool has_nulls() const { return _has_nulls; }
-  
 
  private:
   gdf_size_type _num_columns;  ///< The number of columns in the table
@@ -162,8 +162,9 @@ class device_table {
       CUDF_EXPECTS(_num_rows == columns[i]->size, "Column size mismatch");
       if (_num_rows > 0) {
         CUDF_EXPECTS(nullptr != columns[i]->data, "Column missing data.");
-        if (columns[i]->null_count > 0)
+        if (columns[i]->null_count > 0) {
           _has_nulls = true;
+        }
       }
       temp_columns[i] = *columns[i];
     }
@@ -201,14 +202,45 @@ struct hash_element {
   }
 };
 
+template <bool update_target_bitmask>
 struct copy_element {
   template <typename T>
   __device__ inline void operator()(gdf_column const& target,
                                     gdf_size_type target_index,
                                     gdf_column const& source,
                                     gdf_size_type source_index) {
+    // FIXME: This will copy garbage data if the source element is null
     static_cast<T*>(target.data)[target_index] =
         static_cast<T const*>(source.data)[source_index];
+
+    // This is very inefficient, setting the target bitmask should be done
+    // separately when possible
+    if (update_target_bitmask) {
+      using namespace bit_mask;
+
+      bit_mask_t const* const source_mask{
+          reinterpret_cast<bit_mask_t const*>(source.valid)};
+      bit_mask_t* const target_mask{
+          reinterpret_cast<bit_mask_t*>(target.valid)};
+
+      if (nullptr != target_mask) {
+        bool const target_is_valid{is_valid(target_mask, target_index)};
+        if (nullptr != source_mask) {
+          bool const source_is_valid{is_valid(source_mask, source_index)};
+          if (source_is_valid and not target_is_valid) {
+            set_bit_safe(target_mask, target_index);
+          } else if (not source_is_valid and target_is_valid) {
+            clear_bit_safe(target_mask, target_index);
+          }
+        } else {
+          // If the source mask doesn't exist, it's assumed the source element
+          // is valid
+          if (not target_is_valid) {
+            set_bit_safe(target_mask, target_index);
+          }
+        }
+      }
+    }
   }
 };
 }  // namespace
@@ -306,19 +338,27 @@ __device__ inline hash_value_type hash_row(device_table const& t,
  * This device function should be called by a single thread and the thread
  * will copy all of the elements in the row from one table to the other.
  *
- * FIXME: Does NOT set null bitmask for the target row.
+ * @note If the `update_target_bitmask` template argument is `true`, then this
+ * function will update the target bitmask (if it exists) to match the bitmask
+ * for the source element. A non-existant source bitmask is assumed to mean the
+ * source element is non-null. However, this operation is very inefficient and
+ * should be done outside of this function when possible.
  *
  * @param[in,out] The table whose row will be updated
  * @param[in] The index of the row to update in the target table
  * @param[in] source The table whose row will be copied
  * @param source_row_index The index of the row to copy in the source table
+ * @tparam update_target_bitmask Flag indicating if the target bitmask should be
+ * updated
  */
+template <bool update_target_bitmask = true>
 __device__ inline void copy_row(device_table const& target,
                                 gdf_size_type target_index,
                                 device_table const& source,
                                 gdf_size_type source_index) {
   for (gdf_size_type i = 0; i < target.num_columns(); ++i) {
-    cudf::type_dispatcher(target.get_column(i)->dtype, copy_element{},
+    cudf::type_dispatcher(target.get_column(i)->dtype,
+                          copy_element<update_target_bitmask>{},
                           *target.get_column(i), target_index,
                           *source.get_column(i), source_index);
   }

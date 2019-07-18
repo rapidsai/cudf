@@ -18,16 +18,14 @@
 #include <type_traits>
 #include <algorithm>
 
-#include "cudf.h"
-#include "utilities/cudf_utils.h"
-#include "utilities/error_utils.hpp"
+#include <cudf/cudf.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/error_utils.hpp>
 
-#include "table/device_table.cuh"
-#include "table/device_table_row_operators.cuh"
+#include <table/device_table.cuh>
+#include <table/device_table_row_operators.cuh>
 
-#include "rmm/thrust_rmm_allocator.h"
-
-#include "../sqls/sqls_rtti_comp.h"
+#include <rmm/thrust_rmm_allocator.h>
 
 /* --------------------------------------------------------------------------*/
 /** 
@@ -46,7 +44,7 @@
  * @returns GDF_SUCCESS upon successful completion
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error gdf_order_by(gdf_column** cols,
+gdf_error gdf_order_by(gdf_column const* const* cols,
                        int8_t* asc_desc,
                        size_t num_inputs,
                        gdf_column* output_indices,

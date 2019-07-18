@@ -1,7 +1,7 @@
 #ifndef NEW_GROUPBY_H
 #define NEW_GROUPBY_H
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 /* --------------------------------------------------------------------------*/
 /** 

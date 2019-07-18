@@ -51,24 +51,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-mkdir -p $WORKSPACE/cpp/build
-cd $WORKSPACE/cpp/build
-logger "Run cmake libcudf..."
-cmake -DCMAKE_INSTALL_PREFIX=$CONDA_PREFIX -DCMAKE_CXX11_ABI=ON ..
-
-logger "Clean up make..."
-make clean
-
-logger "Make libcudf..."
-make -j${PARALLEL_LEVEL}
-
-logger "Install libcudf..."
-make -j${PARALLEL_LEVEL} install
-
-logger "Build cuDF..."
-cd $WORKSPACE/python
-python setup.py build_ext --inplace
-python setup.py install
+$WORKSPACE/build.sh clean libcudf cudf
 
 ################################################################################
 # BUILD - Build docs

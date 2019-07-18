@@ -17,6 +17,8 @@
 #ifndef GATHER_HPP
 #define GATHER_HPP
 
+#include <cudf/types.h>
+
 namespace cudf {
 
 // Forward declaration

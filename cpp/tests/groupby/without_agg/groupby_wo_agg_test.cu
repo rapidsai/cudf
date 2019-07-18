@@ -22,14 +22,14 @@
 #include <typeinfo>
 #include <memory>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
-#include <cudf.h>
-#include <groupby.hpp>
-#include <table.hpp>
+#include <cudf/cudf.h>
+#include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 
-#include "utilities/cudf_utils.h"
+#include <utilities/cudf_utils.h>
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
@@ -39,11 +39,11 @@
 #include "../groupby_test_helpers.cuh"
 
 // See this header for all valid handling
-#include "bitmask/legacy_bitmask.hpp"
+#include <bitmask/legacy/legacy_bitmask.hpp>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
-#include "rmm/thrust_rmm_allocator.h"
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace without_agg {
 

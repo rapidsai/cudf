@@ -3,7 +3,7 @@
 #include "utilities/cudf_utils.h"
 #include "utilities/wrapper_types.hpp"
 #include "utilities/bit_util.cuh"
-#include "bitmask/legacy_bitmask.hpp"
+#include "bitmask/legacy/legacy_bitmask.hpp"
  
 
 rmm::device_vector<bool> get_bools_from_gdf_valid(gdf_column *column) {

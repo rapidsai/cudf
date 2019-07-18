@@ -17,6 +17,8 @@
 #ifndef __IO_ORC_COMMON_H__
 #define __IO_ORC_COMMON_H__
 
+namespace cudf {
+namespace io {
 namespace orc {
 
 enum CompressionKind {
@@ -74,8 +76,8 @@ enum ColumnEncodingKind {
     DICTIONARY_V2 = 3,  // the encoding is dictionary-based using RLE v2
 };
 
-
-}; // namespace orc
-
+} // namespace orc
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_ORC_COMMON_H__

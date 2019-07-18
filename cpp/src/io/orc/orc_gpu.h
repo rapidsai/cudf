@@ -17,9 +17,12 @@
 #ifndef __IO_ORC_GPU_H__
 #define __IO_ORC_GPU_H__
 
-#include "io/comp/gpuinflate.h"
+#include <io/comp/gpuinflate.h>
 
-namespace orc { namespace gpu {
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 
 #define DECIMALS_AS_FLOAT64     1     // 0: store decimals as INT64, 1: store decimals as FLOAT64
 
@@ -54,6 +57,7 @@ enum StreamIndexType {
     CI_DATA2,           // Secondary/Length stream
     CI_PRESENT,         // Present stream
     CI_DICTIONARY,      // Dictionary stream
+    CI_INDEX,           // Index stream
     CI_NUM_STREAMS
 };
 
@@ -68,7 +72,7 @@ struct nvstrdesc_s {
 
 
 /**
-* @brief Struct to describe a single entry in the global dictionary
+ * @brief Struct to describe a single entry in the global dictionary
 **/
 struct DictionaryEntry {
     uint32_t pos;   // Position in data stream
@@ -92,11 +96,22 @@ struct ColumnDesc
     uint32_t dict_len;                          // length of local dictionary
     uint32_t null_count;                        // number of null values in this stripe's column
     uint32_t skip_count;                        // number of non-null values to skip
+    uint32_t rowgroup_id;                       // row group position
     uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
     uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type
-    uint8_t pad[4];
+};
+
+
+/**
+ * @brief Struct to describe a groups of row belonging to a column stripe
+ **/
+struct RowGroup
+{
+    uint32_t chunk_id;                          // Column chunk this entry belongs to
+    uint32_t strm_offset[2];                    // Index offset for CI_DATA and CI_DATA2 streams
+    uint16_t run_pos[2];                        // Run position for CI_DATA and CI_DATA2
 };
 
 
@@ -125,6 +140,21 @@ cudaError_t ParseCompressedStripeData(CompressedStreamInfo *strm_info, int32_t n
 cudaError_t PostDecompressionReassemble(CompressedStreamInfo *strm_info, int32_t num_streams, cudaStream_t stream = (cudaStream_t)0);
 
 /**
+ * @brief Launches kernel for constructing rowgroup from index streams
+ *
+ * @param[out] row_groups RowGroup device array [rowgroup][column]
+ * @param[in] strm_info List of compressed streams (or NULL if uncompressed)
+ * @param[in] chunks ColumnDesc device array [stripe][column]
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t ParseRowGroupIndex(RowGroup *row_groups, CompressedStreamInfo *strm_info, ColumnDesc *chunks, uint32_t num_columns, uint32_t num_stripes, uint32_t num_rowgroups, uint32_t rowidx_stride, cudaStream_t stream = (cudaStream_t)0);
+
+/**
  * @brief Launches kernel for decoding NULLs and building string dictionary index tables
  *
  * @param[in] chunks ColumnDesc device array [stripe][column]
@@ -150,14 +180,20 @@ cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
  * @param[in] tz_len Length of timezone translation table
+ * @param[in] row_groups Optional row index data
+ * @param[in] num_rowgroups Number of row groups in row index data
+ * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0,
-                                size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0, cudaStream_t stream = (cudaStream_t)0);
+                                size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0,
+                                RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
 
-
-};}; // orc::gpu namespace
+} // namespace gpu
+} // namespace orc
+} // namespace io
+} // namespace cudf
 
 #endif // __IO_ORC_GPU_H__
