@@ -113,6 +113,18 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
+    def as_categorical_column(self):
+        raise NotImplementedError
+
+    def as_numeric_column(self):
+        raise NotImplementedError
+
+    def as_datetime_column(self):
+        raise NotImplementedError
+
+    def as_string_column(self):
+        raise NotImplementedError
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
