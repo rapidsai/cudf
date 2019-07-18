@@ -241,11 +241,15 @@ class MultiIndex(Index):
         # if not open end or beginning, get range lowest beginning index
         # to highest ending index
         if isinstance(row_tuple, slice):
-            if isinstance(row_tuple.start, numbers.Number) or isinstance(
-                    row_tuple.stop, numbers.Number) or row_tuple == slice(None):
+            if (
+                isinstance(row_tuple.start, numbers.Number)
+                or isinstance(row_tuple.stop, numbers.Number)
+                or row_tuple == slice(None)
+            ):
                 stop = row_tuple.stop or max_length
-                start, stop, step, sln = utils.standard_python_slice(stop,
-                                                                     row_tuple)
+                start, stop, step, sln = utils.standard_python_slice(
+                    stop, row_tuple
+                )
                 return arange(start, stop, step)
             if self._is_valid_index_key(row_tuple.start):
                 start_values = self._compute_validity_mask(
@@ -261,7 +265,7 @@ class MultiIndex(Index):
                 )
             else:
                 return start_values
-            return Series(arange(start_values.min(), stop_values.max()+1))
+            return Series(arange(start_values.min(), stop_values.max() + 1))
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
         return self._compute_validity_mask(
