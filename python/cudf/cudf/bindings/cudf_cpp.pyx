@@ -202,7 +202,8 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
     cdef uintptr_t valid_ptr
     cdef uintptr_t category
 
-    if pd.api.types.is_categorical_dtype(col.dtype):
+    if pd.api.types.pandas_dtype(col.dtype) is \
+            pd.core.dtypes.dtypes.CategoricalDtypeType:
         g_dtype = dtypes[col.data.dtype.type]
     else:
         g_dtype = dtypes[col.dtype.type]
@@ -289,7 +290,8 @@ cdef gdf_column* column_view_from_NDArrays(
         valid_ptr = 0
 
     if dtype is not None:
-        if pd.api.types.is_categorical_dtype(dtype):
+        if pd.api.types.pandas_dtype(dtype) is \
+                pd.core.dtypes.dtypes.CategoricalDtypeType:
             if data is None:
                 g_dtype = dtypes[np.int8]
             else:

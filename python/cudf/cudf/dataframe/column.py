@@ -48,16 +48,16 @@ class Column(object):
         from cudf.dataframe.categorical import CategoricalColumn
 
         if len(objs) == 0:
-            if dtype == np.dtype("object"):
+            dtype = pd.api.types.pandas_dtype(dtype)
+            if dtype in (np.object_, np.str_):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
-            elif pd.api.types.is_categorical_dtype(dtype):
+            elif dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
                 return CategoricalColumn(
                     data=Column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
                     ordered=False,
                 )
             else:
-                dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
 
         # Find the first non-null column:

@@ -701,9 +701,10 @@ class CategoricalIndex(GenericIndex):
     def __init__(self, values, name=None):
         if isinstance(values, CategoricalColumn):
             values = values
-        elif isinstance(
-            values, pd.Series
-        ) and pd.api.types.is_categorical_dtype(values.dtype):
+        elif isinstance(values, pd.Series) and (
+            pd.api.types.pandas_dtype(values.dtype)
+            is pd.core.dtypes.dtypes.CategoricalDtypeType
+        ):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
                 categories=values.cat.categories,

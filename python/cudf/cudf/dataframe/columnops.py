@@ -121,7 +121,8 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
-    if pd.api.types.is_categorical_dtype(dtype):
+    dtype = pd.api.types.pandas_dtype(dtype)
+    if dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
         categories = column.cat().categories
         dtype = column.data.dtype
     return column_empty(row_count, dtype, masked, categories=categories)
@@ -137,7 +138,9 @@ def column_empty(row_count, dtype, masked, categories=None):
     else:
         mask = None
 
-    if categories is None and pd.api.types.is_categorical_dtype(dtype):
+    if (categories is None) and (
+        dtype is pd.core.dtypes.dtypes.CategoricalDtypeType
+    ):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
@@ -382,9 +385,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         elif isinstance(arbitrary, pa.NullArray):
             new_dtype = dtype
             if (type(dtype) == str and dtype == "empty") or dtype is None:
-                new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+                new_dtype = pd.api.types.pandas_dtype(
+                    arbitrary.type.to_pandas_dtype()
+                )
 
-            if pd.api.types.is_categorical_dtype(new_dtype):
+            if new_dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
@@ -515,21 +520,22 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             try:
                 pa_type = None
                 if dtype is not None:
-                    if pd.api.types.is_categorical_dtype(dtype):
+                    dtype = pd.api.types.pandas_dtype(dtype)
+                    if dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
                         raise TypeError
                     else:
-                        np_type = np.dtype(dtype).type
-                        if np_type == np.bool_:
+                        if dtype.type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = np_to_pa_dtype(np.dtype(dtype).type)
+                            pa_type = np_to_pa_dtype(dtype.type)
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     nan_as_null=nan_as_null,
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 np_type = None
-                if pd.api.types.is_categorical_dtype(dtype):
+                d_type = pd.api.types.pandas_dtype(dtype)
+                if d_type is pd.core.dtypes.dtypes.CategoricalDtypeType:
                     data = as_column(
                         pd.Series(arbitrary, dtype="category"),
                         nan_as_null=nan_as_null,
@@ -538,7 +544,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     if dtype is None:
                         np_type = None
                     else:
-                        np_type = np.dtype(dtype)
+                        np_type = d_type
                     data = as_column(
                         np.array(arbitrary, dtype=np_type),
                         nan_as_null=nan_as_null,

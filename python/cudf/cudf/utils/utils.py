@@ -193,8 +193,9 @@ def cudf_dtype_from_pydata_dtype(dtype):
         from pandas.core.dtypes.common import (
             _get_dtype_from_object as infer_dtype_from_object,
         )
+    dtype = pd.api.types.pandas_dtype(dtype)
 
-    if pd.api.types.is_categorical_dtype(dtype):
+    if dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
         pass
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
