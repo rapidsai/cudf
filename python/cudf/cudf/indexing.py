@@ -75,6 +75,11 @@ class _DataFrameIndexer(object):
         return scalar_series_or_df
 
     def _create_valid_tuple(self, arg):
+        """
+        Any argument can be passed to iloc or loc via `__getitem__`. This
+        helper method converts the input argument to a valid tuple
+        (rows, columns)
+        """
         if isinstance(arg, (str, numbers.Number)):
             return (arg, slice(None))
         if type(arg) is not tuple:
@@ -159,7 +164,7 @@ class _DataFrameIndexer(object):
             return df[df.columns[0]]
         else:
             df = _normalize_dtypes(df)
-            sr = df.transpose()
+            sr = df.T
             return sr[sr.columns[0]]
 
 
@@ -178,6 +183,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
         from cudf import MultiIndex
+        # Step 1: Gather columns
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
         else:
@@ -185,12 +191,14 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             columns_df = DataFrame()
             for col in columns:
                 columns_df.add_column(name=col, data=self._df[col])
+        # Step 2: Gather rows
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
         else:
             df = DataFrame()
             for col in columns_df.columns:
                 df[col] = columns_df[col].loc[arg[0]]
+        # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):
                 start = arg[0].start
@@ -199,6 +207,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                 df.index = as_index(start)
             else:
                 df.index = as_index(arg[0])
+        # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
         return df
@@ -275,6 +284,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 df[key] = col.iloc[arg[0]]
             df.columns = columns_df.columns
 
+        # Iloc Step 3:
+        # Reindex
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
                 start = arg[0].start
@@ -283,6 +294,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                 df.index = as_index(self._df.index[start])
             else:
                 df.index = as_index(self._df.index[arg[0]])
+
+        # Iloc Step 4:
+        # Downcast
         if self._can_downcast_to_series(df, arg):
             if isinstance(df.columns, MultiIndex):
                 if len(df) > 0 and not (

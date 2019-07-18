@@ -312,15 +312,15 @@ class MultiIndex(Index):
                 result.reset_index(drop=True)
                 index = index._popn(size)
         if self._is_valid_index_key(index_key):
-            result._index = index
+            result = result.set_index(index)
         return result
 
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
         valid_indices = self._compute_validity_mask(
-                df.index,
-                row_tuple,
-                len(df.index)
+            df.index,
+            row_tuple,
+            len(df.index)
         )
         result = df.take(Series(valid_indices))
         if isinstance(row_tuple, (numbers.Number, slice)):
@@ -332,9 +332,9 @@ class MultiIndex(Index):
         from cudf import Series
         from cudf import DataFrame
         valid_indices = self._compute_validity_mask(
-                df.columns,
-                row_tuple,
-                len(df._cols)
+            df.columns,
+            row_tuple,
+            len(df._cols)
         )
         result = df.take_columns(valid_indices)
 
