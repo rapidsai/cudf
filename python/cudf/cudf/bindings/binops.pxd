@@ -63,5 +63,10 @@ cdef extern from "binaryop.hpp" namespace "cudf" nogil:
         gdf_column* rhs,
         const string& ptx
     ) except +
-    
-    cdef gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs, const string& ptx, gdf_dtype output_type) except +
+
+    cdef gdf_column binary_operation(
+        const gdf_column& lhs,
+        const gdf_column& rhs,
+        const string& ptx,
+        gdf_dtype output_type
+    ) except +

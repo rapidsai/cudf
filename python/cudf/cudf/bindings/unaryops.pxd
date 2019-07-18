@@ -64,7 +64,11 @@ cdef extern from "cudf.h" nogil:
         gdf_column *input,
         gdf_column *output
     ) except +
-    
+
 cdef extern from "transform.hpp" namespace "cudf" nogil:
 
-    cdef gdf_column transform(const gdf_column& input, const string& ptx, gdf_dtype output_type) except +
+    cdef gdf_column transform(
+        const gdf_column& input,
+        const string& ptx,
+        gdf_dtype output_type
+    ) except +

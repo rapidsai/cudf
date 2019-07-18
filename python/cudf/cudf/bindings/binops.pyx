@@ -143,9 +143,10 @@ def apply_op(lhs, rhs, out, op):
     free(c_out)
 
     return nullct
- 
+
+
 def apply_op_udf(lhs, rhs, udf_ptx, np_dtype):
-    
+
     check_gdf_compatibility(lhs)
     check_gdf_compatibility(rhs)
     cdef gdf_column* c_lhs = column_view_from_column(lhs)
@@ -153,15 +154,21 @@ def apply_op_udf(lhs, rhs, udf_ptx, np_dtype):
 
     cdef gdf_column c_outcol
 
-    cdef gdf_dtype g_type = dtypes[np_dtype] # get the gdf_type related to the input np type 
-    
+    # get the gdf_type related to the input np type
+    cdef gdf_dtype g_type = dtypes[np_dtype]
+
     cdef string cpp_str = udf_ptx.encode('UTF-8')
-    
+
     with nogil:
-        c_outcol = binary_operation(<gdf_column>c_lhs[0], <gdf_column>c_rhs[0], cpp_str, g_type)
- 
+        c_outcol = binary_operation(
+            <gdf_column>c_lhs[0],
+            <gdf_column>c_rhs[0],
+            cpp_str,
+            g_type
+        )
+
     data, mask = gdf_column_to_column_mem(&c_outcol)
-    
+
     free(c_lhs)
     free(c_rhs)
 

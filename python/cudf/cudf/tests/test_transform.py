@@ -2,13 +2,12 @@
 
 from __future__ import division
 
-import pytest
 import numba
 import numpy as np
+import pytest
+from packaging.version import Version
 
 from cudf.dataframe import Series
-
-from packaging.version import Version
 
 
 @pytest.mark.skipif(
