@@ -20,9 +20,9 @@ from librmm_cffi import librmm as rmm
 
 import nvstrings
 import numpy as np
-import collections.abc
-import errno
+import collections.abc as abc
 import os
+import errno
 
 
 def is_file_like(obj):
@@ -42,17 +42,39 @@ _quoting_enum = {
 
 
 cpdef cpp_read_csv(
-    filepath_or_buffer, lineterminator='\n',
-    quotechar='"', quoting=0, doublequote=True,
-    header='infer',
-    mangle_dupe_cols=True, usecols=None,
-    sep=',', delimiter=None, delim_whitespace=False,
-    skipinitialspace=False, names=None, dtype=None,
-    skipfooter=0, skiprows=0, dayfirst=False, compression='infer',
-    thousands=None, decimal='.', true_values=None, false_values=None,
-    nrows=None, byte_range=None, skip_blank_lines=True, comment=None,
-    na_values=None, keep_default_na=True, na_filter=True,
-    prefix=None, index_col=None):
+    filepath_or_buffer,
+    lineterminator="\n",
+    quotechar='"',
+    quoting=0,
+    doublequote=True,
+    header="infer",
+    mangle_dupe_cols=True,
+    usecols=None,
+    sep=",",
+    delimiter=None,
+    delim_whitespace=False,
+    skipinitialspace=False,
+    names=None,
+    dtype=None,
+    skipfooter=0,
+    skiprows=0,
+    dayfirst=False,
+    compression="infer",
+    thousands=None,
+    decimal=".",
+    true_values=None,
+    false_values=None,
+    nrows=None,
+    byte_range=None,
+    skip_blank_lines=True,
+    comment=None,
+    parse_dates=None,
+    na_values=None,
+    keep_default_na=True,
+    na_filter=True,
+    prefix=None,
+    index_col=None,
+):
     """
     Cython function to call into libcudf API, see `read_csv`.
 
@@ -108,10 +130,10 @@ cpdef cpp_read_csv(
             args.names.push_back(str(col_name).encode())
 
     if dtype is not None:
-        if isinstance(dtype, collections.abc.Mapping):
+        if isinstance(dtype, abc.Mapping):
             for k, v in dtype.items():
                 args.dtype.push_back(str(str(k)+":"+str(v)).encode())
-        elif isinstance(dtype, collections.abc.Iterable):
+        elif isinstance(dtype, abc.Iterable):
             for col_dtype in dtype:
                 args.dtype.push_back(str(col_dtype).encode())
         else:
@@ -151,6 +173,19 @@ cpdef cpp_read_csv(
     for value in na_values or []:
         args.na_values.push_back(str(value).encode())
 
+    if parse_dates is not None:
+        if isinstance(parse_dates, abc.Mapping):
+            raise TypeError("`parse_dates`: dictionaries are unsupported")
+        if not isinstance(parse_dates, abc.Iterable):
+            raise TypeError("`parse_dates`: non-lists are unsupported")
+        for col in parse_dates:
+            if isinstance(col, str):
+                args.infer_date_names.push_back(str(col).encode())
+            elif isinstance(col, int):
+                args.infer_date_indexes.push_back(col)
+            else:
+                raise TypeError("`parse_dates`: Nesting is unsupported")
+
     args.delimiter = delimiter.encode()[0]
     args.lineterminator = lineterminator.encode()[0]
     args.quotechar = quotechar.encode()[0]
@@ -180,8 +215,9 @@ cpdef cpp_read_csv(
     if byte_range is not None:
         table = reader.get().read_byte_range(byte_range[0], byte_range[1])
     elif skipfooter != 0 or skiprows != 0 or nrows is not None:
-        table = reader.get().read_rows(skiprows, skipfooter,
-                                 nrows if nrows is not None else -1)
+        table = reader.get().read_rows(
+            skiprows, skipfooter, nrows if nrows is not None else -1
+        )
     else:
         table = reader.get().read()
 
@@ -219,9 +255,15 @@ cpdef cpp_read_csv(
     return df
 
 cpdef cpp_write_csv(
-    cols, path=None,
-    sep=',', na_rep='',
-    columns=None, header=True, line_terminator='\n'):
+    cols,
+    path=None,
+    sep=",",
+    na_rep="",
+    columns=None,
+    header=True,
+    line_terminator="\n",
+    rows_per_chunk=8,
+):
     """
     Cython function to call into libcudf API, see `write_csv`.
 
@@ -248,7 +290,8 @@ cpdef cpp_write_csv(
     false_value = 'False'.encode()
     csv_writer.false_value = false_value
     csv_writer.include_header = header
-    csv_writer.rows_per_chunk = 10240000
+    # Minimum rows per chunk allowed by csvwriter is 8
+    csv_writer.rows_per_chunk = rows_per_chunk if rows_per_chunk > 8 else 8
 
     cdef vector[gdf_column*] list_cols
     # Variable for storing col name list that does not get garbage collected
@@ -264,7 +307,7 @@ cpdef cpp_write_csv(
                                 .format(col_name))
             check_gdf_compatibility(cols[col_name])
             col_names_encoded.append(col_name.encode())
-            #Workaround for string columns
+            # Workaround for string columns
             if cols[col_name]._column.dtype.type == np.object_:
                 c_col = column_view_from_string_column(cols[col_name]._column,
                                                        col_names_encoded[idx])
@@ -276,13 +319,14 @@ cpdef cpp_write_csv(
         for idx, (col_name, col) in enumerate(cols.items()):
             check_gdf_compatibility(col)
             col_names_encoded.append(col_name.encode())
-            #Workaround for string columns
+            # Workaround for string columns
             if col._column.dtype.type == np.object_:
                 c_col = column_view_from_string_column(col._column,
                                                        col_names_encoded[idx])
             else:
-                c_col = column_view_from_column(col._column,
-                                                       col_names_encoded[idx])
+                c_col = column_view_from_column(
+                    col._column, col_names_encoded[idx]
+                )
             list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()

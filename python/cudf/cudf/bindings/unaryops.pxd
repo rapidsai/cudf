@@ -9,6 +9,7 @@ from cudf.bindings.cudf_cpp cimport *
 
 from libcpp.string cimport string
 
+
 cdef extern from "cudf.h" nogil:
 
     ctypedef enum gdf_unary_math_op:
@@ -28,15 +29,42 @@ cdef extern from "cudf.h" nogil:
         GDF_NOT,
         GDF_INVALID_UNARY
 
-    cdef gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op) except +
+    cdef gdf_error gdf_unary_math(
+        gdf_column *input,
+        gdf_column *output,
+        gdf_unary_math_op op
+    ) except +
 
-    cdef gdf_error gdf_extract_datetime_year(gdf_column *input, gdf_column *output) except +
-    cdef gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output) except +
-    cdef gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) except +
-    cdef gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) except +
-    cdef gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output) except +
-    cdef gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) except +
+    cdef gdf_error gdf_extract_datetime_year(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
 
+    cdef gdf_error gdf_extract_datetime_month(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
+
+    cdef gdf_error gdf_extract_datetime_day(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
+
+    cdef gdf_error gdf_extract_datetime_hour(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
+
+    cdef gdf_error gdf_extract_datetime_minute(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
+
+    cdef gdf_error gdf_extract_datetime_second(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
+    
 cdef extern from "transform.hpp" namespace "cudf" nogil:
 
     cdef gdf_column transform(const gdf_column& input, const string& ptx, gdf_dtype output_type) except +

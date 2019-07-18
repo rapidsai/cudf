@@ -482,18 +482,20 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
       decompressor->GetLog2MaxCompressionRatio()));
 
   // Dispatch batches of blocks to decompress
-  switch (decompressor->GetKind()) {
-    case orc::ZLIB:
-      CUDA_TRY(gpuinflate(inflate_in.data().get(), inflate_out.data().get(),
-                          num_compressed_blocks, 0));
-      break;
-    case orc::SNAPPY:
-      CUDA_TRY(gpu_unsnap(inflate_in.data().get(), inflate_out.data().get(),
-                          num_compressed_blocks));
-      break;
-    default:
-      CUDF_EXPECTS(false, "Unexpected decompression dispatch");
-      break;
+  if (num_compressed_blocks > 0) {
+    switch (decompressor->GetKind()) {
+      case orc::ZLIB:
+        CUDA_TRY(gpuinflate(inflate_in.data().get(), inflate_out.data().get(),
+                            num_compressed_blocks, 0));
+        break;
+      case orc::SNAPPY:
+        CUDA_TRY(gpu_unsnap(inflate_in.data().get(), inflate_out.data().get(),
+                            num_compressed_blocks));
+        break;
+      default:
+        CUDF_EXPECTS(false, "Unexpected decompression dispatch");
+        break;
+    }
   }
   CUDA_TRY(PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size()));
 

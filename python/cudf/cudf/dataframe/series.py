@@ -15,6 +15,9 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.copying as cpp_copying
 from cudf import formatting
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf.bindings.stream_compaction import (
+    apply_drop_duplicates as cpp_drop_duplicates,
+)
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
@@ -308,6 +311,34 @@ class Series(object):
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
             return func(self)
+        else:
+            return NotImplemented
+
+    def __array_function__(self, func, types, args, kwargs):
+
+        cudf_series_module = Series
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_series_module, submodule):
+                cudf_series_module = getattr(cudf_series_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_series_module]
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_series_module, fname):
+            cudf_func = getattr(cudf_series_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+
         else:
             return NotImplemented
 
@@ -1041,6 +1072,33 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
+    def drop_duplicates(self, keep="first", inplace=False):
+        """
+        Return Series with duplicate values removed
+        """
+        in_cols = [self._column]
+        in_index = self.index
+        from cudf.dataframe.multiindex import MultiIndex
+
+        if isinstance(in_index, MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates(
+            [in_index.as_column()], in_cols, None, keep
+        )
+        new_index = as_index(new_index)
+        if self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, MultiIndex):
+            new_index = self.index.take(new_index)
+
+        if inplace:
+            self._index = new_index
+            self._size = len(new_index)
+            self._column = out_cols[0]
+        else:
+            out = Series(out_cols[0], index=new_index, name=self.name)
+            return out
+
     def dropna(self):
         """
         Return a Series with null values removed.
@@ -1170,7 +1228,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.isnull_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.isnull_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def isna(self):
@@ -1188,7 +1246,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def all(self, axis=0, skipna=True, level=None):
@@ -1516,8 +1574,6 @@ class Series(object):
         A sequence of new series for each category.  Its length is determined
         by the length of ``cats``.
         """
-        if self.dtype.kind not in "iuf":
-            raise TypeError("expecting integer or float dtype")
 
         dtype = np.dtype(dtype)
         return ((self == cat).fillna(False).astype(dtype) for cat in cats)
@@ -1697,30 +1753,23 @@ class Series(object):
                 index=self.index,
             )
 
-    def mean(self, axis=None, skipna=True, dtype=None):
+    def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean(dtype=dtype)
+        return self._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return np.sqrt(self.var(ddof=ddof))
+        return self._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        mu, var = self.mean_var(ddof=ddof)
-        return var
-
-    def mean_var(self, ddof=1):
-        """Compute mean and variance at the same time.
-        """
-        mu, var = self._column.mean_var(ddof=ddof)
-        return mu, var
+        return self._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
@@ -2316,6 +2365,22 @@ class Series(object):
             out.name = index
 
         return out.copy(deep=copy)
+
+    @property
+    def is_unique(self):
+        return self._column.is_unique
+
+    @property
+    def is_monotonic(self):
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._column.is_monotonic_decreasing
 
 
 register_distributed_serializer(Series)
