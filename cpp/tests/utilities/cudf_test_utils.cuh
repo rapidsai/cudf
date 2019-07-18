@@ -234,8 +234,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   // Fill the gdf_column members
   the_column->size = host_vector.size();
   the_column->dtype = gdf_col_type;
-  gdf_dtype_extra_info extra_info;
-  extra_info.time_unit = TIME_UNIT_NONE;
+  gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
   the_column->dtype_info = extra_info;
   the_column->col_name = nullptr;
 
