@@ -290,7 +290,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::table(), unique_indices);
+    return std::make_pair(cudf::empty_like(input_table), unique_indices);
   }
 
   gdf_size_type nrows = input_table.num_rows();
