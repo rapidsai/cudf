@@ -55,7 +55,8 @@ class column_view {
    *
    * @throws `cudf::logic_error` if `size < 0`
    * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `size > 0` but `type == EMPTY`
+   * @throws `cudf::logic_error` if `type == EMPTY` but `data != nullptr` or
+   * `null_mask != nullptr`
    * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
    * @throws `cudf::logic_error` if `offset < 0`
    *
@@ -65,7 +66,7 @@ class column_view {
    * @param null_mask Pointer to device memory containing the null indicator
    * bitmask, may be `nullptr` if `null_count == 0`
    * @param null_count The number of null elements
-   * @param offset optional, index of the first element relative to `data`
+   * @param offset optional, index of the first element 
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
@@ -123,7 +124,7 @@ class column_view {
   size_type size() const noexcept { return _size; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the element type
+   * @brief Returns the element `data_type`
    *---------------------------------------------------------------------------**/
   data_type type() const noexcept { return _type; }
 
