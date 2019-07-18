@@ -79,6 +79,7 @@
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2235 Fix get_dummies to be compatible with dask
+- PR #2332 Zero initialize gdf_dtype_extra_info
 
 
 # cuDF 0.8.0 (27 June 2019)
