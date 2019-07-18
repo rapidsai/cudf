@@ -220,12 +220,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         )
         return col
 
-    def astype(self, dtype):
-        # custom dtype can't be compared with `==`
-        if self.dtype is dtype:
-            return self
-        return self.as_numerical.astype(dtype)
-
     def sort_by_values(self, ascending, na_position="last"):
         return self.as_numerical.sort_by_values(ascending, na_position)
 
@@ -382,6 +376,25 @@ class CategoricalColumn(columnops.TypedColumnBase):
                 self._ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
+
+    def as_categorical_column(self):
+        return self
+
+    def as_numerical_column(self, dtype):
+        return self._decategorize().as_numerical_column(dtype)
+
+    def as_string_column(self):
+        return self._decategorize().as_string_column()
+
+    def as_datetime_column(self, dtype):
+        return self._decategorize().as_datetime_column(dtype)
+
+    def _decategorize(self):
+        gather_map = (
+            self.cat().codes.astype("int32").fillna(0)._column.data.mem
+        )
+        out = self._categories.take(gather_map)
+        return out.replace(mask=self.mask)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

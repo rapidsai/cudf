@@ -137,11 +137,11 @@ class TypedColumnBase(Column):
             mask=self.mask,
             null_count=self.null_count,
             categories=cats._column,
-            ordered=True,
+            ordered=False,
         )
         raise NotImplementedError
 
-    def as_numeric_column(self):
+    def as_numerical_column(self):
         raise NotImplementedError
 
     def as_datetime_column(self):

@@ -3319,3 +3319,37 @@ def test_series_astype_numeric_to_other(dtype, as_dtype):
     psr = pd.Series([1, 2, 3], dtype=dtype)
     gsr = gd.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "as_dtype", ["int32", "float32", "category", "datetime64[ms]", "str"]
+)
+def test_series_astype_string_to_other(as_dtype):
+    if as_dtype == "datetime64[ms]":
+        data = ["2001-01-01", "2002-02-02", "2000-01-05"]
+    else:
+        data = ["1", "2", "3"]
+    psr = pd.Series(data)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize("as_dtype", ["category", "datetime64[ms]", "str"])
+def test_series_astype_datetime_to_other(as_dtype):
+    data = ["2001-01-01", "2002-02-02", "2001-01-05"]
+    psr = pd.Series(data)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "as_dtype", ["int32", "float32", "category", "datetime64[ms]", "str"]
+)
+def test_series_astype_categorical_to_other(as_dtype):
+    if as_dtype == "datetime64[ms]":
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
+    else:
+        data = [1, 2, 3, 1]
+    psr = pd.Series(data, dtype="category")
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))

@@ -1608,6 +1608,7 @@ class Series(object):
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
+        cats.name = None  # mutated above
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
