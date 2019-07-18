@@ -114,6 +114,19 @@ gdf_error estimate_join_output_size(device_table const & build_table,
 
   CUDA_TRY( cudaGetLastError() );
 
+  constexpr int block_size {DEFAULT_CUDA_BLOCK_SIZE};
+  int numBlocks {-1};
+
+  CUDA_TRY(cudaOccupancyMaxActiveBlocksPerMultiprocessor(
+    &numBlocks, compute_join_output_size<join_type, multimap_type, block_size, DEFAULT_CUDA_CACHE_SIZE>,
+    block_size, 0
+  ));
+
+  int dev_id {-1};
+  CUDA_TRY(cudaGetDevice(&dev_id));
+
+  int num_sms {-1};
+  CUDA_TRY(cudaDeviceGetAttribute(&num_sms, cudaDevAttrMultiProcessorCount, dev_id));
 
   // Continue probing with a subset of the probe table until either:
   // a non-zero output size estimate is found OR
@@ -123,9 +136,6 @@ gdf_error estimate_join_output_size(device_table const & build_table,
     sample_probe_num_rows = std::min(sample_probe_num_rows, probe_table_num_rows);
 
     *d_size_estimate = 0;
-
-    constexpr int block_size{DEFAULT_CUDA_BLOCK_SIZE};
-    const gdf_size_type probe_grid_size{(sample_probe_num_rows + block_size -1)/block_size};
     
     // Probe the hash table without actually building the output to simply
     // find what the size of the output will be.
@@ -133,11 +143,11 @@ gdf_error estimate_join_output_size(device_table const & build_table,
                              multimap_type,
                              block_size,
                              DEFAULT_CUDA_CACHE_SIZE>
-    <<<probe_grid_size, block_size>>>(&hash_table,
-                                      build_table,
-                                      probe_table,
-                                      sample_probe_num_rows,
-                                      d_size_estimate);
+    <<<numBlocks * num_sms, block_size>>>(&hash_table,
+                                          build_table,
+                                          probe_table,
+                                          sample_probe_num_rows,
+                                          d_size_estimate);
 
     // Device sync is required to ensure d_size_estimate is updated
     CUDA_TRY( cudaDeviceSynchronize() );
