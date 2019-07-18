@@ -239,8 +239,7 @@ def copy_column(input_col):
     """
         Call cudf::copy
     """
-    cdef gdf_column* c_input_col = \
-                            column_view_from_column(input_col)
+    cdef gdf_column* c_input_col = column_view_from_column(input_col)
     cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
 
     with nogil:

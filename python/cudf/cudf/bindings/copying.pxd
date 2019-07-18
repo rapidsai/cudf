@@ -21,7 +21,7 @@ cdef extern from "copying.hpp" namespace "cudf" nogil:
         const gdf_index_type* gather_map,
         cudf_table* destination_table
     ) except +
-    
+
     cdef gdf_column copy(
         const gdf_column &input
     ) except +
