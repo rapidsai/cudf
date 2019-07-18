@@ -236,7 +236,7 @@ def build_column(
             name=name,
             null_count=null_count,
         )
-    elif dtype in (np.object_, np.str_):
+    elif dtype.type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError
         return string.StringColumn(
