@@ -65,7 +65,7 @@ public final class Table implements AutoCloseable {
     nativeHandle = createCudfTable(cudfColumnPointers);
   }
 
-  private Table(long[] cudfColumns) {
+  Table(long[] cudfColumns) {
     assert cudfColumns != null : "CudfColumns can't be null";
     this.columns = new ColumnVector[cudfColumns.length];
     try {

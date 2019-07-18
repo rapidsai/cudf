@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#include "cudf/copying.hpp"
+
 #include "jni_utils.hpp"
 
 using unique_nvcat_ptr = std::unique_ptr<NVCategory, decltype(&NVCategory::destroy)>;
@@ -130,9 +132,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewAugmented(
 
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
     JNIEnv *env, jobject, jlong handle, jlong data_ptr, jboolean data_ptr_on_host,
-    jlong host_offsets_ptr, jboolean reset_offsets_to_zero,
-    jlong device_valid_ptr, jlong device_output_data_ptr, jint size,
-    jint jdtype, jint null_count) {
+    jlong host_offsets_ptr, jboolean reset_offsets_to_zero, jlong device_valid_ptr,
+    jlong device_output_data_ptr, jint size, jint jdtype, jint null_count) {
   JNI_NULL_CHECK(env, handle, "column is null", );
   JNI_NULL_CHECK(env, data_ptr, "string data is null", );
   JNI_NULL_CHECK(env, host_offsets_ptr, "host offsets is null", );
@@ -144,7 +145,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
 
     uint32_t data_size = host_offsets[size];
     if (reset_offsets_to_zero) {
-        data_size -= host_offsets[0];
+      data_size -= host_offsets[0];
     }
 
     gdf_valid_type *valid = reinterpret_cast<gdf_valid_type *>(device_valid_ptr);
@@ -155,21 +156,21 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
     // NVCategory::create_from_offsets or NVStrings::create_from_offsets, it's much faster to
     // use create_from_index, block-transferring the host string data to the device first.
 
-    char * device_data = nullptr;
+    char *device_data = nullptr;
     cudf::jni::jni_rmm_unique_ptr<char> dev_string_data_holder;
     if (data_ptr_on_host) {
-        dev_string_data_holder = cudf::jni::jni_rmm_alloc<char>(env, data_size);
-        JNI_CUDA_TRY(
-            env, ,
-            cudaMemcpyAsync(dev_string_data_holder.get(), data, data_size, cudaMemcpyHostToDevice));
-        device_data = dev_string_data_holder.get();
+      dev_string_data_holder = cudf::jni::jni_rmm_alloc<char>(env, data_size);
+      JNI_CUDA_TRY(
+          env, ,
+          cudaMemcpyAsync(dev_string_data_holder.get(), data, data_size, cudaMemcpyHostToDevice));
+      device_data = dev_string_data_holder.get();
     } else {
-        device_data = data;
+      device_data = data;
     }
 
     uint32_t offset_amount_to_subtract = 0;
     if (reset_offsets_to_zero) {
-        offset_amount_to_subtract = host_offsets[0];
+      offset_amount_to_subtract = host_offsets[0];
     }
     std::vector<std::pair<const char *, size_t>> index{};
     index.reserve(size);
@@ -278,5 +279,21 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_approxQuantile(JNIEnv
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *env, jclass clazz,
+                                                                        jlong input_column,
+                                                                        jlong slice_indices) {
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  JNI_NULL_CHECK(env, slice_indices, "slice indices are null", 0);
+
+  gdf_column *n_column = reinterpret_cast<gdf_column *>(input_column);
+  gdf_column *n_slice_indices = reinterpret_cast<gdf_column *>(slice_indices);
+
+  std::vector<gdf_column *> result = cudf::slice(
+      *n_column, static_cast<gdf_index_type *>(n_slice_indices->data), n_slice_indices->size);
+  cudf::jni::native_jlongArray n_result(env, reinterpret_cast<jlong *>(result.data()),
+                                        result.size());
+  return n_result.get_jArray();
 }
 } // extern "C"
