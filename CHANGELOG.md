@@ -15,6 +15,7 @@
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
 - PR #2105 Add google benchmark for hash-based join
+- PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 
 ## Improvements
@@ -42,6 +43,7 @@
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
 - PR #2224 implement isna, isnull, notna as dataframe functions
+- PR #2232 Move CodeCov upload from build script to Jenkins
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
@@ -70,6 +72,14 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
+<<<<<<< HEAD
+=======
+- PR #2311 Fix copy behaviour for GenericIndex
+- PR #2323 Fix groupby on categoricals
+- PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2326 Fix for bug in DLPack when reading multiple columns
+- PR #2324 Fix cudf Docker build
+>>>>>>> upstream/branch-0.9
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2311 Fix copy behaviour for GenericIndex
 

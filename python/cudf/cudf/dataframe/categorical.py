@@ -83,7 +83,8 @@ class CategoricalAccessor(object):
         new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
         old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
 
-        cur_df = DataFrame({"old_codes": cur_codes})
+        cur_df = DataFrame({"old_codes": cur_codes,
+                            "order": cudautils.arange(len(cur_codes))})
         old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})
         new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
 
@@ -91,6 +92,7 @@ class CategoricalAccessor(object):
         df = old_df.merge(new_df, on="cats", how="left")
         # Join the old and new codes to "recode" the codes data buffer
         df = cur_df.merge(df, on="old_codes", how="left")
+        df = df.sort_values(by="order").reset_index(True)
 
         kwargs = df["new_codes"]._column._replace_defaults()
         kwargs.update(categories=new_cats)
