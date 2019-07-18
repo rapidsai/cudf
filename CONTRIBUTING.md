@@ -273,6 +273,8 @@ flag. Below is a list of the available arguments and their purpose:
 
 ## Code Formatting
 
+### Python
+
 cuDF uses [Black](https://black.readthedocs.io/en/stable/),
 [isort](https://readthedocs.org/projects/isort/), and
 [flake8](http://flake8.pycqa.org/en/latest/) to ensure a consistent code format
