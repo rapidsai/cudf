@@ -15,6 +15,8 @@
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
 - PR #2105 Add google benchmark for hash-based join
+- PR #2293 Improve `compute_join_output_size` performance
+- PR #2316 Unique, nunique, and value_counts for datetime columns
 
 ## Improvements
 
@@ -69,6 +71,7 @@
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 
 
