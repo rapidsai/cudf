@@ -374,6 +374,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         if deep:
             import cudf.bindings.copying as cpp_copy
+
             copied_col = cpp_copy.copy_column(self)
             category_col = cpp_copy.copy_column(self._categories)
             return self.replace(
@@ -381,7 +382,8 @@ class CategoricalColumn(columnops.TypedColumnBase):
                 mask=copied_col.mask,
                 dtype=self.dtype,
                 categories=category_col,
-                ordered=self._ordered)
+                ordered=self._ordered,
+            )
         else:
             params = self._replace_defaults()
             return type(self)(**params)

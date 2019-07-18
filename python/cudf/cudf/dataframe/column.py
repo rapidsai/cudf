@@ -121,18 +121,22 @@ class Column(object):
         from cudf.dataframe import columnops
 
         if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(buffer=data_mem,
-                                          dtype=np.dtype("object"),
-                                          null_count=null_count)
+            return columnops.build_column(
+                buffer=data_mem,
+                dtype=np.dtype("object"),
+                null_count=null_count,
+            )
         else:
             data_buf = Buffer(data_mem)
             mask = None
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
-            return columnops.build_column(buffer=data_buf,
-                                          dtype=data_mem.dtype,
-                                          mask=mask,
-                                          null_count=null_count)
+            return columnops.build_column(
+                buffer=data_buf,
+                dtype=data_mem.dtype,
+                mask=mask,
+                null_count=null_count,
+            )
 
     def __init__(self, data, mask=None, null_count=None, name=None):
         """
@@ -377,6 +381,7 @@ class Column(object):
         """
         if deep:
             import cudf.bindings.copying as cpp_copy
+
             return cpp_copy.copy_column(self)
         else:
             params = self._replace_defaults()
