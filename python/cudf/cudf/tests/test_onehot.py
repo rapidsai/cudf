@@ -110,6 +110,9 @@ def test_get_dummies(data):
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
 
     utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
+
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])

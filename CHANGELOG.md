@@ -76,6 +76,7 @@
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
+- PR #2235 Fix get_dummies to be compatible with dask
 
 
 # cuDF 0.8.0 (27 June 2019)
