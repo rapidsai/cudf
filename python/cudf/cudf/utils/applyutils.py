@@ -92,7 +92,7 @@ class ApplyKernelCompilerBase(object):
 
     def run(self, df, **launch_params):
         # Get input columns
-        inputs = { k: df[k].data.mem for k in self.incols }
+        inputs = {k: df[k].data.mem for k in self.incols}
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
