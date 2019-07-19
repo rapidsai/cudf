@@ -9,6 +9,8 @@
 #include <groupby/hash_groupby.cuh>
 #include <string/nvcategory_util.hpp>
 #include <table/device_table.cuh>
+#include <utilities/type_dispatcher.hpp>
+#include <rmm/rmm.h>
 
 #include <cassert>
 #include <thrust/fill.h>
@@ -228,7 +230,7 @@ gdf_error gdf_group_by(gdf_column* in_key_columns[],
   return gdf_error_code;
 }
 
-rmm::device_vector<gdf_index_type>
+gdf_column
 gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
 {
   gdf_size_type ncols = input_table.num_columns();
@@ -244,7 +246,10 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
 
-  rmm::device_vector<gdf_index_type> unique_indices(nrows);
+  // Allocating memory for GDF column
+  gdf_column unique_indices {};
+  RMM_TRY(RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type)*nrows, nullptr));
+  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
 
   auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
   auto device_input_table = device_table::create(input_table);
@@ -252,24 +257,28 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context)
   if (nullable){
     auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices.data().get(),
+                              static_cast<gdf_index_type *>(unique_indices.data),
                               comp);
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, counting_iter, counting_iter+nrows,
-                              unique_indices.data().get(),
+                              static_cast<gdf_index_type *>(unique_indices.data),
                               comp);
   }
 
-  unique_indices.resize(thrust::distance(unique_indices.data().get(), result_end));
+  // size of the GDF column is being resized
+  unique_indices.size = thrust::distance(static_cast<gdf_index_type *>(unique_indices.data), result_end);
+  gdf_column resized_unique_indices = cudf::copy(unique_indices);
+  // Free old column, as we have resized (implicitly)
+  gdf_column_free (&unique_indices);
 
   cudaStreamSynchronize(stream);
   cudaStreamDestroy(stream);
 
-  return unique_indices;
+  return resized_unique_indices;
 }
 
-std::pair<cudf::table, rmm::device_vector<gdf_index_type>> 
+std::pair<cudf::table, gdf_column>
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const * key_col_indices,
@@ -277,9 +286,11 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
 {
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols, "number of key colums should be greater than zero");
+  gdf_column unique_indices{};
+  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
 
   if (0 == input_table.num_rows()) {
-    return std::make_pair(cudf::table(), rmm::device_vector<gdf_index_type>());
+    return std::make_pair(cudf::empty_like(input_table), unique_indices);
   }
 
   gdf_size_type nrows = input_table.num_rows();
@@ -350,6 +361,6 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
   std::transform(key_col_indices, key_col_indices+num_key_cols, key_cols_vect_out.begin(),
                   [&destination_table] (gdf_index_type const index) { return destination_table.get_column(index); });
   cudf::table key_col_sorted_table(key_cols_vect_out.data(), key_cols_vect_out.size());
-  
+
   return std::make_pair(destination_table, gdf_unique_indices(key_col_sorted_table, *context));
 }

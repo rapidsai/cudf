@@ -227,8 +227,7 @@ gdf_column create_gdf_column(const size_t size)
   the_column.size = size;
   the_column.dtype = gdf_col_type;
   the_column.valid = nullptr;
-  gdf_dtype_extra_info extra_info;
-  extra_info.time_unit = TIME_UNIT_NONE;
+  gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
   the_column.dtype_info = extra_info;
 
   // Allocate the buffer for the column

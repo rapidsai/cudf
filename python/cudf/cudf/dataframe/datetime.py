@@ -15,7 +15,8 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.utils import utils
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.utils import cudautils, utils
 from cudf.utils.utils import is_single_value
 
 
@@ -235,23 +236,45 @@ class DatetimeColumn(columnops.TypedColumnBase):
         value = columnops.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value)
 
+    def unique(self, method="sort"):
+        # method variable will indicate what algorithm to use to
+        # calculate unique, not used right now
+        if method != "sort":
+            msg = "non sort based unique() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # gather result
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        return out_col
+
+    def value_counts(self, method="sort"):
+        if method != "sort":
+            msg = "non sort based value_count() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # Return both values and their counts
+        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
+        out2 = cudautils.value_count(segs, len(sortedvals))
+        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
+        return out_vals, out_counts
+
     @property
     def is_unique(self):
         return self.as_numerical.is_unique
 
     @property
     def is_monotonic_increasing(self):
-        if not hasattr(self, '_is_monotonic_increasing'):
+        if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = binop(
-                self[1:], self[:-1], 'ge', 'bool'
+                self[1:], self[:-1], "ge", "bool"
             ).all()
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        if not hasattr(self, '_is_monotonic_decreasing'):
+        if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = binop(
-                self[1:], self[:-1], 'le', 'bool'
+                self[1:], self[:-1], "le", "bool"
             ).all()
         return self._is_monotonic_decreasing
 

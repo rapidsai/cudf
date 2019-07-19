@@ -13,8 +13,6 @@ from cudf.bindings.cudf_cpp import *
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-pandas_version = tuple(map(int,pd.__version__.split('.', 2)[:2]))
-
 
 from librmm_cffi import librmm as rmm
 from libc.stdint cimport uintptr_t
@@ -22,6 +20,8 @@ from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
+
+pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
 _GDF_QUANTILE_METHODS = {
     'linear': GDF_QUANT_LINEAR,
@@ -44,23 +44,34 @@ def apply_quantile(column, quant, method, exact):
     """
 
     cdef gdf_column* c_col = column_view_from_column(column)
-    cdef gdf_context* ctx = create_context_view(0, 'sort', 0, 0, 0, 'null_as_largest')
+    cdef gdf_context* ctx = create_context_view(
+        0,
+        'sort',
+        0,
+        0,
+        0,
+        'null_as_largest'
+    )
 
     res = []
     cdef gdf_scalar* c_result = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     for q in quant:
         if exact:
-            gdf_quantile_exact(<gdf_column*>c_col,
-                                      get_quantile_method(method),
-                                      q,
-                                      c_result,
-                                      ctx)
+            gdf_quantile_exact(
+                <gdf_column*>c_col,
+                get_quantile_method(method),
+                q,
+                c_result,
+                ctx
+            )
         else:
-            gdf_quantile_approx(<gdf_column*>c_col,
-                                       q,
-                                       c_result,
-                                       ctx)
-        if c_result.is_valid == True:
+            gdf_quantile_approx(
+                <gdf_column*>c_col,
+                q,
+                c_result,
+                ctx
+            )
+        if c_result.is_valid is True:
             res.append(get_scalar_value(c_result[0]))
 
     free(c_result)

@@ -3,18 +3,17 @@
 """
 Tests related to is_unique and is_monotonic attributes
 """
+import numpy as np
+import pandas as pd
 import pytest
 
 import cudf
-import numpy as np
-import pandas as pd
-
 from cudf.dataframe import MultiIndex, Series
 from cudf.dataframe.index import (
+    CategoricalIndex,
+    DatetimeIndex,
     GenericIndex,
     RangeIndex,
-    DatetimeIndex,
-    CategoricalIndex,
     StringIndex,
 )
 
@@ -222,45 +221,42 @@ def test_multiindex_tuples(testarr):
     [
         [10, 9, 8, 8, 7],
         [2.0, 5.0, 4.0, 3.0, 7.0],
-        ['b', 'd', 'e', 'a', 'c'],
-        ['frog', 'cat', 'bat', 'dog'],
+        ["b", "d", "e", "a", "c"],
+        ["frog", "cat", "bat", "dog"],
     ],
 )
-@pytest.mark.parametrize("side", ['left', 'right'])
-@pytest.mark.parametrize("kind", ['ix', 'loc', 'getitem', None])
+@pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.parametrize("kind", ["ix", "loc", "getitem", None])
 def test_get_slice_bound(testlist, side, kind):
     index = GenericIndex(testlist)
     index_pd = pd.Index(testlist)
     for label in testlist:
-        assert(
-            index.get_slice_bound(label, side, kind)
-            == index_pd.get_slice_bound(label, side, kind)
-        )
+        assert index.get_slice_bound(
+            label, side, kind
+        ) == index_pd.get_slice_bound(label, side, kind)
 
 
 @pytest.mark.parametrize("label", [1, 3, 5, 7, 9, 11])
-@pytest.mark.parametrize("side", ['left', 'right'])
-@pytest.mark.parametrize("kind", ['ix', 'loc', 'getitem', None])
+@pytest.mark.parametrize("side", ["left", "right"])
+@pytest.mark.parametrize("kind", ["ix", "loc", "getitem", None])
 def test_get_slice_bound_missing(label, side, kind):
     mylist = [2, 4, 6, 8, 10]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
-    assert(
-        index.get_slice_bound(label, side, kind)
-        == index_pd.get_slice_bound(label, side, kind)
-    )
+    assert index.get_slice_bound(
+        label, side, kind
+    ) == index_pd.get_slice_bound(label, side, kind)
 
 
 @pytest.mark.xfail
-@pytest.mark.parametrize("label", ['a', 'c', 'e', 'g'])
-@pytest.mark.parametrize("side", ['left', 'right'])
+@pytest.mark.parametrize("label", ["a", "c", "e", "g"])
+@pytest.mark.parametrize("side", ["left", "right"])
 def test_get_slice_bound_missing_str(label, side):
     # Slicing for monotonic string indices not yet supported
     # when missing values are specified (allowed in pandas)
-    mylist = ['b', 'd', 'f']
+    mylist = ["b", "d", "f"]
     index = GenericIndex(mylist)
     index_pd = pd.Index(mylist)
-    assert(
-        index.get_slice_bound(label, side, 'getitem')
-        == index_pd.get_slice_bound(label, side, 'getitem')
-    )
+    assert index.get_slice_bound(
+        label, side, "getitem"
+    ) == index_pd.get_slice_bound(label, side, "getitem")

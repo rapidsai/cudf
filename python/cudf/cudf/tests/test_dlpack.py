@@ -19,11 +19,12 @@ except ImportError:
 require_cupy = pytest.mark.skipif(not _have_cupy, reason="no cupy")
 
 nelems = [0, 3, 10]
-data = [np.nan, 10, 10.0]
-params_1d = itertools.product(nelems, data)
+dtype = [np.int32, np.float64]
+nulls = ["some", "none"]
+params_1d = itertools.product(nelems, dtype, nulls)
 
 ncols = [0, 1, 2]
-params_2d = itertools.product(ncols, nelems, data)
+params_2d = itertools.product(ncols, nelems, dtype, nulls)
 
 
 def data_size_expectation_builder(data):
@@ -35,15 +36,27 @@ def data_size_expectation_builder(data):
 
 @pytest.fixture(params=params_1d)
 def data_1d(request):
-    return np.array([request.param[1]] * request.param[0])
+    nelems = request.param[0]
+    dtype = request.param[1]
+    nulls = request.param[2]
+    a = np.random.randint(10, size=nelems).astype(dtype)
+    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
+        idx = np.random.choice(a.size, size=int(a.size * 0.2), replace=False)
+        a[idx] = np.nan
+    return a
 
 
 @pytest.fixture(params=params_2d)
 def data_2d(request):
-    a = np.ascontiguousarray(
-        np.array([[request.param[2]] * request.param[0]] * request.param[1])
-    )
-    return a
+    ncols = request.param[0]
+    nrows = request.param[1]
+    dtype = request.param[2]
+    nulls = request.param[3]
+    a = np.random.randint(10, size=(nrows, ncols)).astype(dtype)
+    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
+        idx = np.random.choice(a.size, size=int(a.size * 0.2), replace=False)
+        a.ravel()[idx] = np.nan
+    return np.ascontiguousarray(a)
 
 
 def test_to_dlpack_dataframe(data_2d):
@@ -113,11 +126,11 @@ def test_to_dlpack_cupy_2d(data_2d):
 
     with expectation:
         gdf = cudf.DataFrame.from_records(data_2d)
-        cudf_host_array = np.array(gdf.to_pandas())
+        cudf_host_array = np.array(gdf.to_pandas()).flatten()
         dlt = gdf.to_dlpack()
 
         cupy_array = cupy.fromDlpack(dlt)
-        cupy_host_array = cupy_array.get()
+        cupy_host_array = cupy_array.get().flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
 
@@ -143,10 +156,10 @@ def test_from_dlpack_cupy_2d(data_2d):
 
     with expectation:
         cupy_array = cupy.array(data_2d, order="F")
-        cupy_host_array = cupy_array.get()
+        cupy_host_array = cupy_array.get().flatten()
         dlt = cupy_array.toDlpack()
 
         gdf = cudf.from_dlpack(dlt)
-        cudf_host_array = np.array(gdf.to_pandas())
+        cudf_host_array = np.array(gdf.to_pandas()).flatten()
 
         assert_eq(cudf_host_array, cupy_host_array)
