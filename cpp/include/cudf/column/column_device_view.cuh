@@ -17,15 +17,23 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
+#include <cudf/utils/bit.cuh>
 
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief An immutable, non-owning view of device data as a column of elements
- * that is trivially copyable into CUDA device code.
+ * @brief A non-owning view of device data as a column of elements
+ * that is trivially copyable and usable CUDA device code.
  *---------------------------------------------------------------------------**/
-class column_device_view {
+class alignas(16) column_device_view {
  public:
+  column_device_view() = delete;
+  ~column_device_view() = default;
+  column_device_view(column_device_view const&) = default;
+  column_device_view(column_device_view&&) = default;
+  column_device_view& operator=(column_device_view const&) = default;
+  column_device_view& operator=(column_device_view&&) = default;
+
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a column view that is usable in device memory.
    *
@@ -45,13 +53,10 @@ class column_device_view {
    * @return A `unique_ptr` to a `column_device_view` that makes the data from
    *`source_view` available in device memory.
    *---------------------------------------------------------------------------**/
+  static auto create(column_view const source_view, cudaStream_t stream = 0);
+
   static auto create(column_view source_view, cudaStream_t stream = 0);
 
-  column_device_view() = delete;
-  column_device_view(column_device_view const&) = default;
-  column_device_view(column_device_view&&) = default;
-  column_device_view& operator=(column_device_view const&) = default;
-  column_device_view& operator=(column_device_view&&) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -71,6 +76,11 @@ class column_device_view {
     return static_cast<T const*>(_data);
   }
 
+  template <typename T = void>
+  __host__ __device__ T* head() noexcept {
+    return static_cast<T const*>(_data);
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the underlying data casted to the specified type, plus the
    * offset.
@@ -84,6 +94,11 @@ class column_device_view {
    *---------------------------------------------------------------------------**/
   template <typename T>
   __host__ __device__ T const* data() const noexcept {
+    return head<T>() + _offset;
+  }
+
+  template <typename T>
+  __host__ __device__ T* data() noexcept {
     return head<T>() + _offset;
   }
 
@@ -139,6 +154,8 @@ class column_device_view {
     return _null_mask;
   }
 
+  __host__ __device__ bitmask_type* null_mask() noexcept { return _null_mask; }
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the index of the first element relative to the base memory
    * allocation, i.e., what is returned from `head<T>()`.
@@ -151,30 +168,54 @@ class column_device_view {
    * @param child_index The index of the desired child
    * @return column_view The requested child `column_view`
    *---------------------------------------------------------------------------**/
-  __device__ column_device_view child(size_type child_index) const noexcept {
-    assert(child_index > 0);
+  __device__ column_device_view const child(size_type child_index) const
+      noexcept {
     return d_children[child_index];
   }
 
-  __device__ bool is_valid(size_type element_index) {
-    // TODO Implement
-    return true;
+  __device__ column_device_view child(size_type child_index) noexcept {
+    return d_children[child_index];
   }
 
-  __device__ bool is_null(size_type element_index) {
+  /**---------------------------------------------------------------------------*
+   * @brief Returns if the specified element holds a valid value (i.e., not
+   * null)
+   *
+   * @note It is undefined behavior to call this function if `nullable() ==
+   * false`.
+   *
+   * @param element_index The index of the element to query
+   * @return true The element is valid
+   * @return false The element is null
+   *---------------------------------------------------------------------------**/
+  __device__ bool is_valid(size_type element_index) const noexcept {
+    return bit_is_set(_null_mask, element_index);
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns if the specified element is null
+   *
+   * @note It is undefined behavior to call this function if `nullable() ==
+   * false`.
+   *
+   * @param element_index The index of the element to query
+   * @return true The element is null
+   * @return false The element is valid
+   *---------------------------------------------------------------------------**/
+  __device__ bool is_null(size_type element_index) const noexcept {
     return not is_valid(element_index);
   }
 
  private:
-  data_type _type{EMPTY};  ///< Element type
-  cudf::size_type _size{};   ///< Number of elements
-  void const* _data{};       ///< Pointer to device memory containing elements
-  bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
-                                     ///< bitmask representing null elements.
-                                     ///< Optional if `null_count() == 0`
-  size_type _null_count{};           ///< The number of null elements
-  size_type _offset{};               ///< Index position of the first element.
-                                     ///< Enables zero-copy slicing
+  data_type _type{EMPTY};      ///< Element type
+  cudf::size_type _size{};     ///< Number of elements
+  void* _data{};               ///< Pointer to device memory containing elements
+  bitmask_type* _null_mask{};  ///< Pointer to device memory containing
+                               ///< bitmask representing null elements.
+                               ///< Optional if `null_count() == 0`
+  size_type _null_count{};     ///< The number of null elements
+  size_type _offset{};         ///< Index position of the first element.
+                               ///< Enables zero-copy slicing
   column_device_view* d_children{};  ///< Array of `column_device_view`
                                      ///< objects in device memory.
                                      ///< Based on element type, children

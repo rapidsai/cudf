@@ -66,7 +66,7 @@ class column_view {
    * @param null_mask Pointer to device memory containing the null indicator
    * bitmask, may be `nullptr` if `null_count == 0`
    * @param null_count The number of null elements
-   * @param offset optional, index of the first element 
+   * @param offset optional, index of the first element
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
