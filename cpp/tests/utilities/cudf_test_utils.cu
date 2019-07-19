@@ -115,18 +115,6 @@ struct column_printer {
           }
           stream<<std::endl;
 
-          for (gdf_size_type i = 0; i < num_rows; ++i) {
-            stream << std::setw(min_printing_width);
-            if (gdf_is_valid(h_mask.data(), i)) {
-              stream << data[reinterpret_cast<int*>(host_side_data.data())[i]];
-            }
-            else {
-              stream << null_representative;
-            }
-            stream << ' ';
-          }
-          stream<<std::endl;
-
           for(size_t i=0; i<keys_size; i++){
               delete data[i];
           }

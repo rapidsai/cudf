@@ -219,8 +219,9 @@ struct column_gatherer {
       gdf_column temp_src = cudf::copy(*source_column);
       gdf_column copy_src = cudf::copy(*source_column);
       gdf_column temp_dest = cudf::copy(*destination_column);
+      gdf_column copy_dest = cudf::copy(*destination_column);
       gdf_column* input_columns[2] = {&temp_src, &temp_dest};
-      gdf_column* output_columns[2] = {&copy_src, destination_column};
+      gdf_column* output_columns[2] = {&copy_src, &copy_dest};
       
       CUDF_EXPECTS(GDF_SUCCESS ==
         sync_column_categories(input_columns, output_columns, 2),
@@ -229,17 +230,21 @@ struct column_gatherer {
       if (check_bounds) {
         thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
                         gather_map + num_destination_rows, gather_map,
-                        static_cast<ColumnType*>(copy_src.data), destination_data,
+                        static_cast<ColumnType*>(copy_src.data), static_cast<ColumnType*>(copy_dest.data),
                         bounds_checker{0, source_column->size});
       } else {
         thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
                      gather_map + num_destination_rows, static_cast<ColumnType*>(copy_src.data),
-                     destination_data);
+                     static_cast<ColumnType*>(copy_dest.data));
       }
+      
+      CUDF_EXPECTS(GDF_SUCCESS ==
+        clear_column_categories(&copy_dest, destination_column), "Failed to clear NVCategory");
 
       gdf_column_free(&temp_src);
       gdf_column_free(&copy_src);
       gdf_column_free(&temp_dest);
+      gdf_column_free(&copy_dest);
       return;
     }
 

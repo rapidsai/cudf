@@ -53,4 +53,12 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
  */
 gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table);
 
+/**
+ * @brief Takes an input_column whose `values` of the category might be different from its input_column->data.
+ * Sync the `values` with the `data`, and remove unused keys in the category.
+ * The output_column should take ownership of the new category object created within this function.
+ * @param[in] input_column The input column
+ * @param[out] output_column The output column
+ */
+gdf_error clear_column_categories(gdf_column* input_column, gdf_column* output_column);
 #endif

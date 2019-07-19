@@ -31,9 +31,9 @@ struct ScatterTest : GdfTest {};
 
 TEST(ScatterTest, ScatterNVString)
 {
-  bool print = true;
-  const int rows_size = 8;
-  const size_t length = 1;
+  bool print = false;
+  const int rows_size = 12;
+  const size_t length = 2;
 
   const char** left_string_data = cudf::test::generate_string_data(rows_size, length, print);
   const char** right_string_data = cudf::test::generate_string_data(rows_size*2, length, print);
@@ -49,7 +49,11 @@ TEST(ScatterTest, ScatterNVString)
     print_gdf_column(right_column);
   }  
   
-  std::vector<gdf_index_type> scatter_map({0, 1, 2, 6, 8, 10, 12, 14});
+  std::vector<gdf_index_type> scatter_map(rows_size);
+  for(int i = 0; i < rows_size; i++){
+    scatter_map[i] = i * 2;
+  }
+  
   rmm::device_vector<gdf_index_type> d_scatter_map = scatter_map;
 
   cudf::table source_table({left_column});
@@ -61,14 +65,18 @@ TEST(ScatterTest, ScatterNVString)
     print_gdf_column(left_column);
     print_gdf_column(right_column);
   }
-/*
+
   std::vector<std::string> strs;
   std::vector<gdf_valid_type> valids;
   std::tie(strs, valids) = cudf::test::nvcategory_column_to_host(right_column);
-  for(auto str : strs){
-    printf("%s\t", str.c_str());
+  
+  EXPECT_EQ((int)strs.size(), rows_size*2); 
+  for(int i = 0; i < (int)strs.size(); i++){
+    if(i % 2 == 0){
+      EXPECT_TRUE(0 == strcmp(strs[i].c_str(), left_string_data[i/2]));
+    }else{
+      EXPECT_TRUE(0 == strcmp(strs[i].c_str(), right_string_data[i]));
+    }
   }
-  printf("\n");
-*/ 
 }
 
