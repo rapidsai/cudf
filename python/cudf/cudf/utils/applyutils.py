@@ -107,7 +107,7 @@ class ApplyKernelCompilerBase(object):
 
         # prepare pessimistic null mask
         null_mask_aggregate = None
-        null_mask_cols = (k for k in self.incols if df[k].has_null_mask)
+        null_mask_cols = [k for k in self.incols if df[k].has_null_mask]
         if len(null_mask_cols) > 0:
             import numpy
 
