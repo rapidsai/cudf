@@ -204,10 +204,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
     read_arg.comment = comment;
 
     cudf::table result = read_csv(read_arg);
-    std::vector<gdf_column *> ptrs(result.begin(), result.end());
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
-                                                ptrs.size());
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -254,10 +253,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     read_arg.strings_to_categorical = false;
 
     cudf::table result = read_parquet(read_arg);
-    std::vector<gdf_column *> ptrs(result.begin(), result.end());
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
-                                                ptrs.size());
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -304,10 +302,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     read_arg.use_index = false;
 
     cudf::table result = read_orc(read_arg);
-    std::vector<gdf_column*> ptrs(result.begin(), result.end());
-
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
-                                                ptrs.size());
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);

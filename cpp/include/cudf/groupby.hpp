@@ -167,9 +167,9 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
  * nulls context->flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are
  * treated as largest, GDF_NULL_AS_SMALLEST = Nulls are treated as smallest,
  *
- * @returns A device vector containing the first index of every unique row.
+ * @returns A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
  */
-thrust::device_vector<gdf_index_type, rmm_allocator<gdf_index_type>>
+gdf_column
 gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
 
 /**
@@ -191,10 +191,10 @@ gdf_unique_indices(cudf::table const& input_table, gdf_context const& context);
  * @returns A tuple containing:
  *          - A cudf::table containing a set of columns sorted by the key
  * columns.
- *          - A device vector containing the first index of every unique row
+ *          - A non-nullable column of `GDF_INT32` elements containing the indices of the first occurrences of each unique row.
  */
 std::pair<cudf::table,
-          thrust::device_vector<gdf_index_type, rmm_allocator<gdf_index_type>>>
+          gdf_column>
 gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const* key_col_indices,

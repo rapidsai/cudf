@@ -10,9 +10,17 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #2215 `type_dispatcher` benchmark
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
+- PR #2304 gdf_group_by_without_aggregations returns gdf_column
+- PR #2105 Add google benchmark for hash-based join
+- PR #2293 Improve `compute_join_output_size` performance
+- PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2049 Implemented merge functionality
+
+
 
 ## Improvements
 
@@ -31,6 +39,7 @@
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
 - PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
 - PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
+- PR #2199 Better java support for appending strings
 - PR #2176 Added column dtype support for datetime, int8, int16 to csv_writer
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
 - PR #2217 Updated Java bindings to use the new groupby API
@@ -38,7 +47,12 @@
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
 - PR #2224 implement isna, isnull, notna as dataframe functions
-
+- PR #2232 Move CodeCov upload from build script to Jenkins
+- PR #2236 Implement drop_duplicates for Series
+- PR #2225 refactor to use libcudf for gathering columns in dataframes
+- PR #2300 Create separate dask codeowners for dask-cudf codebase
+- PR #2309 Java readers: remove redundant copy of result pointers
+- PR #2307 Add `black` and `isort` to style checker script
 
 ## Bug Fixes
 
@@ -58,6 +72,18 @@
 - PR #2229 Propagate exceptions from Cython cdef functions
 - PR #2234 Fix issue with local build script not properly building
 - PR #2223 Fix CUDA invalid configuration errors reported after loading small compressed ORC files
+- PR #2162 Setting is_unique and is_monotonic-related attributes
+- PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
+- PR #2297 Work around `var/std` unsupported only at debug build
+- PR #2302 Fixed java serialization corner case
+- PR #2311 Fix copy behaviour for GenericIndex
+- PR #2323 Fix groupby on categoricals
+- PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2326 Fix for bug in DLPack when reading multiple columns
+- PR #2324 Fix cudf Docker build
+- PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
+- PR #2235 Fix get_dummies to be compatible with dask
+- PR #2332 Zero initialize gdf_dtype_extra_info
 
 
 # cuDF 0.8.0 (27 June 2019)

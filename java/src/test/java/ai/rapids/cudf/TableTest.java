@@ -761,6 +761,7 @@ public class TableTest {
           try (Table found = JCudfSerialization.readTableFrom(bin)) {
             assertPartialTablesAreEqual(t, i, len, found);
           }
+          assertNull(JCudfSerialization.readTableFrom(bin));
         }
       }
     }
