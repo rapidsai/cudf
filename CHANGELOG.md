@@ -87,7 +87,6 @@
 - PR #2155 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
 
 
-
 # cuDF 0.8.0 (27 June 2019)
 
 ## New Features
