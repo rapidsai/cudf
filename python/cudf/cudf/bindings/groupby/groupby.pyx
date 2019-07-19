@@ -108,13 +108,4 @@ def apply_groupby(keys, values, ops, method='hash', sort_results=True):
                 ordered=inp_key_col.cat().ordered
             )
 
-    for i, inp_value_col in enumerate(values):
-         if isinstance(inp_value_col, CategoricalColumn):
-             result_value_cols[i] = CategoricalColumn(
-                 data=result_value_cols[i].data,
-                 mask=result_value_cols[i].mask,
-                 categories=inp_value_col.cat().categories,
-                 ordered=inp_value_col.cat().ordered
-             )
-
     return (result_key_cols, result_value_cols)

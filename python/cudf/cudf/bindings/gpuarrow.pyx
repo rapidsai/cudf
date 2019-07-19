@@ -30,7 +30,7 @@ _BufferDesc = namedtuple("_BufferDesc", "offset,length")
 _NodeDesc = namedtuple(
     "_NodeDesc",
     'name,length,null_count,null_buffer,data_buffer,dtype,schema'
-    )
+)
 
 
 class MetadataParsingError(ValueError):
@@ -249,7 +249,7 @@ class GpuArrowReader(Sequence):
                 data_buffer=_BufferDesc(**layout['data_buffer']),
                 dtype=_schema_to_dtype(fielddesc, **layout['dtype']),
                 schema=fielddesc,
-                )
+            )
             node = GpuArrowNodeReader(schema=schema,
                                       gpu_data=dataptr,
                                       desc=nodedesc)

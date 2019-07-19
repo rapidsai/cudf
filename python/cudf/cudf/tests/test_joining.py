@@ -474,8 +474,10 @@ def test_dataframe_pairs_of_triples(pairs, max, rows, how):
         for column in gdf_result:
             gdf_col_result_sorted = gdf_result[column].fillna(-1).sort_values()
             pd_col_result_sorted = pdf_result[column].fillna(-1).sort_values()
-            assert np.array_equal(gdf_col_result_sorted.to_pandas().values,
-                                  pd_col_result_sorted.values)
+            assert np.array_equal(
+                gdf_col_result_sorted.to_pandas().values,
+                pd_col_result_sorted.values,
+            )
 
 
 def test_safe_merging_with_left_empty():

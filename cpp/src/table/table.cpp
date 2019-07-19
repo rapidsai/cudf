@@ -60,8 +60,7 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
 
         // Timestamp currently unsupported as it would require passing in
         // additional resolution information
-        gdf_dtype_extra_info extra_info;
-        extra_info.time_unit = TIME_UNIT_NONE;
+        gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
         col->dtype_info = extra_info;
 
         RMM_ALLOC(&col->data, cudf::size_of(dtype) * num_rows, stream);

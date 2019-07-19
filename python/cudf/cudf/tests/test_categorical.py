@@ -267,8 +267,8 @@ def test_categorical_unique(num_elements):
 
     # gdf
     gdf = DataFrame()
-    gdf['a'] = Series.from_categorical(pd_cat)
-    gdf_unique_sorted = np.sort(gdf['a'].unique().to_pandas())
+    gdf["a"] = Series.from_categorical(pd_cat)
+    gdf_unique_sorted = np.sort(gdf["a"].unique().to_pandas())
 
     # pandas
     pdf = pd.DataFrame()
@@ -367,3 +367,12 @@ def test_categorical_set_categories():
     expect = psr.cat.set_categories(["a", "b"])
     got = sr.cat.set_categories(["a", "b"])
     assert_eq(expect, got)
+
+
+def test_categorical_set_categories_preserves_order():
+    series = pd.Series([1, 0, 0, 0, 2]).astype("category")
+    # reassigning categories should preserve element ordering
+    assert_eq(
+        series.cat.set_categories([1, 2]),
+        Series(series).cat.set_categories([1, 2]),
+    )

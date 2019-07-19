@@ -32,7 +32,8 @@ cpdef from_dlpack(dlpack_capsule):
                   " order) input. If the input tensor is row-major, transpose"
                   " it before passing it to this function.")
 
-    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
+    cdef DLManagedTensor* dlpack_tensor = <DLManagedTensor*>pycapsule.\
+        PyCapsule_GetPointer(dlpack_capsule, 'dltensor')
     pycapsule.PyCapsule_SetName(dlpack_capsule, 'used_dltensor')
     cdef gdf_size_type c_result_num_cols
     cdef gdf_column* result_cols
@@ -45,7 +46,7 @@ cpdef from_dlpack(dlpack_capsule):
         )
 
     check_gdf_error(result)
-    
+
     # TODO: Replace this with a generic function from cudf_cpp.pyx since this
     # is copied from join.pyx
     res = []
@@ -99,8 +100,12 @@ cpdef to_dlpack(in_cols):
 
     input_num_cols = len(in_cols)
 
-    cdef DLManagedTensor* dlpack_tensor =<DLManagedTensor*>malloc(sizeof(DLManagedTensor))
-    cdef gdf_column** input_cols = <gdf_column**>malloc(input_num_cols * sizeof(gdf_column*))
+    cdef DLManagedTensor* dlpack_tensor =<DLManagedTensor*>malloc(
+        sizeof(DLManagedTensor)
+    )
+    cdef gdf_column** input_cols = <gdf_column**>malloc(
+        input_num_cols * sizeof(gdf_column*)
+    )
     cdef gdf_size_type c_input_num_cols = input_num_cols
 
     for idx, col in enumerate(in_cols):
@@ -127,7 +132,7 @@ cdef void dlmanaged_tensor_pycapsule_deleter(object pycap_obj):
     try:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
             pycap_obj, 'used_dltensor')
-        return # we do not call a used capsule's deleter
+        return  # we do not call a used capsule's deleter
     except Exception:
         dlpack_tensor = <DLManagedTensor*>pycapsule.PyCapsule_GetPointer(
             pycap_obj, 'dltensor')

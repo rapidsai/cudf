@@ -24,54 +24,54 @@ import nvcategory
 
 
 dtypes = {
-    np.float64:    GDF_FLOAT64,
-    np.float32:    GDF_FLOAT32,
-    np.int64:      GDF_INT64,
-    np.int32:      GDF_INT32,
-    np.int16:      GDF_INT16,
-    np.int8:       GDF_INT8,
-    np.bool_:      GDF_BOOL8,
+    np.float64: GDF_FLOAT64,
+    np.float32: GDF_FLOAT32,
+    np.int64: GDF_INT64,
+    np.int32: GDF_INT32,
+    np.int16: GDF_INT16,
+    np.int8: GDF_INT8,
+    np.bool_: GDF_BOOL8,
     np.datetime64: GDF_DATE64,
-    np.object_:    GDF_STRING_CATEGORY,
-    np.str_:       GDF_STRING_CATEGORY,
+    np.object_: GDF_STRING_CATEGORY,
+    np.str_: GDF_STRING_CATEGORY,
 }
 
 gdf_dtypes = {
-    GDF_FLOAT64:           np.float64,
-    GDF_FLOAT32:           np.float32,
-    GDF_INT64:             np.int64,
-    GDF_INT32:             np.int32,
-    GDF_INT16:             np.int16,
-    GDF_INT8:              np.int8,
-    GDF_BOOL8:             np.bool_,
-    GDF_DATE64:            np.datetime64,
-    GDF_TIMESTAMP:         np.datetime64,
-    GDF_CATEGORY:          np.int32,
-    GDF_STRING_CATEGORY:   np.object_,
-    GDF_STRING:            np.object_,
-    N_GDF_TYPES:           np.int32
+    GDF_FLOAT64: np.float64,
+    GDF_FLOAT32: np.float32,
+    GDF_INT64: np.int64,
+    GDF_INT32: np.int32,
+    GDF_INT16: np.int16,
+    GDF_INT8: np.int8,
+    GDF_BOOL8: np.bool_,
+    GDF_DATE64: np.datetime64,
+    GDF_TIMESTAMP: np.datetime64,
+    GDF_CATEGORY: np.int32,
+    GDF_STRING_CATEGORY: np.object_,
+    GDF_STRING: np.object_,
+    N_GDF_TYPES: np.int32
 }
 
 np_pa_dtypes = {
-    np.float64:     pa.float64(),
-    np.float32:     pa.float32(),
-    np.int64:       pa.int64(),
-    np.int32:       pa.int32(),
-    np.int16:       pa.int16(),
-    np.int8:        pa.int8(),
-    np.bool_:       pa.int8(),
-    np.datetime64:  pa.date64(),
-    np.object_:     pa.string(),
-    np.str_:        pa.string(),
+    np.float64: pa.float64(),
+    np.float32: pa.float32(),
+    np.int64: pa.int64(),
+    np.int32: pa.int32(),
+    np.int16: pa.int16(),
+    np.int8: pa.int8(),
+    np.bool_: pa.int8(),
+    np.datetime64: pa.date64(),
+    np.object_: pa.string(),
+    np.str_: pa.string(),
 }
 
 agg_ops = {
-    'sum':            GDF_SUM,
-    'max':            GDF_MAX,
-    'min':            GDF_MIN,
-    'mean':           GDF_AVG,
-    'avg':            GDF_AVG,
-    'count':          GDF_COUNT,
+    'sum': GDF_SUM,
+    'max': GDF_MAX,
+    'min': GDF_MIN,
+    'mean': GDF_AVG,
+    'avg': GDF_AVG,
+    'count': GDF_COUNT,
     'count_distinct': GDF_COUNT_DISTINCT,
 }
 
@@ -88,6 +88,7 @@ gdf_to_np_time_unit = {
     TIME_UNIT_us: 'us',
     TIME_UNIT_ns: 'ns',
 }
+
 
 def np_to_pa_dtype(dtype):
     """Util to convert numpy dtype to PyArrow dtype.
@@ -123,7 +124,8 @@ def check_gdf_compatibility(col):
     """
     Raise TypeError when a column type does not have gdf support.
     """
-    if not (col.dtype.type in dtypes or pd.api.types.is_categorical_dtype(col)):
+    if not (col.dtype.type in dtypes or
+            pd.api.types.is_categorical_dtype(col)):
         raise TypeError('column type `%s` not supported in gdf' % (col.dtype))
 
 
@@ -190,6 +192,7 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
     if dtype.type in dtypes:
         return dtypes[dtype.type]
     raise TypeError('cannot convert numpy dtype `%s` to gdf_dtype' % (dtype))
+
 
 
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
@@ -276,13 +279,13 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
 
     Parameters
     ----------
-    size : int
+    size: int
         Data count.
-    data : Buffer
+    data: Buffer
         The data buffer.
-    mask : Buffer; optional
+    mask: Buffer; optional
         The mask buffer.
-    dtype : numpy.dtype; optional
+    dtype: numpy.dtype; optional
         The dtype of the data.  Defaults to *data.dtype*.
     """
 
@@ -315,8 +318,8 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(col.dtype)
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit = c_time_unit,
-        category = <void*> category
+        time_unit=c_time_unit,
+        category=<void*>category
     )
 
     if col_name is None:
@@ -325,31 +328,38 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         c_col.col_name = col_name
 
     with nogil:
-        gdf_column_view_augmented(<gdf_column*>c_col,
-                                <void*> data_ptr,
-                                <gdf_valid_type*> valid_ptr,
-                                len_col,
-                                c_dtype,
-                                c_null_count,
-                                c_extra_dtype_info)
+        gdf_column_view_augmented(
+            <gdf_column*>c_col,
+            <void*>data_ptr,
+            <gdf_valid_type*>valid_ptr,
+            len_col,
+            c_dtype,
+            c_null_count,
+            c_extra_dtype_info
+        )
 
     return c_col
 
 
-cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
-                                           null_count) except? NULL:
+cdef gdf_column* column_view_from_NDArrays(
+    size,
+    data,
+    mask,
+    dtype,
+    null_count
+) except? NULL:
     """
     Make a column view from NDArrays
 
     Parameters
     ----------
-    size : int
+    size: int
         Data count.
-    data : Buffer
+    data: Buffer
         The data buffer.
-    mask : Buffer; optional
+    mask: Buffer; optional
         The mask buffer.
-    dtype : numpy.dtype; optional
+    dtype: numpy.dtype; optional
         The dtype of the data.  Defaults to *data.dtype*.
     """
     cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
@@ -376,18 +386,20 @@ cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype,
     cdef gdf_size_type c_null_count = null_count
     cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(dtype)
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit = c_time_unit,
-        category = <void*> 0
+        time_unit=c_time_unit,
+        category=<void*>0
     )
 
     with nogil:
-        gdf_column_view_augmented(<gdf_column*>c_col,
-                                <void*> data_ptr,
-                                <gdf_valid_type*> valid_ptr,
-                                c_size,
-                                c_dtype,
-                                c_null_count,
-                                c_extra_dtype_info)
+        gdf_column_view_augmented(
+            <gdf_column*>c_col,
+            <void*>data_ptr,
+            <gdf_valid_type*>valid_ptr,
+            c_size,
+            c_dtype,
+            c_null_count,
+            c_extra_dtype_info
+        )
 
     return c_col
 
@@ -450,9 +462,12 @@ cdef update_nvstrings_col(col, uintptr_t category_ptr):
     col._data = nvstr_obj
     col._nvcategory = nvcat_obj
 
-    
-cdef gdf_column* column_view_from_string_column(col, col_name=None) except? NULL:
-    if not isinstance(col.data,nvstrings.nvstrings):
+
+cdef gdf_column* column_view_from_string_column(
+    col,
+    col_name=None
+) except? NULL:
+    if not isinstance(col.data, nvstrings.nvstrings):
         raise ValueError("Column should be a cudf string column")
 
     cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
@@ -469,8 +484,8 @@ cdef gdf_column* column_view_from_string_column(col, col_name=None) except? NULL
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit = TIME_UNIT_NONE,
-        category = <void*> category
+        time_unit=TIME_UNIT_NONE,
+        category=<void*>category
     )
 
     if col_name is None:
@@ -479,20 +494,24 @@ cdef gdf_column* column_view_from_string_column(col, col_name=None) except? NULL
         c_col.col_name = col_name
 
     with nogil:
-        gdf_column_view_augmented(<gdf_column*>c_col,
-                                <void*> data_ptr,
-                                <gdf_valid_type*> valid_ptr,
-                                len_col,
-                                c_dtype,
-                                c_null_count,
-                                c_extra_dtype_info)
+        gdf_column_view_augmented(
+            <gdf_column*>c_col,
+            <void*>data_ptr,
+            <gdf_valid_type*>valid_ptr,
+            len_col,
+            c_dtype,
+            c_null_count,
+            c_extra_dtype_info
+        )
 
     return c_col
 
 
 cdef gdf_column** cols_view_from_cols(cols):
     col_count=len(cols)
-    cdef gdf_column **c_cols = <gdf_column**>malloc(sizeof(gdf_column*)*col_count)
+    cdef gdf_column **c_cols = <gdf_column**>malloc(
+        sizeof(gdf_column*) * col_count
+    )
 
     cdef i
     for i in range(col_count):
@@ -505,7 +524,7 @@ cdef gdf_column** cols_view_from_cols(cols):
 cdef free_table(cudf_table* table0, gdf_column** cols):
     cdef i
     cdef gdf_column *c_col
-    for i in range(table0[0].num_columns()) :
+    for i in range(table0[0].num_columns()):
         c_col = table0[0].get_column(i)
         free(c_col)
 
@@ -521,13 +540,19 @@ _join_method_api = {
 }
 
 _null_sort_behavior_api = {
-    'null_as_largest': GDF_NULL_AS_LARGEST, 
+    'null_as_largest': GDF_NULL_AS_LARGEST,
     'null_as_smallest': GDF_NULL_AS_SMALLEST
 }
 
-cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                 flag_sort_result, flag_sort_inplace,
-                                 flag_null_sort_behavior):
+
+cdef gdf_context* create_context_view(
+    flag_sorted,
+    method,
+    flag_distinct,
+    flag_sort_result,
+    flag_sort_inplace,
+    flag_null_sort_behavior
+):
 
     cdef gdf_method method_api = _join_method_api[method]
     cdef gdf_context* context = <gdf_context*>malloc(sizeof(gdf_context))
@@ -536,19 +561,21 @@ cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
     cdef int c_flag_distinct = flag_distinct
     cdef int c_flag_sort_result = flag_sort_result
     cdef int c_flag_sort_inplace = flag_sort_inplace
-    cdef gdf_null_sort_behavior nulls_sort_behavior_api = _null_sort_behavior_api[flag_null_sort_behavior]
+    cdef gdf_null_sort_behavior nulls_sort_behavior_api = \
+        _null_sort_behavior_api[flag_null_sort_behavior]
 
     with nogil:
-        gdf_context_view(context,
-                         c_flag_sorted,
-                         method_api,
-                         c_flag_distinct,
-                         c_flag_sort_result,
-                         c_flag_sort_inplace,
-                         nulls_sort_behavior_api)
+        gdf_context_view(
+            context,
+            c_flag_sorted,
+            method_api,
+            c_flag_distinct,
+            c_flag_sort_result,
+            c_flag_sort_inplace,
+            nulls_sort_behavior_api
+        )
 
     return context
-
 
 
 # # Error handling
@@ -572,6 +599,7 @@ cpdef check_gdf_error(errcode):
             msg = errname
 
         raise GDFError(errname, msg)
+
 
 cpdef count_nonzero_mask(mask, size):
     """ Counts the number of null bits in a given validity mask
