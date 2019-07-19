@@ -14,7 +14,7 @@ from cudf.utils.utils import (
     make_mask,
     mask_bitsize,
     mask_get,
-    mask_set
+    mask_set,
 )
 
 
@@ -126,7 +126,7 @@ def astype(ary, dtype):
     if src_is_datetime or dst_is_datetime:
         # if converting to/from a datetime and to/from int64,
         # it's safe to return a zero-copy view
-        if (src_dtype if dst_is_datetime else dst_dtype) == 'int64':
+        if (src_dtype if dst_is_datetime else dst_dtype) == "int64":
             return ary.view(dst_dtype)
 
     if ary.size == 0:

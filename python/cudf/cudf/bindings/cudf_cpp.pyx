@@ -76,14 +76,14 @@ agg_ops = {
 }
 
 np_to_gdf_time_unit = {
-    's':  TIME_UNIT_s,
+    's': TIME_UNIT_s,
     'ms': TIME_UNIT_ms,
     'us': TIME_UNIT_us,
     'ns': TIME_UNIT_ns,
 }
 
 gdf_to_np_time_unit = {
-    TIME_UNIT_s:  's',
+    TIME_UNIT_s: 's',
     TIME_UNIT_ms: 'ms',
     TIME_UNIT_us: 'us',
     TIME_UNIT_ns: 'ns',
@@ -192,7 +192,6 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
     if dtype.type in dtypes:
         return dtypes[dtype.type]
     raise TypeError('cannot convert numpy dtype `%s` to gdf_dtype' % (dtype))
-
 
 
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:

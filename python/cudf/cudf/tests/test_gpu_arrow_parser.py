@@ -210,17 +210,19 @@ def test_gpu_parse_arrow_int(dtype):
     arrow_version is None,
     reason="need compatible pyarrow to generate test data",
 )
-@pytest.mark.parametrize("dtype", [
-    "datetime64[s]",
-    "datetime64[ms]",
-    "datetime64[us]",
-    "datetime64[ns]",
-])
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
 def test_gpu_parse_arrow_timestamps(dtype):
-    timestamp = cudf.datasets.timeseries(
-        start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={}
-    ).reset_index()['timestamp'].reset_index(drop=True)
-    gdf = cudf.DataFrame({'timestamp': timestamp.astype(dtype)})
+    timestamp = (
+        cudf.datasets.timeseries(
+            start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={}
+        )
+        .reset_index()["timestamp"]
+        .reset_index(drop=True)
+    )
+    gdf = cudf.DataFrame({"timestamp": timestamp.astype(dtype)})
     pdf = gdf.to_arrow(preserve_index=False)
     schema_data = pdf.schema.serialize()
     recbatch_data = pdf.to_batches()[0].serialize()

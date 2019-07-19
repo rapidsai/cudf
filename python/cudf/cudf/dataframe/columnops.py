@@ -409,7 +409,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
-            dtype = np.dtype('M8[{}]'.format(arbitrary.type.unit))
+            dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = datetime.DatetimeColumn(
                 data=padata,

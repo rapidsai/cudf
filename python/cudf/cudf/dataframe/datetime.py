@@ -21,16 +21,15 @@ from cudf.utils.utils import is_single_value
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
-    'ns': 1,
-    'us': 1000,
-    'ms': 1000000,
-    's': 1000000000,
-    'D': 1000000000 * 86400,
+    "ns": 1,
+    "us": 1000,
+    "ms": 1000000,
+    "s": 1000000000,
+    "D": 1000000000 * 86400,
 }
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
-
     def __init__(self, **kwargs):
         """
         Parameters
@@ -71,14 +70,20 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @classmethod
     def from_numpy(cls, array):
         cast_dtype = array.dtype.type == np.int64
-        if array.dtype.kind == 'M':
+        if array.dtype.kind == "M":
             time_unit, _ = np.datetime_data(array.dtype)
-            cast_dtype = time_unit == 'D' or (len(array) > 0 and (
-                isinstance(array[0], str) or isinstance(array[0], dt.datetime)
-            ))
+            cast_dtype = time_unit == "D" or (
+                len(array) > 0
+                and (
+                    isinstance(array[0], str)
+                    or isinstance(array[0], dt.datetime)
+                )
+            )
         elif not cast_dtype:
-            raise ValueError(('Cannot infer datetime dtype '
-                             + 'from np.array dtype `%s`') % (array.dtype))
+            raise ValueError(
+                ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
+                % (array.dtype)
+            )
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
@@ -124,14 +129,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
         if isinstance(other, pd.Timestamp):
             m = _numpy_to_pandas_conversion[self.time_unit]
-            ary = utils.scalar_broadcast_to(other.value * m,
-                                            shape=len(self),
-                                            dtype=self.dtype)
+            ary = utils.scalar_broadcast_to(
+                other.value * m, shape=len(self), dtype=self.dtype
+            )
         elif isinstance(other, np.datetime64):
             other = other.astype(self.dtype)
-            ary = utils.scalar_broadcast_to(other,
-                                            shape=len(self),
-                                            dtype=self.dtype)
+            ary = utils.scalar_broadcast_to(
+                other, shape=len(self), dtype=self.dtype
+            )
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
@@ -140,9 +145,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @property
     def as_numerical(self):
         from cudf.dataframe.numerical import NumericalColumn
-        return self.view(NumericalColumn,
-                         dtype=np.dtype(np.int64),
-                         data=self.data.astype(np.int64))
+
+        return self.view(
+            NumericalColumn,
+            dtype=np.dtype(np.int64),
+            data=self.data.astype(np.int64),
+        )
 
     def astype(self, dtype):
 
@@ -153,6 +161,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             dtype, np.dtype("U").type
         ):
             from cudf.dataframe import string
+
             if len(self) > 0:
                 dev_array = self.data.mem
                 dev_ptr = get_ctype_ptr(dev_array)
@@ -177,6 +186,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         # multiply by the scale factor between the time units and clamp
         if np.issubdtype(dtype, np.datetime64):
             from cudf import Series
+
             numeric = Series(self.as_numerical)
             src_d = np.timedelta64(1, np.datetime_data(self.dtype)[0])
             dst_d = np.timedelta64(1, np.datetime_data(dtype)[0])
@@ -237,8 +247,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
         col_inds = self.replace(
-            data=sort_inds.data,
-            mask=sort_inds.mask,
+            data=sort_inds.data, mask=sort_inds.mask
         ).astype(sort_inds.data.dtype)
         return col_keys, col_inds
 
