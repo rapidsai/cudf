@@ -20,8 +20,6 @@
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2049 Implemented merge functionality
 
-
-
 ## Improvements
 
 - PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
@@ -55,6 +53,7 @@
 - PR #2307 Add `black` and `isort` to style checker script
 - PR #2345 Restore removal of old groupby implementation
 - PR #2329 using libcudf cudf::copy for column deep copy
+- PR #2344 Add docs on how code formatting works for contributors
 
 ## Bug Fixes
 
