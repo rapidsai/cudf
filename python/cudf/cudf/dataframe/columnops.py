@@ -380,7 +380,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             if (type(dtype) == str and dtype == "empty") or dtype is None:
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
-                )
+                ).type
 
             if new_dtype.dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
                 arbitrary = arbitrary.dictionary_encode()
