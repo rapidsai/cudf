@@ -19,7 +19,11 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
                      " -DARROW_USE_GLOG=OFF"
+                     " -DARROW_DATASET=ON"
+                     " -DARROW_BUILD_UTILITIES=OFF"
+                     " -DARROW_HDFS=OFF"
                      " -DCMAKE_VERBOSE_MAKEFILE=ON")
+                    #  " -DARROW_DEPENDENCY_SOURCE=BUNDLED")
 
 if(NOT CMAKE_CXX11_ABI)
     message(STATUS "ARROW: Disabling the GLIBCXX11 ABI")
@@ -76,6 +80,8 @@ configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/i
 configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Message_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Schema_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Schema_generated.h COPYONLY)
 configure_file(${ARROW_GENERATED_IPC_DIR}/Tensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Tensor_generated.h COPYONLY)
+configure_file(${ARROW_GENERATED_IPC_DIR}/SparseTensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/SparseTensor_generated.h COPYONLY)
+configure_file(${ARROW_GENERATED_IPC_DIR}/feather_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/feather_generated.h COPYONLY)
 
 message(STATUS "Arrow installed here: " ${ARROW_ROOT}/install)
 set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
@@ -90,11 +96,11 @@ if(ARROW_LIB)
     set(ARROW_FOUND TRUE)
 endif(ARROW_LIB)
 
-set(FLATBUFFERS_ROOT "${ARROW_ROOT}/build/flatbuffers_ep-prefix/src/flatbuffers_ep-install")
+# set(FLATBUFFERS_ROOT "${ARROW_ROOT}/build/flatbuffers_ep-prefix/src/flatbuffers_ep-install")
 
-message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
-set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
-set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
+# message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
+# set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
+# set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 add_definitions(-DARROW_METADATA_V4)
-add_definitions(-DARROW_VERSION=1400)
+# add_definitions(-DARROW_VERSION=1400)

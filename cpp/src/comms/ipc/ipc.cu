@@ -8,6 +8,7 @@
 #include <arrow/api.h>
 #include <arrow/io/api.h>
 #include <arrow/ipc/api.h>
+#include <arrow/ipc/json-integration.h>
 
 #include <iostream>
 #include <sstream>
@@ -71,6 +72,9 @@ static std::string GetTypeName(Type::type id) {
     SHOW_TYPE_NAME(UNION)
     SHOW_TYPE_NAME(DICTIONARY)
     SHOW_TYPE_NAME(MAP)
+    SHOW_TYPE_NAME(EXTENSION)
+    SHOW_TYPE_NAME(FIXED_SIZE_LIST)
+    SHOW_TYPE_NAME(DURATION)
     #undef SHOW_TYPE_NAME
   }
   return "UNKNOWN";

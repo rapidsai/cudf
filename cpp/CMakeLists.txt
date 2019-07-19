@@ -102,6 +102,26 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - find flatbuffers ------------------------------------------------------------------------------
+
+# find_path(FLATBUFFERS_INCLUDE "flatbuffers"
+#           HINTS "$ENV{FLATBUFFERS_ROOT}/include"
+#                 "$ENV{CONDA_PREFIX}/include/flatbuffers"
+#                 "$ENV{CONDA_PREFIX}/include")
+
+# find_library(FLATBUFFERS_LIBRARY "flatbuffers"
+#              HINTS "$ENV{FLATBUFFERS_ROOT}/lib"
+#                    "$ENV{CONDA_PREFIX}/lib")
+
+# message(STATUS "FLATBUFFERS: FLATBUFFERS_LIBRARY set to ${FLATBUFFERS_LIBRARY}")
+# message(STATUS "FLATBUFFERS: FLATBUFFERS_INCLUDE set to ${FLATBUFFERS_INCLUDE}")
+
+# add_library(flatbuffers SHARED IMPORTED ${FLATBUFFERS_LIBRARY})
+# if (FLATBUFFERS_INCLUDE AND FLATBUFFERS_LIBRARY)
+#     set_target_properties(flatbuffers PROPERTIES IMPORTED_LOCATION ${FLATBUFFERS_LIBRARY})
+# endif (FLATBUFFERS_INCLUDE AND FLATBUFFERS_LIBRARY)
+
+###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
 include(ConfigureArrow)
@@ -238,7 +258,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE_DIR}"
+                    # "${FLATBUFFERS_INCLUDE_DIR}"
+                    # "${FLATBUFFERS_INCLUDE}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
@@ -248,7 +269,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                 "${FLATBUFFERS_LIBRARY_DIR}"
+                #  "${FLATBUFFERS_LIBRARY_DIR}"
+                #  "${FLATBUFFERS_LIBRARY}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}"
                  "${NVSTRINGS_LIBRARY}"
