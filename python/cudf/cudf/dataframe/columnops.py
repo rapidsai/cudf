@@ -376,13 +376,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 )
             )
         elif isinstance(arbitrary, pa.NullArray):
-            new_dtype = dtype
+            new_dtype = pd.api.types.pandas_dtype(dtype)
             if (type(dtype) == str and dtype == "empty") or dtype is None:
                 new_dtype = pd.api.types.pandas_dtype(
                     arbitrary.type.to_pandas_dtype()
-                ).type
+                )
 
-            if new_dtype.dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            if new_dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
