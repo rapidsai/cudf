@@ -153,6 +153,8 @@ void scalar_scatter(const std::vector<gdf_scalar*>& source_row,
   for(int i = 0; i < n_cols; i++){
     CUDF_EXPECTS(source_row[i]->dtype == destination_table->get_column(i)->dtype,
         "source/destination data type mismatch.");
+    CUDF_EXPECTS(source_row[i]->dtype != GDF_STRING_CATEGORY,
+        "Scalar scatter currently does not support GDF_STRING_CATEGORY.");
     type_dispatcher(source_row[i]->dtype, scalar_scatterer{}, source_row[i], 
         scatter_map, num_scatter_rows, destination_table->get_column(i), v_streams[i]);
   }
