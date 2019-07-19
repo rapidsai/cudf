@@ -1371,14 +1371,21 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype):
-        """Convert to the given ``dtype``.
+    def astype(self, dtype, **kwargs):
+        """
+        Cast the Series to the given dtype
+
+        Parameters
+        ---------
+
+        dtype : data type
+        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
-        If the dtype changed, a new ``Series`` is returned by casting each
-        values to the given dtype.
-        If the dtype is not changed, ``self`` is returned.
+        out : Series
+            Copy of ``self`` cast to the given dtype. Returns
+            ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self

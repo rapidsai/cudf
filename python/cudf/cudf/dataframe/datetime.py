@@ -124,15 +124,15 @@ class DatetimeColumn(columnops.TypedColumnBase):
             data=self.data.astype("int64"),
         )
 
-    def as_datetime_column(self, dtype):
+    def as_datetime_column(self, dtype, **kwargs):
         # TODO: this needs to change after
         # we support more than just datetime64[ms]
         return self
 
-    def as_numerical_column(self, dtype):
+    def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
 
-    def as_string_column(self):
+    def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
 
         if len(self) > 0:

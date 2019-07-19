@@ -113,22 +113,27 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
-    def astype(self, dtype):
+    def astype(self, dtype, **kwargs):
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
         elif pd.api.types.is_string_dtype(dtype):
             if pd.api.types.is_categorical_dtype(dtype):
-                return self.as_categorical_column()
-            return self.as_string_column()
+                return self.as_categorical_column(dtype, **kwargs)
+            return self.as_string_column(dtype, **kwargs)
 
         elif np.issubdtype(dtype, np.datetime64):
-            return self.as_datetime_column(dtype)
+            return self.as_datetime_column(dtype, **kwargs)
 
         else:
-            return self.as_numerical_column(dtype)
+            return self.as_numerical_column(dtype, **kwargs)
 
-    def as_categorical_column(self):
+    def as_categorical_column(self, dtype, **kwargs):
+        if "ordered" in kwargs:
+            ordered = kwargs["ordered"]
+        else:
+            ordered = False
+            
         sr = cudf.Series(self)
         labels, cats = sr.factorize()
         return cudf.dataframe.categorical.CategoricalColumn(
@@ -136,17 +141,17 @@ class TypedColumnBase(Column):
             mask=self.mask,
             null_count=self.null_count,
             categories=cats._column,
-            ordered=False,
+            ordered=ordered,
         )
         raise NotImplementedError
 
-    def as_numerical_column(self):
+    def as_numerical_column(self, dtype, **kwargs):
         raise NotImplementedError
 
-    def as_datetime_column(self):
+    def as_datetime_column(self, dtype, **kwargs):
         raise NotImplementedError
 
-    def as_string_column(self):
+    def as_string_column(self, dtype, **kwargs):
         raise NotImplementedError
 
 

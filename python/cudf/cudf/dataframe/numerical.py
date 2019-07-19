@@ -113,7 +113,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-    def as_string_column(self):
+    def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
 
         if len(self) > 0:
@@ -133,31 +133,17 @@ class NumericalColumn(columnops.TypedColumnBase):
             data = []
         return string.StringColumn(data=data)
 
-    def as_datetime_column(self, dtype):
+    def as_datetime_column(self, dtype, **kwargs):
         from cudf.dataframe import datetime
 
         return self.astype("int64").view(
             datetime.DatetimeColumn, dtype=dtype, data=self.data.astype(dtype)
         )
 
-    def as_numerical_column(self, dtype):
+    def as_numerical_column(self, dtype, **kwargs):
         col = self.replace(data=self.data.astype(dtype), dtype=np.dtype(dtype))
         return col
 
-    def astype(self, dtype):
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
-
-        elif pd.api.types.is_string_dtype(dtype):
-            if pd.api.types.is_categorical_dtype(dtype):
-                return self.as_categorical_column()
-            return self.as_string_column()
-
-        elif np.issubdtype(dtype, np.datetime64):
-            return self.as_datetime_column(dtype)
-
-        else:
-            return self.as_numerical_column(dtype)
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)

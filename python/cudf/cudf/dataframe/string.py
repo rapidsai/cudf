@@ -536,7 +536,7 @@ class StringColumn(columnops.TypedColumnBase):
     def __getitem__(self, arg):
         return self.element_indexing(arg)
 
-    def as_numerical_column(self, dtype):
+    def as_numerical_column(self, dtype, **kwargs):
         if dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
             dtype = np.dtype("int32")
@@ -555,10 +555,10 @@ class StringColumn(columnops.TypedColumnBase):
         out_col = columnops.as_column(out_arr)
         return out_col.astype(out_dtype)
 
-    def as_datetime_column(self, dtype):
+    def as_datetime_column(self, dtype, **kwargs):
         return self.as_numerical_column(dtype)
 
-    def as_string_column(self):
+    def as_string_column(self, dtype, **kwargs):
         return self
 
     def to_arrow(self):

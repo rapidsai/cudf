@@ -3352,3 +3352,14 @@ def test_series_astype_categorical_to_other(as_dtype):
     psr = pd.Series(data, dtype="category")
     gsr = gd.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "ordered",
+    [True, False])
+
+def test_series_astype_to_categorical_ordered(ordered):
+    psr = pd.Series([1, 2, 3, 1], dtype="category")
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype("int32", ordered=ordered),
+              gsr.astype("int32", ordered=ordered))
