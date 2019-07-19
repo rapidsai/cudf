@@ -485,11 +485,17 @@ class Series(object):
             more_rows=more_rows,
             series_spacing=True,
         )
-        return (
-            output + "\nName: {}, dtype: {}".format(self.name, str_dtype)
-            if self.name is not None
-            else output + "\ndtype: {}".format(str_dtype)
-        )
+        if self.name is None:
+            output += "\ndtype: {}".format(str_dtype)
+        else:
+            output += "\nName: {}, dtype: {}".format(self.name, str_dtype)
+
+        if pd.api.types.is_categorical_dtype(self.dtype):
+            categories = self.cat.categories
+            desc = '({}, {})'.format(len(categories), categories.dtype.name)
+            output += "\nCategories {}: {}".format(desc, self.cat.to_string())
+
+        return output
 
     def __str__(self):
         return self.to_string(nrows=10)

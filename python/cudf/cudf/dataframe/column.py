@@ -44,6 +44,7 @@ class Column(object):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.series import Series
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
@@ -80,8 +81,12 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            cats = Column._concat([o.categories for o in objs]).unique()
-            objs = [o.cat()._set_categories(cats, True) for o in objs]
+            cats = Series(Column._concat([
+                o.categories for o in objs
+            ])).drop_duplicates()._column
+            objs = [
+                o.cat()._set_categories(cats, is_unique=True)
+                for o in objs]
 
         head = objs[0]
         for obj in objs:

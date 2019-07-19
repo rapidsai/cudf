@@ -2149,7 +2149,7 @@ class DataFrame(object):
             rcats = rhs[idx_col_name].cat.categories
 
             def set_categories(col, cats):
-                return col.cat._set_categories(cats, True).fillna(-1)
+                return col.cat.set_categories(cats, is_unique=True).fillna(-1)
 
             if how == "left":
                 cats = lcats
@@ -2158,7 +2158,8 @@ class DataFrame(object):
                 cats = rcats
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
-                cats = columnops.as_column(lcats).append(rcats).unique()
+                cats = columnops.as_column(lcats).append(rcats)
+                cats = Series(cats).drop_duplicates()._column
 
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical

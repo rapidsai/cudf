@@ -55,6 +55,7 @@ def test_categorical_integer():
 3 c
 4 a
 dtype: category
+Categories (3, object): [a, b, c]
 """
     assert string.split() == expect_str.split()
 
@@ -374,3 +375,31 @@ def test_categorical_set_categories_preserves_order():
     # reassigning categories should preserve element ordering
     assert_eq(series.cat.set_categories([1, 2]),
               Series(series).cat.set_categories([1, 2]))
+
+
+@pytest.mark.parametrize("from_ordered", [True, False])
+@pytest.mark.parametrize("to_ordered", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_reorder_categories(from_ordered, to_ordered, inplace):
+
+    cats_1 = list("abc")
+    cats_2 = list("cba")
+    codes = [0, 0, 1, 0, 1, 2, 0, 1, 1, 2]
+    kwargs = dict(categories=cats_1, ordered=from_ordered)
+    pd_sr = pd.Series(pd.Categorical.from_codes(codes, **kwargs))
+    cd_sr = Series(pd_sr)
+
+    assert_eq(pd_sr, cd_sr)
+
+    assert str(pd_sr) == str(cd_sr)
+
+    kwargs = dict(ordered=to_ordered, inplace=inplace)
+
+    pd_sr_1 = pd_sr.cat.reorder_categories(cats_2, **kwargs)
+    cd_sr_1 = cd_sr.cat.reorder_categories(cats_2, **kwargs)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert_eq(pd_sr_1, cd_sr_1)
+
+    assert str(pd_sr_1) == str(cd_sr_1)
