@@ -31,6 +31,7 @@ _UNARY_OP = {
     'not': NOT,
 }
 
+
 def apply_unary_op(incol, op):
     """
     Call Unary ops.
@@ -42,12 +43,12 @@ def apply_unary_op(incol, op):
 
     cdef gdf_column result
     cdef unary_op c_op = _UNARY_OP[op]
-    with nogil:    
+    with nogil:
         result = unary_operation(
-          c_incol[0],
-          c_op
+            c_incol[0],
+            c_op
         )
-    
+
     free(c_incol)
     data, mask = gdf_column_to_column_mem(&result)
     return Column.from_mem_views(data, mask)

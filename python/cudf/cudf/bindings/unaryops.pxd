@@ -61,12 +61,12 @@ cdef extern from "unary.hpp" namespace "cudf" nogil:
         INVALID_UNARY
 
     cdef gdf_column unary_operation(
-      const gdf_column &input,
-      unary_op op
+        const gdf_column &input,
+        unary_op op
     ) except +
 
     cdef gdf_column col_cast(
-      const gdf_column &input,
-      gdf_dtype out_type,
-      gdf_dtype_extra_info out_info
+        const gdf_column &input,
+        gdf_dtype out_type,
+        gdf_dtype_extra_info out_info
     ) except +
