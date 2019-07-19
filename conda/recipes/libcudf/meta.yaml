@@ -30,6 +30,7 @@ requirements:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - arrow-cpp 0.14.0.*
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
