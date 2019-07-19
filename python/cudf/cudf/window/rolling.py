@@ -1,6 +1,5 @@
-import pandas as pd
-
 import cudf
+import pandas as pd
 from cudf.bindings.rolling import apply_rolling
 from cudf.utils import cudautils
 

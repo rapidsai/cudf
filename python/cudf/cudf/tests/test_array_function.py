@@ -1,9 +1,8 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.utils.utils import IS_NEP18_ACTIVE
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE

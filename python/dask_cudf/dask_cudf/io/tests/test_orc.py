@@ -1,12 +1,11 @@
 import os
 
+import dask_cudf
 import pytest
 
 import dask.dataframe as dd
 
 import cudf
-
-import dask_cudf
 
 # import pyarrow.orc as orc
 

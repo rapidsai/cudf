@@ -2,13 +2,6 @@
 
 from __future__ import division, print_function
 
-import numpy as np
-import pandas as pd
-import pyarrow as pa
-from pandas.api.types import is_integer_dtype
-
-from librmm_cffi import librmm as rmm
-
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.hash as cpp_hash
@@ -16,6 +9,9 @@ import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
+import numpy as np
+import pandas as pd
+import pyarrow as pa
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
@@ -23,6 +19,9 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
+from pandas.api.types import is_integer_dtype
+
+from librmm_cffi import librmm as rmm
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -200,17 +199,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             return out
 
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
-        # sort the column
-        sortcol, _ = densecol.sort_by_values(ascending=True)
-        # find segments
-        sortedvals = sortcol.to_gpu_array()
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
-
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
@@ -221,15 +209,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def unique_count(self, method="sort", dropna=True):
-        if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
 
     def value_counts(self, method="sort"):
         if method != "sort":

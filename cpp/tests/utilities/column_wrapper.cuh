@@ -51,9 +51,7 @@
 namespace {
 
 gdf_dtype_extra_info copy_extra_info(gdf_column const& column) {
-  gdf_dtype_extra_info extra_info;
-  extra_info.time_unit = column.dtype_info.time_unit;
-  extra_info.category = column.dtype_info.category;
+  gdf_dtype_extra_info extra_info = column.dtype_info;
 
   // make a copy of the category if there is one
   if (column.dtype_info.category != nullptr) {
@@ -604,9 +602,7 @@ struct column_wrapper {
     the_column.data = data.data().get();
     the_column.size = data.size();
     the_column.dtype = cudf::gdf_dtype_of<ColumnType>();
-    gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = TIME_UNIT_NONE;
-    extra_info.category = nullptr;
+    gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
     the_column.dtype_info = extra_info;
 
     // If a validity bitmask vector was passed in, allocate device storage

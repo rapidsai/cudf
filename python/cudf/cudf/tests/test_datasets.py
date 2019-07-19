@@ -1,6 +1,5 @@
-import pandas as pd
-
 import cudf as gd
+import pandas as pd
 from cudf.tests.utils import assert_eq
 
 

@@ -2,11 +2,10 @@
 
 from timeit import default_timer as timer
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.dataframe import DataFrame
 from cudf.tests.utils import assert_eq
 

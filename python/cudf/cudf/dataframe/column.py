@@ -6,19 +6,18 @@ LibGDF operates on column.
 """
 from numbers import Number
 
+import cudf.bindings.quantile as cpp_quantile
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
-import nvstrings
-from librmm_cffi import librmm as rmm
-
-import cudf.bindings.quantile as cpp_quantile
 from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
+
+import nvstrings
+from librmm_cffi import librmm as rmm
 
 
 class Column(object):
@@ -669,6 +668,29 @@ class Column(object):
             return self.find_first_value(label)
         if side == "right":
             return self.find_last_value(label) + 1
+
+    def sort_by_values(self):
+        raise NotImplementedError
+
+    def _unique_segments(self):
+        """ Common code for unique, unique_count and value_counts"""
+        # make dense column
+        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
+        # sort the column
+        sortcol, _ = densecol.sort_by_values()
+        # find segments
+        sortedvals = sortcol.data.mem
+        segs, begins = cudautils.find_segments(sortedvals)
+        return segs, sortedvals
+
+    def unique_count(self, method="sort", dropna=True):
+        if method != "sort":
+            msg = "non sort based unique_count() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs) + 1
+        return len(segs)
 
 
 register_distributed_serializer(Column)

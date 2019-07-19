@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils import cudautils, utils
@@ -215,6 +214,10 @@ def get_dummies(
 
     from cudf.multi import concat
 
+    # TODO: This has to go away once we start supporting uint8.
+    if dtype == np.uint8:
+        dtype = "int8"
+
     encode_fallback_dtypes = ["object", "category"]
 
     if columns is None or len(columns) == 0:
@@ -260,10 +263,15 @@ def get_dummies(
         df_list = []
 
         for name in columns:
+            if hasattr(df[name]._column, "categories"):
+                unique = df[name]._column.categories
+            else:
+                unique = df[name].unique()
+
             col_enc_df = df.one_hot_encoding(
                 name,
                 prefix=prefix_map.get(name, prefix),
-                cats=cats.get(name, df[name].unique()),
+                cats=cats.get(name, unique),
                 prefix_sep=prefix_sep_map.get(name, prefix_sep),
                 dtype=dtype,
             )

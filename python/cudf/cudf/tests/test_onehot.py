@@ -2,11 +2,10 @@
 
 from string import ascii_lowercase
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.dataframe import DataFrame, GenericIndex, Series
 from cudf.tests import utils
 
@@ -112,6 +111,9 @@ def test_get_dummies(data):
 
     encoded_expected = pd.get_dummies(pdf, prefix="test")
     encoded_actual = cudf.get_dummies(gdf, prefix="test")
+
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
 
     utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
