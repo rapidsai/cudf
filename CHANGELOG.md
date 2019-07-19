@@ -69,6 +69,7 @@
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2349 Fix issues with String filter in java API
 
 
 # cuDF 0.8.0 (27 June 2019)
