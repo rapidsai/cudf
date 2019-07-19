@@ -56,7 +56,6 @@
 - PR #2345 Restore removal of old groupby implementation
 - PR #2329 using libcudf cudf::copy for column deep copy
 
-
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
