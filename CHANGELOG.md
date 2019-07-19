@@ -53,6 +53,7 @@
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
+- PR #2345 Restore removal of old groupby implementation
 
 ## Bug Fixes
 
