@@ -7,8 +7,8 @@ project(CUDF_BENCHS LANGUAGES C CXX CUDA)
 
 function(ConfigureBench CMAKE_BENCH_NAME CMAKE_BENCH_SRC)
     add_executable(${CMAKE_BENCH_NAME}
-                   ${CMAKE_BENCH_SRC})
-                   # "${CMAKE_CURRENT_SOURCE_DIR}/../tests/utilities/cudf_test_utils.cu")
+                   ${CMAKE_BENCH_SRC}
+                   "${CMAKE_CURRENT_SOURCE_DIR}/synchronization/synchronization.cpp")
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_BENCH_NAME} benchmark benchmark_main pthread cudf )
     set_target_properties(${CMAKE_BENCH_NAME} PROPERTIES
@@ -76,3 +76,17 @@ set(SCATTER_BENCH_SRC
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
 
+# - join benchmark --------------------------------------------------------------------------------
+
+set(JOIN_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/join/join_benchmark.cu")
+
+ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
+
+###################################################################################################
+# - type_dispatcher benchmark ---------------------------------------------------------------------
+
+set(TD_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
+
+ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")

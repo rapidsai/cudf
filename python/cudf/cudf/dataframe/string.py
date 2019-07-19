@@ -538,8 +538,9 @@ class StringColumn(columnops.TypedColumnBase):
         return self.element_indexing(arg)
 
     def astype(self, dtype):
-        if self.dtype == dtype or \
-           (dtype in ('str', 'object') and self.dtype in ('str', 'object')):
+        if self.dtype == dtype or (
+            dtype in ("str", "object") and self.dtype in ("str", "object")
+        ):
             return self
         elif dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
@@ -572,7 +573,7 @@ class StringColumn(columnops.TypedColumnBase):
         nbuf = pa.py_buffer(nbuf)
         if self.null_count == len(self):
             return pa.NullArray.from_buffers(
-                pa.null(), len(self), [pa.py_buffer((b''))], self.null_count
+                pa.null(), len(self), [pa.py_buffer((b""))], self.null_count
             )
         else:
             return pa.StringArray.from_buffers(
@@ -773,6 +774,26 @@ class StringColumn(columnops.TypedColumnBase):
         else:
             msg = "{!r} operator not supported between {} and {}"
             raise TypeError(msg.format(binop, type(self), type(rhs)))
+
+    @property
+    def is_unique(self):
+        return len(self.unique()) == len(self)
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, "_is_monotonic_increasing"):
+            self._is_monotonic_increasing = string_column_binop(
+                self[1:], self[:-1], "ge"
+            ).all()
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            self._is_monotonic_decreasing = string_column_binop(
+                self[1:], self[:-1], "le"
+            ).all()
+        return self._is_monotonic_decreasing
 
 
 def string_column_binop(lhs, rhs, op):

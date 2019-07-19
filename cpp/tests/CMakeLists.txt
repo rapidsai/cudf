@@ -99,11 +99,6 @@ ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
 
-set(GROUPBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_test.cu")
-
-ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
-
 set(HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_count.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_sum.cu"
@@ -358,6 +353,14 @@ set(DEVICE_TABLE_TEST_SRC
 ConfigureTest(DEVICE_TABLE_TEST "${DEVICE_TABLE_TEST_SRC}")
 
 ###################################################################################################
+# - sorted-merge tests -------------------------------------------------------------------------------------
+
+set(MERGE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/merge/merge-test.cu")
+
+ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
+
+###################################################################################################
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
@@ -420,4 +423,3 @@ set(ITERATOR_BENCH_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/iterator/iterator_bench.cu")
 
 ConfigureBench(ITERATOR_BENCH "${ITERATOR_BENCH_SRC}")
-

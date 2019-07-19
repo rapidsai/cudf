@@ -194,7 +194,10 @@ def cudf_dtype_from_pydata_dtype(dtype):
             _get_dtype_from_object as infer_dtype_from_object,
         )
 
-    if pd.api.types.is_categorical_dtype(dtype):
+    if (
+        pd.api.types.pandas_dtype(dtype).type
+        is pd.core.dtypes.dtypes.CategoricalDtypeType
+    ):
         pass
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
@@ -236,11 +239,20 @@ def is_list_like(obj):
 
 
 def min_scalar_type(a, min_size=8):
-    # Get smallest type to represent the category size
-    sizeof = np.min_scalar_type(a).itemsize
-    # Normalize the size to at least `min_size` bytes
-    sizeof = max(max(min_size, 8) // 8, sizeof)
-    return getattr(np, "int" + str(sizeof * 8))
+    return min_signed_type(a, min_size=min_size)
+
+
+def min_signed_type(x, min_size=8):
+    """
+    Return the smallest *signed* integer dtype
+    that can represent the integer ``x``
+    """
+    for int_dtype in np.sctypes["int"]:
+        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
+            if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
+                return int_dtype
+    # resort to using `int64` and let numpy raise appropriate exception:
+    return np.int64(x).dtype
 
 
 def get_result_name(left, right):
@@ -295,3 +307,19 @@ def compare_and_get_name(a, b):
     elif b_has:
         return b.name
     return None
+
+
+# taken from dask array
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
+def _is_nep18_active():
+    class A:
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()

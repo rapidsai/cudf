@@ -30,10 +30,6 @@ class Index(object):
     """The root interface for all Series indexes.
     """
 
-    is_monotonic = None
-    is_monotonic_increasing = None
-    is_monotonic_decreasing = None
-
     def serialize(self, serialize):
         """Serialize into pickle format suitable for file storage or network
         transmission.
@@ -309,6 +305,25 @@ class Index(object):
     def loc(self):
         return _IndexLocIndexer(self)
 
+    @property
+    def is_unique(self):
+        raise (NotImplementedError)
+
+    @property
+    def is_monotonic(self):
+        return self.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        raise (NotImplementedError)
+
+    @property
+    def is_monotonic_decreasing(self):
+        raise (NotImplementedError)
+
+    def get_slice_bound(self, label, side, kind):
+        raise (NotImplementedError)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -393,6 +408,10 @@ class RangeIndex(Index):
         return super(type(self), self).__eq__(other)
 
     def equals(self, other):
+        if self is other:
+            return True
+        if len(self) != len(other):
+            return False
         if isinstance(other, cudf.dataframe.index.RangeIndex):
             return self._start == other._start and self._stop == other._stop
         else:
@@ -451,6 +470,22 @@ class RangeIndex(Index):
             dtype=self.dtype,
             name=self.name,
         )
+
+    @property
+    def is_unique(self):
+        return True
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._start <= self._stop
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._start >= self._stop
+
+    def get_slice_bound(self, label, side, kind):
+        # TODO: Range-specific implementation here
+        raise (NotImplementedError)
 
 
 def index_from_range(start, stop=None, step=None):
@@ -516,7 +551,7 @@ class GenericIndex(Index):
         return self._values.__sizeof__()
 
     def __reduce__(self):
-        return GenericIndex, tuple([self._values])
+        return self.__class__, tuple([self._values])
 
     def __len__(self):
         return len(self._values)
@@ -569,6 +604,25 @@ class GenericIndex(Index):
             end = col.find_last_value(last)
             end += 1
         return begin, end
+
+    @property
+    def is_unique(self):
+        return self._values.is_unique
+
+    @property
+    def is_monotonic(self):
+        return self._values.is_monotonic
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._values.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._values.is_monotonic_decreasing
+
+    def get_slice_bound(self, label, side, kind):
+        return self._values.get_slice_bound(label, side, kind)
 
 
 class DatetimeIndex(GenericIndex):
@@ -647,18 +701,20 @@ class CategoricalIndex(GenericIndex):
     def __init__(self, values, name=None):
         if isinstance(values, CategoricalColumn):
             values = values
-        elif isinstance(values, pd.Series) and \
-                pd.api.types.is_categorical_dtype(values.dtype):
+        elif isinstance(values, pd.Series) and (
+            pd.api.types.pandas_dtype(values.dtype).type
+            is pd.core.dtypes.dtypes.CategoricalDtypeType
+        ):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
                 categories=values.cat.categories,
-                ordered=values.cat.ordered
+                ordered=values.cat.ordered,
             )
         elif isinstance(values, (pd.Categorical, pd.CategoricalIndex)):
             values = CategoricalColumn(
                 data=Buffer(values.codes),
                 categories=values.categories,
-                ordered=values.ordered
+                ordered=values.ordered,
             )
         elif isinstance(values, (list, tuple)):
             values = columnops.as_column(

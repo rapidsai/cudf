@@ -13,6 +13,7 @@ from cudf.bindings.copying import clone_columns_with_size
 from cudf.dataframe.column import Column
 from cudf.bindings.stream_compaction import *
 
+
 def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     """
     get unique entries of subset columns from input columns
@@ -33,12 +34,12 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols+in_index)
     cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count+1)
 
-    cdef duplicate_keep_option keep_first;
+    cdef duplicate_keep_option keep_first
     if keep == 'first':
         keep_first = duplicate_keep_option.KEEP_FIRST
     elif keep == 'last':
         keep_first = duplicate_keep_option.KEEP_LAST
-    elif keep == False:
+    elif keep is False:
         keep_first = duplicate_keep_option.KEEP_NONE
     else:
         raise ValueError('keep must be either "first", "last" or False')
@@ -60,8 +61,12 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     free_table(key_table, key_cols)
     free_table(c_in_table, c_in_cols)
 
-    #convert table to columns, index
-    out_cols = [Column.from_mem_views(*gdf_column_to_column_mem(i)) for i in out_table]
+    # convert table to columns, index
+    out_cols = [
+        Column.from_mem_views(
+            *gdf_column_to_column_mem(i)
+        ) for i in out_table
+    ]
     return (out_cols[:-1], out_cols[-1])
 
 

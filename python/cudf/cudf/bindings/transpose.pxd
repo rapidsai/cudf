@@ -13,4 +13,5 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_transpose(
         gdf_size_type ncols,
         gdf_column** in_cols,
-        gdf_column** out_cols) except +
+        gdf_column** out_cols
+    ) except +

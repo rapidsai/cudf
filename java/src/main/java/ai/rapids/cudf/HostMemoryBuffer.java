@@ -18,14 +18,46 @@
 
 package ai.rapids.cudf;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.io.EOFException;
+import java.io.IOException;
+import java.io.InputStream;
+
 /**
  * This class represents an off-heap buffer held in the host memory.
  *
  * NOTE: Instances must be explicitly closed or native memory will be leaked!
  */
 public class HostMemoryBuffer extends MemoryBuffer {
+  private static final Logger log = LoggerFactory.getLogger(HostMemoryBuffer.class);
+
+  private static final class HostBufferCleaner extends MemoryCleaner.Cleaner {
+    private long address;
+
+    HostBufferCleaner(long address) {
+      this.address = address;
+    }
+
+    @Override
+    public boolean clean(boolean logErrorIfNotClean) {
+      boolean neededCleanup = false;
+      if (address != 0) {
+        UnsafeMemoryAccessor.free(address);
+        address = 0;
+        neededCleanup = true;
+      }
+      if (neededCleanup && logErrorIfNotClean) {
+        log.error("A HOST BUFFER WAS LEAKED!!!!");
+        logRefCountDebug("Leaked host buffer");
+      }
+      return neededCleanup;
+    }
+  }
+
   HostMemoryBuffer(long address, long length) {
-    super(address, length);
+    super(address, length, new HostBufferCleaner(address));
   }
 
   /**
@@ -35,6 +67,10 @@ public class HostMemoryBuffer extends MemoryBuffer {
    */
   public static HostMemoryBuffer allocate(long bytes) {
     return new HostMemoryBuffer(UnsafeMemoryAccessor.allocate(bytes), bytes);
+  }
+
+  private HostMemoryBuffer(long address, long lengthInBytes, HostMemoryBuffer parent) {
+    super(address, lengthInBytes, parent);
   }
 
   /**
@@ -50,6 +86,28 @@ public class HostMemoryBuffer extends MemoryBuffer {
     srcData.addressOutOfBoundsCheck(srcData.address + srcOffset, length, "copy from source");
     UnsafeMemoryAccessor.copyMemory(null, srcData.address + srcOffset, null,
         address + destOffset, length);
+  }
+
+  /**
+   * Copy len bytes from in to this buffer.
+   * @param destOffset  offset in bytes in this buffer to start copying to
+   * @param in input stream to copy bytes from
+   * @param byteLength number of bytes to copy
+   */
+  final void copyFromStream(long destOffset, InputStream in, long byteLength) throws IOException {
+    addressOutOfBoundsCheck(address + destOffset, byteLength, "copy from stream");
+    byte[] arrayBuffer = new byte[(int) Math.min(1024 * 128, byteLength)];
+    long left = byteLength;
+    while (left > 0) {
+      int amountToCopy = (int) Math.min(arrayBuffer.length, left);
+      int amountRead = in.read(arrayBuffer, 0, amountToCopy);
+      if (amountRead < 0) {
+        throw new EOFException();
+      }
+      setBytes(destOffset, arrayBuffer, 0, amountRead);
+      destOffset += amountRead;
+      left -= amountRead;
+    }
   }
 
   /**
@@ -94,7 +152,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
    * @param data   the data to be copied.
    */
   public final void setBytes(long offset, byte[] data, long srcOffset, long len) {
-    assert len > 0;
+    assert len > 0 : "length is not allowed " + len;
     assert len <= data.length - srcOffset;
     assert srcOffset >= 0;
     long requestedAddress = this.address + offset;
@@ -331,8 +389,39 @@ public class HostMemoryBuffer extends MemoryBuffer {
         CudaMemcpyKind.DEVICE_TO_HOST);
   }
 
-  @Override
-  protected void doClose() {
-    UnsafeMemoryAccessor.free(address);
+  /**
+   * Slice off a part of the host buffer.
+   * @param offset where to start the slice at.
+   * @param len how many bytes to slice
+   * @return a host buffer that will need to be closed independently from this buffer.
+   */
+  final HostMemoryBuffer slice(long offset, long len) {
+    addressOutOfBoundsCheck(address + offset, len, "slice");
+    refCount++;
+    cleaner.addRef();
+    return new HostMemoryBuffer(address + offset, len, this);
+  }
+
+  /**
+   * Slice off a part of the host buffer, actually making a copy of the data.
+   * @param offset where to start the slice at.
+   * @param len how many bytes to slice
+   * @return a host buffer that will need to be closed independently from this buffer.
+   */
+  final HostMemoryBuffer sliceWithCopy(long offset, long len) {
+    addressOutOfBoundsCheck(address + offset, len, "slice");
+
+    HostMemoryBuffer ret = null;
+    boolean success = false;
+    try {
+      ret = allocate(len);
+      UnsafeMemoryAccessor.copyMemory(null, address + offset, null, ret.getAddress(), len);
+      success = true;
+      return ret;
+    } finally {
+      if (!success && ret != null) {
+        ret.close();
+      }
+    }
   }
 }

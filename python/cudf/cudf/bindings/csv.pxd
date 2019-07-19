@@ -41,6 +41,9 @@ cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
         vector[int]         use_cols_indexes
         vector[string]      use_cols_names
 
+        vector[int]         infer_date_indexes
+        vector[string]      infer_date_names
+
         vector[string]      true_values
         vector[string]      false_values
         vector[string]      na_values
@@ -58,27 +61,31 @@ cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
         reader(const reader_options &args) except +
 
         cudf_table read() except +
-        
+
         cudf_table read_byte_range(size_t offset, size_t size) except +
 
-        cudf_table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows) except +
+        cudf_table read_rows(
+            gdf_size_type num_skip_header,
+            gdf_size_type num_skip_footer,
+            gdf_size_type num_rows
+        ) except +
 
-cdef extern from "cudf.h"  nogil:
+cdef extern from "cudf.h" nogil:
     # See cpp/include/cudf/io_types.h:146
     ctypedef struct csv_write_arg:
         # Arguments to csv writer function
-        gdf_column**        columns
-        int                 num_cols
+        gdf_column** columns
+        int num_cols
 
-        const char*         filepath
-        const char*         line_terminator
-        char                delimiter
+        const char* filepath
+        const char* line_terminator
+        char delimiter
 
-        const char*         true_value
-        const char*         false_value
-        const char*         na_rep
-        bool                include_header
+        const char* true_value
+        const char* false_value
+        const char* na_rep
+        bool include_header
 
-        int                 rows_per_chunk
+        int rows_per_chunk
 
     cdef gdf_error write_csv(csv_write_arg* args) except +
