@@ -54,6 +54,7 @@
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
 - PR #2345 Restore removal of old groupby implementation
+- PR #2329 using libcudf cudf::copy for column deep copy
 
 ## Bug Fixes
 
