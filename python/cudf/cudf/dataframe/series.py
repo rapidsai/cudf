@@ -1598,16 +1598,16 @@ class Series(object):
         if dtype is None:
             dtype = utils.min_scalar_type(len(cats), 32)
 
-        value = Series(cats).astype(self.dtype)
+        cats = Series(cats).astype(self.dtype)
         order = Series(cudautils.arange(len(self)))
-        codes = Series(cudautils.arange(len(value), dtype=dtype))
+        codes = Series(cudautils.arange(len(cats), dtype=dtype))
 
-        value = DataFrame({"value": value, "code": codes})
+        value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame({"value": self, "order": order})
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
-        cats.name = None  # mutated above
+        cats.name = None  # because it was mutated to "value" above
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
