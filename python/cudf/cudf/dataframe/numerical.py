@@ -99,11 +99,11 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def normalize_binop_value(self, other):
         other_dtype = np.min_scalar_type(other)
-        if other_dtype == np.dtype("float16"):
-            other = np.dtype("float32").type(other)
-            other_dtype = other.dtype
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            if other_dtype == np.dtype("float16"):
+                other = np.dtype("float32").type(other)
+                other_dtype = other.dtype
             if other_dtype.kind in "u":
                 other_dtype = utils.min_signed_type(other)
             if np.isscalar(other):
