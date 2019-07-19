@@ -118,11 +118,13 @@ def test_categorical_index():
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3]
     pdf["index"] = pd.Categorical(["a", "b", "c"])
+    initial_df = DataFrame.from_pandas(pdf)
     pdf = pdf.set_index("index")
     gdf1 = DataFrame.from_pandas(pdf)
     gdf2 = DataFrame()
     gdf2["a"] = [1, 2, 3]
     gdf2["index"] = pd.Categorical(["a", "b", "c"])
+    assert_eq(initial_df.index, gdf2.index)
     gdf2 = gdf2.set_index("index")
 
     assert isinstance(gdf1.index, CategoricalIndex)
