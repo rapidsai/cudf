@@ -10,12 +10,12 @@ def _kernel_multiply(a, b, out):
 
 
 def _assert_multiplication(a, b, out):
-    df_original = cudf.DataFrame({ 'a': a, 'b': b })
-    df_expected = cudf.DataFrame({ 'a': a, 'b': b, 'out': out })
+    df_original = cudf.DataFrame({'a': a, 'b': b})
+    df_expected = cudf.DataFrame({'a': a, 'b': b, 'out': out})
     df_actual = df_original.apply_rows(
         _kernel_multiply,
         ['a', 'b'],
-        { 'out': float },
+        {'out': float},
         {}
     )
 
@@ -24,16 +24,16 @@ def _assert_multiplication(a, b, out):
 
 def test_dataframe_apply_rows_with_null():
     _assert_multiplication(
-        [3.0, None, 9.0,  None, 4.0],
-        [3.0, 7.0,  None, None, 2.0],
+        [3.0, None, 9.0, None, 4.0],
+        [3.0, 7.0, None, None, 2.0],
         [9.0, None, None, None, 8.0]
     )
 
 
 def test_dataframe_apply_rows_with_nan():
     _assert_multiplication(
-        [3.0, np.nan, 5.0,    np.nan, 4.0],
-        [3.0, 9.0,    np.nan, np.nan, 2.0],
+        [3.0, np.nan, 5.0, np.nan, 4.0],
+        [3.0, 9.0, np.nan, np.nan, 2.0],
         [9.0, np.nan, np.nan, np.nan, 8.0]
     )
 

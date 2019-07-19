@@ -112,8 +112,17 @@ class ApplyKernelCompilerBase(object):
             import numpy
             null_masks = (df[k].nullmask.mem for k in null_mask_cols)
             null_mask_length = max(mask.size for mask in null_masks)
-            null_mask_kernel = _make_row_wise_binary_operation_kernal(null_mask_length, null_mask_cols, "&")
-            null_mask_aggregate = rmm.device_array(null_mask_length, dtype=numpy.int8)
+            null_mask_kernel = _make_row_wise_binary_operation_kernal(
+                "&",
+                null_mask_length,
+                null_mask_cols
+            )
+
+            null_mask_aggregate = rmm.device_array(
+                null_mask_length,
+                dtype=numpy.int8
+            )
+
             blksz = 64
             blkct = cudautils.optimal_block_count(null_mask_length // blksz)
             null_mask_kernel[blkct, blksz](null_mask_aggregate, *null_masks)
@@ -164,7 +173,11 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
             chunks = Series(chunks)
             return chunks.to_gpu_array()
 
-def _make_row_wise_binary_operation_kernal(row_count, arg_names, operator_symbol):
+def _make_row_wise_binary_operation_kernal(
+    operator_symbol,
+    row_count,
+    arg_names
+):
     # Build kernel source
     source = """
 def row_binary_op_kernel(out, {args}):
@@ -178,9 +191,9 @@ def row_binary_op_kernel(out, {args}):
     out_expression = " {} ".format(operator_symbol).join(arg_names_indexed)
 
     concrete = source.format(
-        args = ", ".join(arg_names),
-        row_count = row_count,
-        out_expression = out_expression
+        args=", ".join(arg_names),
+        row_count=row_count,
+        out_expression=out_expression
     )
 
     # Get bytecode
@@ -189,6 +202,7 @@ def row_binary_op_kernel(out, {args}):
 
     # Compile as CUDA kernel
     return cuda.jit(glbs["row_binary_op_kernel"])
+
 
 def _make_row_wise_kernel(func, argnames, extras):
     """
