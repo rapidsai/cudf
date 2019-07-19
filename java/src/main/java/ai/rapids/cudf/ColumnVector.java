@@ -1904,6 +1904,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       this.tsTimeUnit = tsTimeUnit;
       this.rows = rows;
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+        if (stringBufferSize <= 0) {
+          // We need at least one byte or we will get NULL back for data
+          stringBufferSize = 1;
+        }
         this.data = HostMemoryBuffer.allocate(stringBufferSize);
         // The offsets are ints and there is 1 more than the number of rows.
         this.offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
@@ -2015,11 +2019,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       assert type == DType.STRING_CATEGORY || type == DType.STRING;
       assert currentIndex < rows;
       // just for strings we want to throw a real exception if we would overrun the buffer
-      while (currentStringByteIndex + length > data.getLength()) {
-        long oldlen = data.getLength();
-        long newlen = oldlen * 2;
+      long oldLen = data.getLength();
+      long newLen = oldLen;
+      while (currentStringByteIndex + length > newLen) {
+        newLen *= 2;
+      }
+      if (newLen > Integer.MAX_VALUE) {
+        throw new IllegalStateException("A string buffer is not supported over 2GB in size");
+      }
+      if (newLen != oldLen) {
         // need to grow the size of the buffer.
-        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newlen);
+        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
         try {
           newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
           data.close();
