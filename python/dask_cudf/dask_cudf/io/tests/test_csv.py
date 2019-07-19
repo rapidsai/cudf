@@ -1,12 +1,13 @@
 import warnings
 
-import dask_cudf
 import numpy as np
 import pandas as pd
 import pytest
 
 import dask
 import dask.dataframe as dd
+
+import dask_cudf
 
 
 def test_read_csv(tmp_path):

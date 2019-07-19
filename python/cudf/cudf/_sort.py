@@ -4,14 +4,15 @@
 import collections
 import logging
 
-import cudf.bindings.sort as cpp_sort
 import numpy as np
+
+from librmm_cffi import librmm as rmm
+
+import cudf.bindings.sort as cpp_sort
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils
-
-from librmm_cffi import librmm as rmm
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
 

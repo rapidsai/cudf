@@ -3,10 +3,11 @@
 """
 Tests related to is_unique and is_monotonic attributes
 """
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.dataframe import MultiIndex, Series
 from cudf.dataframe.index import (
     CategoricalIndex,

@@ -1,10 +1,11 @@
 from __future__ import division, print_function
 
-import cudf.bindings.copying as cpp_copying
 import numpy as np
-from cudf.dataframe import columnops
 
 from librmm_cffi import librmm as rmm
+
+import cudf.bindings.copying as cpp_copying
+from cudf.dataframe import columnops
 
 
 def test_gather_single_col():

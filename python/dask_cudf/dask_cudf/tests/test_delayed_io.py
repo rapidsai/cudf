@@ -1,7 +1,6 @@
 """
 Test IO with dask.delayed API
 """
-import dask_cudf as dgd
 import numpy as np
 import pytest
 from pandas.util.testing import assert_frame_equal
@@ -9,6 +8,8 @@ from pandas.util.testing import assert_frame_equal
 from dask.delayed import delayed
 
 import cudf as gd
+
+import dask_cudf as dgd
 
 
 @delayed

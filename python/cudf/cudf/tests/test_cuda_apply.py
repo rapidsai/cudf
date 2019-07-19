@@ -6,8 +6,9 @@ Test method that apply GPU kernel to a frame.
 
 import numpy as np
 import pytest
-from cudf import DataFrame
 from numba import cuda
+
+from cudf import DataFrame
 
 
 @pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])

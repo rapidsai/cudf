@@ -5,18 +5,19 @@ view of Columns.
 
 import warnings
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.column import Column
-from cudf.utils import cudautils, utils
-from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 from numba import cuda, njit
 
 import nvstrings
 from librmm_cffi import librmm as rmm
+
+import cudf
+from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.column import Column
+from cudf.utils import cudautils, utils
+from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 
 
 class TypedColumnBase(Column):

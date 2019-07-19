@@ -3,9 +3,10 @@
 import itertools
 from contextlib import ExitStack as does_not_raise
 
-import cudf
 import numpy as np
 import pytest
+
+import cudf
 from cudf.tests.utils import assert_eq
 
 try:
