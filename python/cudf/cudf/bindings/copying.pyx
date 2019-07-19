@@ -13,7 +13,6 @@ from librmm_cffi import librmm as rmm
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-pandas_version = tuple(map(int,pd.__version__.split('.', 2)[:2]))
 
 from librmm_cffi import librmm as rmm
 
@@ -24,14 +23,17 @@ from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
 
+pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
+
+
 def clone_columns_with_size(in_cols, row_size):
     from cudf.dataframe import columnops
     out_cols = []
     for col in in_cols:
         o_col = columnops.column_empty_like(col,
-                                            dtype = col.dtype,
-                                            masked = col.has_null_mask,
-                                            newsize = row_size)
+                                            dtype=col.dtype,
+                                            masked=col.has_null_mask,
+                                            newsize=row_size)
         out_cols.append(o_col)
 
     return out_cols
@@ -66,10 +68,10 @@ def apply_gather(in_cols, maps, out_cols=None):
     cdef bool is_same_input = False
     cdef gdf_column** c_out_cols
     cdef cudf_table* c_out_table
-    if out_cols == in_cols :
+    if out_cols == in_cols:
         is_same_input = True
         c_out_table = c_in_table
-    elif out_cols != None :
+    elif out_cols is not None:
         c_out_cols = cols_view_from_cols(out_cols)
         c_out_table = new cudf_table(c_out_cols, col_count)
     else:
@@ -79,7 +81,7 @@ def apply_gather(in_cols, maps, out_cols=None):
 
     cdef uintptr_t c_maps_ptr
     cdef gdf_index_type* c_maps
-    if gather_count != 0 :
+    if gather_count != 0:
         if out_cols[0].dtype == np.dtype("object"):
             out_size = out_cols[0].data.size()
         else:
@@ -99,7 +101,7 @@ def apply_gather(in_cols, maps, out_cols=None):
                 out_cols[i],
                 <uintptr_t>c_out_cols[i].dtype_info.category)
 
-    if is_same_input == False:
+    if is_same_input is False:
         free_table(c_out_table, c_out_cols)
 
     free_table(c_in_table, c_in_cols)
@@ -163,10 +165,10 @@ def apply_scatter(in_cols, maps, out_cols=None):
     cdef bool is_same_input = False
     cdef gdf_column** c_out_cols
     cdef cudf_table* c_out_table
-    if out_cols == in_cols :
+    if out_cols == in_cols:
         is_same_input = True
         c_out_table = c_in_table
-    elif out_cols != None :
+    elif out_cols is not None:
         c_out_cols = cols_view_from_cols(out_cols)
         c_out_table = new cudf_table(c_out_cols, col_count)
     else:
@@ -176,7 +178,7 @@ def apply_scatter(in_cols, maps, out_cols=None):
 
     cdef uintptr_t c_maps_ptr
     cdef gdf_index_type* c_maps
-    if gather_count != 0 :
+    if gather_count != 0:
         # size check, cudf::gather requires same length for maps and in table.
         if out_cols[0].dtype == np.dtype("object"):
             in_size = in_cols[0].data.size()
@@ -190,7 +192,7 @@ def apply_scatter(in_cols, maps, out_cols=None):
         with nogil:
             scatter(c_in_table, c_maps, c_out_table)
 
-    if is_same_input == False :
+    if is_same_input is False:
         free_table(c_out_table, c_out_cols)
 
     free_table(c_in_table, c_in_cols)
@@ -231,3 +233,22 @@ def apply_scatter_array(dev_array, maps, out_col=None):
 
     in_col = columnops.as_column(dev_array)
     return apply_scatter_column(in_col, maps, out_col)
+
+
+def copy_column(input_col):
+    """
+        Call cudf::copy
+    """
+    cdef gdf_column* c_input_col = column_view_from_column(input_col)
+    cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
+
+    with nogil:
+        output[0] = copy(c_input_col[0])
+
+    data, mask = gdf_column_to_column_mem(output)
+    from cudf.dataframe.column import Column
+
+    free(c_input_col)
+    free(output)
+
+    return Column.from_mem_views(data, mask, output.null_count)

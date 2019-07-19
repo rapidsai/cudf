@@ -27,7 +27,8 @@ def apply_cast(incol, **kwargs):
     """
 
     check_gdf_compatibility(incol)
-    
+    check_gdf_compatibility(outcol)
+
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
     npdtype = kwargs.get("dtype", np.float64)
@@ -36,15 +37,19 @@ def apply_cast(incol, **kwargs):
 
     cdef gdf_dtype_extra_info info = gdf_dtype_extra_info(
         time_unit = TIME_UNIT_NONE,
-        category = <void*> category
+        category = <void*>category
     )
-    unit            = kwargs.get("time_unit", 'none')
-    info.time_unit  = _time_unit[unit]
+    unit = kwargs.get("time_unit", 'none')
+    info.time_unit = _time_unit[unit]
 
     cdef gdf_column result
 
     with nogil:    
-        result = col_cast(c_incol[0], dtype, info)
+        result = col_cast(
+          c_incol[0],
+          dtype,
+          info
+       )
     
     free(c_incol)
     data, mask = gdf_column_to_column_mem(&result)

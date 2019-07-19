@@ -1078,6 +1078,7 @@ class Series(object):
         in_cols = [self._column]
         in_index = self.index
         from cudf.dataframe.multiindex import MultiIndex
+
         if isinstance(in_index, MultiIndex):
             in_index = RangeIndex(len(in_index))
         out_cols, new_index = cpp_drop_duplicates(

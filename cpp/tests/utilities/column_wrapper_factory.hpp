@@ -101,8 +101,10 @@ struct column_wrapper_factory<cudf::nvstring_category>
 
 protected:
   const char* convert(gdf_index_type row) {
+    static int str_width = std::to_string(std::numeric_limits<gdf_index_type>().max()).size();
+    
     std::ostringstream convert;
-    convert << row;
+    convert << std::setfill('0') << std::setw(str_width) << row;
     char *s = new char[convert.str().size()+1];
     std::strcpy(s, convert.str().c_str());
     return s; 
