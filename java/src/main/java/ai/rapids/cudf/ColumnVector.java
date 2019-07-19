@@ -681,7 +681,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     int start = offHeap.hostData.offsets.getInt(index * OFFSET_SIZE);
     int size = offHeap.hostData.offsets.getInt((index + 1) * OFFSET_SIZE) - start;
     byte[] rawData = new byte[size];
-    offHeap.hostData.data.getBytes(rawData, 0, start, size);
+    if (size > 0) {
+      offHeap.hostData.data.getBytes(rawData, 0, start, size);
+    }
     return new String(rawData, StandardCharsets.UTF_8);
   }
 
@@ -1523,7 +1525,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
-  private static ColumnVector build(DType type, int rows, long stringBufferSize, Consumer<Builder> init) {
+  public static ColumnVector build(DType type, int rows, long stringBufferSize, Consumer<Builder> init) {
     try (Builder builder = builder(type, rows, stringBufferSize)) {
       init.accept(builder);
       return builder.build();
@@ -2041,7 +2043,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           }
         }
       }
-      data.setBytes(currentStringByteIndex, value, offset, length);
+      if (length > 0) {
+        data.setBytes(currentStringByteIndex, value, offset, length);
+      }
       currentStringByteIndex += length;
       currentIndex++;
       offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
