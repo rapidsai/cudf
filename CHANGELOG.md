@@ -14,10 +14,12 @@
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
+- PR #2304 gdf_group_by_without_aggregations returns gdf_column
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2049 Implemented merge functionality
+
 
 
 ## Improvements
@@ -51,7 +53,9 @@
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
+- PR #2345 Restore removal of old groupby implementation
 - PR #2329 using libcudf cudf::copy for column deep copy
+
 
 ## Bug Fixes
 
@@ -82,6 +86,7 @@
 - PR #2324 Fix cudf Docker build
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
 - PR #2235 Fix get_dummies to be compatible with dask
+- PR #2332 Zero initialize gdf_dtype_extra_info
 
 
 # cuDF 0.8.0 (27 June 2019)
