@@ -133,7 +133,7 @@ class TypedColumnBase(Column):
             ordered = kwargs["ordered"]
         else:
             ordered = False
-            
+
         sr = cudf.Series(self)
         labels, cats = sr.factorize()
         return cudf.dataframe.categorical.CategoricalColumn(

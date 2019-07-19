@@ -144,7 +144,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         col = self.replace(data=self.data.astype(dtype), dtype=np.dtype(dtype))
         return col
 
-
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
         col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)

@@ -221,7 +221,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             ordered=self._ordered,
         )
         return col
-    
+
     def sort_by_values(self, ascending=True, na_position="last"):
         return self.as_numerical.sort_by_values(ascending, na_position)
 
@@ -363,13 +363,19 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return self
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self._get_uncategorized_column().as_numerical_column(dtype, **kwargs)
+        return self._get_uncategorized_column().as_numerical_column(
+            dtype, **kwargs
+        )
 
     def as_string_column(self, dtype, **kwargs):
-        return self._get_uncategorized_column().as_string_column(dtype, **kwargs)
+        return self._get_uncategorized_column().as_string_column(
+            dtype, **kwargs
+        )
 
     def as_datetime_column(self, dtype, **kwargs):
-        return self._get_uncategorized_column().as_datetime_column(dtype, **kwargs)
+        return self._get_uncategorized_column().as_datetime_column(
+            dtype, **kwargs
+        )
 
     def _get_uncategorized_column(self):
         gather_map = (
