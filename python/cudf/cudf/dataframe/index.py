@@ -702,7 +702,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(values, CategoricalColumn):
             values = values
         elif isinstance(values, pd.Series) and (
-            pd.api.types.pandas_dtype(values.dtype)
+            pd.api.types.pandas_dtype(values.dtype).type
             is pd.core.dtypes.dtypes.CategoricalDtypeType
         ):
             values = CategoricalColumn(

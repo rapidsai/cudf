@@ -121,8 +121,10 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
-    dtype = pd.api.types.pandas_dtype(dtype)
-    if dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
+    if (
+        pd.api.types.pandas_dtype(dtype).type
+        is pd.core.dtypes.dtypes.CategoricalDtypeType
+    ):
         categories = column.cat().categories
         dtype = column.data.dtype
     return column_empty(row_count, dtype, masked, categories=categories)
@@ -132,14 +134,13 @@ def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
-
     if masked:
         mask = cudautils.make_empty_mask(row_count)
     else:
         mask = None
 
     if (categories is None) and (
-        dtype is pd.core.dtypes.dtypes.CategoricalDtypeType
+        dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType
     ):
         categories = [] if dtype.categories is None else dtype.categories
 
@@ -228,7 +229,7 @@ def build_column(
     from cudf.dataframe import numerical, categorical, datetime, string
 
     dtype = pd.api.types.pandas_dtype(dtype)
-    if dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
+    if dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
         return categorical.CategoricalColumn(
             data=buffer,
             dtype="categorical",
@@ -381,7 +382,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     arbitrary.type.to_pandas_dtype()
                 )
 
-            if new_dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            if new_dtype.dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
@@ -513,7 +514,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 pa_type = None
                 if dtype is not None:
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if dtype is pd.core.dtypes.dtypes.CategoricalDtypeType:
+                    if (
+                        dtype.type
+                        is pd.core.dtypes.dtypes.CategoricalDtypeType
+                    ):
                         raise TypeError
                     else:
                         if dtype.type == np.bool_:
@@ -527,7 +531,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
                 np_type = None
                 d_type = pd.api.types.pandas_dtype(dtype)
-                if d_type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+                if d_type.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
                     data = as_column(
                         pd.Series(arbitrary, dtype="category"),
                         nan_as_null=nan_as_null,
