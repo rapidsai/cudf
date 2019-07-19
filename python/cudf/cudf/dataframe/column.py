@@ -49,7 +49,7 @@ class Column(object):
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
-            if dtype in (np.object_, np.str_):
+            if dtype.type in (np.object_, np.str_):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
             elif dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
                 return CategoricalColumn(
