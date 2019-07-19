@@ -213,20 +213,27 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
     std::tie(right_data, right_bitmask) =
       cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&right));
 
-    for (size_t i=0; i < left_data.size();i++) {
+    CHECK_STREAM(0);
+
+    if (left_data.size() != right_data.size())
+      return false;
+    
+    for (size_t i = 0; i < left_data.size(); i++) {
       bool const left_is_valid{gdf_is_valid(left_bitmask.data(), i)};
       bool const right_is_valid{gdf_is_valid(right_bitmask.data(), i)};
 
       if (left_is_valid != right_is_valid)
         return false;
       else if (left_is_valid && (left_data[i] != right_data[i]))
-          return false;
+        return false;
     }
-    CHECK_STREAM(0);
 
     return true;
   }
   else {
+    if ((left.dtype_info.category != nullptr) || (right.dtype_info.category != nullptr))
+      return false;  // category must be nullptr
+
     bool equal_data = thrust::all_of(rmm::exec_policy()->on(0),
                                      thrust::make_counting_iterator(0),
                                      thrust::make_counting_iterator(left.size),
