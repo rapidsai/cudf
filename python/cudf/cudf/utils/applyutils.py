@@ -173,6 +173,7 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
             chunks = Series(chunks)
             return chunks.to_gpu_array()
 
+
 def _make_row_wise_binary_operation_kernal(
     operator_symbol,
     row_count,
