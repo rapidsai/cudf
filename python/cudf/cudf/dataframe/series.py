@@ -1574,7 +1574,7 @@ class Series(object):
         A sequence of new series for each category.  Its length is determined
         by the length of ``cats``.
         """
-        if isinstance(cats, Series):
+        if hasattr(cats, "to_pandas"):
             cats = cats.to_pandas()
         else:
             cats = pd.Series(cats)

@@ -1569,7 +1569,7 @@ class DataFrame(object):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
-        if isinstance(cats, Series):
+        if hasattr(cats, "to_pandas"):
             cats = cats.to_pandas()
         else:
             cats = pd.Series(cats)
