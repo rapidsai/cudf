@@ -92,7 +92,7 @@ class ApplyKernelCompilerBase(object):
 
     def run(self, df, **launch_params):
         # Get input columns
-        inputs = {k: df[k].to_gpu_array() for k in self.incols}
+        inputs = { k: df[k].data.mem for k in self.incols }
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
@@ -104,10 +104,24 @@ class ApplyKernelCompilerBase(object):
         bound = self.sig.bind(**args)
         # Launch kernel
         self.launch_kernel(df, bound.args, **launch_params)
+
+        # make the null mask
+        import numpy
+        null_mask_cols = [k for k in self.incols if df[k].has_null_mask]
+        null_masks = [df[k].nullmask.mem for k in null_mask_cols]
+        null_mask_length = max(mask.size for mask in null_masks)
+        null_mask_kernel = _make_row_wise_binary_operation_kernal(null_mask_length, null_mask_cols, "&")
+        null_mask_aggregate = rmm.device_array(null_mask_length, dtype=numpy.int8)
+        blksz = 64
+        blkct = cudautils.optimal_block_count(null_mask_length // blksz)
+        null_mask_kernel[blkct, blksz](null_mask_aggregate, *null_masks)
+
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
+            outdf[k] = outdf[k].set_mask(null_mask_aggregate)
+
         return outdf
 
 
@@ -147,6 +161,31 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
             chunks = Series(chunks)
             return chunks.to_gpu_array()
 
+def _make_row_wise_binary_operation_kernal(row_count, arg_names, operator_symbol):
+    # Build kernel source
+    source = """
+def row_binary_op_kernel(out, {args}):
+    tid = cuda.grid(1)
+    ntid = cuda.gridsize(1)
+    for i in range(tid, {row_count}, ntid):
+        out[i] = {out_expression}
+"""
+
+    arg_names_indexed = ["{}[i]".format(arg_name) for arg_name in arg_names]
+    out_expression = " {} ".format(operator_symbol).join(arg_names_indexed)
+
+    concrete = source.format(
+        args = ", ".join(arg_names),
+        row_count = row_count,
+        out_expression = out_expression
+    )
+
+    # Get bytecode
+    glbs = {"cuda": cuda}
+    exec_(concrete, glbs)
+
+    # Compile as CUDA kernel
+    return cuda.jit(glbs["row_binary_op_kernel"])
 
 def _make_row_wise_kernel(func, argnames, extras):
     """
