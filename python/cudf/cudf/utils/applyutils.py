@@ -106,21 +106,24 @@ class ApplyKernelCompilerBase(object):
         self.launch_kernel(df, bound.args, **launch_params)
 
         # make the null mask
-        import numpy
+        null_mask_aggregate = None
         null_mask_cols = [k for k in self.incols if df[k].has_null_mask]
-        null_masks = [df[k].nullmask.mem for k in null_mask_cols]
-        null_mask_length = max(mask.size for mask in null_masks)
-        null_mask_kernel = _make_row_wise_binary_operation_kernal(null_mask_length, null_mask_cols, "&")
-        null_mask_aggregate = rmm.device_array(null_mask_length, dtype=numpy.int8)
-        blksz = 64
-        blkct = cudautils.optimal_block_count(null_mask_length // blksz)
-        null_mask_kernel[blkct, blksz](null_mask_aggregate, *null_masks)
+        if len(null_mask_cols) > 0:
+            import numpy
+            null_masks = [df[k].nullmask.mem for k in null_mask_cols]
+            null_mask_length = max(mask.size for mask in null_masks)
+            null_mask_kernel = _make_row_wise_binary_operation_kernal(null_mask_length, null_mask_cols, "&")
+            null_mask_aggregate = rmm.device_array(null_mask_length, dtype=numpy.int8)
+            blksz = 64
+            blkct = cudautils.optimal_block_count(null_mask_length // blksz)
+            null_mask_kernel[blkct, blksz](null_mask_aggregate, *null_masks)
 
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
-            outdf[k] = outdf[k].set_mask(null_mask_aggregate)
+            if null_mask_aggregate is not None:
+                outdf[k] = outdf[k].set_mask(null_mask_aggregate)
 
         return outdf
 
