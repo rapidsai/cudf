@@ -27,107 +27,108 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class ReductionTest {
 
-  public static final double DELTA = 0.00001;
+  public static final double DELTAD = 0.00001;
+  public static final float DELTAF = 0.00001f;
 
   private static Stream<Arguments> createBooleanParams() {
     Boolean[] vals = new Boolean[]{true, true, null, false, true, false, null};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Boolean[0], Scalar.fromNull(DType.BOOL8)),
+        Arguments.of(ReductionOp.SUM, new Boolean[0], Scalar.fromNull(DType.BOOL8), 0.),
         Arguments.of(ReductionOp.SUM, new Boolean[]{null, null, null},
-            Scalar.fromNull(DType.BOOL8)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromBool(true)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromBool(false)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromBool(true)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromBool(false)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromBool(true)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(0.5477225575051662))
+            Scalar.fromNull(DType.BOOL8), 0.),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromBool(true), 0.),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromBool(false), 0.),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromBool(true), 0.),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromBool(false), 0.),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromBool(true), 0.),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(0.5477225575051662), DELTAD)
     );
   }
 
   private static Stream<Arguments> createByteParams() {
     Byte[] vals = new Byte[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Byte[0], Scalar.fromNull(DType.INT8)),
-        Arguments.of(ReductionOp.SUM, new Byte[]{null, null, null}, Scalar.fromNull(DType.INT8)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromByte((byte) 83)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromByte((byte) -1)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromByte((byte) 123)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromByte((byte) 160)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromByte((byte) 47)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
+        Arguments.of(ReductionOp.SUM, new Byte[0], Scalar.fromNull(DType.INT8), 0.),
+        Arguments.of(ReductionOp.SUM, new Byte[]{null, null, null}, Scalar.fromNull(DType.INT8), 0.),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromByte((byte) 83), 0.),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromByte((byte) -1), 0.),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromByte((byte) 123), 0.),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromByte((byte) 160), 0.),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromByte((byte) 47), 0.),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839), DELTAD)
     );
   }
 
   private static Stream<Arguments> createShortParams() {
     Short[] vals = new Short[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Short[0], Scalar.fromNull(DType.INT16)),
-        Arguments.of(ReductionOp.SUM, new Short[]{null, null, null}, Scalar.fromNull(DType.INT16)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromShort((short) 339)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromShort((short) -1)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromShort((short) 123)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromShort((short) -22624)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromShort((short) 31279)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
+        Arguments.of(ReductionOp.SUM, new Short[0], Scalar.fromNull(DType.INT16), 0.),
+        Arguments.of(ReductionOp.SUM, new Short[]{null, null, null}, Scalar.fromNull(DType.INT16), 0.),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromShort((short) 339), 0.),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromShort((short) -1), 0.),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromShort((short) 123), 0.),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromShort((short) -22624), 0.),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromShort((short) 31279), 0.),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839), DELTAD)
     );
   }
 
   private static Stream<Arguments> createIntParams() {
     Integer[] vals = new Integer[]{-1, 7, 123, null, 50, 60, 100};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Integer[0], Scalar.fromNull(DType.INT32)),
+        Arguments.of(ReductionOp.SUM, new Integer[0], Scalar.fromNull(DType.INT32), 0.),
         Arguments.of(ReductionOp.SUM, new Integer[]{null, null, null},
-            Scalar.fromNull(DType.INT32)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromInt(339)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromInt(-1)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromInt(123)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromInt(-258300000)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromInt(31279)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
+            Scalar.fromNull(DType.INT32), 0.),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromInt(339), 0.),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromInt(-1), 0.),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromInt(123), 0.),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromInt(-258300000), 0.),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromInt(31279), 0.),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839), DELTAD)
     );
   }
 
   private static Stream<Arguments> createLongParams() {
     Long[] vals = new Long[]{-1L, 7L, 123L, null, 50L, 60L, 100L};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Long[0], Scalar.fromNull(DType.INT64)),
-        Arguments.of(ReductionOp.SUM, new Long[]{null, null, null}, Scalar.fromNull(DType.INT64)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromLong(339)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromLong(-1)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromLong(123)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromLong(-258300000)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromLong(31279)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
+        Arguments.of(ReductionOp.SUM, new Long[0], Scalar.fromNull(DType.INT64), 0.),
+        Arguments.of(ReductionOp.SUM, new Long[]{null, null, null}, Scalar.fromNull(DType.INT64), 0.),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromLong(339), 0.),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromLong(-1), 0.),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromLong(123), 0.),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromLong(-258300000), 0.),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromLong(31279), 0.),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839), DELTAD)
     );
   }
 
   private static Stream<Arguments> createFloatParams() {
     Float[] vals = new Float[]{-1f, 7f, 123f, null, 50f, 60f, 100f};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Float[0], Scalar.fromNull(DType.FLOAT32)),
+        Arguments.of(ReductionOp.SUM, new Float[0], Scalar.fromNull(DType.FLOAT32), 0f),
         Arguments.of(ReductionOp.SUM, new Float[]{null, null, null},
-            Scalar.fromNull(DType.FLOAT32)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromFloat(339f)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromFloat(-1f)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromFloat(123f)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromFloat(-258300000f)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromFloat(31279f)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromFloat(49.24530434467839f))
+            Scalar.fromNull(DType.FLOAT32), 0f),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromFloat(339f), 0f),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromFloat(-1f), 0f),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromFloat(123f), 0f),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromFloat(-258300000f), 0f),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromFloat(31279f), 0f),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromFloat(49.24530434467839f), DELTAF)
     );
   }
 
   private static Stream<Arguments> createDoubleParams() {
     Double[] vals = new Double[]{-1., 7., 123., null, 50., 60., 100.};
     return Stream.of(
-        Arguments.of(ReductionOp.SUM, new Double[0], Scalar.fromNull(DType.FLOAT64)),
+        Arguments.of(ReductionOp.SUM, new Double[0], Scalar.fromNull(DType.FLOAT64), 0.),
         Arguments.of(ReductionOp.SUM, new Double[]{null, null, null},
-            Scalar.fromNull(DType.FLOAT64)),
-        Arguments.of(ReductionOp.SUM, vals, Scalar.fromDouble(339.)),
-        Arguments.of(ReductionOp.MIN, vals, Scalar.fromDouble(-1.)),
-        Arguments.of(ReductionOp.MAX, vals, Scalar.fromDouble(123.)),
-        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromDouble(-258300000.)),
-        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromDouble(31279.)),
-        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839))
+            Scalar.fromNull(DType.FLOAT64), 0.),
+        Arguments.of(ReductionOp.SUM, vals, Scalar.fromDouble(339.), 0.),
+        Arguments.of(ReductionOp.MIN, vals, Scalar.fromDouble(-1.), 0.),
+        Arguments.of(ReductionOp.MAX, vals, Scalar.fromDouble(123.), 0.),
+        Arguments.of(ReductionOp.PRODUCT, vals, Scalar.fromDouble(-258300000.), 0.),
+        Arguments.of(ReductionOp.SUMOFSQUARES, vals, Scalar.fromDouble(31279.), 0.),
+        Arguments.of(ReductionOp.STD, vals, Scalar.fromDouble(49.24530434467839), DELTAD)
     );
   }
 
@@ -168,64 +169,106 @@ class ReductionTest {
 
   @ParameterizedTest
   @MethodSource("createBooleanParams")
-  void testBoolean(ReductionOp op, Boolean[] values, Scalar expected) {
+  void testBoolean(ReductionOp op, Boolean[] values, Scalar expected, Double delta) {
     try (ColumnVector v = ColumnVector.fromBoxedBooleans(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage, delta);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
   @ParameterizedTest
   @MethodSource("createByteParams")
-  void testByte(ReductionOp op, Byte[] values, Scalar expected) {
+  void testByte(ReductionOp op, Byte[] values, Scalar expected, Double delta) {
     try (ColumnVector v = ColumnVector.fromBoxedBytes(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage, delta);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
   @ParameterizedTest
   @MethodSource("createShortParams")
-  void testShort(ReductionOp op, Short[] values, Scalar expected) {
+  void testShort(ReductionOp op, Short[] values, Scalar expected, Double delta) {
     try (ColumnVector v = ColumnVector.fromBoxedShorts(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage, delta);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
   @ParameterizedTest
   @MethodSource("createIntParams")
-  void testInt(ReductionOp op, Integer[] values, Scalar expected) {
+  void testInt(ReductionOp op, Integer[] values, Scalar expected, Double delta) {
     try (ColumnVector v = ColumnVector.fromBoxedInts(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage, delta);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
   @ParameterizedTest
   @MethodSource("createLongParams")
-  void testLong(ReductionOp op, Long[] values, Scalar expected) {
+  void testLong(ReductionOp op, Long[] values, Scalar expected, Double delta) {
     try (ColumnVector v = ColumnVector.fromBoxedLongs(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage, delta);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
   @ParameterizedTest
   @MethodSource("createFloatParams")
-  void testFloat(ReductionOp op, Float[] values, Scalar expected) {
+  void testFloat(ReductionOp op, Float[] values, Scalar expected, Float delta) {
     try (ColumnVector v = ColumnVector.fromBoxedFloats(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage, delta);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
   @ParameterizedTest
   @MethodSource("createDoubleParams")
-  void testByte(ReductionOp op, Double[] values, Scalar expected) {
+  void testByte(ReductionOp op, Double[] values, Scalar expected, Double delta) {
     try (ColumnVector v = ColumnVector.fromBoxedDoubles(values)) {
       Scalar result = v.reduce(op);
-      assertEquals(expected, result);
+      assertEquals(expected.intTypeStorage, result.intTypeStorage);
+      assertEquals(expected.floatTypeStorage, result.floatTypeStorage);
+      assertEquals(expected.doubleTypeStorage, result.doubleTypeStorage, delta);
+      assertEquals(expected.stringTypeStorage, result.stringTypeStorage);
+      assertEquals(expected.type, result.type);
+      assertEquals(expected.isValid, result.isValid);
+      assertEquals(expected.timeUnit, result.timeUnit);
     }
   }
 
