@@ -11,9 +11,9 @@ Here are some guidelines to help the review process go smoothly.
    added.
 
 3. There are CI checks in place to enforce that committed code follows our style
-   and syntax standards. Please see the [contribution guide](../CONTRIBUTING.md)
-   for more information about the checks we perform and how you can run them
-   locally.
+   and syntax standards. Please see our contribution guide in `CONTRIBUTING.MD`
+   in the project root for more information about the checks we perform and how
+   you can run them locally.
 
 4. If you are closing an issue please use one of the automatic closing words as
    noted here: https://help.github.com/articles/closing-issues-using-keywords/
