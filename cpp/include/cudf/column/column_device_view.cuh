@@ -53,10 +53,7 @@ class alignas(16) column_device_view {
    * @return A `unique_ptr` to a `column_device_view` that makes the data from
    *`source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static auto create(column_view const source_view, cudaStream_t stream = 0);
-
-  static auto create(column_view source_view, cudaStream_t stream = 0);
-
+  static auto create(column_view const& source_view, cudaStream_t stream = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
