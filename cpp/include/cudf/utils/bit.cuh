@@ -26,13 +26,14 @@ constexpr inline std::size_t size_in_bits() {
   static_assert(CHAR_BIT == 8, "Size of a byte must be 8 bits.");
   return sizeof(T) * CHAR_BIT;
 }
+}  // namespace detail
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the index of the element containing the specified bit.
  *---------------------------------------------------------------------------**/
 constexpr __host__ __device__ inline size_type element_index(
     size_type bit_index) {
-  return bit_index / size_in_bits<bitmask_type>();
+  return bit_index / detail::size_in_bits<bitmask_type>();
 }
 
 /**---------------------------------------------------------------------------*
@@ -40,9 +41,8 @@ constexpr __host__ __device__ inline size_type element_index(
  *---------------------------------------------------------------------------**/
 constexpr __host__ __device__ inline size_type intra_element_index(
     size_type bit_index) {
-  return bit_index % size_in_bits<bitmask_type>();
+  return bit_index % detail::size_in_bits<bitmask_type>();
 }
-}  // namespace detail
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates if the specified bit is set to `1`
@@ -53,7 +53,7 @@ constexpr __host__ __device__ inline size_type intra_element_index(
  *---------------------------------------------------------------------------**/
 __device__ inline bool bit_is_set(bitmask_type* bitmask, size_type bit_index) {
   assert(nullptr != bitmask);
-  return _mask[element_index(bit_index)] &
+  return bitmask[element_index(bit_index)] &
          (bitmask_type{1} << intra_element_index(bit_index));
 }
 
@@ -71,7 +71,7 @@ __device__ inline bool bit_is_set(bitmask_type* bitmask, size_type bit_index) {
  *---------------------------------------------------------------------------**/
 __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
   assert(nullptr != bitmask);
-  atomicOr(&_mask[element_index(bit_index)],
+  atomicOr(&bitmask[element_index(bit_index)],
            (bitmask_type{1} << intra_element_index(bit_index)));
 }
 
@@ -89,7 +89,7 @@ __device__ inline void set_bit(bitmask_type* bitmask, size_type bit_index) {
  *---------------------------------------------------------------------------**/
 __device__ inline void clear_bit(bitmask_type* bitmask, size_type bit_index) {
   assert(nullptr != bitmask);
-  atomicAnd(&_mask[element_index(bit_index)],
+  atomicAnd(&bitmask[element_index(bit_index)],
             ~(bitmask_type{1} << intra_element_index(bit_index)));
 }
 
