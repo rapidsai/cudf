@@ -492,7 +492,7 @@ class Series(object):
 
         if pd.api.types.is_categorical_dtype(self.dtype):
             categories = self.cat.categories
-            desc = '({}, {})'.format(len(categories), categories.dtype.name)
+            desc = "({}, {})".format(len(categories), categories.dtype.name)
             output += "\nCategories {}: {}".format(desc, self.cat.to_string())
 
         return output
@@ -1085,6 +1085,7 @@ class Series(object):
         in_cols = [self._column]
         in_index = self.index
         from cudf.dataframe.multiindex import MultiIndex
+
         if isinstance(in_index, MultiIndex):
             in_index = RangeIndex(len(in_index))
         out_cols, new_index = cpp_drop_duplicates(
@@ -1253,6 +1254,40 @@ class Series(object):
 
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
+
+    def isin(self, test):
+
+        from cudf import DataFrame
+
+        lhs = self
+        try:
+            rhs = Series(columnops.as_column(test, dtype=self.dtype))
+            # If categorical, combine categories first
+            if pd.api.types.is_categorical_dtype(lhs):
+                cats = lhs.cat.categories.as_column().append(
+                    rhs.cat.categories
+                )
+                cats = Series(cats).drop_duplicates()._column
+                lhs = lhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+                rhs = rhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+        except ValueError:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return Series(cudautils.zeros(len(self), dtype="bool"))
+
+        # fillna so we can find nulls
+        if rhs.null_count > 0:
+            lhs = lhs.fillna(lhs._column.default_na_value())
+            rhs = rhs.fillna(lhs._column.default_na_value())
+
+        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+        res.name = self.name
+
+        return res
 
     def all(self, axis=0, skipna=True, level=None):
         """
