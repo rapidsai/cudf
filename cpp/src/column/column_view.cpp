@@ -62,8 +62,29 @@ size_type column_view_base::null_count() const noexcept {
   }
 }
 }  // namespace detail
+column_view::column_view(data_type type, size_type size, void const* data,
+                         bitmask_type const* null_mask, size_type null_count,
+                         size_type offset,
+                         std::vector<column_view> const& children)
+    : detail::column_view_base{type, size, data, null_mask, null_count, offset},
+      _children{children} {
+  if (type.id() == EMPTY) {
+    CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
+  }
+}
 
-mutable_column_view::operator column_view() const{
+mutable_column_view::mutable_column_view(
+    data_type type, size_type size, void* data, bitmask_type* null_mask,
+    size_type null_count, size_type offset,
+    std::vector<mutable_column_view> const& children)
+    : detail::column_view_base{type, size, data, null_mask, null_count, offset},
+      mutable_children{children} {
+  if (type.id() == EMPTY) {
+    CUDF_EXPECTS(num_children() == 0, "EMPTY column cannot have children.");
+  }
+}
+
+mutable_column_view::operator column_view() const {
   // Convert children to immutable views
   std::vector<column_view> child_views(num_children());
   std::copy(cbegin(mutable_children), cend(mutable_children),

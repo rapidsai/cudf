@@ -245,10 +245,7 @@ class column_view : public detail::column_view_base {
   column_view(data_type type, size_type size, void const* data,
               bitmask_type const* null_mask = nullptr,
               size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
-              std::vector<column_view> const& children = {})
-      : detail::column_view_base{type,      size,       data,
-                                 null_mask, null_count, offset},
-        _children{children} {}
+              std::vector<column_view> const& children = {});
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -331,9 +328,7 @@ class mutable_column_view : public detail::column_view_base {
                       bitmask_type* null_mask = nullptr,
                       size_type null_count = cudf::UNKNOWN_NULL_COUNT,
                       size_type offset = 0,
-                      std::vector<mutable_column_view> const& children = {})
-      : column_view_base{type, size, data, null_mask, null_count, offset},
-        mutable_children{children} {}
+                      std::vector<mutable_column_view> const& children = {});
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
