@@ -728,7 +728,7 @@ class CategoricalIndex(GenericIndex):
 
     @property
     def codes(self):
-        return self._values.cat().codes.to_array()
+        return self._values.cat().codes
 
     @property
     def categories(self):

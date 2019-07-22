@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.dataframe import DataFrame, Series, CategoricalIndex
+from cudf.dataframe import DataFrame, Series
 from cudf.dataframe.index import as_index
 from cudf.tests.utils import assert_eq
 
@@ -36,7 +36,7 @@ def test_categorical_basic():
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
-    assert_eq(cat.codes, cudf_cat.codes)
+    assert_eq(cat.codes, cudf_cat.codes.to_array())
 
 
 def test_categorical_integer():
