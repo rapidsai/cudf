@@ -1784,53 +1784,51 @@ class Series(object):
             index=self.index,
         )
 
-    def isin(self, values):
-        """
-        Check whether values are contained in Series.
-        """
+    def isin(self, test):
+
         from cudf import DataFrame
 
-        if self.empty:
-            return self.astype('bool')
-
-        if isinstance(self._column, CategoricalColumn):
-            msg = "isin is not yet supported for CategoricalColumns."
-            raise NotImplementedError(msg)
+        lhs = self
+        rhs = None
 
         try:
-            values = columnops.as_column(values, dtype=self.dtype)
-        except ValueError:
+            rhs = Series(columnops.as_column(test, dtype=self.dtype))
+        except ValueError as e:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
-            return Series(cudautils.zeros(len(self), dtype='bool'))
+            return Series(cudautils.zeros(len(self), dtype="bool"))
 
-        # need to typecast again outside of as_column due to
-        # https://github.com/rapidsai/cudf/issues/2319
-        unique_values = values.unique().astype(self.dtype)
+        # If categorical, combine categories first
+        if pd.api.types.is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat.categories.as_column()
+            rhs_cats = rhs.cat.categories.as_column()
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+                rhs = rhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+            else:
+                # If they're not the same dtype, short-circuit if the test
+                # list doesn't have any nulls. If it does have nulls, make
+                # the test list a Categorical with a single null
+                if rhs.null_count == 0:
+                    return Series(cudautils.zeros(len(self), dtype="bool"))
+                rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
 
-        if values.null_count > 0:
-            warnings.warn(
-                "Nulls in the Series are not considered in the values array"
-                "for now, differing from Pandas.",
-                UserWarning,
-            )
+        # fillna so we can find nulls
+        if rhs.null_count > 0:
+            lhs = lhs.fillna(lhs._column.default_na_value())
+            rhs = rhs.fillna(lhs._column.default_na_value())
 
-        # need to coerce to the same name and include a carryover column
-        # due to https://github.com/rapidsai/cudf/issues/2299
-        left = self.to_frame(name='key').reset_index()
+        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+        res.name = self.name
 
-        right = DataFrame(
-            {'key': unique_values, 'carryover': unique_values})
-        got = left.merge(right, on='key', how='left').sort_values('index')[
-            'carryover'].notna()
-        got = got.set_index(self.index)
-
-        if self.name:
-            got = got.rename(self.name)
-        else:
-            got.name = None
-
-        return got
+        return res
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)

@@ -45,12 +45,12 @@ class CategoricalAccessor(object):
         else:
             return Series(data)
 
-    def set_categories(self, new_categories):
+    def set_categories(self, new_categories, **kwargs):
         """Returns a new Series with the categories set to the
         specified *new_categories*."""
         from cudf.dataframe.series import Series
 
-        col = self._set_categories(new_categories)
+        col = self._set_categories(new_categories, **kwargs)
         return Series(data=col)
 
     def _set_categories(self, new_categories, is_unique=False):

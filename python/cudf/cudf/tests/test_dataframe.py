@@ -3381,6 +3381,31 @@ def test_isin_string(data, values):
     "data",
     [
         [],
+        pd.Series(['a','b','c','c','c','d','e'], dtype='category'),
+        pd.Series(['a','b',None,'c','d','e'], dtype='category'),
+        pd.Series([0, 3, 10, 12], dtype='category')
+    ])
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ['a', 'b', None, 'f', 'words'],
+        ['0', '12', None, '14'],
+        [0, 10, 12, None, 39, 40, 1000]
+    ])
+def test_isin_categorical(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
         pd.Series(['this', 'is', None, 'a', 'test'],
                   index=['a', 'b', 'c', 'd', 'e']),
         pd.Series([0, 15, 10], index=[0, None, 9]),
@@ -3401,4 +3426,5 @@ def test_isin_index(data, values):
 
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
-    np.testing.assert_array_equal(got.copy_to_host(), expected)
+
+    assert_eq(got.copy_to_host(), expected)
