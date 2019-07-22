@@ -52,7 +52,7 @@ void column_device_view::destroy() {
 }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
-auto column_device_view::create(column_view const& source, cudaStream_t stream) {
+auto column_device_view::create(column_view source, cudaStream_t stream) {
   size_type num_descendants{count_descendants(source)};
   if (num_descendants > 0) {
     CUDF_FAIL("Columns with children are not currently supported.");

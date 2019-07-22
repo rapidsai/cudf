@@ -16,15 +16,13 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_device_view.cuh>
-
+#include <cudf/column/column_view.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-struct ColumnTest : public ::testing::Test{
-    std::unique_ptr<cudf::column> col;
+struct ColumnTest : public ::testing::Test {
+  std::unique_ptr<cudf::column> col;
 };
 
-TEST_F(ColumnTest, First){
-
-}
+TEST_F(ColumnTest, First) {}
