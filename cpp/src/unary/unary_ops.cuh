@@ -87,8 +87,8 @@ inline void handleChecksAndValidity(gdf_column const& input, gdf_column& output)
     // Check for null data pointer
     validate(input);
 
-    if (input.valid == nullptr) {
-        if (output.valid == nullptr) {
+    if ( not has_nulls(input) ) {
+        if ( not has_nulls(output) ) {
             // if input column has no mask, then output column is allowed to have no mask
             output.null_count = 0;
         }
