@@ -32,10 +32,10 @@ namespace jit {
 
 std::istream* headersCode(std::string filename, std::iostream& stream);
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Class used to handle compilation and execution of JIT kernels
  *
- *---------------------------------------------------------------------------**/
+ **/
 class Launcher {
  public:
   Launcher();
@@ -52,7 +52,7 @@ class Launcher {
   Launcher& operator=(const Launcher&) = delete;
 
  public:
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Sets the kernel to launch using this launcher
    *
    * Method to generate vector containing all template types for a JIT kernel.
@@ -63,7 +63,7 @@ class Launcher {
    * @param type   Operator type (direct (lhs op rhs) or reverse (rhs op lhs))
    * @param args   gdf_column* output, lhs, rhs
    * @return Launcher& ref to this launcehr object
-   *---------------------------------------------------------------------------**/
+   **/
   template <typename... Args>
   Launcher& setKernelInst(std::string&& kernName, Args&&... args) {
     std::vector<std::string> arguments;
@@ -73,15 +73,15 @@ class Launcher {
     return *this;
   }
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set the Program for this launcher
    *
    * @param prog_file_name Name to give to the program held by this Launcher.
    * @return Launcher& ref to this launcher object
-   *---------------------------------------------------------------------------**/
+   **/
   Launcher& setProgram(std::string prog_file_name);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Set the Program for this launcher
    *
    * @param prog_file_name Name to give to the program held by this Launcher.
@@ -90,11 +90,11 @@ class Launcher {
    *used.
    *
    * @return Launcher& ref to this launcher object
-   *---------------------------------------------------------------------------**/
+   **/
   Launcher& setProgram(std::string prog_file_name, std::string ptx,
                        std::string output_type);
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Handle the Jitify API to instantiate and launch using information
    *  contained in the members of `this`
    *
@@ -102,7 +102,7 @@ class Launcher {
    * @param lhs[in]  LHS column
    * @param rhs[in]  RHS scalar (single value)
    * @return gdf_error
-   *---------------------------------------------------------------------------**/
+   **/
   gdf_error launch(gdf_column* out, const gdf_column* in);
 
  private:

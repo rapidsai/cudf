@@ -146,7 +146,12 @@ def apply_op(lhs, rhs, out, op):
 
 
 def apply_op_udf(lhs, rhs, udf_ptx, np_dtype):
-
+    """
+    Apply a user-defined binary operator (a UDF) defined in `udf_ptx` on
+    the two input columns `lhs` and `rhs`. The output type of the UDF
+    has to be specified in `np_dtype`, a numpy data type.
+    Currently ONLY int32, int64, float32 and float64 are supported.
+    """
     check_gdf_compatibility(lhs)
     check_gdf_compatibility(rhs)
     cdef gdf_column* c_lhs = column_view_from_column(lhs)

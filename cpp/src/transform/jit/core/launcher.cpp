@@ -30,14 +30,14 @@ constexpr char prog_name[] = "unary_transform";
 const std::vector<std::string> Launcher::compilerFlags{"-std=c++14"};
 const std::vector<std::string> Launcher::headersName{cudf_types_h};
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief  Used to provide Jitify with strings that should be used as headers
  *  during JIT compilation.
  *
  * @param filename  file which was requested to include in source
  * @param stream    stream to pass string of the requested header to
  * @return std::istream*
- *---------------------------------------------------------------------------**/
+ **/
 std::istream* headersCode(std::string filename, std::iostream& stream) {
   return nullptr;
 }

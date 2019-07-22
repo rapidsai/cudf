@@ -37,15 +37,15 @@ void ASSERT_UNARY(cudf::test::column_wrapper<TypeOut>& out,
     auto out_data = std::get<0>(out_h);
 
     ASSERT_TRUE(out_data.size() == in_data.size());
-    for (gdf_index_type index = 0; index < (gdf_index_type)out_data.size(); ++index) {
-      EXPECT_EQ(out_data[index], (TypeOut)(ope(in_data[index])));
+    for (size_t index = 0; index < out_data.size(); ++index) {
+      EXPECT_EQ(out_data[index], static_cast<TypeOut>(ope(in_data[index])));
     }
 
     auto in_valid = std::get<1>(in_h);
     auto out_valid = std::get<1>(out_h);
 
     ASSERT_TRUE(out_valid.size() == in_valid.size());
-    for (gdf_index_type index = 0; index < (gdf_index_type)out_valid.size(); ++index) {
+    for (size_t index = 0; index < out_valid.size(); ++index) {
         EXPECT_EQ(out_valid[index], in_valid[index]);
     }
 }
