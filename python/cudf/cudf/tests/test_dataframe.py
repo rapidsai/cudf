@@ -3417,3 +3417,41 @@ def test_series_astype_null_cases():
         gd.Series(data, dtype="datetime64[ms]"),
         gd.Series(data, dtype="category").astype("datetime64[ms]"),
     )
+
+    # string to other
+    assert_eq(
+        gd.Series([1, 2, None, 3], dtype="int32"),
+        gd.Series(["1", "2", None, "3"]).astype("int32"),
+    )
+
+    assert_eq(
+        gd.Series(
+            ["2001-01-01", "2001-02-01", None, "2001-03-01"],
+            dtype="datetime64[ms]",
+        ),
+        gd.Series(["2001-01-01", "2001-02-01", None, "2001-03-01"]).astype(
+            "datetime64[ms]"
+        ),
+    )
+
+    assert_eq(
+        gd.Series(["a", "b", "c", None], dtype="category").to_pandas(),
+        gd.Series(["a", "b", "c", None]).astype("category").to_pandas(),
+    )
+
+    # datetime to other
+    data = ["2001-01-01", "2001-02-01", None, "2001-03-01"]
+
+    assert_eq(
+        gd.from_pandas(pd.Series(data)).astype("datetime64[ms]"),
+        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]"))
+        .astype("str")
+        .astype("datetime64[ms]"),
+    )
+
+    assert_eq(
+        pd.Series(data, dtype="datetime64[ns]").astype("category"),
+        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
+            "category"
+        ),
+    )

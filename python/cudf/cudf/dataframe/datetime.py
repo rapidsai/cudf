@@ -259,6 +259,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
         out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts
 
+    def default_na_value(self):
+        return np.datetime64("NaT")
+
     @property
     def is_unique(self):
         return self.as_numerical.is_unique

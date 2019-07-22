@@ -115,10 +115,7 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def astype(self, dtype, **kwargs):
-        if pd.api.types.is_dtype_equal(dtype, self.dtype):
-            return self
-
-        elif pd.api.types.is_string_dtype(dtype):
+        if pd.api.types.is_string_dtype(dtype):
             if pd.api.types.is_categorical_dtype(dtype):
                 return self.as_categorical_column(dtype, **kwargs)
             return self.as_string_column(dtype, **kwargs)
@@ -137,6 +134,15 @@ class TypedColumnBase(Column):
 
         sr = cudf.Series(self)
         labels, cats = sr.factorize()
+
+        # string columns include null index in factorization; remove:
+        if (
+            pd.api.types.is_string_dtype(self.dtype)
+            and not pd.api.types.is_categorical_dtype(self.dtype)
+        ) and self.null_count > 0:
+            cats = cats.dropna()
+            labels = labels - 1
+
         return cudf.dataframe.categorical.CategoricalColumn(
             data=labels._column.data,
             mask=self.mask,
