@@ -308,7 +308,6 @@ public class ColumnVectorTest {
   void testSliceWithArray() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
-      //{{12, null}, {20, 22, 24, 26}, {14, 16}, {}}
       Integer[][] expectedSlice = {
           {12, null},
           {20, 22, 24, 26},
@@ -344,11 +343,18 @@ public class ColumnVectorTest {
   }
 
   @Test
+  void testWithOddSlices() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
+      assertThrows(CudfException.class, () -> cv.slice(1, 3, 5, 9, 2, 4, 8));
+    }
+  }
+
+  @Test
   void testSliceWithColumnVector() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28);
         ColumnVector indices = ColumnVector.fromInts(1, 3, 5, 9, 2, 4, 8, 8)) {
-      //{{12, null}, {20, 22, 24, 26}, {14, 16}, {}}
       Integer[][] expectedSlice = {
           {12, null},
           {20, 22, 24, 26},

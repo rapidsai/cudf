@@ -290,10 +290,13 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *
   gdf_column *n_column = reinterpret_cast<gdf_column *>(input_column);
   gdf_column *n_slice_indices = reinterpret_cast<gdf_column *>(slice_indices);
 
-  std::vector<gdf_column *> result = cudf::slice(
-      *n_column, static_cast<gdf_index_type *>(n_slice_indices->data), n_slice_indices->size);
-  cudf::jni::native_jlongArray n_result(env, reinterpret_cast<jlong *>(result.data()),
-                                        result.size());
-  return n_result.get_jArray();
+  try {
+    std::vector<gdf_column *> result = cudf::slice(
+        *n_column, static_cast<gdf_index_type *>(n_slice_indices->data), n_slice_indices->size);
+    cudf::jni::native_jlongArray n_result(env, reinterpret_cast<jlong *>(result.data()),
+                                          result.size());
+    return n_result.get_jArray();
+  }
+  CATCH_STD(env, NULL);
 }
 } // extern "C"
