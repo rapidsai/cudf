@@ -23,37 +23,38 @@ namespace cudf {
 
 static constexpr int UNKNOWN_NULL_COUNT{-1};
 
+namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
  * some of which may be null as indicated by a bitmask.
  *
- * A `column_view` can be constructed implicitly from a `cudf::column`, or may
- * be constructed explicitly from a pointer to pre-existing device memory.
+ * A `column_view_base` can be constructed implicitly from a `cudf::column`, or
+ *may be constructed explicitly from a pointer to pre-existing device memory.
  *
- * Unless otherwise noted, the memory layout of the `column_view`'s data and
- * bitmask is expected to adhere to the Arrow Physical Memory Layout
+ * Unless otherwise noted, the memory layout of the `column_view_base`'s data
+ *and bitmask is expected to adhere to the Arrow Physical Memory Layout
  * Specification: https://arrow.apache.org/docs/memory_layout.html
  *
- * Because `column_view` is non-owning, no device memory is allocated nor free'd
- * when `column_view` objects are created or destroyed.
+ * Because `column_view_base` is non-owning, no device memory is allocated nor
+ *free'd when `column_view_base` objects are created or destroyed.
  *
- * To enable zero-copy slicing, a `column_view` has an `offset` that indicates
- * the index of the first element in the column relative to the base device
- * memory allocation. By default, `offset()` is zero.
+ * To enable zero-copy slicing, a `column_view_base` has an `offset` that
+ *indicates the index of the first element in the column relative to the base
+ *device memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class column_view {
+class column_view_base {
  public:
-  column_view() = default;
-  ~column_view() = default;
-  column_view(column_view const&) = default;
-  column_view(column_view&&) = default;
-  column_view& operator=(column_view const&) = default;
-  column_view& operator=(column_view&&) = default;
+  column_view_base() = default;
+  ~column_view_base() = default;
+  column_view_base(column_view_base const&) = default;
+  column_view_base(column_view_base&&) = default;
+  column_view_base& operator=(column_view_base const&) = default;
+  column_view_base& operator=(column_view_base&&) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a `column_view` from pointers to device memory for the
-   * elements and bitmask of the column.
+   * @brief Construct a `column_view_base` from pointers to device memory for
+   *the elements and bitmask of the column.
    *
    * If `null_count()` is zero, `null_mask` is optional.
    *
@@ -81,10 +82,10 @@ class column_view {
    * @param children optional, depending on the element type, child columns may
    * contain additional data
    *---------------------------------------------------------------------------**/
-  column_view(data_type type, size_type size, void const* data,
-              bitmask_type const* null_mask = nullptr,
-              size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
-              std::vector<column_view> const& children = {});
+  column_view_base(data_type type, size_type size, void const* data,
+                   bitmask_type const* null_mask = nullptr,
+                   size_type null_count = UNKNOWN_NULL_COUNT,
+                   size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -170,6 +171,85 @@ class column_view {
    *---------------------------------------------------------------------------**/
   size_type offset() const noexcept { return _offset; }
 
+ protected:
+  data_type _type{EMPTY};   ///< Element type
+  cudf::size_type _size{};  ///< Number of elements
+  void const* _data{};      ///< Pointer to device memory containing elements
+  bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
+                                     ///< bitmask representing null elements.
+                                     ///< Optional if `null_count() == 0`
+  size_type _null_count{};           ///< The number of null elements
+  size_type _offset{};               ///< Index position of the first element.
+                                     ///< Enables zero-copy slicing
+};
+}  // namespace detail
+
+/**---------------------------------------------------------------------------*
+ * @brief A non-owning, immutable view of device data as a column of elements,
+ * some of which may be null as indicated by a bitmask.
+ *
+ * A `column_view` can be constructed implicitly from a `cudf::column`, or may
+ * be constructed explicitly from a pointer to pre-existing device memory.
+ *
+ * Unless otherwise noted, the memory layout of the `column_view`'s data and
+ * bitmask is expected to adhere to the Arrow Physical Memory Layout
+ * Specification: https://arrow.apache.org/docs/memory_layout.html
+ *
+ * Because `column_view` is non-owning, no device memory is allocated nor free'd
+ * when `column_view` objects are created or destroyed.
+ *
+ * To enable zero-copy slicing, a `column_view` has an `offset` that indicates
+ * the index of the first element in the column relative to the base device
+ * memory allocation. By default, `offset()` is zero.
+ *
+ *---------------------------------------------------------------------------**/
+class column_view : public detail::column_view_base {
+ public:
+  column_view() = default;
+  ~column_view() = default;
+  column_view(column_view const&) = default;
+  column_view(column_view&&) = default;
+  column_view& operator=(column_view const&) = default;
+  column_view& operator=(column_view&&) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a `column_view` from pointers to device memory for the
+   * elements and bitmask of the column.
+   *
+   * If `null_count()` is zero, `null_mask` is optional.
+   *
+   * If the null count of the `null_mask` is not specified, it defaults to
+   * `UNKNOWN_NULL_COUNT`. The first invocation of `null_count()` will then
+   * compute the null count if `null_mask` exists.
+   *
+   * If `type` is `EMPTY`, the specified `null_count` will be ignored and
+   * `null_count()` will always return the same value as `size()`
+   *
+   * @throws `cudf::logic_error` if `size < 0`
+   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
+   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   *or `null_mask != nullptr`
+   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
+   * @throws `cudf::logic_error` if `offset < 0`
+   *
+   * @param type The element type
+   * @param size The number of elements
+   * @param data Pointer to device memory containing the column elements
+   * @param null_mask Optional, pointer to device memory containing the null
+   * indicator bitmask
+   * @param null_count Optional, the number of null elements.
+   * @param offset optional, index of the first element
+   * @param children optional, depending on the element type, child columns may
+   * contain additional data
+   *---------------------------------------------------------------------------**/
+  column_view(data_type type, size_type size, void const* data,
+              bitmask_type const* null_mask = nullptr,
+              size_type null_count = UNKNOWN_NULL_COUNT, size_type offset = 0,
+              std::vector<column_view> const& children = {})
+      : detail::column_view_base{type,      size,       data,
+                                 null_mask, null_count, offset},
+        _children{children} {}
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
    *
@@ -185,16 +265,7 @@ class column_view {
    *---------------------------------------------------------------------------**/
   size_type num_children() const noexcept { return _children.size(); }
 
- protected:
-  data_type _type{EMPTY};   ///< Element type
-  cudf::size_type _size{};  ///< Number of elements
-  void const* _data{};      ///< Pointer to device memory containing elements
-  bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
-                                     ///< bitmask representing null elements.
-                                     ///< Optional if `null_count() == 0`
-  size_type _null_count{};           ///< The number of null elements
-  size_type _offset{};               ///< Index position of the first element.
-                                     ///< Enables zero-copy slicing
+ private:
   std::vector<column_view> _children{};  ///< Based on element type, children
                                          ///< may contain additional data
 };                                       // namespace cudf
@@ -218,7 +289,7 @@ class column_view {
  *device memory allocation. By default, `offset()` is zero.
  *
  *---------------------------------------------------------------------------**/
-class mutable_column_view : public cudf::column_view {
+class mutable_column_view : public detail::column_view_base {
  public:
   mutable_column_view() = default;
   ~mutable_column_view() = default;
@@ -261,7 +332,7 @@ class mutable_column_view : public cudf::column_view {
                       size_type null_count = cudf::UNKNOWN_NULL_COUNT,
                       size_type offset = 0,
                       std::vector<mutable_column_view> const& children = {})
-      : column_view{type, size, data, null_mask, null_count, offset},
+      : column_view_base{type, size, data, null_mask, null_count, offset},
         mutable_children{children} {}
 
   /**---------------------------------------------------------------------------*
@@ -278,7 +349,7 @@ class mutable_column_view : public cudf::column_view {
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   T* head() const noexcept {
-    return const_cast<T*>(column_view::head());
+    return const_cast<T*>(detail::column_view_base::head());
   }
 
   /**---------------------------------------------------------------------------*
@@ -305,7 +376,7 @@ class mutable_column_view : public cudf::column_view {
    * @note If `null_count() == 0`, this may return `nullptr`.
    *---------------------------------------------------------------------------**/
   bitmask_type* null_mask() const noexcept {
-    return const_cast<bitmask_type*>(column_view::null_mask());
+    return const_cast<bitmask_type*>(detail::column_view_base::null_mask());
   }
 
   /**---------------------------------------------------------------------------*
@@ -337,19 +408,7 @@ class mutable_column_view : public cudf::column_view {
    *
    * @return column_view An immutable view of the mutable view's elements
    *---------------------------------------------------------------------------**/
-  operator column_view() {
-    // Convert children to immutable views
-    std::vector<column_view> child_views(num_children());
-    std::copy(cbegin(mutable_children), cend(mutable_children),
-              begin(child_views));
-    return column_view{_type,
-                       _size,
-                       _data,
-                       _null_mask,
-                       _null_count,
-                       _offset,
-                       std::move(child_views)};
-  }
+  operator column_view() const;
 
  private:
   std::vector<mutable_column_view> mutable_children;
