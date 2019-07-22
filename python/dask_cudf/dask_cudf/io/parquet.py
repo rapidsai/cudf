@@ -33,12 +33,6 @@ try:
 
 
 except ImportError:
-    from glob import glob
-
-    from dask.base import tokenize
-    from dask.compatibility import apply
-    from dask.utils import natural_sort_key
-
     ArrowEngine = None
 
 
@@ -46,10 +40,11 @@ def read_parquet(path, **kwargs):
     """ Read parquet files into a Dask DataFrame
 
     This calls ``dask.dataframe.read_parquet`` to cordinate the execution of
-    ``cudf.read_parquet`` on many distinct parquet files.  The Dask version
-    must inherit from the the ``ArrowEngine`` class to support full
-    functionality.
-    See ``cudf.read_parquet`` and the Dask source code for further details.
+    ``cudf.read_parquet``, and ultimately read multiple partitions into a
+    single Dask dataframe. The Dask version must supply an ``ArrowEngine``
+    class to support full functionality.  Otherwise, ``cudf.read_parquet``
+    will simply be called on each file.
+    See ``cudf.read_parquet`` and Dask documentation for further details.
 
     Examples
     --------
@@ -70,6 +65,12 @@ def read_parquet(path, **kwargs):
         )
 
     else:
+        from glob import glob
+
+        from dask.base import tokenize
+        from dask.compatibility import apply
+        from dask.utils import natural_sort_key
+
         name = "read-parquet-" + tokenize(path, **kwargs)
 
         paths = path
