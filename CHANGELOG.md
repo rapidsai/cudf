@@ -85,6 +85,7 @@
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
+- PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
 
 
 # cuDF 0.8.0 (27 June 2019)
