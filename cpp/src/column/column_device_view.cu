@@ -36,12 +36,14 @@ size_type count_descendants(column_view parent) {
   return count;
 }
 }  // namespace
+
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
                                       source.null_count(), source.offset()},
       _num_children{source.num_children()} {}
+
 
 // Free device memory allocated for children
 void column_device_view::destroy() {

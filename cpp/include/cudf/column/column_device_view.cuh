@@ -402,6 +402,7 @@ class alignas(16) mutable_column_device_view
                            ///< objects in device memory.
                            ///< Based on element type, children
                            ///< may contain additional data
+  size_type num_children{}; ///< The number of child columns
 
   /**---------------------------------------------------------------------------*
    * @brief Construct's a `mutable_column_device_view` from a
