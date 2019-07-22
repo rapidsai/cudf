@@ -69,25 +69,12 @@ class _SeriesIlocIndexer(object):
 
 class _DataFrameIndexer(object):
     def __getitem__(self, arg):
-        arg = self._create_valid_tuple(arg)
         try:
             scalar_series_or_df = self._getitem_tuple_arg(arg)
-        except (ValueError, KeyError, IndexError):
+        except (TypeError, ValueError, KeyError, IndexError):
             scalar_series_or_df = self._getitem_tuple_arg((arg, slice(None)))
 
         return scalar_series_or_df
-
-    def _create_valid_tuple(self, arg):
-        """
-        Any argument can be passed to iloc or loc via `__getitem__`. This
-        helper method converts the input argument to a valid tuple
-        (rows, columns)
-        """
-        if isinstance(arg, (str, numbers.Number)):
-            return (arg, slice(None))
-        if type(arg) is not tuple:
-            arg = (arg, slice(None))
-        return arg
 
     def _is_scalar_access(self, arg):
         """
