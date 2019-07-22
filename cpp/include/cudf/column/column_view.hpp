@@ -328,6 +328,11 @@ class mutable_column_view : public cudf::column_view {
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the number of child columns.
+   *---------------------------------------------------------------------------**/
+  size_type num_children() const noexcept { return mutable_children.size(); }
+
+  /**---------------------------------------------------------------------------*
    * @brief Converts a mutable view into an immutable view
    *
    * @return column_view An immutable view of the mutable view's elements
