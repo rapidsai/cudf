@@ -38,12 +38,9 @@ size_type count_descendants(column_view parent) {
 }  // namespace
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
-    : _type{source.type()},
-      _size{source.size()},
-      _data{source.head()},
-      _null_mask{source.null_mask()},
-      _null_count{source.null_count()},
-      _offset{source.offset()},
+    : detail::column_device_view_base{source.type(),       source.size(),
+                                      source.head(),       source.null_mask(),
+                                      source.null_count(), source.offset()},
       _num_children{source.num_children()} {}
 
 // Free device memory allocated for children

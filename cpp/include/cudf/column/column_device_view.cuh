@@ -21,39 +21,20 @@
 
 namespace cudf {
 
+namespace detail {
+
 /**---------------------------------------------------------------------------*
  * @brief An immutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable CUDA device code.
  *---------------------------------------------------------------------------**/
-class alignas(16) column_device_view {
+class alignas(16) column_device_view_base {
  public:
-  column_device_view() = delete;
-  ~column_device_view() = default;
-  column_device_view(column_device_view const&) = default;
-  column_device_view(column_device_view&&) = default;
-  column_device_view& operator=(column_device_view const&) = default;
-  column_device_view& operator=(column_device_view&&) = default;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Factory to construct a column view that is usable in device memory.
-   *
-   * Allocates and copies views of `soure_view`'s children to device memory to
-   * make them accessible in device code.
-   *
-   * If `source_view.num_children() == 0`, then no device memory is allocated.
-   *
-   * Returns a `std::unique_ptr<column_device_view>` with a custom deleter to
-   * free the device memory allocated for the children.
-   *
-   * A `column_device_view` should be passed by value into GPU kernels.
-   *
-   * @param source_view The `column_view` to make usable in device code
-   * @param stream optional, stream on which the memory for children will be
-   * allocated
-   * @return A `unique_ptr` to a `column_device_view` that makes the data from
-   *`source_view` available in device memory.
-   *---------------------------------------------------------------------------**/
-  static auto create(column_view source_view, cudaStream_t stream = 0);
+  column_device_view_base() = delete;
+  ~column_device_view_base() = default;
+  column_device_view_base(column_device_view_base const&) = default;
+  column_device_view_base(column_device_view_base&&) = default;
+  column_device_view_base& operator=(column_device_view_base const&) = default;
+  column_device_view_base& operator=(column_device_view_base&&) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -148,16 +129,6 @@ class alignas(16) column_device_view {
   __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the specified child
-   *
-   * @param child_index The index of the desired child
-   * @return column_view The requested child `column_view`
-   *---------------------------------------------------------------------------**/
-  __device__ column_device_view child(size_type child_index) const noexcept {
-    return d_children[child_index];
-  }
-
-  /**---------------------------------------------------------------------------*
    * @brief Returns if the specified element holds a valid value (i.e., not
    * null)
    *
@@ -209,6 +180,64 @@ class alignas(16) column_device_view {
   size_type _null_count{};           ///< The number of null elements
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
+
+  column_device_view_base(data_type type, size_type size, void const* data,
+                          bitmask_type const* null_mask, size_type null_count,
+                          size_type offset)
+      : _type{type},
+        _size{size},
+        _data{data},
+        _null_mask{null_mask},
+        _null_count{null_count},
+        _offset{offset} {}
+};
+}  // namespace detail
+
+/**---------------------------------------------------------------------------*
+ * @brief An immutable, non-owning view of device data as a column of elements
+ * that is trivially copyable and usable CUDA device code.
+ *---------------------------------------------------------------------------**/
+class alignas(16) column_device_view : public detail::column_device_view_base {
+ public:
+  column_device_view() = delete;
+  ~column_device_view() = default;
+  column_device_view(column_device_view const&) = default;
+  column_device_view(column_device_view&&) = default;
+  column_device_view& operator=(column_device_view const&) = default;
+  column_device_view& operator=(column_device_view&&) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Factory to construct a column view that is usable in device memory.
+   *
+   * Allocates and copies views of `soure_view`'s children to device memory to
+   * make them accessible in device code.
+   *
+   * If `source_view.num_children() == 0`, then no device memory is allocated.
+   *
+   * Returns a `std::unique_ptr<column_device_view>` with a custom deleter to
+   * free the device memory allocated for the children.
+   *
+   * A `column_device_view` should be passed by value into GPU kernels.
+   *
+   * @param source_view The `column_view` to make usable in device code
+   * @param stream optional, stream on which the memory for children will be
+   * allocated
+   * @return A `unique_ptr` to a `column_device_view` that makes the data from
+   *`source_view` available in device memory.
+   *---------------------------------------------------------------------------**/
+  static auto create(column_view source_view, cudaStream_t stream = 0);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the specified child
+   *
+   * @param child_index The index of the desired child
+   * @return column_view The requested child `column_view`
+   *---------------------------------------------------------------------------**/
+  __device__ column_device_view child(size_type child_index) const noexcept {
+    return d_children[child_index];
+  }
+
+ protected:
   column_device_view* d_children{};  ///< Array of `column_device_view`
                                      ///< objects in device memory.
                                      ///< Based on element type, children
@@ -238,7 +267,8 @@ class alignas(16) column_device_view {
  * @brief A mutable, non-owning view of device data as a column of elements
  * that is trivially copyable and usable CUDA device code.
  *---------------------------------------------------------------------------**/
-class alignas(16) mutable_column_device_view : public column_device_view {
+class alignas(16) mutable_column_device_view
+    : public detail::column_device_view_base {
  public:
   mutable_column_device_view() = delete;
   ~mutable_column_device_view() = default;
@@ -284,7 +314,7 @@ class alignas(16) mutable_column_device_view : public column_device_view {
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   __host__ __device__ T* head() const noexcept {
-    return const_cast<T*>(column_device_view::head());
+    return const_cast<T*>(detail::column_device_view_base::head());
   }
 
   /**---------------------------------------------------------------------------*
@@ -311,7 +341,8 @@ class alignas(16) mutable_column_device_view : public column_device_view {
    * @note If `null_count() == 0`, this may return `nullptr`.
    *---------------------------------------------------------------------------**/
   __host__ __device__ bitmask_type* null_mask() const noexcept {
-    return const_cast<bitmask_type*>(column_device_view::null_mask());
+    return const_cast<bitmask_type*>(
+        detail::column_device_view_base::null_mask());
   }
 
   /**---------------------------------------------------------------------------*
@@ -373,8 +404,8 @@ class alignas(16) mutable_column_device_view : public column_device_view {
                            ///< may contain additional data
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct's a `mutable_column_device_view` from a `column_view`
-   *populating all but the children.
+   * @brief Construct's a `mutable_column_device_view` from a
+   *`mutable_column_view` populating all but the children.
    *
    * @note This constructor is for internal use only. To create a
    *`mutable_column_device_view` from a `column_view`, the
