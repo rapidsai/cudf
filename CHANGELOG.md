@@ -85,6 +85,7 @@
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
+- PR #2355 Handle float16 in binary operations
 - PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
 
 
