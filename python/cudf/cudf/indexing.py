@@ -70,7 +70,10 @@ class _SeriesIlocIndexer(object):
 class _DataFrameIndexer(object):
     def __getitem__(self, arg):
         arg = self._create_valid_tuple(arg)
-        scalar_series_or_df = self._getitem_tuple_arg(arg)
+        try:
+            scalar_series_or_df = self._getitem_tuple_arg(arg)
+        except (ValueError, KeyError, IndexError):
+            scalar_series_or_df = self._getitem_tuple_arg((arg, slice(None)))
 
         return scalar_series_or_df
 
@@ -84,19 +87,6 @@ class _DataFrameIndexer(object):
             return (arg, slice(None))
         if type(arg) is not tuple:
             arg = (arg, slice(None))
-        if isinstance(self._df.columns, cudf.MultiIndex):
-            # the second arg can be: single value, tuple of valid keys, slice,
-            # or None
-            if self._df.columns._is_valid_index_key(arg):
-                arg = (slice(None), arg)
-            elif not isinstance(arg, tuple) or len(arg) == 1:
-                arg = (slice(None), arg)
-        if isinstance(self._df.index, cudf.MultiIndex):
-            # the first arg can be: single value, tuple of valid keys, or slice
-            if self._df.index._is_valid_index_key(arg):
-                arg = (arg, slice(None))
-            elif not isinstance(arg, (slice, tuple)) or len(arg) == 1:
-                arg = (arg, slice(None))
         return arg
 
     def _is_scalar_access(self, arg):

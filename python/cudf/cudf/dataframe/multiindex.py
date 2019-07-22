@@ -216,10 +216,10 @@ class MultiIndex(Index):
             if row == slice(None):
                 continue
             lookup[index._source_data.columns[idx]] = Series(row)
-            data_table = concat([
-                index._source_data,
-                DataFrame({'idx': Series(arange(len(index._source_data)))})
-            ], axis=1)
+        data_table = concat([
+            index._source_data,
+            DataFrame({'idx': Series(arange(len(index._source_data)))})
+        ], axis=1)
         result = lookup.merge(data_table)['idx']
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
