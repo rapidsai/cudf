@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf.dataframe import DataFrame
 from cudf.dataframe.index import (
     CategoricalIndex,
@@ -207,3 +208,20 @@ def test_set_index_as_property():
 
     head = cdf.head().to_pandas()
     np.testing.assert_array_equal(head.index.values, idx[:5])
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.dataframe.index.RangeIndex(1, 5),
+        cudf.dataframe.index.DatetimeIndex(["2001", "2003", "2003"]),
+        cudf.dataframe.index.StringIndex(["a", "b", "c"]),
+        cudf.dataframe.index.GenericIndex([1, 2, 3]),
+        cudf.dataframe.index.CategoricalIndex(["a", "b", "c"]),
+    ],
+)
+@pytest.mark.parametrize("deep", [True, False])
+def test_index_copy(idx, deep):
+    idx_copy = idx.copy(deep=deep)
+    assert_eq(idx, idx_copy)
+    assert type(idx) == type(idx_copy)

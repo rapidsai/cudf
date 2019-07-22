@@ -15,7 +15,8 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.utils import utils
+from cudf.dataframe.numerical import NumericalColumn
+from cudf.utils import cudautils, utils
 from cudf.utils.utils import is_single_value
 
 
@@ -124,15 +125,15 @@ class DatetimeColumn(columnops.TypedColumnBase):
             data=self.data.astype("int64"),
         )
 
-    def as_datetime_column(self, dtype):
+    def as_datetime_column(self, dtype, **kwargs):
         # TODO: this needs to change after
         # we support more than just datetime64[ms]
         return self
 
-    def as_numerical_column(self, dtype):
+    def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
 
-    def as_string_column(self):
+    def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
 
         if len(self) > 0:
@@ -235,6 +236,28 @@ class DatetimeColumn(columnops.TypedColumnBase):
         value = pd.to_datetime(value)
         value = columnops.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value)
+
+    def unique(self, method="sort"):
+        # method variable will indicate what algorithm to use to
+        # calculate unique, not used right now
+        if method != "sort":
+            msg = "non sort based unique() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # gather result
+        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        return out_col
+
+    def value_counts(self, method="sort"):
+        if method != "sort":
+            msg = "non sort based value_count() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, sortedvals = self._unique_segments()
+        # Return both values and their counts
+        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
+        out2 = cudautils.value_count(segs, len(sortedvals))
+        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
+        return out_vals, out_counts
 
     @property
     def is_unique(self):
