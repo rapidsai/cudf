@@ -86,12 +86,16 @@ class Series(object):
         elif isinstance(data, Index):
             name = data.name
             data = data.as_column()
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if isinstance(data, Series):
             index = data._index if index is None else index
             if name is None:
                 name = data.name
             data = data._column
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if data is None:
             data = {}

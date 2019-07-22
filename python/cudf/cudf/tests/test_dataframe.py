@@ -3288,6 +3288,32 @@ def test_as_column_types():
 
     assert_eq(pds, gds)
 
+    pds = pd.Series([])
+    gds = Series(columnops.as_column(pds))
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1, 2, 4], dtype="int64")
+    gds = Series(columnops.as_column(Series([1, 2, 4]), dtype="int64"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
+    gds = Series(
+        columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="float32")
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
+    gds = Series(columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
+    gds = Series(gd.dataframe.index.StringIndex(["1", "18", "9"]), dtype="int")
+
+    assert_eq(pds, gds)
+
 
 def test_one_row_head():
     gdf = DataFrame({"name": ["carl"], "score": [100]}, index=[123])
