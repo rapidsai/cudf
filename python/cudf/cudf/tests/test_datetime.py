@@ -186,19 +186,19 @@ def test_to_from_pandas_nulls(data, nulls):
 
 
 @pytest.mark.parametrize(
-    'data',
+    "data",
     [
         [],
-        pd.Series(pd.date_range('2010-01-01', '2010-02-01')),
-        pytest.param(pd.Series([None, None], dtype='datetime64[ns]'),
-                     marks=pytest.mark.xfail),
-    ])
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pytest.param(
+            pd.Series([None, None], dtype="datetime64[ns]"),
+            marks=pytest.mark.xfail,
+        ),
+    ],
+)
 @pytest.mark.parametrize(
-    'nulls',
-    [
-        'none',
-        pytest.param('some', marks=pytest.mark.xfail),
-    ])
+    "nulls", ["none", pytest.param("some", marks=pytest.mark.xfail)]
+)
 def test_datetime_unique(data, nulls):
     psr = pd.Series(data)
 
@@ -206,7 +206,7 @@ def test_datetime_unique(data, nulls):
     print(nulls)
 
     if len(data) > 0:
-        if nulls == 'some':
+        if nulls == "some":
             p = np.random.randint(0, len(data), 2)
             psr[p] = None
 
@@ -215,28 +215,25 @@ def test_datetime_unique(data, nulls):
     got = gsr.unique()
 
     # convert to int64 for equivalence testing
-    np.testing.assert_array_almost_equal(got.to_pandas().astype(int),
-                                         expected.astype(int))
+    np.testing.assert_array_almost_equal(
+        got.to_pandas().astype(int), expected.astype(int)
+    )
 
 
 @pytest.mark.parametrize(
-    'data',
+    "data",
     [
         [],
-        pd.Series(pd.date_range('2010-01-01', '2010-02-01')),
-        pd.Series([None, None], dtype='datetime64[ns]'),
-    ])
-@pytest.mark.parametrize(
-    'nulls',
-    [
-        'none',
-        'some',
-    ])
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_nunique(data, nulls):
     psr = pd.Series(data)
 
     if len(data) > 0:
-        if nulls == 'some':
+        if nulls == "some":
             p = np.random.randint(0, len(data), 2)
             psr[p] = None
 
@@ -247,26 +244,22 @@ def test_datetime_nunique(data, nulls):
 
 
 @pytest.mark.parametrize(
-    'data',
+    "data",
     [
         [],
-        pd.Series(pd.date_range('2010-01-01', '2010-02-01')),
-        pd.Series([None, None], dtype='datetime64[ns]'),
-    ])
-@pytest.mark.parametrize(
-    'nulls',
-    [
-        'none',
-        'some',
-    ])
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some"])
 def test_datetime_value_counts(data, nulls):
     psr = pd.Series(data)
 
     if len(data) > 0:
-        if nulls == 'one':
+        if nulls == "one":
             p = np.random.randint(0, len(data))
             psr[p] = None
-        elif nulls == 'some':
+        elif nulls == "some":
             p = np.random.randint(0, len(data), 2)
             psr[p] = None
 

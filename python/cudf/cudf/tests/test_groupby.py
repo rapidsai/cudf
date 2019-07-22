@@ -727,6 +727,16 @@ def test_groupby_sort():
     )
 
 
+def test_groupby_cat():
+    pdf = pd.DataFrame(
+        {"a": [1, 1, 2], "b": pd.Series(["b", "b", "a"], dtype="category")}
+    )
+    gdf = cudf.from_pandas(pdf)
+    assert_eq(
+        pdf.groupby("a").count(), gdf.groupby("a").count(), check_dtype=False
+    )
+
+
 def test_groupby_index_type():
     df = cudf.DataFrame()
     df["string_col"] = ["a", "b", "c"]

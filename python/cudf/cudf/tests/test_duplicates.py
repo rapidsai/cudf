@@ -1,6 +1,6 @@
 import numpy as np
 import pytest
-from pandas import DataFrame, date_range, Series
+from pandas import DataFrame, Series, date_range
 
 import cudf
 from cudf.multi import concat
@@ -35,17 +35,16 @@ def test_duplicated_with_misspelled_column_name(subset):
         df.drop_duplicates(subset)
 
 
-@pytest.mark.parametrize("keep", [
-    'first',
-    'last',
-    False
-])
-@pytest.mark.parametrize("data", [
-    [1, 2, 4, 5, 6, 6],
-    [],
-    ['a', 'b', 's', 'sd', 'a', 'b'],
-    Series(['aaa'] * 10, dtype='object')
-])
+@pytest.mark.parametrize("keep", ["first", "last", False])
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4, 5, 6, 6],
+        [],
+        ["a", "b", "s", "sd", "a", "b"],
+        Series(["aaa"] * 10, dtype="object"),
+    ],
+)
 def test_drop_duplicates_series(data, keep):
     pds = Series(data)
     gds = cudf.from_pandas(pds)
@@ -570,5 +569,6 @@ def test_drop_duplicates_multi_index():
     # FIXME: to_pandas needed until sort_index support for MultiIndex
 
     for col in gdf.columns:
-        assert_df(gdf[col].drop_duplicates().to_pandas(),
-                  pdf[col].drop_duplicates())
+        assert_df(
+            gdf[col].drop_duplicates().to_pandas(), pdf[col].drop_duplicates()
+        )

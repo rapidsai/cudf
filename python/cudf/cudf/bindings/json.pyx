@@ -5,6 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.json cimport reader as json_reader
@@ -32,6 +33,7 @@ def is_file_like(obj):
     if not hasattr(obj, "__iter__"):
         return False
     return True
+
 
 cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     """
@@ -92,7 +94,7 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     cdef unique_ptr[json_reader] reader
     with nogil:
         reader = unique_ptr[json_reader](new json_reader(args))
-    
+
     cdef cudf_table table
     if byte_range is None:
         table = reader.get().read()

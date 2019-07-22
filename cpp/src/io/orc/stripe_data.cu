@@ -893,17 +893,24 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
             uint32_t pw = pw_byte3 >> 8;
             uint32_t pgw = 1 + ((pw_byte3 >> 5) & 7); // patch gap width, 1 to 8 bits
             uint32_t pll = pw_byte3 & 0x1f;    // patch list length
-            uint32_t patch_pos = (tr < pll) ? bytestream_readbits(bs, pos * 8 + n*w, pgw+pw) + 1 : 0; // FIXME: pgw+pw > 32
-            uint32_t patch = patch_pos & ((1 << pw) - 1);
-            patch_pos >>= pw;
-            for (uint32_t k = 1; k < pll; k <<= 1)
+            if (pll != 0)
             {
-                uint32_t tmp = SHFL(patch_pos, (tr & ~k) | (k-1));
-                patch_pos += (tr & k) ? tmp : 0;
-            }
-            if (tr < pll && patch_pos < n)
-            {
-                vals[base + patch_pos] += patch << w;
+                uint64_t patch_pos64 = (tr < pll) ? bytestream_readbits64(bs, pos * 8 + ((n*w + 7) & ~7) + tr * (pgw + pw), pgw + pw) : 0;
+                uint32_t patch_pos;
+                T patch = 1;
+                patch <<= pw;
+                patch = (patch - 1) & (T)patch_pos64;
+                patch <<= w;
+                patch_pos = (uint32_t)(patch_pos64 >> pw);
+                for (uint32_t k = 1; k < pll; k <<= 1)
+                {
+                    uint32_t tmp = SHFL(patch_pos, (tr & ~k) | (k-1));
+                    patch_pos += (tr & k) ? tmp : 0;
+                }
+                if (tr < pll && patch_pos < n)
+                {
+                    vals[base + patch_pos] += patch;
+                }
             }
         }
         SYNCWARP();
