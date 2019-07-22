@@ -251,20 +251,16 @@ class MultiIndex(Index):
                     stop, row_tuple
                 )
                 return arange(start, stop, step)
-            if self._is_valid_index_key(row_tuple.start):
-                start_values = self._compute_validity_mask(
-                    index,
-                    row_tuple.start,
-                    max_length
-                )
-            if self._is_valid_index_key(row_tuple.stop):
-                stop_values = self._compute_validity_mask(
-                    index,
-                    row_tuple.stop,
-                    max_length
-                )
-            else:
-                return start_values
+            start_values = self._compute_validity_mask(
+                index,
+                row_tuple.start,
+                max_length
+            )
+            stop_values = self._compute_validity_mask(
+                index,
+                row_tuple.stop,
+                max_length
+            )
             return Series(arange(start_values.min(), stop_values.max() + 1))
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
@@ -278,7 +274,13 @@ class MultiIndex(Index):
         from cudf import DataFrame
         from cudf import Series
 
-        if not self._is_valid_index_key(index_key):
+        if (
+                (
+                    len(index_key) > 0
+                    and not isinstance(index_key, tuple)
+                )
+                or isinstance(index_key[0], slice)
+        ):
             index_key = index_key[0]
 
         slice_access = False
@@ -339,7 +341,7 @@ class MultiIndex(Index):
                 # source index until it has the correct number of columns (n-k)
                 result.reset_index(drop=True)
                 index = index._popn(size)
-        if self._is_valid_index_key(index_key):
+        if isinstance(index_key, tuple):
             result = result.set_index(index)
         return result
 
@@ -404,24 +406,6 @@ class MultiIndex(Index):
             return tuples
         else:
             return tuples, slice(None)
-
-    def _is_valid_index_key(self, arg):
-        """
-        Determines by reflecting on each level if a value or tuple of values
-        is a valid key indexing into the MultiIndex
-        """
-        arg = [arg] if isinstance(arg, (
-            str,
-            numbers.Number,
-            slice
-        )) else list(arg)
-        try:
-            for idx, key in enumerate(arg):
-                if key not in self.levels[idx]:
-                    return False
-        except ValueError:
-            return False
-        return True
 
     def __len__(self):
         return len(self._source_data)
