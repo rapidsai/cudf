@@ -76,19 +76,6 @@ class _DataFrameIndexer(object):
 
         return scalar_series_or_df
 
-    def _is_scalar_access(self, arg):
-        """
-        Determine if we are accessing a single value (scalar)
-        """
-        if isinstance(arg, str):
-            return False
-        if not hasattr(arg, "__len__"):
-            return False
-        for obj in arg:
-            if not is_single_value(obj):
-                return False
-        return True
-
     def _can_downcast_to_series(self, df, arg):
         """
         This method encapsulates the logic used
