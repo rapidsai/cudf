@@ -1255,40 +1255,6 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
-    def isin(self, test):
-
-        from cudf import DataFrame
-
-        lhs = self
-        try:
-            rhs = Series(columnops.as_column(test, dtype=self.dtype))
-            # If categorical, combine categories first
-            if pd.api.types.is_categorical_dtype(lhs):
-                cats = lhs.cat.categories.as_column().append(
-                    rhs.cat.categories
-                )
-                cats = Series(cats).drop_duplicates()._column
-                lhs = lhs.cat.set_categories(cats, is_unique=True).fillna(-1)
-                rhs = rhs.cat.set_categories(cats, is_unique=True).fillna(-1)
-        except ValueError:
-            # pandas functionally returns all False when cleansing via
-            # typecasting fails
-            return Series(cudautils.zeros(len(self), dtype="bool"))
-
-        # fillna so we can find nulls
-        if rhs.null_count > 0:
-            lhs = lhs.fillna(lhs._column.default_na_value())
-            rhs = rhs.fillna(lhs._column.default_na_value())
-
-        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
-        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
-        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
-        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
-        res = res["bool"].fillna(False)
-        res.name = self.name
-
-        return res
-
     def all(self, axis=0, skipna=True, level=None):
         """
         """
@@ -1822,6 +1788,52 @@ class Series(object):
             name=self.name,
             index=self.index,
         )
+
+    def isin(self, test):
+
+        from cudf import DataFrame
+
+        lhs = self
+        rhs = None
+
+        try:
+            rhs = Series(columnops.as_column(test, dtype=self.dtype))
+        except ValueError as e:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return Series(cudautils.zeros(len(self), dtype="bool"))
+
+        # If categorical, combine categories first
+        if pd.api.types.is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat.categories.as_column()
+            rhs_cats = rhs.cat.categories.as_column()
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+                rhs = rhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+            else:
+                # If they're not the same dtype, short-circuit if the test
+                # list doesn't have any nulls. If it does have nulls, make
+                # the test list a Categorical with a single null
+                if rhs.null_count == 0:
+                    return Series(cudautils.zeros(len(self), dtype="bool"))
+                rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
+
+        # fillna so we can find nulls
+        if rhs.null_count > 0:
+            lhs = lhs.fillna(lhs._column.default_na_value())
+            rhs = rhs.fillna(lhs._column.default_na_value())
+
+        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+        res.name = self.name
+
+        return res
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
