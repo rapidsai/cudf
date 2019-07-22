@@ -324,6 +324,9 @@ class Index(object):
     def get_slice_bound(self, label, side, kind):
         raise (NotImplementedError)
 
+    def isin(self, values):
+        return self.to_series().isin(values).data.mem
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
