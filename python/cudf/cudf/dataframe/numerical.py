@@ -119,7 +119,7 @@ class NumericalColumn(columnops.TypedColumnBase):
 
         if len(self) > 0:
             if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                dev_array = self.astype("int32").data.mem
+                dev_array = self.astype("int32", **kwargs).data.mem
             else:
                 dev_array = self.data.mem
             dev_ptr = get_ctype_ptr(dev_array)
@@ -137,7 +137,7 @@ class NumericalColumn(columnops.TypedColumnBase):
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.dataframe import datetime
 
-        return self.astype("int64").view(
+        return self.astype("int64", **kwargs).view(
             datetime.DatetimeColumn, dtype=dtype, data=self.data.astype(dtype)
         )
 

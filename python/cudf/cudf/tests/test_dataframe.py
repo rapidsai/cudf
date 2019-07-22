@@ -3341,11 +3341,13 @@ def test_series_astype_numeric_to_other(dtype, as_dtype):
 def test_series_astype_string_to_other(as_dtype):
     if as_dtype == "datetime64[ms]":
         data = ["2001-01-01", "2002-02-02", "2000-01-05"]
+        kwargs = {"format": "%Y-%m-%d"}
     else:
         data = ["1", "2", "3"]
+        kwargs = {}
     psr = pd.Series(data)
     gsr = gd.from_pandas(psr)
-    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
 
 
 @pytest.mark.parametrize("as_dtype", ["category", "datetime64[ms]", "str"])
@@ -3353,7 +3355,7 @@ def test_series_astype_datetime_to_other(as_dtype):
     data = ["2001-01-01", "2002-02-02", "2001-01-05"]
     psr = pd.Series(data)
     gsr = gd.from_pandas(psr)
-    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, format="%Y-%m-%d"))
 
 
 @pytest.mark.parametrize(
@@ -3362,8 +3364,10 @@ def test_series_astype_datetime_to_other(as_dtype):
 def test_series_astype_categorical_to_other(as_dtype):
     if as_dtype == "datetime64[ms]":
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
+        kwargs = {"format": "%Y-%m-%d"}
     else:
         data = [1, 2, 3, 1]
+        kwargs = {}
     psr = pd.Series(data, dtype="category")
     gsr = gd.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
@@ -3399,7 +3403,7 @@ def test_series_astype_null_cases():
 
     assert_eq(
         gd.Series(data, dtype="datetime64[ms]"),
-        gd.Series(data).astype("datetime64[ms]"),
+        gd.Series(data).astype("datetime64[ms]", format="%Y-%m-%d"),
     )
 
     # categorical to other
@@ -3415,7 +3419,9 @@ def test_series_astype_null_cases():
 
     assert_eq(
         gd.Series(data, dtype="datetime64[ms]"),
-        gd.Series(data, dtype="category").astype("datetime64[ms]"),
+        gd.Series(data, dtype="category").astype(
+            "datetime64[ms]", format="%Y-%m-%d"
+        ),
     )
 
     # string to other
@@ -3430,7 +3436,7 @@ def test_series_astype_null_cases():
             dtype="datetime64[ms]",
         ),
         gd.Series(["2001-01-01", "2001-02-01", None, "2001-03-01"]).astype(
-            "datetime64[ms]"
+            "datetime64[ms]", format="%Y-%m-%d"
         ),
     )
 
@@ -3443,10 +3449,10 @@ def test_series_astype_null_cases():
     data = ["2001-01-01", "2001-02-01", None, "2001-03-01"]
 
     assert_eq(
-        gd.from_pandas(pd.Series(data)).astype("datetime64[ms]"),
-        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]"))
-        .astype("str")
-        .astype("datetime64[ms]"),
+        gd.from_pandas(pd.Series(data)),
+        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
+            "str", format="%Y-%m-%d"
+        ),
     )
 
     assert_eq(

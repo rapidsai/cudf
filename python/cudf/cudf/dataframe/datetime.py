@@ -131,7 +131,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         return self
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self.as_numerical.astype(dtype)
+        return self.as_numerical.astype(dtype, **kwargs)
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
@@ -142,12 +142,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
             null_ptr = None
             if self.mask is not None:
                 null_ptr = get_ctype_ptr(self.mask.mem)
-            kwargs = {
-                "count": len(self),
-                "nulls": null_ptr,
-                "bdevmem": True,
-                "units": "ms",
-            }
+            kwargs.update(
+                {
+                    "count": len(self),
+                    "nulls": null_ptr,
+                    "bdevmem": True,
+                    "units": "ms",
+                }
+            )
             data = string._numeric_to_str_typecast_functions[
                 np.dtype(self.dtype)
             ](dev_ptr, **kwargs)

@@ -1391,7 +1391,7 @@ class Series(object):
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
-        return self._copy_construct(data=self._column.astype(dtype))
+        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.

@@ -546,7 +546,7 @@ class StringColumn(columnops.TypedColumnBase):
 
         out_arr = rmm.device_array(shape=len(self), dtype=dtype)
         out_ptr = get_ctype_ptr(out_arr)
-        kwargs = {"devptr": out_ptr}
+        kwargs.update({"devptr": out_ptr})
         if dtype == np.dtype("datetime64[ms]"):
             kwargs["units"] = "ms"
         _str_to_numeric_typecast_functions[np.dtype(dtype)](
@@ -568,7 +568,7 @@ class StringColumn(columnops.TypedColumnBase):
         return out_col.astype(out_dtype)
 
     def as_datetime_column(self, dtype, **kwargs):
-        return self.as_numerical_column(dtype)
+        return self.as_numerical_column(dtype, **kwargs)
 
     def as_string_column(self, dtype, **kwargs):
         return self
