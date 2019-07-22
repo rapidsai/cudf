@@ -29,6 +29,24 @@ class column {
   ~column() = default;
   column& operator=(column const& other) = delete;
   column& operator=(column&& other) = delete;
+  column() = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column by deep copying the device memory of another
+   * column.
+   *
+   * @param other The other column to copy
+   *---------------------------------------------------------------------------**/
+  column(column const& other) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new column object by moving the device memory from
+   * another column.
+   *
+   * @param other The other column whose device memory will be moved to the new
+   * column
+   *---------------------------------------------------------------------------**/
+  column(column&& other) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a size, type, and option to
@@ -116,22 +134,6 @@ class column {
   column(data_type dtype, size_type size, rmm::device_buffer&& data,
          rmm::device_buffer mask);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column by deep copying the device memory of another
-   * column.
-   *
-   * @param other The other column to copy
-   *---------------------------------------------------------------------------**/
-  column(column const& other) = default;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column object by moving the device memory from
-   * another column.
-   *
-   * @param other The other column whose device memory will be moved to the new
-   * column
-   *---------------------------------------------------------------------------**/
-  column(column&& other) = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying from a `column_view`.
