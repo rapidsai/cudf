@@ -51,7 +51,7 @@ constexpr __host__ __device__ inline size_type intra_element_index(
  * @return true The specified bit is `1`
  * @return false  The specified bit is `0`
  *---------------------------------------------------------------------------**/
-__device__ inline bool bit_is_set(bitmask_type* bitmask, size_type bit_index) {
+__device__ inline bool bit_is_set(bitmask_type const* bitmask, size_type bit_index) {
   assert(nullptr != bitmask);
   return bitmask[element_index(bit_index)] &
          (bitmask_type{1} << intra_element_index(bit_index));
