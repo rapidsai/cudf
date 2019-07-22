@@ -728,7 +728,7 @@ class CategoricalIndex(GenericIndex):
 
     @property
     def codes(self):
-        return self._values.codes
+        return self._values.cat().codes.to_array()
 
     @property
     def categories(self):
@@ -757,14 +757,6 @@ class StringIndex(GenericIndex):
             )
         assert self._values.null_count == 0
         self.name = name
-
-    @property
-    def codes(self):
-        return self._values.codes
-
-    @property
-    def categories(self):
-        return self._values.categories
 
     def to_pandas(self):
         result = pd.Index(self.values, name=self.name, dtype="object")
