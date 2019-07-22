@@ -9,7 +9,6 @@ from dask.utils import natural_sort_key
 
 import dask_cudf
 
-
 try:
     from dask.dataframe.io.parquet.arrow import ArrowEngine
 except ImportError:
