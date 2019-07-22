@@ -21,7 +21,7 @@
 
 namespace cudf {
 
-static constexpr int UNKNOWN_NULL_COUNT{-1};
+static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 namespace detail {
 /**---------------------------------------------------------------------------*
