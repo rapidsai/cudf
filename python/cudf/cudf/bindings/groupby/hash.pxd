@@ -25,8 +25,8 @@ cdef extern from "groupby.hpp" namespace "cudf::groupby::hash" nogil:
         MEAN
 
     cdef pair[cudf_table, cudf_table] groupby(
-            cudf_table  keys,
-            cudf_table values,
-            vector[operators] ops,
-            Options options
+        cudf_table  keys,
+        cudf_table values,
+        vector[operators] ops,
+        Options options
     ) except +

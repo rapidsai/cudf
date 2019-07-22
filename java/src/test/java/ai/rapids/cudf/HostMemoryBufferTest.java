@@ -21,10 +21,32 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
-
 public class HostMemoryBufferTest {
+  @Test
+  void testRefCountLeak() throws InterruptedException {
+    assumeTrue(Boolean.getBoolean("ai.rapids.cudf.flaky-tests-enabled"));
+    long expectedLeakCount = MemoryCleaner.leakCount.get() + 1;
+    HostMemoryBuffer.allocate(1);
+    long maxTime = System.currentTimeMillis() + 10_000;
+    long leakNow;
+    do {
+      System.gc();
+      Thread.sleep(50);
+      leakNow = MemoryCleaner.leakCount.get();
+    } while (leakNow != expectedLeakCount && System.currentTimeMillis() < maxTime);
+    assertEquals(expectedLeakCount, MemoryCleaner.leakCount.get());
+  }
+
+  @Test
+  void testDoubleFree() {
+    HostMemoryBuffer buffer = HostMemoryBuffer.allocate(1);
+    buffer.close();
+    assertThrows(IllegalStateException.class, () -> buffer.close() );
+  }
+
   @Test
   public void testGetInt() {
     try (HostMemoryBuffer hostMemoryBuffer = HostMemoryBuffer.allocate(16)) {

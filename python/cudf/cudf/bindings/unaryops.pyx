@@ -15,21 +15,22 @@ from librmm_cffi import librmm as rmm
 
 
 _UNARY_OP = {
-    'sin'   : SIN,
-    'cos'   : COS,
-    'tan'   : TAN,
-    'asin'  : ARCSIN,
-    'acos'  : ARCCOS,
-    'atan'  : ARCTAN,
-    'exp'   : EXP,
-    'log'   : LOG,
-    'sqrt'  : SQRT,
-    'ceil'  : CEIL,
-    'floor' : FLOOR,
-    'abs'   : ABS,
+    'sin': SIN,
+    'cos': COS,
+    'tan': TAN,
+    'asin': ARCSIN,
+    'acos': ARCCOS,
+    'atan': ARCTAN,
+    'exp': EXP,
+    'log': LOG,
+    'sqrt': SQRT,
+    'ceil': CEIL,
+    'floor': FLOOR,
+    'abs': ABS,
     'invert': BIT_INVERT,
-    'not'   : NOT,
+    'not': NOT,
 }
+
 
 def apply_unary_op(incol, op):
     """
@@ -37,14 +38,17 @@ def apply_unary_op(incol, op):
     """
 
     check_gdf_compatibility(incol)
-    
+
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
     cdef gdf_column result
     cdef unary_op c_op = _UNARY_OP[op]
-    with nogil:    
-        result = unary_operation(c_incol[0], c_op)
-    
+    with nogil:
+        result = unary_operation(
+            c_incol[0],
+            c_op
+        )
+
     free(c_incol)
     data, mask = gdf_column_to_column_mem(&result)
     return Column.from_mem_views(data, mask)
