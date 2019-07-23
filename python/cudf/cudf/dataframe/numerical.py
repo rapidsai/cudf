@@ -101,6 +101,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            if other_dtype == np.dtype("float16"):
+                other = np.dtype("float32").type(other)
+                other_dtype = other.dtype
             if other_dtype.kind in "u":
                 other_dtype = utils.min_signed_type(other)
             if np.isscalar(other):
@@ -197,17 +200,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             return out
 
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
-        # sort the column
-        sortcol, _ = densecol.sort_by_values(ascending=True)
-        # find segments
-        sortedvals = sortcol.to_gpu_array()
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
-
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
@@ -218,15 +210,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def unique_count(self, method="sort", dropna=True):
-        if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
 
     def value_counts(self, method="sort"):
         if method != "sort":

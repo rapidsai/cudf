@@ -25,11 +25,13 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
       Call gdf_order_by to retrieve a column of indices of the sorted order
       of rows.
     '''
-    cdef gdf_column** input_columns = <gdf_column**>malloc(len(in_cols) * sizeof(gdf_column*))
+    cdef gdf_column** input_columns = <gdf_column**>malloc(
+        len(in_cols) * sizeof(gdf_column*)
+    )
     for idx, col in enumerate(in_cols):
         check_gdf_compatibility(col)
         input_columns[idx] = column_view_from_column(col)
-    
+
     cdef uintptr_t asc_desc = get_ctype_ptr(ascending)
 
     cdef size_t num_inputs = len(in_cols)
@@ -39,20 +41,27 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
 
     if na_position == 1:
         null_sort_behavior_api = 'null_as_smallest'
-    else :
+    else:
         null_sort_behavior_api = 'null_as_largest'
 
-    cdef gdf_context* context = create_context_view(0, 'sort', 0, 0, 0, null_sort_behavior_api)
+    cdef gdf_context* context = create_context_view(
+        0,
+        'sort',
+        0,
+        0,
+        0,
+        null_sort_behavior_api
+    )
 
-    cdef gdf_error result 
-    
+    cdef gdf_error result
+
     with nogil:
         result = gdf_order_by(<gdf_column**> input_columns,
                               <int8_t*> asc_desc,
                               <size_t> num_inputs,
                               <gdf_column*> output_indices,
                               <gdf_context*> context)
-    
+
     check_gdf_error(result)
     free(context)
 
@@ -163,7 +172,7 @@ class SegmentedRadixSortPlan(object):
     def sort(self, segments, col_keys, col_vals):
         cdef gdf_column* c_col_keys = column_view_from_column(col_keys)
         cdef gdf_column* c_col_vals = column_view_from_column(col_vals)
-    
+
         seg_dtype = np.uint32
         segsize_limit = 2 ** 16 - 1
 
