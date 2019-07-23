@@ -30,14 +30,14 @@ requirements:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
-    - arrow-cpp 0.14.0.*
+    - arrow-cpp 0.14.1.*
     - double-conversion
     - rapidjson
     - flatbuffers
     - boost-cpp
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
-    - arrow-cpp 0.14.0.*
+    - arrow-cpp 0.14.1.*
 
 test:
   commands:
