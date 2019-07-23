@@ -158,7 +158,7 @@ def test_serialize_datetime():
     df["timestamp"] = ts
     gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
-    recreated = cudf.DataFrame.deserialize(*gdf.deserialize())
+    recreated = cudf.DataFrame.deserialize(*gdf.serialize())
     # Check
     assert_eq(recreated, df)
 
