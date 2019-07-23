@@ -3278,6 +3278,34 @@ def test_empty_dataframe_describe():
 def test_as_column_types():
     from cudf.dataframe import columnops
 
+    col = columnops.as_column(Series([]))
+    assert_eq(col.dtype, np.dtype("float64"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([]))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="float32")
+    assert_eq(col.dtype, np.dtype("float32"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="float32"))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="str")
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="str"))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="object")
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="object"))
+
+    assert_eq(pds, gds)
+
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype="float32"))
 
