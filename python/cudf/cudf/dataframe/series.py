@@ -23,7 +23,6 @@ from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
-from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
@@ -1793,7 +1792,7 @@ class Series(object):
 
         try:
             rhs = Series(columnops.as_column(test, dtype=self.dtype))
-        except ValueError as e:
+        except Exception:
             # pandas functionally returns all False when cleansing via
             # typecasting fails
             return Series(cudautils.zeros(len(self), dtype="bool"))
