@@ -1984,20 +1984,20 @@ def test_iteritems(gdf):
         assert_eq(v, gdf[k])
 
 
-@pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
-def test_quantile(pdf, gdf):
-    assert_eq(pdf["x"].quantile(), gdf["x"].quantile())
-    assert_eq(pdf.quantile(), gdf.quantile())
+@pytest.mark.parametrize("q", [0.5, 1, 0.001, [0.5], [], [0.005, 0.5, 1]])
+def test_quantile(pdf, gdf, q):
+    assert_eq(pdf["x"].quantile(q), gdf["x"].quantile(q))
+    assert_eq(pdf.quantile(q), gdf.quantile(q))
 
 
 def test_empty_quantile():
     pdf = pd.DataFrame({"x": []})
     df = gd.DataFrame({"x": []})
 
-    actual = df.quantile().to_pandas()["x"]
+    actual = df.quantile()
     expected = pdf.quantile()
 
-    assert_eq(actual.values, expected.values)
+    assert_eq(actual, expected)
 
 
 def test_from_pandas_function(pdf):

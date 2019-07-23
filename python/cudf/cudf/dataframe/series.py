@@ -1996,7 +1996,9 @@ class Series(object):
                 return res.pop()
 
         if not quant_index:
-            return Series(self._column.quantile(q, interpolation, exact))
+            return Series(
+                self._column.quantile(q, interpolation, exact), name=self.name
+            )
         else:
             from cudf.dataframe.columnops import column_empty_like
 
@@ -2010,7 +2012,7 @@ class Series(object):
                 )
             else:
                 result = self._column.quantile(q, interpolation, exact)
-            return Series(result, index=as_index(np_array_q))
+            return Series(result, index=as_index(np_array_q), name=self.name)
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
