@@ -130,10 +130,12 @@ def test_categorical_index():
     assert isinstance(gdf1.index, CategoricalIndex)
     assert_eq(pdf, gdf1)
     assert_eq(pdf.index, gdf1.index)
+    assert_eq(pdf.index.codes, gdf1.index.codes.to_array())
 
     assert isinstance(gdf2.index, CategoricalIndex)
     assert_eq(pdf, gdf2)
     assert_eq(pdf.index, gdf2.index)
+    assert_eq(pdf.index.codes, gdf2.index.codes.to_array())
 
 
 def test_pandas_as_index():
@@ -162,6 +164,8 @@ def test_pandas_as_index():
     assert_eq(pdf_float_index, gdf_float_index)
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
+
+    assert_eq(pdf_category_index.codes, gdf_category_index.codes.to_array())
 
 
 def test_index_rename():
