@@ -22,6 +22,50 @@ using cudf::test::column_wrapper;
 
 class SearchTest : public GdfTest {};
 
+TEST_F(SearchTest, empty_table)
+{
+    using element_type = int64_t;
+
+    auto column = column_wrapper<element_type>  {};
+    auto values = column_wrapper<element_type>  {  0,  7, 10, 11, 30, 32, 40, 47, 50, 90 };
+    auto expect = column_wrapper<gdf_index_type>{  0,  0,  0,  0,  0,  0,  0,  0,  0,  0 };
+
+    gdf_column result_column{};
+
+    EXPECT_NO_THROW(
+        result_column = cudf::lower_bound(
+            *(column.get()),
+            *(values.get()))
+    );
+
+    auto result = column_wrapper<gdf_index_type>(result_column);
+
+    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
+                              << "Expected:" << expect.to_str();
+}
+
+TEST_F(SearchTest, empty_values)
+{
+    using element_type = int64_t;
+
+    auto column = column_wrapper<element_type>  { 10, 20, 30, 40, 50 };
+    auto values = column_wrapper<element_type>  {};
+    auto expect = column_wrapper<gdf_index_type>{};
+
+    gdf_column result_column{};
+
+    EXPECT_NO_THROW(
+        result_column = cudf::lower_bound(
+            *(column.get()),
+            *(values.get()))
+    );
+
+    auto result = column_wrapper<gdf_index_type>(result_column);
+
+    ASSERT_EQ(result, expect) << "  Actual:" << result.to_str()
+                              << "Expected:" << expect.to_str();
+}
+
 TEST_F(SearchTest, non_null_column__find_first)
 {
     using element_type = int64_t;

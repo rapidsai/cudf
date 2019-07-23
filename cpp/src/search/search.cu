@@ -70,7 +70,6 @@ gdf_column search_ordered(table const& t,
                           cudaStream_t stream = 0)
 {
   // TODO: validate input table and values
-  // TODO: allow empty input
 
   // Allocate result column
   gdf_column result_like{};
@@ -79,6 +78,14 @@ gdf_column search_ordered(table const& t,
   result_like.data = values.get_column(0)->data;
   // TODO: let result have nulls? this could be used for records not found
   auto result = allocate_like(result_like);
+
+  // Handle empty inputs
+  if (t.num_rows() == 0) {
+    CUDA_TRY(cudaMemset(result.data, 0, values.num_rows()));
+    if (is_nullable(result)) {
+      CUDA_TRY(cudaMemset(result.valid, 0, values.num_rows()));
+    }
+  }
 
   auto d_t      = device_table::create(t, stream);
   auto d_values = device_table::create(values, stream);
