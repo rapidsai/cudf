@@ -391,7 +391,7 @@ def test_dataframe_pop():
 
     # check empty dataframe edge case
     empty_pdf = pd.DataFrame(columns=["a", "b"])
-    empty_gdf = DataFrame(columns=["a", "b"])  # .from_pandas(empty_pdf)
+    empty_gdf = DataFrame(columns=["a", "b"])
     pb = empty_pdf.pop("b")
     gb = empty_gdf.pop("b")
     assert len(pb) == len(gb)
