@@ -378,8 +378,13 @@ class MultiIndex(Index):
             result_columns._codes = clear_codes
             result_columns._source_data = clear_codes
             result.columns = result_columns
-        elif len(row_tuple) < len(self.levels) and not\
-                isinstance(row_tuple[0], slice):
+        elif (
+            len(row_tuple) < len(self.levels)
+            and (
+                not slice(None) in row_tuple
+                and not isinstance(row_tuple[0], slice)
+                )
+            ):
             columns = self._popn(len(row_tuple))
             result.columns = columns.take(valid_indices)
         else:

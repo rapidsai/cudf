@@ -143,8 +143,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_tuple_arg(self, arg):
+        from cudf.dataframe.dataframe import Series
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
+        from cudf.utils.cudautils import arange
         from cudf import MultiIndex
         # Step 1: Gather columns
         if isinstance(self._df.columns, MultiIndex):
@@ -158,9 +160,17 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         if isinstance(columns_df.index, MultiIndex):
             return columns_df.index._get_row_major(columns_df, arg[0])
         else:
-            df = DataFrame()
-            for col in columns_df.columns:
-                df[col] = columns_df[col].loc[arg[0]]
+            if isinstance(self._df.columns, MultiIndex):
+                if isinstance(arg[0], slice):
+                    start, stop, step = arg[0].indices(len(columns_df))
+                    indices = arange(start, stop, step)
+                    df = columns_df.take(indices)
+                else:
+                    df = columns_df.take(arg[0])
+            else:
+                df = DataFrame()
+                for col in columns_df.columns:
+                    df[col] = columns_df[col].loc[arg[0]]
         # Step 3: Gather index
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):

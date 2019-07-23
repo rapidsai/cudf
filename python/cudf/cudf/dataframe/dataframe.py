@@ -1058,6 +1058,9 @@ class DataFrame(object):
             for i, col_name in enumerate(self._cols):
                 out[col_name] = result_cols[i]
 
+            if isinstance(self.columns, cudf.MultiIndex):
+                out.columns = self.columns
+
             if ignore_index:
                 out.index = RangeIndex(len(out))
             else:
@@ -1739,7 +1742,7 @@ class DataFrame(object):
         result = cpp_transpose(self)
         self.columns = temp_columns
         result = result.rename(dict(zip(result.columns, self.index)))
-        result = result.set_index(as_index(temp_columns))
+        result = result.set_index(temp_columns)
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             result.columns = self.index
         return result
