@@ -45,8 +45,8 @@ TYPED_TEST(IsSortedAlphaNum, AlphaNumericalTrue)
     bool found  = false;
 
     cudf::test::column_wrapper_factory<T> factory;
-    column_wrapper <T> col1 = factory.make(4, [](int row) { return (row); });
-    column_wrapper <T> col2 = factory.make(4, [](int row) { return (100 - row); });
+    column_wrapper <T> col1 = factory.make(4, [](auto row) { return (row); });
+    column_wrapper <T> col2 = factory.make(4, [](auto row) { return (100 - row); });
     column_wrapper <int32_t> col3 = column_wrapper<int32_t>({1,1,1,1},[](auto row) { return true; });
     column_wrapper <int32_t> col4 = column_wrapper<int32_t>({4,3,2,1},[](auto row) { return true; });
 
@@ -58,7 +58,7 @@ TYPED_TEST(IsSortedAlphaNum, AlphaNumericalTrue)
 
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,1,0,1};
+    std::vector <int8_t> const asc_dec {0,1,0,1};
 
     found = is_sorted (table, asc_dec, false);
     
@@ -71,8 +71,8 @@ TYPED_TEST(IsSortedAlphaNum, AlphaNumericalFalse)
     bool found  = false;
 
     cudf::test::column_wrapper_factory<T> factory;
-    column_wrapper <T> col1 = factory.make(4, [](int row) { return (1); });
-    column_wrapper <T> col2 = factory.make(4, [](int row) { return (row); });
+    column_wrapper <T> col1 = factory.make(4, [](auto row) { return (1); });
+    column_wrapper <T> col2 = factory.make(4, [](auto row) { return (row); });
     column_wrapper <int32_t> col3 = column_wrapper<int32_t>({1,1,1,1},[](auto row) { return true; });
     column_wrapper <int32_t> col4 = column_wrapper<int32_t>({4,3,2,1},[](auto row) { return true; });
 
@@ -84,7 +84,7 @@ TYPED_TEST(IsSortedAlphaNum, AlphaNumericalFalse)
     
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,1,0,1};
+    std::vector <int8_t> const asc_dec {0,1,0,1};
     
     found = is_sorted (table, asc_dec, false);
     
@@ -120,7 +120,7 @@ TYPED_TEST(IsSorted, NumericalTrue)
     
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,1,0,1};
+    std::vector <int8_t> const asc_dec {0,1,0,1};
     
     found = is_sorted (table, asc_dec, false);
     
@@ -145,7 +145,7 @@ TYPED_TEST(IsSorted, NumericalFalse)
 
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,1,0,1};
+    std::vector <int8_t> const asc_dec {0,1,0,1};
 
     found = is_sorted (table, asc_dec, false);
 
@@ -166,7 +166,7 @@ TYPED_TEST(IsSorted, NumericalRowAscending)
 
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,1};
+    std::vector <int8_t> const asc_dec {0,1};
 
     found = is_sorted (table, asc_dec, false);
 
@@ -187,7 +187,7 @@ TYPED_TEST(IsSorted, NumericalRowDecendingFails)
 
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,1};
+    std::vector <int8_t> const asc_dec {0,1};
 
     found = is_sorted (table, asc_dec, false);
 
@@ -209,7 +209,7 @@ TYPED_TEST(IsSorted, NumericalNullSmallest)
 
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,0};
+    std::vector <int8_t> const asc_dec {0,0};
 
     found = is_sorted (table, asc_dec, nulls_are_smallest);
 
@@ -231,7 +231,7 @@ TYPED_TEST(IsSorted, NumericalNullBiggest)
 
     cudf::table table(cols.data(), cols.size());
     EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
-    std::vector <int8_t> asc_dec {0,0};
+    std::vector <int8_t> const asc_dec {0,0};
 
     found = is_sorted (table, asc_dec, nulls_are_smallest);
 

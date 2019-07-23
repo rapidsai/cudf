@@ -41,54 +41,35 @@ struct compare_with_neighbor{
     row_inequality_comparator<nullable> compare;
 };
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Checks if a Table is sorted along the row.
- * 
- * @param[in] input_table 	 whose rows needs to be validated 
- * @param[in] ascending          vector representing the relation between columns
- * 				 (0 is ascending order and 1 is descending)
- * @param[in] nulls_are_smallest Flag to indicate if nulls are to be considered
- * 				 smaller than non-nulls or viceversa
- * 
- * @returns true - if sorted , false - if not.
- */
-/* ----------------------------------------------------------------------------*/
 bool is_sorted(cudf::table const &table,
-                       std::vector<int8_t>& ascending,
+                       std::vector<int8_t>const & descending,
                        bool nulls_are_smallest = false)                       
 {
   cudaStream_t stream = 0;
   bool sorted = false;
 
-  if (static_cast <unsigned int>(table.num_columns()) != ascending.size())
+  CUDF_EXPECTS(static_cast <unsigned int>(table.num_columns()) == descending.size(), "Number of columns in the table doesn't match the vector descending's size .\n");
+  
+  if (table.num_columns() == 0)
   {
-      return false;
-  }
-  else if (table.num_columns() == 0)
-  {
-      return false;
+      return true;
   }
 
   auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(table);
-  bool nullable = device_input_table.get()->has_nulls();
-  int8_t* asc_dec = nullptr;
-  RMM_TRY(RMM_ALLOC((void **)(&asc_dec), ascending.size() * sizeof(int8_t), stream));
-  CUDA_TRY(cudaMemcpy(static_cast<void *>(asc_dec), ascending.data(), ascending.size()*sizeof(int8_t), cudaMemcpyHostToDevice));
+  bool nullable = cudf::has_nulls(table);
+  rmm::device_vector<int8_t> asc_desc(descending);
 
   gdf_size_type nrows = table.num_rows();
   
   if (nullable){
-    auto ineq_op = compare_with_neighbor<true>(*device_input_table, nulls_are_smallest, asc_dec);
+    auto ineq_op = compare_with_neighbor<true>(*device_input_table, nulls_are_smallest, asc_desc.data().get());
     sorted = thrust::all_of (exec, thrust::make_counting_iterator(0), thrust::make_counting_iterator(nrows-1), ineq_op);
 
   } else {
-    auto ineq_op = compare_with_neighbor<false>(*device_input_table, nulls_are_smallest, asc_dec);
+    auto ineq_op = compare_with_neighbor<false>(*device_input_table, nulls_are_smallest, asc_desc.data().get());
     sorted = thrust::all_of (exec, thrust::make_counting_iterator(0), thrust::make_counting_iterator(nrows-1), ineq_op);
   }
-  
-  RMM_TRY(RMM_FREE(asc_dec, stream));
 
   return sorted;
 }
