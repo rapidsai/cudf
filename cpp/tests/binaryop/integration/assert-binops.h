@@ -50,7 +50,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
     uint32_t lhs_valid = (lhs.is_valid() ? UINT32_MAX : 0);
     ASSERT_TRUE(out_valid.size() == rhs_valid.size());
-    for (size_t index = 0; index < out_valid.size(); ++index) {
+    for (decltype(out_valid.size()) index = 0; index < out_valid.size(); ++index) {
         ASSERT_TRUE(out_valid[index] == (lhs_valid & rhs_valid[index]));
     }
 }
@@ -76,7 +76,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
     uint32_t rhs_valid = (rhs.is_valid() ? UINT32_MAX : 0);
     ASSERT_TRUE(out_valid.size() == lhs_valid.size());
-    for (size_t index = 0; index < out_valid.size(); ++index) {
+    for (decltype(out_valid.size()) index = 0; index < out_valid.size(); ++index) {
         ASSERT_TRUE(out_valid[index] == (lhs_valid[index] & rhs_valid));
     }
 }
@@ -105,7 +105,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
     ASSERT_TRUE(out_valid.size() == lhs_valid.size());
     ASSERT_TRUE(out_valid.size() == rhs_valid.size());
-    for (size_t index = 0; index < out_valid.size(); ++index) {
+    for (decltype(out_valid.size()) index = 0; index < out_valid.size(); ++index) {
         ASSERT_TRUE(out_valid[index] == lhs_valid[index] | rhs_valid[index]);
     }
 }
@@ -130,7 +130,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
     const int ULP = 2.0;
     ASSERT_TRUE(out_data.size() == lhs_data.size());
     ASSERT_TRUE(out_data.size() == rhs_data.size());
-    for (size_t index = 0; index < out_data.size(); ++index) {
+    for (decltype(out_data.size()) index = 0; index < out_data.size(); ++index) {
         ASSERT_TRUE(abs(out_data[index] - (TypeOut)(ope(lhs_data[index], rhs_data[index]))) < ULP);
     }
 
@@ -140,7 +140,7 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 
     ASSERT_TRUE(out_valid.size() == lhs_valid.size());
     ASSERT_TRUE(out_valid.size() == rhs_valid.size());
-    for (size_t index = 0; index < out_valid.size(); ++index) {
+    for (decltype(out_valid.size()) index = 0; index < out_valid.size(); ++index) {
         ASSERT_TRUE(out_valid[index] == (lhs_valid[index] & rhs_valid[index]));
     }
 }

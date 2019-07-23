@@ -72,7 +72,7 @@ def column_applymap(incol, udf_ptx, np_dtype):
     cdef gdf_dtype g_type = dtypes[np_dtype]
 
     with nogil:
-        c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type)
+        c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type, True)
 
     data, mask = gdf_column_to_column_mem(&c_outcol)
 

@@ -18,6 +18,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utilities/error_utils.hpp>
 
 constexpr char percent_escape[] = "_";
 
@@ -71,7 +72,9 @@ std::string get_rid_of_nonalnum_sqrbra(const std::string& src) {
 }
 
 std::string parse_register_type(const std::string& src) {
-  if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
+  if (src == ".b8" || src == ".u8" || src == ".s8")
+    return "h";
+  else if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
     return "h";
   else if (src == ".b32" || src == ".u32" || src == ".s32" || src == ".f16x2")
     return "r";
@@ -86,7 +89,9 @@ std::string parse_register_type(const std::string& src) {
 }
 
 std::string register_type_to_cppname(const std::string& register_type) {
-  if (register_type == ".u16")
+  if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
+    return "char";
+  else if (register_type == ".u16")
     return "short";
   else if (register_type == ".s16")
     return "short";
@@ -149,10 +154,10 @@ std::string parse_instruction(const std::string& src) {
   size_t start = 0;
   size_t stop = 0;
   bool is_instruction = true;
-  bool is_loading_param = false;
   std::string constraint;
   std::string register_type;
   bool blank = true;
+  std::string cpp_typename;
   while (stop < length) {
     while (start < length &&
            (is_white(src[start]) || src[start] == ',' || src[start] == '{' ||
@@ -182,12 +187,11 @@ std::string parse_instruction(const std::string& src) {
     }
     std::string piece = std::string(src, start, stop - start);
     if (is_instruction) {
-      is_loading_param = true;
       if (piece.find("ld.param") != std::string::npos) {
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
-        // 
-        if (register_type_to_cppname(register_type) == "int" || register_type_to_cppname(register_type) == "short") {
+        cpp_typename = register_type_to_cppname(register_type);
+        if (cpp_typename == "int" || cpp_typename == "short" || cpp_typename == "char") {
           // The trick to support `ld` statement whose destination reg. wider than 
           // the instruction width, e.g.
           //      
@@ -216,8 +220,13 @@ std::string parse_instruction(const std::string& src) {
       if (piece.find("_param_") != std::string::npos) {
         // This is the source of the parameter loading instruction
         output += " %0";
-        suffix = ": : \"" + constraint + "\"(" +
+        if(cpp_typename == "char"){
+          suffix = ": : \"" + constraint + "\"( static_cast<short>(" +
+                 get_rid_of_nonalnum_sqrbra(piece) + "))";
+        }else{  
+          suffix = ": : \"" + constraint + "\"(" +
                  get_rid_of_nonalnum_sqrbra(piece) + ")";
+        }
         // Here we get to see the actual type of the input arguments.
         get_input_arg_list()[get_rid_of_nonalnum_sqrbra(piece)] =
             register_type_to_cppname(register_type);
@@ -469,4 +478,44 @@ std::string parse_single_function_ptx(const std::string& src,
   final_output += "}";
 
   return final_output;
+}
+
+// The interface
+std::string parse_single_function_cuda(const std::string& src,
+                                       const std::string& function_name,
+                                       const std::string& output_arg_type) {
+  std::string no_comments = remove_comments(src);
+
+  // For CUDA device function we just need to find the function 
+  // name and replace it with the specified one.
+  const size_t length = no_comments.size();
+  size_t start = 0;
+  size_t stop = start;
+  
+  while (stop < length && no_comments[stop] != '(') {
+    stop++;
+  }
+  CUDF_EXPECTS(stop != length && stop != 0,
+    "No CUDA device function found in the input CUDA code.\n");
+  
+  stop--;
+
+  while (stop > 0 && is_white(no_comments[stop]) ){
+    stop--;
+  }
+  CUDF_EXPECTS(stop != 0 || !is_white(no_comments[0]),
+    "No CUDA device function name found in the input CUDA code.\n");
+  
+  start = stop;
+  while (start > 0 && !is_white(no_comments[start])){
+    start--;
+  }
+  start++;
+  stop++;
+  CUDF_EXPECTS(start < stop,
+    "No CUDA device function name found in the input CUDA code.\n");
+ 
+  no_comments.replace(start, stop-start, function_name);
+
+  return no_comments;
 }

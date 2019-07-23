@@ -42,20 +42,22 @@ std::istream* headersCode(std::string filename, std::iostream& stream) {
   return nullptr;
 }
 
-Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx,
-                               std::string output_type) {
-  std::string combined_kernel =
-      parse_single_function_ptx(ptx, "GENERIC_UNARY_OP", output_type) +
+Launcher& Launcher::setProgram(std::string prog_file_name, std::string udf,
+                               std::string output_type, bool is_ptx) {
+  std::string combined_kernel = is_ptx ?
+      parse_single_function_ptx(udf, "GENERIC_UNARY_OP", output_type) +
+      code::kernel:
+      parse_single_function_cuda(udf, "GENERIC_UNARY_OP", output_type) +
       code::kernel;
   program = cacheInstance.getProgram(prog_file_name, combined_kernel.c_str(),
                                      headersName, compilerFlags, headersCode);
 }
 
-Launcher::Launcher(const std::string& ptx, const std::string& output_type)
+Launcher::Launcher(const std::string& udf, const std::string& output_type, bool is_ptx)
     : cacheInstance{cudf::jit::cudfJitCache::Instance()} {
-  std::string ptx_hash_str =
-      std::to_string(std::hash<std::string>{}(ptx + output_type));
-  this->setProgram(prog_name + ("." + ptx_hash_str), ptx, output_type);
+  std::string udf_hash_str =
+      std::to_string(std::hash<std::string>{}(udf + output_type));
+  this->setProgram(prog_name + ("." + udf_hash_str), udf, output_type, is_ptx);
 }
 
 Launcher::Launcher(Launcher&& launcher)

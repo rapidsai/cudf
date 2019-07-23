@@ -37,4 +37,9 @@ will have.
 std::string parse_single_function_ptx(const std::string& src,
                                       const std::string& function_name,
                                       const std::string& output_arg_type);
+
+std::string parse_single_function_cuda(const std::string& src,
+                                       const std::string& function_name,
+                                       const std::string& output_arg_type);
+
 #endif

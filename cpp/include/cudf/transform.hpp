@@ -37,7 +37,7 @@ namespace cudf {
  **/
 gdf_column transform(const gdf_column &input,
                      const std::string &ptx_unary_function,
-                     gdf_dtype output_type);
+                     gdf_dtype output_type, bool is_ptx);
 
 }  // namespace cudf
 

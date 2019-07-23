@@ -40,7 +40,7 @@ class Launcher {
  public:
   Launcher();
 
-  Launcher(const std::string& ptx, const std::string& output_type);
+  Launcher(const std::string& udf, const std::string& output_type, bool is_ptx);
 
   Launcher(Launcher&&);
 
@@ -86,7 +86,7 @@ class Launcher {
    * @return Launcher& ref to this launcher object
    **/
   Launcher& setProgram(std::string prog_file_name, std::string ptx,
-                       std::string output_type);
+                       std::string output_type, bool is_ptx);
 
   /**
    * @brief Handle the Jitify API to instantiate and launch using information

@@ -26,11 +26,48 @@
 #include <cudf/transform.hpp>
 #include "assert-unary.h"
 
+#include <cctype>
+
+#include <cudf/types.h>
+
 namespace cudf {
 namespace test {
 namespace transformation {
 
 struct UnaryOperationIntegrationTest : public GdfTest {};
+
+TEST_F(UnaryOperationIntegrationTest, Cube_Vector_FP32_FP32_CUDA) {
+
+using dtype = float;
+
+// c = a*a*a*a
+const char* cuda =
+R"***(
+__device__ inline void    fdsf   (
+	float* C,
+	float a
+)
+{
+  *C = a*a*a*a;
+}
+)***";
+
+    auto Cube = [](dtype a) {return a*a*a*a;};
+
+    auto in = cudf::test::column_wrapper<dtype>(500,
+        [](gdf_size_type row) {return row % 3;},
+        [](gdf_size_type row) {return row % 4;});
+    
+    gdf_column cpp_output_col;
+
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), cuda, GDF_FLOAT32, false));
+
+    auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
+
+    ASSERT_UNARY(cpp_out, in, Cube);
+    
+    gdf_column_free(&cpp_output_col);
+}
 
 TEST_F(UnaryOperationIntegrationTest, Cube_Vector_FP32_FP32) {
 
@@ -84,7 +121,7 @@ R"***(
     
     gdf_column cpp_output_col;
 
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_FLOAT32));
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_FLOAT32, true));
 
     auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
 
@@ -148,11 +185,111 @@ R"***(
   
     gdf_column cpp_output_col;
 
-    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_INT64));
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_INT64, true));
 
     auto cpp_out = cudf::test::column_wrapper<int64_t>(cpp_output_col);
 
     ASSERT_UNARY(cpp_out, in, Cube);
+    
+    gdf_column_free(&cpp_output_col);
+}
+
+TEST_F(UnaryOperationIntegrationTest, Cube_Vector_BOOL8_BOOL8) {
+
+using dtype = int8_t;
+
+// Capitalize all the lower case letters
+// Assuming ASCII, the PTX code is compiled from the following CUDA
+/**
+__device__ inline void f(
+  signed char* output, 
+  signed char input
+){
+	if(input > 96 && input < 123){	
+  	*output = input - 32;
+  }else{
+  	*output = input;    
+  }
+}
+*/
+const char* ptx = 
+R"***(
+.func _Z1fPcc(
+        .param .b64 _Z1fPcc_param_0,
+        .param .b32 _Z1fPcc_param_1
+)
+{
+        .reg .pred      %p<2>;
+        .reg .b16       %rs<6>;
+        .reg .b32       %r<3>;
+        .reg .b64       %rd<3>;
+
+
+        ld.param.u64    %rd1, [_Z1fPcc_param_0];
+        cvta.to.global.u64      %rd2, %rd1;
+        ld.param.s8     %rs1, [_Z1fPcc_param_1];
+        add.s16         %rs2, %rs1, -97;
+        and.b16         %rs3, %rs2, 255;
+        setp.lt.u16     %p1, %rs3, 26;
+        cvt.u32.u16     %r1, %rs1;
+        add.s32         %r2, %r1, 224;
+        cvt.u16.u32     %rs4, %r2;
+        selp.b16        %rs5, %rs4, %rs1, %p1;
+        st.global.u8    [%rd2], %rs5;
+        ret;
+}
+)***";
+    
+    auto to_upper = [](dtype a) {return std::toupper(a);};
+
+    auto in = cudf::test::column_wrapper<dtype>(500,
+        [](gdf_size_type row) {return 'a' + (row % 26);},
+        [](gdf_size_type row) {return true;});
+  
+    gdf_column cpp_output_col;
+
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), ptx, GDF_INT8, true));
+
+    auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
+
+    ASSERT_UNARY(cpp_out, in, to_upper);
+    
+    gdf_column_free(&cpp_output_col);
+}
+
+TEST_F(UnaryOperationIntegrationTest, Cube_Vector_BOOL8_BOOL8_CUDA) {
+
+using dtype = int8_t;
+
+// Capitalize all the lower case letters
+// Assuming ASCII
+const char* cuda = 
+R"***(
+__device__ inline void f(
+  signed char* output, 
+  signed char input
+){
+	if(input > 96 && input < 123){	
+  	*output = input - 32;
+  }else{
+  	*output = input;    
+  }
+}
+)***";
+    
+    auto to_upper = [](dtype a) {return std::toupper(a);};
+
+    auto in = cudf::test::column_wrapper<dtype>(500,
+        [](gdf_size_type row) {return 'a' + (row % 26);},
+        [](gdf_size_type row) {return true;});
+  
+    gdf_column cpp_output_col;
+
+    CUDF_EXPECT_NO_THROW(cpp_output_col = cudf::transform(*in.get(), cuda, GDF_INT8, false));
+
+    auto cpp_out = cudf::test::column_wrapper<dtype>(cpp_output_col);
+
+    ASSERT_UNARY(cpp_out, in, to_upper);
     
     gdf_column_free(&cpp_output_col);
 }

@@ -42,8 +42,9 @@ namespace transformation {
 namespace jit {
 
 void unary_operation(gdf_column* out, const gdf_column* in,
-                     const std::string& ptx, const std::string& output_type) {
-  Launcher(ptx, output_type).setKernelInst("kernel", out, in).launch(out, in);
+                     const std::string& ptx, const std::string& output_type, bool is_ptx) {
+  Launcher(ptx, output_type, is_ptx).setKernelInst("kernel", out, in).launch(out, in);
+
 }
 
 }  // namespace jit
@@ -52,7 +53,7 @@ void unary_operation(gdf_column* out, const gdf_column* in,
 
 gdf_column transform(const gdf_column& input,
                      const std::string& ptx_unary_function,
-                     gdf_dtype output_type) {
+                     gdf_dtype output_type, bool is_ptx) {
   
   // First create a gdf_column and then call the above function
   gdf_column output = allocate_size_dtype(input.size, output_type, input.valid != nullptr);
@@ -69,18 +70,18 @@ gdf_column transform(const gdf_column& input,
   // Check for datatype
   // Input data types can be different but they have to be one of the
   // following four.
-  CUDF_EXPECTS( input.dtype == GDF_FLOAT32 ||
-                input.dtype == GDF_FLOAT64 ||
-                input.dtype == GDF_INT64   || 
-                input.dtype == GDF_INT32   || 
-                input.dtype == GDF_INT16, "Invalid/Unsupported input datatype" );
+  // CUDF_EXPECTS( input.dtype == GDF_FLOAT32 ||
+  //               input.dtype == GDF_FLOAT64 ||
+  //               input.dtype == GDF_INT64   || 
+  //               input.dtype == GDF_INT32   || 
+  //               input.dtype == GDF_INT16, "Invalid/Unsupported input datatype" );
   
   if (input.valid != nullptr) {
     gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
     CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));
   }
 
-  transformation::jit::unary_operation(&output, &input, ptx_unary_function, cudf::jit::getTypeName(output_type));
+  transformation::jit::unary_operation(&output, &input, ptx_unary_function, cudf::jit::getTypeName(output_type), is_ptx);
   
   return output;
 }
