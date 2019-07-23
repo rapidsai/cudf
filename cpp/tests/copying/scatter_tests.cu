@@ -23,6 +23,9 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <cudf/table.hpp>
 #include <random>
+#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/valid_vectors.h>
+
 
 template <typename T>
 struct ScatterTest : GdfTest {};
@@ -260,3 +263,28 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
     }
   }
 }
+
+// The test to test against BUG #2007
+TYPED_TEST(ScatterTest, PreserveDestBitmask) {
+  
+  cudf::test::column_wrapper<int64_t> source(
+      {10, -1}, [](auto index){ return false; });
+  // So source is {@, @}
+  cudf::test::column_wrapper<int64_t> destination(
+      {10, -1, 6, 7}, [](auto index){ return index != 2; });
+  // So destination is {10, -1, @, 7} 
+
+  std::vector<gdf_index_type> scatter_map({1, 3});
+  rmm::device_vector<gdf_index_type> d_scatter_map = scatter_map;
+
+  cudf::table source_table({source.get()});
+  cudf::table destination_table({destination.get()});
+
+  cudf::scatter(&source_table, d_scatter_map.data().get(), &destination_table);
+
+  // We should expect {10, @, @, @} 
+  cudf::test::column_wrapper<int64_t> expect(
+      {10, 10, 6, -1}, [](auto index){ return index == 0; });
+  EXPECT_EQ(expect, destination);
+}
+
