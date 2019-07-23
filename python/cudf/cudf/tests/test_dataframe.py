@@ -3355,18 +3355,20 @@ def test_isin_string(data, values):
     "data",
     [
         [],
-        pd.Series(['a','b','c','c','c','d','e'], dtype='category'),
-        pd.Series(['a','b',None,'c','d','e'], dtype='category'),
-        pd.Series([0, 3, 10, 12], dtype='category')
-    ])
+        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
+        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
+        pd.Series([0, 3, 10, 12], dtype="category"),
+    ],
+)
 @pytest.mark.parametrize(
     "values",
     [
         [],
-        ['a', 'b', None, 'f', 'words'],
-        ['0', '12', None, '14'],
-        [0, 10, 12, None, 39, 40, 1000]
-    ])
+        ["a", "b", None, "f", "words"],
+        ["0", "12", None, "14"],
+        [0, 10, 12, None, 39, 40, 1000],
+    ],
+)
 def test_isin_categorical(data, values):
     psr = pd.Series(data)
     gsr = Series.from_pandas(psr)
@@ -3380,8 +3382,9 @@ def test_isin_categorical(data, values):
     "data",
     [
         [],
-        pd.Series(['this', 'is', None, 'a', 'test'],
-                  index=['a', 'b', 'c', 'd', 'e']),
+        pd.Series(
+            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
+        ),
         pd.Series([0, 15, 10], index=[0, None, 9]),
         pd.Series(
             range(25),
