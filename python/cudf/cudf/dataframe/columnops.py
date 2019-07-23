@@ -265,9 +265,7 @@ def build_column(
 
 def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     """Create a Column from an arbitrary object
-
     Currently support inputs are:
-
     * ``Column``
     * ``Buffer``
     * ``Series``
@@ -277,7 +275,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     * numpy array
     * pyarrow array
     * pandas.Categorical
-
     Returns
     -------
     result : subclass of TypedColumnBase
@@ -524,10 +521,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     ):
                         raise TypeError
                     else:
-                        if dtype.type == np.bool_:
+                        np_type = np.dtype(dtype).type
+                        if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = np_to_pa_dtype(dtype.type)
+                            pa_type = np_to_pa_dtype(np_type)
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     dtype=dtype,

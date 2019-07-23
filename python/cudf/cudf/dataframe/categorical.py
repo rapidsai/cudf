@@ -34,6 +34,7 @@ class CategoricalAccessor(object):
     @property
     def codes(self):
         from cudf import Series
+
         data = self._parent.data
         if self._parent.has_null_mask:
             mask = self._parent.mask
@@ -56,6 +57,7 @@ class CategoricalAccessor(object):
             data = self._set_categories(self.categories, **kwargs)
         if data is not None:
             from cudf import Series
+
             return Series(data=data)
 
     def as_unordered(self, inplace=False):
@@ -63,7 +65,8 @@ class CategoricalAccessor(object):
             self._parent._ordered = False
         else:
             from cudf import Series
-            return Series(data=data.replace(ordered=False))
+
+            return Series(data=self._parent.replace(ordered=False))
 
     def add_categories(self, new_categories, **kwargs):
         data = None if kwargs["inplace"] else self._parent
@@ -73,10 +76,12 @@ class CategoricalAccessor(object):
             data = self._set_categories(new_categories, **kwargs)
         if data is not None:
             from cudf import Series
+
             return Series(data=data)
 
     def remove_categories(self, removals, **kwargs):
         from cudf import Series
+
         cats = Series(self._parent._categories)
         new_categories = cats[~cats.isin(removals)]
         return self.set_categories(new_categories, **kwargs)
@@ -108,6 +113,7 @@ class CategoricalAccessor(object):
             data = self._set_categories(new_categories, **kwargs)
         if data is not None:
             from cudf import Series
+
             return Series(data=data)
 
     def reorder_categories(self, new_categories, **kwargs):
