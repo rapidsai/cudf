@@ -77,17 +77,11 @@ class Launcher {
    * @brief Set the Program for this launcher
    *
    * @param prog_file_name Name to give to the program held by this Launcher.
-   * @return Launcher& ref to this launcher object
-   **/
-  Launcher& setProgram(std::string prog_file_name);
-
-  /**
-   * @brief Set the Program for this launcher
-   *
-   * @param prog_file_name Name to give to the program held by this Launcher.
    *
    * @param ptx Additional ptx code that contains a user defined function to be
    *used.
+   *
+   * @param output_type The output type that is compatible with the PTX code
    *
    * @return Launcher& ref to this launcher object
    **/

@@ -72,7 +72,8 @@ gdf_column transform(const gdf_column& input,
   CUDF_EXPECTS( input.dtype == GDF_FLOAT32 ||
                 input.dtype == GDF_FLOAT64 ||
                 input.dtype == GDF_INT64   || 
-                input.dtype == GDF_INT32, "Invalid/Unsupported input datatype" );
+                input.dtype == GDF_INT32   || 
+                input.dtype == GDF_INT16, "Invalid/Unsupported input datatype" );
   
   if (input.valid != nullptr) {
     gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);

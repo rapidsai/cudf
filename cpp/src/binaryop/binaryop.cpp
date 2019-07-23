@@ -316,11 +316,13 @@ gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
   CUDF_EXPECTS( lhs.dtype == GDF_FLOAT32 || 
                 lhs.dtype == GDF_FLOAT64 ||
                 lhs.dtype == GDF_INT64   ||
-                lhs.dtype == GDF_INT32,  "Invalid/Unsupported lhs datatype");
+                lhs.dtype == GDF_INT32   ||
+                lhs.dtype == GDF_INT16,  "Invalid/Unsupported lhs datatype");
   CUDF_EXPECTS( rhs.dtype == GDF_FLOAT32 || 
                 rhs.dtype == GDF_FLOAT64 ||
                 rhs.dtype == GDF_INT64   ||
-                rhs.dtype == GDF_INT32,  "Invalid/Unsupported rhs datatype");
+                rhs.dtype == GDF_INT32   ||
+                rhs.dtype == GDF_INT16,  "Invalid/Unsupported rhs datatype");
   
   binops::binary_valid_mask_and(output.null_count, output.valid, lhs.valid,
                                 rhs.valid, rhs.size);

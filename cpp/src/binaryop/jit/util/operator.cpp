@@ -18,7 +18,7 @@
  */
 
 #include "operator.h"
-#include <jit/type.h>
+#include "type.h"
 #include <cstring>
 
 namespace cudf {
@@ -36,7 +36,7 @@ namespace jit {
             buffer[0] = 'R';
             buffer[1] = '\0';
         }
-        strcat(buffer, cudf::jit::getOperatorName(ope).data());
+        strcat(buffer, cudf::binops::jit::getOperatorName(ope).data());
         return buffer;
     }
 

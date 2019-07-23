@@ -42,11 +42,6 @@ std::istream* headersCode(std::string filename, std::iostream& stream) {
   return nullptr;
 }
 
-Launcher& Launcher::setProgram(std::string prog_file_name) {
-  program = cacheInstance.getProgram(prog_file_name, code::kernel, headersName,
-                                     compilerFlags, headersCode);
-}
-
 Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx,
                                std::string output_type) {
   std::string combined_kernel =
@@ -54,10 +49,6 @@ Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx,
       code::kernel;
   program = cacheInstance.getProgram(prog_file_name, combined_kernel.c_str(),
                                      headersName, compilerFlags, headersCode);
-}
-
-Launcher::Launcher() : cacheInstance{cudf::jit::cudfJitCache::Instance()} {
-  this->setProgram(prog_name);
 }
 
 Launcher::Launcher(const std::string& ptx, const std::string& output_type)

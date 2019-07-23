@@ -14,7 +14,7 @@ from cudf.dataframe import Series
     Version(numba.__version__) < Version("0.44.0a"),
     reason="Numba 0.44.0a or newer required",
 )
-@pytest.mark.parametrize("dtype", ["int32", "int64", "float32", "float64"])
+@pytest.mark.parametrize("dtype", ["int16", "int32", "int64", "float32", "float64"])
 def test_applymap(dtype):
 
     size = 500
