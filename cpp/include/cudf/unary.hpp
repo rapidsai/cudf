@@ -67,8 +67,8 @@ gdf_column unary_operation(gdf_column const& input, unary_op op);
  *
  * @returns gdf_column Result of the cast operation
  */
-gdf_column col_cast(gdf_column const& input, gdf_dtype out_type,
-                    gdf_dtype_extra_info out_info = gdf_dtype_extra_info{});
+gdf_column cast(gdf_column const& input, gdf_dtype out_type,
+                gdf_dtype_extra_info out_info = gdf_dtype_extra_info{});
 
 
 } // namespace cudf

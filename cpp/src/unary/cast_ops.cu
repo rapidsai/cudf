@@ -254,8 +254,8 @@ struct CastFrom_Dispatcher
 
 } // namespace detail
 
-gdf_column col_cast(gdf_column const& input, gdf_dtype out_type,
-                    gdf_dtype_extra_info out_info) {
+gdf_column cast(gdf_column const& input, gdf_dtype out_type,
+                gdf_dtype_extra_info out_info) {
 
     bool has_mask = (input.valid != nullptr);
     auto output = cudf::allocate_column(out_type, input.size,

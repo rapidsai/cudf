@@ -106,7 +106,7 @@ TEST_F(col_cast_test, usage_example) {
 	auto inputTimestampMilliCol = cudf::test::column_wrapper<cudf::timestamp>(inputTimestampMilliData);
 	inputTimestampMilliCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-	// example for cudf::col_cast generic to f32
+	// example for cudf::cast generic to f32
 	{
 		auto results = cudf::test::column_wrapper<float>(std::vector<float>{
 			-1528.0,
@@ -115,14 +115,14 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from int32
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputInt32Col, GDF_FLOAT32) );
+		EXPECT_NO_THROW( output = cudf::cast(inputInt32Col, GDF_FLOAT32) );
 
 		// Output column
 		auto outputFloat32Col = cudf::test::column_wrapper<float>(output);
 		EXPECT_TRUE( results == outputFloat32Col );
 	}
 
-	// example for cudf::col_cast generic to i32
+	// example for cudf::cast generic to i32
 	{
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
@@ -131,14 +131,14 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from float32
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputFloat32Col, GDF_INT32) );
+		EXPECT_NO_THROW( output = cudf::cast(inputFloat32Col, GDF_INT32) );
 
 		// Output column
 		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
 	}
 
-	// example for cudf::col_cast generic to i64 - upcast
+	// example for cudf::cast generic to i64 - upcast
 	{
 		auto results = cudf::test::column_wrapper<int64_t>(std::vector<int64_t>{
 			-1528,
@@ -148,14 +148,14 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from int32
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputInt32Col, GDF_INT64) );
+		EXPECT_NO_THROW( output = cudf::cast(inputInt32Col, GDF_INT64) );
 
 		// Output column
 		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(output);
 		EXPECT_TRUE( results == outputInt64Col );
 	}
 
-	// example for cudf::col_cast generic to i32 - downcast
+	// example for cudf::cast generic to i32 - downcast
 	{
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
@@ -165,14 +165,14 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from int64
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputInt64Col, GDF_INT32) );
+		EXPECT_NO_THROW( output = cudf::cast(inputInt64Col, GDF_INT32) );
 
 		// Output column
 		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
 	}
 
-	// example for cudf::col_cast generic to i32
+	// example for cudf::cast generic to i32
 	{
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
@@ -182,14 +182,14 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from date32
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputDate32Col, GDF_INT32) );
+		EXPECT_NO_THROW( output = cudf::cast(inputDate32Col, GDF_INT32) );
 
 		// Output column
 		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
 	}
 
-	// example for cudf::col_cast generic to date32
+	// example for cudf::cast generic to date32
 	{
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{-1528},
@@ -199,14 +199,14 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from int32
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputInt32Col, GDF_DATE32) );
+		EXPECT_NO_THROW( output = cudf::cast(inputInt32Col, GDF_DATE32) );
 
 		// Output column
 		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(output);
 		EXPECT_TRUE( results == outputDate32Col );
 	}
 
-	// example for cudf::col_cast generic to timestamp
+	// example for cudf::cast generic to timestamp
 	{
 		auto results = cudf::test::column_wrapper<cudf::timestamp>(std::vector<cudf::timestamp>{
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
@@ -219,14 +219,14 @@ TEST_F(col_cast_test, usage_example) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_us;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputDate64Col, GDF_TIMESTAMP, info) );
+		EXPECT_NO_THROW( output = cudf::cast(inputDate64Col, GDF_TIMESTAMP, info) );
 
 		// Output column
 		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( results == outputTimestampMicroCol );
 	}
 
-	// example for cudf::col_cast generic to date32
+	// example for cudf::cast generic to date32
 	{
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{17696}, // '2018-06-14'
@@ -236,7 +236,7 @@ TEST_F(col_cast_test, usage_example) {
 
 		// from timestamp in ms
 		gdf_column output;
-		EXPECT_NO_THROW( output = cudf::col_cast(inputTimestampMilliCol, GDF_DATE32) );
+		EXPECT_NO_THROW( output = cudf::cast(inputTimestampMilliCol, GDF_DATE32) );
 
 		// Output column
 		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(output);
@@ -253,7 +253,7 @@ TEST_F(col_cast_test, dataPtrFailureTest) {
 	inputCol.get()->data = nullptr;
 
 	// Pointer to data in input column is null
-	EXPECT_THROW(cudf::col_cast(inputCol, GDF_FLOAT32), cudf::logic_error);
+	EXPECT_THROW(cudf::cast(inputCol, GDF_FLOAT32), cudf::logic_error);
 }
 
 TEST_F(col_cast_test, inputValidMaskFailureTest) {
@@ -264,7 +264,7 @@ TEST_F(col_cast_test, inputValidMaskFailureTest) {
 	inputCol.get()->null_count = 1;
 
 	// Pointer to input column's valid mask is null but null count > 0
-	EXPECT_THROW(cudf::col_cast(inputCol, GDF_FLOAT32), cudf::logic_error);
+	EXPECT_THROW(cudf::cast(inputCol, GDF_FLOAT32), cudf::logic_error);
 }
 
 // Use partial template specialization to choose the uniform_real_distribution type without 
@@ -344,7 +344,7 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
 																				\
 		gdf_column output;														\
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, cudf::gdf_dtype_of<TTO>()));\
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, cudf::gdf_dtype_of<TTO>()));\
 																				\
 		auto outputCol = cudf::test::column_wrapper<TTO>(output);				\
 		auto results = std::get<0>(outputCol.to_host());						\
@@ -401,9 +401,9 @@ struct col_cast_swap_TEST : public GdfTest {};
 																				\
 		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
 																				\
-		gdf_column output = cudf::col_cast(inputCol, cudf::gdf_dtype_of<TTO>());\
+		gdf_column output = cudf::cast(inputCol, cudf::gdf_dtype_of<TTO>());\
 																				\
-		gdf_column originalOutput = cudf::col_cast(output, cudf::gdf_dtype_of<TFROM>());\
+		gdf_column originalOutput = cudf::cast(output, cudf::gdf_dtype_of<TFROM>());\
 																				\
 		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(originalOutput);\
 		auto results = std::get<0>(originalOutputCol.to_host());				\
@@ -427,9 +427,9 @@ struct col_cast_swap_TEST : public GdfTest {};
 		gdf_dtype_extra_info info{};											\
 		info.time_unit = TIME_UNIT_ms;											\
 																				\
-		gdf_column output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info);		\
+		gdf_column output = cudf::cast(inputCol, GDF_TIMESTAMP, info);		\
 																				\
-		gdf_column originalOutput = cudf::col_cast(output, cudf::gdf_dtype_of<TFROM>());\
+		gdf_column originalOutput = cudf::cast(output, cudf::gdf_dtype_of<TFROM>());\
 																				\
 		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(originalOutput);\
 		auto results = std::get<0>(originalOutputCol.to_host());				\
@@ -480,7 +480,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 
 		auto inputCol = cudf::test::column_wrapper<float>(inputData); 
 
-		EXPECT_NO_THROW(cudf::col_cast(inputCol, GDF_FLOAT64));
+		EXPECT_NO_THROW(cudf::cast(inputCol, GDF_FLOAT64));
 	}
 
 	//The input and output valid bitmaps are equal
@@ -492,7 +492,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		auto inputCol = cudf::test::column_wrapper<float>(inputData, generateValidRandom{}); 
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_FLOAT32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_FLOAT32));
 
 		auto outputCol = cudf::test::column_wrapper<float>(output);
 		EXPECT_TRUE( outputCol.get()->dtype == GDF_FLOAT32 );
@@ -508,7 +508,7 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		auto inputCol = cudf::test::column_wrapper<float>(inputData, generateValidRandom{}); 
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_FLOAT32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_FLOAT32));
 
 		auto outputCol = cudf::test::column_wrapper<float>(output);
 		EXPECT_TRUE( inputCol == outputCol );
@@ -548,7 +548,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, allValidFunctor);
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE64));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -628,7 +628,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>(outputData, allValidFunctor);
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date32>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -666,7 +666,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, altValidFunctor);
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE64));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -708,7 +708,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_s;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -745,7 +745,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -784,7 +784,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ms;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -821,7 +821,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -860,7 +860,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ns;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -897,7 +897,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -936,7 +936,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_us;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -973,7 +973,7 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE32));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1035,7 +1035,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ms;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1092,7 +1092,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE64));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1131,7 +1131,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_s;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1168,7 +1168,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE64));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1207,7 +1207,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_us;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1244,7 +1244,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE64));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1283,7 +1283,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ns;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1320,7 +1320,7 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
 		gdf_column output;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_DATE64));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1411,7 +1411,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ms;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1497,7 +1497,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_s;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1583,7 +1583,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_us;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1669,7 +1669,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_s;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1755,7 +1755,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ns;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1841,7 +1841,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_s;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -1927,7 +1927,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ns;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -2013,7 +2013,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_us;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -2099,7 +2099,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ns;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -2185,7 +2185,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ms;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -2271,7 +2271,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_ms;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
@@ -2357,7 +2357,7 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 		gdf_column output;
 		gdf_dtype_extra_info info{};
 		info.time_unit = TIME_UNIT_us;
-		EXPECT_NO_THROW(output = cudf::col_cast(inputCol, GDF_TIMESTAMP, info));
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
 		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );

@@ -47,7 +47,7 @@ def apply_cast(incol, **kwargs):
     cdef gdf_column result
 
     with nogil:
-        result = col_cast(
+        result = cast(
             c_incol[0],
             dtype,
             info
