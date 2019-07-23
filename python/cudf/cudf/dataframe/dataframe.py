@@ -144,17 +144,48 @@ class DataFrame(object):
     """
 
     def __init__(self, name_series=None, index=None):
+        keys = index
         if index is None:
             index = RangeIndex(start=0)
         self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
+
         if name_series is not None:
             if isinstance(name_series, dict):
                 name_series = name_series.items()
-            for k, series in name_series:
-                self.add_column(k, series, forceindex=index is not None)
+            elif utils.is_list_like(name_series) and len(name_series) > 0:
+                if not isinstance(name_series[0], (list, tuple)):
+                    # a nested list is something pandas supports and
+                    # we don't support list-like values in a record yet
+                    if keys is None:
+                        name_series = {
+                            i: element for i, element in enumerate(name_series)
+                        }.items()
+                    else:
+                        name_series = dict(zip(keys, name_series)).items()
+                        self._index = as_index(RangeIndex(start=0))
+                        self._size = len(RangeIndex(start=0))
+
+                    for col_name, series in name_series:
+                        self.add_column(
+                            col_name, series, forceindex=index is not None
+                        )
+
+                    transposed = self.T
+                    self._cols = OrderedDict()
+                    self._size = transposed._size
+                    self._index = as_index(transposed.index)
+                    for col_name in transposed.columns:
+                        self.add_column(
+                            col_name,
+                            transposed._cols[col_name],
+                            forceindex=index is not None,
+                        )
+                    return
+            for col_name, series in name_series:
+                self.add_column(col_name, series, forceindex=index is not None)
 
     def serialize(self, serialize):
         header = {}

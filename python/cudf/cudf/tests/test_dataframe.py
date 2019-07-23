@@ -3297,3 +3297,32 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ),
+        [
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ],
+    ],
+)
+def test_create_dataframe_from_list_like(data):
+    pdf = pd.DataFrame(data, index=["count", "mean", "std", "min"])
+    gdf = DataFrame(data, index=["count", "mean", "std", "min"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf)
