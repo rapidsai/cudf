@@ -730,3 +730,20 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief Checks if a Table is sorted along the row.
+ * 
+ * @param[in] input_table       whose rows needs to be validated 
+ * @param[in] ascending         vector representing the relation between columns
+ * (0 is ascending order and 1 is descending)
+ * @param[in] nulls_are_smallest Flag to indicate if nulls are to be considered
+ * smaller than non-nulls or viceversa
+ * 
+ * @returns true - if sorted , false - if not.
+ */
+/* ----------------------------------------------------------------------------*/
+bool is_sorted(cudf::table const &table,
+                       std::vector<int8_t>& ascending,
+                       bool nulls_are_smallest);

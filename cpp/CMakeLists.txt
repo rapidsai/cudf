@@ -266,6 +266,7 @@ add_library(cudf SHARED
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/orderby/is_sorted.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
