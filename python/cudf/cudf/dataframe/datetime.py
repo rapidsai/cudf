@@ -206,7 +206,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
+        col_keys = cpp_copying.apply_gather([self], sort_inds.data.mem)[0]
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
@@ -244,7 +244,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(
+            [columnops.as_column(sortedvals)], segs
+        )[0]
         return out_col
 
     def value_counts(self, method="sort"):
@@ -253,7 +255,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_vals = cpp_copying.apply_gather(
+            [columnops.as_column(sortedvals)], segs
+        )[0]
         out2 = cudautils.value_count(segs, len(sortedvals))
         out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
         return out_vals, out_counts

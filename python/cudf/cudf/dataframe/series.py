@@ -380,20 +380,17 @@ class Series(object):
         """
         from cudf import Series
 
-        if isinstance(indices, Series):
-            indices = indices.to_gpu_array()
-        else:
-            indices = Buffer(indices).to_gpu_array()
-        # Handle zero size
-        if indices.size == 0:
+        if len(indices) == 0:
             return self._copy_construct(
                 data=self.data[:0], index=self.index[:0]
             )
 
+        indices = columnops.as_column(indices).data.mem
+
         if self.dtype == np.dtype("object"):
             return self[indices]
 
-        col = cpp_copying.apply_gather_array(self.data.to_gpu_array(), indices)
+        col = cpp_copying.apply_gather([self._column], indices)[0]
 
         if self._column.mask:
             mask = self._get_mask_as_series().take(indices).as_mask()
@@ -1555,8 +1552,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = cpp_copying.apply_gather_column(self._column, rinds)
-        index = cpp_copying.apply_gather_array(self.index.gpu_values, rinds)
+        col = cpp_copying.apply_gather([self._column], rinds)[0]
+        index = cpp_copying.apply_gather([self.index.as_column()], rinds)[0]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):

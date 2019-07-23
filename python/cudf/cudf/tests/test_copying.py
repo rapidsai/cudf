@@ -14,7 +14,7 @@ def test_gather_single_col():
 
     device_gather_map = rmm.to_device(gather_map)
 
-    out = cpp_copying.apply_gather_column(col, device_gather_map)
+    out = cpp_copying.apply_gather([col], device_gather_map)[0]
 
     np.testing.assert_array_equal(out.to_array(), gather_map)
 
@@ -45,7 +45,7 @@ def test_scatter_single_col():
     expected = [0.2 * x if x <= 10.0 else x for x in expected]
 
     device_scatter_map = rmm.to_device(scatter_map)
-    cpp_copying.apply_scatter_column(col, device_scatter_map, col_out)
+    cpp_copying.apply_scatter([col], device_scatter_map, [col_out])[0]
 
     np.testing.assert_array_almost_equal(col_out.to_array(), expected)
 

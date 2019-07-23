@@ -264,7 +264,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # Return both values and their counts
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(
+            [columnops.as_column(sortedvals)], segs
+        )[0]
         out = cudautils.value_count(segs, len(sortedvals))
         out_vals = self.replace(data=out_col.data, mask=None)
         out_counts = columnops.build_column(Buffer(out), np.intp)

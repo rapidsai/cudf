@@ -109,41 +109,6 @@ def apply_gather(in_cols, maps, out_cols=None):
     return out_cols
 
 
-def apply_gather_column(in_col, maps, out_col=None):
-    """
-      Call cudf::gather.
-
-     * in_cols input column
-     * maps device array
-     * out_cols the destination column to output
-
-     * returns out_col
-    """
-
-    in_cols = [in_col]
-    out_cols = None if out_col is None else [out_col]
-
-    out_cols = apply_gather(in_cols, maps, out_cols)
-
-    return out_cols[0]
-
-
-def apply_gather_array(dev_array, maps, out_col=None):
-    """
-      Call cudf::gather.
-
-     * dev_array input device array
-     * maps device array
-     * out_cols the destination column to output
-
-     * returns out_col
-    """
-    from cudf.dataframe import columnops
-
-    in_col = columnops.as_column(dev_array)
-    return apply_gather_column(in_col, maps, out_col)
-
-
 def apply_scatter(in_cols, maps, out_cols=None):
     """
       Call cudf::scatter.
@@ -198,41 +163,6 @@ def apply_scatter(in_cols, maps, out_cols=None):
     free_table(c_in_table, c_in_cols)
 
     return out_cols
-
-
-def apply_scatter_column(in_col, maps, out_col=None):
-    """
-      Call cudf::scatter.
-
-     * in_cols input column
-     * maps device array
-     * out_cols the destination column to output
-
-     * returns out_col
-    """
-
-    in_cols = [in_col]
-    out_cols = None if out_col is None else [out_col]
-
-    out_cols = apply_scatter(in_cols, maps, out_cols)
-
-    return out_cols[0]
-
-
-def apply_scatter_array(dev_array, maps, out_col=None):
-    """
-      Call cudf::scatter.
-
-     * dev_array input device array
-     * maps device array
-     * out_cols the destination column to output
-
-     * returns out_col
-    """
-    from cudf.dataframe import columnops
-
-    in_col = columnops.as_column(dev_array)
-    return apply_scatter_column(in_col, maps, out_col)
 
 
 def copy_column(input_col):
