@@ -87,6 +87,7 @@
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
 - PR #2355 Handle float16 in binary operations
+- PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
 - PR #2364 Fix quantile api and other trivial issues around it
 
 
