@@ -381,9 +381,9 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step, sln = utils.standard_python_slice(
-                len(self), index
-            )
+            start, stop, step = index.indices(len(self))
+            sln = (stop - start) // step
+            sln = max(0, sln)
             start += self._start
             stop += self._start
             if sln == 0:

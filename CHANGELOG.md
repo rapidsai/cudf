@@ -54,6 +54,7 @@
 - PR #2345 Restore removal of old groupby implementation
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 
 ## Bug Fixes
 
@@ -86,6 +87,7 @@
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
 - PR #2355 Handle float16 in binary operations
+- PR #2364 Fix quantile api and other trivial issues around it
 - PR #2361 Fixed issue with `codes` of CategoricalIndex
 
 
