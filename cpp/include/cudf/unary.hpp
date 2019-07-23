@@ -62,7 +62,7 @@ gdf_column unary_operation(gdf_column const& input, unary_op op);
  *
  * @param gdf_column Input column
  * @param out_type Desired datatype of output column
- * @param out_info Extra info for output column in case of convertion to types
+ * @param out_info Extra info for output column in case of conversion to types
  *  that require extra info
  *
  * @returns gdf_column Result of the cast operation
