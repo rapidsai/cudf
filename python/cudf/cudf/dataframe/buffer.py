@@ -1,3 +1,5 @@
+import pickle
+
 import numpy as np
 
 from librmm_cffi import librmm as rmm
@@ -44,7 +46,7 @@ class Buffer(object):
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
-    def serialize(self, serialize, context=None):
+    def serialize(self):
         """Called when dask.distributed is performing a serialization on this
         object.
 
@@ -62,10 +64,16 @@ class Buffer(object):
         (header, frames)
             See custom serialization documentation in dask.distributed.
         """
-        return {}, [self.mem]
+        header = {}
+        header["type"] = pickle.dumps(type(self))
+        header["shape"] = self.mem.shape
+        header["strides"] = self.mem.strides
+        header["dtype"] = self.mem.dtype.str
+
+        return header, [self.mem]
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         """Called when dask.distributed is performing a deserialization for
         data of this class.
 

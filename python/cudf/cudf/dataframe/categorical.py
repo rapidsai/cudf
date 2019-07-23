@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -137,26 +139,39 @@ class CategoricalColumn(columnops.TypedColumnBase):
         self._categories = categories
         self._ordered = ordered
 
-    def serialize(self, serialize):
-        header, frames = super(CategoricalColumn, self).serialize(serialize)
+    def serialize(self):
+        header, frames = super(CategoricalColumn, self).serialize()
+        assert "dtype" not in header
         header["ordered"] = self._ordered
-        header["categories"], category_frames = serialize(self._categories)
+        header["categories"], category_frames = self._categories.serialize()
         header["category_frame_count"] = len(category_frames)
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         frames.extend(category_frames)
         return header, frames
 
+    # def serialize(self, serialize):
+    #     header, frames = super(CategoricalColumn, self).serialize(serialize)
+    #     header["ordered"] = self._ordered
+    #     header["categories"], category_frames = serialize(self._categories)
+    #     header["category_frame_count"] = len(category_frames)
+    #     frames.extend(category_frames)
+    #     return header, frames
+
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(CategoricalColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(CategoricalColumn, cls).deserialize(header, frames)
+
         if "category_frame_count" not in header:
             # Handle data from before categories was a cudf.Column
             categories = header["categories"]
         else:
             # Handle categories that were serialized as a cudf.Column
             categories = frames[len(frames) - header["category_frame_count"] :]
-            categories = deserialize(header["categories"], categories)
+            cat_typ = pickle.loads(header["categories"]["type"])
+            categories = cat_typ.deserialize(header["categories"], categories)
+
+            # categories = deserialize(header["categories"], categories)
             categories = columnops.as_column(categories)
 
         return cls(

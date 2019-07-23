@@ -1,5 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import pickle
 import warnings
 from numbers import Number
 
@@ -602,8 +603,9 @@ class StringColumn(columnops.TypedColumnBase):
 
         return self.to_arrow().to_pandas()
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {"null_count": self._null_count}
+        header["type"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
 
@@ -617,23 +619,50 @@ class StringColumn(columnops.TypedColumnBase):
             nbuf=get_ctype_ptr(nbuf),
             bdevmem=True,
         )
-
         for item in [nbuf, sbuf, obuf]:
-            sheader, [frame] = serialize(item)
+            sheader = item.__cuda_array_interface__.copy()
+            sheader["is_cuda"] = 1
+            sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
-            frames.append(frame)
+            frames.append([item])
 
         header["nvstrings"] = len(self._data)
         header["subheaders"] = sub_headers
         return header, frames
 
+    # @cuda_deserialize.register(numba.cuda.devicearray.DeviceNDArray)
+    # def deserialize_numba_ndarray(header, frames):
+    #     frame, = frames
+    #     # TODO: put this in ucx... as a kind of "fixup"
+    #     if isinstance(frame, bytes):
+    #         import numpy as np
+
+    #         arr2 = np.frombuffer(frame, header["typestr"])
+    #         return numba.cuda.to_device(arr2)
+
+    #     frame.typestr = header["typestr"]
+    #     frame.shape = header["shape"]
+
+    #     # numba & cupy don't properly roundtrip length-zero arrays.
+    #     if frame.shape[0] == 0:
+    #         arr = numba.cuda.device_array(
+    #             header["shape"],
+    #             header["typestr"]
+    #             # strides?
+    #             # order?
+    #         )
+    #         return arr
+
+    #     arr = numba.cuda.as_cuda_array(frame)
+    #     return arr
+
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
         arrays = []
         for i, frame in enumerate(frames):
-            subheader = header["subheaders"][i]
-            arrays.append(get_ctype_ptr(deserialize(subheader, [frame])))
+            # subheader = header["subheaders"][i]
+            arrays.append(get_ctype_ptr(frame[0]))
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]

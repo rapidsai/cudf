@@ -4,6 +4,7 @@
 A column is data + validity-mask.
 LibGDF operates on column.
 """
+import pickle
 from numbers import Number
 
 import numpy as np
@@ -205,28 +206,46 @@ class Column(object):
     def name(self, name):
         self._name = name
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {"null_count": self._null_count}
         frames = []
 
-        header["data_buffer"], data_frames = serialize(self._data)
+        header["type"] = pickle.dumps(type(self))
+        header["data_buffer"], data_frames = self._data.serialize()
+
         header["data_frame_count"] = len(data_frames)
         frames.extend(data_frames)
-        header["mask_buffer"], mask_frames = serialize(self._mask)
-        header["mask_frame_count"] = len(mask_frames)
+
+        if self._mask:
+            header["mask_buffer"], mask_frames = self._mask.serialize()
+            header["mask_frame_count"] = len(mask_frames)
+        else:
+            header["mask_buffer"] = []
+            header["mask_frame_count"] = 0
+            mask_frames = {}
+
         frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         data_nframe = header["data_frame_count"]
         mask_nframe = header["mask_frame_count"]
-        data = deserialize(header["data_buffer"], frames[:data_nframe])
-        mask = deserialize(
-            header["mask_buffer"],
-            frames[data_nframe : data_nframe + mask_nframe],
+
+        data_typ = pickle.loads(header["data_buffer"]["type"])
+        data = data_typ.deserialize(
+            header["data_buffer"], frames[:data_nframe]
         )
+
+        if header["mask_buffer"]:
+            mask_typ = pickle.loads(header["mask_buffer"]["type"])
+            mask = mask_typ.deserialize(
+                header["mask_buffer"],
+                frames[data_nframe : data_nframe + mask_nframe],
+            )
+        else:
+            mask = None
         return data, mask
 
     def _get_mask_as_column(self):

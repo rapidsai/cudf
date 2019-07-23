@@ -2,6 +2,8 @@
 
 from __future__ import division, print_function
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -47,22 +49,19 @@ class NumericalColumn(columnops.TypedColumnBase):
             kwargs["dtype"] = kwargs["data"].dtype
         return super(NumericalColumn, self).replace(**kwargs)
 
-    def serialize(self, serialize):
-        header, frames = super(NumericalColumn, self).serialize(serialize)
+    def serialize(self):
+        header, frames = super(NumericalColumn, self).serialize()
         assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(NumericalColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(NumericalColumn, cls).deserialize(header, frames)
+        dtype = header["dtype"]
         col = cls(
-            data=data,
-            mask=mask,
-            null_count=header["null_count"],
-            dtype=deserialize(*header["dtype"]),
+            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
         )
         return col
 
