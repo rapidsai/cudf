@@ -25,3 +25,26 @@ def test_searchsorted(side):
     got = sr.searchsorted(vals, side)
 
     assert_eq(expect, got.to_array())
+
+
+@pytest.mark.parametrize('side', ['left', 'right'])
+def test_searchsorted_categorical(side):
+    import pandas as pd
+
+    cat1 = pd.Categorical(
+        ["a", "a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
+    )
+    psr1 = pd.Series(cat1).sort_values()
+    sr1 = cudf.Series(cat1).sort_values()
+    cat2 = pd.Categorical(
+        ["a", "b", "a", "c", "b"], categories=["a", "b", "c"], ordered=True
+    )
+    psr2 = pd.Series(cat2)
+    sr2 = cudf.Series(cat2)
+
+    expect = psr1.searchsorted(psr2, side)
+    got = sr1.searchsorted(sr2, side)
+
+    assert_eq(expect, got.to_array())
+
+
