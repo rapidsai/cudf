@@ -33,10 +33,10 @@ def search_sorted(column, values, side):
 
     if side == 'left':
         with nogil:
-            result = lower_bound(c_column[0], c_values[0], True)
+            result = lower_bound(c_column[0], c_values[0], False)
     if side == 'right':
         with nogil:
-            result = upper_bound(c_column[0], c_values[0], True)
+            result = upper_bound(c_column[0], c_values[0], False)
 
     free(c_column)
     free(c_values)
