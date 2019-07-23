@@ -170,17 +170,13 @@ class DataFrame(object):
 
     def _add_rows(self, data, index, keys):
         if keys is None:
-            data = {
-                i: element for i, element in enumerate(data)
-            }.items()
+            data = {i: element for i, element in enumerate(data)}.items()
         else:
             data = dict(zip(keys, data)).items()
             self._index = as_index(RangeIndex(start=0))
             self._size = len(RangeIndex(start=0))
         for col_name, series in data:
-            self.add_column(
-                col_name, series, forceindex=index is not None
-            )
+            self.add_column(col_name, series, forceindex=index is not None)
         transposed = self.T
         self._cols = OrderedDict()
         self._size = transposed._size

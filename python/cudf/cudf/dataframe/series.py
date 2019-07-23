@@ -117,7 +117,7 @@ class Series(object):
 
     @property
     def values(self):
-        if self.dtype == np.dtype('object'):
+        if self.dtype == np.dtype("object"):
             return self.data.to_host()
         elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
             return self._column.to_pandas().values
