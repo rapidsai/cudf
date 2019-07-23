@@ -2,6 +2,7 @@
 
 import collections
 import itertools
+import pickle
 
 import cudf
 from cudf import MultiIndex
@@ -26,6 +27,20 @@ def dataframe_from_columns(cols, index_cols=None, index=None, columns=None):
 
 
 class _Groupby(object):
+    def serialize(self):
+        header = {}
+        header["groupby"] = pickle.dumps(self)
+        header["type"] = pickle.dumps(type(self))
+        header["df"], frames = self._df.serialize()
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        groupby = pickle.loads(header["groupby"])
+        # typ = pickle.loads(header["df"]["type"])
+        # df = df_typ.deserialize(header["df"], frames)
+        return groupby
+
     def sum(self):
         return self._apply_aggregation("sum")
 

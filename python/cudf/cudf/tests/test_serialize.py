@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import functools
+
 import msgpack
 import numpy as np
 import pandas as pd
@@ -86,19 +88,21 @@ def test_serialize_dataframe_with_index():
 
 def test_serialize_series():
     sr = cudf.Series(np.arange(100))
-    outsr = cudf.Series(*sr.serialize())
+    outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
 
 def test_serialize_range_index():
     index = cudf.dataframe.index.RangeIndex(10, 20)
-    outindex = cudf.dataframe.index.deserialize(index.serialize())
+    outindex = cudf.dataframe.index.Index.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
 def test_serialize_generic_index():
     index = cudf.dataframe.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.dataframe.index.deserialize(index.serialize())
+    outindex = cudf.dataframe.index.GenericIndex.deserialize(
+        *index.serialize()
+    )
     assert_eq(index, outindex)
 
 
@@ -114,12 +118,32 @@ def test_serialize_masked_series():
     assert_eq(sr, outsr)
 
 
+deserialize = pytest.importorskip("distributed.protocol").deserialize
+serialize = pytest.importorskip("distributed.protocol").serialize
+
+
+cuda_serialize = functools.partial(serialize, serializers=["cuda"])
+cuda_deserialize = functools.partial(deserialize, deserializers=["cuda"])
+
+# def test_serialize_groupby():
+#     df = cudf.DataFrame()
+#     df["key"] = np.random.randint(0, 20, 100)
+#     df["val"] = np.arange(100, dtype=np.float32)
+#     gb = df.groupby("key")
+#     foo = serialize(gb)
+#     breakpoint()
+#     outgb = deserialize(*foo)
+#     got = gb.mean()
+#     expect = outgb.mean()
+#     assert_eq(got, expect)
+
+
 def test_serialize_groupby():
     df = cudf.DataFrame()
     df["key"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
     gb = df.groupby("key")
-    outgb = cudf.DataFrame.deserialize(*gb.serialize())
+    outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
     expect = outgb.mean()
     assert_eq(got, expect)
