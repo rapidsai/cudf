@@ -451,6 +451,27 @@ def test_categorical_reorder_categories(
 
 
 @pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_add_categories(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy())
+    cd_sr = gd.Series(pd_str_cat.copy())
+
+    assert_eq(pd_sr, cd_sr)
+
+    assert str(pd_sr) == str(cd_sr)
+
+    pd_sr_1 = pd_sr.cat.add_categories(['d'], inplace=inplace)
+    cd_sr_1 = cd_sr.cat.add_categories(['d'], inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert ('d' in list(pd_sr_1.cat.categories))
+    assert ('d' in list(cd_sr_1.cat.categories))
+
+    assert_eq(pd_sr_1, cd_sr_1)
+
+
+@pytest.mark.parametrize("inplace", [True, False])
 def test_categorical_remove_categories(pd_str_cat, inplace):
 
     pd_sr = pd.Series(pd_str_cat.copy())
