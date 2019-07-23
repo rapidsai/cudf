@@ -89,6 +89,7 @@
 - PR #2355 Handle float16 in binary operations
 - PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
 - PR #2364 Fix quantile api and other trivial issues around it
+- PR #2361 Fixed issue with `codes` of CategoricalIndex
 
 
 # cuDF 0.8.0 (27 June 2019)
