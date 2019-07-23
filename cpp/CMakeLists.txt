@@ -268,9 +268,8 @@ add_library(cudf SHARED
             src/orderby/orderby.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
-            src/groupby/groupby.cu
-            src/groupby/new_groupby.cu
             src/groupby/hash/groupby.cu
+            src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
@@ -291,9 +290,18 @@ add_library(cudf SHARED
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
             src/replace/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
+            src/merge/merge.cu
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp

@@ -11,5 +11,13 @@ repos:
     rev: 3.7.7
     hooks:
     - id: flake8
+-   repo: https://gitlab.com/pycqa/flake8
+    rev: 3.7.7
+    hooks:
+    - id: flake8
+      alias: flake8-cython
+      name: flake8-cython
+      args: ['--config=python/cudf/.flake8.cython']
+      types: [cython]
 default_language_version:
     python: python3

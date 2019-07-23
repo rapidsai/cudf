@@ -56,8 +56,7 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
 
         // Timestamp currently unsupported as it would require passing in
         // additional resolution information
-        gdf_dtype_extra_info extra_info;
-        extra_info.time_unit = TIME_UNIT_NONE;
+        gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
         extra_info.category = nullptr;
         CUDF_EXPECTS(GDF_SUCCESS ==
                       gdf_column_view_augmented(col, nullptr, nullptr, num_rows,

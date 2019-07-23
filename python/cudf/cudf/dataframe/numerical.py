@@ -101,6 +101,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            if other_dtype == np.dtype("float16"):
+                other = np.dtype("float32").type(other)
+                other_dtype = other.dtype
             if other_dtype.kind in "u":
                 other_dtype = utils.min_signed_type(other)
             if np.isscalar(other):
@@ -199,17 +202,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             return out
 
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
-        # sort the column
-        sortcol, _ = densecol.sort_by_values(ascending=True)
-        # find segments
-        sortedvals = sortcol.to_gpu_array()
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
-
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
@@ -220,15 +212,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def unique_count(self, method="sort", dropna=True):
-        if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
 
     def value_counts(self, method="sort"):
         if method != "sort":
@@ -262,15 +245,13 @@ class NumericalColumn(columnops.TypedColumnBase):
         return cpp_reduce.apply_reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return np.float64(self.sum(dtype=dtype)) / self.valid_count
+        return cpp_reduce.apply_reduce("mean", self, dtype=dtype)
 
-    def mean_var(self, ddof=1, dtype=np.float64):
-        mu = self.mean(dtype=dtype)
-        n = self.valid_count
-        asum = np.float64(self.sum_of_squares(dtype=dtype))
-        div = n - ddof
-        var = asum / div - (mu ** 2) * n / div
-        return mu, var
+    def var(self, ddof=1, dtype=np.float64):
+        return cpp_reduce.apply_reduce("var", self, dtype=dtype, ddof=ddof)
+
+    def std(self, ddof=1, dtype=np.float64):
+        return cpp_reduce.apply_reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return cpp_reduce.apply_reduce("sum_of_squares", self, dtype=dtype)
@@ -365,21 +346,59 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def find_first_value(self, value):
         """
-        Returns offset of first value that matches
+        Returns offset of first value that matches. For monotonic
+        columns, returns the offset of the first larger value.
         """
         found = cudautils.find_first(self.data.mem, value)
-        if found == -1:
+        if found == -1 and self.is_monotonic:
+            if value < self.min():
+                found = 0
+            elif value > self.max():
+                found = len(self)
+            else:
+                found = cudautils.find_first(
+                    self.data.mem, value, compare="gt"
+                )
+                if found == -1:
+                    raise ValueError("value not found")
+        elif found == -1:
             raise ValueError("value not found")
         return found
 
     def find_last_value(self, value):
         """
-        Returns offset of last value that matches
+        Returns offset of last value that matches. For monotonic
+        columns, returns the offset of the last smaller value.
         """
         found = cudautils.find_last(self.data.mem, value)
-        if found == -1:
+        if found == -1 and self.is_monotonic:
+            if value < self.min():
+                found = -1
+            elif value > self.max():
+                found = len(self) - 1
+            else:
+                found = cudautils.find_last(self.data.mem, value, compare="lt")
+                if found == -1:
+                    raise ValueError("value not found")
+        elif found == -1:
             raise ValueError("value not found")
         return found
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, "_is_monotonic_increasing"):
+            self._is_monotonic_increasing = numeric_column_binop(
+                self[1:], self[:-1], "ge", "bool"
+            ).all()
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            self._is_monotonic_decreasing = numeric_column_binop(
+                self[1:], self[:-1], "le", "bool"
+            ).all()
+        return self._is_monotonic_decreasing
 
 
 def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):

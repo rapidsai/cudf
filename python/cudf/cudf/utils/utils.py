@@ -194,7 +194,10 @@ def cudf_dtype_from_pydata_dtype(dtype):
             _get_dtype_from_object as infer_dtype_from_object,
         )
 
-    if pd.api.types.is_categorical_dtype(dtype):
+    if (
+        pd.api.types.pandas_dtype(dtype).type
+        is pd.core.dtypes.dtypes.CategoricalDtypeType
+    ):
         pass
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
@@ -304,3 +307,19 @@ def compare_and_get_name(a, b):
     elif b_has:
         return b.name
     return None
+
+
+# taken from dask array
+# https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
+def _is_nep18_active():
+    class A:
+        def __array_function__(self, *args, **kwargs):
+            return True
+
+    try:
+        return np.concatenate([A()])
+    except ValueError:
+        return False
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()
