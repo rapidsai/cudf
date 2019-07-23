@@ -405,3 +405,27 @@ def test_categorical_reorder_categories(from_ordered, to_ordered, inplace):
     assert_eq(pd_sr_1, cd_sr_1)
 
     assert str(pd_sr_1) == str(cd_sr_1)
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_remove_categories(inplace):
+
+    cats_1 = list("abc")
+    cats_2 = list("cba")
+    codes = [0, 0, 1, 0, 1, 2, 0, 1, 1, 2]
+    pd_sr = pd.Series(pd.Categorical.from_codes(codes, categories=cats_1))
+    cd_sr = Series(pd_sr)
+
+    assert_eq(pd_sr, cd_sr)
+
+    assert str(pd_sr) == str(cd_sr)
+
+    pd_sr_1 = pd_sr.cat.remove_categories(['a'], inplace=inplace)
+    cd_sr_1 = cd_sr.cat.remove_categories(['a'], inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert ('a' not in list(pd_sr_1.cat.categories))
+    assert ('a' not in list(cd_sr_1.cat.categories))
+
+    assert_eq(pd_sr_1, cd_sr_1)
