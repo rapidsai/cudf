@@ -104,10 +104,13 @@ include(CheckLibraryExists)
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
-if (DEFINED ENV{CONDA_PREFIX})
+if ("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif (DEFINED ENV{CONDA_PREFIX})
     set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-endif (DEFINED ENV{CONDA_PREFIX})
+endif ()
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
