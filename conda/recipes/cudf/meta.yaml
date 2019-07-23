@@ -21,12 +21,12 @@ requirements:
     - python
     - cython >=0.29,<0.30
     - setuptools
-    - numba >=0.41
+    - numba >=0.41,<0.45
     - libcudf {{ version }}
   run:
     - python
     - pandas >=0.23.4
-    - numba >=0.41
+    - numba >=0.41,<0.45
     - pyarrow 0.14.1.*
     - rmm {{ minor_version }}.*
     - nvstrings {{ minor_version }}.*
