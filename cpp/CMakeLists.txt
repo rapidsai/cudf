@@ -127,15 +127,6 @@ endif(ARROW_FOUND)
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
-# find_path(
-#     ZLIB_INCLUDE_DIRS "zlib.h"
-#     HINTS "$ENV{ZLIB_ROOT}/include"
-# )
-
-# find_library(
-#     ZLIB_LIBRARIES "z"
-#     HINTS "$ENV{ZLIB_ROOT}/lib"
-# )
 
 message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
 message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
