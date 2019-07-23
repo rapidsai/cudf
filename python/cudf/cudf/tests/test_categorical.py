@@ -1,11 +1,18 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import cudf as gd
 import numpy as np
 import pandas as pd
 import pytest
 
 from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
+
+@pytest.fixture
+def pd_str_cat():
+    categories = list("abc")
+    codes = [0, 0, 1, 0, 1, 2, 0, 1, 1, 2]
+    return pd.Categorical.from_codes(codes, categories=categories)
 
 
 def test_categorical_basic():
@@ -379,17 +386,53 @@ def test_categorical_set_categories_preserves_order():
     )
 
 
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_as_ordered(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
+    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(False))
+
+    assert cd_sr.cat.ordered == False
+    assert cd_sr.cat.ordered == pd_sr.cat.ordered
+
+    pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
+    cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert cd_sr_1.cat.ordered == True
+    assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
+    assert str(cd_sr_1) == str(pd_sr_1)
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_as_unordered(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
+    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(True))
+
+    assert cd_sr.cat.ordered == True
+    assert cd_sr.cat.ordered == pd_sr.cat.ordered
+
+    pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
+    cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert cd_sr_1.cat.ordered == False
+    assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
+    assert str(cd_sr_1) == str(pd_sr_1)
+
+
 @pytest.mark.parametrize("from_ordered", [True, False])
 @pytest.mark.parametrize("to_ordered", [True, False])
 @pytest.mark.parametrize("inplace", [True, False])
-def test_categorical_reorder_categories(from_ordered, to_ordered, inplace):
+def test_categorical_reorder_categories(
+    pd_str_cat, from_ordered, to_ordered, inplace
+):
 
-    cats_1 = list("abc")
-    cats_2 = list("cba")
-    codes = [0, 0, 1, 0, 1, 2, 0, 1, 1, 2]
-    kwargs = dict(categories=cats_1, ordered=from_ordered)
-    pd_sr = pd.Series(pd.Categorical.from_codes(codes, **kwargs))
-    cd_sr = Series(pd_sr)
+    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(from_ordered))
+    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(from_ordered))
 
     assert_eq(pd_sr, cd_sr)
 
@@ -397,24 +440,21 @@ def test_categorical_reorder_categories(from_ordered, to_ordered, inplace):
 
     kwargs = dict(ordered=to_ordered, inplace=inplace)
 
-    pd_sr_1 = pd_sr.cat.reorder_categories(cats_2, **kwargs)
-    cd_sr_1 = cd_sr.cat.reorder_categories(cats_2, **kwargs)
+    pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
+    cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
     pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
     cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
 
     assert_eq(pd_sr_1, cd_sr_1)
 
-    assert str(pd_sr_1) == str(cd_sr_1)
+    assert str(cd_sr_1) == str(pd_sr_1)
 
 
 @pytest.mark.parametrize("inplace", [True, False])
-def test_categorical_remove_categories(inplace):
+def test_categorical_remove_categories(pd_str_cat, inplace):
 
-    cats_1 = list("abc")
-    cats_2 = list("cba")
-    codes = [0, 0, 1, 0, 1, 2, 0, 1, 1, 2]
-    pd_sr = pd.Series(pd.Categorical.from_codes(codes, categories=cats_1))
-    cd_sr = Series(pd_sr)
+    pd_sr = pd.Series(pd_str_cat.copy())
+    cd_sr = gd.Series(pd_str_cat.copy())
 
     assert_eq(pd_sr, cd_sr)
 
@@ -429,3 +469,9 @@ def test_categorical_remove_categories(inplace):
     assert ('a' not in list(cd_sr_1.cat.categories))
 
     assert_eq(pd_sr_1, cd_sr_1)
+
+    # test using ordered operators
+    with pytest.raises(ValueError) as raises:
+        cd_sr_1 = cd_sr.cat.remove_categories(['a', 'd'], inplace=inplace)
+
+    raises.match("removals must all be in old categories")

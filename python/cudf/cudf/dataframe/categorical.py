@@ -82,9 +82,16 @@ class CategoricalAccessor(object):
     def remove_categories(self, removals, **kwargs):
         from cudf import Series
 
-        cats = Series(self._parent._categories)
-        new_categories = cats[~cats.isin(removals)]
-        return self.set_categories(new_categories, **kwargs)
+        cats = self.categories.to_series()
+        removals = Series(removals, dtype=cats.dtype)
+        removals_mask = removals.isin(cats)
+        # ensure all the removals are in the current categories
+        # list. If not, raise an error to match Pandas behavior
+        if not removals_mask.all():
+            vals = removals[~removals_mask].to_array()
+            msg = "removals must all be in old categories: {}".format(vals)
+            raise ValueError(msg)
+        return self.set_categories(cats[~cats.isin(removals)], **kwargs)
 
     def set_categories(self, new_categories, **kwargs):
         """Returns a new Series with the categories set to the
