@@ -87,6 +87,7 @@
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
 - PR #2355 Handle float16 in binary operations
+- PR #2364 Fix quantile api and other trivial issues around it
 
 
 # cuDF 0.8.0 (27 June 2019)
