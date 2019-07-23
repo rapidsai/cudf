@@ -47,6 +47,10 @@ setup(
     setup_requires=["cython"],
     ext_modules=cythonize(extensions),
     packages=find_packages(include=["cudf", "cudf.*"]),
+    package_data={
+        "cudf.bindings": ["*.pxd", "*.pyx"],
+        "cudf.bindings.groupby": ["*.pxd", "*.pyx"],
+    },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     zip_safe=False,

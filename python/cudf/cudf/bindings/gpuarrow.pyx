@@ -267,10 +267,12 @@ class GpuArrowReader(Sequence):
             _check_error(ipcparser)
             # get schema as json
             _logger.debug('IPCParser get metadata as json')
-            schemadct = _load_json(
-                gdf_ipc_parser_get_schema_json(ipcparser))
-            layoutdct = _load_json(
-                gdf_ipc_parser_get_layout_json(ipcparser))
+            schema_json = gdf_ipc_parser_get_schema_json(ipcparser)
+            # Bug in Arrow 0.14.1 of adding an extra "]"
+            schema_json = b"".join(schema_json.rsplit(sep=b"]", maxsplit=1))
+            layout_json = gdf_ipc_parser_get_layout_json(ipcparser)
+            schemadct = _load_json(schema_json)
+            layoutdct = _load_json(layout_json)
 
             # get data offset
             _logger.debug('IPCParser data region offset')
