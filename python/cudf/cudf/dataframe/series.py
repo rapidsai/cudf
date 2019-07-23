@@ -117,26 +117,12 @@ class Series(object):
 
     @property
     def values(self):
-        def as_gpu_matrix(ser, columns=None, order="F"):
-            nrow = len(ser)
-            dtype = ser.dtype
-            if order == "F":
-                matrix = rmm.device_array(
-                    shape=(nrow,), dtype=dtype, order=order
-                )
-                dense = ser._column.to_gpu_array(fillna="pandas")
-                matrix[:].copy_to_device(dense)
-            elif order == "C":
-                matrix = cudautils.row_matrix([ser._column], nrow, 1, dtype)
-            else:
-                errmsg = (
-                    "order parameter should be 'C' for row major or 'F' for"
-                    "column major GPU matrix"
-                )
-                raise ValueError(errmsg.format(ser._column))
-            return matrix
-
-        return as_gpu_matrix(self).copy_to_host()
+        if self.dtype == np.dtype('object'):
+            return self.data.to_host()
+        elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            return self._column.to_pandas().values
+        else:
+            return self.data.mem.copy_to_host()
 
     @classmethod
     def from_arrow(cls, s):

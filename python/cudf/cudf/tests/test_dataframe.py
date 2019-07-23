@@ -3348,9 +3348,15 @@ def test_create_dataframe_column():
     assert_eq(pdf, gdf)
 
 
-@pytest.mark.parametrize("data", [[1, 2, 4], [], [5.0, 7.0, 8.0]])
+@pytest.mark.parametrize("data", [
+    [1, 2, 4],
+    [],
+    [5.0, 7.0, 8.0],
+    pd.Categorical(['a', 'b', 'c']),
+    ['m', 'a', 'd', 'v']
+])
 def test_series_values_property(data):
     pds = pd.Series(data)
     gds = Series(data)
 
-    assert_eq(pds.values, gds.values)
+    np.testing.assert_array_equal(pds.values, gds.values)

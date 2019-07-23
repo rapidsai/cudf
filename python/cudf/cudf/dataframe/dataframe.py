@@ -160,35 +160,39 @@ class DataFrame(object):
                 if not isinstance(data[0], (list, tuple)):
                     # a nested list is something pandas supports and
                     # we don't support list-like values in a record yet
-                    if keys is None:
-                        data = {
-                            i: element for i, element in enumerate(data)
-                        }.items()
-                    else:
-                        data = dict(zip(keys, data)).items()
-                        self._index = as_index(RangeIndex(start=0))
-                        self._size = len(RangeIndex(start=0))
-
-                    for col_name, series in data:
-                        self.add_column(
-                            col_name, series, forceindex=index is not None
-                        )
-
-                    transposed = self.T
-                    self._cols = OrderedDict()
-                    self._size = transposed._size
-                    self._index = as_index(transposed.index)
-                    for col_name in transposed.columns:
-                        self.add_column(
-                            col_name,
-                            transposed._cols[col_name],
-                            forceindex=index is not None,
-                        )
+                    self._add_rows(data, index, keys)
                     return
             for col_name, series in data:
                 self.add_column(col_name, series, forceindex=index is not None)
                 added_columns.add(col_name)
 
+        self._check_add_columns(added_columns, columns, index)
+
+    def _add_rows(self, data, index, keys):
+        if keys is None:
+            data = {
+                i: element for i, element in enumerate(data)
+            }.items()
+        else:
+            data = dict(zip(keys, data)).items()
+            self._index = as_index(RangeIndex(start=0))
+            self._size = len(RangeIndex(start=0))
+        for col_name, series in data:
+            self.add_column(
+                col_name, series, forceindex=index is not None
+            )
+        transposed = self.T
+        self._cols = OrderedDict()
+        self._size = transposed._size
+        self._index = as_index(transposed.index)
+        for col_name in transposed.columns:
+            self.add_column(
+                col_name,
+                transposed._cols[col_name],
+                forceindex=index is not None,
+            )
+
+    def _check_add_columns(self, added_columns, columns, index):
         if columns is not None:
             for col_name in columns:
                 if col_name not in added_columns:
