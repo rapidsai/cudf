@@ -1,8 +1,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 import numpy as np
-import cudf
-import pytest
 import pandas as pd
+import pytest
+
+import cudf
 from cudf.utils.utils import IS_NEP18_ACTIVE
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
@@ -13,19 +14,14 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-@pytest.mark.parametrize(
-    "np_ar",
-    [
-        np.random.random(100),
-    ]
-)
+@pytest.mark.parametrize("np_ar", [np.random.random(100)])
 @pytest.mark.parametrize(
     "func",
     [
         lambda x: np.mean(x),
         lambda x: np.sum(x),
         lambda x: np.var(x, ddof=1),
-        lambda x: np.unique(x)
+        lambda x: np.unique(x),
     ],
 )
 def test_array_func_cudf_series(np_ar, func):
@@ -42,18 +38,13 @@ def test_array_func_cudf_series(np_ar, func):
 # TODO: Make it future proof
 # by adding check if these functions were implemented
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-@pytest.mark.parametrize(
-    "np_ar",
-    [
-        np.random.random(100)
-    ]
-)
+@pytest.mark.parametrize("np_ar", [np.random.random(100)])
 @pytest.mark.parametrize(
     "func",
     [
         lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
-        lambda x: np.linalg.norm(x)
+        lambda x: np.linalg.norm(x),
     ],
 )
 def test_array_func_missing_cudf_series(np_ar, func):
@@ -64,18 +55,11 @@ def test_array_func_missing_cudf_series(np_ar, func):
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
-    "pd_df",
-    [
-        pd.DataFrame(np.random.uniform(size=(100, 10))),
-    ]
+    "pd_df", [pd.DataFrame(np.random.uniform(size=(100, 10)))]
 )
 @pytest.mark.parametrize(
     "func",
-    [
-        lambda x: np.mean(x),
-        lambda x: np.sum(x),
-        lambda x: np.var(x, ddof=1),
-    ],
+    [lambda x: np.mean(x), lambda x: np.sum(x), lambda x: np.var(x, ddof=1)],
 )
 def test_array_func_cudf_dataframe(pd_df, func):
     cudf_df = cudf.from_pandas(pd_df)
@@ -87,10 +71,7 @@ def test_array_func_cudf_dataframe(pd_df, func):
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
-    "pd_df",
-    [
-        pd.DataFrame(np.random.uniform(size=(100, 10))),
-    ]
+    "pd_df", [pd.DataFrame(np.random.uniform(size=(100, 10)))]
 )
 @pytest.mark.parametrize(
     "func",

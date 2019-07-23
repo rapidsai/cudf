@@ -20,19 +20,26 @@ cpdef replace(input_col, values_to_replace, replacement_values):
     """
         Call cudf::find_and_replace_all
     """
-    cdef gdf_column* c_input_col = \
-                            column_view_from_column(input_col)
-    cdef gdf_column* c_values_to_replace = \
-                            column_view_from_column(values_to_replace)
-    cdef gdf_column* c_replacement_values = \
-                            column_view_from_column(replacement_values)
+    cdef gdf_column* c_input_col = column_view_from_column(
+        input_col
+    )
+
+    cdef gdf_column* c_values_to_replace = column_view_from_column(
+        values_to_replace
+    )
+
+    cdef gdf_column* c_replacement_values = column_view_from_column(
+        replacement_values
+    )
 
     cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
 
     with nogil:
-        output[0] = find_and_replace_all(c_input_col[0],
-                                      c_values_to_replace[0],
-                                      c_replacement_values[0])
+        output[0] = find_and_replace_all(
+            c_input_col[0],
+            c_values_to_replace[0],
+            c_replacement_values[0]
+        )
 
     data, mask = gdf_column_to_column_mem(output)
 
@@ -42,7 +49,6 @@ cpdef replace(input_col, values_to_replace, replacement_values):
     free(output)
 
     return Column.from_mem_views(data, mask)
-
 
 
 cdef apply_replace_nulls_column(inp, replacement):

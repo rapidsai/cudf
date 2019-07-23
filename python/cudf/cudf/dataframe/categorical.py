@@ -461,6 +461,28 @@ class CategoricalColumn(columnops.TypedColumnBase):
             )
         return self._is_monotonic_decreasing
 
+    def copy(self, deep=True):
+        """Categorical Columns are immutable, so a deep copy produces a
+        copy of the underlying data, mask, categories and a shallow copy
+        creates a new column and copies the references of the data, mask
+        and categories.
+        """
+        if deep:
+            import cudf.bindings.copying as cpp_copy
+
+            copied_col = cpp_copy.copy_column(self)
+            category_col = cpp_copy.copy_column(self._categories)
+            return self.replace(
+                data=copied_col.data,
+                mask=copied_col.mask,
+                dtype=self.dtype,
+                categories=category_col,
+                ordered=self._ordered,
+            )
+        else:
+            params = self._replace_defaults()
+            return type(self)(**params)
+
 
 def pandas_categorical_as_column(categorical, codes=None):
     """Creates a CategoricalColumn from a pandas.Categorical

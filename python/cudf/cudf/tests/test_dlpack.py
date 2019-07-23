@@ -20,7 +20,7 @@ require_cupy = pytest.mark.skipif(not _have_cupy, reason="no cupy")
 
 nelems = [0, 3, 10]
 dtype = [np.int32, np.float64]
-nulls = ['some', 'none']
+nulls = ["some", "none"]
 params_1d = itertools.product(nelems, dtype, nulls)
 
 ncols = [0, 1, 2]
@@ -40,7 +40,7 @@ def data_1d(request):
     dtype = request.param[1]
     nulls = request.param[2]
     a = np.random.randint(10, size=nelems).astype(dtype)
-    if nulls == 'some' and a.size != 0 and np.issubdtype(dtype, np.floating):
+    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
         idx = np.random.choice(a.size, size=int(a.size * 0.2), replace=False)
         a[idx] = np.nan
     return a
@@ -53,7 +53,7 @@ def data_2d(request):
     dtype = request.param[2]
     nulls = request.param[3]
     a = np.random.randint(10, size=(nrows, ncols)).astype(dtype)
-    if nulls == 'some' and a.size != 0 and np.issubdtype(dtype, np.floating):
+    if nulls == "some" and a.size != 0 and np.issubdtype(dtype, np.floating):
         idx = np.random.choice(a.size, size=int(a.size * 0.2), replace=False)
         a.ravel()[idx] = np.nan
     return np.ascontiguousarray(a)

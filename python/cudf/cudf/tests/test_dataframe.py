@@ -2185,8 +2185,9 @@ def test_dataframe_boolmask(mask_shape):
 
     assert np.array_equal(gdf.columns, pdf.columns)
     for col in gdf.columns:
-        assert np.array_equal(gdf[col].fillna(-1).to_pandas().values,
-                              pdf[col].fillna(-1).values)
+        assert np.array_equal(
+            gdf[col].fillna(-1).to_pandas().values, pdf[col].fillna(-1).values
+        )
 
 
 def test_dataframe_assignment():
@@ -2673,71 +2674,105 @@ def test_select_dtype():
 
     assert_eq(pdf.select_dtypes("float64"), gdf.select_dtypes("float64"))
     assert_eq(pdf.select_dtypes(np.float64), gdf.select_dtypes(np.float64))
-    assert_eq(pdf.select_dtypes(include=["float64"]),
-              gdf.select_dtypes(include=["float64"]))
-    assert_eq(pdf.select_dtypes(include=['object', 'int', 'category']),
-              gdf.select_dtypes(include=['object', 'int', 'category']))
-
-    assert_eq(pdf.select_dtypes(include=["int64", "float64"]),
-              gdf.select_dtypes(include=["int64", "float64"]))
-    assert_eq(pdf.select_dtypes(include=np.number),
-              gdf.select_dtypes(include=np.number))
     assert_eq(
-        pdf.select_dtypes(include=[np.int64, np.float64]),
-        gdf.select_dtypes(include=[np.int64, np.float64])
+        pdf.select_dtypes(include=["float64"]),
+        gdf.select_dtypes(include=["float64"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["object", "int", "category"]),
+        gdf.select_dtypes(include=["object", "int", "category"]),
     )
 
-    assert_eq(pdf.select_dtypes(include=["category"]),
-              gdf.select_dtypes(include=["category"]))
-    assert_eq(pdf.select_dtypes(exclude=np.number),
-              gdf.select_dtypes(exclude=np.number))
+    assert_eq(
+        pdf.select_dtypes(include=["int64", "float64"]),
+        gdf.select_dtypes(include=["int64", "float64"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=np.number),
+        gdf.select_dtypes(include=np.number),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=[np.int64, np.float64]),
+        gdf.select_dtypes(include=[np.int64, np.float64]),
+    )
+
+    assert_eq(
+        pdf.select_dtypes(include=["category"]),
+        gdf.select_dtypes(include=["category"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=np.number),
+        gdf.select_dtypes(exclude=np.number),
+    )
 
     with pytest.raises(TypeError):
-        assert_eq(pdf.select_dtypes(include=["Foo"]),
-                  gdf.select_dtypes(include=["Foo"]))
+        assert_eq(
+            pdf.select_dtypes(include=["Foo"]),
+            gdf.select_dtypes(include=["Foo"]),
+        )
 
     with pytest.raises(ValueError):
         gdf.select_dtypes(exclude=np.number, include=np.number)
     with pytest.raises(ValueError):
         pdf.select_dtypes(exclude=np.number, include=np.number)
 
-    gdf = DataFrame({'A': [3, 4, 5],
-                     'C': [1, 2, 3],
-                     'D': ['a', 'b', 'c']})
+    gdf = DataFrame({"A": [3, 4, 5], "C": [1, 2, 3], "D": ["a", "b", "c"]})
     pdf = gdf.to_pandas()
-    assert_eq(pdf.select_dtypes(include=['object', 'int', 'category']),
-              gdf.select_dtypes(include=['object', 'int', 'category']))
-    assert_eq(pdf.select_dtypes(include=['object'], exclude=['category']),
-              gdf.select_dtypes(include=['object'], exclude=['category']))
+    assert_eq(
+        pdf.select_dtypes(include=["object", "int", "category"]),
+        gdf.select_dtypes(include=["object", "int", "category"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["object"], exclude=["category"]),
+        gdf.select_dtypes(include=["object"], exclude=["category"]),
+    )
 
-    gdf = gd.DataFrame({'a': range(10), 'b': range(10, 20)})
+    gdf = gd.DataFrame({"a": range(10), "b": range(10, 20)})
     pdf = gdf.to_pandas()
-    assert_eq(pdf.select_dtypes(include=['category']),
-              gdf.select_dtypes(include=['category']))
-    assert_eq(pdf.select_dtypes(include=['float']),
-              gdf.select_dtypes(include=['float']))
-    assert_eq(pdf.select_dtypes(include=['object']),
-              gdf.select_dtypes(include=['object']))
-    assert_eq(pdf.select_dtypes(include=['int']),
-              gdf.select_dtypes(include=['int']))
-    assert_eq(pdf.select_dtypes(exclude=['float']),
-              gdf.select_dtypes(exclude=['float']))
-    assert_eq(pdf.select_dtypes(exclude=['object']),
-              gdf.select_dtypes(exclude=['object']))
-    assert_eq(pdf.select_dtypes(include=['int'], exclude=['object']),
-              gdf.select_dtypes(include=['int'], exclude=['object']))
+    assert_eq(
+        pdf.select_dtypes(include=["category"]),
+        gdf.select_dtypes(include=["category"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["float"]),
+        gdf.select_dtypes(include=["float"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["object"]),
+        gdf.select_dtypes(include=["object"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["int"]), gdf.select_dtypes(include=["int"])
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=["float"]),
+        gdf.select_dtypes(exclude=["float"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=["object"]),
+        gdf.select_dtypes(exclude=["object"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["int"], exclude=["object"]),
+        gdf.select_dtypes(include=["int"], exclude=["object"]),
+    )
     with pytest.raises(ValueError):
         pdf.select_dtypes()
     with pytest.raises(ValueError):
         gdf.select_dtypes()
 
-    gdf = gd.DataFrame({'a': gd.Series([], dtype='int'),
-                        'b': gd.Series([], dtype='str')})
+    gdf = gd.DataFrame(
+        {"a": gd.Series([], dtype="int"), "b": gd.Series([], dtype="str")}
+    )
     pdf = gdf.to_pandas()
-    assert_eq(pdf.select_dtypes(exclude=['object']),
-              gdf.select_dtypes(exclude=['object']))
-    assert_eq(pdf.select_dtypes(include=['int'], exclude=['object']),
-              gdf.select_dtypes(include=['int'], exclude=['object']))
+    assert_eq(
+        pdf.select_dtypes(exclude=["object"]),
+        gdf.select_dtypes(exclude=["object"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["int"], exclude=["object"]),
+        gdf.select_dtypes(include=["int"], exclude=["object"]),
+    )
 
 
 def test_select_dtype_datetime():
@@ -2938,9 +2973,13 @@ def test_diff(dtype, period):
 
 def test_isnull_isna():
     # float & strings some missing
-    ps = pd.DataFrame({"a": [0, 1, 2, np.nan, 4, None, 6],
-                       "b": [np.nan, None, 'u', 'h', 'd', 'a', 'm']})
-    ps.index = ['q', 'w', 'e', 'r', 't', 'y', 'u']
+    ps = pd.DataFrame(
+        {
+            "a": [0, 1, 2, np.nan, 4, None, 6],
+            "b": [np.nan, None, "u", "h", "d", "a", "m"],
+        }
+    )
+    ps.index = ["q", "w", "e", "r", "t", "y", "u"]
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())
@@ -2948,7 +2987,7 @@ def test_isnull_isna():
     assert_eq(ps.isna(), gs.isna())
 
     # integer & string none missing
-    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ['a', 'b', 'u', 'h', 'd']})
+    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())
@@ -2956,8 +2995,9 @@ def test_isnull_isna():
     assert_eq(ps.isna(), gs.isna())
 
     # all missing
-    ps = pd.DataFrame({"a": [None, None, np.nan, None],
-                       "b": [np.nan, None, np.nan, None]})
+    ps = pd.DataFrame(
+        {"a": [None, None, np.nan, None], "b": [np.nan, None, np.nan, None]}
+    )
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())
@@ -3005,21 +3045,26 @@ def test_isnull_isna():
 
 def test_notna():
     # float & strings some missing
-    ps = pd.DataFrame({"a": [0, 1, 2, np.nan, 4, None, 6],
-                       "b": [np.nan, None, 'u', 'h', 'd', 'a', 'm']})
+    ps = pd.DataFrame(
+        {
+            "a": [0, 1, 2, np.nan, 4, None, 6],
+            "b": [np.nan, None, "u", "h", "d", "a", "m"],
+        }
+    )
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
 
     # integer & string none missing
-    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ['a', 'b', 'u', 'h', 'd']})
+    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
 
     # all missing
-    ps = pd.DataFrame({"a": [None, None, np.nan, None],
-                       "b": [np.nan, None, np.nan, None]})
+    ps = pd.DataFrame(
+        {"a": [None, None, np.nan, None], "b": [np.nan, None, np.nan, None]}
+    )
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
