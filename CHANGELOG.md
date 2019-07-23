@@ -54,6 +54,7 @@
 - PR #2345 Restore removal of old groupby implementation
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2373 cudf.DataFrame enchancements & Series.values support
 
 ## Bug Fixes
 
