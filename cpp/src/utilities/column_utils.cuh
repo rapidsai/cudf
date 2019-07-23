@@ -37,7 +37,8 @@ __global__ void null_if_kernel(
     Size num_bits
   ){
  
-  static_assert(warp_size == util::size_in_bits<BitContainer>());
+  static_assert(warp_size == util::size_in_bits<BitContainer>(), 
+      "warp size is different from BitConstainer size.");
 
   Size bit_index = threadIdx.x + blockIdx.x * blockDim.x;
 
