@@ -32,7 +32,7 @@ def hash_columns(columns, result, initial_hash_values=None):
         c_initial_hash_values = 0
     else:
         c_initial_hash_values = get_ctype_ptr(initial_hash_values)
-    
+
     with nogil:
         err = gdf_hash(
             ncols,
@@ -103,4 +103,3 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
 
     offsets = list(offsets)
     return offsets
-
