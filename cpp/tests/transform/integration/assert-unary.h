@@ -37,17 +37,22 @@ void ASSERT_UNARY(cudf::test::column_wrapper<TypeOut>& out,
     auto out_data = std::get<0>(out_h);
 
     ASSERT_TRUE(out_data.size() == in_data.size());
-    for (size_t index = 0; index < out_data.size(); ++index) {
-      EXPECT_EQ(out_data[index], static_cast<TypeOut>(ope(in_data[index])));
-    }
-
+    
+    auto data_comprator = [ope](const TypeIn& in, const TypeOut& out){
+      EXPECT_EQ(out, static_cast<TypeOut>(ope(in)));
+      return true;
+    };
+    std::equal(in_data.begin(), in_data.end(), out_data.begin(), data_comprator);
+    
     auto in_valid = std::get<1>(in_h);
     auto out_valid = std::get<1>(out_h);
-
+    
     ASSERT_TRUE(out_valid.size() == in_valid.size());
-    for (size_t index = 0; index < out_valid.size(); ++index) {
-        EXPECT_EQ(out_valid[index], in_valid[index]);
-    }
+    auto valid_comprator = [](const bool& in, const bool& out){
+      EXPECT_EQ(out, in);
+      return true;
+    };
+    std::equal(in_valid.begin(), in_valid.end(), out_valid.begin(), valid_comprator);
 }
 
 }

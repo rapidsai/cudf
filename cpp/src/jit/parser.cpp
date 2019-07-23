@@ -468,7 +468,5 @@ std::string parse_single_function_ptx(const std::string& src,
 
   final_output += "}";
 
-  printf("%s\n", final_output.c_str());
-
   return final_output;
 }
