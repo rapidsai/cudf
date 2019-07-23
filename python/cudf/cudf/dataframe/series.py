@@ -358,13 +358,13 @@ class Series(object):
             if issubclass(arg.dtype.type, np.integer):
                 maps = columnops.as_column(arg).data.mem
                 index = self.index.take(maps)
-                selvals = self._column.take(maps)
+                data = self._column.take(maps)
             elif arg.dtype in [np.bool, np.bool_]:
-                selvals = self._column.apply_boolean_mask(arg)
+                data = self._column.apply_boolean_mask(arg)
                 index = self.index.as_column().apply_boolean_mask(arg)
             else:
                 raise NotImplementedError(arg.dtype)
-            return self._copy_construct(data=selvals, index=index)
+            return self._copy_construct(data=data, index=index)
         elif isinstance(arg, slice):
             index = self.index[arg]  # slice index
             col = self._column[arg]  # slice column
