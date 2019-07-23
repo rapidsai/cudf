@@ -7,12 +7,13 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_WITH_ZLIB=OFF"
                      " -DARROW_BUILD_STATIC=ON"
                      " -DARROW_BUILD_SHARED=OFF"
-                     " -DARROW_BOOST_USE_SHARED=ON"
+                     " -DARROW_BOOST_USE_SHARED=OFF"
                      " -DARROW_BUILD_TESTS=OFF"
                      " -DARROW_TEST_LINKAGE=OFF"
                      " -DARROW_TEST_MEMCHECK=OFF"
                      " -DARROW_BUILD_BENCHMARKS=OFF"
                      " -DARROW_IPC=ON"
+                     " -DARROW_FLIGHT=OFF"
                      " -DARROW_COMPUTE=OFF"
                      " -DARROW_CUDA=OFF"
                      " -DARROW_JEMALLOC=OFF"
@@ -23,7 +24,6 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_BUILD_UTILITIES=OFF"
                      " -DARROW_HDFS=OFF"
                      " -DCMAKE_VERBOSE_MAKEFILE=ON")
-                    #  " -DARROW_DEPENDENCY_SOURCE=BUNDLED")
 
 if(NOT CMAKE_CXX11_ABI)
     message(STATUS "ARROW: Disabling the GLIBCXX11 ABI")
@@ -96,11 +96,4 @@ if(ARROW_LIB)
     set(ARROW_FOUND TRUE)
 endif(ARROW_LIB)
 
-# set(FLATBUFFERS_ROOT "${ARROW_ROOT}/build/flatbuffers_ep-prefix/src/flatbuffers_ep-install")
-
-# message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
-# set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
-# set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
-
 add_definitions(-DARROW_METADATA_V4)
-# add_definitions(-DARROW_VERSION=1400)

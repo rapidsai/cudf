@@ -31,8 +31,13 @@ requirements:
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
     - arrow-cpp 0.14.0.*
+    - double-conversion
+    - rapidjson
+    - flatbuffers
+    - boost-cpp
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - arrow-cpp 0.14.0.*
 
 test:
   commands:

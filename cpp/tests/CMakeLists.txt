@@ -60,8 +60,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
-                    # "${FLATBUFFERS_INCLUDE_DIR}"
-                    "${FLATBUFFERS_INCLUDE}"
                     "${RMM_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
 
@@ -70,8 +68,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                #  "${FLATBUFFERS_LIBRARY_DIR}"
-                 "${FLATBUFFERS_LIBRARY}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}"
                  "${NVSTRINGS_LIBRARY}"

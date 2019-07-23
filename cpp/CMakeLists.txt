@@ -102,24 +102,12 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
-# - find flatbuffers ------------------------------------------------------------------------------
+# - conda environment -----------------------------------------------------------------------------
 
-# find_path(FLATBUFFERS_INCLUDE "flatbuffers"
-#           HINTS "$ENV{FLATBUFFERS_ROOT}/include"
-#                 "$ENV{CONDA_PREFIX}/include/flatbuffers"
-#                 "$ENV{CONDA_PREFIX}/include")
-
-# find_library(FLATBUFFERS_LIBRARY "flatbuffers"
-#              HINTS "$ENV{FLATBUFFERS_ROOT}/lib"
-#                    "$ENV{CONDA_PREFIX}/lib")
-
-# message(STATUS "FLATBUFFERS: FLATBUFFERS_LIBRARY set to ${FLATBUFFERS_LIBRARY}")
-# message(STATUS "FLATBUFFERS: FLATBUFFERS_INCLUDE set to ${FLATBUFFERS_INCLUDE}")
-
-# add_library(flatbuffers SHARED IMPORTED ${FLATBUFFERS_LIBRARY})
-# if (FLATBUFFERS_INCLUDE AND FLATBUFFERS_LIBRARY)
-#     set_target_properties(flatbuffers PROPERTIES IMPORTED_LOCATION ${FLATBUFFERS_LIBRARY})
-# endif (FLATBUFFERS_INCLUDE AND FLATBUFFERS_LIBRARY)
+if (DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif (DEFINED ENV{CONDA_PREFIX})
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -136,6 +124,19 @@ endif(ARROW_FOUND)
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
+# find_path(
+#     ZLIB_INCLUDE_DIRS "zlib.h"
+#     HINTS "$ENV{ZLIB_ROOT}/include"
+# )
+
+# find_library(
+#     ZLIB_LIBRARIES "z"
+#     HINTS "$ENV{ZLIB_ROOT}/lib"
+# )
+
+message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
+
 if(ZLIB_FOUND)
     message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
@@ -143,16 +144,37 @@ else()
 endif(ZLIB_FOUND)
 
 ###################################################################################################
+# - find boost ------------------------------------------------------------------------------------
+
+# Don't look for a CMake configuration file
+set(Boost_NO_BOOST_CMAKE ON)
+
+find_package(
+    Boost REQUIRED MODULE
+    COMPONENTS filesystem
+)
+
+message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
+message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+
+if(Boost_FOUND)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "Boost not found, please check your settings.")
+endif(Boost_FOUND)
+
+###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/rmm"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    RMM_INCLUDE "rmm"
+    HINTS "$ENV{RMM_ROOT}/include"
+)
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    RMM_LIBRARY "rmm"
+    HINTS "$ENV{RMM_ROOT}/lib"
+)
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -165,22 +187,25 @@ endif (RMM_INCLUDE AND RMM_LIBRARY)
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
-find_path(NVSTRINGS_INCLUDE "nvstrings"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/nvstrings"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    NVSTRINGS_INCLUDE "nvstrings"
+    HINTS "$ENV{NVSTRINGS_ROOT}/include"
+)
 
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    NVSTRINGS_LIBRARY "NVStrings"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    NVCATEGORY_LIBRARY "NVCategory"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
-find_library(NVTEXT_LIBRARY "NVText"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    NVTEXT_LIBRARY "NVText"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
 message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
 message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
@@ -258,9 +283,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
-                    # "${FLATBUFFERS_INCLUDE_DIR}"
-                    # "${FLATBUFFERS_INCLUDE}"
                     "${ZLIB_INCLUDE_DIRS}"
+                    "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
 
@@ -269,8 +293,6 @@ include_directories("${CMAKE_BINARY_DIR}/include"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
-                #  "${FLATBUFFERS_LIBRARY_DIR}"
-                #  "${FLATBUFFERS_LIBRARY}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}"
                  "${NVSTRINGS_LIBRARY}"
@@ -281,7 +303,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
-            src/comms/ipc/ipc.cu
+            src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/table.cpp
@@ -405,8 +427,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
-
+target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
