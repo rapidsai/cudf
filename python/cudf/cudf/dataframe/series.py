@@ -122,7 +122,7 @@ class Series(object):
             dtype = ser.dtype
             if order == "F":
                 matrix = rmm.device_array(
-                    shape=(nrow, ), dtype=dtype, order=order
+                    shape=(nrow,), dtype=dtype, order=order
                 )
                 dense = ser._column.to_gpu_array(fillna="pandas")
                 matrix[:].copy_to_device(dense)
