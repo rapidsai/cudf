@@ -781,17 +781,17 @@ class StringColumn(columnops.TypedColumnBase):
 
     @property
     def is_monotonic_increasing(self):
-        if not hasattr(self, '_is_monotonic_increasing'):
+        if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = string_column_binop(
-                self[1:], self[:-1], 'ge'
+                self[1:], self[:-1], "ge"
             ).all()
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        if not hasattr(self, '_is_monotonic_decreasing'):
+        if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = string_column_binop(
-                self[1:], self[:-1], 'le'
+                self[1:], self[:-1], "le"
             ).all()
         return self._is_monotonic_decreasing
 
