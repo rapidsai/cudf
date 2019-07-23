@@ -118,17 +118,16 @@ class Series(object):
     @property
     def values(self):
         def as_gpu_matrix(ser, columns=None, order="F"):
-            ncol = 1
             nrow = len(ser)
             dtype = ser.dtype
             if order == "F":
                 matrix = rmm.device_array(
-                    shape=(nrow,), dtype=dtype, order=order
+                    shape=(nrow, ), dtype=dtype, order=order
                 )
                 dense = ser._column.to_gpu_array(fillna="pandas")
-                matrix[:, ].copy_to_device(dense)
+                matrix[:].copy_to_device(dense)
             elif order == "C":
-                matrix = cudautils.row_matrix([ser._column], nrow, ncol, dtype)
+                matrix = cudautils.row_matrix([ser._column], nrow, 1, dtype)
             else:
                 errmsg = (
                     "order parameter should be 'C' for row major or 'F' for"

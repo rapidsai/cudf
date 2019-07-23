@@ -391,7 +391,7 @@ def test_dataframe_pop():
 
     # check empty dataframe edge case
     empty_pdf = pd.DataFrame(columns=["a", "b"])
-    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    empty_gdf = DataFrame(columns=["a", "b"])  # .from_pandas(empty_pdf)
     pb = empty_pdf.pop("b")
     gb = empty_gdf.pop("b")
     assert len(pb) == len(gb)
@@ -3326,3 +3326,31 @@ def test_create_dataframe_from_list_like(data):
     gdf = DataFrame(data)
 
     assert_eq(pdf, gdf)
+
+
+def test_create_dataframe_column():
+    pdf = pd.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+    gdf = DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+    gdf = DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize("data", [[1, 2, 4], [], [5.0, 7.0, 8.0]])
+def test_series_values_property(data):
+    pds = pd.Series(data)
+    gds = Series(data)
+
+    assert_eq(pds.values, gds.values)

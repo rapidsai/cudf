@@ -143,7 +143,7 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, name_series=None, index=None):
+    def __init__(self, data=None, index=None, columns=None):
         keys = index
         if index is None:
             index = RangeIndex(start=0)
@@ -151,24 +151,25 @@ class DataFrame(object):
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
+        added_columns = set()
 
-        if name_series is not None:
-            if isinstance(name_series, dict):
-                name_series = name_series.items()
-            elif utils.is_list_like(name_series) and len(name_series) > 0:
-                if not isinstance(name_series[0], (list, tuple)):
+        if data is not None:
+            if isinstance(data, dict):
+                data = data.items()
+            elif utils.is_list_like(data) and len(data) > 0:
+                if not isinstance(data[0], (list, tuple)):
                     # a nested list is something pandas supports and
                     # we don't support list-like values in a record yet
                     if keys is None:
-                        name_series = {
-                            i: element for i, element in enumerate(name_series)
+                        data = {
+                            i: element for i, element in enumerate(data)
                         }.items()
                     else:
-                        name_series = dict(zip(keys, name_series)).items()
+                        data = dict(zip(keys, data)).items()
                         self._index = as_index(RangeIndex(start=0))
                         self._size = len(RangeIndex(start=0))
 
-                    for col_name, series in name_series:
+                    for col_name, series in data:
                         self.add_column(
                             col_name, series, forceindex=index is not None
                         )
@@ -184,8 +185,20 @@ class DataFrame(object):
                             forceindex=index is not None,
                         )
                     return
-            for col_name, series in name_series:
+            for col_name, series in data:
                 self.add_column(col_name, series, forceindex=index is not None)
+                added_columns.add(col_name)
+
+        if columns is not None:
+            for col_name in columns:
+                if col_name not in added_columns:
+                    self.add_column(
+                        col_name,
+                        columnops.column_empty(
+                            self._size, dtype="object", masked=True
+                        ),
+                        forceindex=index is not None,
+                    )
 
     def serialize(self, serialize):
         header = {}
