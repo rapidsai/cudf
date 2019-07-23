@@ -364,21 +364,21 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return self
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self._get_uncategorized_column().as_numerical_column(
+        return self._get_decategorized_column().as_numerical_column(
             dtype, **kwargs
         )
 
     def as_string_column(self, dtype, **kwargs):
-        return self._get_uncategorized_column().as_string_column(
+        return self._get_decategorized_column().as_string_column(
             dtype, **kwargs
         )
 
     def as_datetime_column(self, dtype, **kwargs):
-        return self._get_uncategorized_column().as_datetime_column(
+        return self._get_decategorized_column().as_datetime_column(
             dtype, **kwargs
         )
 
-    def _get_uncategorized_column(self):
+    def _get_decategorized_column(self):
         gather_map = (
             self.cat().codes.astype("int32").fillna(0)._column.data.mem
         )
@@ -406,7 +406,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         else:
             params = self._replace_defaults()
             return type(self)(**params)
-
 
 
 def pandas_categorical_as_column(categorical, codes=None):
