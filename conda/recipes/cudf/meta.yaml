@@ -23,6 +23,7 @@ requirements:
     - setuptools
     - numba >=0.41,<0.45
     - dlpack
+    - pyarrow 0.14.1.*
     - libcudf {{ version }}
   run:
     - python
