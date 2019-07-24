@@ -1,5 +1,7 @@
-import cudf
+# Copyright (c) 2018, NVIDIA CORPORATION.
 import pytest
+
+import cudf
 from cudf.tests.utils import assert_eq, gen_rand, random_bitmask
 
 

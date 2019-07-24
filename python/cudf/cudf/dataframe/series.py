@@ -2366,7 +2366,7 @@ class Series(object):
 
         return out.copy(deep=copy)
 
-    def searchsorted(self, value, side='left'):
+    def searchsorted(self, value, side="left"):
         """Find indices where elements should be inserted to maintain order
 
         Parameters

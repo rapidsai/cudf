@@ -385,7 +385,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise ValueError("value not found")
         return found
 
-    def searchsorted(self, value, side='left'):
+    def searchsorted(self, value, side="left"):
         value_col = columnops.as_column(value)
         return cpp_search.search_sorted(self, value_col, side)
 

@@ -237,7 +237,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         value = columnops.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value)
 
-    def searchsorted(self, value, side='left'):
+    def searchsorted(self, value, side="left"):
         value_col = columnops.as_column(value)
         return cpp_search.search_sorted(self, value_col, side)
 

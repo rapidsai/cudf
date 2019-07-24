@@ -351,7 +351,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         """
         return self.as_numerical.find_last_value(self._encode(value))
 
-    def searchsorted(self, value, side='left'):
+    def searchsorted(self, value, side="left"):
         if not self._ordered:
             raise ValueError("Requires ordered categories")
 
