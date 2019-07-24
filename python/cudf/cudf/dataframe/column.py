@@ -455,8 +455,12 @@ class Column(object):
                 # slicing data
                 subdata = self.data[arg]
                 # slicing mask
+                if self.dtype == "object":
+                    data_size = self.data.size()
+                else:
+                    data_size = self.data.size
                 bytemask = cudautils.expand_mask_bits(
-                    self.data.size, self.mask.to_gpu_array()
+                    data_size, self.mask.to_gpu_array()
                 )
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)

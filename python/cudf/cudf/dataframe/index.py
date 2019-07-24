@@ -399,10 +399,12 @@ class RangeIndex(Index):
             index = np.array(index)
             index = rmm.to_device(index)
 
-        if isinstance(index, (DeviceNDArray)):
-            return self.take(index)
         else:
-            raise ValueError(index)
+            if pd.api.types.is_scalar(index):
+                index = utils.min_signed_type(index)(index)
+            index = columnops.as_column(index).data.mem
+
+        return as_index(self.as_column()[index])
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
