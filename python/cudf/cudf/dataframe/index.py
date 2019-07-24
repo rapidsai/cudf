@@ -14,7 +14,6 @@ from librmm_cffi import librmm as rmm
 
 import cudf
 import cudf.bindings.copying as cpp_copying
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
@@ -794,9 +793,3 @@ def as_index(arbitrary, name=None):
         return CategoricalIndex(arbitrary, name=name)
     else:
         return as_index(columnops.as_column(arbitrary), name=name)
-
-
-register_distributed_serializer(RangeIndex)
-register_distributed_serializer(GenericIndex)
-register_distributed_serializer(DatetimeIndex)
-register_distributed_serializer(CategoricalIndex)

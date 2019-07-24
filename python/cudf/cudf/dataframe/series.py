@@ -19,7 +19,6 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
 )
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
@@ -2395,9 +2394,6 @@ class Series(object):
     @property
     def is_monotonic_decreasing(self):
         return self._column.is_monotonic_decreasing
-
-
-register_distributed_serializer(Series)
 
 
 truediv_int_dtype_corrections = {

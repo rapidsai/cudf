@@ -9,7 +9,6 @@ from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
@@ -419,6 +418,3 @@ def pandas_categorical_as_column(categorical, codes=None):
         params.update(dict(mask=Buffer(mask), null_count=null_count))
 
     return CategoricalColumn(**params)
-
-
-register_distributed_serializer(CategoricalColumn)
