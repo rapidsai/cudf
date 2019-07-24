@@ -91,6 +91,7 @@
 - PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
 - PR #2364 Fix quantile api and other trivial issues around it
 - PR #2361 Fixed issue with `codes` of CategoricalIndex
+- PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
 
 
 # cuDF 0.8.0 (27 June 2019)
