@@ -3,7 +3,6 @@ import pandas as pd
 
 import cudf
 from cudf.bindings.rolling import apply_rolling
-from cudf.dataframe import columnops
 from cudf.utils import cudautils
 
 
