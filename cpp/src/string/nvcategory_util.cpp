@@ -213,7 +213,8 @@ gdf_error clear_column_categories(gdf_column* input_column, gdf_column* output_c
   gdf_size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
   CUDA_TRY( cudaMemcpy(output_column->data, output_category->values_cptr(),
         size_to_copy, cudaMemcpyDeviceToDevice));
-
+  
+  NVCategory::destroy(static_cast<NVCategory*>(output_column->dtype_info.category));
   output_column->dtype_info.category = output_category;
 
   return GDF_SUCCESS;
