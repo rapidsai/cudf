@@ -502,38 +502,6 @@ class StringColumn(columnops.TypedColumnBase):
             self._indices = Buffer(out_dev_arr)
         return self._indices
 
-    def element_indexing(self, arg):
-        if isinstance(arg, Number):
-            arg = int(arg)
-            if arg < 0:
-                arg = len(self) + arg
-            if arg > (len(self) - 1):
-                raise IndexError
-            out = self._data[arg]
-        elif isinstance(arg, slice):
-            out = self._data[arg]
-        elif isinstance(arg, list):
-            out = self._data[arg]
-        elif isinstance(arg, np.ndarray):
-            gpu_arr = rmm.to_device(arg)
-            return self.element_indexing(gpu_arr)
-        elif isinstance(arg, DeviceNDArray):
-            # NVStrings gather call expects an array of int32s
-            arg = cudautils.astype(arg, np.dtype("int32"))
-            arg = cudautils.modulo(arg, len(self))
-            if len(arg) > 0:
-                gpu_ptr = get_ctype_ptr(arg)
-                out = self._data.gather(gpu_ptr, len(arg))
-            else:
-                out = self._data.gather([])
-        else:
-            raise NotImplementedError(type(arg))
-
-        if np.isscalar(arg):
-            return out.to_host()[0]
-        else:
-            return columnops.as_column(out)
-
     def astype(self, dtype):
         if self.dtype == dtype or (
             dtype in ("str", "object") and self.dtype in ("str", "object")
@@ -758,9 +726,6 @@ class StringColumn(columnops.TypedColumnBase):
 
     def default_na_value(self):
         return None
-
-    def take(self, indices):
-        return self.element_indexing(indices)
 
     def binary_operator(self, binop, rhs, reflect=False):
         lhs = self

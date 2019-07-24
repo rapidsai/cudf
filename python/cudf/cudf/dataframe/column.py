@@ -427,12 +427,14 @@ class Column(object):
         ------
         ``IndexError`` if out-of-bound
         """
-        index = int(index)
+        index = np.int32(index)
         if index < 0:
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
         val = self.data[index]  # this can raise IndexError
+        if isinstance(val, nvstrings.nvstrings):
+            val = val.to_host()[0]
         valid = (
             cudautils.mask_get.py_func(self.nullmask, index)
             if self.has_null_mask
