@@ -18,6 +18,7 @@
 #include <gmock/gmock.h>
 #include <cudf/cudf.h>
 #include <cudf/table.hpp>
+#include <cudf/predicates.hpp>
 
 #include <utilities/error_utils.hpp>
 
@@ -236,4 +237,62 @@ TYPED_TEST(IsSorted, NumericalNullBiggest)
     found = is_sorted (table, asc_dec, nulls_are_smallest);
 
     EXPECT_EQ(found, true);
+}
+
+
+TYPED_TEST(IsSorted, EmptyInput)
+{
+    using T = TypeParam;
+    bool found  = false;
+    bool nulls_are_smallest  = false;
+
+    cudf::table table{};
+    std::vector <int8_t> const asc_dec{};
+
+    found = is_sorted (table, asc_dec, nulls_are_smallest);
+
+    EXPECT_EQ(found, true);
+}
+
+TYPED_TEST(IsSorted, EmptyColumnOrderingInfoTrue)
+{
+    using T = TypeParam;
+    bool found  = false;
+
+    column_wrapper <T> col1 = column_wrapper<T>({1,1,1,1},[](auto row) { return true; });
+    column_wrapper <T> col2 = column_wrapper<T>({1,2,3,4},[](auto row) { return true; });
+
+    std::vector<gdf_column*> cols;
+    cols.push_back(col1.get());
+    cols.push_back(col2.get());
+
+    cudf::table table(cols.data(), cols.size());
+    EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
+    std::vector <int8_t> const asc_dec{};
+
+    found = is_sorted (table, asc_dec, false);
+
+    EXPECT_EQ(found, true);
+
+}
+
+TYPED_TEST(IsSorted, EmptyColumnOrderingInfoFalse)
+{
+    using T = TypeParam;
+    bool found  = false;
+
+    column_wrapper <T> col1 = column_wrapper<T>({1,1,1,1},[](auto row) { return true; });
+    column_wrapper <T> col2 = column_wrapper<T>({4,3,2,1},[](auto row) { return true; });
+
+    std::vector<gdf_column*> cols;
+    cols.push_back(col1.get());
+    cols.push_back(col2.get());
+
+    cudf::table table(cols.data(), cols.size());
+    EXPECT_EQ(cols.size(), static_cast<unsigned int> (table.num_columns()));
+    std::vector <int8_t> const asc_dec{};
+
+    found = is_sorted (table, asc_dec, false);
+
+    EXPECT_EQ(found, false);
 }

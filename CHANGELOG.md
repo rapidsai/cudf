@@ -19,7 +19,7 @@
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2049 Implemented merge functionality
-- PR #2380 Adding is_sorted to check whether cudf::table is sorted or not
+- PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 
 ## Improvements
 
