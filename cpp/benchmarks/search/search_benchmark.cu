@@ -15,7 +15,7 @@
  */
 
 #include <tests/utilities/column_wrapper.cuh>
-#include <fixture/benchmark_fixtures.hpp>
+#include "../fixture/benchmark_fixture.hpp"
 
 #include <cudf/search.hpp>
 #include <cudf/copying.hpp>
