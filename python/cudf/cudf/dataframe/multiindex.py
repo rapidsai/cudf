@@ -274,6 +274,8 @@ class MultiIndex(Index):
         from cudf import DataFrame
         from cudf import Series
 
+        if isinstance(index_key, (numbers.Number, slice)):
+            index_key = [index_key]
         if (
                 (
                     len(index_key) > 0
@@ -352,9 +354,8 @@ class MultiIndex(Index):
             row_tuple,
             len(df.index)
         )
-        result = df.take(Series(valid_indices))
-        if isinstance(row_tuple, (numbers.Number, slice)):
-            row_tuple = [row_tuple]
+        indices = Series(valid_indices)
+        result = df.take(indices)
         final = self._index_and_downcast(result, result.index, row_tuple)
         return final
 
@@ -383,8 +384,8 @@ class MultiIndex(Index):
             and (
                 not slice(None) in row_tuple
                 and not isinstance(row_tuple[0], slice)
-                )
-            ):
+            )
+        ):
             columns = self._popn(len(row_tuple))
             result.columns = columns.take(valid_indices)
         else:

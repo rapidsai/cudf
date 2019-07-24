@@ -896,7 +896,7 @@ class DataFrame(object):
                     f"Length mismatch: Expected axis has "
                     "%d elements, new values "
                     "have %d elements"
-                    % (len(self[self.columns[0]]), len(_index))
+                    % (len(self), len(_index))
                 )
                 raise ValueError(msg)
             self._index = _index
@@ -1051,6 +1051,7 @@ class DataFrame(object):
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
+
         if self._cols:
             positions = columnops.as_column(positions).astype("int32").data.mem
             cols = [s._column for s in self._cols.values()]
@@ -1061,13 +1062,12 @@ class DataFrame(object):
             if isinstance(self.columns, cudf.MultiIndex):
                 out.columns = self.columns
 
-            if ignore_index:
-                out.index = RangeIndex(len(out))
-            else:
-                out.index = self.index.take(positions)
-
-        if isinstance(self.index, cudf.MultiIndex):
-            out._index = self.index.take(positions)
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        elif len(out) == 0:
+            out = out.set_index(self.index.take(positions))
+        else:
+            out.index = self.index.take(positions)
 
         return out
 
@@ -1363,8 +1363,6 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
         if inplace:
