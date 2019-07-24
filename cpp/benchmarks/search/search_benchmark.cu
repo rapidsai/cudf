@@ -15,12 +15,14 @@
  */
 
 #include <tests/utilities/column_wrapper.cuh>
-#include "../fixture/benchmark_fixture.hpp"
 
 #include <cudf/search.hpp>
 #include <cudf/copying.hpp>
 
 #include <benchmark/benchmark.h>
+
+#include "../fixture/benchmark_fixture.hpp"
+#include "../synchronization/synchronization.hpp"
 
 class Search : public cudf::benchmark {};
 
@@ -36,11 +38,8 @@ void BM_non_null_column(benchmark::State& state){
   );
   
   for(auto _ : state){
+    cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound(*(column.get()), *(values.get()));
-
-    // This is needed so that GBench gets a stable time per iterations.
-    // Otherwise it will run a lot of iterations in pursuit of stability.
-    cudaDeviceSynchronize();
     gdf_column_free(&col);
   }
 }
@@ -50,6 +49,7 @@ BENCHMARK_DEFINE_F(Search, AllValidColumn)(::benchmark::State& state) {
 }
 
 BENCHMARK_REGISTER_F(Search, AllValidColumn)
+  ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Arg(100000000);
 
@@ -67,11 +67,8 @@ void BM_nullable_column(benchmark::State& state){
   );
   
   for(auto _ : state){
+    cuda_event_timer timer(state, true);
     auto col = cudf::upper_bound(*(column.get()), *(values.get()));
-
-    // This is needed so that GBench gets a stable time per iterations.
-    // Otherwise it will run a lot of iterations in pursuit of stability.
-    cudaDeviceSynchronize();
     gdf_column_free(&col);
   }
 }
@@ -81,6 +78,7 @@ BENCHMARK_DEFINE_F(Search, NullableColumn)(::benchmark::State& state) {
 }
 
 BENCHMARK_REGISTER_F(Search, NullableColumn)
+  ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Arg(100000000);
 
@@ -141,11 +139,8 @@ void BM_table(benchmark::State& state){
   sort_table(data_table, desc_flags);
   
   for(auto _ : state){
+    cuda_event_timer timer(state, true);
     auto col = cudf::lower_bound(data_table, values_table, desc_flags);
-
-    // This is needed so that GBench gets a stable time per iterations.
-    // Otherwise it will run a lot of iterations in pursuit of stability.
-    cudaDeviceSynchronize();
     gdf_column_free(&col);
   }
 }
@@ -161,6 +156,7 @@ static void CustomArguments(benchmark::internal::Benchmark* b) {
 }
 
 BENCHMARK_REGISTER_F(Search, Table)
+  ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
   ->Apply(CustomArguments);
 
