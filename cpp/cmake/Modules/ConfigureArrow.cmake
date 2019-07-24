@@ -15,7 +15,7 @@ set(ARROW_CMAKE_ARGS " -DARROW_WITH_LZ4=OFF"
                      " -DARROW_IPC=ON"
                      " -DARROW_FLIGHT=OFF"
                      " -DARROW_COMPUTE=OFF"
-                     " -DARROW_CUDA=OFF"
+                     " -DARROW_CUDA=ON"
                      " -DARROW_JEMALLOC=OFF"
                      " -DARROW_BOOST_VENDORED=OFF"
                      " -DARROW_PYTHON=OFF"
@@ -73,15 +73,14 @@ if(ARROW_BUILD)
     message(FATAL_ERROR "Building Arrow failed: " ${ARROW_BUILD})
 endif(ARROW_BUILD)
 
-set(ARROW_GENERATED_IPC_DIR 
-    "${ARROW_ROOT}/build/src/arrow/ipc")
+# set(ARROW_GENERATED_IPC_DIR "${ARROW_ROOT}/build/src/arrow/ipc")
 
-configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/File_generated.h COPYONLY)
-configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Message_generated.h COPYONLY)
-configure_file(${ARROW_GENERATED_IPC_DIR}/Schema_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Schema_generated.h COPYONLY)
-configure_file(${ARROW_GENERATED_IPC_DIR}/Tensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Tensor_generated.h COPYONLY)
-configure_file(${ARROW_GENERATED_IPC_DIR}/SparseTensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/SparseTensor_generated.h COPYONLY)
-configure_file(${ARROW_GENERATED_IPC_DIR}/feather_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/feather_generated.h COPYONLY)
+# configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/File_generated.h COPYONLY)
+# configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Message_generated.h COPYONLY)
+# configure_file(${ARROW_GENERATED_IPC_DIR}/Schema_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Schema_generated.h COPYONLY)
+# configure_file(${ARROW_GENERATED_IPC_DIR}/Tensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Tensor_generated.h COPYONLY)
+# configure_file(${ARROW_GENERATED_IPC_DIR}/SparseTensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/SparseTensor_generated.h COPYONLY)
+# configure_file(${ARROW_GENERATED_IPC_DIR}/feather_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/feather_generated.h COPYONLY)
 
 message(STATUS "Arrow installed here: " ${ARROW_ROOT}/install)
 set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
@@ -91,9 +90,14 @@ find_library(ARROW_LIB arrow
              NO_DEFAULT_PATH
              HINTS "${ARROW_LIBRARY_DIR}")
 
-if(ARROW_LIB)
+find_library(ARROW_CUDA_LIB arrow_cuda
+             NO_DEFAULT_PATH
+             HINTS "${ARROW_LIBRARY_DIR}")
+
+if(ARROW_LIB AND ARROW_CUDA_LIB)
     message(STATUS "Arrow library: " ${ARROW_LIB})
+    message(STATUS "Arrow CUDA library: " ${ARROW_CUDA_LIB})
     set(ARROW_FOUND TRUE)
-endif(ARROW_LIB)
+endif(ARROW_LIB AND ARROW_CUDA_LIB)
 
 add_definitions(-DARROW_METADATA_V4)

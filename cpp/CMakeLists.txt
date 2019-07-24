@@ -123,6 +123,9 @@ else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
 endif(ARROW_FOUND)
 
+install(DIRECTORY ${ARROW_INCLUDE_DIR}/arrow/gpu
+        DESTINATION include/arrow)
+
 ###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
@@ -421,7 +424,7 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
+target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" "${ARROW_CUDA_LIB}" ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
