@@ -16,7 +16,6 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            "../../cpp/include/cudf",
             "../../cpp/include",
             "../../cpp/thirdparty/dlpack/include/dlpack/",
         ],
