@@ -682,7 +682,9 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     int start = offHeap.hostData.offsets.getInt(index * OFFSET_SIZE);
     int size = offHeap.hostData.offsets.getInt((index + 1) * OFFSET_SIZE) - start;
     byte[] rawData = new byte[size];
-    offHeap.hostData.data.getBytes(rawData, 0, start, size);
+    if (size > 0) {
+      offHeap.hostData.data.getBytes(rawData, 0, start, size);
+    }
     return new String(rawData, StandardCharsets.UTF_8);
   }
 
@@ -908,6 +910,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public ColumnVector filter(ColumnVector mask) {
     assert mask.getType() == DType.BOOL8;
+    assert type != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
     assert rows == 0 || rows == mask.getRowCount();
     return new ColumnVector(Cudf.filter(this, mask));
   }
@@ -1562,7 +1565,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param stringBufferSize the size of the string buffer to allocate.
    * @return the builder to use.
    */
-  private static Builder builder(DType type, int rows, long stringBufferSize) {
+  public static Builder builder(DType type, int rows, long stringBufferSize) {
     assert type == DType.STRING_CATEGORY || type == DType.STRING;
     return new Builder(type, TimeUnit.NONE, rows, stringBufferSize);
   }
@@ -1594,7 +1597,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     }
   }
 
-  private static ColumnVector build(DType type, int rows, long stringBufferSize, Consumer<Builder> init) {
+  public static ColumnVector build(DType type, int rows, long stringBufferSize, Consumer<Builder> init) {
     try (Builder builder = builder(type, rows, stringBufferSize)) {
       init.accept(builder);
       return builder.build();
@@ -1975,6 +1978,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       this.tsTimeUnit = tsTimeUnit;
       this.rows = rows;
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+        if (stringBufferSize <= 0) {
+          // We need at least one byte or we will get NULL back for data
+          stringBufferSize = 1;
+        }
         this.data = HostMemoryBuffer.allocate(stringBufferSize);
         // The offsets are ints and there is 1 more than the number of rows.
         this.offsets = HostMemoryBuffer.allocate((rows + 1) * OFFSET_SIZE);
@@ -2069,31 +2076,55 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return this;
     }
 
-    public final Builder append(String value) {
+    public Builder append(String value) {
       assert value != null : "appendNull must be used to append null strings";
       return appendUTF8String(value.getBytes(StandardCharsets.UTF_8));
     }
 
-    private Builder appendUTF8String(byte[] value) {
+    public Builder appendUTF8String(byte[] value) {
       return appendUTF8String(value, 0, value.length);
     }
 
-    private Builder appendUTF8String(byte[] value, int offset, int length) {
+    public Builder appendUTF8String(byte[] value, int offset, int length) {
       assert value != null : "appendNull must be used to append null strings";
       assert offset >= 0;
       assert length >= 0;
       assert value.length + offset <= length;
       assert type == DType.STRING_CATEGORY || type == DType.STRING;
       assert currentIndex < rows;
-      assert (currentStringByteIndex + length) <= stringBufferSize;
-      data.setBytes(currentStringByteIndex, value, offset, length);
+      // just for strings we want to throw a real exception if we would overrun the buffer
+      long oldLen = data.getLength();
+      long newLen = oldLen;
+      while (currentStringByteIndex + length > newLen) {
+        newLen *= 2;
+      }
+      if (newLen > Integer.MAX_VALUE) {
+        throw new IllegalStateException("A string buffer is not supported over 2GB in size");
+      }
+      if (newLen != oldLen) {
+        // need to grow the size of the buffer.
+        HostMemoryBuffer newData = HostMemoryBuffer.allocate(newLen);
+        try {
+          newData.copyFromHostBuffer(0, data, 0, currentStringByteIndex);
+          data.close();
+          data = newData;
+          newData = null;
+        } finally {
+          if (newData != null) {
+            newData.close();
+          }
+        }
+      }
+      if (length > 0) {
+        data.setBytes(currentStringByteIndex, value, offset, length);
+      }
       currentStringByteIndex += length;
       currentIndex++;
       offsets.setInt(currentIndex * OFFSET_SIZE, currentStringByteIndex);
       return this;
     }
 
-    public final Builder appendArray(byte... values) {
+    public Builder appendArray(byte... values) {
       assert (values.length + currentIndex) <= rows;
       assert type == DType.INT8 || type == DType.BOOL8;
       data.setBytes(currentIndex * type.sizeInBytes, values, 0, values.length);
@@ -2101,7 +2132,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return this;
     }
 
-    public final Builder appendArray(short... values) {
+    public Builder appendArray(short... values) {
       assert type == DType.INT16;
       assert (values.length + currentIndex) <= rows;
       data.setShorts(currentIndex * type.sizeInBytes, values, 0, values.length);
@@ -2109,7 +2140,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return this;
     }
 
-    public final Builder appendArray(int... values) {
+    public Builder appendArray(int... values) {
       assert (type == DType.INT32 || type == DType.DATE32);
       assert (values.length + currentIndex) <= rows;
       data.setInts(currentIndex * type.sizeInBytes, values, 0, values.length);
@@ -2117,7 +2148,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return this;
     }
 
-    public final Builder appendArray(long... values) {
+    public Builder appendArray(long... values) {
       assert type == DType.INT64 || type == DType.DATE64 || type == DType.TIMESTAMP;
       assert (values.length + currentIndex) <= rows;
       data.setLongs(currentIndex * type.sizeInBytes, values, 0, values.length);
@@ -2125,7 +2156,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return this;
     }
 
-    public final Builder appendArray(float... values) {
+    public Builder appendArray(float... values) {
       assert type == DType.FLOAT32;
       assert (values.length + currentIndex) <= rows;
       data.setFloats(currentIndex * type.sizeInBytes, values, 0, values.length);
@@ -2133,7 +2164,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return this;
     }
 
-    public final Builder appendArray(double... values) {
+    public Builder appendArray(double... values) {
       assert type == DType.FLOAT64;
       assert (values.length + currentIndex) <= rows;
       data.setDoubles(currentIndex * type.sizeInBytes, values, 0, values.length);

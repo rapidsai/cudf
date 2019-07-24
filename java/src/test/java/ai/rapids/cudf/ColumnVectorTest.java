@@ -387,4 +387,20 @@ public class ColumnVectorTest {
       }
     }
   }
+  
+  @Test
+  void testAppendStrings() {
+    try (ColumnVector cv = ColumnVector.build(DType.STRING, 10, 0, (b) -> {
+      b.append("123456789");
+      b.append("1011121314151617181920");
+      b.append("");
+      b.appendNull();
+    })) {
+      assertEquals(4, cv.getRowCount());
+      assertEquals("123456789", cv.getJavaString(0));
+      assertEquals("1011121314151617181920", cv.getJavaString(1));
+      assertEquals("", cv.getJavaString(2));
+      assertTrue(cv.isNull(3));
+    }
+  }
 }
