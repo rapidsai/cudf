@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import functools
-
 import msgpack
 import numpy as np
 import pandas as pd
@@ -118,31 +116,20 @@ def test_serialize_masked_series():
     assert_eq(sr, outsr)
 
 
-deserialize = pytest.importorskip("distributed.protocol").deserialize
-serialize = pytest.importorskip("distributed.protocol").serialize
-
-
-cuda_serialize = functools.partial(serialize, serializers=["cuda"])
-cuda_deserialize = functools.partial(deserialize, deserializers=["cuda"])
-
-# def test_serialize_groupby():
-#     df = cudf.DataFrame()
-#     df["key"] = np.random.randint(0, 20, 100)
-#     df["val"] = np.arange(100, dtype=np.float32)
-#     gb = df.groupby("key")
-#     foo = serialize(gb)
-#     breakpoint()
-#     outgb = deserialize(*foo)
-#     got = gb.mean()
-#     expect = outgb.mean()
-#     assert_eq(got, expect)
-
-
-def test_serialize_groupby():
+def test_serialize_groupby_df():
     df = cudf.DataFrame()
     df["key"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
     gb = df.groupby("key")
+    outgb = gb.deserialize(*gb.serialize())
+    got = gb.mean()
+    expect = outgb.mean()
+    assert_eq(got, expect)
+
+
+def test_serialize_groupby_sr():
+    sr = cudf.Series(np.random.randint(0, 20, 100))
+    gb = sr.groupby(sr // 2)
     outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
     expect = outgb.mean()

@@ -127,7 +127,7 @@ class Series(object):
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
         header["column"], column_frames = self._column.serialize()
-
+        header["type"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
 

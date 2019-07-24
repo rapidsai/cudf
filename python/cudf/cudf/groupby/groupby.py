@@ -27,20 +27,6 @@ def dataframe_from_columns(cols, index_cols=None, index=None, columns=None):
 
 
 class _Groupby(object):
-    def serialize(self):
-        header = {}
-        header["groupby"] = pickle.dumps(self)
-        header["type"] = pickle.dumps(type(self))
-        header["df"], frames = self._df.serialize()
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        groupby = pickle.loads(header["groupby"])
-        # typ = pickle.loads(header["df"]["type"])
-        # df = df_typ.deserialize(header["df"], frames)
-        return groupby
-
     def sum(self):
         return self._apply_aggregation("sum")
 
@@ -66,6 +52,21 @@ class SeriesGroupBy(_Groupby):
         self._groupby = _GroupbyHelper(
             obj=self._sr, by=by, level=level, sort=sort
         )
+
+    def serialize(self):
+        header = {}
+        header["groupby"] = pickle.dumps(self)
+        header["type"] = pickle.dumps(type(self))
+        header["sr"], frames = self._sr.serialize()
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        groupby = pickle.loads(header["groupby"])
+        sr_typ = pickle.loads(header["sr"]["type"])
+        sr = sr_typ.deserialize(header["sr"], frames)
+        groupby._sr = sr
+        return groupby
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
@@ -114,6 +115,21 @@ class DataFrameGroupBy(_Groupby):
         raise AttributeError(
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
         )
+
+    def serialize(self):
+        header = {}
+        header["groupby"] = pickle.dumps(self)
+        header["type"] = pickle.dumps(type(self))
+        header["df"], frames = self._df.serialize()
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        groupby = pickle.loads(header["groupby"])
+        df_typ = pickle.loads(header["df"]["type"])
+        df = df_typ.deserialize(header["df"], frames)
+        groupby._df = df
+        return groupby
 
 
 class _GroupbyHelper(object):
