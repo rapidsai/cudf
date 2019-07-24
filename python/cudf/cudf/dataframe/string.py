@@ -630,32 +630,6 @@ class StringColumn(columnops.TypedColumnBase):
         header["subheaders"] = sub_headers
         return header, frames
 
-    # @cuda_deserialize.register(numba.cuda.devicearray.DeviceNDArray)
-    # def deserialize_numba_ndarray(header, frames):
-    #     frame, = frames
-    #     # TODO: put this in ucx... as a kind of "fixup"
-    #     if isinstance(frame, bytes):
-    #         import numpy as np
-
-    #         arr2 = np.frombuffer(frame, header["typestr"])
-    #         return numba.cuda.to_device(arr2)
-
-    #     frame.typestr = header["typestr"]
-    #     frame.shape = header["shape"]
-
-    #     # numba & cupy don't properly roundtrip length-zero arrays.
-    #     if frame.shape[0] == 0:
-    #         arr = numba.cuda.device_array(
-    #             header["shape"],
-    #             header["typestr"]
-    #             # strides?
-    #             # order?
-    #         )
-    #         return arr
-
-    #     arr = numba.cuda.as_cuda_array(frame)
-    #     return arr
-
     @classmethod
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames

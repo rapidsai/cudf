@@ -211,6 +211,7 @@ class Column(object):
         frames = []
 
         header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         header["data_buffer"], data_frames = self._data.serialize()
 
         header["data_frame_count"] = len(data_frames)

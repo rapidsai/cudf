@@ -141,7 +141,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def serialize(self):
         header, frames = super(CategoricalColumn, self).serialize()
-        assert "dtype" not in header
         header["ordered"] = self._ordered
         header["categories"], category_frames = self._categories.serialize()
         header["category_frame_count"] = len(category_frames)
@@ -149,14 +148,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         header["dtype"] = self._dtype.str
         frames.extend(category_frames)
         return header, frames
-
-    # def serialize(self, serialize):
-    #     header, frames = super(CategoricalColumn, self).serialize(serialize)
-    #     header["ordered"] = self._ordered
-    #     header["categories"], category_frames = serialize(self._categories)
-    #     header["category_frame_count"] = len(category_frames)
-    #     frames.extend(category_frames)
-    #     return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):

@@ -51,7 +51,6 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def serialize(self):
         header, frames = super(NumericalColumn, self).serialize()
-        assert "dtype" not in header
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self._dtype.str
         return header, frames
