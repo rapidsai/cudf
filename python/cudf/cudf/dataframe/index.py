@@ -757,7 +757,6 @@ class StringIndex(GenericIndex):
             self._values = columnops.build_column(
                 nvstrings.to_device(values), dtype="object"
             )
-        assert self._values.null_count == 0
         self.name = name
 
     def to_pandas(self):
