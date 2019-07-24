@@ -9,7 +9,8 @@ from cudf.bindings.cudf_cpp cimport *
 
 cdef extern from "predicates.hpp" namespace "cudf" nogil:
 
-    cdef bool is_sorted(cudf_table table,
-         const vector[int8_t] descending,
-         bool nulls_are_smallest
+    cdef bool is_sorted(
+        cudf_table table,
+        const vector[int8_t] descending,
+        bool nulls_are_smallest
     ) except +
