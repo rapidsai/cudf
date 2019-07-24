@@ -3,6 +3,7 @@
 import os
 from distutils.sysconfig import get_python_inc, get_python_lib
 
+import numpy as np
 import versioneer
 from Cython.Build import cythonize
 from setuptools import find_packages, setup
@@ -20,6 +21,7 @@ extensions = [
             "../../cpp/include/cudf",
             "../../cpp/include",
             os.path.dirname(get_python_inc()),
+            np.get_include(),
         ],
         library_dirs=[get_python_lib()],
         libraries=["cudf"],
@@ -49,8 +51,9 @@ setup(
     ext_modules=cythonize(extensions),
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
-        "cudf.bindings": ["*.pxd", "*.pyx"],
-        "cudf.bindings.groupby": ["*.pxd", "*.pyx"],
+        "cudf.bindings": ["*.pxd"],
+        "cudf.bindings.groupby": ["*.pxd"],
+        "cudf.bindings.arrow": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
