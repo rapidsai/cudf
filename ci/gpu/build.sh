@@ -102,7 +102,4 @@ else
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
-
-    conda install codecov
-    codecov -t $CODECOV_TOKEN
 fi

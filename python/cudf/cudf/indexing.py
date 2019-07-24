@@ -16,7 +16,7 @@ class _SeriesLocIndexer(object):
 
     def __getitem__(self, arg):
         from cudf.dataframe.series import Series
-        from cudf.dataframe.index import Index
+        from cudf.dataframe.index import Index, RangeIndex
 
         if isinstance(
             arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
@@ -31,7 +31,11 @@ class _SeriesLocIndexer(object):
             # To do this efficiently we need a solution to
             # https://github.com/rapidsai/cudf/issues/1087
             out = Series(
-                [], dtype=self._sr.dtype, index=self._sr.index.__class__([])
+                [],
+                dtype=self._sr.dtype,
+                index=self._sr.index.__class__(start=0)
+                if isinstance(self._sr.index, RangeIndex)
+                else self._sr.index.__class__([]),
             )
             for s in arg:
                 out = out.append(self._sr.loc[s:s], ignore_index=False)

@@ -3128,7 +3128,6 @@ class DataFrame(object):
             columns = self.columns
 
         result = DataFrame()
-        result["Quantile"] = q
         for k, col in self._cols.items():
             if k in columns:
                 res = col.quantile(
@@ -3139,10 +3138,16 @@ class DataFrame(object):
                 )
                 if not isinstance(res, numbers.Number) and len(res) == 0:
                     res = columnops.column_empty_like(
-                        q, dtype=col.dtype, masked=True, newsize=len(q)
+                        q, dtype="float64", masked=True, newsize=len(q)
                     )
                 result[k] = res
-        return result
+        if isinstance(q, numbers.Number):
+            result.index = [float(q)]
+            return result.iloc[0]
+        else:
+            q = list(map(float, q))
+            result.index = q
+            return result
 
     #
     # Stats
@@ -3274,8 +3279,10 @@ class DataFrame(object):
         selection = tuple(map(frozenset, (include, exclude)))
 
         if not any(selection):
-            raise ValueError('at least one of include or exclude must be \
-                             nonempty')
+            raise ValueError(
+                "at least one of include or exclude must be \
+                             nonempty"
+            )
 
         include, exclude = map(
             lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),

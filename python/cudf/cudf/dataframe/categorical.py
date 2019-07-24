@@ -83,7 +83,9 @@ class CategoricalAccessor(object):
         new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
         old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
 
-        cur_df = DataFrame({"old_codes": cur_codes})
+        cur_df = DataFrame(
+            {"old_codes": cur_codes, "order": cudautils.arange(len(cur_codes))}
+        )
         old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})
         new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
 
@@ -91,6 +93,7 @@ class CategoricalAccessor(object):
         df = old_df.merge(new_df, on="cats", how="left")
         # Join the old and new codes to "recode" the codes data buffer
         df = cur_df.merge(df, on="old_codes", how="left")
+        df = df.sort_values(by="order").reset_index(True)
 
         kwargs = df["new_codes"]._column._replace_defaults()
         kwargs.update(categories=new_cats)
@@ -226,7 +229,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return self
         return self.as_numerical.astype(dtype)
 
-    def sort_by_values(self, ascending, na_position="last"):
+    def sort_by_values(self, ascending=True, na_position="last"):
         return self.as_numerical.sort_by_values(ascending, na_position)
 
     def element_indexing(self, index):
@@ -249,31 +252,11 @@ class CategoricalColumn(columnops.TypedColumnBase):
             dictionary=self._categories.to_arrow(),
         )
 
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
-        # sort the column
-        sortcol, _ = densecol.sort_by_values(ascending=True)
-        # find segments
-        sortedvals = sortcol.to_gpu_array()
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
-
     def unique(self, method=None):
         codes = self.as_numerical.unique(method).data
         return CategoricalColumn(
             data=codes, categories=self._categories, ordered=self._ordered
         )
-
-    def unique_count(self, method="sort", dropna=True):
-        if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
 
     def value_counts(self, method="sort"):
         if method != "sort":
@@ -369,21 +352,41 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     @property
     def is_monotonic_increasing(self):
-        if not hasattr(self, '_is_monotonic_increasing'):
+        if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = (
-                self._ordered
-                and self.as_numerical.is_monotonic_increasing
+                self._ordered and self.as_numerical.is_monotonic_increasing
             )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        if not hasattr(self, '_is_monotonic_decreasing'):
+        if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = (
-                self._ordered
-                and self.as_numerical.is_monotonic_decreasing
+                self._ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
+
+    def copy(self, deep=True):
+        """Categorical Columns are immutable, so a deep copy produces a
+        copy of the underlying data, mask, categories and a shallow copy
+        creates a new column and copies the references of the data, mask
+        and categories.
+        """
+        if deep:
+            import cudf.bindings.copying as cpp_copy
+
+            copied_col = cpp_copy.copy_column(self)
+            category_col = cpp_copy.copy_column(self._categories)
+            return self.replace(
+                data=copied_col.data,
+                mask=copied_col.mask,
+                dtype=self.dtype,
+                categories=category_col,
+                ordered=self._ordered,
+            )
+        else:
+            params = self._replace_defaults()
+            return type(self)(**params)
 
 
 def pandas_categorical_as_column(categorical, codes=None):
