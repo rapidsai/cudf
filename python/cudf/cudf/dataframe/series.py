@@ -347,33 +347,11 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(
-            arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
-        ):
-            if len(arg) == 0:
-                arg = Series(np.array([], dtype="int32"))
-            else:
-                arg = Series(arg)
-        if isinstance(arg, Series):
-            if issubclass(arg.dtype.type, np.integer):
-                maps = columnops.as_column(arg).data.mem
-                index = self.index.take(maps)
-                data = self._column.take(maps)
-            elif arg.dtype in [np.bool, np.bool_]:
-                data = self._column.apply_boolean_mask(arg)
-                index = self.index.as_column().apply_boolean_mask(arg)
-            else:
-                raise NotImplementedError(arg.dtype)
-            return self._copy_construct(data=data, index=index)
-        elif isinstance(arg, slice):
-            index = self.index[arg]  # slice index
-            col = self._column[arg]  # slice column
-            return self._copy_construct(data=col, index=index)
-        elif isinstance(arg, Number):
-            # The following triggers a IndexError if out-of-bound
-            return self._column.element_indexing(arg)
-        else:
-            raise NotImplementedError(type(arg))
+        data = self._column[arg]
+        index = as_index(self.index.as_column()[arg])
+        if utils.is_single_value(data) or data is None:
+            return data
+        return self._copy_construct(data=data, index=index)
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.

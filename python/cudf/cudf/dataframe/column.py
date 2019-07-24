@@ -441,6 +441,8 @@ class Column(object):
         return val if valid else None
 
     def __getitem__(self, arg):
+        from cudf.dataframe import columnops
+
         if isinstance(arg, Number):
             arg = int(arg)
             return self.element_indexing(arg)
@@ -462,14 +464,16 @@ class Column(object):
             else:
                 newbuffer = self.data[arg]
                 return self.replace(data=newbuffer)
-        elif isinstance(arg, (list, np.ndarray)):
-            arg = np.array(arg)
-            arg = rmm.to_device(arg)
-
-        if isinstance(arg, DeviceNDArray):
-            return self.take(arg)
         else:
-            raise NotImplementedError(type(arg))
+            arg = columnops.as_column(arg)
+            if len(arg) == 0:
+                arg = columnops.as_column([], dtype="int32")
+            if pd.api.types.is_integer_dtype(arg.dtype):
+                return self.take(arg.data.mem)
+            elif pd.api.types.is_bool_dtype(arg.dtype):
+                return self.apply_boolean_mask(arg)
+            else:
+                raise NotImplementedError(type(arg))
 
     def masked_assign(self, value, mask):
         """Assign a scalar value to a series using a boolean mask
