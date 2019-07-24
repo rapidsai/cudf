@@ -31,7 +31,10 @@ R"***(
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_s(gdf_size_type size,
-                    TypeOut* out_data, TypeLhs* lhs_data, gdf_data rhs_data) {
+                    TypeOut* out_data,
+                    TypeLhs* lhs_data,
+                    gdf_valid_type* lhs_valid,
+                    gdf_data rhs_data) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -41,14 +44,25 @@ R"***(
         int step = blksz * gridsz;
 
         for (gdf_size_type i=start; i<size; i+=step) {
-            out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], *reinterpret_cast<TypeRhs*>(&rhs_data));
+            gdf_size_type valid_index = i >> 3;
+            gdf_size_type valid_shift = i % 8;
+            out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(
+                lhs_data[i],
+                static_cast<gdf_bool8>((lhs_valid[valid_index] >> valid_shift) & 1),
+                *reinterpret_cast<TypeRhs*>(&rhs_data),
+                true
+            );
         }
     }
 
     template <typename TypeOut, typename TypeLhs, typename TypeRhs, typename TypeOpe>
     __global__
     void kernel_v_v(gdf_size_type size,
-                    TypeOut* out_data, TypeLhs* lhs_data, TypeRhs* rhs_data) {
+                    TypeOut* out_data,
+                    TypeLhs* lhs_data,
+                    gdf_valid_type* lhs_valid,
+                    TypeRhs* rhs_data,
+                    gdf_valid_type* rhs_valid) {
         int tid = threadIdx.x;
         int blkid = blockIdx.x;
         int blksz = blockDim.x;
@@ -58,7 +72,12 @@ R"***(
         int step = blksz * gridsz;
 
         for (gdf_size_type i=start; i<size; i+=step) {
-            out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(lhs_data[i], rhs_data[i]);
+            gdf_size_type valid_index = i >> 3;
+            gdf_size_type valid_shift = i % 8;
+            out_data[i] = TypeOpe::template operate<TypeOut, TypeLhs, TypeRhs>(
+                lhs_data[i], static_cast<gdf_bool8>((lhs_valid[valid_index] >> valid_shift) & 1),
+                rhs_data[i], static_cast<gdf_bool8>((rhs_valid[valid_index] >> valid_shift) & 1)
+            );
         }
     }
 )***";

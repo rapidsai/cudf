@@ -26,10 +26,11 @@ const char* operation =
 R"***(
 #pragma once
     #include "traits.h"
+    #include <cudf/types.h>
 
     struct Add {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) + static_cast<TypeOut>(y));
         }
     };
@@ -38,21 +39,21 @@ R"***(
 
     struct Sub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) - static_cast<TypeOut>(y));
         }
     };
 
     struct RSub {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(y) - static_cast<TypeOut>(x));
         }
     };
 
     struct Mul {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) * static_cast<TypeOut>(y));
         }
     };
@@ -61,42 +62,42 @@ R"***(
 
     struct Div {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) / static_cast<TypeOut>(y));
         }
     };
 
     struct RDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(y) / static_cast<TypeOut>(x));
         }
     };
 
     struct TrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<double>(x) / static_cast<double>(y));
         }
     };
 
     struct RTrueDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<double>(y) / static_cast<double>(x));
         }
     };
 
     struct FloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return floor(static_cast<double>(x) / static_cast<double>(y));
         }
     };
 
     struct RFloorDiv {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return floor(static_cast<double>(y) / static_cast<double>(x));
         }
     };
@@ -106,7 +107,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) % static_cast<TypeOut>(y));
         }
 
@@ -114,7 +115,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(isFloat<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return fmodf(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
         }
 
@@ -122,7 +123,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(isDouble<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return fmod(static_cast<TypeOut>(x), static_cast<TypeOut>(y));
         }
     };
@@ -132,7 +133,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(y) % static_cast<TypeOut>(x));
         }
 
@@ -140,7 +141,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(isFloat<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return fmodf(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
         }
 
@@ -148,7 +149,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(isDouble<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return fmod(static_cast<TypeOut>(y), static_cast<TypeOut>(x));
         }
     };
@@ -158,7 +159,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return ((x % y) + y) % y;
         }
 
@@ -166,7 +167,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_floating_point_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             double x1 = static_cast<double>(x);
             double y1 = static_cast<double>(y);
             return fmod(fmod(x1, y1) + y1, y1);
@@ -178,7 +179,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_integral_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return ((y % x) + x) % x;
         }
 
@@ -186,7 +187,7 @@ R"***(
                   typename TypeLhs,
                   typename TypeRhs,
                   enable_if_t<(is_floating_point_v<TypeOut>)>* = nullptr>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             double x1 = static_cast<double>(x);
             double y1 = static_cast<double>(y);
             return fmod(fmod(y1, x1) + x1, x1);
@@ -195,22 +196,22 @@ R"***(
 
     struct Pow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return pow(static_cast<double>(x), static_cast<double>(y));
         }
     };
 
     struct RPow {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return pow(static_cast<double>(y), static_cast<double>(x));
         }
     };
 
     struct Equal {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x == y);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && x == y;
         }
     };
 
@@ -218,8 +219,8 @@ R"***(
 
     struct NotEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x != y);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid == 0 || y_valid == 0 || x != y;
         }
     };
 
@@ -227,63 +228,63 @@ R"***(
 
     struct Less {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x < y);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && x < y;
         }
     };
 
     struct RLess {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (y < x);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && (y < x);
         }
     };
 
     struct Greater {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x > y);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && (x > y);
         }
     };
 
     struct RGreater {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (y > x);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && (y > x);
         }
     };
 
     struct LessEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x <= y);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && x <= y;
         }
     };
 
     struct RLessEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (y <= x);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && y <= x;
         }
     };
 
     struct GreaterEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (x >= y);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && x >= y;
         }
     };
 
     struct RGreaterEqual {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
-            return (y >= x);
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
+            return x_valid > 0 && y_valid > 0 && y >= x;
         }
     };
     
     struct BitwiseAnd {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) & static_cast<TypeOut>(y));
         }
     };
@@ -292,7 +293,7 @@ R"***(
 
     struct BitwiseOr {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) | static_cast<TypeOut>(y));
         }
     };
@@ -301,7 +302,7 @@ R"***(
 
     struct BitwiseXor {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (static_cast<TypeOut>(x) ^ static_cast<TypeOut>(y));
         }
     };
@@ -310,7 +311,7 @@ R"***(
 
     struct LogicalAnd {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (x && y);
         }
     };
@@ -319,7 +320,7 @@ R"***(
 
     struct LogicalOr {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             return (x || y);
         }
     };
@@ -328,7 +329,7 @@ R"***(
 
     struct UserDefinedOp {
         template <typename TypeOut, typename TypeLhs, typename TypeRhs>
-        static TypeOut operate(TypeLhs x, TypeRhs y) {
+        static TypeOut operate(TypeLhs x, gdf_bool8 x_valid, TypeRhs y, gdf_bool8 y_valid) {
             TypeOut output;
             GENERIC_BINARY_OP(&output, x, y);
             return output;

@@ -424,6 +424,9 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
+    if op in ['lt', 'gt', 'le', 'ge', 'eq', 'ne']:
+        out = out.replace(mask=None)
+
     out = out.replace(null_count=null_count)
     result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     nvtx_range_pop()

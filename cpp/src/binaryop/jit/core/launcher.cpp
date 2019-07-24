@@ -95,7 +95,10 @@ namespace jit {
 
         getKernel().configure_1d_max_occupancy()
                       .launch(out->size,
-                              out->data, lhs->data, rhs->data);
+                              out->data,
+                              lhs->data,
+                              lhs->valid,
+                              rhs->data);
 
         return GDF_SUCCESS;
     }
@@ -104,7 +107,11 @@ namespace jit {
 
         getKernel().configure_1d_max_occupancy()
                       .launch(out->size,
-                              out->data, lhs->data, rhs->data);
+                              out->data,
+                              lhs->data,
+                              lhs->valid,
+                              rhs->data,
+                              rhs->valid);
 
         return GDF_SUCCESS;
     }
