@@ -610,7 +610,7 @@ class Column(object):
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):
-            quant = [q]
+            quant = [float(q)]
         elif isinstance(q, list) or isinstance(q, np.ndarray):
             quant = q
         else:
