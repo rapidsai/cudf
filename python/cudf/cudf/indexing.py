@@ -143,7 +143,6 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return self._df[arg[1]].loc[arg[0]]
 
     def _getitem_tuple_arg(self, arg):
-        from cudf.dataframe.dataframe import Series
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
         from cudf.utils.cudautils import arange
