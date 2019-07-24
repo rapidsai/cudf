@@ -37,7 +37,7 @@ cpdef issorted(columns, descending, nulls_are_smallest=False):
     cdef bool c_result = False
     with nogil:
         c_result = is_sorted(c_values_table[0],
-                  c_descending_vector, c_nulls_are_smallest)
+                             c_descending_vector, c_nulls_are_smallest)
 
     del c_values_table
 
