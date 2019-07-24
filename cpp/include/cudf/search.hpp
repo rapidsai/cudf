@@ -40,8 +40,7 @@ namespace cudf {
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
- * @return gdf_column   Insertion points with the same shape as values
- *  Non-nullable column of type GDF_INT32
+ * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
  *---------------------------------------------------------------------------**/
 gdf_column lower_bound(gdf_column const& column,
                        gdf_column const& values,
@@ -66,8 +65,7 @@ gdf_column lower_bound(gdf_column const& column,
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
- * @return gdf_column   Insertion points with the same shape as values
- *  Non-nullable column of type GDF_INT32
+ * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
  *---------------------------------------------------------------------------**/
 gdf_column upper_bound(gdf_column const& column,
                        gdf_column const& values,
@@ -97,8 +95,7 @@ gdf_column upper_bound(gdf_column const& column,
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
- * @return gdf_column   Insertion points with the same shape as values
- *  Non-nullable column of type GDF_INT32
+ * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
  *---------------------------------------------------------------------------**/
 gdf_column lower_bound(table const& t,
                        table const& values,
@@ -128,8 +125,7 @@ gdf_column lower_bound(table const& t,
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
- * @return gdf_column   Insertion points with the same shape as values
- *  Non-nullable column of type GDF_INT32
+ * @return gdf_column   Insertion points. Non-nullable column of type GDF_INT32 with same size as values.
  *---------------------------------------------------------------------------**/
 gdf_column upper_bound(table const& t,
                        table const& values,
