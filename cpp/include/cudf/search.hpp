@@ -23,13 +23,20 @@
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
- * @brief Find smallest indices in sorted column where values should be 
+ * @brief Find smallest indices in a sorted column where values should be 
  *  inserted to maintain order
  * 
- * @param column        Column to search in
- * @param values        Values to search insert locations for
- * @param descending    Indicate if the column is sorted in descending order.
- *  If false, the column is considered sorted ascending.
+ * For each value v in @p values, find the first index in @p column where
+ *  inserting the value will maintain the sort order of @p column
+ * Example:
+ *    idx      0   1   2   3   4
+ * column = { 10, 20, 20, 30, 50 }
+ * values = { 20 }
+ * result = {  1 }
+ * 
+ * @param column        Column to search
+ * @param values        Find insert locations for these values
+ * @param descending    Indicate column sort order. False indicates ascending order.
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
@@ -42,13 +49,20 @@ gdf_column lower_bound(gdf_column const& column,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
- * @brief Find largest indices in sorted column where values should be 
+ * @brief Find largest indices in a sorted column where values should be 
  *  inserted to maintain order
  * 
- * @param column        Column to search in
- * @param values        Values to search insert locations for
- * @param descending    Indicate if the column is sorted in descending order.
- *  If false, the column is considered sorted ascending.
+ * For each value v in @p values, find the last index in @p column where
+ *  inserting the value will maintain the sort order of @p column
+ * Example:
+ *    idx      0   1   2   3   4
+ * column = { 10, 20, 20, 30, 50 }
+ * values = { 20 }
+ * result = {  3 }
+ * 
+ * @param column        Column to search
+ * @param values        Find insert locations for these values
+ * @param descending    Indicate column sort order. False indicates ascending order.
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
@@ -61,13 +75,25 @@ gdf_column upper_bound(gdf_column const& column,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
- * @brief Find smallest indices in sorted table where values should be 
+ * @brief Find smallest indices in a sorted table where values should be 
  *  inserted to maintain order
  * 
- * @param t             Table to search in
- * @param values        Values to search insert locations for
- * @param desc_flags    Vector of whether corresponding column is sorted in
- *  descending. If false, the column is considered sorted ascending
+ * For each row v in @p values, find the first index in @p t where
+ *  inserting the row will maintain the sort order of @p t
+ * Example:
+ *    idx        0    1    2    3    4
+ * t      = {{  10,  20,  20,  20,  20 },
+ *           { 5.0,  .5,  .5,  .7,  .7 },
+ *           {  90,  77,  78,  61,  61 }}
+ * values = {{ 20 },
+ *           { .7 },
+ *           { 61 }}
+ * result =  {  3 }
+ * 
+ * @param t             Table to search
+ * @param values        Find insert locations for these values
+ * @param desc_flags    Vector of column sort order. False indicates the 
+ *  corresponding column is sorted ascending
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 
@@ -80,13 +106,25 @@ gdf_column lower_bound(table const& t,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
- * @brief Find largest indices in sorted table where values should be 
+ * @brief Find largest indices in a sorted table where values should be 
  *  inserted to maintain order
  * 
- * @param column        Table to search in
- * @param values        Values to search insert locations for
- * @param desc_flags    Vector of whether corresponding column is sorted in
- *  descending. If false, the column is considered sorted ascending
+ * For each row v in @p values, find the last index in @p t where
+ *  inserting the row will maintain the sort order of @p t
+ * Example:
+ *    idx        0    1    2    3    4
+ * t      = {{  10,  20,  20,  20,  20 },
+ *           { 5.0,  .5,  .5,  .7,  .7 },
+ *           {  90,  77,  78,  61,  61 }}
+ * values = {{ 20 },
+ *           { .7 },
+ *           { 61 }}
+ * result =  {  5 }
+ * 
+ * @param column        Table to search
+ * @param values        Find insert locations for these values
+ * @param desc_flags    Vector of column sort order. False indicates the 
+ *  corresponding column is sorted ascending
  * @param nulls_as_largest If true, nulls are considered larger than valid
  *  values, otherwise, nulls are considered smaller than valid values
  * 

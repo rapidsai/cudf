@@ -69,14 +69,11 @@ gdf_column search_ordered(table const& t,
                           bool nulls_as_largest,
                           cudaStream_t stream = 0)
 {
-  // TODO: validate input table and values
-
   // Allocate result column
   gdf_column result_like{};
   result_like.dtype = GDF_INT32;
   result_like.size = values.num_rows();
   result_like.data = values.get_column(0)->data;
-  // TODO: let result have nulls? this could be used for records not found
   auto result = allocate_like(result_like);
 
   // Handle empty inputs
