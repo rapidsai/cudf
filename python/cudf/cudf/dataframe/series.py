@@ -372,7 +372,7 @@ class Series(object):
         if self.dtype == np.dtype("object"):
             return self[indices]
 
-        col = cpp_copying.apply_gather([self._column], indices)[0]
+        col = cpp_copying.apply_gather(self._column, indices)
 
         if self._column.mask:
             mask = self._get_mask_as_series().take(indices).as_mask()
@@ -1534,8 +1534,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = cpp_copying.apply_gather([self._column], rinds)[0]
-        index = cpp_copying.apply_gather([self.index.as_column()], rinds)[0]
+        col = cpp_copying.apply_gather(self._column, rinds)
+        index = cpp_copying.apply_gather(self.index.as_column(), rinds)
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):

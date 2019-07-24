@@ -73,7 +73,7 @@ class Index(object):
             return RangeIndex(indices.size)
         else:
             # Gather
-            index = cpp_copying.apply_gather([self.as_column()], indices)[0]
+            index = cpp_copying.apply_gather(self.as_column(), indices)
             col = self.as_column().replace(data=index.data)
             new_index = as_index(col)
             new_index.name = self.name

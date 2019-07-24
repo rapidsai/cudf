@@ -5,11 +5,13 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from cudf.dataframe import columnops
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.utils.cudautils import astype, modulo
 from librmm_cffi import librmm as rmm
 
+import numba
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -39,24 +41,43 @@ def clone_columns_with_size(in_cols, row_size):
     return out_cols
 
 
-def apply_gather(in_cols, maps, out_cols=None):
+def apply_gather(source, maps, dest=None):
     """
-      Call cudf::gather.
+    Gathers elements from source into dest (if given) using the gathermap maps.
+    If dest is not given, it is allocated inside the function and returned.
 
-     * in_cols input column array
-     * maps RMM device array with gdf_index_type (np.int32 compatible dtype)
-     * out_cols the destination column array to output
+    Parameters
+    ----------
+    source : Column or list of Columns
+    maps : DeviceNDArray
+    dest : Column or list of Columns (optional)
 
-     * returns out_cols
+    Returns
+    -------
+    Column or list of Columns, or None if dest is given
     """
+    if isinstance(source, (list, tuple)):
+        if dest is not None:
+            assert(isinstance(dest, (list, tuple)))
+        in_cols = source
+        out_cols = dest
+    else:
+        in_cols = [source]
+        out_cols = None if dest is None else [dest]
+
+    for i, in_col in enumerate(in_cols):
+        in_cols[i] = columnops.as_column(in_cols[i])
+        if dest is not None:
+            out_cols[i] = columnops.as_column(out_cols[i])
+    
     if in_cols[0].dtype == np.dtype("object"):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
 
-    maps = astype(maps, 'int32')
-    # TODO: replace with libcudf pymod when available
-    maps = modulo(maps, in_size)
+    maps = columnops.as_column(maps).astype("int32")
+    maps = maps.binary_operator("mod", maps.normalize_binop_value(in_size))
+    maps = maps.data.mem
 
     col_count=len(in_cols)
     gather_count = len(maps)
@@ -106,7 +127,13 @@ def apply_gather(in_cols, maps, out_cols=None):
 
     free_table(c_in_table, c_in_cols)
 
-    return out_cols
+    if dest is not None:
+        return
+    
+    if isinstance(source, (list, tuple)):
+        return out_cols
+    else:
+        return out_cols[0]
 
 
 def apply_scatter(in_cols, maps, out_cols=None):

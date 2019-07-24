@@ -214,7 +214,7 @@ def column_select_by_position(column, positions):
     import cudf.bindings.copying as cpp_copying
 
     pos_ary = positions.data.to_gpu_array()
-    selected_values = cpp_copying.apply_gather([column], pos_ary)[0]
+    selected_values = cpp_copying.apply_gather(column, pos_ary)
     selected_index = Buffer(pos_ary)
 
     return (

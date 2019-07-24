@@ -617,7 +617,7 @@ class Column(object):
             return self.copy()
 
         # Returns a new column
-        return cpp_copying.apply_gather([self], indices)[0]
+        return cpp_copying.apply_gather(self, indices)
 
     def as_mask(self):
         """Convert booleans to bitmask
