@@ -104,6 +104,23 @@ def test_serialize_generic_index():
     assert_eq(index, outindex)
 
 
+def test_serialize_multi_index():
+    pdf = pd.DataFrame(
+        {
+            "a": [4, 17, 4, 9, 5],
+            "b": [1, 4, 4, 3, 2],
+            "x": np.random.normal(size=5),
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdg = gdf.groupby(["a", "b"]).sum()
+    multiindex = gdg.index
+    outindex = cudf.dataframe.multiindex.MultiIndex.deserialize(
+        *multiindex.serialize()
+    )
+    assert_eq(multiindex, outindex)
+
+
 def test_serialize_masked_series():
     nelem = 50
     data = np.random.random(nelem)

@@ -1,13 +1,13 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numbers
+import pickle
 import warnings
 from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
 
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.index import Index, StringIndex, as_index
 from cudf.utils import cudautils
@@ -375,6 +375,39 @@ class MultiIndex(Index):
         result.names = self.names
         return result
 
+    def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+        """
+        header = {}
+        header["type"] = pickle.dumps(type(self))
+        header["names"] = pickle.dumps(self.names)
+        header["codes"], codes_frame = self.codes.serialize()
+        level_frames = []
+        for l in self.levels:
+            header["levels"], f = l.serialize()
+            level_frames.append(f)
+
+        frames = [codes_frame] + level_frames
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        """Convert from pickle format into Index
+        """
+        names = pickle.loads(header["names"])
+
+        code_typ = pickle.loads(header["codes"]["type"])
+        codes = code_typ.deserialize(header["codes"], frames[0])
+
+        level_typ = pickle.loads(header["levels"]["type"])
+        levels = [
+            level_typ.deserialize(header["levels"], f) for f in frames[1:]
+        ]
+
+        names = pickle.loads(header["names"])
+        return MultiIndex(levels=levels, codes=codes, names=names)
+
     def __iter__(self):
         self.n = 0
         return self
@@ -560,6 +593,3 @@ class MultiIndex(Index):
                 ascending=True
             ).is_monotonic_decreasing
         return self._is_monotonic_decreasing
-
-
-register_distributed_serializer(MultiIndex)
