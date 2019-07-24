@@ -202,3 +202,18 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
 
   return GDF_SUCCESS;
 }
+
+gdf_error clear_column_categories(gdf_column* input_column, gdf_column* output_column){
+
+   NVCategory* input_category = static_cast<NVCategory*>(input_column->dtype_info.category);
+  NVCategory* output_category = input_category->gather_and_remap(static_cast<int*>(input_column->data), input_column->size);
+
+   gdf_size_type column_size = output_column->size;
+  gdf_size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
+  CUDA_TRY( cudaMemcpy(output_column->data, output_category->values_cptr(),
+        size_to_copy, cudaMemcpyDeviceToDevice));
+
+   output_column->dtype_info.category = output_category;
+
+   return GDF_SUCCESS;
+}
