@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import pickle
 from collections import OrderedDict, defaultdict, namedtuple
 from itertools import chain
 
@@ -114,17 +113,15 @@ class Groupby(object):
             idx for idx in self._df.columns if idx not in self._by
         ]
 
-    def serialize(self):
+    def serialize(self, serialize):
         header = {"by": self._by}
-        header["type"] = pickle.dumps(type(self))
-        header["df"], frames = self._df.serialize()
+        header["df"], frames = serialize(self._df)
         return header, frames
 
     @classmethod
-    def deserialize(cls, header, frames):
+    def deserialize(cls, deserialize, header, frames):
         by = header["by"]
-        df_typ = pickle.loads(header["df"]["type"])
-        df = df_typ.deserialize(header["df"], frames)
+        df = deserialize(header["df"], frames)
         return Groupby(df, by)
 
     def __iter__(self):
