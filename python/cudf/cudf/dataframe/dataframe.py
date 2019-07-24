@@ -151,7 +151,6 @@ class DataFrame(object):
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
-        added_columns = set()
 
         if data is not None:
             if isinstance(data, dict):
@@ -164,9 +163,8 @@ class DataFrame(object):
                     return
             for col_name, series in data:
                 self.add_column(col_name, series, forceindex=index is not None)
-                added_columns.add(col_name)
 
-        self._check_add_columns(added_columns, columns, index)
+        self._add_empty_columns(columns, index)
 
     def _add_rows(self, data, index, keys):
         if keys is None:
@@ -188,10 +186,10 @@ class DataFrame(object):
                 forceindex=index is not None,
             )
 
-    def _check_add_columns(self, added_columns, columns, index):
+    def _add_empty_columns(self, columns, index):
         if columns is not None:
             for col_name in columns:
-                if col_name not in added_columns:
+                if col_name not in self._cols:
                     self.add_column(
                         col_name,
                         columnops.column_empty(
