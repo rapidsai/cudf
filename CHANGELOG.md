@@ -79,6 +79,7 @@
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
 - PR #2326 Fix for bug in DLPack when reading multiple columns
