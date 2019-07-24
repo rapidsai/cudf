@@ -12,7 +12,22 @@ from libc.stdint cimport int64_t
 from libc.stdint cimport uint64_t
 from libcpp.vector cimport vector
 
-cdef extern from "dlpack.h" nogil:
+cdef extern from "dlpack/dlpack.h" nogil:
 
     ctypedef struct DLManagedTensor:
         void(*deleter)(DLManagedTensor*)
+
+
+cdef extern from "cudf.h" nogil:
+
+    cdef gdf_error gdf_from_dlpack(
+        gdf_column** columns,
+        gdf_size_type* num_columns,
+        const DLManagedTensor* tensor
+    ) except +
+
+    cdef gdf_error gdf_to_dlpack(
+        DLManagedTensor* tensor,
+        const gdf_column** columns,
+        gdf_size_type num_columns
+    ) except +

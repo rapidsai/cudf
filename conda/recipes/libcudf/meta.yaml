@@ -35,9 +35,11 @@ requirements:
     - rapidjson
     - flatbuffers
     - boost-cpp
+    - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
     - arrow-cpp 0.14.1.*
+    - dlpack
 
 test:
   commands:

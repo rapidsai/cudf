@@ -5,8 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf.bindings.dlpack cimport DLManagedTensor
-
 from libcpp cimport bool
 from libc.stdint cimport (  # noqa: E211
     uint8_t,
@@ -331,18 +329,6 @@ cdef extern from "cudf.h" nogil:
         gdf_column* bins,
         bool right,
         gdf_index_type* out_indices
-    ) except +
-
-    cdef gdf_error gdf_from_dlpack(
-        gdf_column** columns,
-        gdf_size_type* num_columns,
-        const DLManagedTensor* tensor
-    ) except +
-
-    cdef gdf_error gdf_to_dlpack(
-        DLManagedTensor* tensor,
-        const gdf_column** columns,
-        gdf_size_type num_columns
     ) except +
 
     cdef gdf_error gdf_nvtx_range_push(

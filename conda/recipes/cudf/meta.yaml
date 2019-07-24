@@ -22,6 +22,7 @@ requirements:
     - cython >=0.29,<0.30
     - setuptools
     - numba >=0.41,<0.45
+    - dlpack
     - libcudf {{ version }}
   run:
     - python
@@ -31,6 +32,7 @@ requirements:
     - rmm {{ minor_version }}.*
     - nvstrings {{ minor_version }}.*
     - cython >=0.29,<0.30
+    - dlpack
 
 test:
   commands:
