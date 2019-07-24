@@ -14,6 +14,7 @@ from libc.stdlib cimport free
 
 from cudf.dataframe.column import Column
 
+
 def search_sorted(column, values, side):
     """Find indices where elements should be inserted to maintain order
 
@@ -40,6 +41,6 @@ def search_sorted(column, values, side):
 
     free(c_column)
     free(c_values)
-    
+
     data, mask = gdf_column_to_column_mem(&result)
     return Column.from_mem_views(data, mask)

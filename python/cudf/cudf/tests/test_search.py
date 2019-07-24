@@ -1,6 +1,5 @@
-import pytest
 import cudf
-
+import pytest
 from cudf.tests.utils import assert_eq, gen_rand, random_bitmask
 
 
