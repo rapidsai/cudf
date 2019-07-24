@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from distutils.sysconfig import get_python_lib
+import os
+from distutils.sysconfig import get_python_inc, get_python_lib
 
 import versioneer
 from Cython.Build import cythonize
@@ -15,7 +16,11 @@ extensions = [
     Extension(
         "*",
         sources=cython_files,
-        include_dirs=["../../cpp/include/cudf", "../../cpp/include"],
+        include_dirs=[
+            "../../cpp/include/cudf",
+            "../../cpp/include",
+            os.path.dirname(get_python_inc()),
+        ],
         library_dirs=[get_python_lib()],
         libraries=["cudf"],
         language="c++",

@@ -12,6 +12,9 @@ from libc.stdint cimport int64_t
 from libc.stdint cimport uint64_t
 from libcpp.vector cimport vector
 
+from cudf.bindings.cudf_cpp cimport *
+
+
 cdef extern from "dlpack/dlpack.h" nogil:
 
     ctypedef struct DLManagedTensor:
