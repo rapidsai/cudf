@@ -814,6 +814,10 @@ def as_index(arbitrary, name=None):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, pd.RangeIndex):
+        return RangeIndex(
+            start=arbitrary._start, stop=arbitrary._stop, name=name
+        )
     else:
         return as_index(columnops.as_column(arbitrary), name=name)
 

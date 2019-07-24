@@ -80,6 +80,7 @@
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
 - PR #2326 Fix for bug in DLPack when reading multiple columns
@@ -91,6 +92,7 @@
 - PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
 - PR #2364 Fix quantile api and other trivial issues around it
 - PR #2361 Fixed issue with `codes` of CategoricalIndex
+- PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
 
 
 # cuDF 0.8.0 (27 June 2019)
