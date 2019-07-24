@@ -1,5 +1,6 @@
 import pickle
 
+import numba.cuda
 import numpy as np
 
 from librmm_cffi import librmm as rmm
@@ -27,7 +28,9 @@ class Buffer(object):
         mem = rmm.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(self, mem, size=None, capacity=None, categorical=False):
+    def __init__(
+        self, mem, size=None, capacity=None, categorical=False, header=None
+    ):
         if size is None:
             if categorical:
                 size = len(mem)
@@ -40,6 +43,17 @@ class Buffer(object):
                 size = mem.size
         if capacity is None:
             capacity = size
+        if not (
+            isinstance(mem, np.ndarray)
+            or numba.cuda.driver.is_device_memory(mem)
+        ):
+            # this is probably a ucp_py.BufferRegion
+            # check the header for info -- this should be encoded from
+            # serialization process.  Lastly, `typestr` and `shape` *must*
+            # manually # set *before* consuming the buffer as a DeviceNDArray
+            mem.typestr = header.get("dtype", "B")
+            mem.shape = header.get("shape", len(mem))
+            size = mem.shape[0]
         self.mem = cudautils.to_device(mem)
         _BufferSentry(self.mem).ndim(1)
         self.size = size
@@ -92,7 +106,7 @@ class Buffer(object):
         obj : Buffer
             Returns an instance of Buffer.
         """
-        return Buffer(frames[0])
+        return Buffer(frames[0], header=header)
 
     def __reduce__(self):
         cpumem = self.to_array()
