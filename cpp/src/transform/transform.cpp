@@ -27,6 +27,8 @@
 
 #include <utilities/column_utils.hpp>
 
+#include <cudf/legacy/column.hpp>
+
 namespace cudf {
 namespace transformation {
 
@@ -56,7 +58,8 @@ gdf_column transform(const gdf_column& input,
                      gdf_dtype output_type, bool is_ptx) {
   
   // First create a gdf_column and then call the above function
-  gdf_column output = allocate_size_dtype(input.size, output_type, input.valid != nullptr);
+  gdf_column output = allocate_column(output_type, input.size, input.valid != nullptr);
+  
   output.null_count = input.null_count;
 
   // Check for 0 sized data

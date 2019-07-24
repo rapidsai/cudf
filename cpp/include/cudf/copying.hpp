@@ -45,17 +45,6 @@ gdf_column empty_like(gdf_column const& input);
 gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 
 /**
- * @brief Allocates a new column of the same size as the input with the specified type.
- *
- * @param input The input column to emulate
- * @param output_type The output type
- * @param allocate_mask_if_exists Optional whether or not to allocate bitmask if it exists in input
- * @param stream Optional stream in which to perform copies
- * @return gdf_column An allocated column of same size and type of input
- */
-gdf_column allocate_size_dtype(gdf_size_type size, gdf_dtype output_type, bool allocate_mask=true, cudaStream_t stream=0);
-
-/**
  * @brief Creates a new column that is a copy of input
  * 
  * @param input The input column to copy

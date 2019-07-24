@@ -301,11 +301,11 @@ gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
   CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
 
   if (lhs.valid != nullptr) {
-    output = allocate_size_dtype(lhs.size, output_type);
+    output = allocate_column(output_type, lhs.size);
   } else if (rhs.valid != nullptr) {
-    output = allocate_size_dtype(rhs.size, output_type);
+    output = allocate_column(output_type, rhs.size);
   } else {
-    output = allocate_size_dtype(lhs.size, output_type, false); // don't allocate valid for the output
+    output = allocate_column(output_type, lhs.size, false); // don't allocate valid for the output
   }
 
   // Check for null data pointer
