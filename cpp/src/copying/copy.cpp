@@ -70,31 +70,6 @@ gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists, 
 }
 
 /*
- * Allocates a new column of the same size as the input with the specified type.
- */
-gdf_column allocate_size_dtype(gdf_size_type size, gdf_dtype output_type, bool allocate_mask, cudaStream_t stream)
-{
-  gdf_column output{};
-  output.size = size;
-  output.dtype = output_type;
-
-  if(size == 0){
-    return output;
-  }
-
-  const auto byte_width = (output_type == GDF_STRING)
-                  ? sizeof(std::pair<const char *, size_t>)
-                  : cudf::size_of(output_type);
-  RMM_TRY(RMM_ALLOC(&output.data, size * byte_width, stream));
-  if (allocate_mask) {
-    size_t valid_size = gdf_valid_allocation_size(size);
-    RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
-  }
-
-  return output;
-}
-
-/*
  * Creates a new column that is a copy of input
  */
 gdf_column copy(gdf_column const& input, cudaStream_t stream)

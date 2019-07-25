@@ -63,7 +63,7 @@ gdf_column transform(const gdf_column& input,
   output.null_count = input.null_count;
 
   // Check for 0 sized data
-  if ((output.size == 0) && (input.size == 0)){
+  if (input.size == 0){
       return output;
   }
 

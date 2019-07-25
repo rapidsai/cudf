@@ -292,13 +292,10 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
 
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
                             const std::string& ptx, gdf_dtype output_type) {
+  
   CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
 
   gdf_column output{};
-
-  // Check for 0 sized data
-  if ((lhs.size == 0) && (rhs.size == 0)) return output;
-  CUDF_EXPECTS((lhs.size == rhs.size), "Column sizes don't match");
 
   if (lhs.valid != nullptr) {
     output = allocate_column(output_type, lhs.size);
@@ -307,6 +304,9 @@ gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
   } else {
     output = allocate_column(output_type, lhs.size, false); // don't allocate valid for the output
   }
+  
+  // Check for 0 sized data
+  if (lhs.size == 0) return output;
 
   // Check for null data pointer
   CUDF_EXPECTS((lhs.data != nullptr) && (rhs.data != nullptr),
