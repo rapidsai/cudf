@@ -157,8 +157,52 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  * @return GDF_SUCCESS upon successful completion
  */
 
-void scatter(table const* source_table, gdf_index_type const scatter_map[],
-                  table* destination_table);
+// TODO: to be removed
+// void scatter(table const* source_table, gdf_index_type const scatter_map[],
+//                   table* destination_table);
+
+/**
+ * @brief Scatters the rows (including null values) of a set of source columns
+ * (`source_table`) into a set of target columns (`target_table`) according to 
+ * a scatter map such that row 'i' from the source columns will be scattered to 
+ * row `scatter_map[i]`. The result is return as a a set of destination columns.
+ *
+ * It is the user's reponsibility to free the device memory allocated in the 
+ * returned table `destination_table`.
+ *
+ * The `source_table` and the `target_table` must have equal numbers of columns.
+ *
+ * `data` and `valid` of a specific row of the target_column is kept unchanged 
+ * in the result if the `scatter_map` does not map to that row.
+ * 
+ * The datatypes between coresponding columns in the source and target columns 
+ * must be the same.
+ *
+ * The number of rows in the scatter_map must equal the number of rows in
+ * the source columns.
+ *
+ * If any index in scatter_map is outside the range of [0, num rows in
+ * target columns), the result is undefined.
+ *
+ * If the same index appears more than once in scatter_map, the result is
+ * undefined.
+ * 
+ * If the target column has a valid bitmask the destination column will also
+ * have a bitmask allocated; if the target column has a null bitmask but the 
+ * source column has a non-zero null_count (which implies it has a valid bitmask)
+ * the destination will have a bitmask allocated. If the target column has a
+ * null bitmask and the source column has a zero null_count the destination
+ * column will not have a bitmask allocated.
+ *
+ * @Param[in] source_table The columns whose rows will be scattered
+ * @Param[in] scatter_map An array that maps rows in the input columns
+ * to rows in the output columns.
+ * @Param[in] target_table A preallocated set of columns with a number
+ * of rows equal in size to the maximum index contained in scatter_map
+ * @return[out] The result of the scatter
+ */
+table scatter(table const* source_table, gdf_index_type const scatter_map[],
+              table const* target_table);
 
 /**
  * @brief Scatters one row (including null values) of gdf_scalar 
@@ -218,7 +262,6 @@ void scatter(const std::vector<gdf_scalar*>& source_row, gdf_index_type const sc
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
  *
- * @return GDF_SUCCESS upon successful completion
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);

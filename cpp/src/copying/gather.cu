@@ -339,7 +339,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
     if (dest_col->valid != nullptr &&
         dest_col->valid == source_table->get_column(i)->valid) {
       gdf_size_type num_bitmask_elements =
-          gdf_num_bitmask_elements(dest_col->size);
+          gdf_valid_allocation_size(dest_col->size);
       RMM_TRY(RMM_ALLOC(&h_bit_dest[i], num_bitmask_elements, bit_stream));
     } else {
       h_bit_dest[i] = reinterpret_cast<bit_mask_t*>(dest_col->valid);

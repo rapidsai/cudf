@@ -51,8 +51,7 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
   }
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
 
-  cudf::test::column_wrapper<TypeParam> destination_column(destination_size,
-                                                           false);
+  cudf::test::column_wrapper<TypeParam> destination_column(destination_size, true);
 
   gdf_column* raw_destination = destination_column.get();
 

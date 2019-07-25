@@ -180,9 +180,32 @@ void scalar_scatter(const std::vector<gdf_scalar*>& source_row,
 
 }  // namespace detail
 
+// TODO: to be removed
+/**
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
              table* destination_table) {
   detail::scatter(source_table, scatter_map, destination_table);
+}
+*/
+
+table scatter(table const* source_table, gdf_index_type const scatter_map[], 
+    table const* target_table) {
+  
+  const gdf_size_type n_cols = target_table->num_columns();
+
+  table output = copy(*target_table);
+  for(int i = 0; i < n_cols; ++i){
+    // Allocate bitmask for each column
+    if(source_table->get_column(i)->null_count != 0 && target_table->get_column(i)->valid == nullptr){
+      gdf_size_type valid_size = gdf_valid_allocation_size(target_table->get_column(i)->size);
+      RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
+    }
+  }
+
+  detail::scatter(source_table, scatter_map, &output);
+
+  return output;
+
 }
 
 void scatter(const std::vector<gdf_scalar*>& source_row, 
