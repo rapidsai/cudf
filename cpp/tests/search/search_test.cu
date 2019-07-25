@@ -34,8 +34,10 @@ TEST_F(SearchTest, empty_table)
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
-            *(column.get()),
-            *(values.get()))
+            {column.get()},
+            {values.get()},
+            {false}
+        )
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -56,8 +58,10 @@ TEST_F(SearchTest, empty_values)
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
-            *(column.get()),
-            *(values.get()))
+            {column.get()},
+            {values.get()},
+            {false}
+        )
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -78,8 +82,10 @@ TEST_F(SearchTest, non_null_column__find_first)
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
-            *(column.get()),
-            *(values.get()))
+            {column.get()},
+            {values.get()},
+            {false}
+        )
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -100,8 +106,10 @@ TEST_F(SearchTest, non_null_column__find_last)
 
     EXPECT_NO_THROW(
         result_column = cudf::upper_bound(
-            *(column.get()),
-            *(values.get()))
+            {column.get()},
+            {values.get()},
+            {false}
+        )
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -122,9 +130,9 @@ TEST_F(SearchTest, non_null_column_desc__find_first)
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
-            *(column.get()),
-            *(values.get()),
-            true)   // descending
+            {column.get()},
+            {values.get()},
+            {true})   // descending
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -145,9 +153,9 @@ TEST_F(SearchTest, non_null_column_desc__find_last)
 
     EXPECT_NO_THROW(
         result_column = cudf::upper_bound(
-            *(column.get()),
-            *(values.get()),
-            true)   // descending
+            {column.get()},
+            {values.get()},
+            {true})   // descending
     );
 
     auto result = column_wrapper<gdf_index_type>(result_column);
@@ -178,9 +186,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
 
     EXPECT_NO_THROW(
         result_column = cudf::upper_bound(
-            *(column.get()),
-            *(values.get()),
-            false,   // descending
+            {column.get()},
+            {values.get()},
+            {false},   // descending
             false)  // nulls_as_largest
     );
 
@@ -212,9 +220,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
-            *(column.get()),
-            *(values.get()),
-            false,   // descending
+            {column.get()},
+            {values.get()},
+            {false},   // descending
             false)  // nulls_as_largest
     );
 
@@ -246,9 +254,9 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
 
     EXPECT_NO_THROW(
         result_column = cudf::upper_bound(
-            *(column.get()),
-            *(values.get()),
-            false,  // descending
+            {column.get()},
+            {values.get()},
+            {false},  // descending
             true)  // nulls_as_largest
     );
 
@@ -280,9 +288,9 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
 
     EXPECT_NO_THROW(
         result_column = cudf::lower_bound(
-            *(column.get()),
-            *(values.get()),
-            false,   // descending
+            {column.get()},
+            {values.get()},
+            {false},   // descending
             true)  // nulls_as_largest
     );
 

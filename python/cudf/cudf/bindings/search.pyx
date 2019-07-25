@@ -10,6 +10,8 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.search cimport *
+from cudf.bindings.utils cimport *
+from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
 from cudf.dataframe.column import Column
@@ -28,18 +30,22 @@ def search_sorted(column, values, side):
         If ‘left’, the index of the first suitable location found is given.
         If ‘right’, return the last such index
     """
-    cdef gdf_column *c_column = column_view_from_column(column)
-    cdef gdf_column *c_values = column_view_from_column(values)
+    cdef cudf_table *c_t = table_from_columns([column])
+    cdef cudf_table *c_values = table_from_columns([values])
+    
+    cdef vector[bool] c_desc_flags
+    c_desc_flags.push_back(False)
+
     cdef gdf_column result
 
     if side == 'left':
         with nogil:
-            result = lower_bound(c_column[0], c_values[0], False)
+            result = lower_bound(c_t[0], c_values[0], c_desc_flags)
     if side == 'right':
         with nogil:
-            result = upper_bound(c_column[0], c_values[0], False)
+            result = upper_bound(c_t[0], c_values[0], c_desc_flags)
 
-    free(c_column)
+    free(c_t)
     free(c_values)
 
     data, mask = gdf_column_to_column_mem(&result)

@@ -127,22 +127,6 @@ gdf_column search_ordered(gdf_column const& column,
 
 } // namespace detail
 
-gdf_column lower_bound(gdf_column const& column,
-                       gdf_column const& values,
-                       bool ascending,
-                       bool nulls_as_largest)
-{
-  return detail::search_ordered(column, values, true, ascending, nulls_as_largest);
-}
-
-gdf_column upper_bound(gdf_column const& column,
-                       gdf_column const& values,
-                       bool ascending,
-                       bool nulls_as_largest)
-{
-  return detail::search_ordered(column, values, false, ascending, nulls_as_largest);
-}
-
 gdf_column lower_bound(table const& t,
                        table const& values,
                        std::vector<bool> const& desc_flags,

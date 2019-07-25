@@ -39,7 +39,7 @@ void BM_non_null_column(benchmark::State& state){
   
   for(auto _ : state){
     cuda_event_timer timer(state, true);
-    auto col = cudf::upper_bound(*(column.get()), *(values.get()));
+    auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
     gdf_column_free(&col);
   }
 }
@@ -68,7 +68,7 @@ void BM_nullable_column(benchmark::State& state){
   
   for(auto _ : state){
     cuda_event_timer timer(state, true);
-    auto col = cudf::upper_bound(*(column.get()), *(values.get()));
+    auto col = cudf::upper_bound({column.get()}, {values.get()}, {false});
     gdf_column_free(&col);
   }
 }
