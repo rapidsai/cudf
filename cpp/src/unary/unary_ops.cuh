@@ -99,7 +99,7 @@ inline void handleChecksAndValidity(gdf_column const& input, gdf_column& output)
         }
     }
     else { // input.valid != nullptr
-        CUDF_EXPECTS((output.valid != nullptr),
+        CUDF_EXPECTS( is_nullable(output),
             "Input column has valid mask but output column does not");
 
         // Validity mask transfer

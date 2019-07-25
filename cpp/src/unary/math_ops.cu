@@ -220,7 +220,7 @@ public:
 
 gdf_column unary_operation(gdf_column const& input, unary_op op) {
 
-    gdf_column output;
+    gdf_column output{};
 
     if (op == unary_op::NOT)
     {

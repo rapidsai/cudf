@@ -39,7 +39,6 @@ enum unary_op{
   ABS,          ///< Absolute value
   BIT_INVERT,   ///< Bitwise Not (~)
   NOT,          ///< Logical Not (!)
-  INVALID_UNARY ///< invalid operation
 };
 
 
