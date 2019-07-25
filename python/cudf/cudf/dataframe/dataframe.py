@@ -2844,6 +2844,7 @@ class DataFrame(object):
         types = []
         index_names = []
         index_columns = []
+        index_descriptors = []
 
         for name, column in self._cols.items():
             names.append(name)
@@ -2852,21 +2853,38 @@ class DataFrame(object):
             types.append(arrow_col.type)
 
         index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
-        index_names.append(index_name)
         index_columns.append(self.index)
+
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
         # conversions
-        index_arrow = self.index.to_arrow()
-        types.append(index_arrow.type)
         if preserve_index:
-            arrays.append(index_arrow)
-            names.append(index_name)
+            if isinstance(self.index, cudf.dataframe.index.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                index_arrow = self.index.to_arrow()
+                descr = index_name
+                types.append(index_arrow.type)
+                arrays.append(index_arrow)
+                names.append(index_name)
+                index_names.append(index_name)
+            index_descriptors.append(descr)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
         metadata = pa.pandas_compat.construct_metadata(
-            self, names, index_columns, index_names, preserve_index, types
+            self,
+            names,
+            index_columns,
+            index_descriptors,
+            preserve_index,
+            types,
         )
 
         return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
@@ -2894,22 +2912,20 @@ class DataFrame(object):
         >>> cudf.DataFrame.from_arrow(table)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
-        import json
 
         if not isinstance(table, pa.Table):
             raise TypeError("not a pyarrow.Table")
 
         index_col = None
         dtypes = None
-        if isinstance(table.schema.metadata, dict):
-            if b"pandas" in table.schema.metadata:
-                metadata = json.loads(table.schema.metadata[b"pandas"])
-                index_col = metadata["index_columns"]
-                dtypes = {
-                    col["field_name"]: col["pandas_type"]
-                    for col in metadata["columns"]
-                    if "field_name" in col
-                }
+        if isinstance(table.schema.pandas_metadata, dict):
+            metadata = table.schema.pandas_metadata
+            index_col = metadata["index_columns"]
+            dtypes = {
+                col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
 
         df = cls()
         for col in table.columns:
@@ -2924,11 +2940,21 @@ class DataFrame(object):
 
             df[col.name] = columnops.as_column(col.data, dtype=dtype)
         if index_col:
-            df = df.set_index(index_col[0])
-            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-                df.index.name, df.index.name
-            )
-            df.index.name = new_index_name
+            if isinstance(index_col[0], dict):
+                assert index_col[0]["kind"] == "range"
+                df = df.set_index(
+                    RangeIndex(
+                        index_col[0]["start"],
+                        index_col[0]["stop"],
+                        name=index_col[0]["name"],
+                    )
+                )
+            else:
+                df = df.set_index(index_col[0])
+                new_index_name = pa.pandas_compat._backwards_compatible_index_name(  # noqa: E501
+                    df.index.name, df.index.name
+                )
+                df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):
