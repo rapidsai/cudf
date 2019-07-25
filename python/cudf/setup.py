@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
+import os
+import sysconfig
 from distutils.sysconfig import get_python_lib
 
 import versioneer
@@ -18,6 +19,7 @@ extensions = [
         include_dirs=[
             "../../cpp/include",
             "../../cpp/thirdparty/dlpack/include/dlpack/",
+            os.path.dirname(sysconfig.get_path("include")),
         ],
         library_dirs=[get_python_lib()],
         libraries=["cudf"],
@@ -46,6 +48,10 @@ setup(
     setup_requires=["cython"],
     ext_modules=cythonize(extensions),
     packages=find_packages(include=["cudf", "cudf.*"]),
+    package_data={
+        "cudf.bindings": ["*.pxd"],
+        "cudf.bindings.groupby": ["*.pxd"],
+    },
     cmdclass=versioneer.get_cmdclass(),
     install_requires=install_requires,
     zip_safe=False,
