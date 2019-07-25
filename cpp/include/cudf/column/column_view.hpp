@@ -21,7 +21,6 @@
 
 namespace cudf {
 
-static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 namespace detail {
 /**---------------------------------------------------------------------------*
@@ -45,47 +44,6 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 class column_view_base {
  public:
-  column_view_base() = default;
-  ~column_view_base() = default;
-  column_view_base(column_view_base const&) = default;
-  column_view_base(column_view_base&&) = default;
-  column_view_base& operator=(column_view_base const&) = default;
-  column_view_base& operator=(column_view_base&&) = default;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a `column_view_base` from pointers to device memory for
-   *the elements and bitmask of the column.
-   *
-   * If `null_count()` is zero, `null_mask` is optional.
-   *
-   * If the null count of the `null_mask` is not specified, it defaults to
-   * `UNKNOWN_NULL_COUNT`. The first invocation of `null_count()` will then
-   * compute the null count if `null_mask` exists.
-   *
-   * If `type` is `EMPTY`, the specified `null_count` will be ignored and
-   * `null_count()` will always return the same value as `size()`
-   *
-   * @throws `cudf::logic_error` if `size < 0`
-   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
-   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
-   *or `null_mask != nullptr`
-   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
-   * @throws `cudf::logic_error` if `offset < 0`
-   *
-   * @param type The element type
-   * @param size The number of elements
-   * @param data Pointer to device memory containing the column elements
-   * @param null_mask Optional, pointer to device memory containing the null
-   * indicator bitmask
-   * @param null_count Optional, the number of null elements.
-   * @param offset optional, index of the first element
-   * @param children optional, depending on the element type, child columns may
-   * contain additional data
-   *---------------------------------------------------------------------------**/
-  column_view_base(data_type type, size_type size, void const* data,
-                   bitmask_type const* null_mask = nullptr,
-                   size_type null_count = UNKNOWN_NULL_COUNT,
-                   size_type offset = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -181,6 +139,56 @@ class column_view_base {
   size_type _null_count{};           ///< The number of null elements
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
+
+  column_view_base() = default;
+  ~column_view_base() = default;
+  column_view_base(column_view_base const&) = default;
+  column_view_base(column_view_base&&) = default;
+  column_view_base& operator=(column_view_base const&) = default;
+  column_view_base& operator=(column_view_base&&) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a `column_view_base` from pointers to device memory for
+   *the elements and bitmask of the column.
+   *
+   * If `null_count()` is zero, `null_mask` is optional.
+   *
+   * If the null count of the `null_mask` is not specified, it defaults to
+   * `UNKNOWN_NULL_COUNT`. The first invocation of `null_count()` will then
+   * compute the null count if `null_mask` exists.
+   *
+   * If `type` is `EMPTY`, the specified `null_count` will be ignored and
+   * `null_count()` will always return the same value as `size()`
+   *
+   * @throws `cudf::logic_error` if `size < 0`
+   * @throws `cudf::logic_error` if `size > 0` but `data == nullptr`
+   * @throws `cudf::logic_error` if `type.id() == EMPTY` but `data != nullptr`
+   *or `null_mask != nullptr`
+   * @throws `cudf::logic_error` if `null_count > 0`, but `null_mask == nullptr`
+   * @throws `cudf::logic_error` if `offset < 0`
+   *
+   * @param type The element type
+   * @param size The number of elements
+   * @param data Pointer to device memory containing the column elements
+   * @param null_mask Optional, pointer to device memory containing the null
+   * indicator bitmask
+   * @param null_count Optional, the number of null elements.
+   * @param offset optional, index of the first element
+   * @param children optional, depending on the element type, child columns may
+   * contain additional data
+   *---------------------------------------------------------------------------**/
+  column_view_base(data_type type, size_type size, void const* data,
+                   bitmask_type const* null_mask = nullptr,
+                   size_type null_count = UNKNOWN_NULL_COUNT,
+                   size_type offset = 0);
+};
+
+
+class mutable_column_view_base : public column_view_base{
+    public:
+
+    protected:
+
 };
 }  // namespace detail
 
