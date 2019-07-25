@@ -12,7 +12,7 @@ from libc.stdint cimport int64_t
 from libc.stdint cimport uint64_t
 from libcpp.vector cimport vector
 
-cdef extern from "dlpack.h" nogil:
+cdef extern from "dlpack/dlpack.h" nogil:
 
     ctypedef struct DLManagedTensor:
         void(*deleter)(DLManagedTensor*)
