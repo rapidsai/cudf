@@ -6,7 +6,8 @@ from cudf.tests.utils import assert_eq, gen_rand, random_bitmask
 
 
 @pytest.mark.parametrize("side", ["left", "right"])
-def test_searchsorted(side):
+@pytest.mark.parametrize("obj_class", ["series", "index"])
+def test_searchsorted(side, obj_class):
     nelem = 1000
     column_data = gen_rand("float64", nelem)
     column_mask = random_bitmask(nelem)
@@ -18,6 +19,9 @@ def test_searchsorted(side):
     vals = cudf.Series.from_masked_array(values_data, values_mask)
 
     sr = sr.sort_values()
+
+    if obj_class == "series":
+        sr = cudf.Series.as_index(sr)
 
     psr = sr.to_pandas()
     pvals = vals.to_pandas()
