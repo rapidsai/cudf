@@ -9,15 +9,7 @@ from packaging.version import Version
 
 from cudf.dataframe import Series
 
-
-supported_types = [
-    "int8",
-    "int16",
-    "int32",
-    "int64",
-    "float32",
-    "float64"
-]
+supported_types = ["int8", "int16", "int32", "int64", "float32", "float64"]
 
 
 @pytest.mark.skipif(
