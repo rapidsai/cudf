@@ -2154,10 +2154,18 @@ class Series(object):
 
         input_dary = self.data.to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
+
+        if self.dtype.kind in "iu":
+            replacement_value = np.iinfo(self.dtype).min
+        else:
+            replacement_value = np.finfo(self.dtype).min
         cudautils.gpu_shift.forall(output_dary.size)(
-            input_dary, output_dary, periods
+            input_dary, output_dary, periods, replacement_value
         )
-        return Series(output_dary, name=self.name, index=self.index)
+
+        result = Series(output_dary, name=self.name, index=self.index)
+        result = result.where(result != replacement_value, None)
+        return result
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in

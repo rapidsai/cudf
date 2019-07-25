@@ -2940,16 +2940,23 @@ def test_shift(dtype, period):
     if dtype == np.int8:
         # to keep data in range
         data = gen_rand(dtype, 100000, low=-2, high=2)
+        data2 = gen_rand(dtype, 100000, low=-2, high=2)
     else:
         data = gen_rand(dtype, 100000)
+        data2 = gen_rand(dtype, 100000)
 
-    gdf = DataFrame({"a": data})
-    pdf = pd.DataFrame({"a": data})
+    gdf = DataFrame({"a": data, "b": data2})
+    pdf = pd.DataFrame({"a": data, "b": data2})
 
-    shifted_outcome = gdf.a.shift(period)
-    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+    shifted_outcome = gdf.a.shift(period).fillna(-1)
+    expected_outcome = pdf.a.shift(period).fillna(-1)
 
-    assert_eq(shifted_outcome, expected_outcome)
+    assert_eq(shifted_outcome, expected_outcome, check_dtype=False)
+
+    shifted_outcome = gdf.shift(period).fillna(-1)
+    expected_outcome = pdf.shift(period).fillna(-1)
+
+    assert_eq(shifted_outcome, expected_outcome, check_dtype=False)
 
 
 @pytest.mark.parametrize(

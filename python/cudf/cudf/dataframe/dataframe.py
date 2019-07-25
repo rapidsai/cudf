@@ -2731,6 +2731,12 @@ class DataFrame(object):
         """
         return self._apply_support_method("isnull", **kwargs)
 
+    def shift(self, periods=1, **kwargs):
+        """Identify missing values in a DataFrame.
+        """
+        kwargs["periods"] = periods
+        return self._apply_support_method("shift", **kwargs)
+
     def isna(self, **kwargs):
         """Identify missing values in a DataFrame. Alias for isnull.
         """
