@@ -18,7 +18,6 @@ extensions = [
         sources=cython_files,
         include_dirs=[
             "../../cpp/include",
-            "../../cpp/thirdparty/dlpack/include/dlpack/",
             os.path.dirname(sysconfig.get_path("include")),
         ],
         library_dirs=[get_python_lib()],
