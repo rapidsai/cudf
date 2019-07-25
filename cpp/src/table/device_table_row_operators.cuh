@@ -207,7 +207,7 @@ struct row_inequality_comparator
  *
  * Use this constructor when you will be comparing two rows from the same table
  */
-  row_inequality_comparator(device_table const &lhs, bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) : 
+  row_inequality_comparator(device_table const &lhs, bool nulls_are_smallest = true, int8_t const * const asc_desc_flags = nullptr) : 
         _lhs(lhs), _rhs(lhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
   {
   }
@@ -223,7 +223,7 @@ struct row_inequality_comparator
  * Use this constructor when you will be comparing two rows from the same table
  */
   row_inequality_comparator(device_table const &lhs, device_table const &rhs,
-                        bool nulls_are_smallest = true, int8_t *const asc_desc_flags = nullptr) :
+                        bool nulls_are_smallest = true, int8_t const * const asc_desc_flags = nullptr) :
                            _lhs(lhs), _rhs(rhs), _nulls_are_smallest(nulls_are_smallest), _asc_desc_flags(asc_desc_flags)
   {
   }
@@ -281,7 +281,7 @@ private:
   device_table _lhs;
   device_table _rhs;
   bool _nulls_are_smallest;
-  int8_t * _asc_desc_flags; 
+  int8_t const * _asc_desc_flags; 
 
 };
 

@@ -7,6 +7,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf
 from cudf.dataframe import DataFrame
 from cudf.dataframe.index import (
     CategoricalIndex,
@@ -57,16 +58,24 @@ def test_df_slice_empty_index():
 
 
 def test_index_find_label_range():
+    # Monotonic Index
     idx = GenericIndex(np.asarray([4, 5, 6, 10]))
     assert idx.find_label_range(4, 6) == (0, 3)
     assert idx.find_label_range(5, 10) == (1, 4)
+    assert idx.find_label_range(0, 6) == (0, 3)
+    assert idx.find_label_range(4, 11) == (0, 4)
+
+    # Non-monotonic Index
+    idx_nm = GenericIndex(np.asarray([5, 4, 6, 10]))
+    assert idx_nm.find_label_range(4, 6) == (1, 3)
+    assert idx_nm.find_label_range(5, 10) == (0, 4)
     # Last value not found
     with pytest.raises(ValueError) as raises:
-        idx.find_label_range(0, 6)
+        idx_nm.find_label_range(0, 6)
     raises.match("value not found")
     # Last value not found
     with pytest.raises(ValueError) as raises:
-        idx.find_label_range(4, 11)
+        idx_nm.find_label_range(4, 11)
     raises.match("value not found")
 
 
@@ -109,20 +118,24 @@ def test_categorical_index():
     pdf = pd.DataFrame()
     pdf["a"] = [1, 2, 3]
     pdf["index"] = pd.Categorical(["a", "b", "c"])
+    initial_df = DataFrame.from_pandas(pdf)
     pdf = pdf.set_index("index")
     gdf1 = DataFrame.from_pandas(pdf)
     gdf2 = DataFrame()
     gdf2["a"] = [1, 2, 3]
     gdf2["index"] = pd.Categorical(["a", "b", "c"])
+    assert_eq(initial_df.index, gdf2.index)
     gdf2 = gdf2.set_index("index")
 
     assert isinstance(gdf1.index, CategoricalIndex)
     assert_eq(pdf, gdf1)
     assert_eq(pdf.index, gdf1.index)
+    assert_eq(pdf.index.codes, gdf1.index.codes.to_array())
 
     assert isinstance(gdf2.index, CategoricalIndex)
     assert_eq(pdf, gdf2)
     assert_eq(pdf.index, gdf2.index)
+    assert_eq(pdf.index.codes, gdf2.index.codes.to_array())
 
 
 def test_pandas_as_index():
@@ -151,6 +164,8 @@ def test_pandas_as_index():
     assert_eq(pdf_float_index, gdf_float_index)
     assert_eq(pdf_datetime_index, gdf_datetime_index)
     assert_eq(pdf_category_index, gdf_category_index)
+
+    assert_eq(pdf_category_index.codes, gdf_category_index.codes.to_array())
 
 
 def test_index_rename():
@@ -199,3 +214,20 @@ def test_set_index_as_property():
 
     head = cdf.head().to_pandas()
     np.testing.assert_array_equal(head.index.values, idx[:5])
+
+
+@pytest.mark.parametrize(
+    "idx",
+    [
+        cudf.dataframe.index.RangeIndex(1, 5),
+        cudf.dataframe.index.DatetimeIndex(["2001", "2003", "2003"]),
+        cudf.dataframe.index.StringIndex(["a", "b", "c"]),
+        cudf.dataframe.index.GenericIndex([1, 2, 3]),
+        cudf.dataframe.index.CategoricalIndex(["a", "b", "c"]),
+    ],
+)
+@pytest.mark.parametrize("deep", [True, False])
+def test_index_copy(idx, deep):
+    idx_copy = idx.copy(deep=deep)
+    assert_eq(idx, idx_copy)
+    assert type(idx) == type(idx_copy)

@@ -629,3 +629,11 @@ def test_series_misc_binop():
     utils.assert_eq(pds1 + pds, gds1 + gds)
 
     utils.assert_eq(pds1 + pds + 5, gds1 + gds + 5)
+
+
+def test_int8_float16_binop():
+    a = cudf.Series([1], dtype="int8")
+    b = np.float16(2)
+    expect = cudf.Series([0.5])
+    got = a / b
+    utils.assert_eq(expect, got, check_dtype=False)

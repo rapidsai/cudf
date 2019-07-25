@@ -1050,19 +1050,18 @@ class DataFrame(object):
         return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
-        positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        cols = [s._column for s in self._cols.values()]
+        if self._cols:
+            positions = columnops.as_column(positions).astype("int32").data.mem
+            cols = [s._column for s in self._cols.values()]
+            result_cols = cpp_copying.apply_gather(cols, positions)
+            for i, col_name in enumerate(self._cols):
+                out[col_name] = result_cols[i]
 
-        result_cols = cpp_copying.apply_gather(cols, positions)
-
-        for i, col_name in enumerate(self._cols):
-            out[col_name] = result_cols[i]
-
-        if ignore_index:
-            out.index = RangeIndex(len(out))
-        else:
-            out.index = self.index.take(positions)
+            if ignore_index:
+                out.index = RangeIndex(len(out))
+            else:
+                out.index = self.index.take(positions)
         return out
 
     def copy(self, deep=True):
@@ -1346,7 +1345,7 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if len(self.index) == len(new_index) and self.index.equals(new_index):
+        if self.index.equals(new_index):
             new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
@@ -1610,13 +1609,6 @@ class DataFrame(object):
 
         return outdf
 
-    def _sort_by(self, sorted_indices):
-        df = DataFrame()
-        # Perform out = data[index] for all columns
-        for k in self.columns:
-            df[k] = self[k].take(sorted_indices.to_gpu_array())
-        return df
-
     def argsort(self, ascending=True, na_position="last"):
         cols = [series._column for series in self._cols.values()]
         return get_sorted_inds(
@@ -1626,7 +1618,7 @@ class DataFrame(object):
     def sort_index(self, ascending=True):
         """Sort by the index
         """
-        return self._sort_by(self.index.argsort(ascending=ascending))
+        return self.take(self.index.argsort(ascending=ascending))
 
     def sort_values(self, by, ascending=True, na_position="last"):
         """
@@ -1666,7 +1658,7 @@ class DataFrame(object):
         1  1  2
         """
         # argsort the `by` column
-        return self._sort_by(
+        return self.take(
             self[by].argsort(ascending=ascending, na_position=na_position)
         )
 
@@ -2734,6 +2726,21 @@ class DataFrame(object):
 
         return output_frame
 
+    def isnull(self, **kwargs):
+        """Identify missing values in a DataFrame.
+        """
+        return self._apply_support_method("isnull", **kwargs)
+
+    def isna(self, **kwargs):
+        """Identify missing values in a DataFrame. Alias for isnull.
+        """
+        return self.isnull(**kwargs)
+
+    def notna(self, **kwargs):
+        """Identify non-missing values in a DataFrame.
+        """
+        return self._apply_support_method("notna", **kwargs)
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
@@ -3098,7 +3105,6 @@ class DataFrame(object):
             columns = self.columns
 
         result = DataFrame()
-        result["Quantile"] = q
         for k, col in self._cols.items():
             if k in columns:
                 res = col.quantile(
@@ -3109,10 +3115,16 @@ class DataFrame(object):
                 )
                 if not isinstance(res, numbers.Number) and len(res) == 0:
                     res = columnops.column_empty_like(
-                        q, dtype=col.dtype, masked=True, newsize=len(q)
+                        q, dtype="float64", masked=True, newsize=len(q)
                     )
                 result[k] = res
-        return result
+        if isinstance(q, numbers.Number):
+            result.index = [float(q)]
+            return result.iloc[0]
+        else:
+            q = list(map(float, q))
+            result.index = q
+            return result
 
     #
     # Stats
@@ -3244,8 +3256,10 @@ class DataFrame(object):
         selection = tuple(map(frozenset, (include, exclude)))
 
         if not any(selection):
-            raise ValueError('at least one of include or exclude must be \
-                             nonempty')
+            raise ValueError(
+                "at least one of include or exclude must be \
+                             nonempty"
+            )
 
         include, exclude = map(
             lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),

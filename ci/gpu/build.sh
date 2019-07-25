@@ -26,6 +26,7 @@ export CUDA_REL=${CUDA_VERSION%.*}
 export HOME=$WORKSPACE
 
 # Parse git describe
+cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --tags`
 export MINOR_VERSION=`echo $GIT_DESCRIBE_TAG | grep -o -E '([0-9]+\.[0-9]+)'`
 
@@ -101,7 +102,4 @@ else
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
-
-    conda install codecov
-    codecov -t $CODECOV_TOKEN
 fi

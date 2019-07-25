@@ -12,15 +12,15 @@ from cudf.bindings.cudf_cpp import *
 
 
 _GDF_COLORS = {
-    'green':    GDF_GREEN,
-    'blue':     GDF_BLUE,
-    'yellow':   GDF_YELLOW,
-    'purple':   GDF_PURPLE,
-    'cyan':     GDF_CYAN,
-    'red':      GDF_RED,
-    'white':    GDF_WHITE,
+    'green': GDF_GREEN,
+    'blue': GDF_BLUE,
+    'yellow': GDF_YELLOW,
+    'purple': GDF_PURPLE,
+    'cyan': GDF_CYAN,
+    'red': GDF_RED,
+    'white': GDF_WHITE,
     'darkgreen': GDF_DARK_GREEN,
-    'orange':   GDF_ORANGE,
+    'orange': GDF_ORANGE,
 }
 
 
