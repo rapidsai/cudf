@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
 import os
-from distutils.sysconfig import get_python_inc, get_python_lib
+import sysconfig
+from distutils.sysconfig import get_python_lib
 
 import numpy as np
 import versioneer
@@ -18,10 +18,9 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
-            "../../cpp/include/cudf",
             "../../cpp/include",
             "../../cpp/build/include",
-            os.path.dirname(get_python_inc()),
+            os.path.dirname(sysconfig.get_path("include")),
             np.get_include(),
         ],
         library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],

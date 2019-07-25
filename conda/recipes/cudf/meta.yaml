@@ -25,6 +25,7 @@ requirements:
     - dlpack
     - pyarrow 0.14.1.*
     - libcudf {{ version }}
+    - dlpack
   run:
     - python
     - pandas >=0.23.4

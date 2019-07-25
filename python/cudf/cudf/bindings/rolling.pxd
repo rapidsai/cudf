@@ -7,7 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
-cdef extern from "rolling.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/rolling.hpp" namespace "cudf" nogil:
     gdf_column* rolling_window(
         const gdf_column &input_col,
         gdf_size_type window,

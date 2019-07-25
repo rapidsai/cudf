@@ -18,7 +18,9 @@
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
+- PR #2356 Java column vector standard deviation support
 
 ## Improvements
 
@@ -56,6 +58,7 @@
 - PR #2344 Add docs on how code formatting works for contributors
 - PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
+- PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 
 ## Bug Fixes
 
@@ -93,6 +96,7 @@
 - PR #2364 Fix quantile api and other trivial issues around it
 - PR #2361 Fixed issue with `codes` of CategoricalIndex
 - PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
+- PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
 
 
 # cuDF 0.8.0 (27 June 2019)
