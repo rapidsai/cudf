@@ -85,6 +85,7 @@
 - PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2202 Fix issue with unary ops mishandling empty input
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width

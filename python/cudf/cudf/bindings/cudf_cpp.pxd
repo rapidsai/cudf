@@ -250,11 +250,6 @@ cdef extern from "cudf/cudf.h" nogil:
     cdef const char * gdf_cuda_error_string(int cuda_error) except +
     cdef const char * gdf_cuda_error_name(int cuda_error) except +
 
-    cdef gdf_error gdf_cast(
-        gdf_column *input,
-        gdf_column *output
-    ) except +
-
     cdef gdf_error gdf_validity_and(
         gdf_column *lhs,
         gdf_column *rhs,
