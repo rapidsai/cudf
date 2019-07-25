@@ -2,9 +2,9 @@
 
 import warnings
 
-import fastavro as fa
 import pandas as pd
 
+import fastavro as fa
 from cudf.bindings.avro import cpp_read_avro
 from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils
