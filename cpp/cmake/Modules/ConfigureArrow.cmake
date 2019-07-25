@@ -100,4 +100,9 @@ if(ARROW_LIB AND ARROW_CUDA_LIB)
     set(ARROW_FOUND TRUE)
 endif(ARROW_LIB AND ARROW_CUDA_LIB)
 
+file(INSTALL ${ARROW_INCLUDE_DIR}/arrow/gpu DESTINATION include/arrow)
+
+install(DIRECTORY ${ARROW_INCLUDE_DIR}/arrow/gpu
+        DESTINATION include/arrow)
+
 add_definitions(-DARROW_METADATA_V4)

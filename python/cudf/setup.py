@@ -20,10 +20,11 @@ extensions = [
         include_dirs=[
             "../../cpp/include/cudf",
             "../../cpp/include",
+            "../../cpp/build/include",
             os.path.dirname(get_python_inc()),
             np.get_include(),
         ],
-        library_dirs=[get_python_lib()],
+        library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
         libraries=["cudf"],
         language="c++",
         extra_compile_args=["-std=c++14"],
