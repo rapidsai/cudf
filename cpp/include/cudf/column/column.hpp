@@ -62,14 +62,17 @@ class column {
   column(data_type type, size_type size, bool allocate_bitmask = false);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from a type, and a device_buffer for
-   * data that will be *deep* copied.
+   * @brief Construct a new column by deep copying from `device_buffer`s for the
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
    * @param[in] data device_buffer whose data will be *deep* copied
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer data);
+  column(data_type dtype, size_type size, rmm::device_buffer data,
+         rmm::device_buffer null_mask = {},
+         size_type null_count = UNKNOWN_NULL_COUNT,
+         std::vector<column> const& children = {}, cudaStream_t stream = 0,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, and a device_buffer for
@@ -134,9 +137,10 @@ class column {
   column(data_type dtype, size_type size, rmm::device_buffer&& data,
          rmm::device_buffer mask);
 
-
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying from a `column_view`.
+   *
+   * This accounts for the `column_view`'s offset.
    *
    * @param view The `column_view` that will be copied
    *---------------------------------------------------------------------------**/
@@ -144,13 +148,64 @@ class column {
       column_view view, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
-  column_view const view() const;
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the count of null elements.
+   *
+   * @note If the column was originally constructed with `UNKNOWN_NULL_COUNT`,
+   * then the first invocation of `null_count()` will compute and store the
+   *count of null elements indicated by the `null_mask` (if it exists).
+   *---------------------------------------------------------------------------**/
+  size_type null_count() const;
 
-  column_view view();
+  /**---------------------------------------------------------------------------*
+   * @brief Updates the count of null elements.
+   *
+   * @param new_null_count The new null count.
+   *---------------------------------------------------------------------------**/
+  void set_null_count(size_type new_null_count) noexcept {
+    _null_count = new_null_count;
+  }
 
-  operator const column_view() const { return this->view(); };
+  /**---------------------------------------------------------------------------*
+   * @brief Creates an immutable, non-owning view of the column's data and
+   * children.
+   *
+   * @return column_view The immutable, non-owning view
+   *---------------------------------------------------------------------------**/
+  column_view view() const;
 
-  operator column_view() { return this->view(); };
+  /**---------------------------------------------------------------------------*
+   * @brief Creates a mutable, non-owning view of the column's data and
+   * children.
+   *
+   * @note Creating a mutable view of a `column` will invalidate the `column`'s
+   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. This will require the
+   * user to either explicitly update the null count with `set_null_count()`,
+   * else, the null count to be recomputed on the next invocation of `null_count()`.
+   *
+   * @return mutable_column_view The mutable, non-owning view
+   *---------------------------------------------------------------------------**/
+  mutable_column_view mutable_view();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Implicit conversion operator to a `column_view`.
+   *
+   * This allows passing a `column` object directly into a function that
+   * requires a `column_view` and the conversion will happen automatically.
+   *
+   * @return column_view Immutable, non-owning `column_view`
+   *---------------------------------------------------------------------------**/
+  operator column_view() const { return this->view(); };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Implicit conversion operator to a `mutable_column_view`.
+   *
+   * This allows pasing a `column` object into a function that accepts a
+   *`mutable_column_view` and the conversion will happen automatically.
+   *
+   * @return mutable_column_view Mutable, non-owning `mutable_column_view`
+   *---------------------------------------------------------------------------**/
+  operator mutable_column_view() { return this->mutable_view(); };
 
  private:
   data_type _type{EMPTY};      ///< Logical type of elements in the column

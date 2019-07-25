@@ -26,31 +26,53 @@
 
 namespace cudf {
 
-column_view const column::view() const {
-  std::vector<column_view> child_views(_children.size());
-  std::copy(begin(_children), end(_children), begin(child_views));
-
-  return column_view{_type,
-                     _size,
-                     const_cast<void *>(_data.data()),
-                     const_cast<bitmask_type *>(
-                         static_cast<bitmask_type const *>(_null_mask.data())),
-                     _null_count,
-                     0,
-                     std::move(child_views)};
-}
-
-column_view column::view() {
+// Create immutable view
+column_view column::view() const {
+  // Create views of children
   std::vector<column_view> child_views(_children.size());
   std::copy(begin(_children), end(_children), begin(child_views));
 
   return column_view{_type,
                      _size,
                      _data.data(),
-                     static_cast<bitmask_type *>(_null_mask.data()),
+                     static_cast<bitmask_type const *>(_null_mask.data()),
                      _null_count,
                      0,
                      std::move(child_views)};
+}
+
+// Create mutable view
+mutable_column_view column::mutable_view() {
+  // create views of children
+  std::vector<mutable_column_view> child_views(_children.size());
+  std::copy(begin(_children), end(_children), begin(child_views));
+
+  // Store the old null count
+  auto current_null_count = _null_count;
+
+  // The elements of a column could be changed through a `mutable_column_view`,
+  // therefore the existing `null_count` is no longer valid. Reset it to
+  // `UNKONWN_NULL_COUNT` forcing it to be recomputed on the next invocation of
+  // `null_count()`.
+  _null_count = UNKNOWN_NULL_COUNT;
+
+  return mutable_column_view{_type,
+                             _size,
+                             _data.data(),
+                             static_cast<bitmask_type *>(_null_mask.data()),
+                             current_null_count,
+                             0,
+                             std::move(child_views)};
+}
+
+// If the null count is known, return it. Else, compute and return it
+size_type column::null_count() const {
+  if (_null_count != UNKNOWN_NULL_COUNT) {
+    return _null_count;
+  } else {
+    CUDF_FAIL(
+        "On-demand computation of null count is not currently supported.");
+  }
 }
 
 /**---------------------------------------------------------------------------*

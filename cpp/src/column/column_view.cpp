@@ -62,6 +62,8 @@ size_type column_view_base::null_count() const noexcept {
   }
 }
 }  // namespace detail
+
+// Immutable view constructor
 column_view::column_view(data_type type, size_type size, void const* data,
                          bitmask_type const* null_mask, size_type null_count,
                          size_type offset,
@@ -73,6 +75,7 @@ column_view::column_view(data_type type, size_type size, void const* data,
   }
 }
 
+// Mutable view constructor
 mutable_column_view::mutable_column_view(
     data_type type, size_type size, void* data, bitmask_type* null_mask,
     size_type null_count, size_type offset,
@@ -84,6 +87,7 @@ mutable_column_view::mutable_column_view(
   }
 }
 
+// Conversion from mutable to immutable
 mutable_column_view::operator column_view() const {
   // Convert children to immutable views
   std::vector<column_view> child_views(num_children());
