@@ -18,6 +18,7 @@
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
 - PR #2356 Java column vector standard deviation support
 
