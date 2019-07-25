@@ -114,7 +114,6 @@ __inline__ __device__ void add_pair_to_cache(const output_index_type first,
 * @param[out] output_size The resulting output size
   @tparam join_type The type of join to be performed
   @tparam multimap_type The datatype of the hash table
-  @tparam block_size The number of threads in a thread block for the kernel
   @tparam output_cache_size The size of the shared memory cache for caching the join output results
 * 
 */
@@ -129,23 +128,20 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
                                           const gdf_size_type probe_table_num_rows,
                                           gdf_size_type* output_size)
 {
+  // This kernel probes multiple elements in the probe_table and store the number of matches found inside a register.
+  // A block reduction is used at the end to calculate the matches per thread block, and atomically add to the global
+  // 'output_size'.
+  // Compared to probing one element per thread, this implementation improves performance by reducing atomic adds to
+  // the shared memory counter.
 
-  __shared__ gdf_size_type block_counter;
-  block_counter=0;
-  __syncthreads();
+  gdf_size_type thread_counter {0};
+  const gdf_size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
+  const gdf_size_type stride = blockDim.x * gridDim.x;
+  const auto unused_key = multi_map->get_unused_key();
+  const auto end = multi_map->end();
 
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-  __syncwarp();
-#endif
+  for (gdf_size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows; probe_row_index += stride) {
 
-  gdf_size_type probe_row_index = threadIdx.x + blockIdx.x * blockDim.x;
-
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-  const unsigned int activemask = __ballot_sync(0xffffffff, probe_row_index < probe_table_num_rows);
-#endif
-  if ( probe_row_index < probe_table_num_rows ) {
-    const auto unused_key = multi_map->get_unused_key();
-    const auto end = multi_map->end();
     auto found = end;
 
     // Search the hash map for the hash value of the probe row using the row's
@@ -158,61 +154,59 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
     bool found_match = false;
-#if defined(CUDA_VERSION) && CUDA_VERSION >= 9000
-    while ( __any_sync( activemask, running ) )
-#else
-      while ( __any( running ) )
-#endif
-      {
-        if ( running )
-        {
-          // TODO Simplify this logic...
 
-          // Left joins always have an entry in the output
-          if (join_type == JoinType::LEFT_JOIN && (end == found)) {
-            running = false;    
-          }
-          // Stop searching after encountering an empty hash table entry
-          else if ( unused_key == found->first ) {
-            running = false;
-          }
-          // First check that the hash values of the two rows match
-          else if (found->first == probe_row_hash_value)
-          {
-            // If the hash values are equal, check that the rows are equal
-            if( rows_equal(probe_table, probe_row_index, build_table, found->second) )
-            {
-              // If the rows are equal, then we have found a true match
-              found_match = true;
-              atomicAdd(&block_counter,1) ;
-            }
-            // Continue searching for matching rows until you hit an empty hash map entry
-            ++found;
-            // If you hit the end of the hash map, wrap around to the beginning
-            if(end == found)
-              found = multi_map->begin();
-            // Next entry is empty, stop searching
-            if(unused_key == found->first)
-              running = false;
-          }
-          else 
-          {
-            // Continue searching for matching rows until you hit an empty hash table entry
-            ++found;
-            // If you hit the end of the hash map, wrap around to the beginning
-            if(end == found)
-              found = multi_map->begin();
-            // Next entry is empty, stop searching
-            if(unused_key == found->first)
-              running = false;
-          }
+    while ( running )
+    {
+      // TODO Simplify this logic...
 
-          if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
-            atomicAdd(&block_counter,1);
-          }
-        }
+      // Left joins always have an entry in the output
+      if (join_type == JoinType::LEFT_JOIN && (end == found)) {
+        running = false;
       }
+      // Stop searching after encountering an empty hash table entry
+      else if ( unused_key == found->first ) {
+        running = false;
+      }
+      // First check that the hash values of the two rows match
+      else if (found->first == probe_row_hash_value)
+      {
+        // If the hash values are equal, check that the rows are equal
+        if( rows_equal(probe_table, probe_row_index, build_table, found->second) )
+        {
+          // If the rows are equal, then we have found a true match
+          found_match = true;
+          ++thread_counter;
+        }
+        // Continue searching for matching rows until you hit an empty hash map entry
+        ++found;
+        // If you hit the end of the hash map, wrap around to the beginning
+        if(end == found)
+          found = multi_map->begin();
+        // Next entry is empty, stop searching
+        if(unused_key == found->first)
+          running = false;
+      }
+      else
+      {
+        // Continue searching for matching rows until you hit an empty hash table entry
+        ++found;
+        // If you hit the end of the hash map, wrap around to the beginning
+        if(end == found)
+          found = multi_map->begin();
+        // Next entry is empty, stop searching
+        if(unused_key == found->first)
+          running = false;
+      }
+
+      if ((join_type == JoinType::LEFT_JOIN) && (!running) && (!found_match)) {
+        ++thread_counter;
+      }
+    }
   }
+
+  typedef cub::BlockReduce<gdf_size_type, block_size> BlockReduce;
+  __shared__ typename BlockReduce::TempStorage temp_storage;
+  gdf_size_type block_counter = BlockReduce(temp_storage).Sum(thread_counter);
 
   __syncthreads();
 

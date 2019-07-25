@@ -19,6 +19,7 @@
 #include "wrapper_types.hpp"
 #include "release_assert.cuh"
 
+
 #include <cudf/types.h>
 
 // Forward decl
@@ -26,7 +27,6 @@ class NVStrings;
 
 #include <cassert>
 #include <utility>
-
 
 /* --------------------------------------------------------------------------*/
 /**
@@ -60,6 +60,7 @@ class NVStrings;
  *
  * Example usage with a functor that returns the size of the dispatched type:
  *
+ * ```
  * struct example_functor{
  *  template <typename T>
  *  int operator()(){
@@ -67,12 +68,14 @@ class NVStrings;
  *  }
  * };
  *
- * cudf::type_dispatcher(GDF_INT8, example_functor);  // returns 1
- * cudf::type_dispatcher(GDF_INT64, example_functor); // returns 8
+ * cudf::type_dispatcher(GDF_INT8, example_functor{});  // returns 1
+ * cudf::type_dispatcher(GDF_INT64, example_functor{}); // returns 8
+ * ```
  *
  * Example usage of a functor for checking if element "i" in column "lhs" is
  * equal to element "j" in column "rhs":
  *
+ * ```
  * struct elements_are_equal{
  *   template <typename ColumnType>
  *   bool operator()(void const * lhs, int i,
@@ -90,29 +93,79 @@ class NVStrings;
  *     return i_elem == j_elem;
  *   }
  * };
+ * ```
+ *
+ * It is sometimes neccessary to customize the dispatched functor's
+ * `operator()` for different types.  This can be done in several ways.
+ *
+ * The first method is to use explicit template specialization. This is useful
+ * for specializing behavior for single types. For example, a functor that
+ * prints `int32_t` or `double` when invoked with either of those types, else it
+ * prints `unhandled type`:
+ *
+ * ```
+ * struct type_printer {
+ *   template <typename ColumnType>
+ *   void operator()() { std::cout << "unhandled type\n"; }
+ * };
+ *
+ * // Due to a bug in g++, explicit member function specializations need to be
+ * // defined outside of the class definition
+ * template <>
+ * void type_printer::operator()<int32_t>() { std::cout << "int32_t\n"; }
+ *
+ * template <>
+ * void type_printer::operator()<double>() { std::cout << "double\n"; }
+ * ```
+ *
+ * A second method is to use SFINAE with `std::enable_if_t`. This is useful for
+ * specializing for a set of types that share some property. For example, a
+ * functor that prints `integral` or `floating point` for integral or floating
+ * point types:
+ * 
+ * ```
+ * struct integral_or_floating_point {
+ *   template <typename ColumnType,
+ *             std::enable_if_t<not std::is_integral<ColumnType>::value and
+ *                              not std::is_floating_point<ColumnType>::value>* = nullptr>
+ *   void operator()() { std::cout << "neither integral nor floating point\n"; }
+ * 
+ *   template <typename ColumnType,
+ *             std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
+ *   void operator()() { std::cout << "integral\n"; }
+ * 
+ *   template < typename ColumnType,
+ *              std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
+ *   void operator()() { std::cout << "floating point\n"; }
+ * };
+ * ```
+ * 
+ * For more info on SFINAE and `std::enable_if`, see 
+ * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/ 
  *
  * The return type for all template instantiations of the functor's "operator()"
  * lambda must be the same, else there will be a compiler error as you would be
  * trying to return different types from the same function.
- * 
+ *
  * NOTE: It is undefined behavior if an unsupported or invalid `gdf_dtype` is
  * supplied.
  *
  * @param dtype The gdf_dtype enum that determines which type will be dispatched
- * @param f The functor with a templated "operator()" that will be invoked with 
+ * @param f The functor with a templated "operator()" that will be invoked with
  * the dispatched type
- * @param args A parameter-pack (i.e., arbitrary number of arguments) that will 
+ * @param args A parameter-pack (i.e., arbitrary number of arguments) that will
  * be perfectly-forwarded as the arguments of the functor's "operator()".
  *
- * @returns Whatever is returned by the functor's "operator()". 
+ * @returns Whatever is returned by the functor's "operator()".
  *
  */
 /* ----------------------------------------------------------------------------*/
 namespace cudf {
 
+
 // This pragma disables a compiler warning that complains about the valid usage
 // of calling a __host__ functor from this function which is __host__ __device__
-#pragma hd_warning_disable 
+#pragma hd_warning_disable
 #pragma nv_exec_check_disable
 template <class functor_t, typename... Ts>
 CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dtype,
@@ -138,7 +191,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(gdf_dtype dty
                         { return f.template operator()< nvstring_category >(std::forward<Ts>(args)...); }
     default: {
 #ifdef __CUDA_ARCH__
-      
+
       // This will cause the calling kernel to crash as well as invalidate
       // the GPU context
       release_assert(false && "Invalid gdf_dtype in type_dispatcher");
