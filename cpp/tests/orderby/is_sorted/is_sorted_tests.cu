@@ -254,6 +254,30 @@ TYPED_TEST(IsSorted, EmptyInput)
     EXPECT_EQ(found, true);
 }
 
+
+TYPED_TEST(IsSorted, ZeroRowswithColumns)
+{
+    using T = TypeParam;
+    bool found  = false;
+    bool nulls_are_smallest  = false;
+
+    column_wrapper <T> col1 = column_wrapper<T>({},[](auto row) { return true; });
+    column_wrapper <T> col2 = column_wrapper<T>({},[](auto row) { return true; });
+
+    std::vector<gdf_column*> cols;
+    cols.push_back(col1.get());
+    cols.push_back(col2.get());
+
+    cudf::table table{cols.data(), (int)cols.size()};
+    std::cout<<"Number of rows "<<table.num_rows()<<std::endl;
+    std::cout<<"Number of cols "<<table.num_columns()<<std::endl;
+    std::vector <int8_t> const asc_dec{};
+
+    found = is_sorted (table, asc_dec, nulls_are_smallest);
+
+    EXPECT_EQ(found, true);
+}
+
 TYPED_TEST(IsSorted, EmptyColumnOrderingInfoTrue)
 {
     using T = TypeParam;

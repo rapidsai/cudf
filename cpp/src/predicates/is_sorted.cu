@@ -38,7 +38,7 @@ bool is_sorted(cudf::table const& table,
       CUDF_EXPECTS(static_cast <unsigned int>(table.num_columns()) == descending.size(), "Number of columns in the table doesn't match the vector descending's size .\n");
   }
   
-  if (table.num_columns() == 0)
+  if (table.num_columns() == 0 || table.num_rows() == 0)
   {
       return true;
   }
