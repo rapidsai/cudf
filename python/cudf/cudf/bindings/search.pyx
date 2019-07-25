@@ -32,7 +32,7 @@ def search_sorted(column, values, side):
     """
     cdef cudf_table *c_t = table_from_columns([column])
     cdef cudf_table *c_values = table_from_columns([values])
-    
+
     cdef vector[bool] c_desc_flags
     c_desc_flags.push_back(False)
 
