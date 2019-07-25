@@ -61,7 +61,7 @@ cpdef check_gdf_error(errcode)
 # First version of bindings has no changes to the cudf.h header, so this file
 # mirrors the structure in cpp/include
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     ctypedef int           gdf_size_type
     ctypedef gdf_size_type gdf_index_type
@@ -358,7 +358,7 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_nvtx_range_pop() except +
 
 
-cdef extern from "legacy/bitmask.hpp" nogil:
+cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(
         gdf_valid_type* masks,
@@ -367,7 +367,7 @@ cdef extern from "legacy/bitmask.hpp" nogil:
     ) except +
 
 
-cdef extern from "table.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/table.hpp" namespace "cudf" nogil:
 
     cdef cppclass cudf_table "cudf::table":
 
