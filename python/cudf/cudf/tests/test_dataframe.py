@@ -1591,6 +1591,7 @@ def test_to_arrow_missing_categorical():
         "float32",
         "float64",
         "datetime64[ms]",
+        "datetime64",
     ],
 )
 def test_from_scalar_typing(data_type):
@@ -1600,6 +1601,11 @@ def test_from_scalar_typing(data_type):
             .type(np.random.randint(0, 5))
             .astype("datetime64[ms]")
         )
+    elif data_type == "datetime64":
+        from datetime import date
+
+        scalar = np.datetime64(date.today())
+        data_type = "datetime64[ms]"
     else:
         scalar = np.dtype(data_type).type(np.random.randint(0, 5))
 
