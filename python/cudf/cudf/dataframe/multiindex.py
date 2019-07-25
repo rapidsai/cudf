@@ -10,7 +10,7 @@ import pandas as pd
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.index import Index, StringIndex, as_index
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils
 
 
 class MultiIndex(Index):
@@ -369,9 +369,7 @@ class MultiIndex(Index):
         elif isinstance(indices, Series):
             indices = indices.to_gpu_array()
         elif isinstance(indices, slice):
-            start, stop, step, sln = utils.standard_python_slice(
-                len(self), indices
-            )
+            start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
         result.names = self.names
