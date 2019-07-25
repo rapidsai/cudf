@@ -25,6 +25,8 @@
 
 #include <cuda_runtime.h>
 
+#include <inttypes.h>
+
 namespace cudf {
 namespace io {
 namespace avro {
@@ -54,7 +56,7 @@ gdf_dtype to_dtype(const avro::schema_entry *col) {
     case avro::type_string:
       return GDF_STRING;
     case avro::type_enum:
-      return (not col->symbols.empty()) ? GDF_STRING : GDF_INT32;
+      return (!col->symbols.empty()) ? GDF_STRING : GDF_INT32;
     default:
       return GDF_invalid;
   }
@@ -94,15 +96,16 @@ class avro_metadata : public avro::file_metadata {
   auto select_columns(std::vector<std::string> use_names) {
     std::vector<std::pair<int, std::string>> selection;
 
-    const int num_avro_columns = static_cast<int>(columns.size());
-    if (not use_names.empty()) {
+    const auto num_avro_columns = static_cast<int>(columns.size());
+    if (!use_names.empty()) {
       for (int i = 0, column_id = 0; i < (int)use_names.size(); i++) {
         for (int j = 0; j < num_avro_columns; j++, column_id++) {
           if (column_id >= num_avro_columns) {
             column_id = 0;
           }
           if (columns[column_id].name == use_names[i] &&
-              GDF_invalid != to_dtype(&schema[columns[column_id].schema_data_idx])) {
+              GDF_invalid !=
+                  to_dtype(&schema[columns[column_id].schema_data_idx])) {
             selection.emplace_back(column_id, columns[column_id].name);
             column_id++;
             break;
@@ -126,9 +129,8 @@ class avro_metadata : public avro::file_metadata {
     LOG_PRINTF("\n[+] Metadata:\n");
     LOG_PRINTF(" size = %zd\n", metadata_size);
     LOG_PRINTF(" codec = \"%s\"\n", codec.c_str());
-    LOG_PRINTF(" sync marker = 0x%016llX%016llX\n",
-               (long long unsigned int)sync_marker[1],
-               (long long unsigned int)sync_marker[0]);
+    LOG_PRINTF(" sync marker = 0x%016" PRIx64 "%016" PRIx64 "\n",
+               sync_marker[1], sync_marker[0]);
     LOG_PRINTF(" schema (%zd entries):\n", schema.size());
     for (size_t i = 0; i < schema.size(); ++i) {
       LOG_PRINTF(
@@ -160,7 +162,6 @@ reader::Impl::Impl(std::unique_ptr<DataSource> source,
 }
 
 table reader::Impl::read(int skip_rows, int num_rows) {
-
   // Select and read partial metadata / schema within the subset of rows
   md_->init_and_select_rows(skip_rows, num_rows);
 
@@ -197,8 +198,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
     if (md_->codec != "" && md_->codec != "null") {
       auto decomp_block_data = decompress_data(block_data);
       block_data = std::move(decomp_block_data);
-    }
-    else {
+    } else {
       auto dst_ofs = md_->block_list[0].offset;
       for (size_t i = 0; i < md_->block_list.size(); i++) {
         md_->block_list[i].offset -= dst_ofs;
@@ -243,23 +243,26 @@ table reader::Impl::read(int skip_rows, int num_rows) {
       for (size_t i = 0; i < columns.size(); ++i) {
         auto col_idx = selected_cols_[i].first;
         auto &col_schema = md_->schema[md_->columns[col_idx].schema_data_idx];
-        gpu::nvstrdesc_s *index = &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr()))[dict[i].first];
+        auto index = &(reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.host_ptr()))[dict[i].first];
         for (size_t j = 0; j < dict[i].second; j++) {
           size_t len = col_schema.symbols[j].length();
-          char *ptr = reinterpret_cast<char *>(global_dictionary.device_ptr() + dict_pos);
+          char *ptr = reinterpret_cast<char *>(global_dictionary.device_ptr() +
+                                               dict_pos);
           index[j].ptr = ptr;
           index[j].count = len;
-          memcpy(global_dictionary.host_ptr() + dict_pos, col_schema.symbols[j].c_str(), len);
+          memcpy(global_dictionary.host_ptr() + dict_pos,
+                 col_schema.symbols[j].c_str(), len);
           dict_pos += len;
         }
       }
-      CUDA_TRY(cudaMemcpyAsync(global_dictionary.device_ptr(), global_dictionary.host_ptr(),
-               global_dictionary.memory_size(), cudaMemcpyHostToDevice, 0));
+      CUDA_TRY(cudaMemcpyAsync(
+          global_dictionary.device_ptr(), global_dictionary.host_ptr(),
+          global_dictionary.memory_size(), cudaMemcpyHostToDevice, 0));
     }
 
     // Write out columns
-    decode_data(block_data, columns, dict, global_dictionary, total_dictionary_entries);
-
+    decode_data(block_data, dict, global_dictionary, total_dictionary_entries,
+                columns);
   } else {
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
@@ -403,10 +406,10 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
 
 void reader::Impl::decode_data(
     const device_buffer<uint8_t> &block_data,
-    std::vector<gdf_column_wrapper> &columns,
-    std::vector<std::pair<uint32_t, uint32_t>> &dict,
-    hostdevice_vector<uint8_t> &global_dictionary,
-    size_t total_dictionary_entries) {
+    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+    const hostdevice_vector<uint8_t> &global_dictionary,
+    size_t total_dictionary_entries,
+    const std::vector<gdf_column_wrapper> &columns) {
   // Build gpu schema
   hostdevice_vector<gpu::schemadesc_s> schema_desc(md_->schema.size());
   uint32_t min_row_data_size = 0;
@@ -416,27 +419,28 @@ void reader::Impl::decode_data(
     if (skip_field_cnt != 0) {
       // Exclude union members from min_row_data_size
       skip_field_cnt += md_->schema[i].num_children - 1;
-    }
-    else switch (kind) {
-      case type_union:
-        skip_field_cnt = md_->schema[i].num_children;
-        // fall through
-      case type_boolean:
-      case type_int:
-      case type_long:
-      case type_bytes:
-      case type_string:
-      case type_enum:
-        min_row_data_size += 1;
-        break;
-      case type_float:
-        min_row_data_size += 4;
-        break;
-      case type_double:
-        min_row_data_size += 8;
-        break;
-      default:
-        break;
+    } else {
+      switch (kind) {
+        case type_union:
+          skip_field_cnt = md_->schema[i].num_children;
+          // fall through
+        case type_boolean:
+        case type_int:
+        case type_long:
+        case type_bytes:
+        case type_string:
+        case type_enum:
+          min_row_data_size += 1;
+          break;
+        case type_float:
+          min_row_data_size += 4;
+          break;
+        case type_double:
+          min_row_data_size += 8;
+          break;
+        default:
+          break;
+      }
     }
     if (kind == type_enum && !md_->schema[i].symbols.size()) {
       kind = type_int;
@@ -444,9 +448,11 @@ void reader::Impl::decode_data(
     schema_desc[i].kind = kind;
     schema_desc[i].count = (kind == type_enum) ? 0 : (uint32_t)md_->schema[i].num_children;
     schema_desc[i].dataptr = nullptr;
-    CUDF_EXPECTS(kind != type_union || md_->schema[i].num_children < 2 || 
-        (md_->schema[i].num_children == 2 && (md_->schema[i+1].kind == type_null || md_->schema[i+2].kind == type_null)),
-        "Union with non-null type not currently supported");
+    CUDF_EXPECTS(kind != type_union || md_->schema[i].num_children < 2 ||
+                     (md_->schema[i].num_children == 2 &&
+                      (md_->schema[i + 1].kind == type_null ||
+                       md_->schema[i + 2].kind == type_null)),
+                 "Union with non-null type not currently supported");
   }
   std::vector<void*> valid_alias(columns.size(), nullptr);
   for (size_t i = 0; i < columns.size(); i++) {
@@ -457,8 +463,7 @@ void reader::Impl::decode_data(
     if (schema_null_idx >= 0) {
       if (!schema_desc[schema_null_idx].dataptr) {
         schema_desc[schema_null_idx].dataptr = columns[i]->valid;
-      }
-      else {
+      } else {
         valid_alias[i] = schema_desc[schema_null_idx].dataptr;
       }
     }
@@ -470,26 +475,34 @@ void reader::Impl::decode_data(
   CUDA_TRY(cudaMemcpyAsync(schema_desc.device_ptr(), schema_desc.host_ptr(),
            schema_desc.memory_size(), cudaMemcpyHostToDevice, 0));
   CUDA_TRY(cudaMemcpyAsync(block_list.data(), md_->block_list.data(),
-           md_->block_list.size() * sizeof(block_desc_s), cudaMemcpyHostToDevice, 0));
-  // Decode data blocks
-  DecodeAvroColumnData(block_list.data(), schema_desc.device_ptr(),
-                       reinterpret_cast<gpu::nvstrdesc_s*>(global_dictionary.device_ptr()),
-                       block_data.data(), (uint32_t)block_list.size(), (uint32_t)schema_desc.size(),
-                       (uint32_t)total_dictionary_entries, md_->num_rows, md_->skip_rows, min_row_data_size, 0);
+                           md_->block_list.size() * sizeof(block_desc_s),
+                           cudaMemcpyHostToDevice, 0));
+
+  CUDA_TRY(DecodeAvroColumnData(
+      block_list.data(), schema_desc.device_ptr(),
+      reinterpret_cast<gpu::nvstrdesc_s *>(global_dictionary.device_ptr()),
+      block_data.data(), static_cast<uint32_t>(block_list.size()),
+      static_cast<uint32_t>(schema_desc.size()),
+      static_cast<uint32_t>(total_dictionary_entries), md_->num_rows,
+      md_->skip_rows, min_row_data_size, 0));
+
   // Copy valid bits that are shared between columns
   for (size_t i = 0; i < columns.size(); i++) {
     if (valid_alias[i] != nullptr) {
       CUDA_TRY(cudaMemcpyAsync(columns[i]->valid, valid_alias[i],
-               gdf_valid_allocation_size(columns[i]->size), cudaMemcpyHostToDevice, 0));
+                               gdf_valid_allocation_size(columns[i]->size),
+                               cudaMemcpyHostToDevice, 0));
     }
   }
   CUDA_TRY(cudaMemcpyAsync(schema_desc.host_ptr(), schema_desc.device_ptr(),
-           schema_desc.memory_size(), cudaMemcpyDeviceToHost, 0));
+                           schema_desc.memory_size(), cudaMemcpyDeviceToHost,
+                           0));
   CUDA_TRY(cudaStreamSynchronize(0));
   for (size_t i = 0; i < columns.size(); i++) {
-    auto col_idx = selected_cols_[i].first;
-    int schema_null_idx = md_->columns[col_idx].schema_null_idx;
-    columns[i]->null_count = (schema_null_idx >= 0) ? schema_desc[schema_null_idx].count : 0;
+    const auto col_idx = selected_cols_[i].first;
+    const auto schema_null_idx = md_->columns[col_idx].schema_null_idx;
+    columns[i]->null_count =
+        (schema_null_idx >= 0) ? schema_desc[schema_null_idx].count : 0;
   }
 }
 
@@ -509,7 +522,8 @@ reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
 table reader::read_all() { return impl_->read(0, -1); }
 
 table reader::read_rows(size_t skip_rows, size_t num_rows) {
-  return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1);
+  return impl_->read(skip_rows,
+                     (num_rows != 0) ? static_cast<int>(num_rows) : -1);
 }
 
 reader::~reader() = default;

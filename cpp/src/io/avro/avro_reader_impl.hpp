@@ -15,6 +15,8 @@
  */
 
 #include <memory>
+#include <string>
+#include <utility>
 #include <vector>
 
 #include <cudf/cudf.h>
@@ -67,15 +69,16 @@ class reader::Impl {
    * @brief Convert the avro row-based block data and outputs to gdf_columns
    *
    * @param[in] block_data Uncompressed block data
-   *
+   * @param[in] dict Dictionary entries
+   * @param[in] global_dictionary Dictionary allocation
+   * @param[in] total_dictionary_entries Number of dictionary entries
+   * @param[in, out] columns List of gdf_columns
    **/
-  void decode_data(
-      const device_buffer<uint8_t> &block_data,
-      std::vector<gdf_column_wrapper> &columns,
-      std::vector<std::pair<uint32_t, uint32_t>> &dict,
-      hostdevice_vector<uint8_t> &global_dictionary,
-      size_t total_dictionary_entries
-    );
+  void decode_data(const device_buffer<uint8_t> &block_data,
+                   const std::vector<std::pair<uint32_t, uint32_t>> &dict,
+                   const hostdevice_vector<uint8_t> &global_dictionary,
+                   size_t total_dictionary_entries,
+                   const std::vector<gdf_column_wrapper> &columns);
 
  private:
   std::unique_ptr<DataSource> source_;
@@ -85,6 +88,6 @@ class reader::Impl {
   std::vector<std::pair<int, std::string>> selected_cols_;
 };
 
-} // namespace avro
-} // namespace io
-} // namespace cudf
+}  // namespace avro
+}  // namespace io
+}  // namespace cudf

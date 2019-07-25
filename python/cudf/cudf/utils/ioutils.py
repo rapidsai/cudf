@@ -77,7 +77,8 @@ See Also
 cudf.io.parquet.read_parquet
 """
 doc_read_parquet_metadata = docfmt_partial(
-    docstring=_docstring_read_parquet_metadata)
+    docstring=_docstring_read_parquet_metadata
+)
 
 _docstring_read_parquet = """
 Load a Parquet dataset into a DataFrame
