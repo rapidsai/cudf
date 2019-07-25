@@ -107,7 +107,7 @@ typedef struct {
  */
 // TODO: #1119 Use traits to set `gdf_data` elements
 typedef union {
-  char          si08;  /**< GDF_INT8      */
+  signed char   si08;  /**< GDF_INT8      */
   short         si16;  /**< GDF_INT16     */
   int           si32;  /**< GDF_INT32     */
   long          si64;  /**< GDF_INT64     */
@@ -203,32 +203,6 @@ typedef enum {
 
 
 /**
- * @brief Types of binary operations that can be performed on data.
- */
-typedef enum {
-  GDF_ADD,            ///< operator +
-  GDF_SUB,            ///< operator -
-  GDF_MUL,            ///< operator *
-  GDF_DIV,            ///< operator / using common type of lhs and rhs
-  GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
-  GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
-  GDF_MOD,            ///< operator %
-  GDF_POW,            ///< lhs ^ rhs
-  GDF_EQUAL,          ///< operator ==
-  GDF_NOT_EQUAL,      ///< operator !=
-  GDF_LESS,           ///< operator <
-  GDF_GREATER,        ///< operator >
-  GDF_LESS_EQUAL,     ///< operator <=
-  GDF_GREATER_EQUAL,  ///< operator >=
-  GDF_BITWISE_AND,    ///< operator &
-  GDF_BITWISE_OR,     ///< operator |
-  GDF_BITWISE_XOR,    ///< operator ^
-  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
-  GDF_INVALID_BINARY  ///< invalid operation
-} gdf_binary_operator;
-
-
-/**
  * @brief Types of unary math operations that can be performed on data.
  */
 typedef enum {
@@ -245,6 +219,8 @@ typedef enum {
   GDF_FLOOR,        ///< largest integer value not greater than arg
   GDF_ABS,          ///< Absolute value
   GDF_BIT_INVERT,   ///< Bitwise Not (~)
+  GDF_NOT,          ///< Logical Not (!)
+  GDF_INVALID_UNARY ///< invalid operation
 } gdf_unary_math_op;
 
 

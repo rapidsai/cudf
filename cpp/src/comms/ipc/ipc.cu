@@ -1,4 +1,4 @@
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #pragma diag_suppress set_but_not_used
 #include <cudf/ipc_generated/Schema_generated.h>

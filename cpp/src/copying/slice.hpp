@@ -19,6 +19,7 @@
 #ifndef COPYING_SLICE_HPP
 #define COPYING_SLICE_HPP
 
+#include <cudf/types.h>
 #include <vector>
 
 namespace cudf {

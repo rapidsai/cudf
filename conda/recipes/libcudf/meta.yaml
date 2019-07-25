@@ -35,14 +35,25 @@ requirements:
 
 test:
   commands:
-    - test -f $PREFIX/include/cudf.h
-    - test -f $PREFIX/include/cudf/convert_types.h
-    - test -f $PREFIX/include/cudf/functions.h
-    - test -f $PREFIX/include/cudf/io_functions.h
-    - test -f $PREFIX/include/cudf/io_types.h
-    - test -f $PREFIX/include/cudf/types.h
     - test -f $PREFIX/lib/libcudf.so
-    - test -f $PREFIX/lib/librmm.so
+    - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
+    - test -f $PREFIX/include/cudf/legacy/column.hpp
+    - test -f $PREFIX/include/cudf/groupby.hpp
+    - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/convert_types.h
+    - test -f $PREFIX/include/cudf/io_functions.h
+    - test -f $PREFIX/include/cudf/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/copying.hpp
+    - test -f $PREFIX/include/cudf/io_functions.hpp
+    - test -f $PREFIX/include/cudf/table.hpp
+    - test -f $PREFIX/include/cudf/cudf.h
+    - test -f $PREFIX/include/cudf/io_readers.hpp
+    - test -f $PREFIX/include/cudf/types.h
+    - test -f $PREFIX/include/cudf/functions.h
+    - test -f $PREFIX/include/cudf/io_types.h
+    - test -f $PREFIX/include/cudf/types.hpp
+    - test -f $PREFIX/include/cudf/gis.hpp
+    - test -f $PREFIX/include/cudf/reduction.hpp
 
 
 about:

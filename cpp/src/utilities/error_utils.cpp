@@ -1,4 +1,4 @@
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #define GETNAME(x) case x: return #x;
 

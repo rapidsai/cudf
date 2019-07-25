@@ -38,9 +38,10 @@ inline __device__ uint32_t rotl32(uint32_t x, uint32_t r)
     return __funnelshift_l(x, x, r);    // (x << r) | (x >> (32 - r));
 };
 
-
-namespace parquet { namespace gpu {
-
+namespace cudf {
+namespace io {
+namespace parquet {
+namespace gpu {
 
 struct page_state_s {
     const uint8_t *lvl_start[2];  // [def,rep]
@@ -70,6 +71,7 @@ struct page_state_s {
     int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
     int32_t dict_pos;               // write position of dictionary indices
     int32_t out_pos;                // read position of final output
+    int int64_us2ms;                // if 1, convert microseconds to milliseconds for int64 types
     uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
     uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
     uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
@@ -258,7 +260,8 @@ __device__ void gpuDecodeLevels(page_state_s *s, int32_t target_count, int t)
     int32_t coded_count = s->nz_count;      // Count of non-null values
     while (coded_count < target_count && value_count < num_values)
     {
-        int batch_len, is_valid, valid_mask;
+        int batch_len, is_valid;
+        uint32_t valid_mask;
         if (def_run <= 1)
         {
             // Get a new run symbol from the byte stream
@@ -822,6 +825,62 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
 }
 
 
+#if PARQUET_GPU_USEC_TO_MSEC
+/**
+ * @brief Convert a microsecond 64-bit timestamp to milliseconds
+ *
+ * @param[in,out] s Page state input/output
+ * @param[in] src_pos Source position
+ * @param[in] dst Pointer to row output data
+ **/
+inline __device__ void gpuOutputInt64Timestamp_us2ms(volatile page_state_s *s, int src_pos, int64_t *dst)
+{
+    const uint8_t *src8;
+    uint32_t dict_pos, dict_size = s->dict_size, ofs;
+    int64_t millis;
+
+    if (s->dict_base)
+    {
+        // Dictionary
+        dict_pos = (s->dict_bits > 0) ? s->dict_idx[src_pos & (NZ_BFRSZ - 1)] : 0;
+        src8 = s->dict_base;
+    }
+    else
+    {
+        // Plain
+        dict_pos = src_pos;
+        src8 = s->data_start;
+    }
+    dict_pos *= (uint32_t)s->dtype_len_in;
+    ofs = 3 & reinterpret_cast<size_t>(src8);
+    src8 -= ofs;    // align to 32-bit boundary
+    ofs <<= 3;      // bytes -> bits
+    if (dict_pos + 4 < dict_size)
+    {
+        uint2 v;
+        int64_t micros;
+        v.x = *(const uint32_t *)(src8 + dict_pos + 0);
+        v.y = *(const uint32_t *)(src8 + dict_pos + 4);
+        if (ofs)
+        {
+            uint32_t next = *(const uint32_t *)(src8 + dict_pos + 8);
+            v.x = __funnelshift_r(v.x, v.y, ofs);
+            v.y = __funnelshift_r(v.y, next, ofs);
+        }
+        micros = v.y;
+        micros <<= 32;
+        micros |= v.x;
+        millis = micros / 1000;
+    }
+    else
+    {
+        millis = 0;
+    }
+    *dst = millis;
+}
+#endif // PARQUET_GPU_USEC_TO_MSEC
+
+
 /**
  * @brief Output a small fixed-length value
  *
@@ -974,6 +1033,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             uint8_t *end = cur + s->page.uncompressed_page_size;
             size_t page_start_row = s->col.start_row + s->page.chunk_row;
             uint32_t dtype_len_out = s->col.data_type >> 3;
+            s->int64_us2ms = 0;
             // Validate data type
             switch(s->col.data_type & 7)
             {
@@ -985,6 +1045,11 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 s->dtype_len = 4;
                 break;
             case INT64:
+            #if PARQUET_GPU_USEC_TO_MSEC
+                if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
+                    s->int64_us2ms = 1;
+                // Fall through to DOUBLE
+            #endif
             case DOUBLE:
                 s->dtype_len = 8;
                 break;
@@ -1178,7 +1243,14 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 else if (dtype == INT96)
                     gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                 else if (dtype_len == 8)
-                    gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
+                {
+                #if PARQUET_GPU_USEC_TO_MSEC
+                    if (s->int64_us2ms)
+                        gpuOutputInt64Timestamp_us2ms(s, out_pos, reinterpret_cast<int64_t *>(dst));
+                    else
+                #endif
+                        gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
+                }
                 else if (dtype_len == 4)
                     gpuOutputFast(s, out_pos, reinterpret_cast<uint32_t *>(dst));
                 else
@@ -1211,4 +1283,7 @@ cudaError_t __host__ DecodePageData(PageInfo *pages, int32_t num_pages,
   return cudaSuccess;
 }
 
-}; }; // parquet::gpu namespace
+} // namespace gpu
+} // namespace parquet
+} // namespace io
+} // namespace cudf

@@ -1,12 +1,16 @@
 #cpp code owners
-cpp/       @rapidsai/cudf-cpp-codeowners
+cpp/               @rapidsai/cudf-cpp-codeowners
 
 #python code owners
-python/    @rapidsai/cudf-python-codeowners
+python/            @rapidsai/cudf-python-codeowners
+python/dask_cudf/  @rapidsai/cudf-dask-codeowners
 
 #cmake code owners
 **/CMakeLists.txt  @rapidsai/cudf-cmake-codeowners
 **/cmake/          @rapidsai/cudf-cmake-codeowners
+
+#java code owners
+java/              @rapidsai/cudf-java-codeowners
 
 #build/ops code owners
 .github/           @rapidsai/cudf-ops-codeowners 

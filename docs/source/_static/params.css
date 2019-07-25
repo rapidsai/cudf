@@ -1,0 +1,9 @@
+/* Mirrors the change in:
+ *   https://github.com/sphinx-doc/sphinx/pull/5976
+ * which is not showing up in our theme.
+ */
+.classifier:before {
+    font-style: normal;
+    margin: 0.5em;
+    content: ":";
+}
