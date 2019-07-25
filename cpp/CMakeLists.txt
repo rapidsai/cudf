@@ -143,46 +143,6 @@ if (RMM_INCLUDE AND RMM_LIBRARY)
 endif (RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
-# - NVStrings -------------------------------------------------------------------------------------
-
-find_path(NVSTRINGS_INCLUDE "nvstrings"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/nvstrings"
-                "$ENV{CONDA_PREFIX}/include")
-
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-find_library(NVTEXT_LIBRARY "NVText"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
-message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
-message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
-message(STATUS "NVSTRINGS: NVTEXT_LIBRARY set to ${NVTEXT_LIBRARY}")
-
-add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
-    set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
-
-add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
-    set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
-
-add_library(NVText SHARED IMPORTED ${NVTEXT_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
-    set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVTEXT_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
-
-###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
@@ -201,7 +161,7 @@ if(BUILD_TESTS)
     if(GTEST_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         include_directories(${GTEST_INCLUDE_DIR})
-        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+        # add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
@@ -225,6 +185,25 @@ if(BUILD_BENCHMARKS)
 endif(BUILD_BENCHMARKS)
 
 ###################################################################################################
+# - NVStrings -------------------------------------------------------------------------------------
+
+include(ConfigureNVStrings)
+
+if(NVSTRINGS_FOUND)
+  message(STATUS "NVStrings built successfully")
+  message(STATUS "NVStrings library path: " ${NVSTRINGS_LIBRARY_DIR})
+  
+  add_library(NVStrings SHARED IMPORTED libNVStrings.so)
+  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR})
+
+  add_library(NVCategory SHARED IMPORTED libNVCategory.so)
+  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR})
+
+  add_library(NVText SHARED IMPORTED libNVText.so)
+  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR})
+endif(NVSTRINGS_FOUND)
+
+###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
@@ -240,8 +219,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
-                    "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}")
+                    "${RMM_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -251,9 +229,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}"
-                 "${NVSTRINGS_LIBRARY}"
-                 "${NVCATEGORY_LIBRARY}"
-                 "${NVTEXT_LIBRARY}")
+                 "${NVSTRINGS_LIBRARY_DIR}")
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
@@ -379,12 +355,10 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
-
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
-
+target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} ${NVCategory} ${NVStrings} nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------

@@ -62,7 +62,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}")
+                    "${NVSTRINGS_INCLUDE_DIR}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -72,9 +72,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}"
-                 "${NVSTRINGS_LIBRARY}"
-                 "${NVCATEGORY_LIBRARY}"
-                 "${NVTEXT_LIBRARY}")
+                 "${NVSTRINGS_LIBRARY_DIR}")
 
 ###################################################################################################
 ### test sources ##################################################################################
