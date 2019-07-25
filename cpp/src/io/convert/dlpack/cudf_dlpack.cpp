@@ -20,11 +20,12 @@
 
 #include <limits>
 
-#include "cudf.h"
-#include "utilities/error_utils.hpp"
-#include "utilities/type_dispatcher.hpp"
-#include "dlpack/dlpack.h"
-#include "rmm/rmm.h"
+#include <cudf/cudf.h>
+#include <utilities/column_utils.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/type_dispatcher.hpp>
+#include <dlpack/dlpack.h>
+#include <rmm/rmm.h>
 
 namespace {
   /** ---------------------------------------------------------------------------*
@@ -130,10 +131,10 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
   // Note: assumes Fortran (column-major) data layout
   *num_columns = 1;
   if (tensor->dl_tensor.ndim == 2) *num_columns = tensor->dl_tensor.shape[1];
-  *columns = new gdf_column[*num_columns];
+  *columns = new gdf_column[*num_columns]{};
   GDF_REQUIRE(*columns != nullptr, GDF_MEMORYMANAGER_ERROR);
 
-  gdf_size_type byte_width = gdf_dtype_size(dtype);
+  gdf_size_type byte_width = cudf::size_of(dtype);
   gdf_size_type num_rows = tensor->dl_tensor.shape[0];
   size_t bytes = num_rows * byte_width;
 
@@ -154,7 +155,7 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
     void *tensor_data = reinterpret_cast<void*>(
       reinterpret_cast<uintptr_t>(tensor->dl_tensor.data) +
       tensor->dl_tensor.byte_offset +
-      col_stride);
+      col_stride * c);
 
     void* col_data = 0;
     RMM_TRY(RMM_ALLOC(&col_data, bytes, 0));

@@ -14,70 +14,173 @@
  * limitations under the License.
  */
 
-#include "cudf.h"
-#include "io/utilities/wrapper_utils.hpp"
-#include "utilities/error_utils.hpp"
-#include "utilities/wrapper_types.hpp"
+#include <cudf/cudf.h>
+#include <io/utilities/wrapper_utils.hpp>
+#include <utilities/error_utils.hpp>
+#include <utilities/wrapper_types.hpp>
+#include <utilities/bit_util.cuh>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
+#include <nvstrings/NVCategory.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <fstream>
 #include <algorithm>
 
+// Functor for type-dispatcher converts columns into strings
+struct column_to_strings_fn
+{
+    const gdf_column* column;
+    gdf_valid_type* valid;
+    gdf_size_type row_offset, rows;
+    const char* true_string;
+    const char* false_string;
+    template<typename T>
+    NVStrings* operator()()
+    {
+        throw std::runtime_error("column type not supported");
+    }
+
+    // convert cudf time units to nvstrings timestamp units
+    NVStrings::timestamp_units cudf2nvs( gdf_time_unit time_unit )
+    {
+        if( time_unit==TIME_UNIT_s )
+            return NVStrings::seconds;
+        if( time_unit==TIME_UNIT_us )
+            return NVStrings::us;
+        if( time_unit==TIME_UNIT_ns )
+            return NVStrings::ns;
+        return NVStrings::ms;
+    }
+};
+
+// specialization code for each type
+template<>
+NVStrings* column_to_strings_fn::operator()<int8_t>()
+{
+    auto d_src = (static_cast<const int8_t*>(column->data)) + row_offset;
+    device_buffer<int32_t> int_buffer(rows);
+    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+        [] __device__(const int8_t value) { return int32_t{value}; });
+    return NVStrings::itos(int_buffer.data(), rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<int16_t>()
+{
+    auto d_src = (static_cast<const int16_t*>(column->data)) + row_offset;
+    device_buffer<int32_t> int_buffer(rows);
+    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, int_buffer.data(),
+        [] __device__(const int16_t value) { return int32_t{value}; });
+    return NVStrings::itos(int_buffer.data(), rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<int32_t>()
+{
+    return NVStrings::itos((static_cast<const int32_t*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<int64_t>()
+{
+    return NVStrings::ltos((static_cast<const int64_t*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<float>()
+{
+    return NVStrings::ftos((static_cast<const float*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<double>()
+{
+    return NVStrings::dtos((static_cast<const double*>(column->data)) + row_offset, rows, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::bool8>()
+{
+    if( sizeof(bool) == sizeof(cudf::bool8) )
+        return NVStrings::create_from_bools((static_cast<const bool*>(column->data)) + row_offset, rows, true_string, false_string, valid);
+    else
+    {
+        auto d_src = (static_cast<const cudf::bool8*>(column->data)) + row_offset;
+        device_buffer<bool> bool_buffer(rows);
+        thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, bool_buffer.data(),
+                [] __device__(const cudf::bool8 value) { return bool{value}; });
+        return NVStrings::create_from_bools(bool_buffer.data(), rows, true_string, false_string, valid);
+    }
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::date32>()
+{
+    NVStrings::timestamp_units units = NVStrings::days;
+    if( column->dtype_info.time_unit != TIME_UNIT_NONE )
+        units = cudf2nvs(column->dtype_info.time_unit);
+    auto d_src = (static_cast<const cudf::date32*>(column->data)) + row_offset;
+    device_buffer<unsigned long> ulong_buffer(rows);
+    thrust::transform( rmm::exec_policy()->on(0), d_src, d_src + rows, ulong_buffer.data(),
+        [] __device__(const cudf::date32 value) { return (unsigned long)(int32_t{value}); });
+    return NVStrings::long2timestamp(ulong_buffer.data(), rows, units, nullptr, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::date64>()
+{
+    return NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data) + row_offset, rows,
+                                     NVStrings::ms, nullptr, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::timestamp>()
+{
+    NVStrings::timestamp_units units = cudf2nvs(column->dtype_info.time_unit);
+    return NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data) + row_offset, rows,
+                                     units, nullptr, valid);
+}
+
+template<>
+NVStrings* column_to_strings_fn::operator()<cudf::nvstring_category>()
+{
+    NVCategory* category = reinterpret_cast<NVCategory*>(column->dtype_info.category);
+    CUDF_EXPECTS( category != nullptr, "write_csv: invalid category column");
+    return category->gather_strings((static_cast<const int32_t*>(column->data)) + row_offset, rows);
+}
+
+
 //
 // This is called by the write_csv method below.
 //
 // Parameters:
-// - column:    The column to be converted.
+// - column: The column to be converted.
+// - row_offset: Number entries from the beginning to skip; must be multiple of 8.
+// - rows: Number of rows from the offset that should be converted for this column.
 // - delimiter: Separator to append to the column strings
 // - null_representation: String to use for null entries
 // - true_string: String to use for 'true' values in boolean columns
 // - false_string: String to use for 'false' values in boolean columns
 // Return: NVStrings instance formated for CSV column output.
 //
-NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, const char* null_representation, const char* true_string, const char* false_string )
+NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_offset, gdf_size_type rows,
+                                 const char* delimiter, const char* null_representation,
+                                 const char* true_string, const char* false_string )
 {
     NVStrings* rtn = nullptr;
-    gdf_size_type rows = column->size;
+    // point the null bitmask to the next set of bits associated with this chunk of rows
     gdf_valid_type* valid = column->valid;
-    switch( column->dtype )
-    {
-        case GDF_STRING:
-            rtn = (static_cast<NVStrings*>(column->data))->copy();
-            break;
-        case GDF_BOOL8:
-            {
-            auto d_src = static_cast<const cudf::bool8*>(column->data);
-            device_buffer<bool> bool_buffer(rows);
-            thrust::transform(
-                rmm::exec_policy()->on(0), d_src, d_src + rows,
-                bool_buffer.data(),
-                [] __device__(const cudf::bool8 value) { return bool{value}; });
-            rtn = NVStrings::create_from_bools(bool_buffer.data(), rows,
-                                               true_string, false_string, valid);
-            }
-            break;
-        case GDF_INT32:
-            rtn = NVStrings::itos(static_cast<const int32_t*>(column->data),rows,valid);
-            break;
-        case GDF_INT64:
-            rtn = NVStrings::ltos(static_cast<const int64_t*>(column->data),rows,valid);
-            break;
-        case GDF_FLOAT32:
-            rtn = NVStrings::ftos(static_cast<const float*>(column->data),rows,valid);
-            break;
-        case GDF_FLOAT64:
-            rtn = NVStrings::dtos(static_cast<const double*>(column->data),rows,valid);
-            break;
-        case GDF_DATE64:
-            rtn = NVStrings::long2timestamp(static_cast<const uint64_t*>(column->data),rows,NVStrings::seconds,nullptr,valid);
-            break;
-        default:
-            break;
-    }
+    if( valid )                                    // normalize row_offset (number of bits here)
+        valid += (row_offset / GDF_VALID_BITSIZE); // to appropriate pointer for the bitmask
+
+    if( column->dtype == GDF_STRING )
+        rtn = (static_cast<NVStrings*>(column->data))->sublist(row_offset,row_offset+rows);
+    else
+        rtn = cudf::type_dispatcher(column->dtype, column_to_strings_fn{column,valid,row_offset,rows,true_string,false_string});
+
     CUDF_EXPECTS( rtn != nullptr, "write_csv: unsupported column type");
 
     // replace nulls if specified
@@ -89,7 +192,7 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
     }
 
     // probably could collapse this more
-    bool bquoted = (column->dtype==GDF_STRING);
+    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64);
     // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
@@ -133,9 +236,9 @@ NVStrings* column_to_strings_csv( gdf_column* column, const char* delimiter, con
 gdf_error write_csv(csv_write_arg* args)
 {
     // when args becomes a struct/class these can be modified
-    gdf_column** columns = args->columns;
+    auto columns = args->columns;
     unsigned int count = (unsigned int)args->num_cols;
-    gdf_size_type rows = columns[0]->size;
+    gdf_size_type total_rows = columns[0]->size;
     const char* filepath = args->filepath;
     char delimiter[2] = {',','\0'};
     if( args->delimiter )
@@ -143,9 +246,12 @@ gdf_error write_csv(csv_write_arg* args)
     const char* terminator = "\n";
     if( args->line_terminator )
         terminator = args->line_terminator;
-    const char* narep = args->na_rep;
+    const char* narep = "";
+    if( args->na_rep )
+        narep = args->na_rep;
     const char* true_value = (args->true_value ? args->true_value : "true");
     const char* false_value = (args->false_value ? args->false_value : "false");
+    bool include_header = args->include_header;
 
     // check for issues here
     CUDF_EXPECTS( filepath!=nullptr, "write_csv: filepath not specified" );
@@ -154,14 +260,14 @@ gdf_error write_csv(csv_write_arg* args)
 
     // check all columns are the same size
     const bool all_sizes_match = std::all_of( columns, columns+count,
-        [rows] (gdf_column* col) {
+        [total_rows] (auto col) {
             if( col->dtype==GDF_STRING )
             {
                 NVStrings* strs = (NVStrings*)col->data;
                 unsigned int elems = strs != nullptr ? strs->size() : 0;
-                return (rows==(gdf_size_type)elems);
+                return (total_rows==(gdf_size_type)elems);
             }
-            return (rows==col->size);
+            return (total_rows==col->size);
         });
     CUDF_EXPECTS( all_sizes_match, "write_csv: columns sizes do not match" );
 
@@ -170,92 +276,116 @@ gdf_error write_csv(csv_write_arg* args)
     CUDF_EXPECTS( filecsv.is_open(), "write_csv: file could not be opened");
 
     //
-    // It would be good if we could chunk this.
-    // Use the rows*count calculation and a memory threshold to
-    // output a subset of rows at a time instead of the whole thing at once.
-    // The entire CSV must fit in CPU memory before writing it out.
+    // This outputs the CSV in row chunks to save memory.
+    // Maybe we can use the total_rows*count calculation and a memory threshold
+    // instead of an arbitrary chunk count.
+    // The entire CSV chunk must fit in CPU memory before writing it out.
     //
-    // Compute string lengths for each string to go into the CSV output.
-    std::unique_ptr<int[]> pstring_lengths(new int[rows*count]); // matrix of lengths
-    int* string_lengths = pstring_lengths.get(); // each string length in each row,column
-    size_t memsize = 0;
-    for( unsigned int idx=0; idx < count; ++idx )
-    {
-        gdf_column* col = columns[idx];
-        const char* delim = ((idx+1)<count ? delimiter : terminator);
-        NVStrings* strs = column_to_strings_csv(col,delim,narep,true_value,false_value);
-        memsize += strs->byte_count(string_lengths + (idx*rows),false);
-        NVStrings::destroy(strs);
-    }
+    gdf_size_type rows_chunk = (args->rows_per_chunk/8)*8; // must be divisible by 8
+    CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
-    //
-    // Example string_lengths matrix for 4 columns and 7 rows
-    //                                     row-sums
-    // col0:   1,  1,  2, 11, 12,  7,  7 |  41
-    // col1:   1,  1,  2,  2,  3,  7,  6 |  22
-    // col2:  20, 20, 20, 20, 20, 20, 20 | 140
-    // col3:   5,  6,  4,  6,  4,  4,  5 |  34
-    //        --------------------------------
-    // col-   27, 28, 28, 39, 39, 38, 38 = 237   (for reference only)
-    // sums
-    //
-    // Need to convert this into the following -- string_locations (below)
-    //     0,  27,  55,  83, 122, 161, 199
-    //     1,  28,  57,  94, 134, 168, 206
-    //     2,  29,  59,  96, 137, 175, 212
-    //    22,  49,  79, 116, 157, 195, 232
-    //
-    // This is essentially an exclusive-scan (prefix-sum) across columns.
-    // Moving left-to-right, add up each column and carry each value to the next column.
-    // Looks like we could transpose the matrix, scan it, and then untranspose it.
-    // Should be able to parallelize the math for this -- will look at prefix-sum algorithms.
-    //
-    std::vector<char> buffer(memsize+1);
-    std::vector<size_t> string_locations(rows*count); // all the memory pointers for each column
-    string_locations[0] = 0; // first one is always 0
-    // compute offsets as described above into locations matrix
-    size_t offset = 0;
-    for( gdf_size_type jdx=0; jdx < rows; ++jdx )
+    gdf_size_type row_offset = 0;
+    gdf_size_type rows = total_rows;
+    while( rows > 0 )
     {
-        // add up column values for each row
-        // this is essentially an exclusive-scan across columns
-        string_locations[jdx] = (size_t)(buffer.data() + offset); // initialize first item
+        if( rows > rows_chunk )
+            rows = rows_chunk;
+        //
+        // Compute string lengths for each string to go into the CSV output.
+        std::unique_ptr<int[]> pstring_lengths(new int[rows*count]); // matrix of lengths
+        int* string_lengths = pstring_lengths.get(); // each string length in each row,column
+        size_t memsize = 0;
         for( unsigned int idx=0; idx < count; ++idx )
         {
-            int* in = string_lengths + (idx*rows);
-            int len = in[jdx];
-            offset += (len > 0 ? len:0);
-            if( (idx+1) < count )
+            const gdf_column* col = columns[idx];
+            const char* delim = ((idx+1)<count ? delimiter : terminator);
+            NVStrings* strs = column_to_strings_csv(col,row_offset,rows,delim,narep,true_value,false_value);
+            memsize += strs->byte_count(string_lengths + (idx*rows),false);
+            NVStrings::destroy(strs);
+        }
+
+        //
+        // Example string_lengths matrix for 4 columns and 7 rows
+        //                                     row-sums
+        // col0:   1,  1,  2, 11, 12,  7,  7 |  41
+        // col1:   1,  1,  2,  2,  3,  7,  6 |  22
+        // col2:  20, 20, 20, 20, 20, 20, 20 | 140
+        // col3:   5,  6,  4,  6,  4,  4,  5 |  34
+        //        --------------------------------
+        // col-   27, 28, 28, 39, 39, 38, 38 = 237   (for reference only)
+        // sums
+        //
+        // Need to convert this into the following -- string_locations (below)
+        //     0,  27,  55,  83, 122, 161, 199
+        //     1,  28,  57,  94, 134, 168, 206
+        //     2,  29,  59,  96, 137, 175, 212
+        //    22,  49,  79, 116, 157, 195, 232
+        //
+        // This is essentially an exclusive-scan (prefix-sum) across columns.
+        // Moving left-to-right, add up each column and carry each value to the next column.
+        // Looks like we could transpose the matrix, scan it, and then untranspose it.
+        // Should be able to parallelize the math for this -- will look at prefix-sum algorithms.
+        //
+        std::vector<char> buffer(memsize+1);
+        std::vector<size_t> string_locations(rows*count); // all the memory pointers for each column
+        string_locations[0] = 0; // first one is always 0
+        // compute offsets as described above into locations matrix
+        size_t offset = 0;
+        for( gdf_size_type jdx=0; jdx < rows; ++jdx )
+        {
+            // add up column values for each row
+            // this is essentially an exclusive-scan across columns
+            string_locations[jdx] = (size_t)(buffer.data() + offset); // initialize first item
+            for( unsigned int idx=0; idx < count; ++idx )
             {
-                size_t* out = string_locations.data() + ((idx+1)*rows);
-                out[jdx] = (size_t)(buffer.data() + offset);
+                int* in = string_lengths + (idx*rows);
+                int len = in[jdx];
+                offset += (len > 0 ? len:0);
+                if( (idx+1) < count )
+                {
+                    size_t* out = string_locations.data() + ((idx+1)*rows);
+                    out[jdx] = (size_t)(buffer.data() + offset);
+                }
             }
         }
+        // now fill in the memory one column at a time
+        for( unsigned int idx=0; idx < count; ++idx )
+        {
+            const gdf_column* col = columns[idx];
+            const char* delim = ((idx+1)<count ? delimiter : terminator);
+            NVStrings* strs = column_to_strings_csv(col,row_offset,rows,delim,narep,true_value,false_value);
+            size_t* colptrs = string_locations.data() + (idx*rows);
+            // to_host places all the strings into their correct positions in host memory
+            strs->to_host((char**)colptrs,0,rows);
+            NVStrings::destroy(strs);
+        }
+        //buffer[memsize] = 0; // just so we can printf if needed
+        // now write buffer to file
+        // first write the header
+        if(include_header)
+        {
+            for( unsigned int idx=0; idx < count; ++idx )
+            {
+                const gdf_column* col = columns[idx];
+                const char* delim = ((idx+1)<count ? delimiter : terminator);
+                if( col->col_name )
+                    filecsv << "\"" << col->col_name << "\"";
+                filecsv << delim;
+            }
+        }
+        // now write the data
+        filecsv.write(buffer.data(),memsize);
+
+        // get ready for the next chunk of rows
+        row_offset += rows_chunk;
+        if( row_offset < total_rows )
+            rows = total_rows - row_offset;
+        else
+            rows = 0;
+        // prevent header for subsequent chunks
+        include_header = false;
     }
-    // now fill in the memory one column at a time
-    for( unsigned int idx=0; idx < count; ++idx )
-    {
-        gdf_column* col = columns[idx];
-        const char* delim = ((idx+1)<count ? delimiter : terminator);
-        NVStrings* strs = column_to_strings_csv(col,delim,narep,true_value,false_value);
-        size_t* colptrs = string_locations.data() + (idx*rows);
-        // to_host places all the strings into their correct positions in host memory
-        strs->to_host((char**)colptrs,0,rows);
-        NVStrings::destroy(strs);
-    }
-    //buffer[memsize] = 0; // just so we can printf if needed
-    // now write buffer to file
-    // first write the header
-    for( unsigned int idx=0; idx < count; ++idx )
-    {
-        gdf_column* col = columns[idx];
-        const char* delim = ((idx+1)<count ? delimiter : terminator);
-        if( col->col_name )
-            filecsv << "\"" << col->col_name << "\"";
-        filecsv << delim;
-    }
-    // now write the data
-    filecsv.write(buffer.data(),memsize);
+
     filecsv.close();
     return gdf_error::GDF_SUCCESS;
 }

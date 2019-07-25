@@ -77,11 +77,19 @@ struct wrapper
   using value_type = T;                                          ///< The underlying fundamental type of the wrapper
   value_type value;                                              ///< The wrapped value
 
+  template <gdf_dtype dtype = type_id,
+            std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE
   constexpr explicit wrapper(T v) : value{v} {}
 
-  CUDA_HOST_DEVICE_CALLABLE
-  explicit operator value_type() const { return this->value; }
+  template <gdf_dtype dtype = type_id,
+            std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
+  CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(T v)
+      : value{static_cast<bool>(v)} {}
+
+  CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
+    return this->value;
+  }
 
   // enable conversion to arithmetic types *only* for the cudf::bool8 wrapper
   // (defined later in this file as wrapper<gdf_bool8, GDF_BOOL8>)
@@ -220,7 +228,6 @@ wrapper<T,type_id> operator/(wrapper<T,type_id> const& lhs, wrapper<T,type_id> c
      * 
      * @returns A reference to the underlying wrapped value  
      */
-/* ----------------------------------------------------------------------------*/
 template <typename T, gdf_dtype type_id>
 CUDA_HOST_DEVICE_CALLABLE
 typename wrapper<T, type_id>::value_type &
@@ -349,10 +356,8 @@ using bool8 = detail::wrapper<gdf_bool8, GDF_BOOL8>;
 // We can't rely on --expt-relaxed-constexpr here because `bool8` is not a
 // scalar type. See CUDA Programming guide
 // https://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#constexpr-variables
-#define HOST_DEVICE_CONSTANT
 #ifdef __CUDA_ARCH__
 __device__ __constant__ static bool8 true_v{gdf_bool8{1}};
-
 __device__ __constant__ static bool8 false_v{gdf_bool8{0}};
 #else
 static constexpr bool8 true_v{gdf_bool8{1}};
@@ -458,6 +463,13 @@ cudf::bool8& operator/=(cudf::bool8 &lhs, cudf::bool8 const &rhs)
 {
   lhs = lhs / rhs;
   return lhs;
+}
+
+template <typename T, gdf_dtype type_id>
+CUDA_HOST_DEVICE_CALLABLE
+cudf::bool8 operator!(wrapper<T,type_id> const& me)
+{
+  return static_cast<cudf::bool8>( ! static_cast<bool>(me.value) );
 }
 
 } // namespace detail

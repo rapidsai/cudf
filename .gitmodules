@@ -2,10 +2,6 @@
 	path = thirdparty/cub
 	url = https://github.com/rapidsai/thirdparty-cub.git
 	branch = cudf-cub
-[submodule "thirdparty/rmm"]
-	path = thirdparty/rmm
-	url = https://github.com/rapidsai/rmm.git
-	branch = branch-0.7
 [submodule "thirdparty/dlpack"]
 	path = thirdparty/dlpack
 	url = https://github.com/rapidsai/dlpack.git
@@ -13,4 +9,4 @@
 [submodule "thirdparty/jitify"]
 	path = thirdparty/jitify
 	url = https://github.com/rapidsai/jitify.git
-	branch = cudf
+	branch = feature/api_v2

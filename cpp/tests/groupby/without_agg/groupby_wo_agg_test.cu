@@ -22,14 +22,14 @@
 #include <typeinfo>
 #include <memory>
 
-#include "gtest/gtest.h"
-#include "gmock/gmock.h"
+#include <gtest/gtest.h>
+#include <gmock/gmock.h>
 
-#include <cudf.h>
-#include <groupby.hpp>
-#include <table.hpp>
+#include <cudf/cudf.h>
+#include <cudf/groupby.hpp>
+#include <cudf/table.hpp>
 
-#include "utilities/cudf_utils.h"
+#include <utilities/cudf_utils.h>
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
@@ -39,11 +39,11 @@
 #include "../groupby_test_helpers.cuh"
 
 // See this header for all valid handling
-#include "bitmask/legacy_bitmask.hpp"
+#include <bitmask/legacy/legacy_bitmask.hpp>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
-#include "rmm/thrust_rmm_allocator.h"
+#include <rmm/thrust_rmm_allocator.h>
 
 namespace without_agg {
 
@@ -184,24 +184,26 @@ struct GroupByWoAggTest : public GdfTest {
     cudf::table input_table(group_by_input_key, num_columns);
     
     cudf::table output_table;
-    rmm::device_vector<gdf_index_type> indices_arr;
+    gdf_column indices_col;
     EXPECT_NO_THROW(std::tie(output_table,
-                            indices_arr) = gdf_group_by_without_aggregations(input_table,
+                            indices_col) = gdf_group_by_without_aggregations(input_table,
                                                                             num_columns,
                                                                             groupby_col_indices.data(),
                                                                             &context));
 
-    copy_output_with_array(output_table.begin(), cpu_data_cols_out, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
+    copy_output_with_array(output_table.begin(), cpu_data_cols_out, static_cast<gdf_size_type *>(indices_col.data), indices_col.size, this->cpu_out_indices);
 
     // Free results
+    gdf_column_free(&indices_col);
     std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);
       delete col;
-    });    
+    });
   }
 
   void compare_gdf_result(map_t& reference_map) {
+
     ASSERT_EQ(cpu_out_indices.size(), reference_map.size()) << "Size of gdf result does not match reference result\n";
 
       auto ref_size = reference_map.size();
@@ -398,16 +400,17 @@ struct GroupValidTest : public GroupByWoAggTest<test_parameters>
     cudf::table input_table(group_by_input_key, num_columns);
 
     cudf::table output_table;
-    rmm::device_vector<gdf_index_type> indices_arr;
+    gdf_column indices_col;
     EXPECT_NO_THROW(std::tie(output_table,
-                            indices_arr) = gdf_group_by_without_aggregations(input_table,
+                            indices_col) = gdf_group_by_without_aggregations(input_table,
                                                                             num_columns,
                                                                             groupby_col_indices.data(),
                                                                             &this->context));
     copy_output_with_array_with_nulls(
-            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, indices_arr.data().get(), indices_arr.size(), this->cpu_out_indices);
+            output_table.begin(), this->cpu_data_cols_out, this->cpu_data_cols_out_valid, static_cast<gdf_size_type *>(indices_col.data), indices_col.size, this->cpu_out_indices);
 
     // Free results
+    gdf_column_free(&indices_col);
     std::for_each(output_table.begin(), output_table.end(), [](gdf_column* col){
       RMM_FREE(col->data, 0);
       RMM_FREE(col->valid, 0);
@@ -468,6 +471,5 @@ TYPED_TEST(GroupValidTest, AllKeysDifferent)
     this->compute_gdf_result_with_nulls();
     this->compare_gdf_result_with_nulls(reference_map);
 }
-
 
 } //namespace: without_agg

@@ -21,7 +21,7 @@
 #include <table/device_table.cuh>
 #include <hash/hash_functions.cuh>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
 #include <thrust/sort.h>

@@ -17,7 +17,7 @@
 #ifndef CUDF_TEST_FIXTURES_H
 #define CUDF_TEST_FIXTURES_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 

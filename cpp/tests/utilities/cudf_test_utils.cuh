@@ -22,13 +22,13 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
 #include <utilities/type_dispatcher.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
 
-#include <thrust/equal.h>
+#include <thrust/logical.h>
 
 #include <bitset>
 #include <numeric> // for std::accumulate
@@ -182,12 +182,13 @@ inline void print_typed_column(const gdf_column& column, unsigned min_element_pr
  *
  * @note See the @ref gdf_column variant
  */
-void print_gdf_column(gdf_column const *column, unsigned min_element_print_width = 1);
+void print_gdf_column(gdf_column const *column, unsigned min_element_print_width = 1,
+                      std::ostream& stream = std::cout);
 
 
 /** ---------------------------------------------------------------------------*
  * @brief prints validity data from either a host or device pointer
- * 
+ *
  * @param validity_mask The validity bitmask to print
  * @param length Length of the mask in bits
  *
@@ -224,7 +225,7 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
     RMM_FREE(col->data, 0);
     RMM_FREE(col->valid, 0);
   };
-  gdf_col_pointer the_column{new gdf_column, deleter};
+  gdf_col_pointer the_column{new gdf_column{}, deleter};
 
   // Allocate device storage for gdf_column and copy contents from host_vector
   RMM_ALLOC(&(the_column->data), host_vector.size() * sizeof(ColumnType), 0);
@@ -233,12 +234,11 @@ gdf_col_pointer create_gdf_column(std::vector<ColumnType> const & host_vector,
   // Fill the gdf_column members
   the_column->size = host_vector.size();
   the_column->dtype = gdf_col_type;
-  gdf_dtype_extra_info extra_info;
-  extra_info.time_unit = TIME_UNIT_NONE;
+  gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
   the_column->dtype_info = extra_info;
   the_column->col_name = nullptr;
 
-  // If a validity bitmask vector was passed in, allocate device storage 
+  // If a validity bitmask vector was passed in, allocate device storage
   // and copy its contents from the host vector
   if(valid_vector.size() > 0)
   {
@@ -268,7 +268,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
   for(size_t row = 0; row < num_rows; ++row){
     if(true == bit_initializer(row, col_index))
     {
-      gdf::util::turn_bit_on(valid_masks.data(), row);
+      cudf::util::turn_bit_on(valid_masks.data(), row);
     }
   }
 
@@ -279,7 +279,7 @@ gdf_col_pointer init_gdf_column(std::vector<T> data, size_t col_index, valid_ini
 // a gdf_column and append it to a vector of gdf_columns
 template<typename valid_initializer_t, std::size_t I = 0, typename... Tp>
   inline typename std::enable_if<I == sizeof...(Tp), void>::type
-convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t, 
+convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tuple<std::vector<Tp>...>& t,
                              valid_initializer_t bit_initializer)
 {
   //bottom of compile-time recursion
@@ -303,7 +303,7 @@ convert_tuple_to_gdf_columns(std::vector<gdf_col_pointer> &gdf_columns,std::tupl
 
 // Converts a tuple of host vectors into a vector of gdf_columns
 template<typename valid_initializer_t, typename... Tp>
-std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns, 
+std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns,
                                                     valid_initializer_t bit_initializer)
 {
   std::vector<gdf_col_pointer> gdf_columns;
@@ -312,12 +312,12 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>..
 }
 
 
-// Overload for default initialization of validity bitmasks which 
+// Overload for default initialization of validity bitmasks which
 // sets every element to valid
 template<typename... Tp>
 std::vector<gdf_col_pointer> initialize_gdf_columns(std::tuple<std::vector<Tp>...> & host_columns )
 {
-  return initialize_gdf_columns(host_columns, 
+  return initialize_gdf_columns(host_columns,
                                 [](const size_t row, const size_t col){return true;});
 }
 
@@ -329,7 +329,7 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(
   std::vector<gdf_col_pointer> gdf_columns;
 
   size_t col = 0;
-  
+
   for (auto column : columns)
   {
     // Creates a gdf_column for the current vector and pushes it onto
@@ -347,42 +347,18 @@ std::vector<gdf_col_pointer> initialize_gdf_columns(
   return initialize_gdf_columns(columns,
                                 [](size_t row, size_t col) { return true; });
 }
+
 /**
  * ---------------------------------------------------------------------------*
  * @brief Compare two gdf_columns on all fields, including pairwise comparison
- * of data and valid arrays
+ * of data and valid arrays. 
+ * 
+ * Uses type_dispatcher to dispatch the data comparison
  *
- * @tparam T The type of columns to compare
  * @param left The left column
  * @param right The right column
  * @return bool Whether or not the columns are equal
  * ---------------------------------------------------------------------------**/
-template <typename T>
-bool gdf_equal_columns(gdf_column* left, gdf_column* right)
-{
-  if (left->size != right->size) return false;
-  if (left->dtype != right->dtype) return false;
-  if (left->null_count != right->null_count) return false;
-  if (left->dtype_info.time_unit != right->dtype_info.time_unit) return false;
+bool gdf_equal_columns(gdf_column const& left, gdf_column const &right);
 
-  if (!(left->data && right->data))
-    return false;  // if one is null but not both
-
-  if (!thrust::equal(thrust::cuda::par, reinterpret_cast<T*>(left->data),
-                     reinterpret_cast<T*>(left->data) + left->size,
-                     reinterpret_cast<T*>(right->data)))
-    return false;
-
-  if (!(left->valid && right->valid))
-    return false;  // if one is null but not both
-
-  if (!thrust::equal(thrust::cuda::par, left->valid,
-                     left->valid + gdf_num_bitmask_elements(left->size),
-                     right->valid))
-    return false;
-  
-  return true;
-}
-
-
-#endif
+#endif // CUDF_TEST_UTILS_CUH_

@@ -18,9 +18,10 @@
  */
 
 
-#include "gtest/gtest.h"
+#include <gtest/gtest.h>
 
-#include <cudf.h>
+#include <cudf/binaryop.hpp>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 
 #include <cudf/functions.h>
@@ -31,21 +32,21 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
-#include "rmm/rmm.h"
+#include <rmm/rmm.h>
 #include <cstring>
-#include "tests/utilities/cudf_test_utils.cuh"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/nvcategory_utils.cuh"
-#include "bitmask/bit_mask.cuh"
+#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/nvcategory_utils.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include "tests/utilities/valid_vectors.h"
+#include <tests/utilities/valid_vectors.h>
 
-#include "string/nvcategory_util.hpp"
+#include <string/nvcategory_util.hpp>
 
 
 gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
-	gdf_column * column = new gdf_column;
+	gdf_column * column = new gdf_column{};
 	int32_t * data;
 	EXPECT_EQ(RMM_ALLOC(&data, num_rows * sizeof(int32_t) , 0), RMM_SUCCESS);
 	CUDA_TRY( cudaMemcpy(data, host_data, sizeof(int32_t) * num_rows, cudaMemcpyHostToDevice) );
@@ -62,7 +63,7 @@ gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
 }
 
 gdf_column * create_column_constant(gdf_size_type num_rows, int value){
-	gdf_column * column = new gdf_column;
+	gdf_column * column = new gdf_column{};
 	int * data;
 	bit_mask::bit_mask_t * valid;
 	bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -94,7 +95,7 @@ int32_t* generate_int_data(gdf_size_type num_rows, size_t max_value, bool print=
 struct NVCategoryTest : public GdfTest
 {
 	gdf_column * create_boolean_column(gdf_size_type num_rows){
-		gdf_column * column = new gdf_column;
+		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
 		bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -109,7 +110,7 @@ struct NVCategoryTest : public GdfTest
 	}
 
 	gdf_column * create_indices_column(gdf_size_type num_rows){
-		gdf_column * column = new gdf_column;
+		gdf_column * column = new gdf_column{};
 		int * data;
 		bit_mask::bit_mask_t * valid;
 		bit_mask::create_bit_mask(&valid, num_rows,1);
@@ -246,232 +247,6 @@ struct AggOp<agg_op::CNT> {
     }
 };
 
-struct NVCategoryGroupByTest : public GdfTest
-{
-	using output_t = int32_t;
-	using map_t = std::map<std::string, output_t>;
-
-	const int length = 1;
-
-	std::vector<std::string> input_key;
-	std::vector<output_t> input_value;
-
-  std::vector<std::string> output_key;
-	std::vector<output_t> output_value;
-	
-	gdf_context ctxt = {0, GDF_HASH, 1};
-
-	// Containers for the raw pointers to the gdf_columns that will be used as input
-  // to the gdf_group_by functions
-  std::vector<gdf_column*> gdf_raw_input_key_columns;
-  gdf_column* gdf_raw_input_val_column;
-  std::vector<gdf_column*> gdf_raw_output_key_columns;
-	gdf_column* gdf_raw_output_val_column;
-
-	void copy_output(gdf_column* group_by_output_key, std::vector<std::string>& output_key,
-									 gdf_column* group_by_output_value, std::vector<output_t>& output_value){
-	
-		const size_t keys_size = group_by_output_key->size;
-		NVStrings * temp_strings = static_cast<NVCategory *>(group_by_output_key->dtype_info.category)->gather_strings( 
-			(nv_category_index_type *) group_by_output_key->data, keys_size, DEVICE_ALLOCATED );
-	
-		char** host_strings = new char*[keys_size];
-		for(size_t i=0;i<keys_size;i++){
-			host_strings[i]=new char[length+1];
-		}
-	
-		temp_strings->to_host(host_strings, 0, keys_size);
-	
-		for(size_t i=0;i<keys_size;i++){
-			host_strings[i][length]=0;
-		}
-	
-		output_key = std::vector<std::string>(host_strings, host_strings + keys_size);
-
-		NVStrings::destroy(temp_strings);
-
-		for(size_t i = 0; i < keys_size; i++){
-			delete host_strings[i];
-		}
-		delete host_strings;
-
-		output_value.resize(group_by_output_value->size);
-		CUDA_TRY( cudaMemcpy(output_value.data(), group_by_output_value->data, sizeof(output_t) * group_by_output_value->size, cudaMemcpyDeviceToHost) );
-	}
-
-	void compute_gdf_result(agg_op op, const gdf_error expected_error = GDF_SUCCESS, bool print=false)
-  {
-    const int num_columns = gdf_raw_input_key_columns.size();
-
-    gdf_error error{GDF_SUCCESS};
-
-    gdf_column **group_by_input_key = gdf_raw_input_key_columns.data();
-    gdf_column *group_by_input_value = gdf_raw_input_val_column;
-
-    gdf_column **group_by_output_key = gdf_raw_output_key_columns.data();
-    gdf_column *group_by_output_value = gdf_raw_output_val_column;
-
-    switch(op)
-    {
-      case agg_op::MIN:
-        {
-          error = gdf_group_by_min(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-          break;
-        }
-      case agg_op::MAX:
-        {
-          error = gdf_group_by_max(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-          break;
-        }
-      case agg_op::SUM:
-        {
-          error = gdf_group_by_sum(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-          break;
-        }
-      case agg_op::CNT:
-        {
-          error = gdf_group_by_count(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-          break;
-        }
-      case agg_op::AVG:
-        {
-          error = gdf_group_by_avg(num_columns,
-                                   group_by_input_key,
-                                   group_by_input_value,
-                                   nullptr,
-                                   group_by_output_key,
-                                   group_by_output_value,
-                                   &ctxt);
-          break;
-        }
-      default:
-        error = GDF_INVALID_AGGREGATOR;
-    }
-    EXPECT_EQ(expected_error, error) << "The gdf group by function did not complete successfully";
-
-		if (GDF_SUCCESS == expected_error ) {
-			copy_output(
-				group_by_output_key[0], output_key,
-				group_by_output_value, output_value);
-
-			if (print){
-				print_gdf_column(group_by_output_key[0]);
-				print_gdf_column(group_by_output_value);
-			}
-		}
-	}
-
-	template <agg_op op>
-	map_t compute_reference_solution() {
-			map_t key_val_map;
-
-      if (op != agg_op::AVG) {
-          AggOp<op> agg;
-          for (size_t i = 0; i < input_value.size(); ++i) {
-              auto l_key = input_key[i];
-              auto sch = key_val_map.find(l_key);
-              if (sch != key_val_map.end()) {
-                  key_val_map[l_key] = agg(sch->second, input_value[i]);
-              } else {
-                  key_val_map[l_key] = agg(input_value[i]);
-              }
-          }
-      } else {
-          std::map<std::string, size_t> counters;
-          AggOp<agg_op::SUM> agg;
-          for (size_t i = 0; i < input_value.size(); ++i) {
-              auto l_key = input_key[i];
-              counters[l_key]++;
-              auto sch = key_val_map.find(l_key);
-              if (sch != key_val_map.end()) {
-                  key_val_map[l_key] = agg(sch->second, input_value[i]);
-              } else {
-                  key_val_map[l_key] = agg(input_value[i]);
-              }
-          }
-          for (auto& e : key_val_map) {
-              e.second = e.second/counters[e.first];
-          }
-      }
-      return key_val_map;
-	}
-
-  void compare_gdf_result(map_t& reference_map) {
-		ASSERT_EQ(output_value.size(), reference_map.size()) <<
-				"Size of gdf result does not match reference result\n";
-		ASSERT_EQ(output_key.size(), output_value.size()) <<
-				"Mismatch between aggregation and group by column size.";
-		for (size_t i = 0; i < output_value.size(); ++i) {
-				auto sch = reference_map.find(output_key[i]);
-				bool found = (sch != reference_map.end());
-				EXPECT_EQ(found, true);
-				if (!found) { continue; }
-				if (std::is_integral<output_t>::value) {
-						EXPECT_EQ(sch->second, output_value[i]);
-				} else {
-						EXPECT_NEAR(sch->second, output_value[i], sch->second/100.0);
-				}
-				//ensure no duplicates in gdf output
-				reference_map.erase(sch);
-		}
-	}
-};
-
-TEST_F(NVCategoryGroupByTest, TEST_NVCATEGORY_GROUPBY)
-{
-	bool print = false;
-	const int rows_size = 64;
-	const agg_op op = agg_op::AVG;
-
-	const char ** string_data = cudf::test::generate_string_data(rows_size, length, print);
-
-  input_key = std::vector<std::string>(string_data, string_data + rows_size);
-
-	gdf_column * category_column = cudf::test::create_nv_category_column_strings(string_data, rows_size);
-
-	gdf_raw_input_key_columns.push_back(category_column);
-
-	int32_t* host_values = generate_int_data(rows_size, 10, print);
-	input_value = std::vector<int32_t>(host_values, host_values + rows_size);
-
-	gdf_raw_input_val_column = create_column_ints(host_values, rows_size);
-
-	gdf_column * gdf_raw_output_key_column = cudf::test::create_nv_category_column(rows_size, true);
-	gdf_raw_output_key_columns.push_back(gdf_raw_output_key_column);
-
-	gdf_raw_output_val_column = create_column_constant(rows_size, 1);
-
-	this->compute_gdf_result(op, GDF_SUCCESS, print);
-
-	auto reference_map = this->compute_reference_solution<op>();
-
-	this->compare_gdf_result(reference_map);
-}
-
 TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 {
 	bool print = false;
@@ -509,8 +284,7 @@ TEST_F(NVCategoryTest, TEST_NVCATEGORY_COMPARISON)
 	left_column->dtype_info.category = new_category;
 	right_column->dtype_info.category = new_category;
 
-	gdf_error err = gdf_binary_operation_v_v(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL);
-	EXPECT_EQ(GDF_SUCCESS, err);
+	CUDF_EXPECT_NO_THROW(cudf::binary_operation(output_column, left_column, right_column, gdf_binary_operator::GDF_EQUAL));
 
 	int8_t * data = new int8_t[rows_size];
 	CUDA_TRY( cudaMemcpy(data, output_column->data, sizeof(int8_t) * rows_size, cudaMemcpyDeviceToHost) );
@@ -751,8 +525,8 @@ struct NVCategoryJoinTest : public GdfTest
     EXPECT_EQ(gdf_raw_left_columns.size(), gdf_raw_right_columns.size()) << "Mismatch columns size";
     EXPECT_EQ(left_join_idx.size(), right_join_idx.size()) << "Mismatch join indexes size";
 
-    gdf_column left_result;
-    gdf_column right_result;
+    gdf_column left_result{};
+    gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
 
@@ -1079,4 +853,3 @@ TEST_F(NVCategoryJoinTest, join_test_bug){
   }
 
 }
-

@@ -17,14 +17,14 @@
 #ifndef DEVICE_TABLE_H
 #define DEVICE_TABLE_H
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
-#include <bitmask/bit_mask.cuh>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/bit_mask.cuh>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <hash/hash_functions.cuh>
 #include <hash/managed.cuh>
-#include <table.hpp>
+#include <cudf/table.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
 
@@ -126,7 +126,6 @@ class device_table {
   __host__ __device__ gdf_size_type num_columns() const { return _num_columns; }
   __host__ __device__ gdf_size_type num_rows() const { return _num_rows; }
   __host__ __device__ bool has_nulls() const { return _has_nulls; }
-  
 
  private:
   gdf_size_type _num_columns;  ///< The number of columns in the table
@@ -163,8 +162,9 @@ class device_table {
       CUDF_EXPECTS(_num_rows == columns[i]->size, "Column size mismatch");
       if (_num_rows > 0) {
         CUDF_EXPECTS(nullptr != columns[i]->data, "Column missing data.");
-        if (columns[i]->null_count > 0)
+        if (columns[i]->null_count > 0) {
           _has_nulls = true;
+        }
       }
       temp_columns[i] = *columns[i];
     }

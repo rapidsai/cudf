@@ -17,11 +17,11 @@
 #include <type_traits>
 #include <algorithm>
 
-#include "cudf.h"
-#include "dlpack/dlpack.h"
+#include <cudf/cudf.h>
+#include <dlpack/dlpack.h>
 
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/column_wrapper.cuh"
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
 
 template <class TestParameters>
 struct DLPackTypedTest : public GdfTest
@@ -112,7 +112,7 @@ namespace{
 
     T *init = new T[N];
     for (gdf_size_type c = 0; c < ncols; ++c)
-      for (gdf_size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i;
+      for (gdf_size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i * (c + 1);
 
     if (kDLGPU == device_type) {
       EXPECT_EQ(RMM_ALLOC(&data, bytesize, 0), RMM_SUCCESS);
@@ -250,7 +250,7 @@ TEST_F(DLPackTest, ToDLPack_EmptyDataset)
   ASSERT_EQ(gdf_to_dlpack(nullptr, columns, 0), GDF_DATASET_EMPTY);
   ASSERT_EQ(gdf_to_dlpack(tensor, columns, 0), GDF_DATASET_EMPTY);
 
-  columns[0] = new gdf_column;
+  columns[0] = new gdf_column{};
   columns[0]->dtype = GDF_FLOAT32;
   columns[0]->size = 0;
 
@@ -264,8 +264,8 @@ TEST_F(DLPackTest, ToDLPack_EmptyDataset)
 TEST_F(DLPackTest, ToDLPack_ColumnMismatch)
 {
   gdf_column **columns = new gdf_column*[2];
-  columns[0] = new gdf_column;
-  columns[1] = new gdf_column;
+  columns[0] = new gdf_column{};
+  columns[1] = new gdf_column{};
   columns[0]->size = columns[1]->size = 1;
   columns[0]->dtype = GDF_INT32;
   columns[1]->dtype = GDF_FLOAT32;
@@ -285,7 +285,7 @@ TEST_F(DLPackTest, ToDLPack_ColumnMismatch)
 TEST_F(DLPackTest, ToDLPack_NonNumerical)
 {
   gdf_column **columns = new gdf_column*[1];
-  columns[0] = new gdf_column;
+  columns[0] = new gdf_column{};
   columns[0]->size = 1;
 
   DLManagedTensor *tensor = new DLManagedTensor;
@@ -362,7 +362,7 @@ TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn)
     T *output = new T[length];
     cudaMemcpy(output, columns[c].data, length * sizeof(T), cudaMemcpyDefault);
     for (int64_t i = 0; i < length; i++)
-      EXPECT_EQ(static_cast<T>(i), output[i]);
+      EXPECT_EQ(static_cast<T>(i * (c + 1)), output[i]);
 
     delete [] output;
     gdf_column_free(&columns[c]);

@@ -32,7 +32,7 @@
  * with the given binary operator.
  * ---------------------------------------------------------------------------**/
 
-#include <cudf.h>
+#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/error_utils.hpp>

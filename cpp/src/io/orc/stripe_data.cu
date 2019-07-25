@@ -45,7 +45,10 @@
 #define IS_RLEv2(encoding_mode)         ((encoding_mode) >= DIRECT_V2)
 #define IS_DICTIONARY(encoding_mode)    ((encoding_mode) & 1)
 
-namespace orc { namespace gpu {
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 
 static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
 
@@ -126,6 +129,7 @@ struct orc_datadec_state_s
     int64_t first_tz_transition;        // first transition in timezone table
     int64_t last_tz_transition;         // last transition in timezone table
     int64_t utc_epoch;                  // kORCTimeToUTC - gmtOffset
+    RowGroup index;
 };
 
 
@@ -721,7 +725,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     // 11wwwwwn.nnnnnnnn.<base>.<delta>: delta encoding
                     uint32_t deltapos = varint_length<T>(bs, pos);
                     deltapos += varint_length<T>(bs, pos + deltapos);
-                    l = (l > 1) ? (l * n + 7) >> 3 : 0;
+                    l = (l > 1 && n > 2) ? (l * (n - 2) + 7) >> 3 : 0;
                     l += deltapos;
                 }
             }
@@ -889,17 +893,24 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
             uint32_t pw = pw_byte3 >> 8;
             uint32_t pgw = 1 + ((pw_byte3 >> 5) & 7); // patch gap width, 1 to 8 bits
             uint32_t pll = pw_byte3 & 0x1f;    // patch list length
-            uint32_t patch_pos = (tr < pll) ? bytestream_readbits(bs, pos * 8 + n*w, pgw+pw) + 1 : 0; // FIXME: pgw+pw > 32
-            uint32_t patch = patch_pos & ((1 << pw) - 1);
-            patch_pos >>= pw;
-            for (uint32_t k = 1; k < pll; k <<= 1)
+            if (pll != 0)
             {
-                uint32_t tmp = SHFL(patch_pos, (tr & ~k) | (k-1));
-                patch_pos += (tr & k) ? tmp : 0;
-            }
-            if (tr < pll && patch_pos < n)
-            {
-                vals[base + patch_pos] += patch << w;
+                uint64_t patch_pos64 = (tr < pll) ? bytestream_readbits64(bs, pos * 8 + ((n*w + 7) & ~7) + tr * (pgw + pw), pgw + pw) : 0;
+                uint32_t patch_pos;
+                T patch = 1;
+                patch <<= pw;
+                patch = (patch - 1) & (T)patch_pos64;
+                patch <<= w;
+                patch_pos = (uint32_t)(patch_pos64 >> pw);
+                for (uint32_t k = 1; k < pll; k <<= 1)
+                {
+                    uint32_t tmp = SHFL(patch_pos, (tr & ~k) | (k-1));
+                    patch_pos += (tr & k) ? tmp : 0;
+                }
+                if (tr < pll && patch_pos < n)
+                {
+                    vals[base + patch_pos] += patch;
+                }
             }
         }
         SYNCWARP();
@@ -1077,12 +1088,12 @@ static const __device__ __constant__ int64_t kPow10[19] =
  * @return number of values decoded
  *
  **/
-static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int numvals, int col_scale, int t)
+static __device__ int Decode_Decimals(orc_bytestream_s *bs, volatile orc_byterle_state_s *scratch, volatile int64_t *vals, int val_scale, int numvals, int col_scale, int t)
 {
 #if DECIMALS_AS_FLOAT64
-    int scale = (t < numvals) ? (int)vals[t] : 0;
+    int scale = (t < numvals) ? val_scale : 0;
 #else
-    int scale = (t < numvals) ? col_scale - (int)vals[t] : 0;
+    int scale = (t < numvals) ? col_scale - val_scale : 0;
 #endif
     if (t == 0)
     {
@@ -1563,35 +1574,70 @@ static const __device__ __constant__ uint32_t kTimestampNanoScale[8] =
  *
  * @param[in] chunks ColumnDesc device array
  * @param[in] global_dictionary Global dictionary device array
+ * @param[in] tz_table Timezone translation table
+ * @param[in] row_groups Optional row index data
  * @param[in] max_num_rows Maximum number of rows to load
  * @param[in] first_row Crop all rows below first_row
  * @param[in] num_chunks Number of column chunks (num_columns * num_stripes)
- * @param[in] stream CUDA stream to use, default 0
+ * @param[in] tz_len Length of timezone translation table (number of pairs)
+ * @param[in] num_rowgroups Number of row groups in row index data
+ * @param[in] rowidx_stride Row index stride
  *
  **/
 // blockDim {NTHREADS,1,1}
 extern "C" __global__ void __launch_bounds__(NTHREADS)
-gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, size_t max_num_rows, size_t first_row, uint32_t num_chunks, uint32_t tz_len)
+gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, int64_t *tz_table, RowGroup *row_groups, size_t max_num_rows, size_t first_row, uint32_t num_columns, uint32_t tz_len, uint32_t num_rowgroups, uint32_t rowidx_stride)
 {
     __shared__ __align__(16) orcdec_state_s state_g;
 
     orcdec_state_s * const s = &state_g;
+    uint32_t chunk_id;
     int t = threadIdx.x;
 
+    if (num_rowgroups > 0)
+    {
+        if (t < sizeof(RowGroup) / sizeof(uint32_t))
+        {
+            ((volatile uint32_t *)&s->top.data.index)[t] = ((const uint32_t *)&row_groups[blockIdx.y * num_columns + blockIdx.x])[t];
+        }
+        __syncthreads();
+        chunk_id = s->top.data.index.chunk_id;
+    }
+    else
+    {
+        chunk_id = blockIdx.x;
+    }
     if (t < sizeof(ColumnDesc) / sizeof(uint32_t))
     {
-        uint32_t chunk_id = blockIdx.x;
         ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
     }
     __syncthreads();
     if (t == 0)
     {
+        // If we have an index, seek to the initial run and update row positions
+        if (num_rowgroups > 0)
+        {
+            uint32_t ofs0 = min(s->top.data.index.strm_offset[0], s->chunk.strm_len[CI_DATA]);
+            uint32_t ofs1 = min(s->top.data.index.strm_offset[1], s->chunk.strm_len[CI_DATA2]);
+            uint32_t rowgroup_rowofs;
+            s->chunk.streams[CI_DATA] += ofs0;
+            s->chunk.strm_len[CI_DATA] -= ofs0;
+            s->chunk.streams[CI_DATA2] += ofs1;
+            s->chunk.strm_len[CI_DATA2] -= ofs1;
+            rowgroup_rowofs = min((blockIdx.y - min(s->chunk.rowgroup_id, blockIdx.y)) * rowidx_stride, s->chunk.num_rows);
+            s->chunk.start_row += rowgroup_rowofs;
+            s->chunk.num_rows -= rowgroup_rowofs;
+        }
         s->top.data.cur_row = max(s->chunk.start_row, max((int32_t)(first_row - s->chunk.skip_count), 0));
         s->top.data.end_row = s->chunk.start_row + s->chunk.num_rows;
         s->top.data.buffered_count = 0;
         if (s->top.data.end_row > first_row + max_num_rows)
         {
             s->top.data.end_row = static_cast<uint32_t>(first_row + max_num_rows);
+        }
+        if (num_rowgroups > 0)
+        {
+            s->top.data.end_row = min(s->top.data.end_row, s->chunk.start_row + rowidx_stride);
         }
         if (!IS_DICTIONARY(s->chunk.encoding_kind))
         {
@@ -1640,6 +1686,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
         // Decode data streams
         {
             uint32_t numvals = s->top.data.max_vals, secondary_val;
+            uint32_t vals_skipped = 0;
             if (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR
              || s->chunk.type_kind == TIMESTAMP)
             {
@@ -1675,6 +1722,31 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         s->vals.u32[t] = 0;
                     }
                 }
+                // If we're using an index, we may have to drop values from the initial run
+                if (num_rowgroups > 0)
+                {
+                    int cid = IS_DICTIONARY(s->chunk.encoding_kind) ? CI_DATA : CI_DATA2;
+                    uint32_t run_pos = s->top.data.index.run_pos[cid];
+                    if (run_pos)
+                    {
+                        vals_skipped = min(numvals, run_pos);
+                        __syncthreads();
+                        if (t == 0)
+                        {
+                            s->top.data.index.run_pos[cid] = 0;
+                        }
+                        numvals -= vals_skipped;
+                        if (t < numvals)
+                        {
+                            secondary_val = s->vals.u32[vals_skipped + t];
+                        }
+                        __syncthreads();
+                        if (t < numvals)
+                        {
+                            s->vals.u32[t] = secondary_val;
+                        }
+                    }
+                }
                 __syncthreads();
                 // For strings with direct encoding, we need to convert the lengths into an offset
                 if (!IS_DICTIONARY(s->chunk.encoding_kind))
@@ -1687,7 +1759,11 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                     }
                 }
                 // Adjust the maximum number of values
-                if (t == 0 && numvals > 0 && numvals < s->top.data.max_vals)
+                if (numvals == 0 && vals_skipped == 0)
+                {
+                    numvals = s->top.data.max_vals; // Just so that we don't hang if the stream is corrupted
+                }
+                if (t == 0 && numvals < s->top.data.max_vals)
                 {
                     s->top.data.max_vals = numvals;
                 }
@@ -1754,8 +1830,26 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 }
                 if (s->chunk.type_kind == DECIMAL)
                 {
+                    // If we're using an index, we may have to drop values from the initial run
+                    uint32_t skip = 0;
+                    int val_scale;
+                    if (num_rowgroups > 0)
+                    {
+                        uint32_t run_pos = s->top.data.index.run_pos[CI_DATA2];
+                        if (run_pos)
+                        {
+                            skip = min(numvals, run_pos);
+                            __syncthreads();
+                            if (t == 0)
+                            {
+                                s->top.data.index.run_pos[CI_DATA2] = 0;
+                            }
+                            numvals -= skip;
+                        }
+                    }
+                    val_scale = (t < numvals) ? (int)s->vals.i64[skip + t] : 0;
                     __syncthreads();
-                    numvals = Decode_Decimals(&s->bs, &s->u.rle8, s->vals.i64, numvals, s->chunk.decimal_scale, t);
+                    numvals = Decode_Decimals(&s->bs, &s->u.rle8, s->vals.i64, val_scale, numvals, s->chunk.decimal_scale, t);
                 }
                 __syncthreads();
             }
@@ -1788,18 +1882,33 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 __syncthreads();
             }
             __syncthreads();
-            if (t == 0 && numvals > 0 && numvals < s->top.data.max_vals)
+            vals_skipped = 0;
+            if (num_rowgroups > 0)
+            {
+                uint32_t run_pos = s->top.data.index.run_pos[CI_DATA] << ((s->chunk.type_kind == BOOLEAN) ? 3 : 0);
+                if (run_pos)
+                {
+                    vals_skipped = min(numvals, run_pos);
+                    numvals -= vals_skipped;
+                    __syncthreads();
+                    if (t == 0)
+                    {
+                        s->top.data.index.run_pos[CI_DATA] = 0;
+                    }
+                }
+            }
+            if (t == 0 && numvals + vals_skipped > 0 && numvals < s->top.data.max_vals)
             {
                 if (s->chunk.type_kind == TIMESTAMP)
                 {
-                    s->top.data.buffered_count = s->top.data.max_vals - numvals;
+                    s->top.data.buffered_count = s->top.data.max_vals - (numvals + vals_skipped);
                 }
                 s->top.data.max_vals = numvals;
             }
             __syncthreads();
             // Use the valid bits to compute non-null row positions until we get a full batch of values to decode
             DecodeRowPositions(s, first_row, t);
-            if (!s->top.data.nrows && !s->u.rowdec.nz_count)
+            if (!s->top.data.nrows && !s->u.rowdec.nz_count && !vals_skipped)
             {
                 // This is a bug (could happen with bitstream errors with a bad run that would produce more values than the number of remaining rows)
                 return;
@@ -1815,31 +1924,31 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                     {
                     case FLOAT:
                     case INT:
-                        reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t];
+                        reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
                         break;
                     case DOUBLE:
                     case LONG:
                     case DECIMAL:
-                        reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t];
+                        reinterpret_cast<uint64_t *>(data_out)[row] = s->vals.u64[t + vals_skipped];
                         break;
                     case SHORT:
-                        reinterpret_cast<uint16_t *>(data_out)[row] = static_cast<uint16_t>(s->vals.u32[t]);
+                        reinterpret_cast<uint16_t *>(data_out)[row] = static_cast<uint16_t>(s->vals.u32[t + vals_skipped]);
                         break;
                     case BYTE:
-                        reinterpret_cast<uint8_t *>(data_out)[row] = s->vals.u8[t];
+                        reinterpret_cast<uint8_t *>(data_out)[row] = s->vals.u8[t + vals_skipped];
                         break;
                     case BOOLEAN:
-                        reinterpret_cast<uint8_t *>(data_out)[row] = (s->vals.u8[t >> 3] >> ((~t) & 7)) & 1;
+                        reinterpret_cast<uint8_t *>(data_out)[row] = (s->vals.u8[(t + vals_skipped) >> 3] >> ((~t) & 7)) & 1;
                         break;
                     case DATE:
                         if (s->chunk.dtype_len == 8)
                         {
                             // Convert from days to milliseconds by multiplying by 24*3600*1000
-                            reinterpret_cast<int64_t *>(data_out)[row] = 86400000ll * (int64_t)s->vals.i32[t];
+                            reinterpret_cast<int64_t *>(data_out)[row] = 86400000ll * (int64_t)s->vals.i32[t + vals_skipped];
                         }
                         else
                         {
-                            reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t];
+                            reinterpret_cast<uint32_t *>(data_out)[row] = s->vals.u32[t + vals_skipped];
                         }
                         break;
                     case STRING:
@@ -1852,7 +1961,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         uint32_t count;
                         if (IS_DICTIONARY(s->chunk.encoding_kind))
                         {
-                            uint32_t dict_idx = s->vals.u32[t];
+                            uint32_t dict_idx = s->vals.u32[t + vals_skipped];
                             ptr = s->chunk.streams[CI_DICTIONARY];
                             if (dict_idx < s->chunk.dict_len)
                             {
@@ -1867,7 +1976,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         }
                         else
                         {
-                            uint32_t dict_idx = s->chunk.dictionary_start + s->vals.u32[t] - secondary_val;
+                            uint32_t dict_idx = s->chunk.dictionary_start + s->vals.u32[t + vals_skipped] - secondary_val;
                             count = secondary_val;
                             ptr = s->chunk.streams[CI_DATA] + dict_idx;
                             if (dict_idx + count > s->chunk.strm_len[CI_DATA])
@@ -1882,7 +1991,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                     }
                     case TIMESTAMP:
                     {
-                        int64_t seconds = s->vals.i64[t] + s->top.data.utc_epoch;
+                        int64_t seconds = s->vals.i64[t + vals_skipped] + s->top.data.utc_epoch;
                         uint32_t nanos = secondary_val;
                         nanos = (nanos >> 3) * kTimestampNanoScale[nanos & 7];
                         if (tz_len > 0)
@@ -1901,9 +2010,13 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             }
             __syncthreads();
             // Buffer secondary stream values
-            if (s->chunk.type_kind == TIMESTAMP && t >= s->top.data.max_vals && t < s->top.data.max_vals + s->top.data.buffered_count)
+            if (s->chunk.type_kind == TIMESTAMP)
             {
-                s->vals.u32[t - s->top.data.max_vals] = secondary_val;
+                int buffer_pos = s->top.data.max_vals + vals_skipped;
+                if (t >= buffer_pos && t < buffer_pos + s->top.data.buffered_count)
+                {
+                    s->vals.u32[t - buffer_pos] = secondary_val;
+                }
             }
             else if (s->chunk.type_kind == BOOLEAN && t < s->top.data.buffered_count)
             {
@@ -1957,20 +2070,25 @@ cudaError_t __host__ DecodeNullsAndStringDictionaries(ColumnDesc *chunks, Dictio
  * @param[in] first_row Crop all rows below first_row
  * @param[in] tz_table Timezone translation table
  * @param[in] tz_len Length of timezone translation table
+ * @param[in] row_groups Optional row index data
+ * @param[in] num_rowgroups Number of row groups in row index data
+ * @param[in] rowidx_stride Row index stride
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t __host__ DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_num_rows, size_t first_row,
-    int64_t *tz_table, size_t tz_len, cudaStream_t stream)
+    int64_t *tz_table, size_t tz_len, RowGroup *row_groups, uint32_t num_rowgroups, uint32_t rowidx_stride,
+    cudaStream_t stream)
 {
     uint32_t num_chunks = num_columns * num_stripes;
-    dim3 dim_block(NTHREADS, 1);
-    dim3 dim_grid(num_chunks, 1); // 1024 threads per chunk
-    gpuDecodeOrcColumnData <<< dim_grid, dim_block, 0, stream >>>(chunks, global_dictionary, tz_table, max_num_rows, first_row, num_chunks, (uint32_t)(tz_len >> 1));
+    dim3 dim_block(NTHREADS, 1); // 1024 threads per chunk
+    dim3 dim_grid((num_rowgroups > 0) ? num_columns : num_chunks, (num_rowgroups > 0) ? num_rowgroups : 1);
+    gpuDecodeOrcColumnData <<< dim_grid, dim_block, 0, stream >>>(chunks, global_dictionary, tz_table, row_groups, max_num_rows, first_row, num_columns, (uint32_t)(tz_len >> 1), num_rowgroups, rowidx_stride);
     return cudaSuccess;
 }
 
-
-
-};}; // orc::gpu namespace
+} // namespace gpu
+} // namespace orc
+} // namespace io
+} // namespace cudf
