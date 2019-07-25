@@ -205,32 +205,35 @@ table scatter(table const* source_table, gdf_index_type const scatter_map[],
               table const* target_table);
 
 /**
- * @brief Scatters one row (including null values) of gdf_scalar 
- * into a set of destination columns.
- * 
- * The row of the source scalars will be scattered to rows "scatter_map[i]" 
- * in the destination columns.
+ * @brief Scatters one row (including null values) of gdf_scalar into a set 
+ * of target columns. The source scalars will be scattered to rows 
+ * "scatter_map[i]" in the target columns. The result is return as a a set 
+ * of destination columns.
  *
- * `data` and `valid` of a specific row of the destination_column is kept 
+ * `data` and `valid` of a specific row of the target_column is kept 
  * unchanged if the `scatter_map` does not map to that row.
  * 
- * The datatypes between coresponding columns in the source and destination
+ * The datatypes between coresponding columns in the source and target
  * columns must be the same.
  *
  * If any index in scatter_map is outside the range of [0, num rows in
- * destination_columns), the result is undefined.
+ * target_columns), the result is undefined.
  *
  * If the same index appears more than once in scatter_map, the result is
  * undefined.
  *
+ * If the scalar is null (is_valid == false) and the target column does not
+ * have a valid bitmask, the destination column will have a bitmask allocated.
+ *
  * @Param[in] source_row The row to be scattered
  * @Param[in] scatter_map An array that maps to rows in the output columns.
- * @Param[out] destination_table A preallocated set of columns with a number
+ * @Param[in] target_table A preallocated set of columns with a number
  * of rows equal in size to the maximum index contained in scatter_map
+ * @return[out] The result of the scatter
  *
  */
-void scatter(const std::vector<gdf_scalar*>& source_row, gdf_index_type const scatter_map[],
-                  gdf_size_type num_scatter_rows, table* destination_table);
+table scatter(const std::vector<gdf_scalar*>& source_row, gdf_index_type const scatter_map[],
+                  gdf_size_type num_scatter_rows, table const* destination_table);
 
 /**
  * @brief Gathers the rows (including null values) of a set of source columns

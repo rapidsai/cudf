@@ -170,10 +170,8 @@ void scalar_scatter(const std::vector<gdf_scalar*>& source_row,
       auto f = source_row[i]->is_valid ?
         marking_bitmask_kernel<true> : marking_bitmask_kernel<false>;
       f<<<grid_size, block_size, 0, v_streams[i+n_cols]>>>(dest_valid, dest_col->size, scatter_map, num_scatter_rows);
-    }else{
-      CUDF_EXPECTS(source_row[i]->is_valid, "Scattering a null scalar to a column with NO valid array.");
+      set_null_count(*dest_col);
     }
-    set_null_count(*dest_col);
   }
 
 }
@@ -197,8 +195,13 @@ table scatter(table const* source_table, gdf_index_type const scatter_map[],
   for(int i = 0; i < n_cols; ++i){
     // Allocate bitmask for each column
     if(source_table->get_column(i)->null_count != 0 && target_table->get_column(i)->valid == nullptr){
+      
       gdf_size_type valid_size = gdf_valid_allocation_size(target_table->get_column(i)->size);
       RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
+      
+      gdf_size_type valid_size_set = gdf_num_bitmask_elements(target_table->get_column(i)->size);
+      CUDA_TRY(cudaMemset(output.get_column(i)->valid, 0xff, valid_size_set));
+    
     }
   }
 
@@ -208,10 +211,29 @@ table scatter(table const* source_table, gdf_index_type const scatter_map[],
 
 }
 
-void scatter(const std::vector<gdf_scalar*>& source_row, 
+table scatter(const std::vector<gdf_scalar*>& source_row, 
               gdf_index_type const scatter_map[],
-              gdf_size_type num_scatter_rows, table* destination_table){
-  detail::scalar_scatter(source_row, scatter_map, num_scatter_rows, destination_table);
+              gdf_size_type num_scatter_rows, table const* target_table){
+
+  const gdf_size_type n_cols = target_table->num_columns();
+
+  table output = copy(*target_table);
+  for(int i = 0; i < n_cols; ++i){
+    // Allocate bitmask for each column
+    if(source_row[i]->is_valid == false && target_table->get_column(i)->valid == nullptr){
+      
+      gdf_size_type valid_size = gdf_valid_allocation_size(target_table->get_column(i)->size);
+      RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
+    	
+      gdf_size_type valid_size_set = gdf_num_bitmask_elements(target_table->get_column(i)->size);
+      CUDA_TRY(cudaMemset(output.get_column(i)->valid, 0xff, valid_size_set));
+    
+    }
+  }
+
+  detail::scalar_scatter(source_row, scatter_map, num_scatter_rows, &output);
+  
+  return output;
 }
 
 }  // namespace cudf
