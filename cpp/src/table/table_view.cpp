@@ -54,7 +54,7 @@ template class table_view_base<mutable_column_view>;
 
 // Convert mutable view to immutable view
 mutable_table_view::operator table_view() {
-    return table_view{{begin(), end()}};
+  return table_view{{begin(), end()}};
 }
 
 }  // namespace cudf

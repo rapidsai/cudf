@@ -22,6 +22,8 @@
 #include <vector>
 
 namespace cudf {
+namespace exp {
+
 class table {
  public:
   table() = delete;
@@ -44,8 +46,45 @@ class table {
    *---------------------------------------------------------------------------**/
   table(std::vector<std::unique_ptr<column>>&& columns);
 
- private:
-  std::vector<std::unique_ptr<column>> _columns;
-};
+  /**---------------------------------------------------------------------------*
+   * @brief Copy the contents of a `table_view` to construct a new `table`.
+   *
+   * @param view The view whose contents will be copied to create a new `table`
+   *---------------------------------------------------------------------------**/
+  table(table_view view);
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of rows
+   *---------------------------------------------------------------------------**/
+  size_type num_rows() const noexcept { return _num_rows; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns an immutable, non-owning `table_view` of the contents of
+   *this `table`.
+   *---------------------------------------------------------------------------**/
+  table_view view() const;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Conversion operator to an immutable, non-owning `table_view` of the
+   * contents of this `table`.
+   *---------------------------------------------------------------------------**/
+  operator table_view() const;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a mutable, non-owning `mutable_table_view` of the contents
+   * of this `table`.
+   *---------------------------------------------------------------------------**/
+  mutable_table_view mutable_view();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Conversion operator to a mutable, non-owning `mutable_table_view` of
+   *the contents of this `table`.
+   *---------------------------------------------------------------------------**/
+  operator mutable_table_view();
+
+ private:
+  std::vector<std::unique_ptr<column>> _columns{};
+  size_type _num_rows{};
+};
+}  // namespace exp
 }  // namespace cudf
