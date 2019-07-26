@@ -30,8 +30,10 @@ requirements:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - dlpack
 
 test:
   commands:
@@ -45,7 +47,7 @@ test:
     - test -f $PREFIX/include/cudf/stream_compaction.hpp
     - test -f $PREFIX/include/cudf/copying.hpp
     - test -f $PREFIX/include/cudf/io_functions.hpp
-    - test -f $PREFIX/include/cudf/table.hpp
+    - test -f $PREFIX/include/cudf/legacy/table.hpp
     - test -f $PREFIX/include/cudf/cudf.h
     - test -f $PREFIX/include/cudf/io_readers.hpp
     - test -f $PREFIX/include/cudf/types.h

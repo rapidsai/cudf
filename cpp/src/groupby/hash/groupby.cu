@@ -19,11 +19,11 @@
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <string/nvcategory_util.hpp>
-#include <table/device_table.cuh>
-#include <table/device_table_row_operators.cuh>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
