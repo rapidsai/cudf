@@ -87,6 +87,14 @@ mutable_column_view::mutable_column_view(
   }
 }
 
+// Update the null count
+void mutable_column_view::set_null_count(size_type new_null_count) noexcept {
+  if (new_null_count > 0) {
+    CUDF_EXPECTS(nullable(), "Invalid null count.");
+  }
+  _null_count = new_null_count;
+}
+
 // Conversion from mutable to immutable
 mutable_column_view::operator column_view() const {
   // Convert children to immutable views

@@ -94,7 +94,7 @@ size_type column::null_count() const {
 
 void column::set_null_count(size_type new_null_count) {
   if (new_null_count > 0) {
-    CUDF_EXPECTS(_null_mask.size() > 0, "Invalid null count.");
+    CUDF_EXPECTS(nullable() > 0, "Invalid null count.");
   }
   _null_count = new_null_count;
 }

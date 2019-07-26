@@ -21,7 +21,6 @@
 
 namespace cudf {
 
-
 namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data as a column of elements,
@@ -44,7 +43,6 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 class column_view_base {
  public:
-
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
    * the specified type.
@@ -183,12 +181,9 @@ class column_view_base {
                    size_type offset = 0);
 };
 
-
-class mutable_column_view_base : public column_view_base{
-    public:
-
-    protected:
-
+class mutable_column_view_base : public column_view_base {
+ public:
+ protected:
 };
 }  // namespace detail
 
@@ -385,11 +380,11 @@ class mutable_column_view : public detail::column_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Set the null count
    *
+   * @throws cudf::logic_error if `new_null_count > 0` and `nullable() == false`
+   *
    * @param new_null_count The new null count
    *---------------------------------------------------------------------------**/
-  void set_null_count(size_type new_null_count) noexcept {
-    _null_count = new_null_count;
-  }
+  void set_null_count(size_type new_null_count) noexcept;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a reference to the specified child
