@@ -57,6 +57,7 @@
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
+- PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 
 ## Bug Fixes
 
@@ -84,6 +85,7 @@
 - PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2202 Fix issue with unary ops mishandling empty input
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
@@ -95,6 +97,7 @@
 - PR #2361 Fixed issue with `codes` of CategoricalIndex
 - PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
 - PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
+- PR #2401 Fix to a scalar datetime(of type Days) issue
 - PR #2411 Fixed failures on binary op on single element string column
 
 
