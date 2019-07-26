@@ -38,7 +38,7 @@ def read_json(
             "Using CPU via Pandas to read JSON dataset, this may "
             "be GPU accelerated in the future"
         )
-        if kwargs.get('orient') == 'table':
+        if kwargs.get("orient") == "table":
             pd_value = pd.read_json(
                 path_or_buf,
                 lines=lines,

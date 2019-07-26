@@ -199,23 +199,23 @@ def test_multiindex_getitem(pdf, gdf, pdfIndex):
     "key_tuple",
     [
         # return 2 rows, 0 remaining keys = dataframe with entire index
-        ('a', 'store', 'clouds', 'fire'),
-        (('a', 'store', 'clouds', 'fire'), slice(None)),
+        ("a", "store", "clouds", "fire"),
+        (("a", "store", "clouds", "fire"), slice(None)),
         # return 2 rows, 1 remaining key = dataframe with n-k index columns
-        ('a', 'store', 'storm'),
-        (('a', 'store', 'storm'), slice(None)),
+        ("a", "store", "storm"),
+        (("a", "store", "storm"), slice(None)),
         # return 2 rows, 2 remaining keys = dataframe with n-k index columns
-        ('a', 'store'),
-        (('a', 'store'), slice(None)),
+        ("a", "store"),
+        (("a", "store"), slice(None)),
         # return 2 rows, n-1 remaining keys = dataframe with n-k index columns
-        ('a',),
-        (('a',), slice(None)),
+        ("a",),
+        (("a",), slice(None)),
         # return 1 row, 0 remaining keys = dataframe with entire index
-        ('a', 'store', 'storm', 'smoke'),
-        (('a', 'store', 'storm', 'smoke'), slice(None)),
+        ("a", "store", "storm", "smoke"),
+        (("a", "store", "storm", "smoke"), slice(None)),
         # return 1 row and 1 remaining key = series
-        ('c', 'forest', 'clear'),
-        (('c', 'forest', 'clear'), slice(None)),
+        ("c", "forest", "clear"),
+        (("c", "forest", "clear"), slice(None)),
     ],
 )
 def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
@@ -223,8 +223,7 @@ def test_multiindex_loc(pdf, gdf, pdfIndex, key_tuple):
     assert_eq(pdfIndex, gdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[key_tuple],
-              gdf.loc[key_tuple])
+    assert_eq(pdf.loc[key_tuple], gdf.loc[key_tuple])
 
 
 def test_multiindex_loc_slice(pdf, gdf, pdfIndex):
@@ -582,17 +581,10 @@ def test_multiindex_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
     gresult = gdf.iloc[iloc_rows, iloc_columns]
     if isinstance(gresult, cudf.DataFrame):
         assert_eq(
-            presult,
-            gresult,
-            check_index_type=False,
-            check_column_type=False,
+            presult, gresult, check_index_type=False, check_column_type=False
         )
     else:
-        assert_eq(
-            presult,
-            gresult,
-            check_index_type=False,
-        )
+        assert_eq(presult, gresult, check_index_type=False)
 
 
 @pytest.mark.parametrize(
@@ -632,22 +624,15 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
     gdf = gdf.T
     presult = pdf.iloc[iloc_rows, iloc_columns]
     gresult = gdf.iloc[iloc_rows, iloc_columns]
-    if hasattr(gresult, 'name') and isinstance(gresult.name, tuple):
-        if 'cudf' in gresult.name[len(gresult.name) - 1]:
-            gresult.name = gresult.name[0:len(gresult.name) - 1]
+    if hasattr(gresult, "name") and isinstance(gresult.name, tuple):
+        if "cudf" in gresult.name[len(gresult.name) - 1]:
+            gresult.name = gresult.name[0 : len(gresult.name) - 1]
     if isinstance(presult, cudf.DataFrame):
         assert_eq(
-            presult,
-            gresult,
-            check_index_type=False,
-            check_column_type=False,
+            presult, gresult, check_index_type=False, check_column_type=False
         )
     else:
-        assert_eq(
-            presult,
-            gresult,
-            check_index_type=False,
-        )
+        assert_eq(presult, gresult, check_index_type=False)
 
 
 def test_multiindex_to_frame(pdfIndex):
@@ -701,17 +686,24 @@ def test_multiindex_rows_with_wildcard(pdf, gdf, pdfIndex):
     gdfIndex = cudf.from_pandas(pdfIndex)
     pdf.index = pdfIndex
     gdf.index = gdfIndex
-    assert_eq(pdf.loc[('a',), :],
-              gdf.loc[('a',), :])
-    assert_eq(pdf.loc[(('a'), ('store')), :],
-              gdf.loc[(('a'), ('store')), :])
-    assert_eq(pdf.loc[(('a'), ('store'), ('storm')), :],
-              gdf.loc[(('a'), ('store'), ('storm')), :])
-    assert_eq(pdf.loc[(('a'), ('store'), ('storm'), ('smoke')), :],
-              gdf.loc[(('a'), ('store'), ('storm'), ('smoke')), :])
-    assert_eq(pdf.loc[(slice(None), 'store'), :],
-              gdf.loc[(slice(None), 'store'), :])
-    assert_eq(pdf.loc[(slice(None), slice(None), 'storm'), :],
-              gdf.loc[(slice(None), slice(None), 'storm'), :])
-    assert_eq(pdf.loc[(slice(None), slice(None), slice(None), 'smoke'), :],
-              gdf.loc[(slice(None), slice(None), slice(None), 'smoke'), :])
+    assert_eq(pdf.loc[("a",), :], gdf.loc[("a",), :])
+    assert_eq(pdf.loc[(("a"), ("store")), :], gdf.loc[(("a"), ("store")), :])
+    assert_eq(
+        pdf.loc[(("a"), ("store"), ("storm")), :],
+        gdf.loc[(("a"), ("store"), ("storm")), :],
+    )
+    assert_eq(
+        pdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
+        gdf.loc[(("a"), ("store"), ("storm"), ("smoke")), :],
+    )
+    assert_eq(
+        pdf.loc[(slice(None), "store"), :], gdf.loc[(slice(None), "store"), :]
+    )
+    assert_eq(
+        pdf.loc[(slice(None), slice(None), "storm"), :],
+        gdf.loc[(slice(None), slice(None), "storm"), :],
+    )
+    assert_eq(
+        pdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
+        gdf.loc[(slice(None), slice(None), slice(None), "smoke"), :],
+    )

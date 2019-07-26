@@ -68,11 +68,11 @@ class Index(object):
         indices: An array-like that maps to values contained in this Index.
         """
         from cudf.dataframe.series import Series
+
         # Gather
         indices = Series(indices)
         index = cpp_copying.apply_gather_array(
-            self.gpu_values,
-            indices.data.mem
+            self.gpu_values, indices.data.mem
         )
         col = self.as_column().replace(data=index.data)
         new_index = col

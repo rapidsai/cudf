@@ -213,9 +213,7 @@ class DataFrame(object):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(
-            c
-            for c in self.columns
-            if isinstance(c, str) and c.isidentifier()
+            c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
 
@@ -892,8 +890,7 @@ class DataFrame(object):
                 msg = (
                     f"Length mismatch: Expected axis has "
                     "%d elements, new values "
-                    "have %d elements"
-                    % (len(self), len(_index))
+                    "have %d elements" % (len(self), len(_index))
                 )
                 raise ValueError(msg)
             self._index = _index
@@ -1075,7 +1072,8 @@ class DataFrame(object):
         result = DataFrame()
         for idx in range(len(positions)):
             result[column_names[positions[idx]]] = column_values[
-                positions[idx]]
+                positions[idx]
+            ]
         result._index = self._index
         return result
 

@@ -504,6 +504,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     def element_indexing(self, arg):
         from cudf.dataframe.numerical import NumericalColumn
+
         if isinstance(arg, Number):
             arg = int(arg)
             if arg < 0:

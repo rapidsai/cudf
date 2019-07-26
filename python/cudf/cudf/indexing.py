@@ -151,6 +151,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         from cudf.dataframe.index import as_index
         from cudf.utils.cudautils import arange
         from cudf import MultiIndex
+
         # Step 1: Gather columns
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
@@ -229,8 +230,11 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         columns = self._get_column_selection(arg[1])
         if isinstance(self._df.columns, MultiIndex):
             columns_df = self._df.columns._get_column_major(self._df, arg[1])
-            if len(columns_df) == 0 and len(columns_df.columns) == 0 and not\
-                    isinstance(arg[0], slice):
+            if (
+                len(columns_df) == 0
+                and len(columns_df.columns) == 0
+                and not isinstance(arg[0], slice)
+            ):
                 result = Series([], name=arg[0])
                 result._index = columns_df.columns.copy(deep=False)
                 return result
@@ -247,8 +251,9 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         # Gather the rows specified by the first tuple arg
         if isinstance(columns_df.index, MultiIndex):
             df = columns_df.index._get_row_major(columns_df, arg[0])
-            if (len(df) == 1 and len(columns_df) >= 1) and not\
-                    (isinstance(arg[0], slice) or isinstance(arg[1], slice)):
+            if (len(df) == 1 and len(columns_df) >= 1) and not (
+                isinstance(arg[0], slice) or isinstance(arg[1], slice)
+            ):
                 # Pandas returns a numpy scalar in this case
                 return df[0]
             if self._can_downcast_to_series(df, arg):
@@ -276,7 +281,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
         if self._can_downcast_to_series(df, arg):
             if isinstance(df.columns, MultiIndex):
                 if len(df) > 0 and not (
-                        isinstance(arg[0], slice) or isinstance(arg[1], slice)
+                    isinstance(arg[0], slice) or isinstance(arg[1], slice)
                 ):
                     return list(df._cols.values())[0][0]
                 elif df.shape[1] > 1:
@@ -293,6 +298,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return self._downcast_to_series(df, arg)
         if df.shape[0] == 0 and df.shape[1] == 0:
             from cudf.dataframe.index import RangeIndex
+
             slice_len = arg[0].stop or len(self._df)
             start, stop, step = arg[0].indices(slice_len)
             df._index = RangeIndex(start, stop)

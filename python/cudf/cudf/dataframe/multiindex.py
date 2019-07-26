@@ -211,16 +211,20 @@ class MultiIndex(Index):
         from cudf import Series
         from cudf import concat
         from cudf.utils.cudautils import arange
+
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
             if row == slice(None):
                 continue
             lookup[index._source_data.columns[idx]] = Series(row)
-        data_table = concat([
-            index._source_data,
-            DataFrame({'idx': Series(arange(len(index._source_data)))})
-        ], axis=1)
-        result = lookup.merge(data_table)['idx']
+        data_table = concat(
+            [
+                index._source_data,
+                DataFrame({"idx": Series(arange(len(index._source_data)))}),
+            ],
+            axis=1,
+        )
+        result = lookup.merge(data_table)["idx"]
         # Avoid computing levels unless the result of the merge is empty,
         # which suggests that a KeyError should be raised.
         if len(result) == 0:
@@ -234,6 +238,7 @@ class MultiIndex(Index):
     def _get_valid_indices_by_tuple(self, index, row_tuple, max_length):
         from cudf.utils.cudautils import arange
         from cudf import Series
+
         # Instructions for Slicing
         # if tuple, get first and last elements of tuple
         # if open beginning tuple, get 0 to highest valid_index
@@ -250,23 +255,15 @@ class MultiIndex(Index):
                 start, stop, step = row_tuple.indices(stop)
                 return arange(start, stop, step)
             start_values = self._compute_validity_mask(
-                index,
-                row_tuple.start,
-                max_length
+                index, row_tuple.start, max_length
             )
             stop_values = self._compute_validity_mask(
-                index,
-                row_tuple.stop,
-                max_length
+                index, row_tuple.stop, max_length
             )
             return Series(arange(start_values.min(), stop_values.max() + 1))
         elif isinstance(row_tuple, numbers.Number):
             return row_tuple
-        return self._compute_validity_mask(
-            index,
-            row_tuple,
-            max_length
-        )
+        return self._compute_validity_mask(index, row_tuple, max_length)
 
     def _index_and_downcast(self, result, index, index_key):
         from cudf import DataFrame
@@ -275,12 +272,8 @@ class MultiIndex(Index):
         if isinstance(index_key, (numbers.Number, slice)):
             index_key = [index_key]
         if (
-                (
-                    len(index_key) > 0
-                    and not isinstance(index_key, tuple)
-                )
-                or isinstance(index_key[0], slice)
-        ):
+            len(index_key) > 0 and not isinstance(index_key, tuple)
+        ) or isinstance(index_key[0], slice):
             index_key = index_key[0]
 
         slice_access = False
@@ -295,7 +288,7 @@ class MultiIndex(Index):
         for k in range(size, len(index._source_data.columns)):
             out_index.add_column(
                 index.names[k],
-                index._source_data[index._source_data.columns[k]]
+                index._source_data[index._source_data.columns[k]],
             )
 
         # If there's only one column remaining in the output index, convert
@@ -316,13 +309,11 @@ class MultiIndex(Index):
                 # convert to Series
                 series_name = []
                 for idx, code in enumerate(index._source_data.columns):
-                    series_name.append(
-                        result.columns._source_data[code][0]
-                    )
+                    series_name.append(result.columns._source_data[code][0])
                 result = Series(
                     list(result._cols.values())[0],
                     name=series_name,
-                    index=result.index
+                    index=result.index,
                 )
                 result.name = tuple(series_name)
             elif len(result) == 0 and len(result.columns) == 0:
@@ -331,9 +322,7 @@ class MultiIndex(Index):
                     # the one expected result column
                     series_name = []
                     for idx, code in enumerate(index._source_data.columns):
-                        series_name.append(
-                            index._source_data[code][0]
-                        )
+                        series_name.append(index._source_data[code][0])
                     result = Series([], name=series_name)
                     result.name = tuple(series_name)
             elif (len(out_index.columns)) > 0:
@@ -347,10 +336,9 @@ class MultiIndex(Index):
 
     def _get_row_major(self, df, row_tuple):
         from cudf import Series
+
         valid_indices = self._get_valid_indices_by_tuple(
-            df.index,
-            row_tuple,
-            len(df.index)
+            df.index, row_tuple, len(df.index)
         )
         indices = Series(valid_indices)
         result = df.take(indices)
@@ -360,10 +348,9 @@ class MultiIndex(Index):
     def _get_column_major(self, df, row_tuple):
         from cudf import Series
         from cudf import DataFrame
+
         valid_indices = self._get_valid_indices_by_tuple(
-            df.columns,
-            row_tuple,
-            len(df._cols)
+            df.columns, row_tuple, len(df._cols)
         )
         result = df.take_columns(valid_indices)
 
@@ -377,12 +364,9 @@ class MultiIndex(Index):
             result_columns._codes = clear_codes
             result_columns._source_data = clear_codes
             result.columns = result_columns
-        elif (
-            len(row_tuple) < len(self.levels)
-            and (
-                not slice(None) in row_tuple
-                and not isinstance(row_tuple[0], slice)
-            )
+        elif len(row_tuple) < len(self.levels) and (
+            not slice(None) in row_tuple
+            and not isinstance(row_tuple[0], slice)
         ):
             columns = self._popn(len(row_tuple))
             result.columns = columns.take(valid_indices)
