@@ -1141,13 +1141,8 @@ class DataFrame(object):
            being added
         """
         if SCALAR:
-            if hasattr(series, "dtype") and (
-                series.dtype
-                in (
-                    np.dtype("datetime64[D]"),
-                    np.dtype("datetime64[M]"),
-                    np.dtype("datetime64[Y]"),
-                )
+            if hasattr(series, "dtype") and np.issubdtype(
+                series.dtype, np.datetime64
             ):
                 series = series.astype("datetime64[ms]")
             col = series
