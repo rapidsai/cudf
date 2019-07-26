@@ -26,7 +26,7 @@
 #include <cudf/types.hpp>
 #include <utilities/wrapper_types.hpp>
 
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 
 #include <random>
 #include <utilities/cuda_utils.hpp>

@@ -272,7 +272,7 @@ add_library(cudf SHARED
             src/comms/ipc/ipc.cu
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
-            src/table/table.cpp
+            src/table/legacy/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
