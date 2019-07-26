@@ -95,6 +95,7 @@
 - PR #2361 Fixed issue with `codes` of CategoricalIndex
 - PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
 - PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
+- PR #2411 Fixed failures on binary op on single element string column
 
 
 # cuDF 0.8.0 (27 June 2019)
