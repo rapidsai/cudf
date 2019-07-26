@@ -755,6 +755,8 @@ class StringColumn(columnops.TypedColumnBase):
             col = utils.scalar_broadcast_to(
                 other, shape=len(self), dtype="object"
             )
+            if isinstance(col, str):
+                col = StringColumn(nvstrings.to_device([col]))
             return self.replace(data=col.data)
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
