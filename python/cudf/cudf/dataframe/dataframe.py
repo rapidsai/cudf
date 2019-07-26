@@ -3140,7 +3140,7 @@ class DataFrame(object):
                 result[k] = res
         if isinstance(q, numbers.Number):
             result = result.fillna(np.nan)
-            result = result.iloc[0,:]
+            result = result.iloc[0]
             result.index = as_index(self.columns)
             result.name = q
             return result

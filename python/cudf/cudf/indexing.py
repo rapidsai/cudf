@@ -292,7 +292,6 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
                     return list(df._cols.values())[0]
             return self._downcast_to_series(df, arg)
         if df.shape[0] == 0 and df.shape[1] == 0:
-            from cudf.utils import utils
             from cudf.dataframe.index import RangeIndex
             slice_len = arg[0].stop or len(self._df)
             start, stop, step = arg[0].indices(slice_len)
