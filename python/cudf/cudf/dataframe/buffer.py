@@ -42,14 +42,19 @@ class Buffer(object):
                 size = mem.size
         if capacity is None:
             capacity = size
+        # memoryviews can come from UCX when the length of the DataFrame
+        # is 0 -- for example: joins resulting in empty frames or metadata
+        if isinstance(mem, memoryview):
+            mem = np.frombuffer(mem, dtype=header["dtype"])
+            size = mem.size
         if not (
             isinstance(mem, np.ndarray)
             or numba.cuda.driver.is_device_memory(mem)
         ):
-            # this is probably a ucp_py.BufferRegion
+            # this is probably a ucp_py.BufferRegionmem
             # check the header for info -- this should be encoded from
             # serialization process.  Lastly, `typestr` and `shape` *must*
-            # manually # set *before* consuming the buffer as a DeviceNDArray
+            # manually set *before* consuming the buffer as a DeviceNDArray
             mem.typestr = header.get("dtype", "B")
             mem.shape = header.get("shape", len(mem))
             size = mem.shape[0]
