@@ -19,7 +19,7 @@
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <string/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>

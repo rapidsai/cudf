@@ -15,7 +15,7 @@
  */
 
 #include "copy_if.cuh"
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <rmm/thrust_rmm_allocator.h>
