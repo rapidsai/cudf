@@ -24,6 +24,16 @@
 
 namespace cudf {
 
+/**---------------------------------------------------------------------------*
+ * @brief Controls the allocation/initialization of a column's null mask.
+ *---------------------------------------------------------------------------**/
+enum mask_state {
+  UNALLOCATED,    ///< Null mask not allocated
+  UNINITIALIZED,  ///< Null mask allocated, but not initialized
+  ALL_VALID,      ///< Null mask allocated, initialized to all valid values
+  ALL_NULL        ///< Null mask allocated, initialized to all NULL
+};
+
 class column {
  public:
   ~column() = default;
@@ -35,65 +45,67 @@ class column {
    * @brief Construct a new column by deep copying the device memory of another
    * column.
    *
+   * All device memory allocation and copying is done using the
+   * `device_memory_resource` and `stream` from `other`.
+   *
    * @param other The other column to copy
    *---------------------------------------------------------------------------**/
   column(column const& other) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column object by moving the device memory from
-   * another column.
+   * @brief Construct a new column object from the contents of another `column`
+   * using move semantics. After the move, `other` is guaranteed to be empty.
    *
    * @param other The other column whose device memory will be moved to the new
    * column
    *---------------------------------------------------------------------------**/
-  column(column&& other) = default;
+  column(column&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from a size, type, and option to
-   * allocate bitmask.
+   * @brief Construct a new column and allocate sufficient storage to hold
+   * `size` elements of the specified `type` with an optional null mask
+   * allocation.
    *
-   * Both the data and bitmask are unintialized.
+   * @note This constructor only supports fixed-width types.
    *
    * @param[in] type The element type
    * @param[in] size The number of elements in the column
-   * @param[in] allocate_bitmask Optionally allocate an appropriate sized
-   * bitmask
+   * @param[in] state Optional, controls allocation/initialization of the
+   * column's null mask. By default, no null mask is allocated.
+   * @param[in] stream Optional stream on which all memory allocation and device
+   * kernels will be issued.
+   * @param[in] mr Optional resource that will be used for device memory
+   * allocation of the column's `data` and `null_mask`.
    *---------------------------------------------------------------------------**/
-  column(data_type type, size_type size, bool allocate_bitmask = false);
+  column(data_type type, size_type size, mask_state state = UNALLOCATED,
+         cudaStream_t stream = 0,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column by deep copying from `device_buffer`s for the
+   * @brief Construct a new column by copying from `device_buffer`s for the
+   * column's `data` and `null_mask`.
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
-   * @param[in] data device_buffer whose data will be *deep* copied
+   * @param[in] data `device_buffer` whose contents will be copied for the
+   * column's data
+   * @param[in] null_mask Optional, `device_buffer` whose contents will be
+   * copied for the column's null mask. Buffer may be empty if `null_count` is 0
+   * or `UNKNOWN_NULL_COUNT`.
+   * @param null_count Optional, the count of null elements. If unknown, specify
+   * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
+   * the first invocation of `null_count()`.
+   * @param children Optional, vector of child columns
+   * @param stream Optional, stream on which all memory allocation and copy will
+   * be issued.
+   * @param mr Optional, `device_memory_resource` that is used for device memory
+   * allocation
    *---------------------------------------------------------------------------**/
   column(data_type dtype, size_type size, rmm::device_buffer data,
          rmm::device_buffer null_mask = {},
          size_type null_count = UNKNOWN_NULL_COUNT,
          std::vector<column> const& children = {}, cudaStream_t stream = 0,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from a type, and a device_buffer for
-   * data that will be shallow copied.
-   *
-   * @param[in] dtype The element type
-   * @param[in] size The number of elements in the column
-   * @param[in] data device_buffer whose data will be moved into this column
-   *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer&& data);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Column constructor that deep copies a `device_buffer` and `bitmask`.
-   *
-   * @param[in] dtype The element type
-   * @param[in] size The number of elements
-   * @param[in] data The device buffer to copy
-   * @param[in] mask The bitmask to copy
-   *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer data,
-         rmm::device_buffer mask);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column from a type, and device_buffers for data and
@@ -149,22 +161,54 @@ class column {
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the element type
+   *---------------------------------------------------------------------------**/
+  data_type type() const noexcept { return _type; }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of elements
+   *---------------------------------------------------------------------------**/
+  size_type size() const noexcept { return _size; }
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns the count of null elements.
    *
    * @note If the column was originally constructed with `UNKNOWN_NULL_COUNT`,
    * then the first invocation of `null_count()` will compute and store the
-   *count of null elements indicated by the `null_mask` (if it exists).
+   * count of null elements indicated by the `null_mask` (if it exists).
    *---------------------------------------------------------------------------**/
   size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Updates the count of null elements.
    *
+   * @throws cudf::logic_error if `new_null_count > 0` but `nullable() == false`
+   *
    * @param new_null_count The new null count.
    *---------------------------------------------------------------------------**/
-  void set_null_count(size_type new_null_count) noexcept {
-    _null_count = new_null_count;
-  }
+  void set_null_count(size_type new_null_count);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Indicates if it is possible for the column to contain null values,
+   * i.e., it has an allocated null mask.
+   *
+   * This may return `false` iff `null_count() == 0`.
+   *
+   * May return true if `null_count() == 0`. Indicates that the column has an
+   * allocated null mask, but all elements are valid.
+   *
+   * @return true The column can hold null values
+   * @return false The column cannot hold null values
+   *---------------------------------------------------------------------------**/
+  bool nullable() const noexcept { return (_null_mask.size() > 0); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Indicates if the column contains null elements.
+   *
+   * @return true If the column contains one or more null elements
+   * @return false All elements are valid.
+   *---------------------------------------------------------------------------**/
+  bool has_nulls() const noexcept { return (null_count() > 0); }
 
   /**---------------------------------------------------------------------------*
    * @brief Creates an immutable, non-owning view of the column's data and
@@ -173,19 +217,6 @@ class column {
    * @return column_view The immutable, non-owning view
    *---------------------------------------------------------------------------**/
   column_view view() const;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Creates a mutable, non-owning view of the column's data and
-   * children.
-   *
-   * @note Creating a mutable view of a `column` will invalidate the `column`'s
-   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. This will require the
-   * user to either explicitly update the null count with `set_null_count()`,
-   * else, the null count to be recomputed on the next invocation of `null_count()`.
-   *
-   * @return mutable_column_view The mutable, non-owning view
-   *---------------------------------------------------------------------------**/
-  mutable_column_view mutable_view();
 
   /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to a `column_view`.
@@ -198,10 +229,30 @@ class column {
   operator column_view() const { return this->view(); };
 
   /**---------------------------------------------------------------------------*
+   * @brief Creates a mutable, non-owning view of the column's data and
+   * children.
+   *
+   * @note Creating a mutable view of a `column` will invalidate the `column`'s
+   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. This will require the
+   * user to either explicitly update the null count with `set_null_count()`,
+   * else, the null count to be recomputed on the next invocation of
+   *`null_count()`.
+   *
+   * @return mutable_column_view The mutable, non-owning view
+   *---------------------------------------------------------------------------**/
+  mutable_column_view mutable_view();
+
+  /**---------------------------------------------------------------------------*
    * @brief Implicit conversion operator to a `mutable_column_view`.
    *
    * This allows pasing a `column` object into a function that accepts a
    *`mutable_column_view` and the conversion will happen automatically.
+
+   * @note Creating a mutable view of a `column` will invalidate the `column`'s
+   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. This will require the
+   * user to either explicitly update the null count with `set_null_count()`,
+   * else, the null count to be recomputed on the next invocation of
+   *`null_count()`.
    *
    * @return mutable_column_view Mutable, non-owning `mutable_column_view`
    *---------------------------------------------------------------------------**/

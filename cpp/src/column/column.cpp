@@ -26,6 +26,19 @@
 
 namespace cudf {
 
+// Move constructor
+column::column(column &&other)
+    : _type{other._type},
+      _size{other._size},
+      _data{std::move(other._data)},
+      _null_mask{std::move(other._null_mask)},
+      _null_count{other._null_count},
+      _children{std::move(other._children)} {
+  other._size = 0;
+  other._null_count = 0;
+  other._type = data_type{EMPTY};
+}
+
 // Create immutable view
 column_view column::view() const {
   // Create views of children
@@ -67,12 +80,23 @@ mutable_column_view column::mutable_view() {
 
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
-  if (_null_count != UNKNOWN_NULL_COUNT) {
+  if (_null_count > UNKNOWN_NULL_COUNT) {
     return _null_count;
   } else {
+    // If the null mask isn't allocated, then we can return 0
+    if (0 == _null_mask.size()) {
+      return 0;
+    }
     CUDF_FAIL(
         "On-demand computation of null count is not currently supported.");
   }
+}
+
+void column::set_null_count(size_type new_null_count) {
+  if (new_null_count > 0) {
+    CUDF_EXPECTS(_null_mask.size() > 0, "Invalid null count.");
+  }
+  _null_count = new_null_count;
 }
 
 /**---------------------------------------------------------------------------*
