@@ -41,27 +41,6 @@ namespace detail {
 
 constexpr int warp_size = 32;
   
-NVCategory * combine_column_categories(gdf_column * input_columns[],int num_columns){
-  NVCategory * combined_category = static_cast<NVCategory *>(input_columns[0]->dtype_info.category);
-
-    for(int column_index = 1; column_index < num_columns; column_index++){
-      NVCategory * temp = combined_category;
-      if(input_columns[column_index]->size > 0){
-        combined_category = combined_category->merge_and_remap(
-            * static_cast<NVCategory *>(
-                input_columns[column_index]->dtype_info.category));
-        if(column_index > 1){
-          NVCategory::destroy(temp);
-        }
-      }
-    }
-    if(combined_category == static_cast<NVCategory *>(input_columns[0]->dtype_info.category)){
-      return combined_category->copy();
-    }else{
-      return combined_category;
-    }
-}
-
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
  * end).
@@ -79,10 +58,9 @@ struct bounds_checker {
   }
 };
 
-using CountType = gdf_size_type;
 template <class BitType, int lane = 0>
-__device__ __inline__ CountType single_lane_reduce(BitType f) {
-  static __shared__ CountType smem[warp_size];
+__device__ __inline__ gdf_size_type single_lane_reduce(BitType f) {
+  static __shared__ gdf_size_type smem[warp_size];
 
   int lane_id = (threadIdx.x % warp_size);
   int warp_id = (threadIdx.x / warp_size);
@@ -99,8 +77,8 @@ __device__ __inline__ CountType single_lane_reduce(BitType f) {
     // so one single warp is enough to do the reduction over different warps
     f = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
 
-    __shared__ typename cub::WarpReduce<CountType>::TempStorage temp_storage;
-    f = cub::WarpReduce<CountType>(temp_storage).Sum(f);
+    __shared__ typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
+    f = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(f);
   }
 
   return f;
@@ -239,7 +217,7 @@ struct column_gatherer {
       }
       
       CUDF_EXPECTS(GDF_SUCCESS ==
-        clear_column_categories(&copy_dest, destination_column), "Failed to clear NVCategory");
+        clear_column_categories(copy_dest, *destination_column), "Failed to clear NVCategory");
 
       gdf_column_free(&temp_src);
       gdf_column_free(&copy_src);
@@ -293,7 +271,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
   // We create (n_cols+1) streams for the (n_cols+1) kernels we are gonna
   // launch.
-  std::vector<util::cuda::scoped_stream> v_stream(n_cols + 1);
+  std::vector<util::cuda::scoped_stream> v_stream(n_cols);
 
   for (gdf_size_type i = 0; i < n_cols; i++) {
     // Perform sanity checks
@@ -311,36 +289,27 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
     cudf::type_dispatcher(src_col->dtype, column_gatherer{}, src_col,
                           gather_map, dest_col, check_bounds, v_stream[i], merge_nvstring_category);
 
-    const bool src_has_nulls = src_col->valid != nullptr;
-    const bool dest_has_nulls = dest_col->valid != nullptr;
-    // If the source column has a valid buffer, the destination column must also
-    // have one
-    CUDF_EXPECTS((src_has_nulls && dest_has_nulls) || (!src_has_nulls),
-                 "Missing destination validity buffer");
+    if(cudf::is_nullable(*src_col)){
+       CUDF_EXPECTS(cudf::is_nullable(*dest_col), "Missing destination null mask.");
+    }
   }
 
-  // The bitmask operations will be put on the last stream.
-  cudaStream_t bit_stream = v_stream[n_cols];
-
-  // Allocate memory for bitmask reduction
-  gdf_size_type* d_count_p;
-  RMM_TRY(RMM_ALLOC(&d_count_p, sizeof(gdf_size_type) * n_cols, bit_stream));
-  CUDA_TRY(cudaMemsetAsync(d_count_p, 0, sizeof(gdf_size_type) * n_cols,
-                           bit_stream));
+  rmm::device_vector<gdf_size_type> d_count_vec(n_cols, 0);
 
   std::vector<bit_mask_t*> h_bit_src(n_cols);
   std::vector<bit_mask_t*> h_bit_dest(n_cols);
+
+  std::vector<rmm::device_vector<bit_mask_t>> vec_temp_bit(n_cols);
 
   for (gdf_size_type i = 0; i < n_cols; i++) {
     const gdf_column* dest_col = destination_table->get_column(i);
     h_bit_src[i] =
         reinterpret_cast<bit_mask_t*>(source_table->get_column(i)->valid);
     // Allocate inplace buffer
-    if (dest_col->valid != nullptr &&
+    if (cudf::is_nullable(*dest_col) &&
         dest_col->valid == source_table->get_column(i)->valid) {
-      gdf_size_type num_bitmask_elements =
-          gdf_valid_allocation_size(dest_col->size);
-      RMM_TRY(RMM_ALLOC(&h_bit_dest[i], num_bitmask_elements, bit_stream));
+      vec_temp_bit[i].resize(dest_col->size);
+      h_bit_dest[i] = vec_temp_bit[i].data().get();
     } else {
       h_bit_dest[i] = reinterpret_cast<bit_mask_t*>(dest_col->valid);
     }
@@ -348,50 +317,39 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
   // In the following we allocate the device array thats hold the valid
   // bits.
-  bit_mask_t** d_bit_src;
-  bit_mask_t** d_bit_dest;
-  RMM_TRY(RMM_ALLOC(&d_bit_src, sizeof(bit_mask_t*) * n_cols, bit_stream));
-  RMM_TRY(RMM_ALLOC(&d_bit_dest, sizeof(bit_mask_t*) * n_cols, bit_stream));
+  rmm::device_vector<bit_mask_t*> d_bit_src(n_cols);
+  rmm::device_vector<bit_mask_t*> d_bit_dest(n_cols);
+  CUDA_TRY(cudaMemcpy(d_bit_src.data().get(), h_bit_src.data(),
+                        n_cols * sizeof(bit_mask_t*), cudaMemcpyHostToDevice));
+  CUDA_TRY(cudaMemcpy(d_bit_dest.data().get(), h_bit_dest.data(),
+                        n_cols * sizeof(bit_mask_t*), cudaMemcpyHostToDevice));
 
-  CUDA_TRY(cudaMemcpyAsync(d_bit_src, h_bit_src.data(),
-                           n_cols * sizeof(bit_mask_t*), cudaMemcpyHostToDevice,
-                           bit_stream));
-  CUDA_TRY(cudaMemcpyAsync(d_bit_dest, h_bit_dest.data(),
-                           n_cols * sizeof(bit_mask_t*), cudaMemcpyHostToDevice,
-                           bit_stream));
-
-  auto f =
+  auto bitmask_kernel =
       check_bounds ? gather_bitmask_kernel<true> : gather_bitmask_kernel<false>;
 
   int gather_grid_size;
   int gather_block_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&gather_grid_size,
-                                              &gather_block_size, f));
+                                              &gather_block_size, bitmask_kernel));
 
-  f<<<gather_grid_size, gather_block_size, 0, bit_stream>>>(
-      d_bit_src, source_table->num_rows(), gather_map, d_bit_dest,
-      destination_table->num_rows(), d_count_p, n_cols);
+  bitmask_kernel<<<gather_grid_size, gather_block_size>>>(
+      d_bit_src.data().get(), source_table->num_rows(), gather_map, d_bit_dest.data().get(),
+      destination_table->num_rows(), d_count_vec.data().get(), n_cols);
 
   std::vector<gdf_size_type> h_count(n_cols);
-  CUDA_TRY(cudaMemcpyAsync(h_count.data(), d_count_p,
+  CUDA_TRY(cudaMemcpy(h_count.data(), d_count_vec.data().get(),
                            sizeof(gdf_size_type) * n_cols,
-                           cudaMemcpyDeviceToHost, bit_stream));
-
-  // We want to sync the bit_stream here since the null_count update has be
-  // after the above memcpy is finished.
-  CUDA_TRY(cudaStreamSynchronize(bit_stream));
+                           cudaMemcpyDeviceToHost));
 
   for (gdf_size_type i = 0; i < destination_table->num_columns(); i++) {
     gdf_column* dest_col = destination_table->get_column(i);
-    if (dest_col->valid != nullptr) {
-      // Free the inplace buffer
+    if (is_nullable(*dest_col)) {
+      // Copy temp buffer content back to column
       if (dest_col->valid == source_table->get_column(i)->valid) {
         gdf_size_type num_bitmask_elements =
             gdf_num_bitmask_elements(dest_col->size);
-        CUDA_TRY(cudaMemcpyAsync(dest_col->valid, h_bit_dest[i],
-                                 num_bitmask_elements, cudaMemcpyDeviceToDevice,
-                                 bit_stream));
-        RMM_TRY(RMM_FREE(h_bit_dest[i], bit_stream));
+        CUDA_TRY(cudaMemcpy(dest_col->valid, h_bit_dest[i],
+                                 num_bitmask_elements, cudaMemcpyDeviceToDevice));
       }
       dest_col->null_count = dest_col->size - h_count[i];
     } else {
@@ -399,11 +357,6 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
     }
   }
 
-  // Free the dynamically allocated buffers
-  RMM_TRY(RMM_FREE(d_bit_src, bit_stream));
-  RMM_TRY(RMM_FREE(d_bit_dest, bit_stream));
-
-  RMM_TRY(RMM_FREE(d_count_p, bit_stream));
 }
 
 }  // namespace detail

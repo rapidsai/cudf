@@ -60,5 +60,5 @@ gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destinat
  * @param[in] input_column The input column
  * @param[out] output_column The output column
  */
-gdf_error clear_column_categories(gdf_column* input_column, gdf_column* output_column);
+gdf_error clear_column_categories(gdf_column& input_column, gdf_column& output_column);
 #endif

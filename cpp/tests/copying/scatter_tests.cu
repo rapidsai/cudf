@@ -52,8 +52,8 @@ TYPED_TEST(ScatterTest, DtypeMistach){
   
   cudf::table destination_table;
 
-  EXPECT_THROW(destination_table = cudf::scatter(&source_table, scatter_map.data().get(),
-                             &target_table), cudf::logic_error);
+  EXPECT_THROW(destination_table = cudf::scatter(source_table, scatter_map.data().get(),
+                             target_table), cudf::logic_error);
   
   destination_table.destroy();
 
@@ -78,8 +78,8 @@ TYPED_TEST(ScatterTest, NumColumnsMismatch){
   
   cudf::table destination_table;
 
-  EXPECT_THROW(destination_table = cudf::scatter(&source_table, scatter_map.data().get(),
-                             &target_table), cudf::logic_error);
+  EXPECT_THROW(destination_table = cudf::scatter(source_table, scatter_map.data().get(),
+                             target_table), cudf::logic_error);
   
   destination_table.destroy();
 }
@@ -108,8 +108,8 @@ TYPED_TEST(ScatterTest, IdentityTest) {
   cudf::table destination_table;
 
   EXPECT_NO_THROW(destination_table = 
-      cudf::scatter(&source_table, scatter_map.data().get(),
-      &target_table));
+      cudf::scatter(source_table, scatter_map.data().get(),
+      target_table));
 
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
 
@@ -144,8 +144,8 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
   
   cudf::table destination_table;
 
-  EXPECT_NO_THROW(destination_table = cudf::scatter(&source_table, scatter_map.data().get(),
-                             &target_table));
+  EXPECT_NO_THROW(destination_table = cudf::scatter(source_table, scatter_map.data().get(),
+                             target_table));
   
   // Expected result is the reversal of the source column
   std::vector<TypeParam> expected_data;
@@ -198,8 +198,8 @@ TYPED_TEST(ScatterTest, AllNull) {
   cudf::table destination_table;
   
   EXPECT_NO_THROW(destination_table = 
-      cudf::scatter(&source_table, scatter_map.data().get(),
-      &target_table));
+      cudf::scatter(source_table, scatter_map.data().get(),
+      target_table));
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
@@ -251,8 +251,8 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
   cudf::table destination_table;
   
   EXPECT_NO_THROW(destination_table = 
-      cudf::scatter(&source_table, scatter_map.data().get(),
-      &target_table));
+      cudf::scatter(source_table, scatter_map.data().get(),
+      target_table));
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
@@ -297,8 +297,8 @@ TEST(ScatterTest, PreserveDestBitmask) {
   cudf::table destination_table;
   
   EXPECT_NO_THROW(destination_table = 
-      cudf::scatter(&source_table, d_scatter_map.data().get(),
-      &target_table));
+      cudf::scatter(source_table, d_scatter_map.data().get(),
+      target_table));
   
   cudf::test::column_wrapper<int64_t> destination_column(*destination_table.get_column(0));
 

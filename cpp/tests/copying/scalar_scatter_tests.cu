@@ -56,12 +56,12 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
   cudf::table target_table{&raw_target, 1};
 
   cudf::test::scalar_wrapper<TypeParam> source(static_cast<TypeParam>(1), true);
-  std::vector<gdf_scalar*> source_row {source.get()};
+  std::vector<gdf_scalar> source_row {*source.get()};
   
   cudf::table destination_table;
 
   EXPECT_NO_THROW(destination_table = cudf::scatter(source_row, scatter_map.data().get(), target_size/3,
-                                &target_table));
+                                target_table));
 
   // Copy result of target column to host
   std::vector<TypeParam> result_data;
@@ -110,12 +110,12 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
   cudf::test::scalar_wrapper<TypeParam> source1(static_cast<TypeParam>(1), true);
   cudf::test::scalar_wrapper<TypeParam> source2(static_cast<TypeParam>(2), true);
  
-  std::vector<gdf_scalar*> source_row {source0.get(), source1.get(), source2.get()};
+  std::vector<gdf_scalar> source_row {*source0.get(), *source1.get(), *source2.get()};
   
   cudf::table destination_table;
 
   EXPECT_NO_THROW(destination_table = cudf::scatter(source_row, scatter_map.data().get(), target_size/3,
-                                &target_table));
+                                target_table));
 
   for(int c = 0; c < n_cols; c++){
     // Copy result of target column to host
@@ -158,12 +158,12 @@ TYPED_TEST(ScalarScatterTest, ScatterValid) {
 
   cudf::test::scalar_wrapper<TypeParam> source(static_cast<TypeParam>(1), true);
  
-  std::vector<gdf_scalar*> source_row {source.get()};
+  std::vector<gdf_scalar> source_row {*source.get()};
   
   cudf::table destination_table;
 
   EXPECT_NO_THROW(destination_table = cudf::scatter(source_row, scatter_map.data().get(), target_size/3,
-                                &target_table));
+                                target_table));
 
   // Copy result of target column to host
   std::vector<TypeParam> result_data;
@@ -203,12 +203,12 @@ TYPED_TEST(ScalarScatterTest, ScatterNull) {
 
   cudf::test::scalar_wrapper<TypeParam> source(static_cast<TypeParam>(1), false); // valid = false
  
-  std::vector<gdf_scalar*> source_row {source.get()};
+  std::vector<gdf_scalar> source_row {*source.get()};
   
   cudf::table destination_table;
 
   EXPECT_NO_THROW(destination_table = cudf::scatter(source_row, scatter_map.data().get(), target_size/3,
-                                &target_table));
+                                target_table));
 
   // Copy result of target column to host
   std::vector<TypeParam> result_data;

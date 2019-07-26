@@ -162,53 +162,43 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
 //                   table* destination_table);
 
 /**
- * @brief Scatters the rows (including null values) of a set of source columns
- * (`source_table`) into a set of target columns (`target_table`) according to 
- * a scatter map such that row 'i' from the source columns will be scattered to 
- * row `scatter_map[i]`. The result is return as a a set of destination columns.
+ * @brief Creates a new `table` as if an in-place scatter from a `source` table 
+ * was performed on the `target` table.
  *
  * It is the user's reponsibility to free the device memory allocated in the 
  * returned table `destination_table`.
  *
  * The `source_table` and the `target_table` must have equal numbers of columns.
  *
- * `data` and `valid` of a specific row of the target_column is kept unchanged 
- * in the result if the `scatter_map` does not map to that row.
- * 
  * The datatypes between coresponding columns in the source and target columns 
  * must be the same.
  *
  * The number of rows in the scatter_map must equal the number of rows in
  * the source columns.
  *
- * If any index in scatter_map is outside the range of [0, num rows in
- * target columns), the result is undefined.
+ * If any index in scatter_map is outside the range of [0, target.num_rows()), 
+ * the result is undefined.
  *
  * If the same index appears more than once in scatter_map, the result is
  * undefined.
  * 
- * If the target column has a valid bitmask the destination column will also
- * have a bitmask allocated; if the target column has a null bitmask but the 
- * source column has a non-zero null_count (which implies it has a valid bitmask)
- * the destination will have a bitmask allocated. If the target column has a
- * null bitmask and the source column has a zero null_count the destination
- * column will not have a bitmask allocated.
+ * A column in the output will only be nullable if: 
+ * - Its corresponding column in `target` is nullable
+ * - Its corresponding column in `source` has `null_count > 0` 
  *
- * @Param[in] source_table The columns whose rows will be scattered
+ * @Param[in] source The columns whose rows will be scattered
  * @Param[in] scatter_map An array that maps rows in the input columns
  * to rows in the output columns.
- * @Param[in] target_table A preallocated set of columns with a number
- * of rows equal in size to the maximum index contained in scatter_map
+ * @Param[in] target The table to copy and then perform an in-place scatter 
+ * into the copy.
  * @return[out] The result of the scatter
  */
-table scatter(table const* source_table, gdf_index_type const scatter_map[],
-              table const* target_table);
+table scatter(table const& source, gdf_index_type const scatter_map[],
+              table const& target);
 
 /**
- * @brief Scatters one row (including null values) of gdf_scalar into a set 
- * of target columns. The source scalars will be scattered to rows 
- * "scatter_map[i]" in the target columns. The result is return as a a set 
- * of destination columns.
+ * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
+ * values into the rows of a `target` table in-place.
  *
  * `data` and `valid` of a specific row of the target_column is kept 
  * unchanged if the `scatter_map` does not map to that row.
@@ -225,15 +215,16 @@ table scatter(table const* source_table, gdf_index_type const scatter_map[],
  * If the scalar is null (is_valid == false) and the target column does not
  * have a valid bitmask, the destination column will have a bitmask allocated.
  *
- * @Param[in] source_row The row to be scattered
+ * @Param[in] source The row to be scattered
  * @Param[in] scatter_map An array that maps to rows in the output columns.
- * @Param[in] target_table A preallocated set of columns with a number
- * of rows equal in size to the maximum index contained in scatter_map
+ * @Param[in] target The table to copy and then perform an in-place scatter 
+ * into the copy.
  * @return[out] The result of the scatter
  *
  */
-table scatter(const std::vector<gdf_scalar*>& source_row, gdf_index_type const scatter_map[],
-                  gdf_size_type num_scatter_rows, table const* destination_table);
+table scatter(std::vector<gdf_scalar> const& source,
+              gdf_index_type const scatter_map[],
+              gdf_size_type num_scatter_rows, table const& target);
 
 /**
  * @brief Gathers the rows (including null values) of a set of source columns
