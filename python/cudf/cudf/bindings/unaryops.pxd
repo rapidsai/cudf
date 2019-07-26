@@ -41,7 +41,7 @@ cdef extern from "cudf/cudf.h" nogil:
     ) except +
 
 
-cdef extern from "unary.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
 
     ctypedef enum unary_op:
         SIN,
