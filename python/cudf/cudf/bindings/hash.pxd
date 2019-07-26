@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     ctypedef enum gdf_hash_func:
         GDF_HASH_MURMUR3=0,
