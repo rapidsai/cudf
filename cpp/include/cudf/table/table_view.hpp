@@ -124,5 +124,10 @@ class table_view : public detail::table_view_base<column_view> {
  *---------------------------------------------------------------------------**/
 class mutable_table_view : public detail::table_view_base<mutable_column_view> {
   using detail::table_view_base<mutable_column_view>::table_view_base;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Creates an immutable `table_view` of the columns
+   *---------------------------------------------------------------------------**/
+  operator table_view();
 };
 }  // namespace cudf

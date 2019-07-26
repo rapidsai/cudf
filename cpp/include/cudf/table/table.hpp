@@ -35,6 +35,15 @@ class table {
    *---------------------------------------------------------------------------**/
   table(table const& other);
 
+  /**---------------------------------------------------------------------------*
+   * @brief Moves the contents from a vector of `unique_ptr`s to columns to
+   * construct a new table.
+   *
+   * @param columns The vector of `unique_ptr`s to columns whose contents will
+   * be moved into the new table.
+   *---------------------------------------------------------------------------**/
+  table(std::vector<std::unique_ptr<column>>&& columns);
+
  private:
   std::vector<std::unique_ptr<column>> _columns;
 };
