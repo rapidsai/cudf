@@ -199,18 +199,9 @@ gdf_error gdf_column_free(gdf_column *column)
   return GDF_SUCCESS;
 }
 
+namespace cudf {
 
-namespace{
-  struct get_type_size{
-    template <typename T>
-    auto operator()()
-    {
-      return sizeof(T);
-    }
-  };
-}
-
-namespace {
+namespace detail {
 
 void allocate_column_fields(gdf_column& column,
                             bool allocate_mask,
@@ -228,7 +219,8 @@ void allocate_column_fields(gdf_column& column,
   }
 }
 
-} // namespace
+} // namespace detail
+
 
 /*
  * Allocates a new column of the given size and type.
@@ -243,7 +235,20 @@ gdf_column allocate_column(gdf_dtype dtype, gdf_size_type size,
   output.dtype = dtype;
   output.dtype_info = info;
 
-  allocate_column_fields(output, allocate_mask, stream);
+  detail::allocate_column_fields(output, allocate_mask, stream);
 
   return output;
 }
+
+} // namespace cudf
+
+namespace{
+  struct get_type_size{
+    template <typename T>
+    auto operator()()
+    {
+      return sizeof(T);
+    }
+  };
+}
+

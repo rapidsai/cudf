@@ -143,6 +143,16 @@ if (RMM_INCLUDE AND RMM_LIBRARY)
 endif (RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
+# - DLPACK -------------------------------------------------------------------------------------------
+
+find_path(DLPACK_INCLUDE "dlpack"
+          HINTS "$ENV{DLPACK_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include/dlpack"
+                "$ENV{CONDA_PREFIX}/include")
+
+message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
+
+###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
 find_path(NVSTRINGS_INCLUDE "nvstrings"
@@ -236,11 +246,11 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
+		    "${DLPACK_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
 
 ###################################################################################################
@@ -268,9 +278,8 @@ add_library(cudf SHARED
             src/orderby/orderby.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
-            src/groupby/groupby.cu
-            src/groupby/new_groupby.cu
             src/groupby/hash/groupby.cu
+            src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp

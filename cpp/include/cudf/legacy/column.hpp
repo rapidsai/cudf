@@ -96,6 +96,22 @@ gdf_error gdf_column_view_augmented(gdf_column *column, void *data,
  */
 gdf_error gdf_column_free(gdf_column *column);
 
+namespace cudf {
+namespace detail {
+
+/**
+ * @brief Allocate the data fields of column
+ * 
+ * @param column The column for which the data fields need to be allocated
+ * @param allocate_mask Optional Whether or not to allocate bitmask
+ * @param stream Optional stream in which to perform allocation
+ */
+void allocate_column_fields(gdf_column& column,
+                            bool allocate_mask = true,
+                            cudaStream_t stream = 0);
+
+} // namespace detail
+
 /**
  * @brief Allocates a new column of the specified size and type.
  * 
@@ -110,5 +126,7 @@ gdf_column allocate_column(gdf_dtype dtype, gdf_size_type size,
                            bool allocate_mask = true,
                            gdf_dtype_extra_info info = gdf_dtype_extra_info{},
                            cudaStream_t stream = 0);
+
+} // namespace cudf
 
 #endif

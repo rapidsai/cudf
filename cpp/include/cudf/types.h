@@ -203,28 +203,6 @@ typedef enum {
 
 
 /**
- * @brief Types of unary math operations that can be performed on data.
- */
-typedef enum {
-  GDF_SIN,          ///< Trigonometric sine
-  GDF_COS,          ///< Trigonometric cosine
-  GDF_TAN,          ///< Trigonometric tangent
-  GDF_ARCSIN,       ///< Trigonometric sine inverse
-  GDF_ARCCOS,       ///< Trigonometric cosine inverse
-  GDF_ARCTAN,       ///< Trigonometric tangent inverse
-  GDF_EXP,          ///< Exponential (base e, Euler number)
-  GDF_LOG,          ///< Natural Logarithm (base e)
-  GDF_SQRT,         ///< Square-root (x^0.5)
-  GDF_CEIL,         ///< Smallest integer value not less than arg
-  GDF_FLOOR,        ///< largest integer value not greater than arg
-  GDF_ABS,          ///< Absolute value
-  GDF_BIT_INVERT,   ///< Bitwise Not (~)
-  GDF_NOT,          ///< Logical Not (!)
-  GDF_INVALID_UNARY ///< invalid operation
-} gdf_unary_math_op;
-
-
-/**
  * @brief Options for how nulls are treated in group_by/order_by operations.
  */
 typedef enum {

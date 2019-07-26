@@ -5,11 +5,14 @@ import pandas as pd
 import pytest
 
 from cudf.dataframe import DataFrame, Series
+from cudf.dataframe.index import as_index
 from cudf.tests.utils import assert_eq
 
 
 def test_categorical_basic():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    cudf_cat = as_index(cat)
+
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(cat.codes, sr.to_array())
@@ -33,6 +36,7 @@ def test_categorical_basic():
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    assert_eq(cat.codes, cudf_cat.codes.to_array())
 
 
 def test_categorical_integer():

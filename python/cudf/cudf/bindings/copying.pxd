@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "copying.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
     cdef void scatter(
         const cudf_table* source_table,
@@ -20,4 +20,8 @@ cdef extern from "copying.hpp" namespace "cudf" nogil:
         const cudf_table * source_table,
         const gdf_index_type* gather_map,
         cudf_table* destination_table
+    ) except +
+
+    cdef gdf_column copy(
+        const gdf_column &input
     ) except +

@@ -28,10 +28,11 @@ def transpose(df):
         return df
 
     dtype = df.dtypes.iloc[0]
-    if pd.api.types.is_categorical_dtype(dtype):
+    d_type = pd.api.types.pandas_dtype(dtype)
+    if d_type.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
         raise NotImplementedError('Categorical columns are not yet '
                                   'supported for function')
-    elif np.dtype(dtype).kind in 'OU':
+    elif d_type.kind in 'OU':
         raise NotImplementedError('String columns are not yet '
                                   'supported for function')
 
