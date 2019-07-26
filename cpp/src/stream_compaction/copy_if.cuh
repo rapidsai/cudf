@@ -145,7 +145,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
       // use an atomicOr, because these are where other blocks may overlap.
 
       constexpr int num_warps = block_size / warp_size;
-      const int last_warp = block_sum / warp_size;
+      const int last_warp = min(num_warps, (block_offset + block_sum) / warp_size);
       const int wid = threadIdx.x / warp_size;
       const int lane = threadIdx.x % warp_size;
 

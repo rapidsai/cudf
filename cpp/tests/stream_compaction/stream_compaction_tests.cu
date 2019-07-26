@@ -238,6 +238,47 @@ TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
       [](gdf_index_type row) { return 2 * row + 1; }));
 }
 
+TEST_F(ApplyBooleanMaskErrorTest, Bug2141)
+{
+  // This bug found an error (cudf Issue #2141) where the kernel wouldn't
+  // properly store some valid bits when the indices overlapped a warp
+  // boundary within a block
+  // The data are arbitrary -- comes from the original Python repro
+
+  std::vector<int> nanvals{0,      70,  140,  210,  280,  350,  420,  490,
+                            560,  630,  700,  770,  840,  910,  980, 1050,
+                           1120, 1190, 1260, 1330, 1400, 1470, 1540, 1610,
+                           1680, 1750, 1820, 1890, 1960, 2030, 2100, 2101,
+                           2102, 2103, 2104, 2105, 2106, 2107, 2108, 2109,
+                           2110, 2111, 2112, 2113, 2114, 2115, 2116, 2117,
+                           2118, 2119, 2120, 2121, 2122, 2123, 2124, 2125,
+                           2126, 2127, 2128, 2129, 2130, 2131, 2132, 2170,
+                           2171, 2172, 2173, 2174, 2175, 2176, 2177, 2178,
+                           2179, 2180, 2181, 2182, 2183, 2184, 2185, 2186,
+                           2187, 2188, 2189, 2190, 2191, 2192, 2193, 2194,
+                           2195, 2196, 2197, 2198, 2199, 2200, 2201, 2202,
+                           2240, 2241, 2242, 2243, 2244, 2245, 2246, 2247,
+                           2248, 2249, 2250, 2251, 2252, 2253, 2254, 2255,
+                           2256, 2257, 2258, 2259, 2260, 2261, 2262, 2263,
+                           2264, 2265, 2266, 2267, 2268, 2269, 2270, 2271,
+                           2272};
+
+  std::vector<int> v(2300, 0);
+  for (auto x : nanvals) v[x] = 1;
+
+  BooleanMaskTest<int>(
+    column_wrapper<int>(2300,
+      [](gdf_index_type row) { return 1; },
+      [&](gdf_index_type row) { return (v[row] == 1); }),
+    column_wrapper<cudf::bool8>(2300,
+      [&](gdf_index_type row) { return cudf::bool8{v[row] == 1}; },
+      [](gdf_index_type row) { return true; }),
+    column_wrapper<int>(nanvals.size(),
+      [](gdf_index_type row) { return 1; },
+      [](gdf_index_type row) { return true; }));
+}
+
+
 struct DropNullsErrorTest : GdfTest {};
 
 TEST_F(DropNullsErrorTest, EmptyInput)
