@@ -295,8 +295,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             from cudf.utils import utils
             from cudf.dataframe.index import RangeIndex
             slice_len = arg[0].stop or len(self._df)
-            start, stop, step, sln = utils.standard_python_slice(slice_len,
-                                                                 arg[0])
+            start, stop, step = arg[0].indices(slice_len)
             df._index = RangeIndex(start, stop)
         return df
 

@@ -247,9 +247,7 @@ class MultiIndex(Index):
                 or row_tuple == slice(None)
             ):
                 stop = row_tuple.stop or max_length
-                start, stop, step, sln = utils.standard_python_slice(
-                    stop, row_tuple
-                )
+                start, stop, step = row_tuple.indices(stop)
                 return arange(start, stop, step)
             start_values = self._compute_validity_mask(
                 index,

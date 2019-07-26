@@ -215,10 +215,7 @@ class DataFrame(object):
         o.update(
             c
             for c in self.columns
-            if (
-                isinstance(c, pd.compat.string_types)
-                and pd.compat.isidentifier(c)
-            )
+            if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
 
@@ -1343,7 +1340,7 @@ class DataFrame(object):
             subset = self._cols
         elif (
             not np.iterable(subset)
-            or isinstance(subset, pd.compat.string_types)
+            or isinstance(subset, str)
             or isinstance(subset, tuple)
             and subset in self.columns
         ):
@@ -3142,8 +3139,11 @@ class DataFrame(object):
                     )
                 result[k] = res
         if isinstance(q, numbers.Number):
-            result.index = [float(q)]
-            return result.iloc[0]
+            result = result.fillna(np.nan)
+            result = result.iloc[0,:]
+            result.index = as_index(self.columns)
+            result.name = q
+            return result
         else:
             q = list(map(float, q))
             result.index = q
