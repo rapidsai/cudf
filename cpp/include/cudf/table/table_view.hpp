@@ -89,6 +89,11 @@ class table_view_base {
   ColumnView& column(size_type column_index) noexcept;
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the number of columns in the table
+   *---------------------------------------------------------------------------**/
+  size_type num_columns() const noexcept { return _columns.size(); }
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns the number of rows
    *---------------------------------------------------------------------------**/
   size_type num_rows() const noexcept { return _num_rows; }

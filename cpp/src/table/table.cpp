@@ -16,6 +16,7 @@
 
 #include <cudf/table/table.hpp>
 #include <cudf/table/table_view.hpp>
+#include <rmm/mr/device_memory_resource.hpp>
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
@@ -37,6 +38,41 @@ table::table(std::vector<std::unique_ptr<column>>&& columns)
   for (auto const& c : _columns) {
     CUDF_EXPECTS(c->size() == num_rows(), "Column size mismatch.");
   }
+}
+
+// Copy the contents of a `table_view`
+table::table(table_view view, cudaStream_t stream,
+             rmm::mr::device_memory_resource* mr) {
+  _columns.reserve(view.num_columns());
+  for (auto const& c : view) {
+    _columns.emplace_back(std::make_unique<column>(c, stream, mr));
+  }
+}
+
+// Create immutable view
+table_view table::view() const {
+  std::vector<column_view> views;
+  views.reserve(_columns.size());
+  for (auto const& c : _columns) {
+    views.push_back(c->view());
+  }
+  return table_view{views};
+}
+
+// Create mutable view
+mutable_table_view table::mutable_view() {
+  std::vector<mutable_column_view> views;
+  views.reserve(_columns.size());
+  for (auto const& c : _columns) {
+    views.push_back(c->mutable_view());
+  }
+  return mutable_table_view{views};
+}
+
+// Release ownership of columns
+std::vector<std::unique_ptr<column>> table::release() {
+  return std::move(_columns);
+  _num_rows = 0;
 }
 
 }  // namespace exp

@@ -50,8 +50,18 @@ class table {
    * @brief Copy the contents of a `table_view` to construct a new `table`.
    *
    * @param view The view whose contents will be copied to create a new `table`
+   * @param stream Optional, stream on which all memory allocations and copies
+   * will be performed
+   * @param mr Optional, the memory resource that will be used for allocating
+   * the device memory for the new columns
    *---------------------------------------------------------------------------**/
-  table(table_view view);
+  table(table_view view, cudaStream_t stream = 0,
+        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the number of columns in the table
+   *---------------------------------------------------------------------------**/
+  size_type num_columns() const noexcept { return _columns.size(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of rows
@@ -68,7 +78,7 @@ class table {
    * @brief Conversion operator to an immutable, non-owning `table_view` of the
    * contents of this `table`.
    *---------------------------------------------------------------------------**/
-  operator table_view() const;
+  operator table_view() const { return this->view(); };
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a mutable, non-owning `mutable_table_view` of the contents
@@ -80,7 +90,15 @@ class table {
    * @brief Conversion operator to a mutable, non-owning `mutable_table_view` of
    *the contents of this `table`.
    *---------------------------------------------------------------------------**/
-  operator mutable_table_view();
+  operator mutable_table_view() { return this->mutable_view(); };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Releases ownership of the `column`s by returning a vector of
+   *`unique_ptr`s to the constiuent columns.
+   *
+   * After `release()`, `num_columns() == 0` and `num_rows() == 0`
+   *---------------------------------------------------------------------------**/
+  std::vector<std::unique_ptr<column>> release();
 
  private:
   std::vector<std::unique_ptr<column>> _columns{};
