@@ -13,7 +13,7 @@ from cudf.bindings.cudf_cpp cimport *
 
 cimport cudf.bindings.groupby.common as groupby_common
 
-cdef extern from "groupby.hpp" namespace "cudf::groupby::hash" nogil:
+cdef extern from "cudf/groupby.hpp" namespace "cudf::groupby::hash" nogil:
     cdef cppclass Options(groupby_common.Options):
         pass
 
