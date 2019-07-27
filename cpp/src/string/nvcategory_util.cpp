@@ -206,6 +206,7 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
 
 gdf_error clear_column_categories(gdf_column& input_column, gdf_column& output_column){
 
+  CUDF_EXPECTS(input_column.dtype == GDF_STRING_CATEGORY, "Unsupported type.");
   NVCategory* input_category = static_cast<NVCategory*>(input_column.dtype_info.category);
   NVCategory* output_category = input_category->gather_and_remap(static_cast<int*>(input_column.data), input_column.size);
 
@@ -218,4 +219,5 @@ gdf_error clear_column_categories(gdf_column& input_column, gdf_column& output_c
   output_column.dtype_info.category = output_category;
 
   return GDF_SUCCESS;
+
 }

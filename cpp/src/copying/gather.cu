@@ -58,8 +58,14 @@ struct bounds_checker {
   }
 };
 
-template <class BitType, int lane = 0>
-__device__ __inline__ gdf_size_type single_lane_reduce(BitType f) {
+/**
+ * @brief for each warp in the block do a reduction (summation) of the 
+ * `__popc(bit_mask)` on a certain lane (default is lane 0).
+ * @param[in] bit_mask The bit_mask to be reduced.
+ * @return[out] result of each block is returned in thread 0.
+ */
+template <class bit_mask_type, int lane = 0>
+__device__ __inline__ gdf_size_type single_lane_reduce(bit_mask_type bit_mask) {
   static __shared__ gdf_size_type smem[warp_size];
 
   int lane_id = (threadIdx.x % warp_size);
@@ -68,20 +74,20 @@ __device__ __inline__ gdf_size_type single_lane_reduce(BitType f) {
   // Assuming one lane of each warp holds the value that we want to perform
   // reduction
   if (lane_id == lane) {
-    smem[warp_id] = __popc(f);
+    smem[warp_id] = __popc(bit_mask);
   }
   __syncthreads();
 
   if (warp_id == 0) {
     // Here I am assuming maximum block size is 1024 and 1024 / 32 = 32
     // so one single warp is enough to do the reduction over different warps
-    f = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
+    bit_mask = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
 
     __shared__ typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
-    f = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(f);
+    bit_mask = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(bit_mask);
   }
 
-  return f;
+  return bit_mask;
 }
 
 template <bool check_bounds>
@@ -93,8 +99,8 @@ __global__ void gather_bitmask_kernel(const bit_mask_t* const* source_valid,
                                       gdf_size_type* d_count,
                                       gdf_size_type num_columns) {
   for (gdf_index_type i = 0; i < num_columns; i++) {
-    const bit_mask_t* source_valid_col = source_valid[i];
-    bit_mask_t* destination_valid_col = destination_valid[i];
+    const bit_mask_t* __restrict__ source_valid_col = source_valid[i];
+    bit_mask_t* __restrict__ destination_valid_col = destination_valid[i];
 
     const bool src_has_nulls = source_valid_col != nullptr;
     const bool dest_has_nulls = destination_valid_col != nullptr;
@@ -179,7 +185,7 @@ struct column_gatherer {
                   gdf_index_type const gather_map[],
                   gdf_column* destination_column, bool check_bounds,
                   cudaStream_t stream, bool merge_nvstring_category = false) {
-    ColumnType const* const source_data{
+    ColumnType const* source_data{
         static_cast<ColumnType const*>(source_column->data)};
     ColumnType* destination_data{
         static_cast<ColumnType*>(destination_column->data)};
@@ -191,13 +197,18 @@ struct column_gatherer {
     // temporary buffers to hold intermediate results
     bool const merge_category = std::is_same<ColumnType, nvstring_category>::value && merge_nvstring_category;
     bool const in_place = !merge_category && (source_data == destination_data);
+      
+    gdf_column temp_src {};
+    gdf_column copy_src {};
+    gdf_column temp_dest {};
+    gdf_column copy_dest {};
     
     if(merge_category){
       // merge the categories.
-      gdf_column temp_src = cudf::copy(*source_column);
-      gdf_column copy_src = cudf::copy(*source_column);
-      gdf_column temp_dest = cudf::copy(*destination_column);
-      gdf_column copy_dest = cudf::copy(*destination_column);
+      temp_src = cudf::copy(*source_column);
+      copy_src = cudf::copy(*source_column);
+      temp_dest = cudf::copy(*destination_column);
+      copy_dest = cudf::copy(*destination_column);
       gdf_column* input_columns[2] = {&temp_src, &temp_dest};
       gdf_column* output_columns[2] = {&copy_src, &copy_dest};
       
@@ -205,31 +216,15 @@ struct column_gatherer {
         sync_column_categories(input_columns, output_columns, 2),
         "Failed to synchronize NVCategory");
 
-      if (check_bounds) {
-        thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
-                        gather_map + num_destination_rows, gather_map,
-                        static_cast<ColumnType*>(copy_src.data), static_cast<ColumnType*>(copy_dest.data),
-                        bounds_checker{0, source_column->size});
-      } else {
-        thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
-                     gather_map + num_destination_rows, static_cast<ColumnType*>(copy_src.data),
-                     static_cast<ColumnType*>(copy_dest.data));
-      }
-      
-      CUDF_EXPECTS(GDF_SUCCESS ==
-        clear_column_categories(copy_dest, *destination_column), "Failed to clear NVCategory");
-
-      gdf_column_free(&temp_src);
-      gdf_column_free(&copy_src);
-      gdf_column_free(&temp_dest);
-      gdf_column_free(&copy_dest);
-      return;
+      source_data = static_cast<ColumnType*>(copy_src.data);
+      destination_data = static_cast<ColumnType*>(copy_dest.data);
     }
 
     if (in_place) {
       RMM_TRY(RMM_ALLOC(&destination_data,
                         sizeof(ColumnType) * num_destination_rows, stream));
     }
+    
     if (check_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
                         gather_map + num_destination_rows, gather_map,
@@ -239,6 +234,18 @@ struct column_gatherer {
       thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
                      gather_map + num_destination_rows, source_data,
                      destination_data);
+    }
+
+    if(merge_category){     
+      
+      CUDF_EXPECTS(GDF_SUCCESS ==
+        clear_column_categories(copy_dest, *destination_column), "Failed to clear NVCategory");
+
+      gdf_column_free(&temp_src);
+      gdf_column_free(&copy_src);
+      gdf_column_free(&temp_dest);
+      gdf_column_free(&copy_dest);
+    
     }
 
     // Copy temporary buffers used for in-place gather to destination column
@@ -280,9 +287,6 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
     CUDF_EXPECTS(src_col->dtype == dest_col->dtype, "Column type mismatch");
 
-    // If source table has 0 rows it is okay to have null buffers
-    CUDF_EXPECTS(src_col->data != nullptr || source_table->num_rows() == 0,
-                 "Missing source data buffer.");
     CUDF_EXPECTS(dest_col->data != nullptr, "Missing source data buffer.");
 
     // The data gather for n columns will be put on the first n streams
@@ -301,6 +305,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 
   std::vector<rmm::device_vector<bit_mask_t>> vec_temp_bit(n_cols);
 
+  // loop over each column, check if inplace and allocate buffer if true.
   for (gdf_size_type i = 0; i < n_cols; i++) {
     const gdf_column* dest_col = destination_table->get_column(i);
     h_bit_src[i] =
@@ -341,6 +346,8 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
                            sizeof(gdf_size_type) * n_cols,
                            cudaMemcpyDeviceToHost));
 
+  // loop over each column, check if inplace and copy the result from the 
+  // buffer back to destination if true.
   for (gdf_size_type i = 0; i < destination_table->num_columns(); i++) {
     gdf_column* dest_col = destination_table->get_column(i);
     if (is_nullable(*dest_col)) {
