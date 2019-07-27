@@ -20,6 +20,7 @@
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2049 Implemented merge functionality
 - PR #2356 Java column vector standard deviation support
+- PR #2396 Add support for cudf.utils.hash_cudf_object
 
 ## Improvements
 
