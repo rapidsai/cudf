@@ -3,9 +3,8 @@
 import warnings
 from io import BytesIO, StringIO
 
-import pandas as pd
-
 import cudf
+import pandas as pd
 from cudf.bindings.json import cpp_read_json
 from cudf.utils import ioutils
 

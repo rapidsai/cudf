@@ -1,7 +1,5 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-from librmm_cffi import librmm as rmm
-
 from cudf import dataframe, datasets
 from cudf._version import get_versions
 from cudf.dataframe import (
@@ -38,6 +36,8 @@ from cudf.ops import (
 )
 from cudf.reshape import get_dummies, melt
 from cudf.settings import set_options
+
+from librmm_cffi import librmm as rmm
 
 __version__ = get_versions()["version"]
 del get_versions

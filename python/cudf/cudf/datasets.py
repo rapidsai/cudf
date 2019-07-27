@@ -1,7 +1,6 @@
+import cudf
 import numpy as np
 import pandas as pd
-
-import cudf
 
 __all__ = ["timeseries", "randomdata"]
 

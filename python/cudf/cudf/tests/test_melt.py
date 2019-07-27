@@ -1,7 +1,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf import melt as cudf_melt
 from cudf.dataframe import DataFrame
 

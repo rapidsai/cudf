@@ -3,10 +3,9 @@ import logging
 
 import numpy as np
 import pytest
+from cudf.comm.gpuarrow import GpuArrowReader
 
 from librmm_cffi import librmm as rmm
-
-from cudf.comm.gpuarrow import GpuArrowReader
 
 try:
     import pyarrow as pa
@@ -138,7 +137,7 @@ def test_gpu_parse_arrow_cats():
     writer.close()
 
     schema_bytes = batch.schema.serialize().to_pybytes()
-    recordbatches_bytes = stream.getvalue().to_pybytes()[len(schema_bytes):]
+    recordbatches_bytes = stream.getvalue().to_pybytes()[len(schema_bytes) :]
 
     schema = np.ndarray(
         shape=len(schema_bytes), dtype=np.byte, buffer=bytearray(schema_bytes)
