@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     # See cpp/include/cudf/io_types.h:22
     ctypedef enum gdf_input_type:

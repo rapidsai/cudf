@@ -30,8 +30,10 @@ requirements:
     - librmm {{ minor_version }}.*
     - libnvstrings {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
+    - dlpack
 
 test:
   commands:
