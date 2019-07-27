@@ -59,6 +59,7 @@ cdef CCudaBufferReader* to_buffer_reader(object obj):
 cdef public api bint pyarrow_is_cudabuffer(object buffer):
     return isinstance(buffer, CudaBuffer)
 
+
 def as_pa_buffer(object o):
     if isinstance(o, pa.Buffer):
         return o
