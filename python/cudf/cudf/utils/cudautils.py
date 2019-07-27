@@ -553,21 +553,27 @@ def gpu_unique_set_insert(vset, sz, val):
 
 
 @cuda.jit
-def gpu_shift(in_col, out_col, N, replacement_value):
+def gpu_shift(in_col, out_col, N, mask_bits):
     """Shift value at index i of an input array forward by N positions and
     store the output in a new array.
     """
     i = cuda.grid(1)
+
     if N > 0:
         if i < in_col.size:
             out_col[i] = in_col[i - N]
-        if i < N:
-            out_col[i] = replacement_value
     else:
         if i <= (in_col.size + N):
             out_col[i] = in_col[i - N]
-        if i >= (in_col.size + N) and i < in_col.size:
-            out_col[i] = replacement_value
+
+    base = i * mask_bitsize
+    for k in range(base, base + mask_bitsize):
+        if k >= in_col.size:
+            break
+        if N > 0 and k >= N:
+            mask_set(mask_bits, k)
+        elif N < 0 and k < (in_col.size + N):
+            mask_set(mask_bits, k)
 
 
 @cuda.jit

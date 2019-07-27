@@ -2154,17 +2154,14 @@ class Series(object):
 
         input_dary = self.data.to_gpu_array()
         output_dary = rmm.device_array_like(input_dary)
-
-        if self.dtype.kind in "iu":
-            replacement_value = np.iinfo(self.dtype).min
-        else:
-            replacement_value = np.finfo(self.dtype).min
+        mask_array = cudautils.make_empty_mask(output_dary.size)
         cudautils.gpu_shift.forall(output_dary.size)(
-            input_dary, output_dary, periods, replacement_value
+            input_dary, output_dary, periods, mask_array
         )
 
-        result = Series(output_dary, name=self.name, index=self.index)
-        result = result.where(result != replacement_value, None)
+        result = Series.from_masked_array(data=output_dary, mask=mask_array)
+        result.name = self.name
+        result = result.set_index(self.index)
         return result
 
     def diff(self, periods=1):
