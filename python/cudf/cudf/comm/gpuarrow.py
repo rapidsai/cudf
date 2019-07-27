@@ -1,3 +1,183 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf.bindings.gpuarrow import GpuArrowReader  # noqa: F401
+import numpy as np
+import pyarrow as pa
+import numba.cuda.cudadrv.driver
+from collections.abc import Sequence
+
+from librmm_cffi import librmm as rmm
+from collections import namedtuple, OrderedDict
+
+from cudf.dataframe import Series
+from cudf.bindings.arrow._cuda import CudaBuffer
+from cudf.utils.utils import mask_dtype, mask_bitsize
+from cudf.bindings.gpuarrow import CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader
+
+class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
+    """
+    Reader for the Arrow streaming binary format
+
+    Parameters
+    ----------
+    source : pyarrow.cuda.CudaBuffer or numba DeviceNDarray
+        Either numba DeviceNDArray, or a pyarrow.cuda.CudaBuffer
+    schema : bytes/buffer-like, pyarrow.Schema, pyarrow.NativeFile, file-like Python object
+        Optional pyarrow.Schema or host-serialized bytes/buffer-like pyarrow.Schema
+    """
+    def __init__(self, source, schema=None):
+        self._open(source, schema)
+
+class GpuArrowReader(Sequence):
+    def __init__(self, schema, dev_ary):
+        self._table = CudaRecordBatchStreamReader(dev_ary, schema).read_all()
+    def __len__(self):
+        return self._table.num_columns
+    def __getitem__(self, idx):
+        return GpuArrowNodeReader(self._table, idx)
+    def schema(self):
+        return self._table.schema
+    def to_dict(self):
+        """
+        Return a dictionary of Series object
+        """
+        dc = OrderedDict()
+        for node in self:
+            dc[node.name] = node.make_series()
+        return dc
+
+class GpuArrowNodeReader(object):
+    def __init__(self, table, index):
+        self._table = table
+        self._field = table.schema[index]
+        self._series = array_to_series(table.column(index))
+
+    def __len__(self):
+        return len(self._series)
+    @property
+    def schema(self):
+        return self._table.schema
+    @property
+    def field_schema(self):
+        return self._field
+    @property
+    def is_dictionary(self):
+        return pa.types.is_dictionary(self._field.type)
+    @property
+    def null_count(self):
+        return self._series.null_count
+    @property
+    def dtype(self):
+        return self._field.type.to_pandas_dtype()
+    @property
+    def index_dtype(self):
+        return self._field.type.index_type.to_pandas_dtype()
+    @property
+    def name(self):
+        return self._field.name
+    @property
+    def data(self):
+        """
+        Return the data as the expected dtype
+        and with the padding bytes truncated.
+        """
+        if self.data_raw is not None:
+            return self.data_raw.view(self.dtype
+                            if not self.is_dictionary
+                                else self.index_dtype)
+    @property
+    def null(self):
+        """
+        Return the null mask with the padding bytes truncated.
+        """
+        if self.null_raw is not None:
+            bits = mask_bitsize
+            itemsize = mask_dtype.itemsize
+            end = ((len(self) + bits - 1) // bits) * itemsize
+            return self.null_raw[:end].view(mask_dtype)
+
+    @property
+    def data_raw(self):
+        "Accessor for the data buffer as a device array"
+        return self._series.data.mem
+    @property
+    def null_raw(self):
+        "Accessor for the null buffer as a device array"
+        return self._series.nullmask.mem
+    def make_series(self):
+        """Make a Series object out of this node
+        """
+        return self._series.copy(deep=False)
+    def _make_dictionary_series(self):
+        """Make a dictionary-encoded series from this node
+        """
+        assert self.is_dictionary
+        return self._series.copy(deep=False)
+
+def gpu_view_as(buf, dtype, shape=None, strides=None):
+    ptr = numba.cuda.cudadrv.driver.device_pointer(buf.to_numba())
+    return rmm.device_array_from_ptr(ptr, buf.size // dtype.itemsize, dtype=dtype)
+
+def make_device_arrays(array):
+
+    buffers = array.buffers()
+    dtypes = [np.dtype(np.int8), None, None]
+
+    if pa.types.is_list(array.type):
+        dtypes[1] = np.dtype(np.int32)
+    elif pa.types.is_string(array.type) or pa.types.is_binary(array.type):
+        dtypes[2] = np.dtype(np.int8)
+        dtypes[1] = np.dtype(np.int32)
+    elif not pa.types.is_dictionary(array.type):
+        dtypes[1] = np.dtype(array.type.to_pandas_dtype())
+    else:
+        dtypes[1] = np.dtype(array.type.index_type.to_pandas_dtype())
+
+    for i in range(len(buffers)):
+        buffers[i] = None if buffers[i] is None \
+            else gpu_view_as(CudaBuffer.from_buffer(buffers[i]), dtypes[i])
+
+    return buffers
+
+def array_to_series(array):
+
+    if isinstance(array, pa.ChunkedArray):
+        return Series._concat([array_to_series(chunk) for chunk in array.chunks])
+    if isinstance(array, pa.Column):
+        return Series._concat([array_to_series(chunk) for chunk in array.data.chunks])
+
+    dtype = None
+    array_len = len(array)
+    null_count = array.null_count
+    buffers = make_device_arrays(array)
+    mask, data = buffers[0], buffers[1]
+
+    if pa.types.is_dictionary(array.type):
+        from cudf.dataframe import CategoricalColumn
+        dtype = 'categorical'
+        codes = array_to_series(array.indices)
+        categories = array_to_series(array.dictionary)
+        data = CategoricalColumn(data=codes.data,
+                                 mask=mask,
+                                 null_count=null_count,
+                                 categories=categories,
+                                 ordered=array.type.ordered)
+    elif pa.types.is_string(array.type):
+        import nvstrings
+        offs, data = buffers[1], buffers[2]
+        offs = offs[array.offset : array.offset + array_len + 1]
+        data = np.empty(0, dtype=np.dtype(np.int8)) if data is None else data
+        mask = None if mask is None else mask.copy_to_host().view(np.dtype(np.int8))
+        data = nvstrings.from_offsets(data.copy_to_host(),
+                                      offs.copy_to_host(),
+                                      array_len, nbuf=mask, ncount=null_count)
+    else:
+        dtype = array.type.to_pandas_dtype()
+        if data is not None:
+            data = data[array.offset : array.offset + len(array)]
+
+    series = Series(data, dtype=dtype)
+
+    if null_count > 0 and mask is not None and not series.has_null_mask:
+        return series.set_mask(mask, null_count)
+
+    return series
