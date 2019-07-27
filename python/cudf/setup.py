@@ -18,6 +18,7 @@ extensions = [
         "*",
         sources=cython_files,
         include_dirs=[
+            "../../cpp/include/cudf",
             "../../cpp/include",
             "../../cpp/build/include",
             os.path.dirname(sysconfig.get_path("include")),

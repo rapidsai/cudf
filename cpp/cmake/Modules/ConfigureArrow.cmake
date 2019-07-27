@@ -73,15 +73,6 @@ if(ARROW_BUILD)
     message(FATAL_ERROR "Building Arrow failed: " ${ARROW_BUILD})
 endif(ARROW_BUILD)
 
-# set(ARROW_GENERATED_IPC_DIR "${ARROW_ROOT}/build/src/arrow/ipc")
-
-# configure_file(${ARROW_GENERATED_IPC_DIR}/File_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/File_generated.h COPYONLY)
-# configure_file(${ARROW_GENERATED_IPC_DIR}/Message_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Message_generated.h COPYONLY)
-# configure_file(${ARROW_GENERATED_IPC_DIR}/Schema_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Schema_generated.h COPYONLY)
-# configure_file(${ARROW_GENERATED_IPC_DIR}/Tensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/Tensor_generated.h COPYONLY)
-# configure_file(${ARROW_GENERATED_IPC_DIR}/SparseTensor_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/SparseTensor_generated.h COPYONLY)
-# configure_file(${ARROW_GENERATED_IPC_DIR}/feather_generated.h ${CMAKE_SOURCE_DIR}/include/cudf/ipc_generated/feather_generated.h COPYONLY)
-
 message(STATUS "Arrow installed here: " ${ARROW_ROOT}/install)
 set(ARROW_LIBRARY_DIR "${ARROW_ROOT}/install/lib")
 set(ARROW_INCLUDE_DIR "${ARROW_ROOT}/install/include")
@@ -99,6 +90,12 @@ if(ARROW_LIB AND ARROW_CUDA_LIB)
     message(STATUS "Arrow CUDA library: " ${ARROW_CUDA_LIB})
     set(ARROW_FOUND TRUE)
 endif(ARROW_LIB AND ARROW_CUDA_LIB)
+
+set(FLATBUFFERS_ROOT "${ARROW_ROOT}/build/flatbuffers_ep-prefix/src/flatbuffers_ep-install")
+
+message(STATUS "FlatBuffers installed here: " ${FLATBUFFERS_ROOT})
+set(FLATBUFFERS_INCLUDE_DIR "${FLATBUFFERS_ROOT}/include")
+set(FLATBUFFERS_LIBRARY_DIR "${FLATBUFFERS_ROOT}/lib")
 
 file(INSTALL ${ARROW_INCLUDE_DIR}/arrow/gpu DESTINATION include/arrow)
 
