@@ -12,12 +12,20 @@ from libc.stdint cimport uintptr_t, uint32_t
 from libcpp.vector cimport vector
 
 
-def hash_columns(columns, result, initial_hash_values=None):
+def hash_columns(columns, initial_hash_values=None):
     """Hash the *columns* and store in *result*.
     Returns *result*
     """
+    from cudf.dataframe.buffer import Buffer
+    from librmm_cffi import librmm as rmm
+    from cudf.dataframe.numerical import NumericalColumn
+
     assert len(columns) > 0
-    assert result.dtype == np.int32
+    buf = Buffer(rmm.device_array(len(columns[0]), dtype=np.int32))
+    result = NumericalColumn(data=buf, dtype=buf.dtype)
+    if initial_hash_values:
+        initial_hash_values = rmm.to_device(initial_hash_values)
+
     # No-op for 0-sized
     if len(result) == 0:
         return result

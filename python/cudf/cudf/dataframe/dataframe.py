@@ -2471,13 +2471,13 @@ class DataFrame(object):
             Sequence of column names. If columns is *None* (unspecified),
             all columns in the frame are used.
         """
-        from cudf.dataframe import numerical
 
         if columns is None:
             columns = self.columns
-
         cols = [self[k]._column for k in columns]
-        return Series(numerical.column_hash_values(*cols))
+        import cudf.bindings.hash as cpp_hash
+
+        return Series(cpp_hash.hash_columns(cols))
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.

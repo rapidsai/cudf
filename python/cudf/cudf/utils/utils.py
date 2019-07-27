@@ -278,43 +278,22 @@ def hash_cudf_object(
         raise NotImplementedError("categorize is not yet supported")
 
     from cudf import Series, DataFrame
-    import itertools
-
-    def _combine_hash_arrays(arrays, num_items):
-        try:
-            first = next(arrays)
-        except StopIteration:
-            return Series([], dtype=np.int64)
-
-        arrays = itertools.chain([first], arrays)
-        from cudf.dataframe.columnops import column_empty_like
-
-        mult = np.int64(1000003)
-        out = Series(
-            column_empty_like(first, masked=True).fillna(np.int64(0x345678))
-        )
-        for i, a in enumerate(arrays):
-            inverse_i = num_items - i
-            out ^= a
-            out *= mult
-            mult += 82520 + inverse_i + inverse_i
-        assert i + 1 == num_items, "Fed in wrong num_items"
-        out += np.int64(97531)
-        return out
 
     if isinstance(obj, Series):
-        values_hash = obj.hash_values()
+        columns = [obj._column]
     elif isinstance(obj, DataFrame):
-        values_hash = obj.hash_columns()
+        columns = [obj[k]._column for k in obj.columns]
     else:
         raise TypeError("Unsupported type to hash")
 
     if index is True:
-        index_hash = Series(obj.index.values).hash_values()
-        arrays = itertools.chain([values_hash], [index_hash])
-        values_hash = _combine_hash_arrays(arrays, 2)
+        columns = columns + [Series(obj.index.values)._column]
 
-    hash_object = Series(values_hash, index=obj.index, dtype="int64")
+    import cudf.bindings.hash as cpp_hash
+
+    hash_object = Series(
+        cpp_hash.hash_columns(columns), index=obj.index, dtype="int64"
+    )
 
     return hash_object
 

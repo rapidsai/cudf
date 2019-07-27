@@ -11,7 +11,6 @@ from librmm_cffi import librmm as rmm
 
 import cudf.bindings.binops as cpp_binops
 import cudf.bindings.copying as cpp_copying
-import cudf.bindings.hash as cpp_hash
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.sort as cpp_sort
@@ -465,19 +464,6 @@ def safe_cast_to_int(col, dtype):
                 col.dtype.type.__name__, np.dtype(dtype).type.__name__
             )
         )
-
-
-def column_hash_values(column0, *other_columns, initial_hash_values=None):
-    """Hash all values in the given columns.
-    Returns a new NumericalColumn[int32]
-    """
-    columns = [column0] + list(other_columns)
-    buf = Buffer(rmm.device_array(len(column0), dtype=np.int32))
-    result = NumericalColumn(data=buf, dtype=buf.dtype)
-    if initial_hash_values:
-        initial_hash_values = rmm.to_device(initial_hash_values)
-    cpp_hash.hash_columns(columns, result, initial_hash_values)
-    return result
 
 
 def digitize(column, bins, right=False):
