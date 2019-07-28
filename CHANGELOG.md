@@ -19,6 +19,7 @@
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2049 Implemented merge functionality
+- PR #2415 Add `value_counts` support for string column
 
 ## Improvements
 
