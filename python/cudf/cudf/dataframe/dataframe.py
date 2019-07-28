@@ -3138,7 +3138,7 @@ class DataFrame(object):
     #
     def _prepare_for_rowwise_method(self, coerce_dtype=np.float64):
         filtered = self.select_dtypes(include=[np.number])
-        coerced = filtered._apply_support_method('astype', coerce_dtype)
+        coerced = filtered._apply_support_method('astype', dtype=coerce_dtype)
         arr = cp.fromDlpack(coerced.to_dlpack())
         return arr
 
@@ -3252,9 +3252,9 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(self, method, *args, **kwargs):
+    def _apply_support_method(self, method, **kwargs):
         result = [
-            getattr(self[col], method)(*args, **kwargs) for col in
+            getattr(self[col], method)(**kwargs) for col in
             self._cols.keys()
         ]
         if isinstance(result[0], Series):
