@@ -3133,34 +3133,67 @@ class DataFrame(object):
     #
     # Stats
     #
+    def _prepare_for_rowwise_method(self, coerce_dtype=np.float64):
+        filtered = self.select_dtypes(include=[np.number])
+        coerced = filtered._apply_support_method('astype', coerce_dtype)
+        arr = cp.fromDlpack(coerced.to_dlpack())
+        return arr
+
+    def _apply_rowwise_op(self, op, axis=1, **kwargs):
+        kwargs['axis'] = axis
+        arr = self._prepare_for_rowwise_method()
+        result = getattr(arr, op)(**kwargs)
+
+        if len(result.shape) == 1:
+            return Series(cuda.as_cuda_array(result))
+        else:
+            return DataFrame.from_gpu_matrix(cuda.as_cuda_array(result))
+
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
-    def min(self, **kwargs):
+    def min(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("min")
         return self._apply_support_method("min", **kwargs)
 
-    def max(self, **kwargs):
+    def max(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("max")
         return self._apply_support_method("max", **kwargs)
 
-    def sum(self, **kwargs):
+    def sum(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("sum")
         return self._apply_support_method("sum", **kwargs)
 
-    def product(self, **kwargs):
+    def product(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("prod")
         return self._apply_support_method("product", **kwargs)
 
-    def cummin(self, **kwargs):
+    def prod(self, axis=0, **kwargs):
+        """Alias for product.
+        """
+        return self.product(axis, **kwargs)
+
+    def cummin(self, axis=0, **kwargs):
         return self._apply_support_method("cummin", **kwargs)
 
-    def cummax(self, **kwargs):
+    def cummax(self, axis=0, **kwargs):
         return self._apply_support_method("cummax", **kwargs)
 
-    def cumsum(self, **kwargs):
+    def cumsum(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("cumsum")
         return self._apply_support_method("cumsum", **kwargs)
 
-    def cumprod(self, **kwargs):
+    def cumprod(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("cumprod")
         return self._apply_support_method("cumprod", **kwargs)
 
-    def mean(self, numeric_only=None, **kwargs):
+    def mean(self, numeric_only=None, axis=0, **kwargs):
         """Return the mean of the values for the requested axis.
 
         Parameters
@@ -3187,12 +3220,18 @@ class DataFrame(object):
         -------
         mean : Series or DataFrame (if level specified)
         """
+        if axis == 1:
+            return self._apply_rowwise_op("mean")
         return self._apply_support_method("mean", **kwargs)
 
-    def std(self, **kwargs):
+    def std(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("std")
         return self._apply_support_method("std", **kwargs)
 
-    def var(self, **kwargs):
+    def var(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("var")
         return self._apply_support_method("var", **kwargs)
 
     def all(self, bool_only=None, **kwargs):
@@ -3209,9 +3248,10 @@ class DataFrame(object):
             )
         return self._apply_support_method("any", **kwargs)
 
-    def _apply_support_method(self, method, **kwargs):
+    def _apply_support_method(self, method, *args, **kwargs):
         result = [
-            getattr(self[col], method)(**kwargs) for col in self._cols.keys()
+            getattr(self[col], method)(*args, **kwargs) for col in
+            self._cols.keys()
         ]
         if isinstance(result[0], Series):
             support_result = result
