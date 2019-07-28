@@ -41,6 +41,9 @@ from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.window import Rolling
 
+import cupy as cp
+from numba import cuda
+
 
 def _unique_name(existing_names, suffix="_unique_name"):
     ret = suffix
@@ -3177,10 +3180,10 @@ class DataFrame(object):
         """
         return self.product(axis, **kwargs)
 
-    def cummin(self, axis=0, **kwargs):
+    def cummin(self, **kwargs):
         return self._apply_support_method("cummin", **kwargs)
 
-    def cummax(self, axis=0, **kwargs):
+    def cummax(self, **kwargs):
         return self._apply_support_method("cummax", **kwargs)
 
     def cumsum(self, axis=0, **kwargs):
