@@ -3148,9 +3148,10 @@ class DataFrame(object):
         result = getattr(arr, op)(**kwargs)
 
         if len(result.shape) == 1:
-            return Series(cuda.as_cuda_array(result))
+            return Series(cuda.as_cuda_array(result), index=self.index)
         else:
-            return DataFrame.from_gpu_matrix(cuda.as_cuda_array(result))
+            return DataFrame.from_gpu_matrix(cuda.as_cuda_array(result),
+                                             index=self.index)
 
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
