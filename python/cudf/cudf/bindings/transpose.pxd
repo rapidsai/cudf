@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     cdef gdf_error gdf_transpose(
         gdf_size_type ncols,
