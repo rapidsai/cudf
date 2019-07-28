@@ -1826,9 +1826,9 @@ class Series(object):
             msg = "non sort based value_count() not implemented yet"
             raise NotImplementedError(msg)
         if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int64))
+            return Series(np.array([], dtype=np.int64), name=self.name)
         vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=as_index(vals))
+        res = Series(cnts, index=as_index(vals), name=self.name)
         if sort:
             return res.sort_values(ascending=False)
         return res

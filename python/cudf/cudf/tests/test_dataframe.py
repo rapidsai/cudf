@@ -3351,3 +3351,28 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+def test_value_counts():
+    pdf = pd.DataFrame(
+        {
+            "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
+            "alpha": ["u", "h", "d", "a", "m", "u", "h", "d", "a"] * 10,
+        }
+    )
+
+    gdf = DataFrame(
+        {
+            "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
+            "alpha": ["u", "h", "d", "a", "m", "u", "h", "d", "a"] * 10,
+        }
+    )
+
+    assert_eq(
+        pdf.numeric.value_counts().sort_index(),
+        gdf.numeric.value_counts().sort_index(),
+    )
+    assert_eq(
+        pdf.alpha.value_counts().sort_index(),
+        gdf.alpha.value_counts().sort_index(),
+    )
