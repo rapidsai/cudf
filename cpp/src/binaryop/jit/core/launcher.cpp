@@ -64,7 +64,7 @@ namespace jit {
     Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx, std::string output_type)
     {
         std::string combined_kernel = 
-          parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type) + code::kernel;
+          cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type) + code::kernel;
         program = cacheInstance.getProgram(prog_file_name,
                                            combined_kernel.c_str(),
                                            headersName,

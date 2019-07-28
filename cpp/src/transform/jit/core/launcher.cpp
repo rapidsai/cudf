@@ -45,9 +45,9 @@ std::istream* headersCode(std::string filename, std::iostream& stream) {
 Launcher& Launcher::setProgram(std::string prog_file_name, std::string udf,
                                std::string output_type, bool is_ptx) {
   std::string combined_kernel = is_ptx ?
-      parse_single_function_ptx(udf, "GENERIC_UNARY_OP", output_type) +
+      cudf::jit::parse_single_function_ptx(udf, "GENERIC_UNARY_OP", output_type) +
       code::kernel:
-      parse_single_function_cuda(udf, "GENERIC_UNARY_OP", output_type) +
+      cudf::jit::parse_single_function_cuda(udf, "GENERIC_UNARY_OP", output_type) +
       code::kernel;
   program = cacheInstance.getProgram(prog_file_name, combined_kernel.c_str(),
                                      headersName, compilerFlags, headersCode);

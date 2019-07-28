@@ -393,6 +393,14 @@ set(FILLING_TEST_SRC
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
+###################################################################################################
+# - filling test --------------------------------------------------------------------------
+
+set(PARSER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/jit/parser_tests.cpp")
+
+ConfigureTest(PARSER_TEST "${PARSER_TEST_SRC}")
+
 
 
 ###################################################################################################

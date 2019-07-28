@@ -285,4 +285,51 @@ gdf_column* rolling_window(const gdf_column &input_col,
   return output_col.release();
 }
 
+/**
+// see rolling.hpp for declaration
+gdf_column rolling_window(gdf_column const& input_col,
+                           gdf_size_type window,
+                           gdf_size_type min_periods,
+                           gdf_size_type forward_window,
+                           std::string& user_defined_aggregator,
+                           gdf_dtype output_type,
+                           gdf_size_type const* window_col,
+                           gdf_size_type const* min_periods_col,
+                           gdf_size_type const* forward_window_col)
+{
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
+
+  // Use the column wrapper class from io/utilities to quickly create a column
+  gdf_column_wrapper output_col(input_col.size,
+                                input_col.dtype,
+                                gdf_dtype_extra_info{TIME_UNIT_NONE},
+                                "");
+
+  // If there are no rows in the input, return successfully
+  if (input_col.size == 0)
+    return *output_col.release();
+
+  // Allocate memory for the output column
+  CUDF_EXPECTS(output_col.allocate() == GDF_SUCCESS, "Cannot allocate the output column");
+
+  // At least one observation is required to procure a valid output
+  min_periods = std::max(min_periods, 1);
+
+  // always use the default stream for now
+  cudaStream_t stream = NULL;
+
+  // Launch type dispatcher
+  cudf::type_dispatcher(input_col.dtype,
+                        rolling_window_launcher{},
+                        input_col.size, agg_type,
+                        output_col->data, output_col->valid,
+                        input_col.data, input_col.valid,
+                        window, min_periods, forward_window,
+                        window_col, min_periods_col, forward_window_col,
+                        stream);
+
+  // Release the gdf pointer from the wrapper class
+  return *output_col.release();
+}
+*/
 }  // namespace cudf

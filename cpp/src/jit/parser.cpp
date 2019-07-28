@@ -20,18 +20,18 @@
 #include <vector>
 #include <utilities/error_utils.hpp>
 
+#include "parser.h"
+
+namespace cudf {
+namespace jit {
+
 constexpr char percent_escape[] = "_";
 
 inline bool is_white(const char c) {
   return c == ' ' || c == '\n' || c == '\r' || c == '\t';
 }
 
-inline std::map<std::string, std::string>& get_input_arg_list() {
-  static std::map<std::string, std::string> m;
-  return m;
-}
-
-std::string escape_percent(const std::string& src) {
+std::string ptx_parser::escape_percent(const std::string& src) {
   // Since we are transforming into inline ptx we are not allowed to have
   // register names starting with %.
   const size_t length = src.size();
@@ -53,7 +53,7 @@ std::string escape_percent(const std::string& src) {
   }
 }
 
-std::string get_rid_of_nonalnum_sqrbra(const std::string& src) {
+std::string ptx_parser::get_rid_of_nonalnum_sqrbra(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -71,7 +71,7 @@ std::string get_rid_of_nonalnum_sqrbra(const std::string& src) {
   return output.substr(start, stop - start);
 }
 
-std::string parse_register_type(const std::string& src) {
+std::string ptx_parser::parse_register_type(const std::string& src) {
   if (src == ".b8" || src == ".u8" || src == ".s8")
     return "h";
   else if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
@@ -88,13 +88,13 @@ std::string parse_register_type(const std::string& src) {
     return "x_reg";
 }
 
-std::string register_type_to_cppname(const std::string& register_type) {
+std::string ptx_parser::register_type_to_cppname(const std::string& register_type) {
   if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
     return "char";
   else if (register_type == ".u16")
-    return "short";
+    return "short int";
   else if (register_type == ".s16")
-    return "short";
+    return "short int";
   else if (register_type == ".f16")
     return "half";
   else if (register_type == ".u32")
@@ -104,9 +104,9 @@ std::string register_type_to_cppname(const std::string& register_type) {
   else if (register_type == ".f16x2")
     return "half2";
   else if (register_type == ".u64")
-    return "long";
+    return "long int";
   else if (register_type == ".s64")
-    return "long";
+    return "long int";
   else if (register_type == ".f32")
     return "float";
   else if (register_type == ".f64")
@@ -115,7 +115,7 @@ std::string register_type_to_cppname(const std::string& register_type) {
     return "x_cpptype";
 }
 
-std::string find_register_type(const std::string& src) {
+std::string ptx_parser::find_register_type(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -140,7 +140,7 @@ std::string find_register_type(const std::string& src) {
   exit(1);
 }
 
-std::string parse_instruction(const std::string& src) {
+std::string ptx_parser::parse_instruction(const std::string& src) {
   // I am assumming for an instruction statement the starting phrase is an
   // instruction.
   const size_t length = src.size();
@@ -228,7 +228,7 @@ std::string parse_instruction(const std::string& src) {
                  get_rid_of_nonalnum_sqrbra(piece) + ")";
         }
         // Here we get to see the actual type of the input arguments.
-        get_input_arg_list()[get_rid_of_nonalnum_sqrbra(piece)] =
+        input_arg_list[get_rid_of_nonalnum_sqrbra(piece)] =
             register_type_to_cppname(register_type);
       } else {
         output += escape_percent(std::string(src, start, stop - start));
@@ -241,7 +241,7 @@ std::string parse_instruction(const std::string& src) {
   return "asm volatile (\"" + output + "\"" + suffix + ");" + original_code;
 }
 
-std::string parse_statement(const std::string& src) {
+std::string ptx_parser::parse_statement(const std::string& src) {
   // First find the first non-white charactor.
   const size_t length = src.size();
   size_t start = 0;
@@ -258,8 +258,7 @@ std::string parse_statement(const std::string& src) {
   }
 }
 
-std::vector<std::string> parse_function_body(const std::string& src,
-                                             const char indicator = ';') {
+std::vector<std::string> ptx_parser::parse_function_body(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -268,7 +267,7 @@ std::vector<std::string> parse_function_body(const std::string& src,
 
   while (stop < length) {
     stop = start;
-    while (stop < length && src[stop] != indicator) {
+    while (stop < length && src[stop] != ';') {
       stop++;
     }
     // statements.push_back(std::string(src, start, stop-start));
@@ -281,7 +280,7 @@ std::vector<std::string> parse_function_body(const std::string& src,
   return statements;
 }
 
-std::string parse_param(const std::string& src, bool first = false) {
+std::string ptx_parser::parse_param(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -306,7 +305,7 @@ std::string parse_param(const std::string& src, bool first = false) {
   return name;
 }
 
-std::string parse_param_list(const std::string& src, const std::string& output_arg_type) {
+std::string ptx_parser::parse_param_list(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -320,24 +319,34 @@ std::string parse_param_list(const std::string& src, const std::string& output_a
     while (stop < length && src[stop] != ',') {
       stop++;
     }
-    if (item_count == 0) {  // The first input argument is always a pointer.
-      first_name = parse_param(std::string(src, start, stop - start));
-    } else {
-      std::string name = parse_param(std::string(src, start, stop - start));
-      arg_type = get_input_arg_list()[name];
-      output += ", \n  " + arg_type + " " + name;
+    std::string name = parse_param(std::string(src, start, stop - start));
+    if(input_arg_list.count(name)){
+      if(pointer_arg_list.find(item_count) != pointer_arg_list.end()){
+        if(item_count == 0){
+          output += output_arg_type + "* " + name;
+        }else{
+          // On a 64-bit machine inside the PTX function body a pointer is
+          // literally just a uint_64 so here is doesn't make sense to
+          // have the type of the pointer. Thus we will just use void* here.
+          output += ",\n  void* " + name;
+        }
+      }else{
+        output += ", \n  " + input_arg_list[name] + " " + name;
+      }
+    }else{
+      // This parameter isn't used in the function body so we just pretend
+      // it's an int. After being inlined they are gone anyway.
+      output += ", \n  int " + name;
     }
     stop++;
     start = stop;
     item_count++;
   }
 
-  return "\n  " + output_arg_type + "* " + first_name + output + "\n";
+  return "\n  " + output + "\n";
 }
 
-std::string parse_function_header(const std::string& src,
-                                  const std::string& function_name,
-                                  const std::string& output_arg_type) {
+std::string ptx_parser::parse_function_header(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -384,7 +393,7 @@ std::string parse_function_header(const std::string& src,
     stop++;
   }
   std::string input_arg =
-      parse_param_list(std::string(src, start, stop - start), output_arg_type);
+      parse_param_list(std::string(src, start, stop - start));
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg +
          "){" + "\n";
 }
@@ -425,12 +434,11 @@ std::string remove_comments(const std::string& src) {
 }
 
 // The interface
-std::string parse_single_function_ptx(const std::string& src,
-                                      const std::string& function_name,
-                                      const std::string& output_arg_type) {
-  std::string no_comments = remove_comments(src);
+std::string ptx_parser::parse() {
 
-  get_input_arg_list().clear();
+  std::string no_comments = remove_comments(ptx);
+
+  input_arg_list.clear();
   // Go directly to the .func mark
   const size_t length = no_comments.size();
   size_t start = no_comments.find(".func") + 5;
@@ -465,7 +473,7 @@ std::string parse_single_function_ptx(const std::string& src,
       parse_function_body(std::string(no_comments, start, stop - start));
 
   std::string function_header_output =
-      parse_function_header(function_header, function_name, output_arg_type);
+      parse_function_header(function_header);
 
   std::string final_output = function_header_output + "\n";
   for (int i = 0; i < function_body_output.size(); i++) {
@@ -479,6 +487,17 @@ std::string parse_single_function_ptx(const std::string& src,
 
   return final_output;
 }
+
+ptx_parser::ptx_parser(
+    const std::string& ptx_,
+    const std::string& function_name_,
+    const std::string& output_arg_type_,
+    const std::set<int>& pointer_arg_list_
+): 
+  ptx(ptx_), 
+  function_name(function_name_), 
+  output_arg_type(output_arg_type_),
+  pointer_arg_list(pointer_arg_list_) {}
 
 // The interface
 std::string parse_single_function_cuda(const std::string& src,
@@ -519,3 +538,6 @@ std::string parse_single_function_cuda(const std::string& src,
 
   return no_comments;
 }
+
+} // namespace cudf
+} // namespace jit
