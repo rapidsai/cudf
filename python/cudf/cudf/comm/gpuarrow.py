@@ -6,14 +6,15 @@ from collections.abc import Sequence
 import numba.cuda.cudadrv.driver
 import numpy as np
 import pyarrow as pa
+
+from librmm_cffi import librmm as rmm
+
 from cudf.bindings.arrow._cuda import CudaBuffer
 from cudf.bindings.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
 from cudf.dataframe import Series
 from cudf.utils.utils import mask_bitsize, mask_dtype
-
-from librmm_cffi import librmm as rmm
 
 
 class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):
@@ -206,14 +207,14 @@ def array_to_series(array):
         offs, data = buffers[1], buffers[2]
         offs = offs[array.offset : array.offset + array_len + 1]
         data = None if data is None else data.device_ctypes_pointer.value
-        mask = (
-            None
-            if mask is None
-            else mask.device_ctypes_pointer.value
-        )
-        data = nvstrings.from_offsets(data,
+        mask = None if mask is None else mask.device_ctypes_pointer.value
+        data = nvstrings.from_offsets(
+            data,
             offs.device_ctypes_pointer.value,
-            array_len, mask, null_count, True
+            array_len,
+            mask,
+            null_count,
+            True,
         )
     else:
         dtype = array.type.to_pandas_dtype()
