@@ -28,7 +28,7 @@ requirements:
     - dlpack
   run:
     - python
-    - pandas >=0.23.4
+    - pandas>=0.24.2,<0.25
     - numba >=0.41,<0.45
     - pyarrow 0.14.1.*
     - rmm {{ minor_version }}.*
