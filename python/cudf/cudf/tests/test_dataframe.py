@@ -4,18 +4,19 @@ import array as arr
 import operator
 from itertools import combinations
 
-import cudf as gd
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+from librmm_cffi import librmm as rmm
+
+import cudf as gd
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.dataframe import DataFrame, Series
 from cudf.settings import set_options
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
-
-from librmm_cffi import librmm as rmm
 
 
 def test_buffer_basic():

@@ -1,17 +1,18 @@
 import datetime as dt
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import DatetimeIndex
-from cudf.tests.utils import assert_eq
 from pandas.util.testing import (
     assert_frame_equal,
     assert_index_equal,
     assert_series_equal,
 )
+
+import cudf
+from cudf.dataframe import DataFrame, Series
+from cudf.dataframe.index import DatetimeIndex
+from cudf.tests.utils import assert_eq
 
 
 def data1():

@@ -2,10 +2,11 @@
 
 from string import ascii_lowercase
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.dataframe import DataFrame, GenericIndex, Series
 from cudf.tests import utils
 

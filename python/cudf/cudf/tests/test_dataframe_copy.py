@@ -5,9 +5,10 @@ from copy import copy, deepcopy
 import numpy as np
 import pandas as pd
 import pytest
+from numba import cuda
+
 from cudf.dataframe.dataframe import DataFrame
 from cudf.tests.utils import assert_eq
-from numba import cuda
 
 
 """

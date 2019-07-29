@@ -1,6 +1,7 @@
-import cudf
 import numba
 import pandas as pd
+
+import cudf
 from cudf.bindings.rolling import apply_rolling
 from cudf.utils import cudautils
 

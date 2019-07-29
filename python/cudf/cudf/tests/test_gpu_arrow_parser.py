@@ -3,9 +3,10 @@ import logging
 
 import numpy as np
 import pytest
-from cudf.comm.gpuarrow import GpuArrowReader
 
 from librmm_cffi import librmm as rmm
+
+from cudf.comm.gpuarrow import GpuArrowReader
 
 try:
     import pyarrow as pa
