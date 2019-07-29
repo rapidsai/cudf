@@ -45,7 +45,7 @@ source activate gdf
 conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
-              "feather-format" "cupy>=6.0.0"
+              "feather-format" "cupy>=6.0.0" "arrow-cpp=0.14.1" "pyarrow=0.14.1"
 
 # Install the master version of dask and distributed
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps" 

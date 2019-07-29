@@ -13,6 +13,7 @@ from cudf.bindings.arrow._cuda cimport *
 from cudf.bindings.arrow.libarrow_cuda cimport *
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+
 cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
 
     cdef readonly:
