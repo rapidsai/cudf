@@ -11,7 +11,7 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 
-cdef extern from "cudf.h" namespace "cudf::io::parquet" nogil:
+cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
 
     cdef cppclass reader_options:
         vector[string] columns

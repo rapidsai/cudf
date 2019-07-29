@@ -11,7 +11,7 @@ from cudf.bindings.io cimport *
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
+cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
 
     ctypedef enum quote_style:
         QUOTE_MINIMAL = 0,
@@ -70,7 +70,7 @@ cdef extern from "cudf.h" namespace "cudf::io::csv" nogil:
             gdf_size_type num_rows
         ) except +
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
     # See cpp/include/cudf/io_types.h:146
     ctypedef struct csv_write_arg:
         # Arguments to csv writer function
