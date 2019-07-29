@@ -1,7 +1,7 @@
 import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
-
+from cudf import Series
 from cudf.utils import utils
 
 
@@ -95,3 +95,11 @@ def gen_rand(dtype, size, **kwargs):
         high = kwargs.get("high", 1)
         return np.random.randint(low=low, high=high, size=size).astype(np.bool)
     raise NotImplementedError("dtype.kind={}".format(dtype.kind))
+
+
+def gen_rand_series(dtype, size, **kwargs):
+    values = gen_rand(dtype, size, **kwargs)
+    if kwargs.get("has_nulls", False):
+        return Series(values)
+
+    return Series.from_masked_array(values, utils.random_bitmask(size))
