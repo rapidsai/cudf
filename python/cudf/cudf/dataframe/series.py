@@ -2382,7 +2382,7 @@ class Series(object):
         A Column of insertion points with the same shape as value
         """
         outcol = self._column.searchsorted(value, side)
-        return self._copy_construct(data=outcol)
+        return Series(outcol)
 
     @property
     def is_unique(self):
