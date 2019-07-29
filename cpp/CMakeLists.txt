@@ -143,6 +143,25 @@ if (RMM_INCLUDE AND RMM_LIBRARY)
 endif (RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
+# - NVStrings -------------------------------------------------------------------------------------
+
+include(ConfigureNVStrings)
+
+if(NVSTRINGS_BUILT)
+  message(STATUS "NVStrings built successfully")
+  message(STATUS "NVStrings library path: " ${NVSTRINGS_LIBRARY_DIR})
+  
+  add_library(NVStrings SHARED IMPORTED)
+  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so)
+
+  add_library(NVCategory SHARED IMPORTED)
+  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so)
+
+  add_library(NVText SHARED IMPORTED)
+  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVText.so)
+endif(NVSTRINGS_BUILT)
+
+###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
 
 option(JITIFY_USE_CACHE "Use a file cache for JIT compiled kernels" ON)
@@ -161,7 +180,8 @@ if(BUILD_TESTS)
     if(GTEST_FOUND)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         include_directories(${GTEST_INCLUDE_DIR})
-        # add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/custrings/tests)
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
@@ -183,25 +203,6 @@ if(BUILD_BENCHMARKS)
   endif(GBENCH_FOUND)
 
 endif(BUILD_BENCHMARKS)
-
-###################################################################################################
-# - NVStrings -------------------------------------------------------------------------------------
-
-include(ConfigureNVStrings)
-
-if(NVSTRINGS_BUILT)
-  message(STATUS "NVStrings built successfully")
-  message(STATUS "NVStrings library path: " ${NVSTRINGS_LIBRARY_DIR})
-  
-  add_library(NVStrings SHARED IMPORTED)
-  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so)
-
-  add_library(NVCategory SHARED IMPORTED)
-  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so)
-
-  add_library(NVText SHARED IMPORTED)
-  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVText.so)
-endif(NVSTRINGS_BUILT)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
