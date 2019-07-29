@@ -123,7 +123,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
         return self.view(
             numerical.NumericalColumn,
             dtype="int64",
-            data = typecast.apply_cast(self, dtype=np.int64).data,
+            data=typecast.apply_cast(self, dtype=np.int64).data,
         )
 
     def astype(self, dtype):
