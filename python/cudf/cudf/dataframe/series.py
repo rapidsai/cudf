@@ -357,6 +357,9 @@ class Series(object):
         return self._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
+        from cudf.indexing import indices_from_labels
+
+        key = indices_from_labels(self, key)
         self._column[key] = value
 
     def take(self, indices, ignore_index=False):

@@ -8,14 +8,15 @@ from cudf.utils.utils import is_single_value
 
 
 def indices_from_labels(obj, labels):
+    from cudf.dataframe import columnops
+
+    labels = columnops.as_column(labels)
     if pd.api.types.is_categorical_dtype(obj.index):
         labels = labels.astype("category")
 
-        labels._column._data = labels._column.data.astype(
-            obj.index._values.data.dtype
-        )
+        labels._data = labels.data.astype(obj.index._values.data.dtype)
 
-    lhs = cudf.DataFrame({}, index=labels._column)
+    lhs = cudf.DataFrame({}, index=labels)
     rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
     return lhs.join(rhs)["_"]
 
