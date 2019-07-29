@@ -205,18 +205,15 @@ def array_to_series(array):
 
         offs, data = buffers[1], buffers[2]
         offs = offs[array.offset : array.offset + array_len + 1]
-        data = np.empty(0, dtype=np.dtype(np.int8)) if data is None else data
+        data = None if data is None else data.device_ctypes_pointer.value
         mask = (
             None
             if mask is None
-            else mask.copy_to_host().view(np.dtype(np.int8))
+            else mask.device_ctypes_pointer.value
         )
-        data = nvstrings.from_offsets(
-            data.copy_to_host(),
-            offs.copy_to_host(),
-            array_len,
-            nbuf=mask,
-            ncount=null_count,
+        data = nvstrings.from_offsets(data,
+            offs.device_ctypes_pointer.value,
+            array_len, mask, null_count, True
         )
     else:
         dtype = array.type.to_pandas_dtype()
