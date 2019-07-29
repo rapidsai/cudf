@@ -57,9 +57,11 @@ TEST(ScatterTest, ScatterNVString)
   rmm::device_vector<gdf_index_type> d_scatter_map = scatter_map;
 
   cudf::table source_table({left_column});
-  cudf::table destination_table({right_column});
+  cudf::table target_table({right_column});
 
-  cudf::scatter(&source_table, d_scatter_map.data().get(), &destination_table);
+  cudf::table destination_table;
+
+  EXPECT_NO_THROW(destination_table = cudf::scatter(source_table, d_scatter_map.data().get(), target_table));
   
   if(print){
     print_gdf_column(left_column);
@@ -68,7 +70,7 @@ TEST(ScatterTest, ScatterNVString)
 
   std::vector<std::string> strs;
   std::vector<gdf_valid_type> valids;
-  std::tie(strs, valids) = cudf::test::nvcategory_column_to_host(right_column);
+  std::tie(strs, valids) = cudf::test::nvcategory_column_to_host(destination_table.get_column(0));
   
   EXPECT_EQ((int)strs.size(), rows_size*2); 
   for(int i = 0; i < (int)strs.size(); i++){

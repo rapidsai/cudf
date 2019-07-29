@@ -77,9 +77,10 @@ void BM_scatter(benchmark::State& state){
   }
  
   cudf::table source_table{ vp_src };
-  cudf::table destination_table{ vp_dest };
+  cudf::table target_table{ vp_dest };
 
-  cudf::scatter(&source_table, scatter_map.data().get(), &destination_table);
+  cudf::table destination_table = 
+    cudf::scatter(source_table, scatter_map.data().get(), destination_table);
   
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
