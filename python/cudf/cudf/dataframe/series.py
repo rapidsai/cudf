@@ -7,7 +7,6 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from pandas.api.types import is_dict_like, is_scalar
 
 from librmm_cffi import librmm as rmm
@@ -360,8 +359,6 @@ class Series(object):
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        from cudf import Series
-
         if len(indices) == 0:
             return self._copy_construct(
                 data=self.data[:0], index=self.index[:0]

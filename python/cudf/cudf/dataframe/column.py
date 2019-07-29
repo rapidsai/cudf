@@ -8,7 +8,6 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
@@ -480,6 +479,9 @@ class Column(object):
                 return self.apply_boolean_mask(arg)
             else:
                 raise NotImplementedError(type(arg))
+
+    def __setitem__(self):
+        pass
 
     def masked_assign(self, value, mask):
         """Assign a scalar value to a series using a boolean mask

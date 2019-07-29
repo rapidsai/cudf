@@ -1,12 +1,10 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import warnings
-from numbers import Number
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
