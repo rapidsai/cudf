@@ -22,7 +22,6 @@
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
 
-
 ## Improvements
 
 - PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
