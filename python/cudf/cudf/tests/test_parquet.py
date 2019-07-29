@@ -6,11 +6,12 @@ from distutils.version import LooseVersion
 from io import BytesIO
 from string import ascii_letters
 
-import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+
+import cudf
 from cudf.tests.utils import assert_eq
 
 
@@ -320,8 +321,8 @@ def test_parquet_writer(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    pdf.to_parquet(pdf_fname)
-    gdf.to_parquet(gdf_fname)
+    pdf.to_parquet(pdf_fname.strpath)
+    gdf.to_parquet(gdf_fname.strpath)
 
     assert os.path.exists(pdf_fname)
     assert os.path.exists(gdf_fname)
