@@ -650,15 +650,16 @@ def gpu_clip(in_col, lower, upper, inplace, out_col=None):
 
 
 def apply_clip(data, lower, upper, inplace):
-    if data.size > 0:
-        if not inplace:
-            output_dary = rmm.device_arrya_like(data)
+    if not inplace:
+        output_dary = rmm.device_arrya_like(data)
+        if data.size > 0:
             gpu_clip.forall(data.size)(data, lower, upper,
                                        inplace, output_dary)
-            return output_dary
-        else:
+        return output_dary
+    else:
+        if data.size > 0:
             gpu_clip.forall(data.size)(data, lower, upper, inplace)
-            return data
+        return data
 
 
 MAX_FAST_UNIQUE_K = 2 * 1024
