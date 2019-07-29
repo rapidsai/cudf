@@ -12,7 +12,7 @@ from cudf.bindings.cudf_cpp import *
 from cudf.bindings.issorted cimport *
 from cudf.bindings.utils cimport *
 
-cpdef issorted(columns, descending, nulls_are_smallest=False):
+cpdef issorted(columns, descending=[], nulls_are_smallest=False):
     """
     Checks whether the rows of a `table` are sorted in a lexicographical order.
 
