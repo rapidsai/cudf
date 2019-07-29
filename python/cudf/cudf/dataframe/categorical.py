@@ -370,7 +370,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
             )
         return self._is_monotonic_decreasing
 
-
     def _as_string_column(self):
         if self.null_count > 0:
             raise NotImplementedError(
@@ -382,7 +381,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         data = self._categories.data.gather(gathermap_ptr, len(self))
         return columnops.build_column(buffer=data, dtype="object")
 
- 
     def copy(self, deep=True):
         """Categorical Columns are immutable, so a deep copy produces a
         copy of the underlying data, mask, categories and a shallow copy

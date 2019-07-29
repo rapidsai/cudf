@@ -34,7 +34,7 @@ class _SeriesLocIndexer(object):
 
     def _loc_to_iloc(self, arg):
         from cudf.dataframe.series import Series
-        from cudf.dataframe.index import Index
+        from cudf.dataframe.index import Index, RangeIndex
 
         if isinstance(
             arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
