@@ -72,13 +72,22 @@ class _SeriesIlocIndexer(object):
 
 class _DataFrameIndexer(object):
     def __getitem__(self, arg):
-        try:
-            scalar_series_or_df = self._getitem_tuple_arg(arg)
-        except (TypeError, KeyError, IndexError):
-            scalar_series_or_df = self._getitem_tuple_arg((arg, slice(None)))
-
-        return scalar_series_or_df
-
+        from cudf import MultiIndex
+        if (
+            isinstance(self._df.index, MultiIndex)
+            or isinstance(self._df.columns, MultiIndex)
+        ):
+            # This try/except block allows the use of pandas-like
+            # tuple arguments into MultiIndex dataframes.
+            try:
+                return self._getitem_tuple_arg(arg)
+            except (TypeError, KeyError, IndexError):
+                return self._getitem_tuple_arg((arg, slice(None)))
+        else:
+            if not isinstance(arg, tuple):
+                arg = (arg, slice(None))
+            return self._getitem_tuple_arg(arg)
+ 
     def _can_downcast_to_series(self, df, arg):
         """
         This method encapsulates the logic used
