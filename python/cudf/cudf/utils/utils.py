@@ -79,10 +79,13 @@ def scalar_broadcast_to(scalar, shape, dtype):
     if np.dtype(dtype) == np.dtype("object"):
         import nvstrings
         from cudf.dataframe.string import StringColumn
+
+        scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
+        if shape[0] == 1:
+            return scalar_str_col
         from cudf.utils.cudautils import zeros
 
         gather_map = zeros(shape[0], dtype="int32")
-        scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
         return scalar_str_col[gather_map]
     else:
         da = rmm.device_array(shape, dtype=dtype)
