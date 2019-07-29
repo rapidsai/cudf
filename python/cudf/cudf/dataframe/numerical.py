@@ -263,14 +263,14 @@ class NumericalColumn(columnops.TypedColumnBase):
             data=Buffer(rounded), mask=mask, dtype=self.dtype
         )
 
-    def clip(lower=None, upper=None, inplace=False):
+    def clip(self, lower=None, upper=None, inplace=False):
         mask = None
         if self.has_null_mas:
             mask = self.nullmask
 
         # TODO: direct copy when both lower and upper are None
         if lower is not None and upper is not None:
-            if is_scalar(lower) and is_scalar(upper):
+            if np.isscalar(lower) and np.isscalar(upper):
                 lower, upper = min(lower, upper), max(lower, upper)
 
         # TODO: add support for array-like lower and upper
