@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-import cudf as gd
+import cudf
 from cudf import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
@@ -521,7 +521,7 @@ def test_dataframe_boolean_mask_with_None():
 
 @pytest.mark.parametrize("dtype", [int, float, str])
 def test_empty_boolean_mask(dtype):
-    gdf = gd.datasets.randomdata(nrows=0, dtypes={"a": dtype})
+    gdf = cudf.datasets.randomdata(nrows=0, dtypes={"a": dtype})
     pdf = gdf.to_pandas()
 
     expected = pdf[pdf.a == 1]
@@ -552,7 +552,7 @@ def test_empty_boolean_mask(dtype):
         [True, False, False, True],
         np.array([True, False, True, False]),
         pd.Series([True, False, True, False]),
-        gd.Series([True, False, True, False]),
+        cudf.Series([True, False, True, False]),
     ],
 )
 @pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
@@ -570,14 +570,14 @@ def test_series_apply_boolean_mask(data, mask, nulls):
         elif nulls == "all":
             psr[:] = None
 
-    gsr = gd.from_pandas(psr)
+    gsr = cudf.from_pandas(psr)
 
     # TODO: from_pandas(psr) has dtype "float64"
     # when psr has dtype "object" and is all None
     if psr.dtype == "object" and nulls == "all":
-        gsr = gd.Series([None, None, None, None], dtype="object")
+        gsr = cudf.Series([None, None, None, None], dtype="object")
 
-    if isinstance(mask, gd.Series):
+    if isinstance(mask, cudf.Series):
         expect = psr[mask.to_pandas()]
     else:
         expect = psr[mask]
@@ -620,9 +620,20 @@ def test_dataframe_boolean_mask(mask_fn):
         False,
     ]
     pdf = pd.DataFrame({"x": range(10), "y": range(10)})
-    gdf = gd.from_pandas(pdf)
+    gdf = cudf.from_pandas(pdf)
     mask = mask_fn(mask_base)
     assert len(mask) == gdf.shape[0]
     pdf_masked = pdf[mask]
     gdf_masked = gdf[mask]
     assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
+
+
+@pytest.mark.parametrize(
+    "key, value", [(0, 4), (1, 4), ([0, 1], 4), ([0, 1], [4, 5]), (-1, 4)]
+)
+def test_series_setitem(key, value):
+    psr = pd.Series([1, 2, 3])
+    gsr = cudf.from_pandas(psr)
+    psr[key] = value
+    gsr[key] = value
+    assert_eq(psr, gsr)

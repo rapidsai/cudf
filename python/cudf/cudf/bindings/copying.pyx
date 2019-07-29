@@ -8,7 +8,9 @@
 from cudf.dataframe import columnops
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.copying cimport *
 from cudf.utils.cudautils import astype, modulo
+from cudf.bindings.utils cimport columns_from_table, table_from_columns
 from librmm_cffi import librmm as rmm
 
 import numba
@@ -41,6 +43,13 @@ def clone_columns_with_size(in_cols, row_size):
     return out_cols
 
 
+def _normalize_maps(maps, size):
+    maps = columnops.as_column(maps).astype("int32")
+    maps = maps.binary_operator("mod", maps.normalize_binop_value(size))
+    maps = maps.data.mem
+    return maps
+
+
 def apply_gather(source, maps, dest=None):
     """
     Gathers elements from source into dest (if given) using the gathermap maps.
@@ -69,15 +78,13 @@ def apply_gather(source, maps, dest=None):
         in_cols[i] = columnops.as_column(in_cols[i])
         if dest is not None:
             out_cols[i] = columnops.as_column(out_cols[i])
-    
+
     if in_cols[0].dtype == np.dtype("object"):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
-
-    maps = columnops.as_column(maps).astype("int32")
-    maps = maps.binary_operator("mod", maps.normalize_binop_value(in_size))
-    maps = maps.data.mem
+        
+    maps = _normalize_maps(maps, in_size)
 
     col_count=len(in_cols)
     gather_count = len(maps)
@@ -135,6 +142,51 @@ def apply_gather(source, maps, dest=None):
     else:
         return out_cols[0]
 
+def apply_scatter(source, maps, target):
+    cdef cudf_table* c_source_table
+    cdef cudf_table* c_target_table
+    cdef cudf_table c_result_table
+    cdef uintptr_t c_maps_ptr
+    cdef gdf_index_type* c_maps
+
+    source_cols = source
+    target_cols = target
+
+    if not isinstance(target_cols, (list, tuple)):
+        target_cols = [target_cols]
+
+    if not isinstance(source_cols, (list, tuple)):
+        source_cols = [source_cols] * len(target_cols)
+
+    for i in range(len(target_cols)):
+        target_cols[i] = columnops.as_column(target_cols[i])
+        source_cols[i] = columnops.as_column(source_cols[i])
+
+    c_source_table = table_from_columns(source_cols)
+    c_target_table = table_from_columns(target_cols)
+
+    maps = _normalize_maps(maps, len(target_cols[0]))
+    
+
+    c_maps_ptr = get_ctype_ptr(maps)
+    c_maps = <gdf_index_type*>c_maps_ptr
+                             
+    c_result_table = scatter(
+        c_source_table[0],
+        c_maps,
+        c_target_table[0])
+
+    result_cols = columns_from_table(&c_result_table)
+        
+    del c_source_table
+    del c_target_table
+
+    if isinstance(target, (list, tuple)):
+        return result_cols
+    else:
+        return result_cols[0]
+
+    
 def copy_column(input_col):
     """
         Call cudf::copy

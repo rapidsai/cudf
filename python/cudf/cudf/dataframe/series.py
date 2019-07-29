@@ -356,6 +356,9 @@ class Series(object):
             return data
         return self._copy_construct(data=data, index=index)
 
+    def __setitem__(self, key, value):
+        self._column[key] = value
+
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """

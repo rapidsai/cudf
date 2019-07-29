@@ -480,8 +480,20 @@ class Column(object):
             else:
                 raise NotImplementedError(type(arg))
 
-    def __setitem__(self):
-        pass
+    def __setitem__(self, key, value):
+        import cudf.bindings.copying as cpp_copying
+        from cudf.dataframe import columnops
+
+        key = columnops.as_column(key)
+        if utils.is_single_value(value):
+            value = utils.scalar_broadcast_to(value, len(key), self.dtype)
+        value = columnops.as_column(value)
+
+        out = cpp_copying.apply_scatter(value, key, self)
+
+        self._data = out.data
+        self._mask = out.mask
+        self._update_null_count()
 
     def masked_assign(self, value, mask):
         """Assign a scalar value to a series using a boolean mask

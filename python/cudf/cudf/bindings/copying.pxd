@@ -19,3 +19,8 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     cdef gdf_column copy(
         const gdf_column &input
     ) except +
+
+    cudf_table scatter(
+        const cudf_table source,
+        const gdf_index_type* scatter_map,
+        const cudf_table target)
