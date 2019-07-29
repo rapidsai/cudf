@@ -118,11 +118,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @property
     def as_numerical(self):
         from cudf.dataframe import numerical
+        import cudf.bindings.typecast as typecast
 
         return self.view(
             numerical.NumericalColumn,
             dtype="int64",
-            data=self.data.astype("int64"),
+            data = typecast.apply_cast(self, dtype=np.int64).data,
         )
 
     def astype(self, dtype):
@@ -154,7 +155,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
             return string.StringColumn(data=data)
 
-        return self.as_numerical.astype(dtype)
+        import cudf.bindings.typecast as typecast
+
+        col = typecast.apply_cast(
+            self.as_numerical, dtype=np.dtype(dtype).type
+        )
+        return col
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs

@@ -147,17 +147,21 @@ class NumericalColumn(columnops.TypedColumnBase):
             return string.StringColumn(data=data)
 
         elif np.issubdtype(dtype, np.datetime64):
-            return self.astype("int64").view(
+            import cudf.bindings.typecast as typecast
+
+            return self.view(
                 datetime.DatetimeColumn,
                 dtype=dtype,
-                data=self.data.astype(dtype),
+                data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
             )
 
         else:
-            col = self.replace(
-                data=self.data.astype(dtype), dtype=np.dtype(dtype)
+            import cudf.bindings.typecast as typecast
+
+            return self.replace(
+                data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+                dtype=np.dtype(dtype)
             )
-            return col
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)

@@ -519,8 +519,10 @@ class StringColumn(columnops.TypedColumnBase):
             return self.element_indexing(gpu_arr)
         elif isinstance(arg, DeviceNDArray):
             # NVStrings gather call expects an array of int32s
-            arg = cudautils.astype(arg, np.dtype("int32"))
-            arg = cudautils.modulo(arg, len(self))
+            import cudf.bindings.typecast as typecast
+
+            arg = typecast.apply_cast(columnops.as_column(arg), dtype=np.int32)
+            arg = cudautils.modulo(arg.data.mem, len(self))
             if len(arg) > 0:
                 gpu_ptr = get_ctype_ptr(arg)
                 out = self._data.gather(gpu_ptr, len(arg))
@@ -728,8 +730,10 @@ class StringColumn(columnops.TypedColumnBase):
         return self._mimic_inplace(result, inplace)
 
     def _find_first_and_last(self, value):
-        found_indices = self.str().contains(f"^{value}$").data.mem
-        found_indices = cudautils.astype(found_indices, "int32")
+        found_indices = self.str().contains(f"^{value}$")._column
+        import cudf.bindings.typecast as typecast
+
+        found_indices = typecast.apply_cast(found_indices, dtype=np.int32)
         first = columnops.as_column(found_indices).find_first_value(1)
         last = columnops.as_column(found_indices).find_last_value(1)
         return first, last
