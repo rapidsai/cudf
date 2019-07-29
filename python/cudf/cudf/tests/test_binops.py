@@ -488,10 +488,10 @@ _operator_funcs = [
     "rtruediv",
 ]
 
-_operator_funcs_series = ["eq", "ne", "lt", "le", "gt", "ge"]
+_operator_funcs_logical = ["eq", "ne", "lt", "le", "gt", "ge"]
 
 
-@pytest.mark.parametrize("func", _operator_funcs + _operator_funcs_series)
+@pytest.mark.parametrize("func", _operator_funcs)
 @pytest.mark.parametrize("has_nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
@@ -516,19 +516,10 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
     expect = getattr(psr1, func)(psr2, fill_value=fill_value)
     got = getattr(sr1, func)(sr2, fill_value=fill_value)
 
-    # This is being done because of the various gymnastics required to support
-    # equality for null values. cudf.Series().to_pandas() replaces nulls with
-    # None and so a bool Series becomes object Series. Which does not match the
-    # output of equality op in pandas which remains a bool. Furthermore, NaN
-    # values are treated as not comparable and always return False in a bool op
-    # except in not-equal op where bool(Nan != Nan) gives True.
-    if got.dtype == np.bool:
-        got = got.fillna(True) if func == "ne" else got.fillna(False)
-
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operator_funcs + _operator_funcs_series)
+@pytest.mark.parametrize("func", _operator_funcs)
 @pytest.mark.parametrize("has_nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
@@ -548,14 +539,54 @@ def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     expect = getattr(psr, func)(scalar, fill_value=fill_value)
     got = getattr(sr, func)(scalar, fill_value=fill_value)
 
-    # This is being done because of the various gymnastics required to support
-    # equality for null values. cudf.Series().to_pandas() replaces nulls with
-    # None and so a bool Series becomes object Series. Which does not match the
-    # output of equality op in pandas which remains a bool. Furthermore, NaN
-    # values are treated as not comparable and always return False in a bool op
-    # except in not-equal op where bool(Nan != Nan) gives True.
-    if got.dtype == np.bool:
-        got = got.fillna(True) if func == "ne" else got.fillna(False)
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("func", _operator_funcs_logical)
+@pytest.mark.parametrize("has_nulls", _nulls)
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_operator_func_between_series_logical(dtype, func, has_nulls):
+    nelem = 1000
+    arr1 = utils.gen_rand(dtype, nelem) * 10000
+    # Keeping a low value because CUDA 'pow' has 2 full range error
+    arr2 = utils.gen_rand(dtype, nelem) * 100
+
+    if has_nulls == "some":
+        nulls1 = utils.random_bitmask(nelem)
+        nulls2 = utils.random_bitmask(nelem)
+        sr1 = Series.from_masked_array(arr1, nulls1)
+        sr2 = Series.from_masked_array(arr2, nulls2)
+    else:
+        sr1 = Series(arr1)
+        sr2 = Series(arr2)
+
+    psr1 = sr1.to_pandas()
+    psr2 = sr2.to_pandas()
+
+    expect = getattr(psr1, func)(psr2)
+    got = getattr(sr1, func)(sr2)
+
+    utils.assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("func", _operator_funcs_logical)
+@pytest.mark.parametrize("has_nulls", _nulls)
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+def test_operator_func_series_and_scalar_logical(dtype, func, has_nulls):
+    nelem = 1000
+    arr = utils.gen_rand(dtype, nelem) * 10000
+    scalar = 59.0
+
+    if has_nulls == "some":
+        nulls = utils.random_bitmask(nelem)
+        sr = Series.from_masked_array(arr, nulls)
+    else:
+        sr = Series(arr)
+
+    psr = sr.to_pandas()
+
+    expect = getattr(psr, func)(scalar)
+    got = getattr(sr, func)(scalar)
 
     utils.assert_eq(expect, got)
 
@@ -596,7 +627,7 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operator_funcs + _operator_funcs_series)
+@pytest.mark.parametrize("func", _operator_funcs + _operator_funcs_logical)
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
