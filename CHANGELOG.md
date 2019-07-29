@@ -21,6 +21,7 @@
 - PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
 - PR #2356 Java column vector standard deviation support
+- PR #2424 Add clip() for cudf.Series
 
 ## Improvements
 
