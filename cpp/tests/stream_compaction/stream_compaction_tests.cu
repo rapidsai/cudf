@@ -245,7 +245,7 @@ TEST_F(ApplyBooleanMaskErrorTest, Bug2141)
   // boundary within a block
   // The data are arbitrary -- comes from the original Python repro
 
-  std::vector<int> nanvals{0,      70,  140,  210,  280,  350,  420,  490,
+  std::vector<int> valids{    0,   70,  140,  210,  280,  350,  420,  490,
                             560,  630,  700,  770,  840,  910,  980, 1050,
                            1120, 1190, 1260, 1330, 1400, 1470, 1540, 1610,
                            1680, 1750, 1820, 1890, 1960, 2030, 2100, 2101,
@@ -264,7 +264,7 @@ TEST_F(ApplyBooleanMaskErrorTest, Bug2141)
                            2272};
 
   std::vector<int> v(2300, 0);
-  for (auto x : nanvals) v[x] = 1;
+  for (auto x : valids) v[x] = 1;
 
   BooleanMaskTest<int>(
     column_wrapper<int>(2300,
@@ -273,7 +273,35 @@ TEST_F(ApplyBooleanMaskErrorTest, Bug2141)
     column_wrapper<cudf::bool8>(2300,
       [&](gdf_index_type row) { return cudf::bool8{v[row] == 1}; },
       [](gdf_index_type row) { return true; }),
-    column_wrapper<int>(nanvals.size(),
+    column_wrapper<int>(valids.size(),
+      [](gdf_index_type row ) { return 1; },
+      [](gdf_index_type row) { return true; }));
+}
+
+TEST_F(ApplyBooleanMaskErrorTest, Gaps)
+{
+  std::vector<int> valids{3, 4, 5,
+                          259, 260, 261, 262,
+                          291, 292, 293, 294,
+                          323, 324, 325, 326,
+                          355, 356, 357,
+                          387, 388, 389,
+                          419, 420, 421,
+                          451, 452, 453,
+                          483, 484, 485,
+                          506, 507, 508};
+
+  std::vector<int> v(512, 0);
+  for (auto x : valids) v[x] = 1;
+
+  BooleanMaskTest<int>(
+    column_wrapper<int>(512,
+      [](gdf_index_type row) { return 1; },
+      [&](gdf_index_type row) { return true; }),
+    column_wrapper<cudf::bool8>(512,
+      [&](gdf_index_type row) { return cudf::bool8{v[row] == 1}; },
+      [](gdf_index_type row) { return true; }),
+    column_wrapper<int>(valids.size(),
       [](gdf_index_type row) { return 1; },
       [](gdf_index_type row) { return true; }));
 }
