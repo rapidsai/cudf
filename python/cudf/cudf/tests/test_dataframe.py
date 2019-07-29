@@ -3145,6 +3145,52 @@ def test_round(decimal):
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
 
 
+@pytest.mark.parametrize("lower, upper", [(-10, 10), (-10, None), (None, 10),
+                                          (None, None), (-1000, 20)])
+def test_clip_inplace(lower, upper):
+    arr = np.random.normal(0, 100, 10000)
+    pser = pd.Series(arr)
+    ser = Series(arr)
+    # run both inplace and not inplace
+    result_inplace = ser.clip(lower=-10, upper=10, inplace=True)
+    expected = pser.clip(lower=-10, upper=10)
+    assert result_inplace is ser            # check inplace identity
+    np.testing.assert_array_almost_equal(
+        result_inplace.to_pandas(), expected, decimal=10
+    )
+
+
+@pytest.mark.parametrize("lower, upper", [(-10, 10), (-10, None), (None, 10),
+                                          (None, None), (-1000, 20)])
+def test_clip_not_inplace(lower, upper):
+    arr = np.random.normal(0, 100, 10000)
+    pser = pd.Series(arr)
+    ser = Series(arr)
+    # run both inplace and not inplace
+    result_not_inplace = ser.clip(lower=-10, upper=10, inplace=False)
+    expected = pser.clip(lower=-10, upper=10)
+    assert result_not_inplace is not ser    # check not inplace
+    np.testing.assert_array_almost_equal(
+        result_not_inplace.to_pandas(), expected, decimal=10
+    )
+
+
+def test_clip_null_mask():
+    arr = np.random.normal(0, 100, 10000)
+    mask = np.random.randint(0, 2, 10000)
+    arr[mask == 1] = np.nan
+
+    pser = pd.Series(arr)
+    ser = Series(arr)
+    result = ser.clip(lower=-10, upper=10)
+    expected = pser.clip(lower=-10, upper=10)
+    assert result is ser    # check inplace
+    np.testing.assert_array_almost_equal(
+        result.to_pandas(), expected, decimal=10
+    )
+    np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+
+
 @pytest.mark.parametrize(
     "data",
     [
