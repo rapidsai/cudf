@@ -6,11 +6,10 @@ import operator
 import random
 from itertools import product
 
+import cudf
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf
 from cudf.dataframe import Series
 from cudf.dataframe.index import as_index
 from cudf.tests import utils
