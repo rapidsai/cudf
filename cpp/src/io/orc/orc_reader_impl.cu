@@ -28,6 +28,8 @@
 #include <numeric>
 
 namespace cudf {
+namespace io {
+namespace orc {
 
 static_assert(sizeof(orc::gpu::CompressedStreamInfo) <= 256 &&
                   !(sizeof(orc::gpu::CompressedStreamInfo) & 7),
@@ -350,7 +352,7 @@ struct OrcStreamInfo {
   uint32_t stripe_idx;  // stripe index
 };
 
-size_t OrcReader::Impl::gather_stream_info(
+size_t reader::Impl::gather_stream_info(
     const size_t stripe_index, const orc::StripeInformation *stripeinfo,
     const orc::StripeFooter *stripefooter, const std::vector<int> &orc2gdf,
     const std::vector<int> &gdf2orc, const std::vector<orc::SchemaType> types,
@@ -418,7 +420,7 @@ size_t OrcReader::Impl::gather_stream_info(
   return dst_offset;
 }
 
-device_buffer<uint8_t> OrcReader::Impl::decompress_stripe_data(
+device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
     const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
     const std::vector<device_buffer<uint8_t>> &stripe_data,
     const orc::OrcDecompressor *decompressor,
@@ -480,18 +482,20 @@ device_buffer<uint8_t> OrcReader::Impl::decompress_stripe_data(
       decompressor->GetLog2MaxCompressionRatio()));
 
   // Dispatch batches of blocks to decompress
-  switch (decompressor->GetKind()) {
-    case orc::ZLIB:
-      CUDA_TRY(gpuinflate(inflate_in.data().get(), inflate_out.data().get(),
-                          num_compressed_blocks, 0));
-      break;
-    case orc::SNAPPY:
-      CUDA_TRY(gpu_unsnap(inflate_in.data().get(), inflate_out.data().get(),
-                          num_compressed_blocks));
-      break;
-    default:
-      CUDF_EXPECTS(false, "Unexpected decompression dispatch");
-      break;
+  if (num_compressed_blocks > 0) {
+    switch (decompressor->GetKind()) {
+      case orc::ZLIB:
+        CUDA_TRY(gpuinflate(inflate_in.data().get(), inflate_out.data().get(),
+                            num_compressed_blocks, 0));
+        break;
+      case orc::SNAPPY:
+        CUDA_TRY(gpu_unsnap(inflate_in.data().get(), inflate_out.data().get(),
+                            num_compressed_blocks));
+        break;
+      default:
+        CUDF_EXPECTS(false, "Unexpected decompression dispatch");
+        break;
+    }
   }
   CUDA_TRY(PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size()));
 
@@ -530,7 +534,7 @@ device_buffer<uint8_t> OrcReader::Impl::decompress_stripe_data(
   return decomp_data;
 }
 
-void OrcReader::Impl::decode_stream_data(
+void reader::Impl::decode_stream_data(
     const hostdevice_vector<orc::gpu::ColumnDesc> &chunks, size_t num_dicts,
     size_t skip_rows, const std::vector<int64_t> &timezone_table,
     rmm::device_vector<orc::gpu::RowGroup> &row_groups, size_t row_index_stride,
@@ -585,8 +589,8 @@ void OrcReader::Impl::decode_stream_data(
   }
 }
 
-OrcReader::Impl::Impl(std::unique_ptr<DataSource> source,
-                      OrcReaderOptions const &options)
+reader::Impl::Impl(std::unique_ptr<DataSource> source,
+                   reader_options const &options)
     : source_(std::move(source)) {
 
   // Open and parse the source Parquet dataset metadata
@@ -599,11 +603,7 @@ OrcReader::Impl::Impl(std::unique_ptr<DataSource> source,
   use_index_ = options.use_index;
 }
 
-OrcReader::Impl::Impl(const std::shared_ptr<arrow::io::RandomAccessFile> &file,
-                      OrcReaderOptions const &options)
-    : OrcReader::Impl::Impl(std::make_unique<DataSource>(file), options) {}
-
-table OrcReader::Impl::read(int skip_rows, int num_rows, int stripe) {
+table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
 
   // Select only stripes required (aka row groups)
   const auto selected_stripes =
@@ -787,27 +787,29 @@ table OrcReader::Impl::read(int skip_rows, int num_rows, int stripe) {
   return table(out_cols.data(), out_cols.size());
 }
 
-OrcReader::OrcReader(std::string filepath, OrcReaderOptions const &options)
+reader::reader(std::string filepath, reader_options const &options)
     : impl_(std::make_unique<Impl>(
           std::make_unique<DataSource>(filepath.c_str()), options)) {}
 
-OrcReader::OrcReader(const char *buffer, size_t length,
-                     OrcReaderOptions const &options)
+reader::reader(const char *buffer, size_t length, reader_options const &options)
     : impl_(std::make_unique<Impl>(
           std::make_unique<DataSource>(buffer, length), options)) {}
 
-table OrcReader::read_all() {
-  return impl_->read(0, -1, -1);
-}
+reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               reader_options const &options)
+    : impl_(std::make_unique<Impl>(
+          std::make_unique<DataSource>(file), options)) {}
 
-table OrcReader::read_rows(size_t skip_rows, size_t num_rows) {
+table reader::read_all() { return impl_->read(0, -1, -1); }
+
+table reader::read_rows(size_t skip_rows, size_t num_rows) {
   return impl_->read(skip_rows, (num_rows != 0) ? (int)num_rows : -1, -1);
 }
 
-table OrcReader::read_stripe(size_t stripe) {
-  return impl_->read(0, -1, stripe);
-}
+table reader::read_stripe(size_t stripe) { return impl_->read(0, -1, stripe); }
 
-OrcReader::~OrcReader() = default;
+reader::~reader() = default;
 
-}  // namespace cudf
+} // namespace orc
+} // namespace io
+} // namespace cudf

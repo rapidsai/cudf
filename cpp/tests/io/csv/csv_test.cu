@@ -37,10 +37,6 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
             std::get<0>(arg)<std::get<1>(arg)+tolerance) ;
 }
 
-using cudf::csv_reader_args;
-using cudf::CsvReader;
-using cudf::gdf_csv_quote_style;
-
 TEST(gdf_csv_test, DetectColumns)
 {
     const std::string fname	= temp_env->get_temp_dir()+"DetectColumnsTest.csv";
@@ -55,13 +51,11 @@ TEST(gdf_csv_test, DetectColumns)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A", "B", "C" };
         args.header = -1;
         args.use_cols_names = { "A", "C" };
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         // cudf auto detect type code uses INT64
         ASSERT_EQ(df.get_column(0)->dtype, GDF_INT64);
@@ -86,14 +80,12 @@ TEST(gdf_csv_test, UseColumns)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form    = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A", "B", "C" };
         args.dtype = { "int", "float64", "int" };
         args.header = -1;
         args.use_cols_names = { "A", "C" };
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
         ASSERT_EQ( df.get_column(1)->dtype, GDF_INT32 );
@@ -132,14 +124,12 @@ TEST(gdf_csv_test, Numbers) {
   }
 
   {
-    csv_reader_args args;
-    args.input_data_form = gdf_input_type::FILE_PATH;
-    args.filepath_or_buffer = fname;
+    cudf::csv_read_arg args(cudf::source_info{fname});
     args.dtype = {"int8",    "short",  "int16",  "int",
                   "int32",   "long",   "int64",  "float",
                   "float32", "double", "float64"};
     args.header = -1;
-    const cudf::table df = cudf::CsvReader(args).read();
+    const auto df = cudf::read_csv(args);
 
     EXPECT_THAT(gdf_host_column<int8_t>(df.get_column(0)).hostdata(),
                 ::testing::ElementsAreArray(int8_values));
@@ -158,15 +148,12 @@ TEST(gdf_csv_test, Numbers) {
 
 TEST(gdf_csv_test, MortPerf)
 {
-    csv_reader_args args;
-    args.input_data_form = gdf_input_type::FILE_PATH;
-    args.filepath_or_buffer = "Performance_2000Q1.txt";
-
-    if (checkFile(args.filepath_or_buffer))
+    const std::string fname = "Performance_2000Q1.txt";
+    if (checkFile(fname))
     {
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.delimiter = '|';
-
-        cudf::CsvReader(args).read();
+        cudf::read_csv(args);
     }
 }
 
@@ -184,13 +171,11 @@ TEST(gdf_csv_test, Strings)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = names;
         args.dtype = { "int32", "str" };
-        args.quoting = gdf_csv_quote_style::QUOTE_NONE; // enable quoting
-        const cudf::table df = cudf::CsvReader(args).read();
+        args.quoting = cudf::csv_read_arg::quote_style::QUOTE_NONE;
+        const auto df = cudf::read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), static_cast<int>(names.size()) );
@@ -213,13 +198,11 @@ TEST(gdf_csv_test, QuotedStrings)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = names;
         args.dtype = { "int32", "str" };
         args.quotechar = '`';
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), static_cast<int>(names.size()) );
@@ -242,14 +225,12 @@ TEST(gdf_csv_test, IgnoreQuotes)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = names;
         args.dtype = { "int32", "str" };
-        args.quoting = gdf_csv_quote_style::QUOTE_NONE; // disable quoting
+        args.quoting = cudf::csv_read_arg::quote_style::QUOTE_NONE;
         args.doublequote = false; // do not replace double quotechar with single
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         // No filtering of any columns
         EXPECT_EQ( df.num_columns(), static_cast<int>(names.size()) );
@@ -269,15 +250,13 @@ TEST(gdf_csv_test, Booleans)
     ASSERT_TRUE(checkFile(fname));
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = {"A", "B", "C", "D"};
         args.dtype = {"int32", "int32", "short", "bool"};
         args.true_values = {"yes", "Yes", "YES", "foo", "FOO"};
         args.false_values = {"no", "No", "NO", "Bar", "bar"};
         args.header = -1;
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         // Booleans are the same (integer) data type, but valued at 0 or 1
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
@@ -309,14 +288,12 @@ TEST(gdf_csv_test, Dates)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A" };
         args.dtype = { "date" };
         args.dayfirst = true;
         args.header = -1;
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_DATE64 );
@@ -339,14 +316,12 @@ TEST(gdf_csv_test, FloatingPoint)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A" };
         args.dtype = { "float32" };
         args.lineterminator = ';';
         args.header = -1;
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_FLOAT32 );
@@ -368,14 +343,12 @@ TEST(gdf_csv_test, Category)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "UserID" };
         args.dtype = { "category" };
         args.lineterminator = ';';
         args.header = -1;
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_CATEGORY );
@@ -396,13 +369,14 @@ TEST(gdf_csv_test, SkiprowsNrows)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A" };
         args.dtype = { "int32" };
         args.header = 1;
-        const cudf::table df = cudf::CsvReader(args).read_rows(2, 0, 2);
+        args.skiprows = 2;
+        args.skipfooter = 0;
+        args.nrows = 2;
+        const auto df = cudf::read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
@@ -422,13 +396,13 @@ TEST(gdf_csv_test, ByteRange)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A" };
         args.dtype = { "int32" };
         args.header = -1;
-        const cudf::table df = cudf::CsvReader(args).read_byte_range(11, 15);
+        args.byte_range_offset = 11;
+        args.byte_range_size = 15;
+        const auto df = cudf::read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
@@ -448,14 +422,12 @@ TEST(gdf_csv_test, BlanksAndComments)
     ASSERT_TRUE( checkFile(fname) );
 
     {
-        csv_reader_args args;
-        args.input_data_form = gdf_input_type::FILE_PATH;
-        args.filepath_or_buffer = fname;
+        cudf::csv_read_arg args(cudf::source_info{fname});
         args.names = { "A" };
         args.dtype = { "int32" };
         args.header = -1;
         args.comment = '#';
-        const cudf::table df = cudf::CsvReader(args).read();
+        const auto df = cudf::read_csv(args);
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_INT32 );
@@ -470,20 +442,24 @@ TEST(gdf_csv_test, Writer)
     const std::string fname	= temp_env->get_temp_dir()+"CsvWriteTest.csv";
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "true,1,1.0,one" << '\n';
-    outfile << "false,2,2.25,two" << '\n';
-    outfile << "false,3,3.50,three" << '\n';
-    outfile << "true,4,4.75,four" << '\n';
-    outfile << "false,5,5.0,five" << '\n';
+    outfile << "boolean,integer,long,short,byte,float,double,string,datetime" << '\n';
+    outfile << "true,111,1111,11,1,1.0,12.0,one,01/01/2001" << '\n';
+    outfile << "false,222,2222,22,2,2.25,24.0,two,02/02/2002" << '\n';
+    outfile << "false,333,3333,33,3,3.50,32.0,three,03/03/2003" << '\n';
+    outfile << "true,444,4444,44,4,4.75,48.0,four,04/04/2004" << '\n';
+    outfile << "false,555,5555,55,5,5.0,56.0,five,05/05/2005" << '\n';
+    outfile << "false,666,6666,66,6,6.125,64.0,six,06/06/2006" << '\n';
+    outfile << "false,777,7777,77,7,7.25,72.0,seven,07/07/2007" << '\n';
+    outfile << "true,888,8888,88,8,8.5,80.0,eight,08/08/2008" << '\n';
+    outfile << "true,999,9999,99,9,9.75,92.0,nine,09/09/2009 09:09:09.009" << '\n';
+    outfile << "false,1111,11111,111,10,10.5,108.0,ten,10/10/2010 10:10:10.010" << '\n';
     outfile.close();
 
-    csv_reader_args rargs;
-    rargs.input_data_form = gdf_input_type::FILE_PATH;
-    rargs.filepath_or_buffer = fname;
-    rargs.names = { "boolean", "integer", "float", "string" };
-    rargs.dtype = { "bool", "int32", "float32", "str" };
-    rargs.header = -1;
-    const cudf::table df = cudf::CsvReader(rargs).read();
+    cudf::csv_read_arg rargs(cudf::source_info{fname});
+    rargs.names = { "boolean", "integer", "long", "short", "byte", "float", "double", "string", "datetime" };
+    rargs.dtype = { "bool", "int32", "int64", "int16", "int8", "float32", "float64", "str", "date" };
+    rargs.header = 0;
+    const auto df = cudf::read_csv(rargs);
 
     const std::string ofname = temp_env->get_temp_dir()+"CsvWriteTestOut.csv";
     csv_write_arg wargs{};
@@ -491,19 +467,26 @@ TEST(gdf_csv_test, Writer)
     wargs.filepath = ofname.c_str();
     wargs.num_cols = df.num_columns();
     wargs.delimiter = ',';
+    wargs.na_rep = "";
     wargs.line_terminator = "\n";
     wargs.include_header = true;
+    wargs.rows_per_chunk = 8;
 
     EXPECT_EQ( write_csv(&wargs), GDF_SUCCESS );
 
     std::ifstream infile(ofname);
     std::string csv((std::istreambuf_iterator<char>(infile)), std::istreambuf_iterator<char>());
     std::string verify =
-        "\"boolean\",\"integer\",\"float\",\"string\"\n"
-        "true,1,1.0,\"one\"\n"
-        "false,2,2.25,\"two\"\n"
-        "false,3,3.5,\"three\"\n"
-        "true,4,4.75,\"four\"\n"
-        "false,5,5.0,\"five\"\n";
+        "\"boolean\",\"integer\",\"long\",\"short\",\"byte\",\"float\",\"double\",\"string\",\"datetime\"\n"
+        "true,111,1111,11,1,1.0,12.0,\"one\",\"2001-01-01T00:00:00Z\"\n"
+        "false,222,2222,22,2,2.25,24.0,\"two\",\"2002-02-02T00:00:00Z\"\n"
+        "false,333,3333,33,3,3.5,32.0,\"three\",\"2003-03-03T00:00:00Z\"\n"
+        "true,444,4444,44,4,4.75,48.0,\"four\",\"2004-04-04T00:00:00Z\"\n"
+        "false,555,5555,55,5,5.0,56.0,\"five\",\"2005-05-05T00:00:00Z\"\n"
+        "false,666,6666,66,6,6.125,64.0,\"six\",\"2006-06-06T00:00:00Z\"\n"
+        "false,777,7777,77,7,7.25,72.0,\"seven\",\"2007-07-07T00:00:00Z\"\n"
+        "true,888,8888,88,8,8.5,80.0,\"eight\",\"2008-08-08T00:00:00Z\"\n"
+        "true,999,9999,99,9,9.75,92.0,\"nine\",\"2009-09-09T09:09:09Z\"\n"
+        "false,1111,11111,111,10,10.5,108.0,\"ten\",\"2010-10-10T10:10:10Z\"\n";
     EXPECT_STREQ( csv.c_str(), verify.c_str() );
 }

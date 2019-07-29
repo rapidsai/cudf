@@ -20,11 +20,11 @@
 #include "jit/core/launcher.h"
 #include "jit/util/operator.h"
 #include "compiled/binary_ops.hpp"
-#include <bitmask/bitmask_ops.hpp>
+#include <bitmask/legacy/bitmask_ops.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <string/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
 #include <nvstrings/NVCategory.h>
@@ -159,6 +159,13 @@ namespace jit {
                   .launch(out, lhs, rhs);
 
     }
+    
+    void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx)  {
+
+        Launcher(ptx).setKernelInst("kernel_v_v", GDF_GENERIC_OP, Operator::Type::Direct, out, lhs, rhs)
+                     .launch(out, lhs, rhs);
+
+    }
 
 } // namespace jit
 } // namespace binops
@@ -270,6 +277,33 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, gdf_bin
     auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
     if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
         binops::jit::binary_operation(out, lhs, rhs, ope);
+}
+
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs, const std::string& ptx) {
+    // Check for null pointers in input
+    CUDF_EXPECTS((out != nullptr) && (lhs != nullptr) && (rhs != nullptr),
+        "Input pointers are null");
+
+    // Check for 0 sized data
+    if((out->size == 0) && (lhs->size == 0) && (rhs->size == 0)) return;
+    CUDF_EXPECTS((out->size == lhs->size) && (lhs->size == rhs->size),
+        "Column sizes don't match");
+
+    // Check for null data pointer
+    CUDF_EXPECTS((out->data != nullptr) &&
+                 (lhs->data != nullptr) &&
+                 (rhs->data != nullptr) , 
+        "Column data pointers are null");
+
+    // Check for datatype
+    CUDF_EXPECTS((out->dtype == lhs->dtype) && (lhs->dtype == rhs->dtype) &&
+                 (out->dtype == GDF_FLOAT32 || out->dtype == GDF_FLOAT64 || 
+                  out->dtype == GDF_INT64   || out->dtype == GDF_INT32     ),
+        "Invalid/Unsupported datatype");
+    
+    binops::binary_valid_mask_and(out->null_count, out->valid, lhs->valid, rhs->valid, rhs->size);
+
+    binops::jit::binary_operation(out, lhs, rhs, ptx);
 }
 
 } // namespace cudf

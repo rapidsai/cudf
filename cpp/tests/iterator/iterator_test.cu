@@ -322,7 +322,7 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     // copy back data and valid arrays
     auto hos = w_col.to_host();
 
-    // calculate by cudf::reduction
+    // calculate by cudf::reduce
     std::vector<T> replaced_array(w_col.size());
     std::transform(std::get<0>(hos).begin(), std::get<0>(hos).end(), host_bools.begin(),
         replaced_array.begin(), [&](T x, bool b) { return (b)? x : init; } );
@@ -336,15 +336,19 @@ TYPED_TEST(IteratorTest, large_size_reduction)
     this->iterator_test_cub(expected_value, it_dev, w_col.size());
 
 
-    // compare with cudf::reduction
+    // compare with cudf::reduce
     cudf::test::scalar_wrapper<T> result =
-        cudf::reduction(w_col, GDF_REDUCTION_SUM, GDF_INT32);
+        cudf::reduce(w_col, cudf::reduction::SUM, GDF_INT32);
 
     EXPECT_EQ(expected_value, result.value());
 }
 
 
 
+// TODO: enable this test also at __CUDACC_DEBUG__
+// This test causes fatal compilation error only at device debug mode.
+// Workaround: exclude this test only at device debug mode.
+#if !defined(__CUDACC_DEBUG__)
 // Test for mixed output value using `ColumnOutputMix`
 // It computes `count`, `sum`, `sum_of_squares` at a single reduction call.
 // It wpuld be useful for `var`, `std` operation
@@ -393,7 +397,7 @@ TYPED_TEST(IteratorTest, mean_var_output)
     this->iterator_test_thrust(expected_value, it_dev_squared, w_col.size());
     this->iterator_test_cub(expected_value, it_dev_squared, w_col.size());
 }
-
+#endif
 
 
 

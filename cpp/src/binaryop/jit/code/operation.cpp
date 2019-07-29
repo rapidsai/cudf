@@ -326,6 +326,15 @@ R"***(
 
     using RLogicalOr = LogicalOr;
 
+    struct UserDefinedOp {
+        template <typename TypeOut, typename TypeLhs, typename TypeRhs>
+        static TypeOut operate(TypeLhs x, TypeRhs y) {
+            TypeOut output;
+            GENERIC_BINARY_OP(&output, x, y);
+            return output;
+        }
+    };
+
 )***";
 
 } // namespace code

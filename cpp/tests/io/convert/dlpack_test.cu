@@ -112,7 +112,7 @@ namespace{
 
     T *init = new T[N];
     for (gdf_size_type c = 0; c < ncols; ++c)
-      for (gdf_size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i;
+      for (gdf_size_type i = 0; i < nrows; ++i) init[c*nrows + i] = i * (c + 1);
 
     if (kDLGPU == device_type) {
       EXPECT_EQ(RMM_ALLOC(&data, bytesize, 0), RMM_SUCCESS);
@@ -148,7 +148,7 @@ TEST_F(DLPackTest, InvalidDeviceType)
   int num_columns = 0;
 
   // We support kDLGPU, kDLCPU, and kDLCPUPinned
-  for (int i = kDLOpenCL; i <= kDLExtDev; i++) {
+  for (int i = kDLOpenCL; i <= kDLROCM; i++) {
     mng_tensor->dl_tensor.ctx.device_type = static_cast<DLDeviceType>(i);
     ASSERT_EQ(gdf_from_dlpack(&columns, &num_columns, mng_tensor), 
                               GDF_INVALID_API_CALL);
@@ -362,7 +362,7 @@ TYPED_TEST(DLPackTypedTest, FromDLPack_MultiColumn)
     T *output = new T[length];
     cudaMemcpy(output, columns[c].data, length * sizeof(T), cudaMemcpyDefault);
     for (int64_t i = 0; i < length; i++)
-      EXPECT_EQ(static_cast<T>(i), output[i]);
+      EXPECT_EQ(static_cast<T>(i * (c + 1)), output[i]);
 
     delete [] output;
     gdf_column_free(&columns[c]);

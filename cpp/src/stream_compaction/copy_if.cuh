@@ -17,9 +17,9 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/stream_compaction.hpp>
-#include <bitmask/bit_mask.cuh>
+
+#include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
@@ -27,8 +27,11 @@
 #include <utilities/wrapper_types.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <cub/cub.cuh>
 #include <string/nvcategory_util.hpp>
+
+#include <rmm/thrust_rmm_allocator.h>
+
+#include <cub/cub.cuh>
 
 using bit_mask::bit_mask_t;
 

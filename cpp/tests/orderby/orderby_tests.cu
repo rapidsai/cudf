@@ -25,7 +25,7 @@
 
 #include <utilities/bit_util.cuh>
 #include <utilities/wrapper_types.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 
 #include <rmm/rmm.h>
@@ -143,8 +143,7 @@ struct OrderByTest : public GdfTest
     // Fill the gdf_column members
     the_column->size = host_vector.size();
     the_column->dtype = gdf_col_type;
-    gdf_dtype_extra_info extra_info;
-    extra_info.time_unit = TIME_UNIT_NONE;
+    gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
     the_column->dtype_info = extra_info;
 
     return the_column;

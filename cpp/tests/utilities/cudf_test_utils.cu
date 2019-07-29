@@ -21,9 +21,12 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <utilities/type_dispatcher.hpp>
+#include <tests/utilities/nvcategory_utils.cuh>
 #include <cudf/functions.h>
 
 namespace {
+
+static constexpr char null_signifier = '@';
 
 namespace detail {
 
@@ -44,68 +47,91 @@ int promote_for_streaming(const signed char& x)   { return x; }
 
 
 struct column_printer {
-    template<typename Element>
-    void operator()(gdf_column const* the_column, unsigned min_printing_width, std::ostream& stream)
-    {
-        gdf_size_type num_rows { the_column->size };
+  template<typename Element>
+  void operator()(gdf_column const* the_column, unsigned min_printing_width,
+                  std::ostream& stream)
+  {
+    gdf_size_type num_rows { the_column->size };
 
-        Element const* column_data { static_cast<Element const*>(the_column->data) };
+    Element const* column_data { static_cast<Element const*>(the_column->data) };
 
-        std::vector<Element> host_side_data(num_rows);
-        cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element), cudaMemcpyDeviceToHost);
+    std::vector<Element> host_side_data(num_rows);
+    cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element),
+               cudaMemcpyDeviceToHost);
 
-        gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
-        std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
-        if (nullptr != the_column->valid) {
-            cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type), cudaMemcpyDeviceToHost);
-        }
-
-        for (gdf_size_type i = 0; i < num_rows; ++i) {
-            stream << std::setw(min_printing_width);
-            if (gdf_is_valid(h_mask.data(), i)) {
-                stream << detail::promote_for_streaming(host_side_data[i]);
-            }
-            else {
-                stream << null_representative;
-            }
-            stream << ' ';
-        }
-        stream << std::endl;
-
-        if(the_column->dtype == GDF_STRING_CATEGORY){
-            stream<<"Data on category:\n";
-            size_t length = 1;
-
-            if(the_column->dtype_info.category != nullptr){
-                size_t keys_size = static_cast<NVCategory *>(the_column->dtype_info.category)->keys_size();
-                if(keys_size>0){
-                    char ** data = new char *[keys_size];
-                    for(size_t i=0; i<keys_size; i++){
-                        data[i]=new char[length+1];
-                    }
-
-                    static_cast<NVCategory *>(the_column->dtype_info.category)->get_keys()->to_host(data, 0, keys_size);
-
-                    for(size_t i=0; i<keys_size; i++){
-                        data[i][length]=0;
-                    }
-
-                    for(size_t i=0; i<keys_size; i++){
-                        stream<<"("<<data[i]<<"|"<<i<<")\t";
-                    }
-                    stream<<std::endl;
-                }
-            }
-        }
+    gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
+    std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
+    if (nullptr != the_column->valid) {
+      cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type),
+                 cudaMemcpyDeviceToHost);
     }
+
+    for (gdf_size_type i = 0; i < num_rows; ++i) {
+      stream << std::setw(min_printing_width);
+      if (gdf_is_valid(h_mask.data(), i)) {
+        stream << detail::promote_for_streaming(host_side_data[i]);
+      }
+      else {
+        stream << null_representative;
+      }
+      stream << ' ';
+    }
+    stream << std::endl;
+
+    if(the_column->dtype == GDF_STRING_CATEGORY){
+      stream<<"Category Data (index | key):\n";
+
+      if(the_column->dtype_info.category != nullptr){
+        NVCategory *category =
+          static_cast<NVCategory *>(the_column->dtype_info.category);
+        
+        size_t keys_size = category->keys_size();
+        NVStrings *keys = category->get_keys();
+        
+        if (keys_size>0) {
+          char ** data = new char *[keys_size];
+          int * byte_sizes = new int[keys_size];
+          keys->byte_count(byte_sizes, false);
+          for(size_t i=0; i<keys_size; i++){
+            data[i]=new char[std::max(2, byte_sizes[i])];
+          }
+
+          keys->to_host(data, 0, keys_size);
+
+          for(size_t i=0; i<keys_size; i++){ // null terminate strings
+            // TODO: nvstrings overwrites data[i] ifit is a null string
+            // Update this based on resolution of https://github.com/rapidsai/custrings/issues/330
+            if (byte_sizes[i]!=-1)  
+              data[i][byte_sizes[i]]=0;
+          }
+          
+          for(size_t i=0; i<keys_size; i++){ // print category strings
+            stream << "(" << i << "|";
+            if (data[i] == nullptr)
+               stream << null_signifier; // account for null
+            else
+              stream << data[i];
+            stream << ")\t";
+          }
+          stream<<std::endl;
+
+          for(size_t i=0; i<keys_size; i++){
+              delete data[i];
+          }
+          delete [] data;
+          delete [] byte_sizes;
+        }
+      }
+    }
+  }
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Functor for comparing if two elements between two gdf_columns are
+ * @brief Functor for comparing whether two elements from two gdf_columns are
  * equal.
  *
  *---------------------------------------------------------------------------**/
-template <typename T, bool has_nulls>
+template <typename T>
 struct elements_equal {
   gdf_column lhs_col;
   gdf_column rhs_col;
@@ -125,7 +151,7 @@ struct elements_equal {
                                      bool nulls_are_equal = true)
       : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
 
-  __device__ bool operator()(gdf_index_type row) {    
+  __device__ bool operator()(gdf_index_type row) {
     bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
     bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 
@@ -176,24 +202,47 @@ bool gdf_equal_columns(gdf_column const& left, gdf_column const& right)
     return false;  // if one is null but not both
 
   if (left.data == nullptr)
-      return true;  // logically, both are null
+    return true;  // logically, both are null
 
-  // both are non-null...
-  bool const has_nulls {(left.valid != nullptr) && (left.null_count > 0)};
+  if (left.dtype == GDF_STRING_CATEGORY) {
+    // Transfer input column to host
+    std::vector<std::string> left_data, right_data;
+    std::vector<gdf_valid_type> left_bitmask, right_bitmask;
+    std::tie(left_data, left_bitmask) =
+      cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&left));
+    std::tie(right_data, right_bitmask) =
+      cudf::test::nvcategory_column_to_host(const_cast<gdf_column*>(&right));
 
-  bool equal_data = (has_nulls) ?
-    thrust::all_of(rmm::exec_policy()->on(0),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(left.size),
-                   elements_equal<T, true>{left, right}) :
-    thrust::all_of(rmm::exec_policy()->on(0),
-                   thrust::make_counting_iterator(0),
-                   thrust::make_counting_iterator(left.size),
-                   elements_equal<T, false>{left, right});
+    CHECK_STREAM(0);
+
+    if (left_data.size() != right_data.size())
+      return false;
+    
+    for (size_t i = 0; i < left_data.size(); i++) {
+      bool const left_is_valid{gdf_is_valid(left_bitmask.data(), i)};
+      bool const right_is_valid{gdf_is_valid(right_bitmask.data(), i)};
+
+      if (left_is_valid != right_is_valid)
+        return false;
+      else if (left_is_valid && (left_data[i] != right_data[i]))
+        return false;
+    }
+
+    return true;
+  }
+  else {
+    if ((left.dtype_info.category != nullptr) || (right.dtype_info.category != nullptr))
+      return false;  // category must be nullptr
+
+    bool equal_data = thrust::all_of(rmm::exec_policy()->on(0),
+                                     thrust::make_counting_iterator(0),
+                                     thrust::make_counting_iterator(left.size),
+                                     elements_equal<T>{left, right});
+    
+    CHECK_STREAM(0);
   
-  CHECK_STREAM(0);
-
-  return equal_data;
+    return equal_data;
+  }
 }
 
 namespace {
@@ -238,7 +287,7 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   std::transform(
       h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
       std::ostream_iterator<std::string>(std::cout, " "), [](gdf_valid_type x) {
-        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string('@');
+        auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string(null_signifier);
         return std::string(bits.rbegin(), bits.rend());
       });
   std::cout << std::endl;

@@ -28,8 +28,10 @@
 #define BALLOT(v)   __ballot(v)
 #endif
 
-namespace orc { namespace gpu {
-
+namespace cudf {
+namespace io {
+namespace orc {
+namespace gpu {
 
 struct compressed_stream_s
 {
@@ -558,6 +560,7 @@ cudaError_t __host__ ParseRowGroupIndex(RowGroup *row_groups, CompressedStreamIn
     return cudaSuccess;
 }
 
-
-
-};}; // orc::gpu namespace
+} // namespace gpu
+} // namespace orc
+} // namespace io
+} // namespace cudf

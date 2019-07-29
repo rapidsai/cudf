@@ -6,7 +6,10 @@
 #include "types.h"
 #include "io_types.h"
 #include "convert_types.h"
+#include "io_types.hpp"
+#include "io_functions.hpp"
 #include "io_readers.hpp"
+#include "legacy/column.hpp"
 
 constexpr size_t GDF_VALID_BITSIZE{(sizeof(gdf_valid_type) * 8)};
 
