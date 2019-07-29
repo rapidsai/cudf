@@ -189,19 +189,19 @@ endif(BUILD_BENCHMARKS)
 
 include(ConfigureNVStrings)
 
-if(NVSTRINGS_FOUND)
+if(NVSTRINGS_BUILT)
   message(STATUS "NVStrings built successfully")
   message(STATUS "NVStrings library path: " ${NVSTRINGS_LIBRARY_DIR})
   
-  add_library(NVStrings SHARED IMPORTED libNVStrings.so)
-  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR})
+  add_library(NVStrings SHARED IMPORTED)
+  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so)
 
-  add_library(NVCategory SHARED IMPORTED libNVCategory.so)
-  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR})
+  add_library(NVCategory SHARED IMPORTED)
+  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so)
 
-  add_library(NVText SHARED IMPORTED libNVText.so)
-  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR})
-endif(NVSTRINGS_FOUND)
+  add_library(NVText SHARED IMPORTED)
+  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVText.so)
+endif(NVSTRINGS_BUILT)
 
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
@@ -358,13 +358,21 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} ${NVCategory} ${NVStrings} nvrtc)
+target_link_libraries(cudf rmm cudart cuda ${ARROW_LIB} ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
+install(FILES ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so
+              ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so
+              ${NVSTRINGS_LIBRARY_DIR}/libNVText.so
+        DESTINATION lib)
+
 install(TARGETS cudf
         DESTINATION lib)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
+        DESTINATION include)
 
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
         DESTINATION include)
@@ -372,9 +380,14 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
+add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
+                   COMMAND doxygen Doxyfile
+                   VERBATIM)
+
 add_custom_command(OUTPUT CUDF_DOXYGEN
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
                    COMMAND doxygen Doxyfile
                    VERBATIM)
 
-add_custom_target(doc DEPENDS CUDF_DOXYGEN)
+add_custom_target(doc DEPENDS CUDF_DOXYGEN NVSTRINGS_DOXYGEN)

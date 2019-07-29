@@ -126,42 +126,42 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}"
 # - library targets -------------------------------------------------------------------------------
 
 add_library(NVStrings SHARED 
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/NVStrings.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/NVStringsImpl.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/array.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/attrs.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/case.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/combine.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/convert.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/count.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/datetime.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/extract.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/extract_record.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/find.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/findall.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/findall_record.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/modify.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/pad.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/replace.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/replace_backref.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/replace_multi.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/split.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/strip.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/strings/substr.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/util.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/regex/regexec.cpp
-            ${CMAKE_SOURCE_DIR}/src/custrings/regex/regcomp.cpp)
+            ${CMAKE_SOURCE_DIR}/custrings/strings/NVStrings.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/NVStringsImpl.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/array.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/attrs.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/case.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/combine.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/convert.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/count.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/datetime.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/extract.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/extract_record.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/find.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/findall.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/findall_record.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/modify.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/pad.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/replace.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/replace_backref.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/replace_multi.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/split.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/strip.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/substr.cu
+            ${CMAKE_SOURCE_DIR}/custrings/util.cu
+            ${CMAKE_SOURCE_DIR}/custrings/regex/regexec.cpp
+            ${CMAKE_SOURCE_DIR}/custrings/regex/regcomp.cpp)
 
 add_library(NVCategory SHARED
-            ${CMAKE_SOURCE_DIR}/src/custrings/category/NVCategory.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/category/numeric_category.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/category/numeric_category_int.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/category/numeric_category_long.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/category/numeric_category_float.cu
-            ${CMAKE_SOURCE_DIR}/src/custrings/category/numeric_category_double.cu)
+            ${CMAKE_SOURCE_DIR}/custrings/category/NVCategory.cu
+            ${CMAKE_SOURCE_DIR}/custrings/category/numeric_category.cu
+            ${CMAKE_SOURCE_DIR}/custrings/category/numeric_category_int.cu
+            ${CMAKE_SOURCE_DIR}/custrings/category/numeric_category_long.cu
+            ${CMAKE_SOURCE_DIR}/custrings/category/numeric_category_float.cu
+            ${CMAKE_SOURCE_DIR}/custrings/category/numeric_category_double.cu)
 
 add_library(NVText SHARED
-            ${CMAKE_SOURCE_DIR}/src/custrings/text/NVText.cu)
+            ${CMAKE_SOURCE_DIR}/custrings/text/NVText.cu)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
@@ -169,28 +169,3 @@ add_library(NVText SHARED
 target_link_libraries(NVStrings rmm cudart cuda)
 target_link_libraries(NVCategory NVStrings rmm cudart cuda)
 target_link_libraries(NVText NVStrings rmm cudart cuda)
-
-###################################################################################################
-# - install targets -------------------------------------------------------------------------------
-
-install(TARGETS NVStrings
-        DESTINATION lib)
-
-install(TARGETS NVCategory
-        DESTINATION lib)
-
-install(TARGETS NVText LIBRARY
-        DESTINATION lib)
-
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/nvstrings
-        DESTINATION include)
-
-###################################################################################################
-# - make documentation ----------------------------------------------------------------------------
-
-add_custom_command(OUTPUT DOCS_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM)
-
-add_custom_target(doc DEPENDS DOCS_DOXYGEN)
