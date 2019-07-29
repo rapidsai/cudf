@@ -157,9 +157,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
         import cudf.bindings.typecast as typecast
 
-        col = typecast.apply_cast(
-            self.as_numerical, dtype=np.dtype(dtype).type
-        )
+        col = typecast.apply_cast(self, dtype=np.dtype(dtype).type)
         return col
 
     def unordered_compare(self, cmpop, rhs):
