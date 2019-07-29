@@ -9,6 +9,7 @@ import pyarrow as pa
 import nvstrings
 from librmm_cffi import librmm as rmm
 
+import cudf
 import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
@@ -501,11 +502,11 @@ class StringColumn(columnops.TypedColumnBase):
         return self._indices
 
     def astype(self, dtype):
-        if self.dtype == dtype or (
-            dtype in ("str", "object") and self.dtype in ("str", "object")
-        ):
+        if utils.dtype_equals(dtype, (self.dtype, "str", "object")):
             return self
-        elif dtype in (np.dtype("int8"), np.dtype("int16")):
+        elif pd.api.types.is_categorical_dtype(dtype):
+            return self._as_categorical_column()
+        if utils.dtype_equals(dtype, ("int8", "int16")):
             out_dtype = np.dtype(dtype)
             dtype = np.dtype("int32")
         else:
@@ -754,6 +755,19 @@ class StringColumn(columnops.TypedColumnBase):
                 self[1:], self[:-1], "le"
             ).all()
         return self._is_monotonic_decreasing
+
+    def _as_categorical_column(self):
+        data = rmm.device_array(len(self), dtype="int32")
+        ptr = get_ctype_ptr(data)
+        self.nvcategory.values(devptr=ptr)
+        data = cudf.dataframe.buffer.Buffer(data)
+
+        mask = self.mask
+        categories = self.nvcategory.keys()
+
+        return columnops.build_column(
+            buffer=data, mask=mask, categories=categories, dtype="category"
+        )
 
 
 def string_column_binop(lhs, rhs, op):
