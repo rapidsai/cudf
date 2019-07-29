@@ -297,6 +297,7 @@ add_library(cudf SHARED
             src/datetime/datetime_ops.cu
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
+            src/quantiles/group_quantiles.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
