@@ -381,9 +381,9 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step, sln = utils.standard_python_slice(
-                len(self), index
-            )
+            start, stop, step = index.indices(len(self))
+            sln = (stop - start) // step
+            sln = max(0, sln)
             start += self._start
             stop += self._start
             if sln == 0:
@@ -728,7 +728,7 @@ class CategoricalIndex(GenericIndex):
 
     @property
     def codes(self):
-        return self._values.codes
+        return self._values.cat().codes
 
     @property
     def categories(self):
@@ -757,14 +757,6 @@ class StringIndex(GenericIndex):
             )
         assert self._values.null_count == 0
         self.name = name
-
-    @property
-    def codes(self):
-        return self._values.codes
-
-    @property
-    def categories(self):
-        return self._values.categories
 
     def to_pandas(self):
         result = pd.Index(self.values, name=self.name, dtype="object")
@@ -822,6 +814,10 @@ def as_index(arbitrary, name=None):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, pd.RangeIndex):
+        return RangeIndex(
+            start=arbitrary._start, stop=arbitrary._stop, name=name
+        )
     else:
         return as_index(columnops.as_column(arbitrary), name=name)
 

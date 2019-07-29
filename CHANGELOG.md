@@ -18,7 +18,9 @@
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
+- PR #2356 Java column vector standard deviation support
 
 ## Improvements
 
@@ -55,6 +57,8 @@
 - PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2377 Replace `standard_python_slice` with just `slice.indices()`
+- PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 
 ## Bug Fixes
 
@@ -80,14 +84,22 @@
 - PR #2302 Fixed java serialization corner case
 - PR #2355 Handle float16 in binary operations
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2202 Fix issue with unary ops mishandling empty input
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
 - PR #2355 Handle float16 in binary operations
+- PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
+- PR #2364 Fix quantile api and other trivial issues around it
+- PR #2361 Fixed issue with `codes` of CategoricalIndex
+- PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
+- PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
+- PR #2401 Fix to a scalar datetime(of type Days) issue
 
 
 # cuDF 0.8.0 (27 June 2019)

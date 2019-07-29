@@ -354,9 +354,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column
+        if dtype is not None:
+            data = data.astype(dtype)
     elif isinstance(arbitrary, Index):
         data = arbitrary._values
-
+        if dtype is not None:
+            data = data.astype(dtype)
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
 

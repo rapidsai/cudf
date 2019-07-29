@@ -1591,6 +1591,11 @@ def test_to_arrow_missing_categorical():
         "float32",
         "float64",
         "datetime64[ms]",
+        "datetime64",
+        "datetime64[ns]",
+        "datetime64[D]",
+        "datetime64[s]",
+        "datetime64[M]",
     ],
 )
 def test_from_scalar_typing(data_type):
@@ -1600,6 +1605,11 @@ def test_from_scalar_typing(data_type):
             .type(np.random.randint(0, 5))
             .astype("datetime64[ms]")
         )
+    elif data_type.startswith("datetime64"):
+        from datetime import date
+
+        scalar = np.datetime64(date.today())
+        data_type = "datetime64[ms]"
     else:
         scalar = np.dtype(data_type).type(np.random.randint(0, 5))
 
@@ -1984,20 +1994,20 @@ def test_iteritems(gdf):
         assert_eq(v, gdf[k])
 
 
-@pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
-def test_quantile(pdf, gdf):
-    assert_eq(pdf["x"].quantile(), gdf["x"].quantile())
-    assert_eq(pdf.quantile(), gdf.quantile())
+@pytest.mark.parametrize("q", [0.5, 1, 0.001, [0.5], [], [0.005, 0.5, 1]])
+def test_quantile(pdf, gdf, q):
+    assert_eq(pdf["x"].quantile(q), gdf["x"].quantile(q))
+    assert_eq(pdf.quantile(q), gdf.quantile(q))
 
 
 def test_empty_quantile():
     pdf = pd.DataFrame({"x": []})
     df = gd.DataFrame({"x": []})
 
-    actual = df.quantile().to_pandas()["x"]
+    actual = df.quantile()
     expected = pdf.quantile()
 
-    assert_eq(actual.values, expected.values)
+    assert_eq(actual, expected)
 
 
 def test_from_pandas_function(pdf):
@@ -3278,6 +3288,34 @@ def test_empty_dataframe_describe():
 def test_as_column_types():
     from cudf.dataframe import columnops
 
+    col = columnops.as_column(Series([]))
+    assert_eq(col.dtype, np.dtype("float64"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([]))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="float32")
+    assert_eq(col.dtype, np.dtype("float32"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="float32"))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="str")
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="str"))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="object")
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="object"))
+
+    assert_eq(pds, gds)
+
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype="float32"))
 
@@ -3285,6 +3323,32 @@ def test_as_column_types():
 
     pds = pd.Series([1, 2, 3], dtype="float32")
     gds = Series([1, 2, 3], dtype="float32")
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([])
+    gds = Series(columnops.as_column(pds))
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1, 2, 4], dtype="int64")
+    gds = Series(columnops.as_column(Series([1, 2, 4]), dtype="int64"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
+    gds = Series(
+        columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="float32")
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
+    gds = Series(columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
+    gds = Series(gd.dataframe.index.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
