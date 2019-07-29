@@ -1141,6 +1141,10 @@ class DataFrame(object):
            being added
         """
         if SCALAR:
+            if hasattr(series, "dtype") and np.issubdtype(
+                series.dtype, np.datetime64
+            ):
+                series = series.astype("datetime64[ms]")
             col = series
 
         if (utils.is_list_like(series)) or (isinstance(series, Series)):
@@ -3105,7 +3109,6 @@ class DataFrame(object):
             columns = self.columns
 
         result = DataFrame()
-        result["Quantile"] = q
         for k, col in self._cols.items():
             if k in columns:
                 res = col.quantile(
@@ -3116,10 +3119,16 @@ class DataFrame(object):
                 )
                 if not isinstance(res, numbers.Number) and len(res) == 0:
                     res = columnops.column_empty_like(
-                        q, dtype=col.dtype, masked=True, newsize=len(q)
+                        q, dtype="float64", masked=True, newsize=len(q)
                     )
                 result[k] = res
-        return result
+        if isinstance(q, numbers.Number):
+            result.index = [float(q)]
+            return result.iloc[0]
+        else:
+            q = list(map(float, q))
+            result.index = q
+            return result
 
     #
     # Stats
