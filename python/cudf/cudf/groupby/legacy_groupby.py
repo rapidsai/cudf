@@ -377,7 +377,7 @@ class Groupby(object):
             - segments : Series
                 Group begin offsets.
         """
-        dsegs = segs.astype(dtype=np.int32).to_gpu_array()
+        dsegs = segs.astype(dtype=np.int32).data.mem
         sorted_keys = []
         plan_cache = {}
         for col in columns:
