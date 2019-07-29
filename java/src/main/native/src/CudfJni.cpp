@@ -21,6 +21,7 @@
 #include "cudf/reduction.hpp"
 #include "cudf/replace.hpp"
 #include "cudf/stream_compaction.hpp"
+#include "cudf/unary.hpp"
 
 #include "jni_utils.hpp"
 
@@ -279,12 +280,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfUnaryMath(JNIEnv *env, jclas
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
-    gdf_unary_math_op op = static_cast<gdf_unary_math_op>(int_op);
-    cudf::jni::gdf_column_wrapper ret(input->size, out_type, 
-                                      input->valid != nullptr);
-    // TODO should null count         input->null_count > 0);
-
-    JNI_GDF_TRY(env, 0, gdf_unary_math(input, ret.get(), op));
+    cudf::unary_op op = static_cast<cudf::unary_op>(int_op);
+    std::unique_ptr<gdf_column, decltype(free) *> ret(
+        static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -430,6 +428,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
     gdf_dtype c_dtype = static_cast<gdf_dtype>(dtype);
     gdf_time_unit c_time_unit = static_cast<gdf_time_unit>(time_unit);
+    gdf_dtype_extra_info info{};
     size_t size = input->size;
     if (input->dtype == GDF_STRING) {
       NVStrings *str = static_cast<NVStrings *>(input->data);
@@ -440,13 +439,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
       return cudf::jni::cast_string_cat_to(env, cat, c_dtype, c_time_unit, size, input->null_count,
                                            input->valid);
     } else {
-      // TODO should be but bug in cudf cudf::jni::gdf_column_wrapper
-      // output(input->size, c_dtype,
-      // input->null_count != 0);
-      cudf::jni::gdf_column_wrapper output(input->size, c_dtype, input->valid != nullptr);
-      output.get()->dtype_info.time_unit = c_time_unit;
-      JNI_GDF_TRY(env, 0, gdf_cast(input, output.get()));
-      return reinterpret_cast<jlong>(output.release());
+      std::unique_ptr<gdf_column, decltype(free) *> ret(
+          static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
+      info.time_unit = c_time_unit;
+      *ret.get() = cudf::cast(*input, c_dtype, info);
+      return reinterpret_cast<jlong>(ret.release());
     }
   }
   CATCH_STD(env, 0);
