@@ -11,7 +11,7 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.replace cimport *
 from cudf.dataframe.column import Column
-from cudf.utils.utils import is_single_value
+from cudf.util.internalutil import is_single_value
 
 from libc.stdlib cimport calloc, malloc, free
 

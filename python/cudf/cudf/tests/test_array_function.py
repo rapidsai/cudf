@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.utils.utils import IS_NEP18_ACTIVE
+from cudf.util.internalutil import IS_NEP18_ACTIVE
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"

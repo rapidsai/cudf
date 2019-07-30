@@ -7,7 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.utils.cudautils import astype, modulo
+from cudf.util.cudautils import astype, modulo
 from librmm_cffi import librmm as rmm
 
 import numpy as np

@@ -15,8 +15,8 @@ from librmm_cffi import librmm as rmm
 
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
-from cudf.util import cudautils, utils
-from cudf.util.utils import buffers_from_pyarrow, min_scalar_type
+from cudf.util import cudautils, internalutil
+from cudf.util.internalutil import buffers_from_pyarrow, min_scalar_type
 
 
 class TypedColumnBase(Column):
@@ -394,11 +394,11 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
                     if new_dtype == np.dtype("object"):
-                        arbitrary = utils.scalar_broadcast_to(
+                        arbitrary = internalutil.scalar_broadcast_to(
                             None, (len(arbitrary),), dtype=new_dtype
                         )
                     else:
-                        arbitrary = utils.scalar_broadcast_to(
+                        arbitrary = internalutil.scalar_broadcast_to(
                             np.nan, (len(arbitrary),), dtype=new_dtype
                         )
             data = as_column(arbitrary, nan_as_null=nan_as_null)
@@ -580,7 +580,7 @@ def column_applymap(udf, column, out_dtype):
             # in range?
             if i < values.size:
                 # valid?
-                if utils.mask_get(masks, i):
+                if internalutil.mask_get(masks, i):
                     # call udf
                     results[i] = core(values[i])
 

@@ -10,7 +10,7 @@ import pandas as pd
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.index import Index, StringIndex, as_index
-from cudf.utils import cudautils
+from cudf.util import cudautils
 
 
 class MultiIndex(Index):

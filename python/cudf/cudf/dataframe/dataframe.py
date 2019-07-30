@@ -37,7 +37,7 @@ from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.series import Series
 from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.util import applyutils, cudautils, ioutils, queryutils, utils
+from cudf.util import applyutils, cudautils, ioutils, queryutils, internalutil
 from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
 
@@ -274,7 +274,7 @@ class DataFrame(object):
             self.columns, cudf.dataframe.multiindex.MultiIndex
         ) and isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if utils.is_single_value(arg) or isinstance(arg, tuple):
+        if internalutil.is_single_value(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -1105,7 +1105,7 @@ class DataFrame(object):
            col values
         """
 
-        if (utils.is_list_like(series)) or (isinstance(series, Series)):
+        if (internalutil.is_list_like(series)) or (isinstance(series, Series)):
             """
             This case should handle following three scenarios:
 
@@ -1128,8 +1128,10 @@ class DataFrame(object):
             if self[next(iter(self._cols))].dtype == np.dtype("object"):
                 dtype = np.dtype("object")
             arr = rmm.device_array(shape=len(ind), dtype=dtype)
-            size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
-            mask = cudautils.zeros(size, dtype=utils.mask_dtype)
+            size = internalutil.calc_chunk_size(
+                arr.size, internalutil.mask_bitsize
+            )
+            mask = cudautils.zeros(size, dtype=internalutil.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
             for name in self._cols:
                 self._cols[name] = val
@@ -1147,7 +1149,7 @@ class DataFrame(object):
                 series = series.astype("datetime64[ms]")
             col = series
 
-        if (utils.is_list_like(series)) or (isinstance(series, Series)):
+        if (internalutil.is_list_like(series)) or (isinstance(series, Series)):
             """
             This case should handle following three scenarios:
 
@@ -3292,7 +3294,9 @@ class DataFrame(object):
             )
 
         include, exclude = map(
-            lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
+            lambda x: frozenset(
+                map(internalutil.cudf_dtype_from_pydata_dtype, x)
+            ),
             selection,
         )
 
@@ -3327,7 +3331,7 @@ class DataFrame(object):
                     exclude_subtypes.add(dtype.type)
 
         include_all = set(
-            [utils.cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
+            [internalutil.cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
         )
 
         if include:
@@ -3340,7 +3344,7 @@ class DataFrame(object):
         inclusion = inclusion - exclude_subtypes
 
         for x in self._cols.values():
-            infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)
+            infered_type = internalutil.cudf_dtype_from_pydata_dtype(x.dtype)
             if infered_type in inclusion:
                 df.add_column(x.name, x)
 

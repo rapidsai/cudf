@@ -14,7 +14,7 @@ from cudf.bindings.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
 from cudf.dataframe import Series
-from cudf.utils.utils import mask_bitsize, mask_dtype
+from cudf.util.internalutil import mask_bitsize, mask_dtype
 
 
 class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):

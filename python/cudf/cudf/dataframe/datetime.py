@@ -16,8 +16,8 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
-from cudf.util import cudautils, utils
-from cudf.util.utils import is_single_value
+from cudf.util import cudautils, internalutil
+from cudf.util.internalutil import is_single_value
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -98,14 +98,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
             other = np.datetime64(other)
 
         if isinstance(other, pd.Timestamp):
-            ary = utils.scalar_broadcast_to(
+            ary = internalutil.scalar_broadcast_to(
                 other.value * self._pandas_conversion_factor,
                 shape=len(self),
                 dtype=self._npdatetime64_dtype,
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self._npdatetime64_dtype)
-            ary = utils.scalar_broadcast_to(
+            ary = internalutil.scalar_broadcast_to(
                 other, shape=len(self), dtype=self._npdatetime64_dtype
             )
         else:

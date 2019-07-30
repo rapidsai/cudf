@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
-from cudf.utils import utils
+from cudf.util import internalutil
 
 
 def random_bitmask(size):
@@ -12,9 +12,9 @@ def random_bitmask(size):
     size : int
         number of bits
     """
-    sz = utils.calc_chunk_size(size, utils.mask_bitsize)
+    sz = internalutil.calc_chunk_size(size, internalutil.mask_bitsize)
     data = np.random.randint(0, 255 + 1, size=sz)
-    return data.astype(utils.mask_dtype)
+    return data.astype(internalutil.mask_dtype)
 
 
 def expand_bits_to_bytes(arr):

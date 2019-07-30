@@ -3,7 +3,7 @@ import numpy as np
 from librmm_cffi import librmm as rmm
 
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.utils import cudautils, utils
+from cudf.util import cudautils, internalutil
 
 
 class Buffer(object):
@@ -101,7 +101,7 @@ class Buffer(object):
             buf.dtype = self.dtype  # for np.datetime64 support
             return buf
         elif isinstance(arg, (int, np.integer)):
-            arg = utils.normalize_index(int(arg), self.size)
+            arg = internalutil.normalize_index(int(arg), self.size)
             item = self.mem[arg]
             if isinstance(item, str):
                 return item

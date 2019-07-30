@@ -12,7 +12,7 @@ import cudf.bindings.sort as cpp_sort
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
-from cudf.utils import cudautils
+from cudf.util import cudautils
 
 logging.basicConfig(format="%(levelname)s:%(message)s")
 
