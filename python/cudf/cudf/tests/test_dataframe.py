@@ -391,7 +391,7 @@ def test_dataframe_pop():
 
     # check empty dataframe edge case
     empty_pdf = pd.DataFrame(columns=["a", "b"])
-    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    empty_gdf = DataFrame(columns=["a", "b"])
     pb = empty_pdf.pop("b")
     gb = empty_gdf.pop("b")
     assert len(pb) == len(gb)
@@ -3365,3 +3365,69 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ),
+        [
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ],
+    ],
+)
+def test_create_dataframe_from_list_like(data):
+    pdf = pd.DataFrame(data, index=["count", "mean", "std", "min"])
+    gdf = DataFrame(data, index=["count", "mean", "std", "min"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+
+def test_create_dataframe_column():
+    pdf = pd.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+    gdf = DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+    gdf = DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pd.Categorical(["a", "b", "c"]),
+        ["m", "a", "d", "v"],
+    ],
+)
+def test_series_values_property(data):
+    pds = pd.Series(data)
+    gds = Series(data)
+
+    np.testing.assert_array_equal(pds.values, gds.values)

@@ -58,6 +58,7 @@
 - PR #2344 Add docs on how code formatting works for contributors
 - PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
+- PR #2373 cudf.DataFrame enchancements & Series.values support
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
 
