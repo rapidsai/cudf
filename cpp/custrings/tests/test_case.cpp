@@ -2,8 +2,8 @@
 #include <vector>
 
 #include "nvstrings/NVStrings.h"
-#include "./utils.h"
 
+#include "./utils.h"
 
 std::vector<const char*> hstrs{ "Examples aBc", "thesé", nullptr, "ARE THE", "tést strings", "" };
 

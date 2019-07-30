@@ -189,8 +189,8 @@ NVStrings* NVStrings::copy()
 //
 void NVStrings::print( int start, int end, int maxwidth, const char* delimiter )
 {
-    int count = (int) size();
-    if( end < 0 || end > count )
+    unsigned int count = size();
+    if( end < 0 || end > (int) count )
         end = count;
     if( start < 0 )
         start = 0;
@@ -249,7 +249,7 @@ void NVStrings::print( int start, int end, int maxwidth, const char* delimiter )
     thrust::host_vector<custring_view*> h_strings(*(pImpl->pList)); // just for checking nulls
     thrust::host_vector<size_t> h_lens(lens);
     char* hstr = h_buffer;
-    for( int idx=0; idx < count; ++idx )
+    for( int idx=0; idx < (int) count; ++idx )
     {
         printf("%d:",idx);
         if( !h_strings[idx] )
@@ -265,8 +265,8 @@ void NVStrings::print( int start, int end, int maxwidth, const char* delimiter )
 //
 int NVStrings::to_host(char** list, int start, int end)
 {
-    int count = (int) size();
-    if( end < 0 || end > count )
+    unsigned int count = size();
+    if( end < 0 || end > (int) count )
         end = count;
     if( start >= end )
         return 0;
@@ -331,7 +331,7 @@ int NVStrings::to_host(char** list, int start, int end)
     thrust::host_vector<custring_view*> h_strings(*(pImpl->pList)); // just for checking nulls
     thrust::host_vector<size_t> h_offsets(offsets);
     h_offsets.push_back(msize); // include size as last offset
-    for( int idx=0; idx < count; ++idx )
+    for( unsigned int idx=0; idx < count; ++idx )
     {
         if( h_strings[idx]==0 )
             continue;

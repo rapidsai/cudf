@@ -5,8 +5,9 @@
 extern "C" {
 #include <rmm/rmm_api.h>
 }
-#include "regex.cuh"
-#include "regcomp.h"
+
+#include "./regex.cuh"
+#include "./regcomp.h"
 
 dreprog* dreprog::create_from(const char32_t* pattern, unsigned char* uflags )
 {

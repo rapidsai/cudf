@@ -33,19 +33,6 @@
 
 typedef custring_view** custring_view_array;
 
-//
-static custring_view* custring_from_host( const char* str )
-{
-    if( !str )
-        return nullptr;
-    unsigned int length = (unsigned int)strlen(str);
-    unsigned int bytes = custring_view::alloc_size(str,length);
-    custring_view* d_str = reinterpret_cast<custring_view*>(device_alloc<char>(bytes,0));
-    custring_view::create_from_host(d_str,str,length);
-    return d_str;
-}
-
-
 // common token counter for all split methods
 struct nvtext_token_counter
 {
@@ -181,10 +168,7 @@ NVStrings* NVText::tokenize(NVStrings& strs, const char* delimiter)
     if( delimiter==nullptr || *delimiter==0 )
         return NVText::tokenize(strs);
     auto execpol = rmm::exec_policy(0);
-    unsigned int delim_length = (unsigned int)strlen(delimiter);
-    unsigned int delim_size = custring_view::alloc_size(delimiter,delim_length);
-    custring_view* d_delimiter = reinterpret_cast<custring_view*>(device_alloc<char>(delim_size,0));
-    custring_view::create_from_host(d_delimiter,delimiter,delim_length);
+    custring_view* d_delimiter = custring_from_host(delimiter);
 
     unsigned int count = strs.size();
     rmm::device_vector<custring_view*> strings(count,nullptr);
@@ -346,10 +330,8 @@ NVStrings* NVText::tokenize(NVStrings& strs, NVStrings& delims )
 // return unique set of tokens within all the strings using the specified delimiter
 NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
 {
-    int bytes = (int)strlen(delimiter);
     auto execpol = rmm::exec_policy(0);
-    char* d_delimiter = device_alloc<char>(bytes,0);
-    CUDA_TRY( cudaMemcpyAsync(d_delimiter,delimiter,bytes,cudaMemcpyHostToDevice))
+    custring_view* d_delimiter = custring_from_host(delimiter);
 
     // need to count how many output strings per string
     unsigned int count = strs.size();
@@ -359,10 +341,10 @@ NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
     rmm::device_vector<int> counts(count,0);
     int* d_counts = counts.data().get();
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        [d_strings, d_delimiter, bytes, d_counts] __device__(unsigned int idx){
+        [d_strings, d_delimiter, d_counts] __device__(unsigned int idx){
             custring_view* dstr = d_strings[idx];
             if( dstr )
-                d_counts[idx] = dstr->split_size(d_delimiter,bytes,0,-1);
+                d_counts[idx] = dstr->split_size(d_delimiter->data(),d_delimiter->size(),0,-1);
         });
 
     int columnsCount = *thrust::max_element(execpol->on(0), counts.begin(), counts.end() );
@@ -376,7 +358,7 @@ NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
         rmm::device_vector< thrust::pair<const char*,size_t> > indexes(count);
         thrust::pair<const char*,size_t>* d_indexes = indexes.data().get();
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-            [d_strings, col, d_delimiter, bytes, d_counts, d_indexes] __device__(unsigned int idx){
+            [d_strings, col, d_delimiter, d_counts, d_indexes] __device__(unsigned int idx){
                 custring_view* dstr = d_strings[idx];
                 d_indexes[idx].first = nullptr;   // initialize to
                 d_indexes[idx].second = 0;  // null string
@@ -391,7 +373,7 @@ NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
                 int epos = nchars;
                 for( int c=0; c < (dcount-1); ++c )
                 {
-                    epos = dstr->find(d_delimiter,bytes,spos);
+                    epos = dstr->find(*d_delimiter,spos);
                     if( epos < 0 )
                     {
                         epos = nchars;
@@ -399,7 +381,7 @@ NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
                     }
                     if( c==col )  // found our column
                         break;
-                    spos = epos + bytes;
+                    spos = epos + d_delimiter->chars_count();
                     epos = nchars;
                 }
                 // this will be the string for this column
@@ -411,12 +393,6 @@ NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
                     d_indexes[idx].second = (epos-spos);
                 }
             });
-        //cudaError_t err = cudaDeviceSynchronize();
-        //if( err != cudaSuccess )
-        //{
-        //    fprintf(stderr,"unique_tokens:col=%d\n",col);
-        //    printCudaError(err);
-        //}
         // add column values to vocab list
         vocab.insert(vocab.end(),indexes.begin(),indexes.end());
         //printf("vocab size = %lu\n",vocab.size());
@@ -454,10 +430,8 @@ NVStrings* NVText::unique_tokens(NVStrings& strs, const char* delimiter )
 // return a count of the number of tokens for each string when applying the specified delimiter
 unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsigned int* results, bool bdevmem )
 {
-    int bytes = (int)strlen(delimiter);
     auto execpol = rmm::exec_policy(0);
-    char* d_delimiter = device_alloc<char>(bytes,0);
-    CUDA_TRY( cudaMemcpyAsync(d_delimiter,delimiter,bytes,cudaMemcpyHostToDevice))
+    custring_view* d_delimiter = custring_from_host(delimiter);
 
     unsigned int count = strs.size();
     unsigned int* d_counts = results;
@@ -469,11 +443,11 @@ unsigned int NVText::token_count( NVStrings& strs, const char* delimiter, unsign
     custring_view** d_strings = strings.data().get();
     strs.create_custring_index(d_strings);
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        [d_strings, d_delimiter, bytes, d_counts] __device__(unsigned int idx){
+        [d_strings, d_delimiter, d_counts] __device__(unsigned int idx){
             custring_view* dstr = d_strings[idx];
             int tc = 0;
             if( dstr )
-                tc = dstr->empty() ? 0 : dstr->split_size(d_delimiter,bytes,0,-1);
+                tc = dstr->empty() ? 0 : dstr->split_size(d_delimiter->data(),d_delimiter->size(),0,-1);
             d_counts[idx] = tc;
         });
     //
@@ -610,6 +584,7 @@ unsigned int NVText::tokens_counts( NVStrings& strs, NVStrings& tkns, const char
     strs.create_custring_index(d_strings);
     tkns.create_custring_index(d_tokens);
 
+    // change this to use the next_token logic like in the replace_tokens method
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
         [d_strings, d_tokens, tcount, d_delimiter, dellen, d_rtn] __device__(unsigned int idx){
             custring_view* dstr = d_strings[idx];
@@ -794,6 +769,116 @@ NVStrings* NVText::replace_tokens(NVStrings& strs, NVStrings& tgts, NVStrings& r
     return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_indexes,count);
 }
 
+struct normalize_spaces_fn
+{
+    custring_view_array d_strings;
+    size_t* d_offsets;
+    bool bcompute_size_only{true};
+    char* d_buffer;
+    thrust::pair<const char*,size_t>* d_indexes;
+
+    __device__ bool next_token( custring_view* dstr, bool& spaces, custring_view::iterator& itr, int& spos, int& epos )
+    {
+        if( spos >= dstr->chars_count() )
+            return false;
+        for( ; itr != dstr->end(); itr++ )
+        {
+            Char ch = *itr;
+            if( spaces == (ch <= ' ') )
+            {
+                if( spaces )
+                    spos = itr.position()+1;
+                else
+                    epos = itr.position()+1;
+                continue;
+            }
+            spaces = !spaces;
+            if( spaces )
+            {
+                epos = itr.position();
+                break;
+            }
+        }
+        return spos < epos;
+    }
+
+    __device__ void operator()(unsigned int idx)
+    {
+        if( !bcompute_size_only )
+        {
+            d_indexes[idx].first = nullptr;   // initialize to
+            d_indexes[idx].second = 0;        // null string
+        }
+        custring_view* dstr = d_strings[idx];
+        if( !dstr )
+            return;
+        char* sptr = dstr->data();  // input buffer
+        char* buffer = nullptr;     // output buffer
+        if( !bcompute_size_only )
+            buffer = d_buffer + d_offsets[idx];
+        char* optr = buffer; // running output pointer
+        int nbytes = 0, spos = 0, epos = dstr->chars_count();
+        bool spaces = true;
+        auto itr = dstr->begin();
+        while( next_token(dstr,spaces,itr,spos,epos) )
+        {
+            int spos_bo = dstr->byte_offset_for(spos); // convert char pos
+            int epos_bo = dstr->byte_offset_for(epos); // to byte offset
+            nbytes += epos_bo - spos_bo + 1; // include space per token
+            if( !bcompute_size_only )
+            {
+                if( optr != buffer )
+                    copy_and_incr(optr,(char*)" ",1); // add just one space
+                copy_and_incr(optr,sptr+spos_bo,epos_bo-spos_bo); // copy token
+            }
+            spos = epos + 1;
+            epos = dstr->chars_count();
+            itr++; // skip the first whitespace
+        }
+        // set result (remove extra space for last token)
+        if( bcompute_size_only )
+            d_offsets[idx] = (nbytes ? nbytes-1:0);
+        else
+        {
+            d_indexes[idx].first = buffer;
+            d_indexes[idx].second = (nbytes ? nbytes-1:0);
+        }
+    }
+};
+
+NVStrings* NVText::normalize_spaces(NVStrings& strs)
+{
+    if( strs.size()==0 )
+        return strs.copy();
+
+    auto execpol = rmm::exec_policy(0);
+    // go get the strings for all the parameters
+    unsigned int count = strs.size();
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    // first, calculate size of the output
+    rmm::device_vector<size_t> offsets(count,0);
+    size_t* d_offsets = offsets.data().get();
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        normalize_spaces_fn{d_strings, d_offsets} );
+
+    size_t buffer_size = thrust::reduce(execpol->on(0), d_offsets, d_offsets+count);
+    if( buffer_size==0 )
+        return nullptr;
+    char* d_buffer = device_alloc<char>(buffer_size,0);
+    thrust::exclusive_scan( execpol->on(0), offsets.begin(), offsets.end(), offsets.begin() );
+    // build the output strings
+    rmm::device_vector< thrust::pair<const char*,size_t> > indexes(count);
+    thrust::pair<const char*,size_t>* d_indexes = indexes.data().get();
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        normalize_spaces_fn{d_strings, d_offsets, false, d_buffer, d_indexes} );
+
+    return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_indexes,count);
+}
+
+
 // Documentation here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
 // And here: https://en.wikipedia.org/wiki/Levenshtein_distances
 struct editdistance_levenshtein_algorithm
@@ -882,18 +967,15 @@ struct editdistance_levenshtein_algorithm
     }
 };
 
-unsigned int NVText::edit_distance( distance_type algo, NVStrings& strs, const char* str, unsigned int* results, bool bdevmem )
+unsigned int NVText::edit_distance( distance_type algo, NVStrings& strs, const char* target, unsigned int* results, bool bdevmem )
 {
-    if( algo != levenshtein || str==0 || results==0 )
+    if( algo != levenshtein || target==0 || results==0 )
         throw std::invalid_argument("invalid algorithm");
     unsigned int count = strs.size();
     if( count==0 )
         return 0; // nothing to do
     auto execpol = rmm::exec_policy(0);
-    unsigned int len = strlen(str);
-    unsigned int alcsz = custring_view::alloc_size(str,len);
-    custring_view* d_tgt = reinterpret_cast<custring_view*>(device_alloc<char>(alcsz,0));
-    custring_view::create_from_host(d_tgt,str,len);
+    custring_view* d_target = custring_from_host(target);
 
     // setup results vector
     unsigned int* d_rtn = results;
@@ -909,13 +991,13 @@ unsigned int NVText::edit_distance( distance_type algo, NVStrings& strs, const c
     rmm::device_vector<size_t> sizes(count,0);
     size_t* d_sizes = sizes.data().get();
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        [d_strings, d_tgt, d_sizes] __device__(unsigned int idx){
+        [d_strings, d_target, d_sizes] __device__(unsigned int idx){
             custring_view* dstr = d_strings[idx];
             if( !dstr )
                 return;
             int len = dstr->chars_count();
-            if( d_tgt->chars_count() < len )
-                len = d_tgt->chars_count();
+            if( d_target->chars_count() < len )
+                len = d_target->chars_count();
             d_sizes[idx] = len * 3;
         });
     //
@@ -927,14 +1009,14 @@ unsigned int NVText::edit_distance( distance_type algo, NVStrings& strs, const c
     thrust::exclusive_scan(execpol->on(0), sizes.begin(), sizes.end(), offsets.begin() );
     // compute edit distance
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        editdistance_levenshtein_algorithm(d_strings, d_tgt, d_buffer, d_offsets, d_rtn));
+        editdistance_levenshtein_algorithm(d_strings, d_target, d_buffer, d_offsets, d_rtn));
     //
     if( !bdevmem )
     {
         CUDA_TRY( cudaMemcpyAsync(results,d_rtn,count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
         RMM_FREE(d_rtn,0);
     }
-    RMM_FREE(d_tgt,0);
+    RMM_FREE(d_target,0);
     return 0;
 }
 
@@ -1021,10 +1103,7 @@ NVStrings* NVText::create_ngrams(NVStrings& strs, unsigned int ngrams, const cha
     if( ngrams==1 )
         return strs.copy(); // same with this one; need method to create NVStrings from custring_views
 
-    unsigned int sep_length = (unsigned int)strlen(separator);
-    unsigned int sep_size = custring_view::alloc_size(separator,sep_length);
-    custring_view* d_separator = reinterpret_cast<custring_view*>(device_alloc<char>(sep_size,0));
-    custring_view::create_from_host(d_separator,separator,sep_length);
+    custring_view* d_separator = custring_from_host(separator);
 
     // compute size of new strings
     unsigned int ngrams_count = count - ngrams +1;
@@ -1078,4 +1157,81 @@ NVStrings* NVText::create_ngrams(NVStrings& strs, unsigned int ngrams, const cha
     RMM_FREE(d_separator,0);
     // build strings object from results elements
     return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_results,ngrams_count);
+}
+
+struct porter_stemmer_measure_fn
+{
+    custring_view_array d_strings;
+    custring_view* d_vowels;
+    Char y_char;
+    unsigned int* d_results;
+
+    __device__ bool is_consonant( custring_view* dstr, int index )
+    {
+        Char ch = dstr->at(index);
+        if( d_vowels->find(ch) >= 0 )
+            return false;
+        if( (ch != y_char) || (index==0) )
+            return true;
+        ch = dstr->at(index-1);       // only if previous char
+        return d_vowels->find(ch)>=0; // is not a consonant
+    }
+
+    __device__ void operator()(unsigned int idx)
+    {
+        custring_view* dstr = d_strings[idx];
+        if( !dstr )
+            return;
+        unsigned int vcs = 0;
+        bool vowel_run = !is_consonant(dstr,0);
+        for( auto itr=dstr->begin(); itr!=dstr->end(); itr++ )
+        {
+            if( is_consonant(dstr,itr.position()) )
+            {
+                if( vowel_run )
+                    vcs++;
+                vowel_run = false;
+            }
+            else
+                vowel_run = true;
+        }
+        d_results[idx] = vcs;
+    }
+};
+
+unsigned int NVText::porter_stemmer_measure(NVStrings& strs, const char* vowels, const char* y_char, unsigned int* results, bool bdevmem )
+{
+    unsigned int count = strs.size();
+    if( count==0 )
+        return 0; // nothing to do
+    auto execpol = rmm::exec_policy(0);
+    // setup results vector
+    unsigned int* d_results = results;
+    if( !bdevmem )
+        d_results = device_alloc<unsigned int>(count,0);
+    if( vowels==nullptr )
+        vowels = "aeiou";
+    custring_view* d_vowels = custring_from_host(vowels);
+    if( y_char==nullptr )
+        y_char = "y";
+    Char char_y;
+    custring_view::char_to_Char(y_char,char_y);
+
+    // get the string pointers
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    // do the measure
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        porter_stemmer_measure_fn{d_strings,d_vowels,char_y,d_results});
+
+    // done
+    if( !bdevmem )
+    {
+        CUDA_TRY( cudaMemcpyAsync(results,d_results,count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
+        RMM_FREE(d_results,0);
+    }
+    RMM_FREE(d_vowels,0);
+    return 0;
 }

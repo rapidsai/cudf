@@ -19,6 +19,7 @@
 #include <string>
 
 class NVStrings;
+class custring_view;
 
 // csv parser flags
 #define CSV_SORT_LENGTH    1
@@ -26,9 +27,12 @@ class NVStrings;
 #define CSV_NULL_IS_EMPTY  8
 // this has become a thing
 NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int lines=0, unsigned int flags=0);
-
+//
 __host__ __device__ inline unsigned int u2u8( unsigned int unchr );
 __host__ __device__ inline unsigned int u82u( unsigned int utf8 );
+
+//
+custring_view* custring_from_host( const char* str );
 
 // copies and moves dest pointer
 __device__ inline char* copy_and_incr( char*& dest, char* src, unsigned int bytes );

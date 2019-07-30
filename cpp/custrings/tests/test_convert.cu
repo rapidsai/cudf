@@ -3,8 +3,8 @@
 #include <thrust/device_vector.h>
 
 #include "nvstrings/NVStrings.h"
-#include "./utils.h"
 
+#include "./utils.h"
 
 TEST(TestConvert, Hash)
 {

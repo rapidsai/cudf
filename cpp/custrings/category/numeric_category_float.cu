@@ -14,7 +14,7 @@
 * limitations under the License.
 */
 
-#include "numeric_category.inl"
+#include "./numeric_category.inl"
 
 // see cudf/cpp/include/cudf/types.h for reference
 // these are the floating point types

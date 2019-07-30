@@ -177,6 +177,46 @@ NVStrings* NVStrings::scatter( NVStrings& strs, const int* pos, bool bdevmem )
     return rtn;
 }
 
+//
+// s1 = ['a','b,'c','d']
+// pos = [1,3]
+// s3 = s1.scatter('e',pos,2)
+// ['a','e','c','e']
+//
+NVStrings* NVStrings::scatter( const char* str, const int* pos, unsigned int elements, bool bdevmem )
+{
+    unsigned int count = size();
+    if( pos==nullptr )
+        throw std::invalid_argument("parameter cannot be null");
+    auto execpol = rmm::exec_policy(0);
+    // copy string to device
+    custring_view* d_repl = custring_from_host(str);
+    const int* d_pos = pos;
+    if( !bdevmem )
+    {   // copy indexes to device memory
+        d_pos = const_cast<const int*>(device_alloc<int>(elements,0));
+        CUDA_TRY(cudaMemcpyAsync((void*)d_pos,pos,elements*sizeof(int),cudaMemcpyHostToDevice))
+    }
+    // create result output array
+    rmm::device_vector<custring_view*> results(count,nullptr);
+    auto d_results = results.data().get();
+    custring_view_array d_strings = pImpl->getStringsPtr();
+    thrust::copy( execpol->on(0), d_strings, d_strings+count, d_results );
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), elements,
+        [d_pos, count, d_repl, d_results] __device__ (unsigned int idx) {
+            int pos = d_pos[idx];
+            if( (pos >= 0) && (pos < count) )
+                d_results[pos] = d_repl;
+        });
+    // build resulting instance
+    NVStrings* rtn = new NVStrings(count);
+    NVStrings_init_from_custrings(rtn->pImpl, d_results, count);
+    if( !bdevmem )
+        RMM_FREE((void*)d_pos,0);
+    RMM_FREE((void*)d_repl,0);
+    return rtn;
+}
+
 NVStrings* NVStrings::sublist( unsigned int start, unsigned int end, int step )
 {
     unsigned int count = size();

@@ -1,4 +1,3 @@
-
 #include <stdio.h>
 #include <string>
 #include <cuda_runtime.h>

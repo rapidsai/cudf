@@ -88,38 +88,16 @@ set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
 set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 
 ###################################################################################################
-# - RMM -------------------------------------------------------------------------------------------
-
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/rmm"
-                "$ENV{CONDA_PREFIX}/include")
-
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
-message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
-
-add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
-if (RMM_INCLUDE AND RMM_LIBRARY)
-    set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
-endif (RMM_INCLUDE AND RMM_LIBRARY)
-
-###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
 include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${CMAKE_SOURCE_DIR}/include"
-                    "${CMAKE_SOURCE_DIR}/src"
                     "${RMM_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}"
-                 "${CMAKE_BINARY_DIR}/lib"
                  "${RMM_LIBRARY}")
 
 ###################################################################################################
@@ -148,6 +126,7 @@ add_library(NVStrings SHARED
             ${CMAKE_SOURCE_DIR}/custrings/strings/split.cu
             ${CMAKE_SOURCE_DIR}/custrings/strings/strip.cu
             ${CMAKE_SOURCE_DIR}/custrings/strings/substr.cu
+            ${CMAKE_SOURCE_DIR}/custrings/strings/urlencode.cu
             ${CMAKE_SOURCE_DIR}/custrings/util.cu
             ${CMAKE_SOURCE_DIR}/custrings/regex/regexec.cpp
             ${CMAKE_SOURCE_DIR}/custrings/regex/regcomp.cpp)
@@ -161,11 +140,12 @@ add_library(NVCategory SHARED
             ${CMAKE_SOURCE_DIR}/custrings/category/numeric_category_double.cu)
 
 add_library(NVText SHARED
-            ${CMAKE_SOURCE_DIR}/custrings/text/NVText.cu)
+            ${CMAKE_SOURCE_DIR}/custrings/text/NVText.cu
+            ${CMAKE_SOURCE_DIR}/custrings/util.cu)
 
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(NVStrings rmm cudart cuda)
-target_link_libraries(NVCategory NVStrings rmm cudart cuda)
-target_link_libraries(NVText NVStrings rmm cudart cuda)
+target_link_libraries(NVStrings ${RMM_LIBRARY} cudart cuda)
+target_link_libraries(NVCategory NVStrings ${RMM_LIBRARY} cudart cuda)
+target_link_libraries(NVText NVStrings ${RMM_LIBRARY} cudart cuda)

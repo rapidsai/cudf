@@ -3,6 +3,7 @@
 #include <thrust/device_vector.h>
 
 #include "nvstrings/NVStrings.h"
+
 #include "./utils.h"
 
 std::vector<const char*> hstrs{ "Héllo", "thesé", nullptr, "ARE THE", "tést strings", "" };

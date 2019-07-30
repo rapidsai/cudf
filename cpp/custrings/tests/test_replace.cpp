@@ -3,6 +3,7 @@
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
+
 #include "./utils.h"
 
 std::vector<const char*> hstrs{ "the quick brown fox jumps over the lazy dog",

@@ -289,6 +289,18 @@ public:
      */
     NVStrings* scatter( NVStrings& strs, const int* pos, bool devmem=true );
     /**
+     * @brief Returns new instance using the provided index values and strings instance.
+     * The position values specify the location in the new strings instance.
+     * Missing values pass through from this instance at those positions.
+     *
+     * @param[in] str The instance for which to retrieve the values specified in pos array.
+     * @param[in] pos The 0-based index values to replace with the given strings in this instance.
+     * @param[in] count Number of values in pos parameter.
+     * @param devmem Indicates whether the pos parameter points to device memory or CPU memory.
+     * @return New instance with the specified strings.
+     */
+    NVStrings* scatter( const char* str, const int* pos, unsigned int count, bool devmem=true );
+    /**
      * @brief Returns a new instance without the specified strings.
      *
      * @param[in] pos The 0-based index of the strings to be ignored when creating a copy of this instance.
@@ -1157,6 +1169,23 @@ public:
      * @return New instance with string representation of the integers as appropriate.
      */
     static NVStrings* long2timestamp( const unsigned long* values, unsigned int count, timestamp_units units, const char* format, const unsigned char* nullbitmask=nullptr, bool devmem=true);
+
+    // urlencode.cu
+    /**
+     * @brief URL-encodes each string and returns the new instance.
+     *        This uses UTF-8 encoding style and does no error checking on the strings.
+     *        All letters and digits are not encoded as well as characters '.','_','~','-'.
+     *
+     * @return New instance of url-encoded strings
+     */
+    NVStrings* url_encode();
+    /**
+     * @brief URL-decodes each string and returns the new instance.
+     *        This expects UTF-8 encoding style and does no error checking on the strings.
+     *
+     * @return New instance of url-encoded strings
+     */
+    NVStrings* url_decode();
 
     /**
      * @brief Output strings to stdout.

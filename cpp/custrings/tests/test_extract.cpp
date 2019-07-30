@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "nvstrings/NVStrings.h"
+
 #include "./utils.h"
 
  std::vector<const char*> hstrs{"First Last", "Joe Schmoe", "John Smith", "Jane Smith",

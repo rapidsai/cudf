@@ -2,9 +2,11 @@
 #include <vector>
 
 #include "nvstrings/NVStrings.h"
+
 #include "./utils.h"
 
 std::vector<const char*> hstrs{ "Héllo thesé", nullptr, "are some", "tést String", "" };
+
 
 TEST(TestSplit, Split)
 {

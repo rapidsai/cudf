@@ -24,7 +24,19 @@
 #include "nvstrings/NVStrings.h"
 
 #include "./util.h"
+#include "./custring_view.cuh"
 
+//
+custring_view* custring_from_host( const char* str )
+{
+    if( !str )
+        return nullptr;
+    unsigned int length = (unsigned int)strlen(str);
+    unsigned int bytes = custring_view::alloc_size(str,length);
+    custring_view* d_str = reinterpret_cast<custring_view*>(device_alloc<char>(bytes,0));
+    custring_view::create_from_host(d_str,str,length);
+    return d_str;
+}
 
 // this is just a convenience and should be removed in the future
 NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int lines, unsigned int flags)

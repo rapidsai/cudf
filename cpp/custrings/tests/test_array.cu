@@ -3,8 +3,8 @@
 #include <thrust/device_vector.h>
 
 #include "nvstrings/NVStrings.h"
-#include "./utils.h"
 
+#include "./utils.h"
 
 std::vector<const char*> hstrs{ "John Smith", "Joe Blow", "Jane Smith", nullptr, "" };
 
@@ -67,11 +67,19 @@ TEST(TestArray, Scatter)
     indexes.push_back(1);
     indexes.push_back(3);
 
-    NVStrings* got = strs1->scatter(*strs2, indexes.data().get() );
-    const char* expected[] = {"John Smith", "", "Jane Smith", "Joe Schmoe", "" };
-    EXPECT_TRUE( verify_strings(got,expected));
+    {
+        NVStrings* got = strs1->scatter(*strs2, indexes.data().get() );
+        const char* expected[] = {"John Smith", "", "Jane Smith", "Joe Schmoe", "" };
+        EXPECT_TRUE( verify_strings(got,expected));
+        NVStrings::destroy(got);
+    }
+    {
+        NVStrings* got = strs1->scatter("_", indexes.data().get(), indexes.size() );
+        const char* expected[] = {"John Smith", "_", "Jane Smith", "_", "" };
+        EXPECT_TRUE( verify_strings(got,expected));
+        NVStrings::destroy(got);
+    }
 
-    NVStrings::destroy(got);
     NVStrings::destroy(strs1);
     NVStrings::destroy(strs2);
 }

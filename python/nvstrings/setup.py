@@ -38,5 +38,3 @@ setup(
     cmdclass={'build_ext': CMakeBuildExt},
     zip_safe=False
 )
-
-# convert_to_manylinux(name, version)

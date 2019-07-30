@@ -104,6 +104,7 @@ include(CheckLibraryExists)
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
+message(STATUS "BUILDING ARROW")
 include(ConfigureArrow)
 
 if (ARROW_FOUND)
@@ -145,6 +146,7 @@ endif (RMM_INCLUDE AND RMM_LIBRARY)
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
+message(STATUS "BUILDING NVSTRINGS")
 include(ConfigureNVStrings)
 
 if(NVSTRINGS_BUILT)

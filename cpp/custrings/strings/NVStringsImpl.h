@@ -61,7 +61,6 @@ void printCudaError( cudaError_t err, const char* prefix="\t" );
 char32_t* to_char32( const char* ca );
 unsigned char* get_unicode_flags();
 unsigned short* get_charcases();
-custring_view* custring_from_host( const char* str );
 
 //
 int NVStrings_init_from_strings(NVStringsImpl* pImpl, const char** strs, unsigned int count );

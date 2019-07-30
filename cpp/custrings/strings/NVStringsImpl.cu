@@ -53,7 +53,7 @@ char32_t* to_char32( const char* ca )
     char32_t* rtn = new char32_t[count+1];
     char32_t* optr = rtn;
     const char* iptr = ca;
-    for( unsigned int i=0; i < size; ++i )
+    for( int i=0; i < (int) size; ++i )
     {
         Char oc = 0;
         unsigned int cw = custring_view::char_to_Char(iptr,oc);
@@ -88,18 +88,6 @@ unsigned short* get_charcases()
         cudaMemcpy(d_charcases,charcases,65536*sizeof(unsigned short),cudaMemcpyHostToDevice);
     }
     return d_charcases;
-}
-
-//
-custring_view* custring_from_host( const char* str )
-{
-    if( !str )
-        return nullptr;
-    unsigned int length = (unsigned int)strlen(str);
-    unsigned int bytes = custring_view::alloc_size(str,length);
-    custring_view* d_str = reinterpret_cast<custring_view*>(device_alloc<char>(bytes,0));
-    custring_view::create_from_host(d_str,str,length);
-    return d_str;
 }
 
 //

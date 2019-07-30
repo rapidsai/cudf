@@ -2,6 +2,7 @@
 #include <vector>
 
 #include "nvstrings/NVStrings.h"
+
 #include "./utils.h"
 
 std::vector<const char*> hstrs{ "12345", "thesé", nullptr, "ARE THE", "tést strings", "" };

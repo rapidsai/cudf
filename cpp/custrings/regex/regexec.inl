@@ -16,7 +16,8 @@
 
 #include <memory.h>
 #include <rmm/rmm.h>
-#include "regcomp.h"
+
+#include "./regcomp.h"
 #include "../custring_view.cuh"
 #include "../unicode/is_flags.h"
 #include "../util.h"

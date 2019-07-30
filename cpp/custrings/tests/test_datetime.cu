@@ -4,8 +4,8 @@
 #include <thrust/device_vector.h>
 
 #include "nvstrings/NVStrings.h"
-#include "./utils.h"
 
+#include "./utils.h"
 
 TEST(TestTimestamp, ToTimestamp)
 {
@@ -17,7 +17,7 @@ TEST(TestTimestamp, ToTimestamp)
         strs->timestamp2long("%Y-%m-%dT%H:%M:%SZ", NVStrings::seconds, results.data().get());
         int expected[] = { 131246625, 1563399277, 0,0 };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
-            EXPECT_EQ((int) results[idx],expected[idx]);
+            EXPECT_EQ((int)results[idx],expected[idx]);
         NVStrings::destroy(strs);
     }
 
@@ -28,7 +28,7 @@ TEST(TestTimestamp, ToTimestamp)
         strs->timestamp2long("%m-%d-%Y", NVStrings::days, results.data().get());
         int expected[] = { 4744, 18094 };
         for( int idx = 0; idx < (int) hstrs.size(); ++idx )
-            EXPECT_EQ((int) results[idx],expected[idx]);
+            EXPECT_EQ((int)results[idx],expected[idx]);
         NVStrings::destroy(strs);
     }
 }

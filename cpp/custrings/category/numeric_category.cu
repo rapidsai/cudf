@@ -14,7 +14,7 @@
 * limitations under the License.
 */
 
-#include "numeric_category.inl"
+#include "./numeric_category.inl"
 
 size_t count_nulls( const BYTE* nulls, size_t count )
 {

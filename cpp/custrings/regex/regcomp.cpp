@@ -15,7 +15,8 @@
 */
 
 #include <string.h>
-#include "regcomp.h"
+
+#include "./regcomp.h"
 
 #define OPERATOR    0200    /* Bitmask of all operators */
 enum InstType_Internal
