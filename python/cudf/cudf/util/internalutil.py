@@ -264,11 +264,26 @@ def compare_and_get_name(a, b):
         return b.name
     return None
 
-def hash_pandas_object(obj, index=True, encoding="utf8", hash_key=None, categorize=True):
+
+def hash_pandas_object(
+    obj, index=True, encoding="utf8", hash_key=None, categorize=True
+):
     if isinstance(obj, (pd.Series, pd.Index, pd.MultiIndex, pd.DataFrame)):
-        return pd.util.hash_pandas_object(obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize)
+        return pd.util.hash_pandas_object(
+            obj,
+            index=index,
+            encoding=encoding,
+            hash_key=hash_key,
+            categorize=categorize,
+        )
     else:
-        return hash_cudf_object(obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize)
+        return hash_cudf_object(
+            obj,
+            index=index,
+            encoding=encoding,
+            hash_key=hash_key,
+            categorize=categorize,
+        )
 
 
 def hash_cudf_object(
