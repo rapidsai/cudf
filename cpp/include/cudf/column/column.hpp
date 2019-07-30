@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include "column_view.hpp"
 
@@ -23,16 +24,6 @@
 #include <vector>
 
 namespace cudf {
-
-/**---------------------------------------------------------------------------*
- * @brief Controls the allocation/initialization of a column's null mask.
- *---------------------------------------------------------------------------**/
-enum mask_state {
-  UNALLOCATED,    ///< Null mask not allocated
-  UNINITIALIZED,  ///< Null mask allocated, but not initialized
-  ALL_VALID,      ///< Null mask allocated, initialized to all valid values
-  ALL_NULL        ///< Null mask allocated, initialized to all NULL
-};
 
 class column {
  public:
@@ -175,14 +166,18 @@ class column {
   /**---------------------------------------------------------------------------*
    * @brief Returns the count of null elements.
    *
-   * @note If the column was originally constructed with `UNKNOWN_NULL_COUNT`,
-   * then the first invocation of `null_count()` will compute and store the
-   * count of null elements indicated by the `null_mask` (if it exists).
+   * @note If the column was constructed with `UNKNOWN_NULL_COUNT`, or if at any
+   * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
+   * first invocation of `null_count()` will compute and store the count of null
+   * elements indicated by the `null_mask` (if it exists).
    *---------------------------------------------------------------------------**/
   size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Updates the count of null elements.
+   *
+   * @note `UNKNOWN_NULL_COUNT` can be specified as `new_null_count` to force
+   * recomputing the null count from the null mask.
    *
    * @throws cudf::logic_error if `new_null_count > 0` but `nullable() == false`
    *
@@ -267,7 +262,7 @@ class column {
                                ///< buffer containing the column elements
   rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
                                     ///< May be empty if `null_count() == 0`
-  size_type _null_count{};          ///< The number of null elements
+  size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
   std::vector<column> _children{};  ///< Depending on element type, child
                                     ///< columns may contain additional data
 };
