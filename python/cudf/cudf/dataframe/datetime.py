@@ -125,36 +125,39 @@ class DatetimeColumn(columnops.TypedColumnBase):
             data=self.data.astype("int64"),
         )
 
-    def astype(self, dtype):
+    def as_datetime_column(self, dtype, **kwargs):
+        # TODO: this needs to change after
+        # we support more than just datetime64[ms]
+        return self
+
+    def as_numerical_column(self, dtype, **kwargs):
+        return self.as_numerical.astype(dtype, **kwargs)
+
+    def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
 
-        if self.dtype is dtype:
-            return self
-        elif dtype == np.dtype("object") or np.issubdtype(
-            dtype, np.dtype("U").type
-        ):
-            if len(self) > 0:
-                dev_array = self.data.mem
-                dev_ptr = get_ctype_ptr(dev_array)
-                null_ptr = None
-                if self.mask is not None:
-                    null_ptr = get_ctype_ptr(self.mask.mem)
-                kwargs = {
+        if len(self) > 0:
+            dev_array = self.data.mem
+            dev_ptr = get_ctype_ptr(dev_array)
+            null_ptr = None
+            if self.mask is not None:
+                null_ptr = get_ctype_ptr(self.mask.mem)
+            kwargs.update(
+                {
                     "count": len(self),
                     "nulls": null_ptr,
                     "bdevmem": True,
                     "units": "ms",
                 }
-                data = string._numeric_to_str_typecast_functions[
-                    np.dtype(self.dtype)
-                ](dev_ptr, **kwargs)
+            )
+            data = string._numeric_to_str_typecast_functions[
+                np.dtype(self.dtype)
+            ](dev_ptr, **kwargs)
 
-            else:
-                data = []
+        else:
+            data = []
 
-            return string.StringColumn(data=data)
-
-        return self.as_numerical.astype(dtype)
+        return string.StringColumn(data=data)
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
