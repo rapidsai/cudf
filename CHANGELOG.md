@@ -59,6 +59,7 @@
 - PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
+- PR #2406 Moved all existing `table` related files to a `legacy/` directory
 
 ## Bug Fixes
 
