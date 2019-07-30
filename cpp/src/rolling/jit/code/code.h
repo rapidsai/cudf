@@ -26,7 +26,7 @@ namespace jit {
 namespace code {
 
     extern const char* kernel;
-    extern const char* operation;
+    extern const char* operation_h;
 
 }
 }

@@ -315,7 +315,8 @@ gdf_column rolling_window(gdf_column const& input,
   // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);
 
-  std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
+  std::string hash = "prog_rolling." 
+    + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
   std::string cuda_source = 
     cudf::jit::parse_single_function_ptx(
       user_defined_aggregator, 
@@ -324,22 +325,14 @@ gdf_column rolling_window(gdf_column const& input,
       {0,5}
     ) + cudf::rolling::jit::code::kernel;
 
-  // Launch type dispatcher
+  // Launch the kernel
   cudf::jit::launcher(
-    hash, 
-    cuda_source,
-    { "operation.h" , cudf_types_h },
-    { "-std=c++14" },
-    [](std::string filename, std::iostream& stream)-> std::istream* {
-      if(filename == "operation.h"){
-        stream << cudf::rolling::jit::code::operation;
-        return &stream;
-      }
-      return nullptr;
-    }
+    hash, cuda_source,
+    { cudf::rolling::jit::code::operation_h , cudf_types_h },
+    { "-std=c++14" }, nullptr
   ).set_kernel_inst(
-    "gpu_rolling", 
-    { cudf::jit::getTypeName(output.dtype),
+    "gpu_rolling", // name of the kernel we are launching
+    { cudf::jit::getTypeName(output.dtype), // list of template arguments
       cudf::jit::getTypeName(input.dtype),
       cudf::rolling::jit::get_operator_name(agg_op) } 
   ).launch(

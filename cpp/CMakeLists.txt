@@ -324,7 +324,6 @@ add_library(cudf SHARED
             src/rolling/rolling.cu
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
-            src/rolling/jit/core/launcher.cpp
             src/rolling/jit/util/type.cpp
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu

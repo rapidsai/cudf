@@ -22,9 +22,8 @@ namespace rolling {
 namespace jit {
 namespace code {
 
-const char* operation =
-R"***(
-
+const char* operation_h =
+R"***(operation.h
 #pragma once
   struct numba_generic_aggregator {
     template <typename OutType, typename InType>
