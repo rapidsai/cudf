@@ -1,11 +1,8 @@
 import os
-import sysconfig
 from distutils.sysconfig import get_python_lib
 
 from setuptools import setup
-from cmake_setuptools import (
-  CMakeExtension, CMakeBuildExt, convert_to_manylinux
-)
+from cmake_setuptools import (CMakeExtension, CMakeBuildExt)
 
 install_requires = []
 

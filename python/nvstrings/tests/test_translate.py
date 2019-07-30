@@ -11,14 +11,10 @@ from utils import assert_eq
 
 @pytest.mark.parametrize('table', [
     [],
-    pytest.param([['e', 'a']], marks=[pytest.mark.xfail(
-         reason='Pandas series requires ordinal mapping')]),
-    pytest.param([['e', 'é']], marks=[pytest.mark.xfail(
-         reason='Pandas series requires ordinal mapping')]),
-    pytest.param([['é', 'e']], marks=[pytest.mark.xfail(
-         reason='Pandas series requires ordinal mapping')]),
-    pytest.param([['o', None]], marks=[pytest.mark.xfail(
-         reason='Pandas series requires ordinal mapping')])
+    pytest.param([['e', 'a']], marks=[pytest.mark.xfail(reason='Pandas series requires ordinal mapping')]),
+    pytest.param([['e', 'é']], marks=[pytest.mark.xfail(reason='Pandas series requires ordinal mapping')]),
+    pytest.param([['é', 'e']], marks=[pytest.mark.xfail(reason='Pandas series requires ordinal mapping')]),
+    pytest.param([['o', None]], marks=[pytest.mark.xfail(reason='Pandas series requires ordinal mapping')])
 ])
 def test_translate_from_list(table):
     s = ["hello", "there", "world", "accéntéd", None, ""]

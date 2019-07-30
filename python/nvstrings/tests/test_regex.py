@@ -178,10 +178,8 @@ def test_extract_record():
 @pytest.mark.parametrize('replace', [
     '\\1-\\2',
     'V\\2-\\1',
-    pytest.param('V\\1-\\3', marks=[pytest.mark.xfail(
-         reason='Pandas fails with this backreference group 3')]),
-    pytest.param('V\\3-\\2', marks=[pytest.mark.xfail(
-         reason='Pandas fails with this backreference group 3')]),
+    pytest.param('V\\1-\\3', marks=[pytest.mark.xfail(reason='Pandas fails with this backreference group 3')]),
+    pytest.param('V\\3-\\2', marks=[pytest.mark.xfail(reason='Pandas fails with this backreference group 3')]),
     "\\1 \\2",
     "\\2 \\1",
     "X\\1+\\2Z",

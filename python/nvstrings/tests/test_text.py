@@ -162,7 +162,7 @@ def test_replace_tokens():
     repls = nvstrings.to_device(
         ["1", "2", "3"]
     )
-    outcome = nvtext.replace_tokens(strs,tokens,repls)
+    outcome = nvtext.replace_tokens(strs, tokens, repls)
     expected = ["1 quick fox jumped 2 1 lazy dog",
                 "1 siamésé cat jumped 3 1 sofa",
                 None, ""]

@@ -27,8 +27,10 @@ def initialize_rmm_pool():
     from librmm_cffi import librmm_config as rmm_cfg
 
     rmm_cfg.use_pool_allocator = True
-    rmm_cfg.initial_pool_size = 2 << 30  # set to 2GiB. Default is 1/2 total GPU memory
-    rmm_cfg.use_managed_memory = False  # default is false
+    # set to 2GiB. Default is 1/2 total GPU memory
+    rmm_cfg.initial_pool_size = 2 << 30
+    # default is false
+    rmm_cfg.use_managed_memory = False
     rmm_cfg.enable_logging = True
     return rmm.initialize()
 

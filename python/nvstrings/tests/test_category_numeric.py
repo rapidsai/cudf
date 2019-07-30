@@ -169,7 +169,7 @@ def test_gather_and_remap():
 
 def test_nulls():
     narr = np.array([4, 1, 2, 3, 2, 1, 4, 1, 1])
-    bitmask = np.array([1+2+8+32+64+128, 1], dtype=np.int8)
+    bitmask = np.array([1 + 2 + 8 + 32 + 64 + 128, 1], dtype=np.int8)
     cat = nvcategory.from_numbers(narr, bitmask)
 
     (got_keys, got_values) = util_check_cat(cat, narr.dtype)

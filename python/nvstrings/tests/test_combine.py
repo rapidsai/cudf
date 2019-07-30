@@ -46,8 +46,7 @@ def test_cat_multiple():
 
     got = strs.cat([strs1, strs2], sep=":", na_rep="_")
     expected = [
-        'abc:1:1', 'df:2:2', '_:3:3', ':4:_', 'jkl:5:5', 'mn:é:é', 'accént:_:'
-        ]
+        'abc:1:1', 'df:2:2', '_:3:3', ':4:_', 'jkl:5:5', 'mn:é:é', 'accént:_:']
     assert_eq(got, expected)
 
 

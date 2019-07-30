@@ -78,8 +78,7 @@ def test_partition():
         ['ab', '_', 'cd_'],
         ['', '', ''],
         [' a b ', '', ''],
-        [' a  bbb   c', '', ''],
-        ])
+        [' a  bbb   c', '', ''],])
     for i in range(len(got)):
         assert_eq(got[i], expected[i])
 

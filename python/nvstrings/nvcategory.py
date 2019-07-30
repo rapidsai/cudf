@@ -186,8 +186,8 @@ class nvcategory:
         return str(self.keys())
 
     def __repr__(self):
-        return "<nvcategory[{}] keys={},values={}>".format(
-                self.keys_type(), self.keys_size(), self.size())
+        return "<nvcategory[{}] keys={},values={}>".format(self.keys_type(),
+          self.keys_size(), self.size())
 
     def get_cpointer(self):
         """
