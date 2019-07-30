@@ -63,10 +63,11 @@ struct quantiles_functor {
 
 } // namespace anonymous
 
-// TODO: add optional check for is_sorted. Use context.flag_sorted
-gdf_column group_quantiles(cudf::table const& input_table,
-                           double quantile,
-                           gdf_context const& context)
+namespace detail {
+
+// TODO: optimize this so that it doesn't have to generate the sorted table
+auto group_values_and_indices(cudf::table const& input_table,
+                              gdf_context const& context)
 {
   // Sort and groupby the input table
   cudf::table grouped_table;
@@ -92,14 +93,27 @@ gdf_column group_quantiles(cudf::table const& input_table,
 
   // And get the group indices again, this time excluding the last (values) column
   auto group_indices = gdf_unique_indices(key_table, context);
+  auto grouped_values = **(grouped_table.end() - 1);
+  return std::make_pair(grouped_values, group_indices);
+}
 
-  auto values_col = *(grouped_table.end() - 1);
+} // namespace detail
+
+// TODO: add optional check for is_sorted. Use context.flag_sorted
+gdf_column group_quantiles(cudf::table const& input_table,
+                           double quantile,
+                           gdf_context const& context)
+{
+  gdf_column grouped_values, group_indices;
+  std::tie(grouped_values, group_indices) = 
+    detail::group_values_and_indices(input_table, context);
+
   // TODO: currently ignoring nulls
   gdf_size_type num_grps = group_indices.size;
-  auto quants_col = cudf::allocate_column(values_col->dtype, num_grps, false);
+  auto quants_col = cudf::allocate_column(grouped_values.dtype, num_grps, false);
 
-  type_dispatcher(values_col->dtype, quantiles_functor{},
-                  *values_col, group_indices, quants_col, quantile);
+  type_dispatcher(grouped_values.dtype, quantiles_functor{},
+                  grouped_values, group_indices, quants_col, quantile);
 
   return quants_col;
 }
