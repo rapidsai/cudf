@@ -251,9 +251,9 @@ auto extract_results(table const& input_keys, table const& input_values,
                      device_table const& d_input_keys,
                      table const& sparse_output_values, Map* map,
                      cudaStream_t stream) {
-  cudf::table output_keys{cudf::allocate_like(input_keys, true, stream)};
+  cudf::table output_keys{cudf::allocate_like(input_keys, keys_have_nulls, stream)};
   cudf::table output_values{
-      cudf::allocate_like(sparse_output_values, true, stream)};
+      cudf::allocate_like(sparse_output_values, values_have_nulls, stream)};
 
   auto d_sparse_output_values =
       device_table::create(sparse_output_values, stream);
