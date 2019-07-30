@@ -191,7 +191,7 @@ def array_to_series(array):
     if pa.types.is_dictionary(array.type):
         from cudf.dataframe import CategoricalColumn
 
-        dtype = "categorical"
+        dtype = "category"
         codes = array_to_series(array.indices)
         categories = array_to_series(array.dictionary)
         data = CategoricalColumn(
