@@ -556,8 +556,8 @@ class StringColumn(columnops.TypedColumnBase):
         out_col = columnops.as_column(out_arr)
 
         if self.null_count > 0:
-            mask_size = utils.calc_chunk_size(
-                len(self.data), utils.mask_bitsize
+            mask_size = internalutil.calc_chunk_size(
+                len(self.data), internalutil.mask_bitsize
             )
             out_mask_arr = rmm.device_array(mask_size, dtype="int8")
             out_mask_ptr = get_ctype_ptr(out_mask_arr)

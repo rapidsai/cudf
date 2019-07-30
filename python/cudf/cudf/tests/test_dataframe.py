@@ -3366,6 +3366,7 @@ def test_one_row_head():
 
     assert_eq(head_pdf, head_gdf)
 
+
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )

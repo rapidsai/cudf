@@ -155,7 +155,7 @@ class DataFrame(object):
         if data is not None:
             if isinstance(data, dict):
                 data = data.items()
-            elif utils.is_list_like(data) and len(data) > 0:
+            elif internalutil.is_list_like(data) and len(data) > 0:
                 if not isinstance(data[0], (list, tuple)):
                     # a nested list is something pandas supports and
                     # we don't support list-like values in a record yet
