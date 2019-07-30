@@ -84,3 +84,11 @@ set(TD_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
+
+###################################################################################################
+# - quantiles benchmark ---------------------------------------------------------------------------
+
+set(QUANTILES_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_benchmark.cu")
+
+ConfigureBench(QUANTILES_BENCH "${QUANTILES_BENCH_SRC}")

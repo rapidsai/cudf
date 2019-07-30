@@ -80,6 +80,8 @@ auto group_values_and_indices(cudf::table const& input_table,
                                       key_col_indices.data(),
                                       const_cast<gdf_context*>(&context));
 
+  gdf_column_free(&discard_indices);
+
   // discard_indices now contains the starting location of all the groups
   // but we don't want that. WE want indices when the last column is NOT included
   // So make a table without it and get the indices for it
@@ -93,6 +95,7 @@ auto group_values_and_indices(cudf::table const& input_table,
 
   // And get the group indices again, this time excluding the last (values) column
   auto group_indices = gdf_unique_indices(key_table, context);
+  key_table.destroy();
   auto grouped_values = **(grouped_table.end() - 1);
   return std::make_pair(grouped_values, group_indices);
 }
@@ -114,6 +117,9 @@ gdf_column group_quantiles(cudf::table const& input_table,
 
   type_dispatcher(grouped_values.dtype, quantiles_functor{},
                   grouped_values, group_indices, quants_col, quantile);
+
+  gdf_column_free(&grouped_values);
+  gdf_column_free(&group_indices);
 
   return quants_col;
 }
