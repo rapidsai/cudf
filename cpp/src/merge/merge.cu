@@ -15,9 +15,9 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
-#include "table/device_table.cuh"
-#include "table/device_table_row_operators.cuh"
+#include <cudf/legacy/table.hpp>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include "bitmask/legacy/bit_mask.cuh"
 #include "string/nvcategory_util.hpp"
 #include "rmm/thrust_rmm_allocator.h"

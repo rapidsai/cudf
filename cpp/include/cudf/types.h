@@ -228,11 +228,6 @@ typedef struct gdf_context_{
                                 ///< Indicates how nulls are treated in group_by/order_by operations
 } gdf_context;
 
-
-struct _OpaqueIpcParser;
-typedef struct _OpaqueIpcParser gdf_ipc_parser_type;
-
-
 struct _OpaqueSegmentedRadixsortPlan;
 typedef struct _OpaqueSegmentedRadixsortPlan gdf_segmented_radixsort_plan_type;
 
