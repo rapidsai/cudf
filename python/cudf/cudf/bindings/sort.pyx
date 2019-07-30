@@ -184,7 +184,10 @@ class SegmentedRadixSortPlan(object):
         #       is just a plain memcpy
         import cudf.bindings.typecast as typecast
         from cudf.dataframe import columnops
-        col = typecast.apply_cast(columnops.as_column(segments), dtype=seg_dtype)
+        col = typecast.apply_cast(
+            columnops.as_column(segments),
+            dtype=seg_dtype
+        )
         d_begins.copy_to_device(col.data.mem)
         d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
 
