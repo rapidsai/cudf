@@ -19,7 +19,7 @@
 #define DEVICE_TABLE_ROW_OPERATORS_CUH
 
 #include <cudf/cudf.h>
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 
 namespace
 {
