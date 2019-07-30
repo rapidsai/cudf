@@ -20,6 +20,8 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.stream.IntStream;
+
 import static ai.rapids.cudf.QuantileMethod.*;
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
 import static org.junit.jupiter.api.Assertions.*;
@@ -302,6 +304,90 @@ public class ColumnVectorTest {
     }
   }
 
+  @Test
+  void testSliceWithArray() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
+      Integer[][] expectedSlice = {
+          {12, null},
+          {20, 22, 24, 26},
+          {null, null},
+          {}};
+
+      ColumnVector[] slices = cv.slice(1, 3, 5, 9, 2, 4, 8, 8);
+
+      try {
+        for (int i = 0; i < slices.length; i++) {
+          final int sliceIndex = i;
+          ColumnVector slice = slices[sliceIndex];
+          slice.ensureOnHost();
+          assertEquals(expectedSlice[sliceIndex].length, slices[sliceIndex].getRowCount());
+          IntStream.range(0, expectedSlice[sliceIndex].length).forEach(rowCount -> {
+            if (expectedSlice[sliceIndex][rowCount] == null) {
+              assertTrue(slices[sliceIndex].isNull(rowCount));
+            } else {
+              assertEquals(expectedSlice[sliceIndex][rowCount],
+                  slices[sliceIndex].getInt(rowCount));
+            }
+          });
+        }
+        assertEquals(4, slices.length);
+      } finally {
+        for (int i = 0 ; i < slices.length ; i++) {
+          if (slices[i] != null) {
+            slices[i].close();
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testWithOddSlices() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28)) {
+      assertThrows(CudfException.class, () -> cv.slice(1, 3, 5, 9, 2, 4, 8));
+    }
+  }
+
+  @Test
+  void testSliceWithColumnVector() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try(ColumnVector cv = ColumnVector.fromBoxedInts(10, 12, null, null, 18, 20, 22, 24, 26, 28);
+        ColumnVector indices = ColumnVector.fromInts(1, 3, 5, 9, 2, 4, 8, 8)) {
+      Integer[][] expectedSlice = {
+          {12, null},
+          {20, 22, 24, 26},
+          {null, null},
+          {}};
+
+      final ColumnVector[] slices = cv.slice(indices);
+      try {
+        for (int i = 0; i < slices.length; i++) {
+          final int sliceIndex = i;
+          ColumnVector slice = slices[sliceIndex];
+          slice.ensureOnHost();
+          assertEquals(expectedSlice[sliceIndex].length, slices[sliceIndex].getRowCount());
+          IntStream.range(0, expectedSlice[sliceIndex].length).forEach(rowCount -> {
+            if (expectedSlice[sliceIndex][rowCount] == null) {
+              assertTrue(slices[sliceIndex].isNull(rowCount));
+            } else {
+              assertEquals(expectedSlice[sliceIndex][rowCount],
+                  slices[sliceIndex].getInt(rowCount));
+            }
+          });
+        }
+        assertEquals(4, slices.length);
+      } finally {
+        for (int i = 0 ; i < slices.length ; i++) {
+          if (slices[i] != null) {
+            slices[i].close();
+          }
+        }
+      }
+    }
+  }
+  
   @Test
   void testAppendStrings() {
     try (ColumnVector cv = ColumnVector.build(DType.STRING, 10, 0, (b) -> {

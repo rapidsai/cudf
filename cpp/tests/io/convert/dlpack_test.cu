@@ -148,7 +148,7 @@ TEST_F(DLPackTest, InvalidDeviceType)
   int num_columns = 0;
 
   // We support kDLGPU, kDLCPU, and kDLCPUPinned
-  for (int i = kDLOpenCL; i <= kDLExtDev; i++) {
+  for (int i = kDLOpenCL; i <= kDLROCM; i++) {
     mng_tensor->dl_tensor.ctx.device_type = static_cast<DLDeviceType>(i);
     ASSERT_EQ(gdf_from_dlpack(&columns, &num_columns, mng_tensor), 
                               GDF_INVALID_API_CALL);
