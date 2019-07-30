@@ -119,6 +119,15 @@ class Series(object):
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
 
+    @property
+    def values(self):
+        if self.dtype == np.dtype("object"):
+            return self.data.to_host()
+        elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            return self._column.to_pandas().values
+        else:
+            return self.data.mem.copy_to_host()
+
     @classmethod
     def from_arrow(cls, s):
         return cls(s)
