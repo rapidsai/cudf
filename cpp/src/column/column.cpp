@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/utils/traits.hpp>
 #include <cudf/utils/type_dispatcher.hpp>
 
 #include <rmm/device_buffer.hpp>
@@ -37,6 +38,55 @@ column::column(column &&other)
   other._size = 0;
   other._null_count = 0;
   other._type = data_type{EMPTY};
+}
+
+namespace {
+struct size_of_helper {
+  template <typename T>
+  constexpr int operator()() const noexcept {
+    return sizeof(T);
+  }
+};
+
+/**
+ * @brief Returns the size in bytes of elements of the specified `data_type`
+ *
+ * @note Only fixed-width types are supported
+ *
+ * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
+ *
+ * TODO: This should go somewhere else
+ */
+constexpr inline std::size_t size_of(data_type element_type) {
+  CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
+  return cudf::exp::type_dispatcher(element_type, size_of_helper{});
+}
+
+rmm::device_buffer create_null_mask(size_type size, mask_state state,
+                                    cudaStream_t stream,
+                                    rmm::mr::device_memory_resource *mr) {
+  switch (state) {
+    case UNALLOCATED:
+      return rmm::device_buffer{0, stream, mr};
+    case UNINITIALIZED:
+    case ALL_NULL:
+    case ALL_VALID:
+    default:
+      CUDF_FAIL("Invalid mask state\n");
+  }
+}
+
+}  // namespace
+
+// Allocate storage for a specified number of fixed-width elements
+column::column(data_type type, size_type size, mask_state state,
+               cudaStream_t stream, rmm::mr::device_memory_resource *mr) {
+  CUDF_EXPECTS(cudf::is_fixed_width(type) and cudf::is_simple(type),
+               "Invalid element type.");
+
+  _data = rmm::device_buffer(size * cudf::size_of(type), stream, mr);
+
+  _null_mask = create_null_mask(state, stream, mr);
 }
 
 // Create immutable view

@@ -67,7 +67,6 @@ enum type_id {
  *
  * Simple types can be be entirely described by their `id()`, but some types
  * require additional metadata to fully describe elements of that type.
- *
  *---------------------------------------------------------------------------**/
 class data_type {
  public:
@@ -90,10 +89,10 @@ class data_type {
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates an unknown null count.
- * 
- * Use this value when constructing any column-like object to indicate that 
+ *
+ * Use this value when constructing any column-like object to indicate that
  * the null count should be computed on the first invocation of `null_count()`.
-*---------------------------------------------------------------------------**/
+ *---------------------------------------------------------------------------**/
 static constexpr size_type UNKNOWN_NULL_COUNT{-1};
 
 }  // namespace cudf

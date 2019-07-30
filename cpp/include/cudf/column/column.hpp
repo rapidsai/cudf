@@ -66,7 +66,9 @@ class column {
    * `size` elements of the specified `type` with an optional null mask
    * allocation.
    *
-   * @note This constructor only supports fixed-width types.
+   * @note This constructor only supports fixed-width, simple types.
+   *
+   * @throws cudf::logic_error if `type` is not a fixed-width, simple type.
    *
    * @param[in] type The element type
    * @param[in] size The number of elements in the column

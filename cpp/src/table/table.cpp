@@ -71,8 +71,8 @@ mutable_table_view table::mutable_view() {
 
 // Release ownership of columns
 std::vector<std::unique_ptr<column>> table::release() {
-  return std::move(_columns);
   _num_rows = 0;
+  return std::move(_columns);
 }
 
 }  // namespace exp
