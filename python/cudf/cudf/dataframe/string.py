@@ -537,12 +537,8 @@ class StringColumn(columnops.TypedColumnBase):
     def __getitem__(self, arg):
         return self.element_indexing(arg)
 
-    def astype(self, dtype):
-        if self.dtype == dtype or (
-            dtype in ("str", "object") and self.dtype in ("str", "object")
-        ):
-            return self
-        elif dtype in (np.dtype("int8"), np.dtype("int16")):
+    def as_numerical_column(self, dtype, **kwargs):
+        if dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
             dtype = np.dtype("int32")
         else:
@@ -550,7 +546,7 @@ class StringColumn(columnops.TypedColumnBase):
 
         out_arr = rmm.device_array(shape=len(self), dtype=dtype)
         out_ptr = get_ctype_ptr(out_arr)
-        kwargs = {"devptr": out_ptr}
+        kwargs.update({"devptr": out_ptr})
         if dtype == np.dtype("datetime64[ms]"):
             kwargs["units"] = "ms"
         _str_to_numeric_typecast_functions[np.dtype(dtype)](
@@ -558,7 +554,24 @@ class StringColumn(columnops.TypedColumnBase):
         )
 
         out_col = columnops.as_column(out_arr)
+
+        if self.null_count > 0:
+            mask_size = utils.calc_chunk_size(
+                len(self.data), utils.mask_bitsize
+            )
+            out_mask_arr = rmm.device_array(mask_size, dtype="int8")
+            out_mask_ptr = get_ctype_ptr(out_mask_arr)
+            self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
+            mask = Buffer(out_mask_arr)
+            out_col = out_col.set_mask(mask)
+
         return out_col.astype(out_dtype)
+
+    def as_datetime_column(self, dtype, **kwargs):
+        return self.as_numerical_column(dtype, **kwargs)
+
+    def as_string_column(self, dtype, **kwargs):
+        return self
 
     def to_arrow(self):
         sbuf = np.empty(self._data.byte_count(), dtype="int8")

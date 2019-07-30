@@ -15,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <utilities/error_utils.hpp>
 
 using namespace cudf::io;

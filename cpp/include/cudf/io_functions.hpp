@@ -17,7 +17,7 @@
 #pragma once
 
 #include "cudf.h"
-#include "table.hpp"
+#include <cudf/legacy/table.hpp>
 
 #include <memory>
 
