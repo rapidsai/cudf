@@ -1,5 +1,5 @@
 #include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 #include <cudf/functions.h>
