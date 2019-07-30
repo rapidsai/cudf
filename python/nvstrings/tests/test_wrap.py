@@ -1,8 +1,8 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-import pytest
-import pandas as pd
 import nvstrings
+import pandas as pd
+import pytest
 
 from utils import assert_eq
 

@@ -1,11 +1,10 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 import numpy as np
-
 import nvstrings
 
-from utils import assert_eq
 from librmm_cffi import librmm as rmm
+from utils import assert_eq
 
 
 def test_from_offsets():

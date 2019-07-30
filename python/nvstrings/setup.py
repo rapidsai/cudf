@@ -1,8 +1,8 @@
 import os
 from distutils.sysconfig import get_python_lib
 
+from cmake_setuptools import CMakeBuildExt, CMakeExtension
 from setuptools import setup
-from cmake_setuptools import (CMakeExtension, CMakeBuildExt)
 
 install_requires = []
 

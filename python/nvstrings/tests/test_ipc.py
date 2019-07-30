@@ -1,6 +1,7 @@
-import sys
-import nvstrings
 import pickle
+import sys
+
+import nvstrings
 
 if(len(sys.argv) < 2):
     print("require parameter: 'server' or 'client'")

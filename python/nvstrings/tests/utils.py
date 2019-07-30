@@ -1,7 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numpy as np
-
 import nvstrings
 
 

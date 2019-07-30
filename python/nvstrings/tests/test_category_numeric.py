@@ -1,7 +1,8 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import nvcategory
 import numpy as np
+import nvcategory
+
 from utils import assert_eq
 
 
