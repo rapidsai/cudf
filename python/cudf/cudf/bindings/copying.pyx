@@ -6,10 +6,12 @@
 # cython: language_level = 3
 
 from cudf.dataframe import columnops
+from cudf.dataframe.buffer import Buffer
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.copying cimport *
 from cudf.utils.cudautils import astype, modulo
+import cudf.utils.utils as utils
 from cudf.bindings.utils cimport columns_from_table, table_from_columns
 from librmm_cffi import librmm as rmm
 
@@ -83,7 +85,7 @@ def apply_gather(source, maps, dest=None):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
-        
+
     maps = _normalize_maps(maps, in_size)
 
     col_count=len(in_cols)
@@ -136,7 +138,7 @@ def apply_gather(source, maps, dest=None):
 
     if dest is not None:
         return
-    
+
     if isinstance(source, (list, tuple)):
         return out_cols
     else:
@@ -166,18 +168,18 @@ def apply_scatter(source, maps, target):
     c_target_table = table_from_columns(target_cols)
 
     maps = _normalize_maps(maps, len(target_cols[0]))
-    
+
 
     c_maps_ptr = get_ctype_ptr(maps)
     c_maps = <gdf_index_type*>c_maps_ptr
-                             
+
     c_result_table = scatter(
         c_source_table[0],
         c_maps,
         c_target_table[0])
 
     result_cols = columns_from_table(&c_result_table)
-        
+
     del c_source_table
     del c_target_table
 
@@ -186,7 +188,7 @@ def apply_scatter(source, maps, target):
     else:
         return result_cols[0]
 
-    
+
 def copy_column(input_col):
     """
         Call cudf::copy
@@ -204,3 +206,33 @@ def copy_column(input_col):
     free(output)
 
     return Column.from_mem_views(data, mask, output.null_count)
+
+
+
+def apply_copy_range(out_col, in_col, out_begin, out_end, in_begin):
+    from cudf.dataframe.column import Column
+
+    if out_col.null_count == 0:
+        mask = utils.make_mask(len(out_col))
+        cudautils.fill_value(mask, 0xff)
+        out_col._mask = Buffer(mask)
+        out_col._null_count = 0
+
+    cdef gdf_column* c_out_col = column_view_from_column(out_col)
+    cdef gdf_column* c_in_col = column_view_from_column(in_col)
+
+    copy_range(c_out_col,
+               c_in_col[0],
+               out_begin,
+               out_end,
+               in_begin)
+
+    out_col._update_null_count(c_out_col.null_count)
+
+    if out_col.dtype == np.dtype("object") and len(out_col) > 0:
+        update_nvstrings_col(
+            out_col,
+            <uintptr_t>c_out_col.dtype_info.category)
+
+    free(c_in_col)
+    free(c_out_col)
