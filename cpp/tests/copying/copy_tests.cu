@@ -16,7 +16,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 
 struct CopyErrorTest : GdfTest {};

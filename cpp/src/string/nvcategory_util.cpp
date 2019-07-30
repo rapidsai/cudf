@@ -3,7 +3,7 @@
 #include "nvcategory_util.hpp"
 #include <cudf/replace.hpp>
 #include <cudf/types.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>

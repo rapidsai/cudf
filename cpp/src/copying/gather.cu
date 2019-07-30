@@ -20,12 +20,12 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/type_dispatcher.hpp>
 
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <string/nvcategory_util.hpp>
 
 #include <algorithm>
 
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 #include <thrust/gather.h>
 
 #include <cub/cub.cuh>

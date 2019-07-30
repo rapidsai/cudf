@@ -17,7 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
