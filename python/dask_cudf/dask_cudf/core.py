@@ -241,10 +241,10 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
             for k, dtype in rhs_dtypes:
                 data = np.zeros(len(lhs), dtype=dtype)
-                mask_size = cudf.utils.utils.calc_chunk_size(
-                    data.size, cudf.utils.utils.mask_bitsize
+                mask_size = cudf.util.utils.calc_chunk_size(
+                    data.size, cudf.util.utils.mask_bitsize
                 )
-                mask = np.zeros(mask_size, dtype=cudf.utils.utils.mask_dtype)
+                mask = np.zeros(mask_size, dtype=cudf.util.utils.mask_dtype)
                 sr = cudf.Series.from_masked_array(
                     data=data, mask=mask, null_count=data.size
                 )

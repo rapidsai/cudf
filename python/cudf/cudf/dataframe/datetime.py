@@ -16,8 +16,8 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.numerical import NumericalColumn
-from cudf.utils import cudautils, utils
-from cudf.utils.utils import is_single_value
+from cudf.util import cudautils, utils
+from cudf.util.utils import is_single_value
 
 
 class DatetimeColumn(columnops.TypedColumnBase):

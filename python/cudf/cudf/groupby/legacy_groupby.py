@@ -15,7 +15,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.multi import concat
-from cudf.utils import cudautils
+from cudf.util import cudautils
 
 
 def _auto_generate_grouper_agg(members):

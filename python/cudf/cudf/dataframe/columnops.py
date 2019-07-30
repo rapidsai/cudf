@@ -15,8 +15,8 @@ from librmm_cffi import librmm as rmm
 
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
-from cudf.utils import cudautils, utils
-from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
+from cudf.util import cudautils, utils
+from cudf.util.utils import buffers_from_pyarrow, min_scalar_type
 
 
 class TypedColumnBase(Column):

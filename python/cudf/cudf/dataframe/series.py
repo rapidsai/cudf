@@ -26,8 +26,8 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.docutils import copy_docstring
+from cudf.util import cudautils, ioutils, utils
+from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
 
 

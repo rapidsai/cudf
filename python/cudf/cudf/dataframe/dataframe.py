@@ -37,8 +37,8 @@ from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.series import Series
 from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
-from cudf.utils.docutils import copy_docstring
+from cudf.util import applyutils, cudautils, ioutils, queryutils, utils
+from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
 
 
