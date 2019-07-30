@@ -31,7 +31,12 @@
 // allocate column
 #include <io/utilities/wrapper_utils.hpp>
 
-#include "jit/core/launcher.h"
+#include <jit/launcher.h>
+#include <jit/type.h>
+#include <jit/types_h_jit.h>
+#include <jit/parser.h>
+#include "jit/code/code.h"
+#include "jit/util/type.h"
 
 namespace
 {
@@ -310,18 +315,46 @@ gdf_column rolling_window(gdf_column const& input,
   // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);
 
+  std::string hash = "prog_rolling." + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
+  std::string cuda_source = 
+    cudf::jit::parse_single_function_ptx(
+      user_defined_aggregator, 
+      cudf::rolling::jit::get_function_name(agg_op), 
+      cudf::jit::getTypeName(output_type),
+      {0,5}
+    ) + cudf::rolling::jit::code::kernel;
+
   // Launch type dispatcher
-  cudf::rolling::jit::launcher(user_defined_aggregator, cudf::jit::getTypeName(output_type))
-    .set_kernel_inst("gpu_rolling", agg_op, output, input)
-    .launch(
-      output, input,
-      window,
-      min_periods,
-      forward_window,
-      window_col,
-      min_periods_col,
-      forward_window_col
-    );
+  cudf::jit::launcher(
+    hash, 
+    cuda_source,
+    { "operation.h" , cudf_types_h },
+    { "-std=c++14" },
+    [](std::string filename, std::iostream& stream)-> std::istream* {
+      if(filename == "operation.h"){
+        stream << cudf::rolling::jit::code::operation;
+        return &stream;
+      }
+      return nullptr;
+    }
+  ).set_kernel_inst(
+    "gpu_rolling", 
+    { cudf::jit::getTypeName(output.dtype),
+      cudf::jit::getTypeName(input.dtype),
+      cudf::rolling::jit::get_operator_name(agg_op) } 
+  ).launch(
+    output.size,
+    output.data,
+    output.valid,
+    input.data,
+    input.valid,
+    window,
+    min_periods,
+    forward_window,
+    window_col,
+    min_periods_col,
+    forward_window_col
+  );
                        
   return output;
 }

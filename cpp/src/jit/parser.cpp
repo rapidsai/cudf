@@ -330,7 +330,7 @@ std::string ptx_parser::parse_param_list(const std::string& src) {
           // On a 64-bit machine inside the PTX function body a pointer is
           // literally just a uint_64 so here is doesn't make sense to
           // have the type of the pointer. Thus we will just use void* here.
-          output += ",\n  void* " + name;
+          output += ",\n  const void* " + name;
         }
       }else{
         output += ", \n  " + input_arg_list[name] + " " + name;

@@ -379,6 +379,11 @@ set(ROLLING_TEST_SRC
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
+set(xROLLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/test.cu")
+
+ConfigureTest(test.x "${xROLLING_TEST_SRC}")
+
 ###################################################################################################
 # - point in polygon test --------------------------------------------------------------------------
 

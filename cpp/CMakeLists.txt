@@ -337,6 +337,7 @@ add_library(cudf SHARED
             src/jit/type.cpp
             src/jit/types_h_jit.cpp
             src/jit/parser.cpp
+            src/jit/cache.cpp
             src/jit/launcher.cpp
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
