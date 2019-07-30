@@ -102,6 +102,17 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - conda environment -----------------------------------------------------------------------------
+
+if ("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif (DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif ()
+
+###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
 message(STATUS "BUILDING ARROW")
@@ -117,6 +128,10 @@ endif(ARROW_FOUND)
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
+
+message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
+
 if(ZLIB_FOUND)
     message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
@@ -124,16 +139,37 @@ else()
 endif(ZLIB_FOUND)
 
 ###################################################################################################
+# - find boost ------------------------------------------------------------------------------------
+
+# Don't look for a CMake configuration file
+set(Boost_NO_BOOST_CMAKE ON)
+
+find_package(
+    Boost REQUIRED MODULE
+    COMPONENTS filesystem
+)
+
+message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
+message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+
+if(Boost_FOUND)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "Boost not found, please check your settings.")
+endif(Boost_FOUND)
+
+###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/rmm"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    RMM_INCLUDE "rmm"
+    HINTS "$ENV{RMM_ROOT}/include"
+)
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    RMM_LIBRARY "rmm"
+    HINTS "$ENV{RMM_ROOT}/lib"
+)
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -142,6 +178,16 @@ add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
 if (RMM_INCLUDE AND RMM_LIBRARY)
     set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
 endif (RMM_INCLUDE AND RMM_LIBRARY)
+
+###################################################################################################
+# - DLPACK -------------------------------------------------------------------------------------------
+
+find_path(DLPACK_INCLUDE "dlpack"
+          HINTS "$ENV{DLPACK_ROOT}/include"
+                "$ENV{CONDA_PREFIX}/include/dlpack"
+                "$ENV{CONDA_PREFIX}/include")
+
+message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
@@ -218,11 +264,12 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
-                    "${RMM_INCLUDE}")
+                    "${Boost_INCLUDE_DIRS}"
+                    "${RMM_INCLUDE}"
+                    "${DLPACK_INCLUDE}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -238,7 +285,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
-            src/comms/ipc/ipc.cu
+            src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/table.cpp
@@ -361,7 +408,9 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda ${ARROW_LIB} ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
+SET(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
+
+target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
