@@ -116,10 +116,10 @@ class TypedColumnBase(Column):
 
     def astype(self, dtype, **kwargs):
         if (
-                pd.api.types.pandas_dtype(dtype).type
-                is pd.core.dtypes.dtypes.CategoricalDtypeType
-            ):
-                return self.as_categorical_column(dtype, **kwargs)
+            pd.api.types.pandas_dtype(dtype).type
+            is pd.core.dtypes.dtypes.CategoricalDtypeType
+        ):
+            return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
             return self.as_string_column(dtype, **kwargs)
 
