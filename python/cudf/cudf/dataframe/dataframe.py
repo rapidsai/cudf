@@ -12,16 +12,12 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
-import numpy as np
-import pandas as pd
-import pyarrow as pa
-from pandas.api.types import is_dict_like
-
-from librmm_cffi import librmm as rmm
-
 import cudf
 import cudf.bindings.hash as cpp_hash
 import cudf.bindings.join as cpp_join
+import numpy as np
+import pandas as pd
+import pyarrow as pa
 from cudf import formatting
 from cudf._sort import get_sorted_inds
 from cudf.bindings import copying as cpp_copying
@@ -37,9 +33,12 @@ from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.series import Series
 from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.util import applyutils, cudautils, ioutils, queryutils, internalutil
+from cudf.util import applyutils, cudautils, internalutil, ioutils, queryutils
 from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
+from pandas.api.types import is_dict_like
+
+from librmm_cffi import librmm as rmm
 
 
 def _unique_name(existing_names, suffix="_unique_name"):

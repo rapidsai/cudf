@@ -5,14 +5,9 @@ import warnings
 from collections import OrderedDict
 from numbers import Number
 
+import cudf.bindings.copying as cpp_copying
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-from pandas.api.types import is_dict_like, is_scalar
-
-from librmm_cffi import librmm as rmm
-
-import cudf.bindings.copying as cpp_copying
 from cudf import formatting
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
@@ -26,9 +21,13 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.util import cudautils, ioutils, internalutil
+from cudf.util import cudautils, internalutil, ioutils
 from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
+from pandas.api.types import is_dict_like, is_scalar
+
+from librmm_cffi import librmm as rmm
 
 
 class Series(object):
