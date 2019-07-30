@@ -223,12 +223,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         )
         return col
 
-    def astype(self, dtype):
-        # custom dtype can't be compared with `==`
-        if self.dtype is dtype:
-            return self
-        return self.as_numerical.astype(dtype)
-
     def sort_by_values(self, ascending=True, na_position="last"):
         return self.as_numerical.sort_by_values(ascending, na_position)
 
@@ -365,6 +359,31 @@ class CategoricalColumn(columnops.TypedColumnBase):
                 self._ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
+
+    def as_categorical_column(self, dtype, **kwargs):
+        return self
+
+    def as_numerical_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_numerical_column(
+            dtype, **kwargs
+        )
+
+    def as_string_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_string_column(
+            dtype, **kwargs
+        )
+
+    def as_datetime_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_datetime_column(
+            dtype, **kwargs
+        )
+
+    def _get_decategorized_column(self):
+        gather_map = (
+            self.cat().codes.astype("int32").fillna(0)._column.data.mem
+        )
+        out = self._categories.take(gather_map)
+        return out.replace(mask=self.mask)
 
     def copy(self, deep=True):
         """Categorical Columns are immutable, so a deep copy produces a

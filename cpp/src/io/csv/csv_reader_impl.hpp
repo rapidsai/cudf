@@ -21,7 +21,7 @@
 #include <string>
 #include <vector>
 
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 #include "type_conversion.cuh"
 
