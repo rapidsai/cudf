@@ -16,7 +16,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.dataframe import DataFrame, Series
 from cudf.settings import set_options
 from cudf.tests import utils
-from cudf.tests.utils import assert_eq, gen_rand
+from cudf.tests.utils import assert_eq, assert_neq, gen_rand
 
 
 def test_buffer_basic():
@@ -3366,8 +3366,67 @@ def test_one_row_head():
 
     assert_eq(head_pdf, head_gdf)
 
+
 def test_utils_hash_cudf_object():
-    first = gd.util.hash_cudf_object(Series([1,2,3]))
-    second = gd.util.hash_cudf_object(Series([1,2,3]))
+    first = gd.util.hash_cudf_object(Series([1, 2, 3]))
+    second = gd.util.hash_cudf_object(Series([1, 2, 3]))
+
+    assert_eq(first, second)
+
+    first = gd.util.hash_cudf_object(Series([1, 2, 4]))
+    second = gd.util.hash_cudf_object(Series([1, 2, 3]))
+
+    assert_neq(first, second)
+
+    first = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]})
+    )
+    second = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]})
+    )
+
+    assert_eq(first, second)
+
+    first = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]}), index=False
+    )
+    second = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]})
+    )
+
+    assert_neq(first, second)
+
+    first = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]}), index=False
+    )
+    second = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]}), index=False
+    )
+
+    assert_eq(first, second)
+
+    first = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "m"]})
+    )
+    second = gd.util.hash_cudf_object(
+        DataFrame({"x": [1, 2, 3], "y": ["ma", "am", "ma"]})
+    )
+
+    assert_neq(first, second)
+
+    df = DataFrame({"x": ["hello", "world"] * 3, "ui": [1, 2, 3, 4, 5, 6]})
+    first = gd.util.hash_cudf_object(df.index)
+    second = gd.util.hash_cudf_object(df.index)
+
+    assert_eq(first, second)
+
+    df1 = pd.DataFrame(dict(x=np.arange(5), y=np.arange(5)))
+    gdf = DataFrame.from_pandas(df1)
+    gdf.index = gd.MultiIndex(
+        levels=[[0, 1, 2, 3], [0, 1]], codes=[[0, 1, 2, 3, 2], [0, 1, 0, 1, 0]]
+    )
+
+    first = gd.util.hash_cudf_object(gdf.index)
+    second = gd.util.hash_cudf_object(gdf.index)
 
     assert_eq(first, second)
