@@ -43,7 +43,7 @@ class CategoricalAccessor(object):
                 data=data.mem, mask=mask.mem, null_count=null_count
             )
         else:
-            return Series(data)
+            return Series(data, index=self._parent.index, name=self._parent.name)
 
     def to_string(self):
         if self.ordered:
