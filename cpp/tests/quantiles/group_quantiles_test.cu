@@ -24,11 +24,17 @@ struct group_quantile : public GdfTest {};
 
 TEST_F(group_quantile, SingleColumn)
 {
-    auto keys = cudf::test::column_wrapper<int32_t> { 1, 2, 3, 2, 1, 2, 1, 3, 3};
-    auto vals = cudf::test::column_wrapper<float>   { 0, 1, 2, 3, 4, 5, 6, 7, 8};
+    auto keys = cudf::test::column_wrapper<int32_t> { 1, 2, 3, 2, 1, 2, 1, 3, 3, 2};
+    auto vals = cudf::test::column_wrapper<float>   { 0, 1, 2, 3, 4, 5, 6, 7, 8, 9};
+
+                                                //  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
+                                                //  { 0, 4, 6, 1, 3, 5, 9, 2, 7, 8}
+    auto expect = cudf::test::column_wrapper<float> {    4,          5,       7   };
     
     gdf_context ctxt{};
     auto result_col = cudf::group_quantiles({keys, vals}, 0.5, ctxt);
     auto result = cudf::test::column_wrapper<float>(result_col);
-    result.print();
+
+    ASSERT_EQ(result, expect) << "Expected: " << expect.to_str()
+                              << "  Actual: " << result.to_str();
 }
