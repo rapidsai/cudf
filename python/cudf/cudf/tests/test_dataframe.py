@@ -3518,3 +3518,16 @@ def test_categorical_value_counts(num_elements):
     gdf_dict = gdf_value_counts.to_pandas().to_dict()
 
     assert pandas_dict == gdf_dict
+
+
+def test_series_value_counts():
+    for size in [10 ** x for x in range(5)]:
+        arr = np.random.randint(low=-1, high=10, size=size)
+        mask = arr != -1
+        sr = Series.from_masked_array(arr, Series(mask).as_mask())
+        sr.name = "col"
+        df = pd.DataFrame(data=arr[mask], columns=["col"])
+        expect = df.col.value_counts().sort_index()
+        got = sr.value_counts().sort_index()
+
+        assert_eq(expect, got, check_dtype=False)
