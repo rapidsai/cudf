@@ -629,19 +629,36 @@ def test_dataframe_boolean_mask(mask_fn):
 
 
 @pytest.mark.parametrize(
-    "key, value", [(0, 4), (1, 4), ([0, 1], 4), ([0, 1], [4, 5]),
-                   (slice(0, 2), [4, 5]),
-                   (slice(1, None), [4, 5])]
+    "key, value",
+    [
+        (0, 4),
+        (1, 4),
+        ([0, 1], 4),
+        ([0, 1], [4, 5]),
+        (slice(0, 2), [4, 5]),
+        (slice(1, None), [4, 5, 6, 7]),
+        ([], 1),
+        ([], []),
+        (slice(None, None), 1),
+        (slice(-1, -3), 7),
+    ],
 )
-def test_series_setitem_numerical_index(key, value):
-    psr = pd.Series([1, 2, 3])
+@pytest.mark.parametrize("nulls", ["none", "some", "all"])
+def test_series_setitem_numerical_index(key, value, nulls):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    if nulls == "some":
+        psr[[0, 4]] = None
+    elif nulls == "all":
+        psr[:] = None
     gsr = cudf.from_pandas(psr)
     psr[key] = value
     gsr[key] = value
-    assert_eq(psr, gsr)
+    assert_eq(psr, gsr, check_dtype=False)
 
 
-@pytest.mark.xfail(reason="Setting values by label not allowed; use loc[] instead")
+@pytest.mark.xfail(
+    reason="Setting values by label not allowed; use loc[] instead"
+)
 @pytest.mark.parametrize(
     "key, value", [("a", 4), ("b", 4), (["a", "b"], 4), (["a", "b"], [4, 5])]
 )
@@ -651,4 +668,3 @@ def test_series_setitem_string_index(key, value):
     psr[key] = value
     gsr[key] = value
     assert_eq(psr, gsr)
-

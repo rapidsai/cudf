@@ -488,23 +488,17 @@ class Column(object):
             key_start, key_stop, key_stride = key.indices(len(self))
             if key_stride != 1:
                 raise NotImplementedError("Stride not supported in slice")
-            nelem = key_stop - key_start
+            nelem = abs(key_stop - key_start)
         else:
             key = columnops.as_column(key)
             nelem = len(key)
-        
+
         if utils.is_single_value(value):
             value = utils.scalar_broadcast_to(value, nelem, self.dtype)
         value = columnops.as_column(value)
 
         if isinstance(key, slice):
-            cpp_copying.apply_copy_range(
-                self,
-                value,
-                key_start,
-                key_stop,
-                0
-            )
+            cpp_copying.apply_copy_range(self, value, key_start, key_stop, 0)
         else:
             out = cpp_copying.apply_scatter(value, key, self)
             self._data = out.data

@@ -162,21 +162,22 @@ def apply_scatter(source, maps, target):
 
     for i in range(len(target_cols)):
         target_cols[i] = columnops.as_column(target_cols[i])
-        source_cols[i] = columnops.as_column(source_cols[i])
+        source_cols[i] = columnops.as_column(source_cols[i]).astype(
+            target_cols[i])
 
     c_source_table = table_from_columns(source_cols)
     c_target_table = table_from_columns(target_cols)
 
     maps = _normalize_maps(maps, len(target_cols[0]))
 
-
     c_maps_ptr = get_ctype_ptr(maps)
     c_maps = <gdf_index_type*>c_maps_ptr
 
-    c_result_table = scatter(
-        c_source_table[0],
-        c_maps,
-        c_target_table[0])
+    with nogil:
+        c_result_table = scatter(
+            c_source_table[0],
+            c_maps,
+            c_target_table[0])
 
     result_cols = columns_from_table(&c_result_table)
 
@@ -209,8 +210,21 @@ def copy_column(input_col):
 
 
 
-def apply_copy_range(out_col, in_col, out_begin, out_end, in_begin):
+def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
     from cudf.dataframe.column import Column
+
+    in_col = in_col.astype(out_col.dtype)
+    
+    if abs(out_end - out_begin) <= 1:
+        return
+
+    if out_begin < 0:
+        out_begin = len(out_col) + out_begin
+    if out_end < 0:
+        out_end = len(out_col) + out_end
+        
+    if out_begin > out_end:
+        return
 
     if out_col.null_count == 0 and in_col.has_null_mask:
         mask = utils.make_mask(len(out_col))
@@ -228,11 +242,12 @@ def apply_copy_range(out_col, in_col, out_begin, out_end, in_begin):
     cdef gdf_column* c_out_col = column_view_from_column(out_col)
     cdef gdf_column* c_in_col = column_view_from_column(in_col)
 
-    copy_range(c_out_col,
-               c_in_col[0],
-               out_begin,
-               out_end,
-               in_begin)
+    with nogil:
+        copy_range(c_out_col,
+                   c_in_col[0],
+                   out_begin,
+                   out_end,
+                   in_begin)
 
     out_col._update_null_count(c_out_col.null_count)
 
