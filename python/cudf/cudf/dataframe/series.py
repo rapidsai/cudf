@@ -1832,11 +1832,10 @@ class Series(object):
         """
 
         if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int64), name=self.name)
+            return Series(np.array([], dtype=np.int32), name=self.name)
 
         res = self.groupby(self).count()
         res.index.name = None
-        res = res.astype("int64")
 
         if sort:
             return res.sort_values(ascending=False)

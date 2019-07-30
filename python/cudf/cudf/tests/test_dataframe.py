@@ -3451,10 +3451,12 @@ def test_value_counts():
     assert_eq(
         pdf.numeric.value_counts().sort_index(),
         gdf.numeric.value_counts().sort_index(),
+        check_dtype=False,
     )
     assert_eq(
         pdf.alpha.value_counts().sort_index(),
         gdf.alpha.value_counts().sort_index(),
+        check_dtype=False,
     )
 
 
@@ -3478,7 +3480,7 @@ def test_datetime_value_counts(data, nulls):
             p = np.random.randint(0, len(data), 2)
             psr[p] = None
 
-    gsr = DataFrame.from_pandas(psr)
+    gsr = Series.from_pandas(psr)
     expected = psr.value_counts()
     got = gsr.value_counts()
 
