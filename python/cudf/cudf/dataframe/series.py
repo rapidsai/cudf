@@ -1835,16 +1835,16 @@ class Series(object):
         return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
-    def value_counts(self, method="sort", sort=True):
+    def value_counts(self, sort=True):
         """Returns unique values of this Series.
         """
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
+
         if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int64))
-        vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=as_index(vals))
+            return Series(np.array([], dtype=np.int32), name=self.name)
+
+        res = self.groupby(self).count()
+        res.index.name = None
+
         if sort:
             return res.sort_values(ascending=False)
         return res
