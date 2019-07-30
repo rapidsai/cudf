@@ -1818,12 +1818,9 @@ class Series(object):
         return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
-    def value_counts(self, method="sort", sort=True):
+    def value_counts(self, sort=True):
         """Returns unique values of this Series.
         """
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
         from cudf import Series
 
         if self.null_count == len(self):
