@@ -629,7 +629,9 @@ def test_dataframe_boolean_mask(mask_fn):
 
 
 @pytest.mark.parametrize(
-    "key, value", [(0, 4), (1, 4), ([0, 1], 4), ([0, 1], [4, 5])]
+    "key, value", [(0, 4), (1, 4), ([0, 1], 4), ([0, 1], [4, 5]),
+                   (slice(0, 2), [4, 5]),
+                   (slice(1, None), [4, 5])]
 )
 def test_series_setitem_numerical_index(key, value):
     psr = pd.Series([1, 2, 3])
@@ -639,6 +641,7 @@ def test_series_setitem_numerical_index(key, value):
     assert_eq(psr, gsr)
 
 
+@pytest.mark.xfail(reason="Setting values by label not allowed; use loc[] instead")
 @pytest.mark.parametrize(
     "key, value", [("a", 4), ("b", 4), (["a", "b"], 4), (["a", "b"], [4, 5])]
 )
@@ -648,3 +651,4 @@ def test_series_setitem_string_index(key, value):
     psr[key] = value
     gsr[key] = value
     assert_eq(psr, gsr)
+

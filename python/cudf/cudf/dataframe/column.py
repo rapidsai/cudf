@@ -484,16 +484,32 @@ class Column(object):
         import cudf.bindings.copying as cpp_copying
         from cudf.dataframe import columnops
 
-        key = columnops.as_column(key)
+        if isinstance(key, slice):
+            key_start, key_stop, key_stride = key.indices(len(self))
+            if key_stride != 1:
+                raise NotImplementedError("Stride not supported in slice")
+            nelem = key_stop - key_start
+        else:
+            key = columnops.as_column(key)
+            nelem = len(key)
+        
         if utils.is_single_value(value):
-            value = utils.scalar_broadcast_to(value, len(key), self.dtype)
+            value = utils.scalar_broadcast_to(value, nelem, self.dtype)
         value = columnops.as_column(value)
 
-        out = cpp_copying.apply_scatter(value, key, self)
-
-        self._data = out.data
-        self._mask = out.mask
-        self._update_null_count()
+        if isinstance(key, slice):
+            cpp_copying.apply_copy_range(
+                self,
+                value,
+                key_start,
+                key_stop,
+                0
+            )
+        else:
+            out = cpp_copying.apply_scatter(value, key, self)
+            self._data = out.data
+            self._mask = out.mask
+            self._update_null_count()
 
     def masked_assign(self, value, mask):
         """Assign a scalar value to a series using a boolean mask

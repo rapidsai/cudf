@@ -212,11 +212,18 @@ def copy_column(input_col):
 def apply_copy_range(out_col, in_col, out_begin, out_end, in_begin):
     from cudf.dataframe.column import Column
 
-    if out_col.null_count == 0:
+    if out_col.null_count == 0 and in_col.has_null_mask:
         mask = utils.make_mask(len(out_col))
         cudautils.fill_value(mask, 0xff)
         out_col._mask = Buffer(mask)
         out_col._null_count = 0
+
+    if in_col.null_count == 0 and out_col.has_null_mask:
+        mask = utils.make_mask(len(in_col))
+        cudautils.fill_value(mask, 0xff)
+        in_col._mask = Buffer(mask)
+        in_col._null_count = 0
+        
 
     cdef gdf_column* c_out_col = column_view_from_column(out_col)
     cdef gdf_column* c_in_col = column_view_from_column(in_col)
