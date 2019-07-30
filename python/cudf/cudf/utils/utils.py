@@ -81,8 +81,6 @@ def scalar_broadcast_to(scalar, shape, dtype):
         from cudf.dataframe.string import StringColumn
 
         scalar_str_col = StringColumn(nvstrings.to_device([scalar]))
-        if shape[0] == 1:
-            return scalar_str_col
         from cudf.utils.cudautils import zeros
 
         gather_map = zeros(shape[0], dtype="int32")

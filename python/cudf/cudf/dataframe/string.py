@@ -535,7 +535,11 @@ class StringColumn(columnops.TypedColumnBase):
             return columnops.as_column(out)
 
     def __getitem__(self, arg):
-        return self.element_indexing(arg)
+        col = self.element_indexing(arg)
+        if (not np.isscalar(arg)) and (np.ndim(col) == 0):
+            return columnops.as_column([col])
+        else:
+            return col
 
     def astype(self, dtype):
         if self.dtype == dtype or (
