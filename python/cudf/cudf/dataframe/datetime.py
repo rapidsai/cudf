@@ -133,8 +133,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def as_numerical_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
-        
-        return typecast.apply_cast(self.as_numerical, dtype=np.dtype(dtype).type)
+
+        return typecast.apply_cast(
+            self.as_numerical, dtype=np.dtype(dtype).type
+        )
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
@@ -159,7 +161,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
         else:
             data = []
-            
+
         return string.StringColumn(data=data)
 
     def unordered_compare(self, cmpop, rhs):

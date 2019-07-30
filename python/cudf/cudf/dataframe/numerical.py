@@ -137,22 +137,18 @@ class NumericalColumn(columnops.TypedColumnBase):
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.dataframe import datetime
         import cudf.bindings.typecast as typecast
-        
+
         return self.view(
             datetime.DatetimeColumn,
             dtype=dtype,
-            data=typecast.apply_cast(
-                self, dtype=np.dtype(dtype).type
-            ).data,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
         return self.replace(
-            data=typecast.apply_cast(
-                self, dtype=np.dtype(dtype).type
-            ).data,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
             dtype=np.dtype(dtype),
         )
 
