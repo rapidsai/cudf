@@ -529,17 +529,13 @@ class StringColumn(columnops.TypedColumnBase):
         else:
             raise NotImplementedError(type(arg))
 
-        if len(out) == 1:
+        if isinstance(arg, Number):
             return out.to_host()[0]
         else:
             return columnops.as_column(out)
 
     def __getitem__(self, arg):
-        col = self.element_indexing(arg)
-        if (not np.isscalar(arg)) and (np.ndim(col) == 0):
-            return columnops.as_column([col])
-        else:
-            return col
+        return self.element_indexing(arg)
 
     def as_numerical_column(self, dtype, **kwargs):
         if dtype in (np.dtype("int8"), np.dtype("int16")):
