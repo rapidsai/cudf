@@ -22,7 +22,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7"
     ],
-    library_dirs=[get_python_lib()],
+    library_dirs=[get_python_lib(), os.path.join(os.sys.prefix, "lib")],
     py_modules=['nvstrings', 'nvcategory', 'nvtext'],
     author='NVIDIA Corporation',
     license="Apache",
