@@ -56,6 +56,7 @@
 - PR #2345 Restore removal of old groupby implementation
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 
