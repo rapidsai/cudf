@@ -120,7 +120,7 @@ class TypedColumnBase(Column):
                 is pd.core.dtypes.dtypes.CategoricalDtypeType
             ):
                 return self.as_categorical_column(dtype, **kwargs)
-        elif pd.api.types.pandas_dtype(dtype) in (np.str_, np.object_):
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
             return self.as_string_column(dtype, **kwargs)
 
         elif np.issubdtype(dtype, np.datetime64):
@@ -140,7 +140,7 @@ class TypedColumnBase(Column):
 
         # string columns include null index in factorization; remove:
         if (
-            pd.api.types.pandas_dtype(self.dtype) in (np.str_, np.object_)
+            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
         ) and self.null_count > 0:
             cats = cats.dropna()
             labels = labels - 1
