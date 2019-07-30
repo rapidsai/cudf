@@ -10,7 +10,7 @@ from cudf.bindings.cudf_cpp cimport *
 from libcpp.string cimport string
 from libcpp.vector cimport vector
 
-cdef extern from "cudf.h" namespace "cudf::io::orc" nogil:
+cdef extern from "cudf/cudf.h" namespace "cudf::io::orc" nogil:
 
     cdef cppclass reader_options:
         vector[string] columns

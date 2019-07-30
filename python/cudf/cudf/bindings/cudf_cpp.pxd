@@ -5,8 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf.bindings.dlpack cimport DLManagedTensor
-
 from libcpp cimport bool
 from libc.stdint cimport (  # noqa: E211
     uint8_t,
@@ -61,7 +59,7 @@ cpdef check_gdf_error(errcode)
 # First version of bindings has no changes to the cudf.h header, so this file
 # mirrors the structure in cpp/include
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     ctypedef int           gdf_size_type
     ctypedef gdf_size_type gdf_index_type
@@ -250,11 +248,6 @@ cdef extern from "cudf.h" nogil:
     cdef const char * gdf_cuda_error_string(int cuda_error) except +
     cdef const char * gdf_cuda_error_name(int cuda_error) except +
 
-    cdef gdf_error gdf_cast(
-        gdf_column *input,
-        gdf_column *output
-    ) except +
-
     cdef gdf_error gdf_validity_and(
         gdf_column *lhs,
         gdf_column *rhs,
@@ -333,18 +326,6 @@ cdef extern from "cudf.h" nogil:
         gdf_index_type* out_indices
     ) except +
 
-    cdef gdf_error gdf_from_dlpack(
-        gdf_column** columns,
-        gdf_size_type* num_columns,
-        const DLManagedTensor* tensor
-    ) except +
-
-    cdef gdf_error gdf_to_dlpack(
-        DLManagedTensor* tensor,
-        const gdf_column** columns,
-        gdf_size_type num_columns
-    ) except +
-
     cdef gdf_error gdf_nvtx_range_push(
         const char* const name,
         gdf_color color
@@ -358,7 +339,7 @@ cdef extern from "cudf.h" nogil:
     cdef gdf_error gdf_nvtx_range_pop() except +
 
 
-cdef extern from "legacy/bitmask.hpp" nogil:
+cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 
     cdef gdf_error gdf_count_nonzero_mask(
         gdf_valid_type* masks,
@@ -367,7 +348,7 @@ cdef extern from "legacy/bitmask.hpp" nogil:
     ) except +
 
 
-cdef extern from "table.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/table.hpp" namespace "cudf" nogil:
 
     cdef cppclass cudf_table "cudf::table":
 
