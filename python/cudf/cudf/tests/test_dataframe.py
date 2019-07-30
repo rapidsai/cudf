@@ -1591,6 +1591,11 @@ def test_to_arrow_missing_categorical():
         "float32",
         "float64",
         "datetime64[ms]",
+        "datetime64",
+        "datetime64[ns]",
+        "datetime64[D]",
+        "datetime64[s]",
+        "datetime64[M]",
     ],
 )
 def test_from_scalar_typing(data_type):
@@ -1600,6 +1605,11 @@ def test_from_scalar_typing(data_type):
             .type(np.random.randint(0, 5))
             .astype("datetime64[ms]")
         )
+    elif data_type.startswith("datetime64"):
+        from datetime import date
+
+        scalar = np.datetime64(date.today())
+        data_type = "datetime64[ms]"
     else:
         scalar = np.dtype(data_type).type(np.random.randint(0, 5))
 
@@ -2652,9 +2662,13 @@ def test_series_list_nanasnull(nan_as_null):
     data = [1.0, 2.0, 3.0, np.nan, None]
 
     expect = pa.array(data, from_pandas=nan_as_null)
-    got = Series(data, nan_as_null=nan_as_null)
+    got = Series(data, nan_as_null=nan_as_null).to_arrow()
 
-    assert pa.Array.equals(expect, got.to_arrow())
+    # Bug in Arrow 0.14.1 where NaNs aren't handled
+    expect = expect.cast("int64", safe=False)
+    got = got.cast("int64", safe=False)
+
+    assert pa.Array.equals(expect, got)
 
 
 def test_column_assignment():
