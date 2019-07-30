@@ -504,27 +504,27 @@ class Series(object):
             top = self.head(int(mr))
             bottom = self.tail(int(mr))
             from cudf import concat
+
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        output = preprocess.astype('O').fillna('null').to_pandas().__repr__()
-        lines = output.split('\n')
-        if lines[-1].startswith('N'):
+        output = preprocess.astype("O").fillna("null").to_pandas().__repr__()
+        lines = output.split("\n")
+        if lines[-1].startswith("N"):
             lines = lines[:-1]
             lines.append("Name: %s" % str(self.name))
-            if len(self) > len(preprocess)/2:
+            if len(self) > len(preprocess) / 2:
                 lines[-1] = lines[-1] + ", Length: %d" % len(self)
-            lines[-1] = lines[-1] + ', '
-        elif lines[-1].startswith('L'):
+            lines[-1] = lines[-1] + ", "
+        elif lines[-1].startswith("L"):
             lines = lines[:-1]
             lines.append("Length: %d" % len(self))
-            lines[-1] = lines[-1] + ', '
+            lines[-1] = lines[-1] + ", "
         else:
             lines = lines[:-1]
-            lines[-1] = lines[-1] + '\n'
+            lines[-1] = lines[-1] + "\n"
         lines[-1] = lines[-1] + "dtype: %s" % self.dtype
-        return '\n'.join(lines)
-
+        return "\n".join(lines)
 
     def _binaryop(self, other, fn, reflect=False):
         """

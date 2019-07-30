@@ -541,24 +541,30 @@ class DataFrame(object):
 
     def get_renderable_dataframe(self):
         nrows = pd.options.display.max_rows
-        ncols = pd.options.display.max_columns if\
-                pd.options.display.max_columns else 15
+        ncols = (
+            pd.options.display.max_columns
+            if pd.options.display.max_columns
+            else 15
+        )
         if len(self) <= nrows or len(self.columns) <= ncols:
             output = self.copy(deep=False)
         else:
-            uppercols = len(self.columns)-ncols-1
+            uppercols = len(self.columns) - ncols - 1
             upper_left = self.head(nrows).loc[:, :ncols]
             upper_right = self.head(nrows).loc[:, uppercols:]
             lower_left = self.tail(nrows).loc[:, :ncols]
             lower_right = self.tail(nrows).loc[:, uppercols:]
-            output = cudf.concat([
-                cudf.concat([upper_left, upper_right], axis=1),
-                cudf.concat([lower_left, lower_right], axis=1),
-            ])
+            output = cudf.concat(
+                [
+                    cudf.concat([upper_left, upper_right], axis=1),
+                    cudf.concat([lower_left, lower_right], axis=1),
+                ]
+            )
         for col in output._cols:
             if self._cols[col].null_count > 0:
-                output[col] = output._cols[col].astype('str').str.fillna(
-                        'null')
+                output[col] = (
+                    output._cols[col].astype("str").str.fillna("null")
+                )
             else:
                 output[col] = output._cols[col]
         if isinstance(self.columns, cudf.MultiIndex):
@@ -567,29 +573,28 @@ class DataFrame(object):
 
     def __repr__(self):
         output = self.get_renderable_dataframe()
-        lines = output.to_pandas().__repr__().split('\n')
-        if lines[-1].startswith('['):
+        lines = output.to_pandas().__repr__().split("\n")
+        if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
-                    '[%d rows x %d columns]' % (len(self), len(self.columns))
+                "[%d rows x %d columns]" % (len(self), len(self.columns))
             )
-        return '\n'.join(lines)
-
+        return "\n".join(lines)
 
     def _repr_html_(self):
         lines = (
             self.get_renderable_dataframe()
             .to_pandas()
             ._repr_html_()
-            .split('\n')
+            .split("\n")
         )
-        if lines[-2].startswith('<p>'):
+        if lines[-2].startswith("<p>"):
             lines = lines[:-2]
             lines.append(
-                '<p>%d rows × %d columns</p>' % (len(self), len(self.columns))
+                "<p>%d rows × %d columns</p>" % (len(self), len(self.columns))
             )
-            lines.append('</div>')
-        return '\n'.join(lines)
+            lines.append("</div>")
+        return "\n".join(lines)
 
     def _repr_latex_(self):
         return self.get_renderable_dataframe().to_pandas()._repr_latex_()
