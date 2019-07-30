@@ -795,16 +795,6 @@ class StringColumn(columnops.TypedColumnBase):
             ).all()
         return self._is_monotonic_decreasing
 
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        from cudf import Series
-
-        val_counts = Series(self, name=self.name)
-        res = val_counts.groupby(val_counts).count()
-        return res.index, res._column.astype("int64")
-
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")

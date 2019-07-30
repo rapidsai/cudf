@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
-import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
@@ -257,18 +256,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return CategoricalColumn(
             data=codes, categories=self._categories, ordered=self._ordered
         )
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
-        out = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=out_col.data, mask=None)
-        out_counts = columnops.build_column(Buffer(out), np.intp)
-        return out_vals, out_counts
 
     def _encode(self, value):
         return self._categories.find_first_value(value)

@@ -1825,10 +1825,15 @@ class Series(object):
         if method != "sort":
             msg = "non sort based value_count() not implemented yet"
             raise NotImplementedError(msg)
+        from cudf import Series
+
         if self.null_count == len(self):
             return Series(np.array([], dtype=np.int64), name=self.name)
-        vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=as_index(vals), name=self.name)
+
+        res = self.groupby(self).count()
+        res.index.name = None
+        res = res.astype("int64")
+
         if sort:
             return res.sort_values(ascending=False)
         return res
