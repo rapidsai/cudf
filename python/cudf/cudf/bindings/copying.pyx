@@ -7,6 +7,7 @@
 
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
+from cudf.dataframe.numerical import numeric_normalize_types
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.copying cimport *
@@ -50,6 +51,20 @@ def _normalize_maps(maps, size):
     maps = maps.binary_operator("mod", maps.normalize_binop_value(size))
     maps = maps.data.mem
     return maps
+
+
+def _normalize_column_types(source, target):
+    """
+    Normalize the types of source/target for scatter
+    """
+    if (
+        pd.api.types.is_numeric_dtype(source.dtype) and
+        pd.api.types.is_numeric_dtype(target.dtype)
+    ):
+        return numeric_normalize_types(source, target)
+    else:
+        source = source.astype(target.dtype)
+        return source, target
 
 
 def apply_gather(source, maps, dest=None):
@@ -162,8 +177,9 @@ def apply_scatter(source, maps, target):
 
     for i in range(len(target_cols)):
         target_cols[i] = columnops.as_column(target_cols[i])
-        source_cols[i] = columnops.as_column(source_cols[i]).astype(
-            target_cols[i])
+        source_cols[i] = columnops.as_column(source_cols[i])
+        source_cols[i], target_cols[i] = _normalize_column_types(
+            source_cols[i], target_cols[i])
 
     c_source_table = table_from_columns(source_cols)
     c_target_table = table_from_columns(target_cols)
@@ -209,22 +225,21 @@ def copy_column(input_col):
     return Column.from_mem_views(data, mask, output.null_count)
 
 
-
 def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
     from cudf.dataframe.column import Column
 
-    in_col = in_col.astype(out_col.dtype)
-    
     if abs(out_end - out_begin) <= 1:
-        return
+        return out_col
 
     if out_begin < 0:
         out_begin = len(out_col) + out_begin
     if out_end < 0:
         out_end = len(out_col) + out_end
-        
+
     if out_begin > out_end:
-        return
+        return out_col
+
+    in_col, out_col = _normalize_column_types(in_col, out_col)
 
     if out_col.null_count == 0 and in_col.has_null_mask:
         mask = utils.make_mask(len(out_col))
@@ -237,7 +252,6 @@ def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
         cudautils.fill_value(mask, 0xff)
         in_col._mask = Buffer(mask)
         in_col._null_count = 0
-        
 
     cdef gdf_column* c_out_col = column_view_from_column(out_col)
     cdef gdf_column* c_in_col = column_view_from_column(in_col)
@@ -249,6 +263,7 @@ def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
                    out_end,
                    in_begin)
 
+
     out_col._update_null_count(c_out_col.null_count)
 
     if out_col.dtype == np.dtype("object") and len(out_col) > 0:
@@ -258,3 +273,5 @@ def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
 
     free(c_in_col)
     free(c_out_col)
+
+    return out_col

@@ -644,7 +644,7 @@ def test_dataframe_boolean_mask(mask_fn):
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
-def test_series_setitem_numerical_index(key, value, nulls):
+def test_series_setitem_basics(key, value, nulls):
     psr = pd.Series([1, 2, 3, 4, 5])
     if nulls == "some":
         psr[[0, 4]] = None
@@ -654,6 +654,17 @@ def test_series_setitem_numerical_index(key, value, nulls):
     psr[key] = value
     gsr[key] = value
     assert_eq(psr, gsr, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "key, value", [(0, 0.5), ([0, 1], [0.5, 2.5]), (slice(0, 2), [0.5, 0.25])]
+)
+def test_series_setitem_dtype(key, value):
+    psr = pd.Series([1, 2, 3], dtype="int32")
+    gsr = cudf.from_pandas(psr)
+    psr[key] = value
+    gsr[key] = value
+    assert_eq(psr, gsr)
 
 
 @pytest.mark.xfail(

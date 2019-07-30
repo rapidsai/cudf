@@ -495,15 +495,17 @@ class Column(object):
 
         if utils.is_single_value(value):
             value = utils.scalar_broadcast_to(value, nelem, self.dtype)
+
         value = columnops.as_column(value)
 
         if isinstance(key, slice):
-            cpp_copying.apply_copy_range(self, value, key_start, key_stop, 0)
+            out = cpp_copying.apply_copy_range(self, value, key_start, key_stop, 0)
         else:
             out = cpp_copying.apply_scatter(value, key, self)
-            self._data = out.data
-            self._mask = out.mask
-            self._update_null_count()
+
+        self._data = out.data
+        self._mask = out.mask
+        self._update_null_count()
 
     def masked_assign(self, value, mask):
         """Assign a scalar value to a series using a boolean mask
