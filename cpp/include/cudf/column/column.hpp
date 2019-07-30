@@ -177,7 +177,8 @@ class column {
    * @brief Updates the count of null elements.
    *
    * @note `UNKNOWN_NULL_COUNT` can be specified as `new_null_count` to force
-   * recomputing the null count from the null mask.
+   * the next invocation of `null_count()` to recompute the null count from the
+   * null mask.
    *
    * @throws cudf::logic_error if `new_null_count > 0` but `nullable() == false`
    *
@@ -202,8 +203,8 @@ class column {
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the column contains null elements.
    *
-   * @return true If the column contains one or more null elements
-   * @return false All elements are valid.
+   * @return true One or more elements are null
+   * @return false All elements are valid
    *---------------------------------------------------------------------------**/
   bool has_nulls() const noexcept { return (null_count() > 0); }
 
