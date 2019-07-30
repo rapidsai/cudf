@@ -101,6 +101,7 @@
 - PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
 - PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
 - PR #2401 Fix to a scalar datetime(of type Days) issue
+- PR #2386 Correctly allocate output valids in groupby
 - PR #2422 Fix Pandas logical binary operation incompatibilites
 
 
