@@ -6,12 +6,11 @@ from distutils.version import LooseVersion
 from io import BytesIO
 from string import ascii_letters
 
+import cudf
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
-
-import cudf
 from cudf.tests.utils import assert_eq
 
 

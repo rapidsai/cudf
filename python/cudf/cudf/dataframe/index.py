@@ -5,15 +5,10 @@ from __future__ import division, print_function
 import pickle
 from copy import copy, deepcopy
 
-import numpy as np
-import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
-
-import nvstrings
-from librmm_cffi import librmm as rmm
-
 import cudf
 import cudf.bindings.copying as cpp_copying
+import numpy as np
+import pandas as pd
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
@@ -24,6 +19,10 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.indexing import _IndexLocIndexer
 from cudf.utils import cudautils, ioutils, utils
+from numba.cuda.cudadrv.devicearray import DeviceNDArray
+
+import nvstrings
+from librmm_cffi import librmm as rmm
 
 
 class Index(object):

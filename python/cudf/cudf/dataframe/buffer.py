@@ -1,9 +1,8 @@
 import numpy as np
-
-from librmm_cffi import librmm as rmm
-
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.utils import cudautils, utils
+
+from librmm_cffi import librmm as rmm
 
 
 class Buffer(object):

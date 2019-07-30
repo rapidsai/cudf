@@ -1,16 +1,15 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import cudf.bindings.copying as cpp_copying
+import cudf.bindings.replace as cpp_replace
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.core.dtypes.dtypes import CategoricalDtype
-
-import cudf.bindings.copying as cpp_copying
-import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
+from pandas.core.dtypes.dtypes import CategoricalDtype
 
 
 class CategoricalAccessor(object):

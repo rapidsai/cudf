@@ -1,11 +1,10 @@
+import dask_cudf
 import pandas as pd
 import pytest
 
 import dask
 import dask.dataframe as dd
 from dask.utils import tmpfile
-
-import dask_cudf
 
 
 def test_read_json(tmp_path):

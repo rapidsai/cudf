@@ -1,10 +1,9 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import cudf as gd
 import numpy as np
 import pandas as pd
 import pytest
-
-import cudf as gd
 from cudf.tests.utils import assert_eq
 
 

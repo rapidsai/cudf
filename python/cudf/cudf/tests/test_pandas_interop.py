@@ -2,7 +2,6 @@
 
 import numpy as np
 import pandas as pd
-
 from cudf.dataframe import DataFrame
 
 

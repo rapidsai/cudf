@@ -1,12 +1,11 @@
 import os
 
+import dask_cudf
 import pandas as pd
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key
-
-import dask_cudf
 
 nrows = 40
 npartitions = 15

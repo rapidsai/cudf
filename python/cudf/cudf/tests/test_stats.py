@@ -3,7 +3,6 @@
 import numpy as np
 import pandas as pd
 import pytest
-
 from cudf.dataframe import Series
 
 params_dtypes = [np.int32, np.float32, np.float64]
