@@ -50,7 +50,9 @@ def arange(start, stop=None, step=1, dtype=np.int64):
     if size < 0:
         msgfmt = "size={size} in arange({start}, {stop}, {step}, {dtype})"
         raise ValueError(
-            msgfmt.format(size=size, start=start, stop=stop, step=step, dtype=dtype)
+            msgfmt.format(
+                size=size, start=start, stop=stop, step=step, dtype=dtype
+            )
         )
     out = rmm.device_array(shape=int(size), dtype=dtype)
     if size > 0:
@@ -113,9 +115,9 @@ def gpu_copy(inp, out):
 def astype(ary, dtype):
     if ary.dtype == np.dtype(dtype):
         return ary
-    elif (ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")) and (
-        dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")
-    ):
+    elif (
+        ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")
+    ) and (dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")):
         return ary.view(dtype)
     elif ary.size == 0:
         return rmm.device_array(shape=ary.shape, dtype=dtype)
@@ -131,7 +133,11 @@ def copy_array(arr, out=None):
     if out is None:
         out = rmm.device_array_like(arr)
 
-    if arr.is_c_contiguous() and out.is_c_contiguous() and out.size == arr.size:
+    if (
+        arr.is_c_contiguous()
+        and out.is_c_contiguous()
+        and out.size == arr.size
+    ):
         out.copy_to_device(arr)
     else:
         if arr.size > 0:
@@ -600,7 +606,11 @@ def gpu_round(in_col, out_col, decimal):
             newval = newval + round_val
             out_col[i] = newval
 
-        elif remainder != 0 and abs(remainder) < (0.5 * round_val) and in_col[i] < 0:
+        elif (
+            remainder != 0
+            and abs(remainder) < (0.5 * round_val)
+            and in_col[i] < 0
+        ):
             newval = newval + round_val
             out_col[i] = newval
 
@@ -643,7 +653,8 @@ def apply_clip(data, lower, upper, inplace):
     if not inplace:
         output_dary = rmm.device_arrya_like(data)
         if data.size > 0:
-            gpu_clip.forall(data.size)(data, lower, upper, inplace, output_dary)
+            gpu_clip.forall(data.size)(data, lower, upper,
+                                       inplace, output_dary)
         return output_dary
     else:
         if data.size > 0:
@@ -842,9 +853,13 @@ def find_first(arr, val, compare="eq"):
             gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
         else:
             if arr.dtype in ("float32", "float64"):
-                gpu_mark_found_float.forall(found.size)(arr, val, found, arr.size)
+                gpu_mark_found_float.forall(found.size)(
+                    arr, val, found, arr.size
+                )
             else:
-                gpu_mark_found_int.forall(found.size)(arr, val, found, arr.size)
+                gpu_mark_found_int.forall(found.size)(
+                    arr, val, found, arr.size
+                )
     from cudf.dataframe.columnops import as_column
 
     found_col = as_column(found)
@@ -925,7 +940,9 @@ def find_segments(arr, segs=None, markers=None):
     # Compact segments
     begins = rmm.device_array(shape=int(ct), dtype=np.int32)
     if markers.size > 0:
-        gpu_scatter_segment_begins.forall(markers.size)(markers, scanned, begins)
+        gpu_scatter_segment_begins.forall(markers.size)(
+            markers, scanned, begins
+        )
     return begins, markers
 
 
@@ -957,7 +974,9 @@ def row_matrix(cols, nrow, ncol, dtype):
     for colidx, col in enumerate(cols):
         data = matrix[:, colidx]
         if data.size > 0:
-            gpu_row_matrix.forall(data.size)(data, col.to_gpu_array(), nrow, ncol)
+            gpu_row_matrix.forall(data.size)(
+                data, col.to_gpu_array(), nrow, ncol
+            )
     return matrix
 
 
@@ -1001,5 +1020,7 @@ def gpu_window_sizes_from_offset(arr, window_sizes, offset):
 def window_sizes_from_offset(arr, offset):
     window_sizes = rmm.device_array(shape=(arr.shape), dtype="int32")
     if arr.size > 0:
-        gpu_window_sizes_from_offset.forall(arr.size)(arr, window_sizes, offset)
+        gpu_window_sizes_from_offset.forall(arr.size)(
+            arr, window_sizes, offset
+        )
     return window_sizes
