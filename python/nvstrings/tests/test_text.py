@@ -149,6 +149,40 @@ def test_tokens_counts():
     assert np.array_equal(outcome_darray.copy_to_host(), expected)
 
 
+def test_replace_tokens():
+    strs = nvstrings.to_device(
+        ["the quick fox jumped over the lazy dog",
+         "the siamésé cat jumped under the sofa",
+         None,
+         ""]
+    )
+    tokens = nvstrings.to_device(
+        ["the", "over", "under"]
+    )
+    repls = nvstrings.to_device(
+        ["1", "2", "3"]
+    )
+    outcome = nvtext.replace_tokens(strs,tokens,repls)
+    expected = ["1 quick fox jumped 2 1 lazy dog",
+                "1 siamésé cat jumped 3 1 sofa",
+                None, ""]
+    assert outcome.to_host() == expected
+
+
+def test_normalize_spaces():
+    strs = nvstrings.to_device(
+        [" the\t quick fox  jumped over the lazy dog",
+         "the siamésé cat\f jumped\t\tunder the sofa  ",
+         None,
+         ""]
+    )
+    outcome = nvtext.normalize_spaces(strs)
+    expected = ["the quick fox jumped over the lazy dog",
+                "the siamésé cat jumped under the sofa",
+                None, ""]
+    assert outcome.to_host() == expected
+
+
 def test_edit_distance():
     # singe comparator
     strs = nvstrings.to_device(["my favorite sentence", "kittin", "nvidia"])

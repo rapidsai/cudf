@@ -477,6 +477,21 @@ static PyObject* n_replace_tokens( PyObject* self, PyObject* args )
     return PyLong_FromLong((long)rtn);
 }
 
+static PyObject* n_normalize_spaces( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    Py_BEGIN_ALLOW_THREADS
+    strs = NVText::normalize_spaces(*strs);
+    Py_END_ALLOW_THREADS
+    if( strs==0 )
+        Py_RETURN_NONE;
+    return PyLong_FromVoidPtr((void*)strs);
+}
+
 static PyObject* n_edit_distance( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -608,6 +623,7 @@ static PyMethodDef s_Methods[] = {
     { "n_strings_counts", n_strings_counts, METH_VARARGS, "" },
     { "n_tokens_counts", n_tokens_counts, METH_VARARGS, "" },
     { "n_replace_tokens", n_replace_tokens, METH_VARARGS, "" },
+    { "n_normalize_spaces", n_normalize_spaces, METH_VARARGS, "" },
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }

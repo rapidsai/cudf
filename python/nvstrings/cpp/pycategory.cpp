@@ -24,12 +24,11 @@
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <nvstrings/numeric_category.h>
-#include "numeric_category.h"
+
+#include "./numeric_category.h"
 
 const char* string_type_name = "custring";
-//
-//
-//
+
 static PyObject* n_createCategoryFromNVStrings( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);

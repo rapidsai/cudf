@@ -2442,6 +2442,36 @@ class nvstrings:
             rtn = nvstrings(rtn)
         return rtn
 
+    def scalar_scatter(self, str, indexes, count):
+        """
+        Return a new list of strings placing the specified
+        string at the provided indexes.
+
+        Parameters
+        ----------
+        str : str
+            String to be placed
+        indexes : List of ints or GPU memory pointer
+            0-based indexes of strings indicating the positions
+            where the str parameter should be placed.
+            Existing strings at those positions will be replaced.
+            Values must be of type int32.
+        count : int
+            Number of elements in the indexes parameter.
+
+        Examples
+        --------
+        >>> import nvstrings
+        >>> s1 = nvstrings.to_device(["a","b","c","d"])
+        >>> print(s1.scalar_scatter("_", [1, 3]))
+        ['a', '_', 'c', '_']
+
+        """
+        rtn = pyniNVStrings.n_scalar_scatter(self.m_cptr, str, indexes, count)
+        if rtn is not None:
+            rtn = nvstrings(rtn)
+        return rtn
+
     def remove_strings(self, indexes, count=0):
         """
         Remove the specified strings and return a new instance.
@@ -2549,4 +2579,43 @@ class nvstrings:
 
         """
         rtn = pyniNVStrings.n_get_info(self.m_cptr)
+        return rtn
+
+    def url_encode(self):
+        """
+        URL-encode each string and return as a new instance.
+        No format checking is performed. All characters are encoded except
+        for ASCII letters, digits, and these characters: '.','_','-','~'.
+        Encoding converts to hex using UTF-8 encoded bytes.
+
+        Examples
+        --------
+        >>> import nvstrings
+        >>> s = nvstrings.to_device(["a/b-c/d","E F.G","1-2,3"])
+        >>> print(s.url_encode())
+        ['a%2Fb-c%2Fd', 'E%20F.G', '1-2%2C3']
+
+        """
+        rtn = pyniNVStrings.n_url_encode(self.m_cptr)
+        if rtn is not None:
+            rtn = nvstrings(rtn)
+        return rtn
+
+    def url_decode(self):
+        """
+        URL-decode each string and return as a new instance.
+        No format checking is performed. All characters are
+        expected to be encoded as UTF-8 hex values.
+
+        Examples
+        --------
+        >>> import nvstrings
+        >>> s = nvstrings.to_device(['A%2FB-C%2FD', 'e%20f.g', '4-5%2C6'])
+        >>> print(s.url_decode())
+        ['A/B-C/D', 'e f.g', '4-5,6']
+
+        """
+        rtn = pyniNVStrings.n_url_decode(self.m_cptr)
+        if rtn is not None:
+            rtn = nvstrings(rtn)
         return rtn

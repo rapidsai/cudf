@@ -233,6 +233,31 @@ def replace_tokens(strs, tgts, repls, delimiter=None):
     return rtn
 
 
+def normalize_spaces(strs):
+    """
+    Remove extra whitespace between tokens and trim whitespace
+    from the beginning and the end of each string.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["hello \t world"," test string  "])
+    >>> n = nvtext.normalize_spaces(s)
+    >>> print(n)
+    ["hello world", "test string"]
+
+    """
+    rtn = pyniNVText.n_normalize_spaces(strs)
+    if rtn is not None:
+        rtn = nvs.nvstrings(rtn)
+    return rtn
+
+
 def edit_distance(strs, tgt, algo=0, devptr=0):
     """
     Compute the edit-distance between strs and tgt.

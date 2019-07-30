@@ -86,6 +86,7 @@ __device__ inline double stod( const char* str, unsigned int bytes )
         sign = (*ptr == '-' ? -1 : 1);
         ++ptr;
     }
+    unsigned long max_mantissa = 0x0FFFFFFFFFFFFF;
     unsigned int digits = 0;
     int exp_off = 0;
     bool decimal = false;
@@ -100,8 +101,19 @@ __device__ inline double stod( const char* str, unsigned int bytes )
         }
         if(ch < '0' || ch > '9')
             break;
-        digits = (digits * 10) + (unsigned int)(ch-'0');
-        exp_off -= (int)decimal;
+        if( digits > max_mantissa )
+            exp_off += (int)!decimal;
+        else
+        {
+            digits = (digits * 10L) + (unsigned long)(ch-'0');
+            if( digits > max_mantissa )
+            {
+                digits = digits / 10L;
+                exp_off += (int)!decimal;
+            }
+            else
+                exp_off -= (int)decimal;
+        }
         ++ptr;
     }
     // check for exponent char
@@ -129,6 +141,10 @@ __device__ inline double stod( const char* str, unsigned int bytes )
     }
     exp10 *= exp_sign;
     exp10 += exp_off;
+    if( exp10 > 308 )
+        return sign > 0 ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
+    else if( exp10 < -308 )
+        return 0.0;
     double value = (double)digits * pow(10.0,(double)exp10);
     return (value * sign);
 }

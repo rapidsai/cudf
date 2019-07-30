@@ -37,3 +37,10 @@ def test_scatter():
     got = s1.scatter(s2, [1, 3])
     expected = ['a', 'e', 'c', 'f']
     assert got.to_host() == expected
+
+
+def test_scalar_scatter():
+    s1 = nvstrings.to_device(['a', 'b', 'c', 'd'])
+    got = s1.scalar_scatter('+', [1, 3], 2)
+    expected = ['a', '+', 'c', '+']
+    assert got.to_host() == expected
