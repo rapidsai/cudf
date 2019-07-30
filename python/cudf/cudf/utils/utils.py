@@ -277,22 +277,29 @@ def hash_cudf_object(
     if categorize is not True:
         raise NotImplementedError("categorize is not yet supported")
 
-    from cudf import Series, DataFrame
+    from cudf import Series, DataFrame, Index, MultiIndex
 
     if isinstance(obj, Series):
         columns = [obj._column]
+        if index is True:
+            columns = columns + [Series(obj.index.values)._column]
     elif isinstance(obj, DataFrame):
         columns = [obj[k]._column for k in obj.columns]
+        if index is True:
+            columns = columns + [Series(obj.index.values)._column]
+    elif isinstance(obj, MultiIndex):
+        columns = [obj.codes[col]._column for col in obj.codes.columns]
+    elif isinstance(obj, Index):
+        columns = [obj.to_series()._column]
     else:
         raise TypeError("Unsupported type to hash")
-
-    if index is True:
-        columns = columns + [Series(obj.index.values)._column]
 
     import cudf.bindings.hash as cpp_hash
 
     hash_object = Series(
-        cpp_hash.hash_columns(columns), index=obj.index, dtype="int64"
+        cpp_hash.hash_columns(columns),
+        index=obj.index if isinstance(obj, (Series, DataFrame)) else obj,
+        dtype="int64",
     )
 
     return hash_object
