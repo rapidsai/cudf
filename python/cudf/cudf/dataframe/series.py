@@ -1384,19 +1384,26 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype):
-        """Convert to the given ``dtype``.
+    def astype(self, dtype, **kwargs):
+        """
+        Cast the Series to the given dtype
+
+        Parameters
+        ---------
+
+        dtype : data type
+        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
-        If the dtype changed, a new ``Series`` is returned by casting each
-        values to the given dtype.
-        If the dtype is not changed, ``self`` is returned.
+        out : Series
+            Copy of ``self`` cast to the given dtype. Returns
+            ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
-        return self._copy_construct(data=self._column.astype(dtype))
+        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
@@ -1611,15 +1618,16 @@ class Series(object):
         if dtype is None:
             dtype = utils.min_scalar_type(len(cats), 32)
 
-        value = Series(cats).astype(self.dtype)
+        cats = Series(cats).astype(self.dtype)
         order = Series(cudautils.arange(len(self)))
-        codes = Series(cudautils.arange(len(value), dtype=dtype))
+        codes = Series(cudautils.arange(len(cats), dtype=dtype))
 
-        value = DataFrame({"value": value, "code": codes})
+        value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame({"value": self, "order": order})
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
+        cats.name = None  # because it was mutated to "value" above
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):

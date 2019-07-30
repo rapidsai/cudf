@@ -54,6 +54,7 @@
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
 - PR #2345 Restore removal of old groupby implementation
+- PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
 - PR #2353 Bump Arrow and Dask versions
@@ -84,6 +85,7 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
+- PR #2355 Handle float16 in binary operations
 - PR #2311 Fix copy behaviour for GenericIndex
 - PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
