@@ -6,7 +6,7 @@ import pyarrow.parquet as pq
 
 from cudf.bindings.parquet import cpp_read_parquet
 from cudf.dataframe.dataframe import DataFrame
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 @ioutils.doc_read_parquet_metadata()

@@ -6,7 +6,7 @@ import pyarrow.orc as orc
 
 from cudf.bindings.orc import cpp_read_orc
 from cudf.dataframe.dataframe import DataFrame
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 @ioutils.doc_read_orc_metadata()

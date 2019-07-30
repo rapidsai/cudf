@@ -5,7 +5,7 @@ import warnings
 import pandas as pd
 
 import cudf
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 @ioutils.doc_read_hdf()

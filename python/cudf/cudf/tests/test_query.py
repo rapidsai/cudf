@@ -14,7 +14,7 @@ from pandas.util.testing import assert_frame_equal
 import cudf
 from cudf.dataframe import DataFrame
 from cudf.tests.utils import assert_eq
-from cudf.utils import queryutils
+from cudf.util import queryutils
 
 _params_query_parser = []
 _params_query_parser.append(("a > @b", ("a", "__CUDF_ENVREF__b")))

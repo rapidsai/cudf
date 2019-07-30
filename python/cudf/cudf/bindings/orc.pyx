@@ -14,7 +14,7 @@ from libcpp.memory cimport unique_ptr
 
 from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
-from cudf.utils import ioutils
+from cudf.util import ioutils
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 
 from io import BytesIO

@@ -8,7 +8,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.index import Index
 from cudf.dataframe.series import Series
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 def from_dlpack(pycapsule_obj):

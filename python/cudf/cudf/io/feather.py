@@ -5,7 +5,7 @@ import warnings
 from pyarrow import feather
 
 from cudf.dataframe.dataframe import DataFrame
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 @ioutils.doc_read_feather()

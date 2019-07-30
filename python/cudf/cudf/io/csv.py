@@ -3,7 +3,7 @@
 from io import BytesIO, StringIO
 
 from cudf.bindings.csv import cpp_read_csv, cpp_write_csv
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 @ioutils.doc_read_csv()
