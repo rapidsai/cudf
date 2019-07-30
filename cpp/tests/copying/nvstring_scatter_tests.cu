@@ -65,7 +65,7 @@ TEST(ScatterTest, ScatterNVString)
   
   if(print){
     print_gdf_column(left_column);
-    print_gdf_column(right_column);
+    print_gdf_column(destination_table.get_column(0));
   }
 
   std::vector<std::string> strs;
