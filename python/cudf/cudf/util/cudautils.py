@@ -910,22 +910,6 @@ def find_segments(arr, segs=None, markers=None):
 
 
 @cuda.jit
-def gpu_value_counts(arr, counts, total_size):
-    i = cuda.grid(1)
-    if 0 <= i < arr.size - 1:
-        counts[i] = arr[i + 1] - arr[i]
-    elif i == arr.size - 1:
-        counts[i] = total_size - arr[i]
-
-
-def value_count(arr, total_size):
-    counts = rmm.device_array(shape=len(arr), dtype=np.intp)
-    if arr.size > 0:
-        gpu_value_counts.forall(arr.size)(arr, counts, total_size)
-    return counts
-
-
-@cuda.jit
 def gpu_row_matrix(rowmatrix, col, nrow, ncol):
     i = cuda.grid(1)
     if i < rowmatrix.size:
