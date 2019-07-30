@@ -21,6 +21,7 @@ cudf.egg-info/
 python/build
 python/*/build
 python/cudf/*/bindings/**/*.cpp
+python/cudf/*/bindings/**/*.h
 python/cudf/*/bindings/.nfs*
 python/cudf/*.ipynb
 python/cudf/.ipynb_checkpoints
