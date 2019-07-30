@@ -21,7 +21,7 @@
 - PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
 - PR #2356 Java column vector standard deviation support
-- PR #2396 Add support for cudf.util.hash_cudf_object & refactor cudf.utils to cudf.util
+- PR #2396 Add support for `cudf.util.hash_cudf_object` & refactor cudf.utils to cudf.util
 
 ## Improvements
 
