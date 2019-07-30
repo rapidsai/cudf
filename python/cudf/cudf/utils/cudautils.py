@@ -653,8 +653,9 @@ def apply_clip(data, lower, upper, inplace):
     if not inplace:
         output_dary = rmm.device_arrya_like(data)
         if data.size > 0:
-            gpu_clip.forall(data.size)(data, lower, upper,
-                                       inplace, output_dary)
+            gpu_clip.forall(data.size)(
+                data, lower, upper, inplace, output_dary
+            )
         return output_dary
     else:
         if data.size > 0:
