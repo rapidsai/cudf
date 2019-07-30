@@ -25,7 +25,7 @@
 #include <rmm/rmm.h>
 
 #include "cudf/cudf.h"
-#include "cudf/table.hpp"
+#include "cudf/legacy/table.hpp"
 #include "utilities/column_utils.hpp"
 #include "utilities/error_utils.hpp"
 
