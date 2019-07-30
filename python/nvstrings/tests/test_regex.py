@@ -178,8 +178,10 @@ def test_extract_record():
 @pytest.mark.parametrize('replace', [
     '\\1-\\2',
     'V\\2-\\1',
-    pytest.param('V\\1-\\3', marks=[pytest.mark.xfail(reason='Pandas fails with this backreference group 3')]),
-    pytest.param('V\\3-\\2', marks=[pytest.mark.xfail(reason='Pandas fails with this backreference group 3')]),
+    pytest.param('V\\1-\\3', marks=[pytest.mark.xfail(reason='''
+      Pandas fails with this backreference group 3''')]),
+    pytest.param('V\\3-\\2', marks=[pytest.mark.xfail(reason='''
+      Pandas fails with this backreference group 3''')]),
     "\\1 \\2",
     "\\2 \\1",
     "X\\1+\\2Z",
@@ -196,11 +198,13 @@ def test_replace_with_backrefs(find, replace):
 
 
 @pytest.mark.parametrize('pattern', [
-    "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home",
-    "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home zzzz"
+    "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home",      # noqa E501
+    "hello @abc @def world The quick brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home zzzz"  # noqa E501
 ])
 def test_contains_large_regex(pattern):
-    s = ["hello @abc @def world The quick brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home", "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890", "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"]
+    s = ["hello @abc @def world The quick brown @fox jumps over the lazy @dog hello http://www.world.com I'm here @home",                                                 # noqa E501
+         "12345678901234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890",                                                # noqa E501
+         "abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"]  # noqa E501
     pstrs = pd.Series(s)
     strs = nvstrings.to_device(s)
     got = strs.contains(pattern)

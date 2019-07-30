@@ -1,7 +1,6 @@
 
-import pyniNVCategory
-
 import nvstrings as nvs
+import pyniNVCategory
 
 
 def to_device(strs):
@@ -188,7 +187,8 @@ class nvcategory:
 
     def __repr__(self):
         return "<nvcategory[{}] keys={},values={}>".format(self.keys_type(),
-          self.keys_size(), self.size())
+                                                           self.keys_size(),
+                                                           self.size())
 
     def get_cpointer(self):
         """

@@ -1,8 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import pyniNVText
-
 import nvstrings as nvs
+import pyniNVText
 
 
 def tokenize(strs, delimiter=None):
