@@ -282,6 +282,10 @@ add_library(cudf SHARED
             src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
+            src/rolling/jit/core/launcher.cpp
+            src/rolling/jit/util/type.cpp
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
             src/binaryop/jit/code/kernel.cpp

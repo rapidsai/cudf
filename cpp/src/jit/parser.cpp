@@ -211,6 +211,8 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
       } else if (piece.find("st.param") != std::string::npos) {
         return "// Out port does not support return value!" +
                original_code;  // Our port does not support return value;
+      } else if (piece[0] == '@') {
+        output += " @" + get_rid_of_nonalnum_sqrbra(piece.substr(1, piece.size()-1));
       } else {
         output += " " + piece;
       }
@@ -476,12 +478,14 @@ std::string ptx_parser::parse() {
       parse_function_header(function_header);
 
   std::string final_output = function_header_output + "\n";
+  final_output += " asm volatile (\"{\");";
   for (int i = 0; i < function_body_output.size(); i++) {
     if (function_body_output[i].find("ret;") != std::string::npos) {
       continue;
     }
     final_output += "  " + function_body_output[i] + "\n";
   }
+  final_output += " asm volatile (\"}\");";
 
   final_output += "}";
 

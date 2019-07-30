@@ -178,6 +178,8 @@ typedef enum {
   GDF_AVG,            ///< Computes arithmetic mean of all values in the aggregation column
   GDF_COUNT,          ///< Computes histogram of the occurance of each key in the GroupBy Columns
   GDF_COUNT_DISTINCT, ///< Counts the number of distinct keys in the GroupBy columns
+  GDF_NUMBA_GENERIC_AGG_OPS,
+  GDF_CUDA_GENERIC_AGG_OPS,
   N_GDF_AGG_OPS,      ///< The total number of aggregation operations. ALL NEW OPERATIONS SHOULD BE ADDED ABOVE THIS LINE
 } gdf_agg_op;
 

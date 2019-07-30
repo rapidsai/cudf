@@ -76,6 +76,17 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            const gdf_size_type *min_periods_col,
                            const gdf_size_type *forward_window_col);
 
+gdf_column rolling_window(gdf_column const& input,
+                           gdf_size_type window,
+                           gdf_size_type min_periods,
+                           gdf_size_type forward_window,
+                           const std::string& user_defined_aggregator,
+                           gdf_agg_op agg_op,
+                           gdf_dtype output_type,
+                           gdf_size_type const* window_col,
+                           gdf_size_type const* min_periods_col,
+                           gdf_size_type const* forward_window_col);
+
 }  // namespace cudf
 
 #endif  // ROLLING_HPP
