@@ -3432,6 +3432,7 @@ def test_series_values_property(data):
 
     np.testing.assert_array_equal(pds.values, gds.values)
 
+
 def test_value_counts():
     pdf = pd.DataFrame(
         {
@@ -3455,3 +3456,63 @@ def test_value_counts():
         pdf.alpha.value_counts().sort_index(),
         gdf.alpha.value_counts().sort_index(),
     )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some"])
+def test_datetime_value_counts(data, nulls):
+    psr = pd.Series(data)
+
+    if len(data) > 0:
+        if nulls == "one":
+            p = np.random.randint(0, len(data))
+            psr[p] = None
+        elif nulls == "some":
+            p = np.random.randint(0, len(data), 2)
+            psr[p] = None
+
+    gsr = DataFrame.from_pandas(psr)
+    expected = psr.value_counts()
+    got = gsr.value_counts()
+
+    pandas_dict = expected.to_dict()
+    gdf_dict = got.to_pandas().to_dict()
+
+    assert pandas_dict == gdf_dict
+
+
+@pytest.mark.parametrize("num_elements", [10, 100, 1000])
+def test_categorical_value_counts(num_elements):
+    from string import ascii_letters, digits
+
+    # create categorical series
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            np.random.choice(list(ascii_letters + digits), num_elements),
+            dtype="category",
+        )
+    )
+
+    # gdf
+    gdf = DataFrame()
+    gdf["a"] = Series.from_categorical(pd_cat)
+    gdf_value_counts = gdf["a"].value_counts()
+
+    # pandas
+    pdf = pd.DataFrame()
+    pdf["a"] = pd_cat
+    pdf_value_counts = pdf["a"].value_counts()
+
+    # verify
+    pandas_dict = pdf_value_counts.to_dict()
+    gdf_dict = gdf_value_counts.to_pandas().to_dict()
+
+    assert pandas_dict == gdf_dict

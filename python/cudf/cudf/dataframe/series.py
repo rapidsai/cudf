@@ -1830,7 +1830,6 @@ class Series(object):
     def value_counts(self, sort=True):
         """Returns unique values of this Series.
         """
-        from cudf import Series
 
         if self.null_count == len(self):
             return Series(np.array([], dtype=np.int64), name=self.name)
