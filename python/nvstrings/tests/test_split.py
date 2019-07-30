@@ -97,7 +97,6 @@ def test_rpartition():
         ['ab_cd', '_', ''],
         ['', '', ''],
         ['', '', ' a b '],
-        ['', '', ' a  bbb   c'],
-        ])
+        ['', '', ' a  bbb   c']])
     for i in range(len(got)):
         assert_eq(got[i], expected[i])
