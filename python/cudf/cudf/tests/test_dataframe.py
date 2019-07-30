@@ -3365,3 +3365,9 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+def test_utils_hash_cudf_object():
+    first = gd.util.hash_cudf_object(Series([1,2,3]))
+    second = gd.util.hash_cudf_object(Series([1,2,3]))
+
+    assert_eq(first, second)
