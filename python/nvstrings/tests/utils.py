@@ -36,4 +36,5 @@ def initialize_rmm_pool():
 
 def finalize_rmm():
     from librmm_cffi import librmm as rmm
+
     return rmm.finalize()

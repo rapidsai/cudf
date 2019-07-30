@@ -7,10 +7,14 @@ import pytest
 from utils import assert_eq
 
 
-@pytest.mark.parametrize('width', [10, 20, 50])
+@pytest.mark.parametrize("width", [10, 20, 50])
 def test_wrap(width):
-    s = ["quick brown fox jumped over lazy brown dog", None,
-         "hello there, accéntéd world", ""]
+    s = [
+        "quick brown fox jumped over lazy brown dog",
+        None,
+        "hello there, accéntéd world",
+        "",
+    ]
     strs = nvstrings.to_device(s)
     pstrs = pd.Series(s)
     got = strs.wrap(width)

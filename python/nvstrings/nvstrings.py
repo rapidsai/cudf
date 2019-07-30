@@ -142,8 +142,9 @@ def from_offsets(sbuf, obuf, scount, nbuf=None, ncount=0, bdevmem=False):
     ['a', 'p', 'p', 'l', 'e']
 
     """
-    rtn = pyniNVStrings.n_createFromOffsets(sbuf, obuf, scount, nbuf, ncount,
-                                            bdevmem)
+    rtn = pyniNVStrings.n_createFromOffsets(
+        sbuf, obuf, scount, nbuf, ncount, bdevmem
+    )
     if rtn is not None:
         rtn = nvstrings(rtn)
     return rtn
@@ -271,8 +272,9 @@ def int2ip(values, count=0, nulls=None, bdevmem=False):
     return rtn
 
 
-def int2timestamp(values, count=0, nulls=None,
-                  format=None, units='s', bdevmem=False):
+def int2timestamp(
+    values, count=0, nulls=None, format=None, units="s", bdevmem=False
+):
     """
     Create date/time strings from an array of int64 values.
     The values must be in units as specified by the units parameter.
@@ -300,16 +302,17 @@ def int2timestamp(values, count=0, nulls=None,
         Default (False) interprets memory pointers as CPU memory.
 
     """
-    rtn = pyniNVStrings.n_createFromTimestamp(values, count, nulls,
-                                              format, units,
-                                              bdevmem)
+    rtn = pyniNVStrings.n_createFromTimestamp(
+        values, count, nulls, format, units, bdevmem
+    )
     if rtn is not None:
         rtn = nvstrings(rtn)
     return rtn
 
 
-def from_booleans(values, count=0, nulls=None,
-                  true='True', false='False', bdevmem=False):
+def from_booleans(
+    values, count=0, nulls=None, true="True", false="False", bdevmem=False
+):
     """
     Create strings from an array of bool values.
     Each string will be created using the true and false strings provided.
@@ -334,8 +337,9 @@ def from_booleans(values, count=0, nulls=None,
         Default (False) interprets memory pointers as CPU memory.
 
     """
-    rtn = pyniNVStrings.n_createFromBools(values, count, nulls,
-                                          true, false, bdevmem)
+    rtn = pyniNVStrings.n_createFromBools(
+        values, count, nulls, true, false, bdevmem
+    )
     if rtn is not None:
         rtn = nvstrings(rtn)
     return rtn
@@ -381,6 +385,7 @@ class nvstrings:
     device memory. Strings in the list are immutable.
     Methods that modify any string will create a new nvstrings instance.
     """
+
     #
     m_cptr = 0
 
@@ -507,8 +512,9 @@ class nvstrings:
         offsets [0 1 2 3 4 5]
 
         """
-        return pyniNVStrings.n_create_offsets(self.m_cptr, sbuf, obuf, nbuf,
-                                              bdevmem)
+        return pyniNVStrings.n_create_offsets(
+            self.m_cptr, sbuf, obuf, nbuf, bdevmem
+        )
 
     def size(self):
         """
@@ -840,7 +846,7 @@ class nvstrings:
         rtn = pyniNVStrings.n_ip2int(self.m_cptr, devptr)
         return rtn
 
-    def timestamp2int(self, format=None, units='s', devptr=0):
+    def timestamp2int(self, format=None, units="s", devptr=0):
         """
         Returns integer value represented by each string.
         String is interpretted using the format provided.
@@ -869,9 +875,7 @@ class nvstrings:
         [1553085296]
 
         """
-        rtn = pyniNVStrings.n_timestamp2int(self.m_cptr,
-                                            format, units,
-                                            devptr)
+        rtn = pyniNVStrings.n_timestamp2int(self.m_cptr, format, units, devptr)
         return rtn
 
     def cat(self, others=None, sep=None, na_rep=None):
@@ -906,7 +910,7 @@ class nvstrings:
             rtn = nvstrings(rtn)
         return rtn
 
-    def join(self, sep=''):
+    def join(self, sep=""):
         """
         Concatentate this list of strings into a single string.
 
@@ -996,7 +1000,7 @@ class nvstrings:
                 rtn.append(None)
         return rtn
 
-    def partition(self, delimiter=' '):
+    def partition(self, delimiter=" "):
         """
         Each string is split into two strings on the first delimiter found.
 
@@ -1029,7 +1033,7 @@ class nvstrings:
                 rtn.append(None)
         return rtn
 
-    def rpartition(self, delimiter=' '):
+    def rpartition(self, delimiter=" "):
         """
         Each string is split into two strings on the first delimiter found.
         Delimiter is searched for from the end.
@@ -1170,7 +1174,7 @@ class nvstrings:
             rtn = nvstrings(rtn)
         return rtn
 
-    def pad(self, width, side='left', fillchar=' '):
+    def pad(self, width, side="left", fillchar=" "):
         """
         Add specified padding to each string.
         Side:{'left','right','both'}, default is 'left'.
@@ -1200,7 +1204,7 @@ class nvstrings:
             rtn = nvstrings(rtn)
         return rtn
 
-    def ljust(self, width, fillchar=' '):
+    def ljust(self, width, fillchar=" "):
         """
         Pad the end of each string to the minimum width.
 
@@ -1228,7 +1232,7 @@ class nvstrings:
             rtn = nvstrings(rtn)
         return rtn
 
-    def center(self, width, fillchar=' '):
+    def center(self, width, fillchar=" "):
         """
         Pad the beginning and end of each string to the minimum width.
 
@@ -1256,7 +1260,7 @@ class nvstrings:
             rtn = nvstrings(rtn)
         return rtn
 
-    def rjust(self, width, fillchar=' '):
+    def rjust(self, width, fillchar=" "):
         """
         Pad the beginning of each string to the minimum width.
 
@@ -1518,8 +1522,9 @@ class nvstrings:
         if isinstance(repls, list):
             repls = to_device(repls)
 
-        rtn = pyniNVStrings.n_replace_multi(self.m_cptr, pats, repls.m_cptr,
-                                            regex)
+        rtn = pyniNVStrings.n_replace_multi(
+            self.m_cptr, pats, repls.m_cptr, regex
+        )
         if rtn is not None:
             rtn = nvstrings(rtn)
         return rtn

@@ -6,10 +6,9 @@ import pytest
 from utils import methodcaller
 
 
-@pytest.mark.parametrize('func',
-                         ['lower', 'upper',
-                          'swapcase', 'capitalize',
-                          'title', 'strip'])
+@pytest.mark.parametrize(
+    "func", ["lower", "upper", "swapcase", "capitalize", "title", "strip"]
+)
 def test_allnulls(func):
     strs = nvstrings.to_device([None, None, None])
     M = methodcaller(func)

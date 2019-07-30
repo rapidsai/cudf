@@ -14,12 +14,12 @@ def test_strip():
     expected = pstrs.str.strip()
     assert_eq(got.to_host(), expected)
 
-    got = strs.strip().strip('é')
-    expected = pstrs.str.strip().str.strip('é')
+    got = strs.strip().strip("é")
+    expected = pstrs.str.strip().str.strip("é")
     assert_eq(got.to_host(), expected)
 
-    got = strs.strip(' e')
-    expected = pstrs.str.strip(' e')
+    got = strs.strip(" e")
+    expected = pstrs.str.strip(" e")
     assert_eq(got.to_host(), expected)
 
 

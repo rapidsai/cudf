@@ -68,7 +68,7 @@ def test_gather_numbers():
     nbrs = np.empty([idxs.size], dtype=narr.dtype)
     cat.gather_numbers(idxs, nbrs)
     got = nbrs.tolist()
-    expected = [1., 1.5, 1.]
+    expected = [1.0, 1.5, 1.0]
     assert_eq(got, expected)
 
 
@@ -83,8 +83,7 @@ def util_check_cat(ncat, dtype):
 
 
 def test_merge_category():
-    cat1 = nvcategory.from_numbers(
-        np.array([4, 1, 2, 3, 2, 1, 4, 1, 1]))
+    cat1 = nvcategory.from_numbers(np.array([4, 1, 2, 3, 2, 1, 4, 1, 1]))
     cat2 = nvcategory.from_numbers(np.array([2, 4, 3, 0]))
     ncat = cat1.merge_and_remap(cat2)
 

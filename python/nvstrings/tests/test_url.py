@@ -7,8 +7,11 @@ import nvstrings
 from utils import assert_eq
 
 urls1 = ["http://www.hellow.com", "/home/nvidia/nfs", "123.45 ~ABCDEF"]
-urls2 = ["http://www.hellow.com?k1=acc%C3%A9nted&k2=a%2F/b.c",
-         "%2Fhome%2fnfs", "987%20ZYX"]
+urls2 = [
+    "http://www.hellow.com?k1=acc%C3%A9nted&k2=a%2F/b.c",
+    "%2Fhome%2fnfs",
+    "987%20ZYX",
+]
 
 
 def test_encode_url():
@@ -16,7 +19,7 @@ def test_encode_url():
     got = s.url_encode()
     expected = []
     for url in urls1:
-        expected.append(urllib.parse.quote(url, safe='~'))
+        expected.append(urllib.parse.quote(url, safe="~"))
     assert_eq(got, expected)
 
 

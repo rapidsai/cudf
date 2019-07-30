@@ -43,7 +43,7 @@ def tokenize(strs, delimiter=None):
     return rtn
 
 
-def unique_tokens(strs, delimiter=' '):
+def unique_tokens(strs, delimiter=" "):
     """
     Each string is split into tokens using the provided delimiter.
     The nvstrings instance returned contains unique list of tokens.
@@ -73,7 +73,7 @@ def unique_tokens(strs, delimiter=' '):
     return rtn
 
 
-def token_count(strs, delimiter=' ', devptr=0):
+def token_count(strs, delimiter=" ", devptr=0):
     """
     Each string is split into tokens using the provided delimiter.
     The returned integer array is the number of tokens in each string.
@@ -159,7 +159,7 @@ def strings_counts(strs, tgts, devptr=0):
     return rtn
 
 
-def tokens_counts(strs, tgts, delimiter=' ', devptr=0):
+def tokens_counts(strs, tgts, delimiter=" ", devptr=0):
     """
     The tgts strings are searched for within each strs.
     The returned int32 array is number of occurrences of each tgts in strs.
@@ -287,7 +287,7 @@ def edit_distance(strs, tgt, algo=0, devptr=0):
     return rtn
 
 
-def ngrams(tokens, N=2, sep='_'):
+def ngrams(tokens, N=2, sep="_"):
     """
     Generate the n-grams from a set of tokens.
     You can generate tokens from an nvstrings instance using
