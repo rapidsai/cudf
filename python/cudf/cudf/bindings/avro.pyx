@@ -30,7 +30,7 @@ cpdef cpp_read_avro(filepath_or_buffer, columns=None, skip_rows=None,
 
     See Also
     --------
-    cudf.io.parquet.read_avro
+    cudf.io.avro.read_avro
     """
 
     # Setup reader options
