@@ -4,15 +4,19 @@
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
-
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
+from cudf.bindings.GDFError import GDFError
 from cudf.dataframe.column import Column
+from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 
+from libcpp.string cimport string
+
+import numpy as np
 
 _UNARY_OP = {
     'sin': SIN,
@@ -51,6 +55,26 @@ def apply_unary_op(incol, op):
 
     free(c_incol)
     data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)
+
+
+def column_applymap(incol, udf_ptx, np_dtype):
+
+    cdef gdf_column* c_incol = column_view_from_column(incol)
+
+    cdef string cpp_str = udf_ptx.encode('UTF-8')
+    cdef gdf_column c_outcol
+
+    # get the gdf_type related to the input np type
+    cdef gdf_dtype g_type = dtypes[np_dtype]
+
+    with nogil:
+        c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type, True)
+
+    data, mask = gdf_column_to_column_mem(&c_outcol)
+
+    free(c_incol)
+
     return Column.from_mem_views(data, mask)
 
 
