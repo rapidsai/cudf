@@ -1,9 +1,9 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numpy as np
+from librmm_cffi import librmm as rmm
 import nvstrings
 import nvtext
-from librmm_cffi import librmm as rmm
 
 
 def test_tokenize():

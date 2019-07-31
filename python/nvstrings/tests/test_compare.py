@@ -1,8 +1,8 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numpy as np
-import nvstrings
 from librmm_cffi import librmm as rmm
+import nvstrings
 from utils import assert_eq
 
 
