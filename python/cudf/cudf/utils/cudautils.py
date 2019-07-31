@@ -112,23 +112,6 @@ def gpu_copy(inp, out):
         out[tid] = inp[tid]
 
 
-def astype(ary, dtype):
-    if ary.dtype == np.dtype(dtype):
-        return ary
-    elif (
-        ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")
-    ) and (dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")):
-        return ary.view(dtype)
-    elif ary.size == 0:
-        return rmm.device_array(shape=ary.shape, dtype=dtype)
-    else:
-        out = rmm.device_array(shape=ary.shape, dtype=dtype)
-        if out.size > 0:
-            configured = gpu_copy.forall(out.size)
-            configured(ary, out)
-        return out
-
-
 def copy_array(arr, out=None):
     if out is None:
         out = rmm.device_array_like(arr)

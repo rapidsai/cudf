@@ -63,6 +63,7 @@
 - PR #2373 cudf.DataFrame enchancements & Series.values support
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
+- PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
 
 ## Bug Fixes
 
