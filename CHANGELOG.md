@@ -21,6 +21,7 @@
 - PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
 - PR #2356 Java column vector standard deviation support
+- PR #2415 Revamp `value_counts` to use groupby count series of any type
 
 ## Improvements
 
@@ -54,6 +55,7 @@
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
 - PR #2345 Restore removal of old groupby implementation
+- PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
 - PR #2353 Bump Arrow and Dask versions
@@ -61,6 +63,8 @@
 - PR #2373 cudf.DataFrame enchancements & Series.values support
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
+- PR #2350 Performance related changes to get_dummies
+- PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
 
 ## Bug Fixes
 
@@ -84,6 +88,7 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
+- PR #2355 Handle float16 in binary operations
 - PR #2311 Fix copy behaviour for GenericIndex
 - PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
@@ -102,6 +107,7 @@
 - PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
 - PR #2401 Fix to a scalar datetime(of type Days) issue
 - PR #2386 Correctly allocate output valids in groupby
+- PR #2411 Fixed failures on binary op on single element string column
 - PR #2422 Fix Pandas logical binary operation incompatibilites
 
 
