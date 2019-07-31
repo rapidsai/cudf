@@ -4,7 +4,6 @@ import warnings
 
 import pandas as pd
 
-import fastavro as fa
 from cudf.bindings.avro import cpp_read_avro
 from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils
@@ -27,15 +26,6 @@ def read_avro(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        df = cpp_read_avro(filepath_or_buffer, columns, skip_rows, num_rows)
+        return cpp_read_avro(filepath_or_buffer, columns, skip_rows, num_rows)
     else:
-        warnings.warn("Using CPU via fastavro to read Avro dataset.")
-        if ioutils.is_file_like(filepath_or_buffer):
-            reader = fa.reader(filepath_or_buffer)
-        else:
-            reader = fa.reader(open(filepath_or_buffer, "rb"))
-
-        pdf = pd.DataFrame.from_records(reader, columns=columns)
-        df = DataFrame.from_pandas(pdf)
-
-    return df
+        raise NotImplementedError("read_avro currently only supports cudf engine")

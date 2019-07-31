@@ -45,7 +45,7 @@ def path_or_buf(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.parametrize("engine", ["fastavro", "cudf"])
+@pytest.mark.parametrize("engine", ["cudf"])
 @pytest.mark.parametrize("inputfile, columns", [("example.avro", None)])
 def test_avro_reader_basic(datadir, inputfile, columns, engine):
     path = datadir / inputfile
