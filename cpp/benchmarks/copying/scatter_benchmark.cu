@@ -17,7 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -31,6 +31,7 @@
 #include <algorithm>
 
 #include "../fixture/benchmark_fixture.hpp"
+#include "../synchronization/synchronization.hpp"
 
 class Scatter: public cudf::benchmark {
 };
@@ -79,20 +80,23 @@ void BM_scatter(benchmark::State& state){
   cudf::table source_table{ vp_src };
   cudf::table target_table{ vp_dest };
 
-  cudf::table destination_table = 
-    cudf::scatter(source_table, scatter_map.data().get(), destination_table);
+  for(auto _ : state){
+    cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
+    cudf::table destination_table = 
+      cudf::scatter(source_table, scatter_map.data().get(), target_table);
+  }
   
   state.SetBytesProcessed(
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
+using namespace cudf;
+
 #define SBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
-BENCHMARK_DEFINE_F(Scatter, name)(::benchmark::State& state) {          \
+BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {        \
   BM_scatter<type, coalesce>(state);                                    \
-}
+}                                                                       \
+BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
 
 SBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
 SBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);
-
-BENCHMARK_REGISTER_F(Scatter, double_coalesce_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
-BENCHMARK_REGISTER_F(Scatter, double_coalesce_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});

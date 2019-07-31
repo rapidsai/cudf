@@ -499,7 +499,9 @@ class Column(object):
         value = columnops.as_column(value)
 
         if isinstance(key, slice):
-            out = cpp_copying.apply_copy_range(self, value, key_start, key_stop, 0)
+            out = cpp_copying.apply_copy_range(
+                self, value, key_start, key_stop, 0
+            )
         else:
             out = cpp_copying.apply_scatter(value, key, self)
 

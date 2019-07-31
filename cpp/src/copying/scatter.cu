@@ -18,7 +18,7 @@
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <copying/gather.hpp>
 

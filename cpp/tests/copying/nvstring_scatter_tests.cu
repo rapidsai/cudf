@@ -21,7 +21,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <random>
 #include <tests/utilities/nvcategory_utils.cuh>
 #include <tests/utilities/valid_vectors.h>
@@ -65,7 +65,7 @@ TEST(ScatterTest, ScatterNVString)
   
   if(print){
     print_gdf_column(left_column);
-    print_gdf_column(right_column);
+    print_gdf_column(destination_table.get_column(0));
   }
 
   std::vector<std::string> strs;

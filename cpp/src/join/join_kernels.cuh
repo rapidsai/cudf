@@ -25,8 +25,8 @@ enum class JoinType {
 };
 
 #include <cudf/cudf.h>
-#include <table/device_table.cuh>
-#include <table/device_table_row_operators.cuh>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <hash/concurrent_unordered_multimap.cuh>
 #include <hash/hash_functions.cuh>
 #include <utilities/bit_util.cuh>
