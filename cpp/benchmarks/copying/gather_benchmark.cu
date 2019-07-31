@@ -17,7 +17,7 @@
 #include <benchmark/benchmark.h>
 
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -31,6 +31,7 @@
 #include <algorithm>
 
 #include "../fixture/benchmark_fixture.hpp"
+#include "../synchronization/synchronization.hpp"
 
 class Gather: public cudf::benchmark {
 };
@@ -80,6 +81,7 @@ void BM_gather(benchmark::State& state){
   cudf::table destination_table{ vp_dest };
 
   for(auto _ : state){
+    cuda_event_timer raii(state, true); // flush_l2_cache = true, stream = 0
     cudf::gather(&source_table, gather_map.data().get(), &destination_table);
   }
   
@@ -87,13 +89,13 @@ void BM_gather(benchmark::State& state){
       static_cast<int64_t>(state.iterations())*state.range(0)*n_cols*2*sizeof(TypeParam));
 }
 
+using namespace cudf;
+
 #define GBM_BENCHMARK_DEFINE(name, type, coalesce)                      \
-BENCHMARK_DEFINE_F(Gather, name)(::benchmark::State& state) {           \
+BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {        \
   BM_gather<type, coalesce>(state);                                     \
-}
+}                                                                       \
+BENCHMARK_REGISTER_F(benchmark, name)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}})->UseManualTime();
 
 GBM_BENCHMARK_DEFINE(double_coalesce_x,double, true);
 GBM_BENCHMARK_DEFINE(double_coalesce_o,double,false);
-
-BENCHMARK_REGISTER_F(Gather, double_coalesce_x)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
-BENCHMARK_REGISTER_F(Gather, double_coalesce_o)->RangeMultiplier(2)->Ranges({{1<<10,1<<26},{1,8}});
