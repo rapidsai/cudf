@@ -505,9 +505,13 @@ class Series(object):
             output += "\nName: {}, dtype: {}".format(self.name, str_dtype)
 
         if is_categorical_dtype(self.dtype):
-            categories = self.cat.categories
-            desc = "({}, {})".format(len(categories), categories.dtype.name)
-            output += "\nCategories {}: {}".format(desc, self.cat.to_string())
+            cat = self.cat
+            str_dtype = cat.categories.dtype.name
+            categories = cat.categories.to_array()
+            separator = " < " if cat.ordered else ", "
+            desc = "({}, {})".format(len(categories), str_dtype)
+            categories = "[{}]".format(separator.join(categories))
+            output += "\nCategories {}: {}".format(desc, categories)
 
         return output
 

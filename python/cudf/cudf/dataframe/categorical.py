@@ -45,11 +45,6 @@ class CategoricalAccessor(object):
         else:
             return Series(data, name=self._parent.name)
 
-    def to_string(self):
-        if self.ordered:
-            return "[{}]".format(" < ".join(self.categories.to_array()))
-        return "[{}]".format(", ".join(self.categories.to_array()))
-
     def as_ordered(self, **kwargs):
         data = None if kwargs["inplace"] else self._parent
         if not self.ordered:
