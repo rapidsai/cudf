@@ -191,34 +191,42 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
-               rmm::mr::device_memory_resource *mr)
-    : _type{view.type()},
-      _size{view.size()},
-      _data{view.data(), view.size() * cudf::size_of(view.type()), stream, mr},
-      _null_count{view.null_count()} {
-  if (view.nullable()) {
-    // If there's no offset, do a simple copy
-    if (view.offset() == 0) {
-      _null_mask =
-          rmm::device_buffer{static_cast<void const *>(view.null_mask()),
-                             bitmask_allocation_size_bytes(size()), stream, mr},
-    } else {
-      CUDF_EXPECTS(view.offset() > 0, "Invalid view offset.");
-      // If there's a non-zero offset, need to handle offset bitmask elements
-      _null_mask =
-          rmm::device_buffer{bitmask_allocation_size_bytes(size()), stream, mr};
-      cudf::util::cuda::grid_config_1d config(view.size(), 256);
-      copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
-                            stream>>>(
-          static_cast<bitmask_type *>(_null_mask.data()), view.null_mask(),
-          view.offset(), view.size());
-      CHECK_STREAM(stream);
-    }
-  }
-
-  for (size_type i = 0; i < view.num_children(); ++i) {
-    _children.emplace_back(view.child(i));
-  }
+               rmm::mr::device_memory_resource *mr) {
+  CUDF_FAIL("Copying from a view is not supported yet.");
 }
+/*
+: _type{view.type()},
+_size{view.size()},
+// TODO: Fix for variable-width types
+_data{view.head() + (view.offset() * cudf::size_of(view.type())),
+view.size() * cudf::size_of(view.type()), stream, mr},
+_null_count{view.null_count()} {
+
+if (view.nullable()) {
+// If there's no offset, do a simple copy
+if (view.offset() == 0) {
+_null_mask =
+rmm::device_buffer{static_cast<void const *>(view.null_mask()),
+              bitmask_allocation_size_bytes(size()), stream, mr},
+} else {
+CUDF_EXPECTS(view.offset() > 0, "Invalid view offset.");
+// If there's a non-zero offset, need to handle offset bitmask elements
+_null_mask =
+rmm::device_buffer{bitmask_allocation_size_bytes(size()), stream, mr};
+cudf::util::cuda::grid_config_1d config(view.size(), 256);
+copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
+             stream>>>(
+static_cast<bitmask_type *>(_null_mask.data()), view.null_mask(),
+view.offset(), view.size());
+CHECK_STREAM(stream);
+}
+}
+
+// Implicitly invokes conversion of the view's child views to `column`s
+for (size_type i = 0; i < view.num_children(); ++i) {
+_children.emplace_back(view.child(i), stream, mr);
+}
+}
+*/
 
 }  // namespace cudf
