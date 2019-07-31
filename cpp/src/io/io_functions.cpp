@@ -103,7 +103,7 @@ table read_json(json_read_arg const &args) {
 
 table read_orc(orc_read_arg const &args) {
   auto reader = [&]() {
-    orc::reader_options options{args.columns, args.use_index};
+    orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<orc::reader>(args.source.filepath, options);
