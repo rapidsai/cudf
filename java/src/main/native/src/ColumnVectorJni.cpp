@@ -306,6 +306,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfLengths(JNIEnv *env
   try {
     gdf_column *n_column = reinterpret_cast<gdf_column *>(column_handle);
     NVStrings *strings = static_cast<NVStrings *>(n_column->data);
+    JNI_ARG_CHECK(env, n_column->size == strings->size(),
+                  "NVStrings size and gdf_column size mismatch", 0);
     cudf::jni::gdf_column_wrapper lengths(n_column->size, gdf_dtype::GDF_INT32,
                                           n_column->null_count != 0);
     strings->len(static_cast<int *>(lengths->data));
