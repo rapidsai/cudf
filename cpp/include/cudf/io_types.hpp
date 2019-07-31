@@ -46,6 +46,20 @@ struct source_info {
 };
 
 /**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `read_avro` interface
+ *---------------------------------------------------------------------------**/
+struct avro_read_arg {
+  source_info source;                       ///< Info on source of data
+
+  std::vector<std::string> columns;         ///< Names of column to read; empty is all
+
+  int skip_rows = -1;                       ///< Rows to skip from the start; -1 is none
+  int num_rows = -1;                        ///< Rows to read; -1 is all
+
+  explicit avro_read_arg(const source_info& src) : source(src) {}
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Input arguments to the `read_csv` interface
  *
  * Available parameters and are closely patterned after PANDAS' `read_csv` API.

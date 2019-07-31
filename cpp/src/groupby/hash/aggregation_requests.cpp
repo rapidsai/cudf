@@ -18,7 +18,7 @@
 #include <cudf/cudf.h>
 #include <cudf/binaryop.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/type_dispatcher.hpp>

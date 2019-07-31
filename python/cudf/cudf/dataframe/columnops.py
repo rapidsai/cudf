@@ -13,6 +13,7 @@ from numba import cuda, njit
 import nvstrings
 from librmm_cffi import librmm as rmm
 
+import cudf
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
@@ -114,6 +115,55 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def searchsorted(self, value, side="left"):
+        raise NotImplementedError
+
+    def astype(self, dtype, **kwargs):
+        if (
+            pd.api.types.pandas_dtype(dtype).type
+            is pd.core.dtypes.dtypes.CategoricalDtypeType
+        ):
+            return self.as_categorical_column(dtype, **kwargs)
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
+            return self.as_string_column(dtype, **kwargs)
+
+        elif np.issubdtype(dtype, np.datetime64):
+            return self.as_datetime_column(dtype, **kwargs)
+
+        else:
+            return self.as_numerical_column(dtype, **kwargs)
+
+    def as_categorical_column(self, dtype, **kwargs):
+        if "ordered" in kwargs:
+            ordered = kwargs["ordered"]
+        else:
+            ordered = False
+
+        sr = cudf.Series(self)
+        labels, cats = sr.factorize()
+
+        # string columns include null index in factorization; remove:
+        if (
+            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
+        ) and self.null_count > 0:
+            cats = cats.dropna()
+            labels = labels - 1
+
+        return cudf.dataframe.categorical.CategoricalColumn(
+            data=labels._column.data,
+            mask=self.mask,
+            null_count=self.null_count,
+            categories=cats._column,
+            ordered=ordered,
+        )
+        raise NotImplementedError
+
+    def as_numerical_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_datetime_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_string_column(self, dtype, **kwargs):
         raise NotImplementedError
 
 

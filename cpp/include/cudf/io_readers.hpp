@@ -21,13 +21,79 @@
 #include <memory>
 
 #include "cudf.h"
-#include "table.hpp"
+#include <cudf/legacy/table.hpp>
 
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }
 
 namespace cudf {
 namespace io {
+namespace avro {
+/**---------------------------------------------------------------------------*
+ * @brief Options for the Avro reader
+ *---------------------------------------------------------------------------**/
+struct reader_options {
+  std::vector<std::string> columns;
+
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] columns List of columns to read. If empty, all columns are read
+   *---------------------------------------------------------------------------**/
+  reader_options(std::vector<std::string> cols) : columns(std::move(cols)) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to read Apache Avro data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class reader {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::string filepath, reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+ /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_all();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a range of rows.
+   *
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] num_rows Number of rows to read; use `0` for all remaining data
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_rows(size_t skip_rows, size_t num_rows);
+
+  ~reader();
+};
+
+} // namespace avro
+
 namespace json {
 /**---------------------------------------------------------------------------*
  * @brief Arguments to the read_json interface.

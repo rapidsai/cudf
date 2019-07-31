@@ -21,7 +21,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/type_dispatcher.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <string/nvcategory_util.hpp>
 
 #include <algorithm>

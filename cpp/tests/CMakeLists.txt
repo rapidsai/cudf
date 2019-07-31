@@ -61,6 +61,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${ZLIB_INCLUDE_DIRS}"
+                    "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
 
@@ -128,6 +130,14 @@ set(ORDERBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_tests.cu")
 
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
+
+###################################################################################################
+# - is_sorted tests ---------------------------------------------------------------------------------
+
+set(IS_SORTED_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/is_sorted_tests.cu")
+
+ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
 
 ###################################################################################################
 # - legacy bitmask tests ---------------------------------------------------------------------------------
@@ -239,6 +249,9 @@ ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
+set(AVRO_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
@@ -247,6 +260,7 @@ set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
+ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
