@@ -15,7 +15,7 @@
  */
 
 #include <utilities/error_utils.hpp>
-#include "cache.h"
+#include <jit/cache.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>

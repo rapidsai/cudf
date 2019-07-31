@@ -136,14 +136,21 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.dataframe import datetime
+        import cudf.bindings.typecast as typecast
 
-        return self.astype("int64", **kwargs).view(
-            datetime.DatetimeColumn, dtype=dtype, data=self.data.astype(dtype)
+        return self.view(
+            datetime.DatetimeColumn,
+            dtype=dtype,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        col = self.replace(data=self.data.astype(dtype), dtype=np.dtype(dtype))
-        return col
+        import cudf.bindings.typecast as typecast
+
+        return self.replace(
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            dtype=np.dtype(dtype),
+        )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
@@ -195,17 +202,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
 
     def all(self):
         return bool(self.min(dtype=np.bool_))
@@ -271,6 +267,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             udf=udf, column=self, out_dtype=out_dtype
         )
         return self.replace(data=out, dtype=out_dtype)
+
+    def applymap_ptx(self, udf_ptx, np_dtype):
+        return cpp_unaryops.column_applymap(self, udf_ptx, np_dtype)
 
     def default_na_value(self):
         """Returns the default NA value for this column
@@ -403,11 +402,17 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
         masked = lhs.has_null_mask or rhs.has_null_mask
         row_count = len(lhs)
 
+    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+
     out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
-    out = out.replace(null_count=null_count)
+    if is_op_comparison:
+        out.fillna(op == "ne", inplace=True)
+    else:
+        out = out.replace(null_count=null_count)
+
     result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     nvtx_range_pop()
     return result
