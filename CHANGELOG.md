@@ -70,7 +70,7 @@
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2128 Add offset param to host buffer readers in java API.
-- PR #2145 Work around binops validity checks for java
+- PR #2145 Work around binops validity checks for java 
 - PR #2146 Work around unary_math validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
@@ -108,6 +108,7 @@
 - PR #2401 Fix to a scalar datetime(of type Days) issue
 - PR #2386 Correctly allocate output valids in groupby
 - PR #2411 Fixed failures on binary op on single element string column
+- PR #2422 Fix Pandas logical binary operation incompatibilites
 
 
 # cuDF 0.8.0 (27 June 2019)
