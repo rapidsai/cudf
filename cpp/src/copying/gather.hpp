@@ -60,12 +60,13 @@ namespace detail {
  * `gather_map`
  * @param merge_nvstring_category If set to true and both the source column and its
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
- * `nvstring_category` objects of these will be merged before gather is performed. 
+ * `nvstring_category` objects of these will be synchronizeded before gather is 
+ * performed. 
  * @return gdf_error
  *---------------------------------------------------------------------------**/
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table, bool check_bounds = false, 
-                 bool merge_nvstring_category = false);
+                 bool sync_nvstring_category = false);
 
 }  // namespace detail
 }  // namespace cudf
