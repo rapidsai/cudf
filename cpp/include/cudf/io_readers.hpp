@@ -285,6 +285,7 @@ namespace orc {
 struct reader_options {
   std::vector<std::string> columns;
   bool use_index = true;
+  bool use_np_dtypes = true;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -294,9 +295,10 @@ struct reader_options {
    *
    * @param[in] columns List of columns to read. If empty, all columns are read
    * @param[in] use_index_lookup Whether to use row index for faster scanning
+   * @param[in] np_compat Whether to use numpy-compatible dtypes
    *---------------------------------------------------------------------------**/
-  reader_options(std::vector<std::string> cols, bool use_index_lookup)
-      : columns(std::move(cols)), use_index(use_index_lookup) {}
+  reader_options(std::vector<std::string> cols, bool use_index_lookup, bool np_compat)
+      : columns(std::move(cols)), use_index(use_index_lookup), use_np_dtypes(np_compat) {}
 };
 
 /**---------------------------------------------------------------------------*
