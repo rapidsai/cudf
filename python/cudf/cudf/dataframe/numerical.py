@@ -267,6 +267,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         )
         return self.replace(data=out, dtype=out_dtype)
 
+    def applymap_ptx(self, udf_ptx, np_dtype):
+        return cpp_unaryops.column_applymap(self, udf_ptx, np_dtype)
+
     def default_na_value(self):
         """Returns the default NA value for this column
         """

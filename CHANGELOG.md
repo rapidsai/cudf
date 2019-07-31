@@ -4,6 +4,7 @@
 
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
+- PR #2097 Add GPU-accelerated AVRO reader
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
@@ -20,6 +21,7 @@
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
+- PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2396 Add support for `cudf.util.hash_cudf_object` & refactor `cudf.utils` to `cudf.util`
@@ -145,8 +147,9 @@
 - PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
-- PR #1652 Added `Series.where()` feature
-- PR #2074 Java Aggregates, logical ops, and better RMM support
+- PR #1652 Added `Series.where()` feature 
+- PR #2074 Java Aggregates, logical ops, and better RMM support 
+- PR #2140 Add a `cudf::transform` function
 
 ## Improvements
 
