@@ -23,7 +23,8 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.indexing import _IndexLocIndexer
-from cudf.util import cudautils, internalutil, ioutils
+from cudf.util import cudautils, ioutils
+from cudf.util.internalutil import normalize_index
 
 
 class Index(object):
@@ -392,7 +393,7 @@ class RangeIndex(Index):
                 return index_from_range(start, stop, step)
 
         elif isinstance(index, int):
-            index = internalutil.normalize_index(index, len(self))
+            index = normalize_index(index, len(self))
             index += self._start
             return index
         elif isinstance(index, (list, np.ndarray)):

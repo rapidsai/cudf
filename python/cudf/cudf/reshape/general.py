@@ -5,7 +5,8 @@ import pandas as pd
 
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
-from cudf.util import cudautils, internalutil
+from cudf.util import cudautils
+from cudf.util.internalutil import is_list_like
 
 
 def melt(
@@ -230,7 +231,7 @@ def get_dummies(
             "length of the columns being encoded ({len_required})."
         )
 
-        if internalutil.is_list_like(obj):
+        if is_list_like(obj):
             if len(obj) != len(columns):
                 err_msg = err_msg.format(
                     name=name, len_obj=len(obj), len_required=len(columns)

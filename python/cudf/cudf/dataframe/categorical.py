@@ -9,7 +9,8 @@ import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.util import cudautils, internalutil
+from cudf.util import cudautils
+from cudf.util.internalutil import scalar_broadcast_to
 
 
 class CategoricalAccessor(object):
@@ -211,7 +212,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return self.as_numerical.ordered_compare(cmpop, rhs.as_numerical)
 
     def normalize_binop_value(self, other):
-        ary = internalutil.scalar_broadcast_to(
+        ary = scalar_broadcast_to(
             self._encode(other), shape=len(self), dtype=self.data.dtype
         )
         col = self.replace(
