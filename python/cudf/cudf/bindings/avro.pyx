@@ -6,7 +6,7 @@
 # cython: language_level = 3
 
 from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.avro cimport reader as avro_reader
 from cudf.bindings.avro cimport reader_options as avro_reader_options
 from libc.stdlib cimport free
