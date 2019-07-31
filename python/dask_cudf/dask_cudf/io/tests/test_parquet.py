@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe.io.parquet.arrow import ArrowEngine
 from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key
 
@@ -33,55 +32,30 @@ def test_roundtrip_from_dask(tmpdir):
         key=natural_sort_key,
     )
 
-    if ArrowEngine is None:
+    # Read list of parquet files
+    ddf2 = dask_cudf.read_parquet(files, gather_statistics=True)
+    assert_eq(ddf, ddf2)
 
-        # Read list of parquet files
-        ddf2 = dask_cudf.read_parquet(files)
-        assert_eq(ddf, ddf2, check_divisions=False)
+    # Specify columns=['x']
+    ddf2 = dask_cudf.read_parquet(files, columns=["x"], gather_statistics=True)
+    assert_eq(ddf[["x"]], ddf2)
 
-        # Specify columns=['x']
-        ddf2 = dask_cudf.read_parquet(files, columns=["x"])
-        assert_eq(ddf[["x"]], ddf2, check_divisions=False)
+    # Specify columns='y'
+    ddf2 = dask_cudf.read_parquet(files, columns="y", gather_statistics=True)
+    assert_eq(ddf[["y"]], ddf2)
 
-        # Specify columns='y'
-        ddf2 = dask_cudf.read_parquet(files, columns="y")
-        assert_eq(ddf[["y"]], ddf2, check_divisions=False)
+    # Now include metadata; gather_statistics is True by default
+    # Read list of parquet files
+    ddf2 = dask_cudf.read_parquet(tmpdir)
+    assert_eq(ddf, ddf2)
 
-        # Read parquet-dataset directory
-        # dask_cudf.read_parquet will ignore *_metadata files
-        ddf2 = dask_cudf.read_parquet(os.path.join(tmpdir, "*"))
-        assert_eq(ddf, ddf2, check_divisions=False)
+    # Specify columns=['x']
+    ddf2 = dask_cudf.read_parquet(tmpdir, columns=["x"])
+    assert_eq(ddf[["x"]], ddf2)
 
-    else:
-
-        # Read list of parquet files
-        ddf2 = dask_cudf.read_parquet(files, gather_statistics=True)
-        assert_eq(ddf, ddf2)
-
-        # Specify columns=['x']
-        ddf2 = dask_cudf.read_parquet(
-            files, columns=["x"], gather_statistics=True
-        )
-        assert_eq(ddf[["x"]], ddf2)
-
-        # Specify columns='y'
-        ddf2 = dask_cudf.read_parquet(
-            files, columns="y", gather_statistics=True
-        )
-        assert_eq(ddf[["y"]], ddf2)
-
-        # Now include metadata; gather_statistics is True by default
-        # Read list of parquet files
-        ddf2 = dask_cudf.read_parquet(tmpdir)
-        assert_eq(ddf, ddf2)
-
-        # Specify columns=['x']
-        ddf2 = dask_cudf.read_parquet(tmpdir, columns=["x"])
-        assert_eq(ddf[["x"]], ddf2)
-
-        # Specify columns='y'
-        ddf2 = dask_cudf.read_parquet(tmpdir, columns="y")
-        assert_eq(ddf[["y"]], ddf2)
+    # Specify columns='y'
+    ddf2 = dask_cudf.read_parquet(tmpdir, columns="y")
+    assert_eq(ddf[["y"]], ddf2)
 
 
 def test_roundtrip_from_pandas(tmpdir):
