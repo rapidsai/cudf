@@ -1617,6 +1617,11 @@ class DataFrame(object):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
+        if hasattr(cats, "to_pandas"):
+            cats = cats.to_pandas()
+        else:
+            cats = pd.Series(cats)
+
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
