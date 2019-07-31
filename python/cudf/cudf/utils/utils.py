@@ -6,9 +6,10 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import njit
-from cudf.utils.dtypes import is_categorical_dtype
 
 from librmm_cffi import librmm as rmm
+
+from cudf.utils.dtypes import is_categorical_dtype
 
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8

@@ -1,7 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-import pandas as pd
 
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn

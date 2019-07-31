@@ -28,8 +28,9 @@ from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.window import Rolling
 from cudf.utils.dtypes import is_categorical_dtype
+from cudf.window import Rolling
+
 
 class Series(object):
     """
