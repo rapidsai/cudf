@@ -29,7 +29,7 @@ from cudf.settings import NOTSET, settings
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.window import Rolling
-
+from cudf.utils.dtypes import is_categorical_dtype
 
 class Series(object):
     """
@@ -123,7 +123,7 @@ class Series(object):
     def values(self):
         if self.dtype == np.dtype("object"):
             return self.data.to_host()
-        elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+        elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
             return self.data.mem.copy_to_host()
@@ -503,7 +503,7 @@ class Series(object):
         else:
             output += "\nName: {}, dtype: {}".format(self.name, str_dtype)
 
-        if pd.api.types.is_categorical_dtype(self.dtype):
+        if is_categorical_dtype(self.dtype):
             categories = self.cat.categories
             desc = "({}, {})".format(len(categories), categories.dtype.name)
             output += "\nCategories {}: {}".format(desc, self.cat.to_string())
@@ -1816,7 +1816,7 @@ class Series(object):
             return Series(cudautils.zeros(len(self), dtype="bool"))
 
         # If categorical, combine categories first
-        if pd.api.types.is_categorical_dtype(lhs):
+        if is_categorical_dtype(lhs):
             lhs_cats = lhs.cat.categories.as_column()
             rhs_cats = rhs.cat.categories.as_column()
             if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):

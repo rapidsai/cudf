@@ -39,6 +39,7 @@ from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -444,7 +445,7 @@ class DataFrame(object):
         columns = [
             c
             for c, dt in self.dtypes.items()
-            if dt != object and not pd.api.types.is_categorical_dtype(dt)
+            if dt != object and not is_categorical_dtype(dt)
         ]
         return self[columns]
 
@@ -1990,7 +1991,7 @@ class DataFrame(object):
         categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
-            if pd.api.types.is_categorical_dtype(col):
+            if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
@@ -2189,7 +2190,7 @@ class DataFrame(object):
 
         cat_join = False
 
-        if pd.api.types.is_categorical_dtype(lhs[idx_col_name]):
+        if is_categorical_dtype(lhs[idx_col_name]):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
@@ -3347,14 +3348,12 @@ class DataFrame(object):
                 )
             )
 
-        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
-
         # include all subtypes
         include_subtypes = set()
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if i_dtype is cat_type:
+                if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
                 elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
@@ -3364,7 +3363,7 @@ class DataFrame(object):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if e_dtype is cat_type:
+                if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
                 elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)

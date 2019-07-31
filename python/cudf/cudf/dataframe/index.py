@@ -24,6 +24,7 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.indexing import _IndexLocIndexer
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 class Index(object):
@@ -705,8 +706,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(values, CategoricalColumn):
             values = values
         elif isinstance(values, pd.Series) and (
-            pd.api.types.pandas_dtype(values.dtype).type
-            is pd.core.dtypes.dtypes.CategoricalDtypeType
+            is_categorical_dtype(values.dtype)
         ):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),

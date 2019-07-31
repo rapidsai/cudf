@@ -6,6 +6,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from numba import njit
+from cudf.utils.dtypes import is_categorical_dtype
 
 from librmm_cffi import librmm as rmm
 
@@ -150,10 +151,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
             _get_dtype_from_object as infer_dtype_from_object,
         )
 
-    if (
-        pd.api.types.pandas_dtype(dtype).type
-        is pd.core.dtypes.dtypes.CategoricalDtypeType
-    ):
+    if is_categorical_dtype(dtype):
         pass
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64

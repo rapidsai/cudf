@@ -16,6 +16,7 @@ from librmm_cffi import librmm as rmm
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 
 
@@ -121,10 +122,7 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
-    if (
-        pd.api.types.pandas_dtype(dtype).type
-        is pd.core.dtypes.dtypes.CategoricalDtypeType
-    ):
+    if is_categorical_dtype(dtype):
         categories = column.cat().categories
         dtype = column.data.dtype
     return column_empty(row_count, dtype, masked, categories=categories)
@@ -139,9 +137,7 @@ def column_empty(row_count, dtype, masked, categories=None):
     else:
         mask = None
 
-    if (categories is None) and (
-        dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType
-    ):
+    if categories is None and is_categorical_dtype(dtype):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
@@ -229,7 +225,7 @@ def build_column(
     from cudf.dataframe import numerical, categorical, datetime, string
 
     dtype = pd.api.types.pandas_dtype(dtype)
-    if dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+    if is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(
             data=buffer,
             dtype="categorical",
@@ -383,7 +379,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     arbitrary.type.to_pandas_dtype()
                 )
 
-            if new_dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
@@ -477,7 +473,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if pd.api.types.is_categorical_dtype(arbitrary):
+        if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
@@ -518,10 +514,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             try:
                 if dtype is not None:
                     dtype = pd.api.types.pandas_dtype(dtype)
-                    if (
-                        dtype.type
-                        is pd.core.dtypes.dtypes.CategoricalDtypeType
-                    ):
+                    if is_categorical_dtype(dtype):
                         raise TypeError
                     else:
                         np_type = np.dtype(dtype).type
@@ -541,7 +534,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         dtype=dtype,
                         nan_as_null=nan_as_null,
                     )
-                elif pd.api.types.is_categorical_dtype(dtype):
+                elif is_categorical_dtype(dtype):
                     data = as_column(
                         pd.Series(arbitrary, dtype="category"),
                         nan_as_null=nan_as_null,

@@ -19,6 +19,7 @@ from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 class Column(object):
@@ -52,7 +53,7 @@ class Column(object):
             dtype = pd.api.types.pandas_dtype(dtype)
             if dtype.type in (np.object_, np.str_):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
-            elif dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
                     data=Column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
