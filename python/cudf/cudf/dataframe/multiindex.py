@@ -280,7 +280,7 @@ class MultiIndex(Index):
         if isinstance(index_key, slice):
             slice_access = True
         out_index = DataFrame()
-        # Select the last n-k columns where n is the number of _source_data 
+        # Select the last n-k columns where n is the number of _source_data
         # columns and k is the length of the indexing tuple
         size = 0
         if not isinstance(index_key, (numbers.Number, slice)):
@@ -306,7 +306,7 @@ class MultiIndex(Index):
             )
             result.name = tuple(series_name)
         elif len(result) == 0 and slice_access is False:
-            # Pandas returns an empty Series with a tuple as name 
+            # Pandas returns an empty Series with a tuple as name
             # the one expected result column
             series_name = []
             for idx, code in enumerate(index._source_data.columns):
