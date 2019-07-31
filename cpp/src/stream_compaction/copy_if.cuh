@@ -20,7 +20,7 @@
 #include <cudf/stream_compaction.hpp>
 
 #include <bitmask/legacy/bit_mask.cuh>
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 
 #include <utilities/device_atomics.cuh>
 #include <utilities/cudf_utils.h>

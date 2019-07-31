@@ -15,7 +15,7 @@
  */
 
 #include "copy_if.cuh"
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
  
 namespace {
 
