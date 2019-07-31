@@ -26,7 +26,7 @@ from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.util import cudautils, internalutil, ioutils
+from cudf.util import cudautils, utils, ioutils
 from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
 
@@ -526,7 +526,7 @@ class Series(object):
             return other._apply_op(self, fn)
 
         nvtx_range_push("CUDF_BINARY_OP", "orange")
-        result_name = internalutil.get_result_name(self, other)
+        result_name = utils.get_result_name(self, other)
         lhs, rhs = _align_indices(self, other)
         rhs = self._normalize_binop_value(rhs)
         outcol = lhs._column.binary_operator(fn, rhs, reflect=reflect)
@@ -876,7 +876,7 @@ class Series(object):
 
     def _unordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_UNORDERED_COMP", "orange")
-        result_name = internalutil.get_result_name(self, other)
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.unordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol, name=result_name)
@@ -885,7 +885,7 @@ class Series(object):
 
     def _ordered_compare(self, other, cmpops):
         nvtx_range_push("CUDF_ORDERED_COMP", "orange")
-        result_name = internalutil.get_result_name(self, other)
+        result_name = utils.get_result_name(self, other)
         other = self._normalize_binop_value(other)
         outcol = self._column.ordered_compare(cmpops, other)
         result = self._copy_construct(data=outcol, name=result_name)
@@ -1191,7 +1191,7 @@ class Series(object):
                 if np.dtype(type(other)).kind in "f" and typ.kind in "i":
                     typ = np.int64 if other == int(other) else np.float64
 
-                new_value = internalutil.scalar_broadcast_to(
+                new_value = utils.scalar_broadcast_to(
                     other, (len(to_replace),), np.dtype(typ)
                 )
         else:
@@ -1532,7 +1532,7 @@ class Series(object):
                 if all_nan:
                     replacement = [replacement] * len(to_replace)
                 else:
-                    replacement = internalutil.scalar_broadcast_to(
+                    replacement = utils.scalar_broadcast_to(
                         replacement,
                         (len(to_replace),),
                         np.dtype(type(replacement)),
@@ -1619,7 +1619,7 @@ class Series(object):
         from cudf import DataFrame
 
         if dtype is None:
-            dtype = internalutil.min_scalar_type(len(cats), 32)
+            dtype = utils.min_scalar_type(len(cats), 32)
 
         cats = Series(cats).astype(self.dtype)
         order = Series(cudautils.arange(len(self)))
@@ -1995,7 +1995,7 @@ class Series(object):
 
         """
 
-        if isinstance(q, Number) or internalutil.is_list_like(q):
+        if isinstance(q, Number) or utils.is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
                 raise ValueError(

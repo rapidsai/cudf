@@ -6,7 +6,7 @@ import pandas as pd
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.util import cudautils
-from cudf.util.internalutil import is_list_like
+from cudf.util.utils import is_list_like
 
 
 def melt(

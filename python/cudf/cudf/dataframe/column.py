@@ -18,7 +18,7 @@ from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
-from cudf.util import cudautils, internalutil, ioutils
+from cudf.util import cudautils, utils, ioutils
 
 
 class Column(object):
@@ -103,7 +103,7 @@ class Column(object):
         # Allocate output mask only if there's nulls in the input objects
         mask = None
         if nulls:
-            mask = Buffer(internalutil.make_mask(newsize))
+            mask = Buffer(utils.make_mask(newsize))
 
         col = head.replace(data=data, mask=mask, null_count=nulls)
 
@@ -162,7 +162,7 @@ class Column(object):
             null_count = 0
         else:
             # check that mask length is sufficient
-            assert mask.size * internalutil.mask_bitsize >= len(self)
+            assert mask.size * utils.mask_bitsize >= len(self)
 
         self._update_null_count(null_count)
 
@@ -296,10 +296,10 @@ class Column(object):
         If ``all_valid`` is False, the new mask is set to all null.
         """
         nelem = len(self)
-        mask_sz = internalutil.calc_chunk_size(
-            nelem, internalutil.mask_bitsize
+        mask_sz = utils.calc_chunk_size(
+            nelem, utils.mask_bitsize
         )
-        mask = rmm.device_array(mask_sz, dtype=internalutil.mask_dtype)
+        mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
             cudautils.fill_value(mask, 0xFF if all_valid else 0)
         return self.set_mask(mask=mask, null_count=0 if all_valid else nelem)

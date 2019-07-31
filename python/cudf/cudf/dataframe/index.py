@@ -24,7 +24,7 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.indexing import _IndexLocIndexer
 from cudf.util import cudautils, ioutils
-from cudf.util.internalutil import normalize_index
+from cudf.util.utils import normalize_index
 
 
 class Index(object):

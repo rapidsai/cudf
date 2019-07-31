@@ -3,7 +3,7 @@ import pandas as pd
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
-from cudf.util.internalutil import is_single_value
+from cudf.util.utils import is_single_value
 
 
 class _SeriesLocIndexer(object):

@@ -21,7 +21,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.util import cudautils, internalutil
+from cudf.util import cudautils, utils
 
 
 class NumericalColumn(columnops.TypedColumnBase):
@@ -101,12 +101,12 @@ class NumericalColumn(columnops.TypedColumnBase):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
             if other_dtype.kind in "u":
-                other_dtype = internalutil.min_signed_type(other)
+                other_dtype = utils.min_signed_type(other)
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
                 return other
             else:
-                ary = internalutil.scalar_broadcast_to(
+                ary = utils.scalar_broadcast_to(
                     other, shape=len(self), dtype=other_dtype
                 )
                 return self.replace(data=Buffer(ary), dtype=ary.dtype)

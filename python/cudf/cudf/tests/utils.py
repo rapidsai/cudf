@@ -3,7 +3,7 @@ import pandas as pd
 import pandas.util.testing as tm
 
 from cudf import Series
-from cudf.util import internalutil
+from cudf.util import utils
 
 
 def random_bitmask(size):
@@ -13,9 +13,9 @@ def random_bitmask(size):
     size : int
         number of bits
     """
-    sz = internalutil.calc_chunk_size(size, internalutil.mask_bitsize)
+    sz = utils.calc_chunk_size(size, utils.mask_bitsize)
     data = np.random.randint(0, 255 + 1, size=sz)
-    return data.astype(internalutil.mask_dtype)
+    return data.astype(utils.mask_dtype)
 
 
 def expand_bits_to_bytes(arr):
@@ -103,4 +103,4 @@ def gen_rand_series(dtype, size, **kwargs):
     if kwargs.get("has_nulls", False):
         return Series(values)
 
-    return Series.from_masked_array(values, internalutil.random_bitmask(size))
+    return Series.from_masked_array(values, utils.random_bitmask(size))

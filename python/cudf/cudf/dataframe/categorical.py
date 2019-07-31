@@ -10,7 +10,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.util import cudautils
-from cudf.util.internalutil import scalar_broadcast_to
+from cudf.util.utils import scalar_broadcast_to
 
 
 class CategoricalAccessor(object):

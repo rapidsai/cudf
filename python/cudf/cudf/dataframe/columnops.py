@@ -17,7 +17,7 @@ import cudf
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.util import cudautils
-from cudf.util.internalutil import (
+from cudf.util.utils import (
     buffers_from_pyarrow,
     mask_get,
     min_scalar_type,

@@ -4,7 +4,7 @@ from librmm_cffi import librmm as rmm
 
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.util import cudautils
-from cudf.util.internalutil import normalize_index
+from cudf.util.utils import normalize_index
 
 
 class Buffer(object):

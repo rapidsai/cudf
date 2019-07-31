@@ -17,7 +17,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.util import cudautils, internalutil
+from cudf.util import cudautils, utils
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,
@@ -140,7 +140,7 @@ class StringMethods(object):
             """
             assert others.dtype == np.dtype("object")
             others = others.data
-        elif internalutil.is_list_like(others) and others:
+        elif utils.is_list_like(others) and others:
             """
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
@@ -156,7 +156,7 @@ class StringMethods(object):
             """
             first = others[0]
 
-            if internalutil.is_list_like(first) or isinstance(
+            if utils.is_list_like(first) or isinstance(
                 first, (Series, Index, pd.Series, pd.Index)
             ):
                 """
@@ -185,7 +185,7 @@ class StringMethods(object):
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
-            elif not internalutil.is_list_like(first):
+            elif not utils.is_list_like(first):
                 """
                 Picking first element and checking if it really adheres to
                 non-list like conditions.
@@ -444,8 +444,8 @@ class StringColumn(columnops.TypedColumnBase):
         self._null_count = null_count
         self._mask = None
         if self._null_count > 0:
-            mask_size = internalutil.calc_chunk_size(
-                len(self.data), internalutil.mask_bitsize
+            mask_size = utils.calc_chunk_size(
+                len(self.data), utils.mask_bitsize
             )
             out_mask_arr = rmm.device_array(mask_size, dtype="int8")
             out_mask_ptr = get_ctype_ptr(out_mask_arr)
@@ -556,8 +556,8 @@ class StringColumn(columnops.TypedColumnBase):
         out_col = columnops.as_column(out_arr)
 
         if self.null_count > 0:
-            mask_size = internalutil.calc_chunk_size(
-                len(self.data), internalutil.mask_bitsize
+            mask_size = utils.calc_chunk_size(
+                len(self.data), utils.mask_bitsize
             )
             out_mask_arr = rmm.device_array(mask_size, dtype="int8")
             out_mask_ptr = get_ctype_ptr(out_mask_arr)
@@ -577,8 +577,8 @@ class StringColumn(columnops.TypedColumnBase):
         sbuf = np.empty(self._data.byte_count(), dtype="int8")
         obuf = np.empty(len(self._data) + 1, dtype="int32")
 
-        mask_size = internalutil.calc_chunk_size(
-            len(self._data), internalutil.mask_bitsize
+        mask_size = utils.calc_chunk_size(
+            len(self._data), utils.mask_bitsize
         )
         nbuf = np.empty(mask_size, dtype="int8")
 
@@ -624,8 +624,8 @@ class StringColumn(columnops.TypedColumnBase):
 
         sbuf = rmm.device_array(self._data.byte_count(), dtype="int8")
         obuf = rmm.device_array(len(self._data) + 1, dtype="int32")
-        mask_size = internalutil.calc_chunk_size(
-            len(self._data), internalutil.mask_bitsize
+        mask_size = utils.calc_chunk_size(
+            len(self._data), utils.mask_bitsize
         )
         nbuf = rmm.device_array(mask_size, dtype="int8")
         self.data.to_offsets(
@@ -771,7 +771,7 @@ class StringColumn(columnops.TypedColumnBase):
         if isinstance(other, column.Column):
             return other.astype(self.dtype)
         elif isinstance(other, str) or other is None:
-            col = internalutil.scalar_broadcast_to(
+            col = utils.scalar_broadcast_to(
                 other, shape=len(self), dtype="object"
             )
             return self.replace(data=col.data)

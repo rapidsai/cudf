@@ -1,7 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 from cudf.bindings.avro import cpp_read_avro
-from cudf.utils import ioutils
+from cudf.util import ioutils
 
 
 @ioutils.doc_read_avro()

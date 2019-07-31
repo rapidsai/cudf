@@ -15,7 +15,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.util.internalutil import is_single_value, scalar_broadcast_to
+from cudf.util.utils import is_single_value, scalar_broadcast_to
 
 
 class DatetimeColumn(columnops.TypedColumnBase):

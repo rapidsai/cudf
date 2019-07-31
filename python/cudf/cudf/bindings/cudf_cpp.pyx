@@ -16,7 +16,7 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf.util import cudautils
-from cudf.util.internalutil import calc_chunk_size, mask_dtype, mask_bitsize
+from cudf.util.utils import calc_chunk_size, mask_dtype, mask_bitsize
 import cudf.dataframe.columnops
 from librmm_cffi import librmm as rmm
 import nvstrings

@@ -8,7 +8,7 @@ from numba import cuda, int32, numpy_support
 import nvstrings
 from librmm_cffi import librmm as rmm
 
-from cudf.util.internalutil import (
+from cudf.util.utils import (
     check_equals_float,
     check_equals_int,
     make_mask,
