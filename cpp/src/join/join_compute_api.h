@@ -21,7 +21,7 @@
 
 #include "join_kernels.cuh"
 
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
 #include "full_join.cuh"

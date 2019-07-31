@@ -143,18 +143,60 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, name_series=None, index=None):
+    def __init__(self, data=None, index=None, columns=None):
+        keys = index
         if index is None:
             index = RangeIndex(start=0)
         self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
-        if name_series is not None:
-            if isinstance(name_series, dict):
-                name_series = name_series.items()
-            for k, series in name_series:
-                self.add_column(k, series, forceindex=index is not None)
+
+        if data is not None:
+            if isinstance(data, dict):
+                data = data.items()
+            elif utils.is_list_like(data) and len(data) > 0:
+                if not isinstance(data[0], (list, tuple)):
+                    # a nested list is something pandas supports and
+                    # we don't support list-like values in a record yet
+                    self._add_rows(data, index, keys)
+                    return
+            for col_name, series in data:
+                self.add_column(col_name, series, forceindex=index is not None)
+
+        self._add_empty_columns(columns, index)
+
+    def _add_rows(self, data, index, keys):
+        if keys is None:
+            data = {i: element for i, element in enumerate(data)}.items()
+        else:
+            data = dict(zip(keys, data)).items()
+            self._index = as_index(RangeIndex(start=0))
+            self._size = len(RangeIndex(start=0))
+        for col_name, series in data:
+            self.add_column(col_name, series, forceindex=index is not None)
+        transposed = self.T
+        self._cols = OrderedDict()
+        self._size = transposed._size
+        self._index = as_index(transposed.index)
+        for col_name in transposed.columns:
+            self.add_column(
+                col_name,
+                transposed._cols[col_name],
+                forceindex=index is not None,
+            )
+
+    def _add_empty_columns(self, columns, index):
+        if columns is not None:
+            for col_name in columns:
+                if col_name not in self._cols:
+                    self.add_column(
+                        col_name,
+                        columnops.column_empty(
+                            self._size, dtype="object", masked=True
+                        ),
+                        forceindex=index is not None,
+                    )
 
     def serialize(self, serialize):
         header = {}
@@ -2853,6 +2895,7 @@ class DataFrame(object):
         types = []
         index_names = []
         index_columns = []
+        index_descriptors = []
 
         for name, column in self._cols.items():
             names.append(name)
@@ -2861,21 +2904,38 @@ class DataFrame(object):
             types.append(arrow_col.type)
 
         index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
-        index_names.append(index_name)
         index_columns.append(self.index)
+
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
         # conversions
-        index_arrow = self.index.to_arrow()
-        types.append(index_arrow.type)
         if preserve_index:
-            arrays.append(index_arrow)
-            names.append(index_name)
+            if isinstance(self.index, cudf.dataframe.index.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                index_arrow = self.index.to_arrow()
+                descr = index_name
+                types.append(index_arrow.type)
+                arrays.append(index_arrow)
+                names.append(index_name)
+                index_names.append(index_name)
+            index_descriptors.append(descr)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
         metadata = pa.pandas_compat.construct_metadata(
-            self, names, index_columns, index_names, preserve_index, types
+            self,
+            names,
+            index_columns,
+            index_descriptors,
+            preserve_index,
+            types,
         )
 
         return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
@@ -2903,22 +2963,20 @@ class DataFrame(object):
         >>> cudf.DataFrame.from_arrow(table)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
-        import json
 
         if not isinstance(table, pa.Table):
             raise TypeError("not a pyarrow.Table")
 
         index_col = None
         dtypes = None
-        if isinstance(table.schema.metadata, dict):
-            if b"pandas" in table.schema.metadata:
-                metadata = json.loads(table.schema.metadata[b"pandas"])
-                index_col = metadata["index_columns"]
-                dtypes = {
-                    col["field_name"]: col["pandas_type"]
-                    for col in metadata["columns"]
-                    if "field_name" in col
-                }
+        if isinstance(table.schema.pandas_metadata, dict):
+            metadata = table.schema.pandas_metadata
+            index_col = metadata["index_columns"]
+            dtypes = {
+                col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
 
         df = cls()
         for col in table.columns:
@@ -2933,11 +2991,21 @@ class DataFrame(object):
 
             df[col.name] = columnops.as_column(col.data, dtype=dtype)
         if index_col:
-            df = df.set_index(index_col[0])
-            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-                df.index.name, df.index.name
-            )
-            df.index.name = new_index_name
+            if isinstance(index_col[0], dict):
+                assert index_col[0]["kind"] == "range"
+                df = df.set_index(
+                    RangeIndex(
+                        index_col[0]["start"],
+                        index_col[0]["stop"],
+                        name=index_col[0]["name"],
+                    )
+                )
+            else:
+                df = df.set_index(index_col[0])
+                new_index_name = pa.pandas_compat._backwards_compatible_index_name(  # noqa: E501
+                    df.index.name, df.index.name
+                )
+                df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):
