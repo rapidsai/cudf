@@ -5,11 +5,14 @@ import pandas as pd
 import pytest
 
 from cudf.dataframe import DataFrame, Series
+from cudf.dataframe.index import as_index
 from cudf.tests.utils import assert_eq
 
 
 def test_categorical_basic():
     cat = pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+    cudf_cat = as_index(cat)
+
     pdsr = pd.Series(cat)
     sr = Series(cat)
     np.testing.assert_array_equal(cat.codes, sr.to_array())
@@ -33,6 +36,7 @@ def test_categorical_basic():
 4 a
 """
     assert all(x == y for x, y in zip(string.split(), expect_str.split()))
+    assert_eq(cat.codes, cudf_cat.codes.to_array())
 
 
 def test_categorical_integer():
@@ -277,36 +281,6 @@ def test_categorical_unique(num_elements):
 
     # verify
     np.testing.assert_array_equal(pdf_unique_sorted, gdf_unique_sorted)
-
-
-@pytest.mark.parametrize("num_elements", [10, 100, 1000])
-def test_categorical_value_counts(num_elements):
-    from string import ascii_letters, digits
-
-    # create categorical series
-    np.random.seed(12)
-    pd_cat = pd.Categorical(
-        pd.Series(
-            np.random.choice(list(ascii_letters + digits), num_elements),
-            dtype="category",
-        )
-    )
-
-    # gdf
-    gdf = DataFrame()
-    gdf["a"] = Series.from_categorical(pd_cat)
-    gdf_value_counts = gdf["a"].value_counts()
-
-    # pandas
-    pdf = pd.DataFrame()
-    pdf["a"] = pd_cat
-    pdf_value_counts = pdf["a"].value_counts()
-
-    # verify
-    pandas_dict = pdf_value_counts.to_dict()
-    gdf_dict = gdf_value_counts.to_pandas().to_dict()
-
-    assert pandas_dict == gdf_dict
 
 
 @pytest.mark.parametrize("nelem", [20, 50, 100])

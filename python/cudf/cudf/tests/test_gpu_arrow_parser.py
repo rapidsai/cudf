@@ -129,9 +129,16 @@ def make_gpu_parse_arrow_cats_batch():
     reason="need compatible pyarrow to generate test data",
 )
 def test_gpu_parse_arrow_cats():
+
     batch = make_gpu_parse_arrow_cats_batch()
+
+    stream = pa.BufferOutputStream()
+    writer = pa.RecordBatchStreamWriter(stream, batch.schema)
+    writer.write_batch(batch)
+    writer.close()
+
     schema_bytes = batch.schema.serialize().to_pybytes()
-    recordbatches_bytes = batch.serialize().to_pybytes()
+    recordbatches_bytes = stream.getvalue().to_pybytes()[len(schema_bytes) :]
 
     schema = np.ndarray(
         shape=len(schema_bytes), dtype=np.byte, buffer=bytearray(schema_bytes)

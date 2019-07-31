@@ -1,3 +1,4 @@
+import numba
 import pandas as pd
 
 import cudf
@@ -204,12 +205,19 @@ class Rolling:
             if self.min_periods is None:
                 min_periods = window
         else:
+            if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
+                # window is a device_array of window sizes
+                self.window = window
+                self.min_periods = min_periods
+                return
+
             if not isinstance(
                 self.obj.index, cudf.dataframe.index.DatetimeIndex
             ):
                 raise ValueError(
                     "window must be an integer for " "non datetime index"
                 )
+
             try:
                 window = pd.to_timedelta(window)
                 # to_timedelta will also convert np.arrays etc.,
@@ -220,11 +228,13 @@ class Rolling:
                 raise ValueError(
                     "window must be integer or " "convertible to a timedelta"
                 ) from e
+
             window = cudautils.window_sizes_from_offset(
                 self.obj.index.as_column().data.mem, window
             )
             if self.min_periods is None:
                 min_periods = 1
+
         self.window = window
         self.min_periods = min_periods
 

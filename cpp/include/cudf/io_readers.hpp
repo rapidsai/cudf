@@ -21,7 +21,7 @@
 #include <memory>
 
 #include "cudf.h"
-#include "table.hpp"
+#include <cudf/legacy/table.hpp>
 
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }

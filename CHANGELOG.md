@@ -18,7 +18,11 @@
 - PR #2105 Add google benchmark for hash-based join
 - PR #2293 Improve `compute_join_output_size` performance
 - PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
+- PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
+- PR #2356 Java column vector standard deviation support
+- PR #2415 Revamp `value_counts` to use groupby count series of any type
 
 ## Improvements
 
@@ -52,16 +56,23 @@
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
 - PR #2345 Restore removal of old groupby implementation
+- PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
 - PR #2376 Add inoperative axis= and win_type= arguments to Rolling()
+- PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
+- PR #2373 cudf.DataFrame enchancements & Series.values support
+- PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
+- PR #2406 Moved all existing `table` related files to a `legacy/` directory
+- PR #2350 Performance related changes to get_dummies
+- PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
 
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2128 Add offset param to host buffer readers in java API.
-- PR #2145 Work around binops validity checks for java
+- PR #2145 Work around binops validity checks for java 
 - PR #2146 Work around unary_math validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
@@ -79,15 +90,28 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
+- PR #2355 Handle float16 in binary operations
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2349 Fix issues with String filter in java API
 - PR #2323 Fix groupby on categoricals
 - PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2202 Fix issue with unary ops mishandling empty input
 - PR #2326 Fix for bug in DLPack when reading multiple columns
 - PR #2324 Fix cudf Docker build
 - PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
 - PR #2235 Fix get_dummies to be compatible with dask
 - PR #2332 Zero initialize gdf_dtype_extra_info
 - PR #2355 Handle float16 in binary operations
+- PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
+- PR #2364 Fix quantile api and other trivial issues around it
+- PR #2361 Fixed issue with `codes` of CategoricalIndex
+- PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
+- PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
+- PR #2402 Fixed bug in valid mask computation in cudf::copy_if (apply_boolean_mask)
+- PR #2401 Fix to a scalar datetime(of type Days) issue
+- PR #2386 Correctly allocate output valids in groupby
+- PR #2411 Fixed failures on binary op on single element string column
+- PR #2422 Fix Pandas logical binary operation incompatibilites
 
 
 # cuDF 0.8.0 (27 June 2019)

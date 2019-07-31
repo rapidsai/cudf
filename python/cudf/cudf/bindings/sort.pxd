@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     ctypedef struct _OpaqueSegmentedRadixsortPlan:
         pass
