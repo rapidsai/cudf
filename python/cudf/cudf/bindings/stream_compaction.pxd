@@ -9,7 +9,7 @@ from cudf.bindings.cudf_cpp cimport *
 
 from libcpp.vector cimport vector
 
-cdef extern from "stream_compaction.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
 
     # defined in cpp/include/stream_compaction.hpp
     ctypedef enum duplicate_keep_option:

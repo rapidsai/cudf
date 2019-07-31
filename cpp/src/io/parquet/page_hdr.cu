@@ -133,6 +133,9 @@ __device__ void skip_struct_field(byte_stream_s *bs, int t)
         case ST_FLD_I64:
             get_u32(bs);
             break;
+        case ST_FLD_BYTE:
+            skip_bytes(bs, 1);
+            break;
         case ST_FLD_DOUBLE:
             skip_bytes(bs, 8);
             break;

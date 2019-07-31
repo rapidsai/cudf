@@ -21,7 +21,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <random>
 
 template <typename T>
