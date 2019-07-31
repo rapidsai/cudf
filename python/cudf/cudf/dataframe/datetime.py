@@ -15,8 +15,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.numerical import NumericalColumn
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 from cudf.utils.utils import is_single_value
 
 # nanoseconds per time_unit
@@ -144,56 +143,52 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     @property
     def as_numerical(self):
-        from cudf.dataframe.numerical import NumericalColumn
+        from cudf.dataframe import numerical
+        import cudf.bindings.typecast as typecast
 
         return self.view(
-            NumericalColumn,
-            dtype=np.dtype(np.int64),
-            data=self.data.astype(np.int64),
+            numerical.NumericalColumn,
+            dtype="int64",
+            data=typecast.apply_cast(self, dtype=np.int64).data,
         )
 
-    def astype(self, dtype):
+    def as_datetime_column(self, dtype, **kwargs):
+        import cudf.bindings.typecast as typecast
 
-        if self.dtype == dtype:
-            return self
+        return typecast.apply_cast(self, dtype=np.dtype(dtype).type)
 
-        if dtype == np.dtype("object") or np.issubdtype(
-            dtype, np.dtype("U").type
-        ):
-            from cudf.dataframe import string
+    def as_numerical_column(self, dtype, **kwargs):
+        import cudf.bindings.typecast as typecast
 
-            if len(self) > 0:
-                dev_array = self.data.mem
-                dev_ptr = get_ctype_ptr(dev_array)
-                null_ptr = None
-                if self.mask is not None:
-                    null_ptr = get_ctype_ptr(self.mask.mem)
-                kwargs = {
+        return typecast.apply_cast(
+            self.as_numerical, dtype=np.dtype(dtype).type
+        )
+
+    def as_string_column(self, dtype, **kwargs):
+        from cudf.dataframe import string
+
+        if len(self) > 0:
+            dev_array = self.data.mem
+            dev_ptr = get_ctype_ptr(dev_array)
+            null_ptr = None
+            if self.mask is not None:
+                null_ptr = get_ctype_ptr(self.mask.mem)
+            kwargs.update(
+                {
                     "count": len(self),
                     "nulls": null_ptr,
                     "bdevmem": True,
                     "units": self.time_unit,
                 }
-                data = string._numeric_to_str_typecast_functions[
-                    np.dtype(self.dtype)
-                ](dev_ptr, **kwargs)
-            else:
-                data = []
+            )
+            data = string._numeric_to_str_typecast_functions[
+                np.dtype(self.dtype)
+            ](dev_ptr, **kwargs)
 
-            return string.StringColumn(data=data)
+        else:
+            data = []
 
-        # if converting from one datetime resolution to another,
-        # multiply by the scale factor between the time units and clamp
-        if np.issubdtype(dtype, np.datetime64):
-            from cudf import Series
-
-            numeric = Series(self.as_numerical)
-            src_d = np.timedelta64(1, np.datetime_data(self.dtype)[0])
-            dst_d = np.timedelta64(1, np.datetime_data(dtype)[0])
-            datetimes = (numeric * (src_d / dst_d)).astype(dtype)
-            return self.replace(data=datetimes.data, dtype=dtype)
-
-        return self.as_numerical.astype(dtype)
+        return string.StringColumn(data=data)
 
     def unordered_compare(self, cmpop, rhs):
         lhs, rhs = self, rhs
@@ -283,17 +278,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
 
     @property
     def is_unique(self):

@@ -352,7 +352,7 @@ cdef extern from "cudf/legacy/bitmask.hpp" nogil:
     ) except +
 
 
-cdef extern from "cudf/table.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
     cdef cppclass cudf_table "cudf::table":
 

@@ -112,33 +112,6 @@ def gpu_copy(inp, out):
         out[tid] = inp[tid]
 
 
-def astype(ary, dtype):
-
-    src_dtype = ary.dtype
-    dst_dtype = np.dtype(dtype)
-
-    if src_dtype == dst_dtype:
-        return ary
-
-    src_is_datetime = np.issubdtype(src_dtype, np.datetime64)
-    dst_is_datetime = np.issubdtype(dst_dtype, np.datetime64)
-
-    if src_is_datetime or dst_is_datetime:
-        # if converting to/from a datetime and to/from int64,
-        # it's safe to return a zero-copy view
-        if (src_dtype if dst_is_datetime else dst_dtype) == "int64":
-            return ary.view(dst_dtype)
-
-    if ary.size == 0:
-        return rmm.device_array(shape=ary.shape, dtype=dst_dtype)
-
-    out = rmm.device_array(shape=ary.shape, dtype=dst_dtype)
-    if out.size > 0:
-        configured = gpu_copy.forall(out.size)
-        configured(ary, out)
-    return out
-
-
 def copy_array(arr, out=None):
     if out is None:
         out = rmm.device_array_like(arr)
@@ -917,22 +890,6 @@ def find_segments(arr, segs=None, markers=None):
             markers, scanned, begins
         )
     return begins, markers
-
-
-@cuda.jit
-def gpu_value_counts(arr, counts, total_size):
-    i = cuda.grid(1)
-    if 0 <= i < arr.size - 1:
-        counts[i] = arr[i + 1] - arr[i]
-    elif i == arr.size - 1:
-        counts[i] = total_size - arr[i]
-
-
-def value_count(arr, total_size):
-    counts = rmm.device_array(shape=len(arr), dtype=np.intp)
-    if arr.size > 0:
-        gpu_value_counts.forall(arr.size)(arr, counts, total_size)
-    return counts
 
 
 @cuda.jit

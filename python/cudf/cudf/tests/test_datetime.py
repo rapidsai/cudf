@@ -335,33 +335,3 @@ def test_datetime_nunique(data, nulls):
     expected = psr.nunique()
     got = gsr.nunique()
     assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [],
-        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
-        pd.Series([None, None], dtype="datetime64[ns]"),
-    ],
-)
-@pytest.mark.parametrize("nulls", ["none", "some"])
-def test_datetime_value_counts(data, nulls):
-    psr = pd.Series(data)
-
-    if len(data) > 0:
-        if nulls == "one":
-            p = np.random.randint(0, len(data))
-            psr[p] = None
-        elif nulls == "some":
-            p = np.random.randint(0, len(data), 2)
-            psr[p] = None
-
-    gsr = cudf.from_pandas(psr)
-    expected = psr.value_counts()
-    got = gsr.value_counts()
-
-    pandas_dict = expected.to_dict()
-    gdf_dict = got.to_pandas().to_dict()
-
-    assert pandas_dict == gdf_dict
