@@ -23,6 +23,7 @@
 - PR #2049 Implemented merge functionality
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
+- PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 
