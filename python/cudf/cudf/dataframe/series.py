@@ -1823,8 +1823,8 @@ class Series(object):
             if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
                 # if the categories are the same dtype, we can combine them
                 cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
-                lhs = lhs.cat.set_categories(cats, is_unique=True).fillna(-1)
-                rhs = rhs.cat.set_categories(cats, is_unique=True).fillna(-1)
+                lhs = lhs.cat.set_categories(cats, is_unique=True)
+                rhs = rhs.cat.set_categories(cats, is_unique=True)
             else:
                 # If they're not the same dtype, short-circuit if the test
                 # list doesn't have any nulls. If it does have nulls, make
