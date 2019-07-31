@@ -500,12 +500,18 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
     gdf_series_a = utils.gen_rand_series(
         dtype, count, has_nulls=has_nulls, stride=10000
     )
-    gdf_series_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
+    gdf_series_b = utils.gen_rand_series(
+        dtype, count, has_nulls=has_nulls, stride=100
+    )
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_result = getattr(gdf_series_a, func)(gdf_series_b, fill_value=fill_value)
-    pdf_result = getattr(pdf_series_a, func)(pdf_series_b, fill_value=fill_value)
+    gdf_result = getattr(gdf_series_a, func)(
+        gdf_series_b, fill_value=fill_value
+    )
+    pdf_result = getattr(pdf_series_a, func)(
+        pdf_series_b, fill_value=fill_value
+    )
 
     utils.assert_eq(pdf_result, gdf_result)
 
@@ -517,11 +523,17 @@ def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
 def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     count = 1000
     scalar = 59
-    gdf_series = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=10000)
+    gdf_series = utils.gen_rand_series(
+        dtype, count, has_nulls=has_nulls, stride=10000
+    )
     pdf_series = gdf_series.to_pandas()
 
-    gdf_series_result = getattr(gdf_series, func)(scalar, fill_value=fill_value)
-    pdf_series_result = getattr(pdf_series, func)(scalar, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series, func)(
+        scalar, fill_value=fill_value
+    )
+    pdf_series_result = getattr(pdf_series, func)(
+        scalar, fill_value=fill_value
+    )
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
@@ -537,12 +549,18 @@ def test_operator_func_between_series_logical(
     gdf_series_a = utils.gen_rand_series(
         dtype, count, has_nulls=has_nulls, stride=10000
     )
-    gdf_series_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
+    gdf_series_b = utils.gen_rand_series(
+        dtype, count, has_nulls=has_nulls, stride=100
+    )
     pdf_series_a = gdf_series_a.to_pandas()
     pdf_series_b = gdf_series_b.to_pandas()
 
-    gdf_series_result = getattr(gdf_series_a, func)(gdf_series_b, fill_value=fill_value)
-    pdf_series_result = getattr(pdf_series_a, func)(pdf_series_b, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series_a, func)(
+        gdf_series_b, fill_value=fill_value
+    )
+    pdf_series_result = getattr(pdf_series_a, func)(
+        pdf_series_b, fill_value=fill_value
+    )
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
@@ -555,11 +573,17 @@ def test_operator_func_between_series_logical(
 def test_operator_func_series_and_scalar_logical(
     dtype, func, has_nulls, scalar, fill_value
 ):
-    gdf_series = utils.gen_rand_series(dtype, 1000, has_nulls=has_nulls, stride=10000)
+    gdf_series = utils.gen_rand_series(
+        dtype, 1000, has_nulls=has_nulls, stride=10000
+    )
     pdf_series = gdf_series.to_pandas()
 
-    gdf_series_result = getattr(gdf_series, func)(scalar, fill_value=fill_value)
-    pdf_series_result = getattr(pdf_series, func)(scalar, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series, func)(
+        scalar, fill_value=fill_value
+    )
+    pdf_series_result = getattr(pdf_series, func)(
+        scalar, fill_value=fill_value
+    )
 
     utils.assert_eq(pdf_series_result, gdf_series_result)
 
