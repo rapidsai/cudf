@@ -326,7 +326,7 @@ class Index(object):
         raise (NotImplementedError)
 
     def isin(self, values):
-        return self.to_series().isin(values).data.mem
+        return self.to_series().isin(values)
 
 
 class RangeIndex(Index):

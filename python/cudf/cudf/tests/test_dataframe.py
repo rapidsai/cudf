@@ -3589,4 +3589,4 @@ def test_isin_index(data, values):
     got = gsr.index.isin(values)
     expected = psr.index.isin(values)
 
-    assert_eq(got.copy_to_host(), expected)
+    assert_eq(got.data.mem.copy_to_host(), expected)
