@@ -667,15 +667,12 @@ def test_series_setitem_dtype(key, value):
     assert_eq(psr, gsr)
 
 
-@pytest.mark.xfail(
-    reason="Setting values by label not allowed; use loc[] instead"
-)
 @pytest.mark.parametrize(
     "key, value", [("a", 4), ("b", 4), (["a", "b"], 4), (["a", "b"], [4, 5])]
 )
-def test_series_setitem_string_index(key, value):
+def test_series_setitem_loc(key, value):
     psr = pd.Series([1, 2, 3], ["a", "b", "c"])
     gsr = cudf.from_pandas(psr)
-    psr[key] = value
-    gsr[key] = value
+    psr.loc[key] = value
+    gsr.loc[key] = value
     assert_eq(psr, gsr)
