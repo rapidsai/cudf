@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <quantiles/quantiles.hpp>
 #include <utilities/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
@@ -32,45 +33,6 @@
 namespace cudf {
 
 namespace {
-
-template <typename T>
-CUDA_HOST_DEVICE_CALLABLE
-double select_quantile(T const* devarr, gdf_size_type size, double quantile,
-                       gdf_quantile_method interpolation)
-{
-  T temp[2];
-  double result;
-  
-  detail::QuantileIndex qi(size, quantile);
-
-  switch( interpolation )
-  {
-  case GDF_QUANT_LINEAR:
-    temp[0] = devarr[qi.lower_bound];
-    temp[1] = devarr[qi.upper_bound];
-    cudf::interpolate::linear(result, temp[0], temp[1], qi.fraction);
-    break;
-  case GDF_QUANT_MIDPOINT:
-    temp[0] = devarr[qi.lower_bound];
-    temp[1] = devarr[qi.upper_bound];
-    cudf::interpolate::midpoint(result, temp[0], temp[1]);
-    break;
-  case GDF_QUANT_LOWER:
-    temp[0] = devarr[qi.lower_bound];
-    result = static_cast<double>( temp[0] );
-    break;
-  case GDF_QUANT_HIGHER:
-    temp[0] = devarr[qi.upper_bound];
-    result = static_cast<double>( temp[0] );
-    break;
-  case GDF_QUANT_NEAREST:
-    temp[0] = devarr[qi.nearest];
-    result = static_cast<double>( temp[0] );
-    break;
-  }
-
-  return result;
-}
 
 struct quantiles_functor {
 
@@ -96,8 +58,8 @@ struct quantiles_functor {
                                   ? grp_id[i + 1]
                                   : num_vals;
         gdf_size_type segment_size = (upper_limit - grp_id[i]);
-        quants[i] = select_quantile(values + grp_id[i], segment_size, quantile,
-                                    interpolation);
+        quants[i] = detail::select_quantile(values + grp_id[i], segment_size,
+                                            quantile, interpolation);
       }
     );
   }
