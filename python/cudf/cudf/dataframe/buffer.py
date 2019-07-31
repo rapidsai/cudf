@@ -128,17 +128,14 @@ class Buffer(object):
     def extend(self, array):
         needed = array.size
         self._sentry_capacity(needed)
-        array = cudautils.astype(array, dtype=self.dtype)
+        import cudf.bindings.typecast as typecast
+        from cudf.dataframe import columnops
+
+        array = typecast.apply_cast(
+            columnops.as_column(array), dtype=self.dtype.type
+        ).data.mem
         self.mem[self.size : self.size + needed].copy_to_device(array)
         self.size += needed
-
-    def astype(self, dtype):
-        if self.dtype == dtype:
-            return self
-        elif self.dtype != "int64" and np.issubdtype(dtype, np.datetime64):
-            return self.astype("int64").astype(dtype)
-        else:
-            return Buffer(cudautils.astype(self.mem, dtype=dtype))
 
     def to_array(self):
         return self.to_gpu_array().copy_to_host()

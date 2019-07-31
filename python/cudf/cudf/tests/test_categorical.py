@@ -283,36 +283,6 @@ def test_categorical_unique(num_elements):
     np.testing.assert_array_equal(pdf_unique_sorted, gdf_unique_sorted)
 
 
-@pytest.mark.parametrize("num_elements", [10, 100, 1000])
-def test_categorical_value_counts(num_elements):
-    from string import ascii_letters, digits
-
-    # create categorical series
-    np.random.seed(12)
-    pd_cat = pd.Categorical(
-        pd.Series(
-            np.random.choice(list(ascii_letters + digits), num_elements),
-            dtype="category",
-        )
-    )
-
-    # gdf
-    gdf = DataFrame()
-    gdf["a"] = Series.from_categorical(pd_cat)
-    gdf_value_counts = gdf["a"].value_counts()
-
-    # pandas
-    pdf = pd.DataFrame()
-    pdf["a"] = pd_cat
-    pdf_value_counts = pdf["a"].value_counts()
-
-    # verify
-    pandas_dict = pdf_value_counts.to_dict()
-    gdf_dict = gdf_value_counts.to_pandas().to_dict()
-
-    assert pandas_dict == gdf_dict
-
-
 @pytest.mark.parametrize("nelem", [20, 50, 100])
 def test_categorical_unique_count(nelem):
     from string import ascii_letters, digits
