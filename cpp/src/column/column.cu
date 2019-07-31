@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/utils/bit.cuh>
 #include <cudf/utils/traits.hpp>
 #include <cudf/utils/type_dispatcher.hpp>
 
@@ -164,49 +165,60 @@ void column::set_null_count(size_type new_null_count) {
  * @param bit_offset The offset into `source` from which to begin the copy
  * @param number_of_bits The number of bits to copy
  *---------------------------------------------------------------------------**/
-//__global__ void copy_offset_bitmask(mutable_bitmask_device_view destination,
-//                                    bitmask_device_view source,
-//                                    size_type bit_offset,
-//                                    size_type number_of_bits) {
-//  constexpr size_type warp_size{32};
-//  size_type destination_index = threadIdx.x + blockIdx.x * blockDim.x;
-//
-//  auto active_mask =
-//      __ballot_sync(0xFFFF'FFFF, destination_index < number_of_bits);
-//
-//  while (destination_index < number_of_bits) {
-//    bitmask_type const new_mask_element = __ballot_sync(
-//        active_mask, source.bit_is_set(bit_offset + destination_index));
-//
-//    if (threadIdx.x % warp_size == 0) {
-//      destination.set_element(element_index(destination_index),
-//                              new_mask_element);
-//    }
-//
-//    destination_index += blockDim.x * gridDim.x;
-//    active_mask =
-//        __ballot_sync(active_mask, destination_index < number_of_bits);
-//  }
-//}
+__global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
+                                    bitmask_type const *__restrict__ source,
+                                    size_type bit_offset,
+                                    size_type number_of_bits) {
+  constexpr size_type warp_size{32};
+  size_type destination_bit_index = threadIdx.x + blockIdx.x * blockDim.x;
+
+  auto active_mask =
+      __ballot_sync(0xFFFF'FFFF, destination_bit_index < number_of_bits);
+
+  while (destination_bit_index < number_of_bits) {
+    bitmask_type const new_mask_element = __ballot_sync(
+        active_mask, bit_is_set(source, bit_offset + destination_bit_index));
+
+    if (threadIdx.x % warp_size == 0) {
+      destination[element_index(destination_bit_index)] = new_mask_element;
+    }
+
+    destination_bit_index += blockDim.x * gridDim.x;
+    active_mask =
+        __ballot_sync(active_mask, destination_bit_index < number_of_bits);
+  }
+}
 
 // Copy from a view
 column::column(column_view view, cudaStream_t stream,
-               rmm::mr::device_memory_resource *mr) {
-  // if (source_view.offset() == 0) {
-  //  // If there's no offset, do a simple copy
-  //  _data = std::make_unique<rmm::device_buffer>(
-  //      static_cast<void const *>(source_view.data()), _size);
-  //} else {
-  //  // If there's a non-zero offset, need to handle offset bitmask elements
-  //  _data = std::make_unique<rmm::device_buffer>(
-  //      bitmask_allocation_size_bytes(_size), stream, mr);
+               rmm::mr::device_memory_resource *mr)
+    : _type{view.type()},
+      _size{view.size()},
+      _data{view.data(), view.size() * cudf::size_of(view.type()), stream, mr},
+      _null_count{view.null_count()} {
+  if (view.nullable()) {
+    // If there's no offset, do a simple copy
+    if (view.offset() == 0) {
+      _null_mask =
+          rmm::device_buffer{static_cast<void const *>(view.null_mask()),
+                             bitmask_allocation_size_bytes(size()), stream, mr},
+    } else {
+      CUDF_EXPECTS(view.offset() > 0, "Invalid view offset.");
+      // If there's a non-zero offset, need to handle offset bitmask elements
+      _null_mask =
+          rmm::device_buffer{bitmask_allocation_size_bytes(size()), stream, mr};
+      cudf::util::cuda::grid_config_1d config(view.size(), 256);
+      copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
+                            stream>>>(
+          static_cast<bitmask_type *>(_null_mask.data()), view.null_mask(),
+          view.offset(), view.size());
+      CHECK_STREAM(stream);
+    }
+  }
 
-  //  cudf::util::cuda::grid_config_1d config(_size, 256);
-  //  copy_offset_bitmask<<<config.num_blocks, config.num_threads_per_block, 0,
-  //                        stream>>>(this->mutable_view(), source_view,
-  //                                  source_view.offset(), _size);
-
-  //  CHECK_STREAM(stream);
+  for (size_type i = 0; i < view.num_children(); ++i) {
+    _children.emplace_back(view.child(i));
+  }
 }
 
 }  // namespace cudf

@@ -389,7 +389,7 @@ add_library(cudf SHARED
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
-            src/column/column.cpp
+            src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
             src/table/table_view.cpp
