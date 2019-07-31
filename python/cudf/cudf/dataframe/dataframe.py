@@ -1065,7 +1065,7 @@ class DataFrame(object):
 
         return out
 
-    def take_columns(self, positions):
+    def _take_columns(self, positions):
         positions = Series(positions)
         column_names = list(self._cols.keys())
         column_values = list(self._cols.values())

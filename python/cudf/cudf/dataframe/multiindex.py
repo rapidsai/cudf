@@ -280,8 +280,8 @@ class MultiIndex(Index):
         if isinstance(index_key, slice):
             slice_access = True
         out_index = DataFrame()
-        # Select the last n-k columns where n is the number of source
-        # levels and k is the length of the indexing tuple
+        # Select the last n-k columns where n is the number of _source_data 
+        # columns and k is the length of the indexing tuple
         size = 0
         if not isinstance(index_key, (numbers.Number, slice)):
             size = len(index_key)
@@ -291,45 +291,42 @@ class MultiIndex(Index):
                 index._source_data[index._source_data.columns[k]],
             )
 
-        # If there's only one column remaining in the output index, convert
-        # it into an Index and name the final index values according
-        # to the proper codes.
-        if len(out_index.columns) == 1:
+        if len(result) == 1 and size == 0 and slice_access is False:
+            # If the final result is one row and it was not mapped into
+            # directly, return a Series with a tuple as name.
+            result = result.T
+            result = result[result.columns[0]]
+            # convert to Series
+            series_name = []
+            for idx, code in enumerate(index._source_data.columns):
+                series_name.append(result.columns._source_data[code][0])
+            result = Series(
+                list(result._cols.values())[0],
+                index=result.index,
+            )
+            result.name = tuple(series_name)
+        elif len(result) == 0 and slice_access is False:
+            # Pandas returns an empty Series with a tuple as name 
+            # the one expected result column
+            series_name = []
+            for idx, code in enumerate(index._source_data.columns):
+                series_name.append(index._source_data[code][0])
+            result = Series([])
+            result.name = tuple(series_name)
+        elif len(out_index.columns) == 1:
+            # If there's only one column remaining in the output index, convert
+            # it into an Index and name the final index values according
+            # to the _source_data column names
             last_column = index._source_data.columns[-1]
             out_index = index._source_data[last_column]
             out_index = as_index(out_index)
             out_index.name = index.names[len(index.names) - 1]
             index = out_index
-        else:
-            if len(result) == 1 and size == 0 and slice_access is False:
-                # If the final result is one row and it was not mapped into
-                # directly
-                result = result.T
-                result = result[result.columns[0]]
-                # convert to Series
-                series_name = []
-                for idx, code in enumerate(index._source_data.columns):
-                    series_name.append(result.columns._source_data[code][0])
-                result = Series(
-                    list(result._cols.values())[0],
-                    name=series_name,
-                    index=result.index,
-                )
-                result.name = tuple(series_name)
-            elif len(result) == 0 and len(result.columns) == 0:
-                if slice_access is False:
-                    # Pandas returns a Series with a stringified index for
-                    # the one expected result column
-                    series_name = []
-                    for idx, code in enumerate(index._source_data.columns):
-                        series_name.append(index._source_data[code][0])
-                    result = Series([], name=series_name)
-                    result.name = tuple(series_name)
-            elif (len(out_index.columns)) > 0:
-                # Otherwise pop the leftmost levels, names, and codes from the
-                # source index until it has the correct number of columns (n-k)
-                result.reset_index(drop=True)
-                index = index._popn(size)
+        elif len(out_index.columns) > 1:
+            # Otherwise pop the leftmost levels, names, and codes from the
+            # source index until it has the correct number of columns (n-k)
+            result.reset_index(drop=True)
+            index = index._popn(size)
         if isinstance(index_key, tuple):
             result = result.set_index(index)
         return result
@@ -352,7 +349,7 @@ class MultiIndex(Index):
         valid_indices = self._get_valid_indices_by_tuple(
             df.columns, row_tuple, len(df._cols)
         )
-        result = df.take_columns(valid_indices)
+        result = df._take_columns(valid_indices)
 
         if isinstance(row_tuple, (numbers.Number, slice)):
             row_tuple = [row_tuple]
