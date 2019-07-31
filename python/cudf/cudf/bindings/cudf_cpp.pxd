@@ -159,6 +159,8 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_AVG,
         GDF_COUNT,
         GDF_COUNT_DISTINCT,
+        GDF_NUMBA_GENERIC_AGG_OPS,
+        GDF_CUDA_GENERIC_AGG_OPS,
         N_GDF_AGG_OPS,
 
     ctypedef enum gdf_color:

@@ -15,10 +15,13 @@ def apply_rolling(inp, window, min_periods, center, op):
     cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0
-    cdef gdf_agg_op c_op = agg_ops[op]
+    cdef gdf_agg_op c_op
     cdef gdf_index_type *c_window_col = NULL
     cdef gdf_index_type *c_min_periods_col = NULL
     cdef gdf_index_type *c_forward_window_col = NULL
+    
+    cdef string cpp_str
+    cdef gdf_dtype g_type
 
     if op == "mean":
         inp = inp.astype("float64")
@@ -57,18 +60,38 @@ def apply_rolling(inp, window, min_periods, center, op):
             cudautils.fill_value(data, inp.default_na_value())
             mask = cudautils.make_empty_mask(len(inp))
     else:
-        with nogil:
-            output_col = rolling_window(
-                inp_col[0],
-                c_window,
-                c_min_periods,
-                c_forward_window,
-                c_op,
-                c_window_col,
-                c_min_periods_col,
-                c_forward_window_col
-            )
-        data, mask = gdf_column_to_column_mem(output_col)
+        if isinstance(op, tuple):
+            print("Here!")
+            cpp_str = op[0].encode('UTF-8')
+            g_type = dtypes[op[1]]
+            with nogil:
+                c_output_col = rolling_window(
+                    inp_col[0],
+                    c_window,
+                    c_min_periods,
+                    c_forward_window,
+                    cpp_str,
+                    GDF_NUMBA_GENERIC_AGG_OPS,
+                    g_type,
+                    c_window_col,
+                    c_min_periods_col,
+                    c_forward_window_col
+                )
+            data, mask = gdf_column_to_column_mem(&c_output_col)
+        else:
+            c_op = agg_ops[ops]
+            with nogil:
+                output_col = rolling_window(
+                    inp_col[0],
+                    c_window,
+                    c_min_periods,
+                    c_forward_window,
+                    c_op,
+                    c_window_col,
+                    c_min_periods_col,
+                    c_forward_window_col
+                )
+            data, mask = gdf_column_to_column_mem(output_col)
 
     result = Column.from_mem_views(data, mask)
 
