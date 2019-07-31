@@ -398,11 +398,17 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
         masked = lhs.has_null_mask or rhs.has_null_mask
         row_count = len(lhs)
 
+    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+
     out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
-    out = out.replace(null_count=null_count)
+    if is_op_comparison:
+        out.fillna(op == "ne", inplace=True)
+    else:
+        out = out.replace(null_count=null_count)
+
     result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     nvtx_range_pop()
     return result
