@@ -1,11 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import warnings
-
-import pandas as pd
-
 from cudf.bindings.avro import cpp_read_avro
-from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils
 
 
@@ -28,4 +23,4 @@ def read_avro(
     if engine == "cudf":
         return cpp_read_avro(filepath_or_buffer, columns, skip_rows, num_rows)
     else:
-        raise NotImplementedError("read_avro currently only supports cudf engine")
+        raise NotImplementedError("read_avro currently only supports cudf")
