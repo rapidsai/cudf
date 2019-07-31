@@ -15,10 +15,11 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/legacy/column.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <nvstrings/NVCategory.h>
 
 #include <cuda_runtime.h>
@@ -53,19 +54,12 @@ gdf_column empty_like(gdf_column const& input)
 gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists, cudaStream_t stream)
 {
   gdf_column output = empty_like(input);
-  
-  output.size = input.size;
-  if (input.size > 0) {
-    const auto byte_width = (input.dtype == GDF_STRING)
-                          ? sizeof(std::pair<const char *, size_t>)
-                          : cudf::size_of(input.dtype);
-    RMM_TRY(RMM_ALLOC(&output.data, input.size * byte_width, stream));
-    if ((input.valid != nullptr) && allocate_mask_if_exists) {
-      size_t valid_size = gdf_valid_allocation_size(input.size);
-      RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
-    }
-  }
 
+  output.size = input.size;
+  bool allocate_mask = allocate_mask_if_exists && (input.valid != nullptr);
+
+  detail::allocate_column_fields(output, allocate_mask, stream);
+  
   return output;
 }
 
@@ -77,7 +71,7 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
   CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
 
   gdf_column output = allocate_like(input, true, stream);
-
+  output.null_count = input.null_count;
   if (input.size > 0) {
     const auto byte_width = (input.dtype == GDF_STRING)
                           ? sizeof(std::pair<const char *, size_t>)

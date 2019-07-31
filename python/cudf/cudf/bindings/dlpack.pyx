@@ -9,7 +9,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.bindings.dlpack cimport DLManagedTensor
+from cudf.bindings.dlpack cimport *
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t, int8_t

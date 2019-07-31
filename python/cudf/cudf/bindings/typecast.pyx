@@ -7,29 +7,51 @@
 
 from .cudf_cpp cimport *
 from .cudf_cpp import *
-
+from cudf.bindings.unaryops cimport *
+from cudf.dataframe.column import Column
 from libc.stdlib cimport free
 
+import numpy as np
 
-def apply_cast(incol, outcol):
+
+_time_unit = {
+    'none': TIME_UNIT_NONE,
+    's': TIME_UNIT_s,
+    'ms': TIME_UNIT_ms,
+    'us': TIME_UNIT_us,
+    'ns': TIME_UNIT_ns,
+}
+
+
+def apply_cast(incol, **kwargs):
     """
       Cast from incol.dtype to outcol.dtype
     """
 
     check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
-    cdef gdf_error result
+    npdtype = kwargs.get("dtype", np.float64)
+    cdef gdf_dtype dtype = dtypes[npdtype]
+    cdef uintptr_t category
+
+    cdef gdf_dtype_extra_info info = gdf_dtype_extra_info(
+        time_unit=TIME_UNIT_NONE,
+        category=<void*>category
+    )
+    unit = kwargs.get("time_unit", 'none')
+    info.time_unit = _time_unit[unit]
+
+    cdef gdf_column result
+
     with nogil:
-        result = gdf_cast(
-            <gdf_column*>c_incol,
-            <gdf_column*>c_outcol
+        result = cast(
+            c_incol[0],
+            dtype,
+            info
         )
 
     free(c_incol)
-    free(c_outcol)
-
-    check_gdf_error(result)
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)

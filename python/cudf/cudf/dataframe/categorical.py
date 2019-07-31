@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
-import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
@@ -223,12 +222,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         )
         return col
 
-    def astype(self, dtype):
-        # custom dtype can't be compared with `==`
-        if self.dtype is dtype:
-            return self
-        return self.as_numerical.astype(dtype)
-
     def sort_by_values(self, ascending=True, na_position="last"):
         return self.as_numerical.sort_by_values(ascending, na_position)
 
@@ -257,18 +250,6 @@ class CategoricalColumn(columnops.TypedColumnBase):
         return CategoricalColumn(
             data=codes, categories=self._categories, ordered=self._ordered
         )
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
-        out = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=out_col.data, mask=None)
-        out_counts = columnops.build_column(Buffer(out), np.intp)
-        return out_vals, out_counts
 
     def _encode(self, value):
         return self._categories.find_first_value(value)
@@ -365,6 +346,53 @@ class CategoricalColumn(columnops.TypedColumnBase):
                 self._ordered and self.as_numerical.is_monotonic_decreasing
             )
         return self._is_monotonic_decreasing
+
+    def as_categorical_column(self, dtype, **kwargs):
+        return self
+
+    def as_numerical_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_numerical_column(
+            dtype, **kwargs
+        )
+
+    def as_string_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_string_column(
+            dtype, **kwargs
+        )
+
+    def as_datetime_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_datetime_column(
+            dtype, **kwargs
+        )
+
+    def _get_decategorized_column(self):
+        gather_map = (
+            self.cat().codes.astype("int32").fillna(0)._column.data.mem
+        )
+        out = self._categories.take(gather_map)
+        return out.replace(mask=self.mask)
+
+    def copy(self, deep=True):
+        """Categorical Columns are immutable, so a deep copy produces a
+        copy of the underlying data, mask, categories and a shallow copy
+        creates a new column and copies the references of the data, mask
+        and categories.
+        """
+        if deep:
+            import cudf.bindings.copying as cpp_copy
+
+            copied_col = cpp_copy.copy_column(self)
+            category_col = cpp_copy.copy_column(self._categories)
+            return self.replace(
+                data=copied_col.data,
+                mask=copied_col.mask,
+                dtype=self.dtype,
+                categories=category_col,
+                ordered=self._ordered,
+            )
+        else:
+            params = self._replace_defaults()
+            return type(self)(**params)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

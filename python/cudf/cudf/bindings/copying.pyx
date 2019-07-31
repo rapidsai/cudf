@@ -7,7 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.utils.cudautils import astype, modulo
+from cudf.utils.cudautils import modulo
 from librmm_cffi import librmm as rmm
 
 import numpy as np
@@ -54,7 +54,10 @@ def apply_gather(in_cols, maps, out_cols=None):
     else:
         in_size = in_cols[0].data.size
 
-    maps = astype(maps, 'int32')
+    import cudf.bindings.typecast as typecast
+    from cudf.dataframe import columnops
+    col = typecast.apply_cast(columnops.as_column(maps), dtype=np.int32)
+    maps = col.data.mem
     # TODO: replace with libcudf pymod when available
     maps = modulo(maps, in_size)
 
@@ -233,3 +236,22 @@ def apply_scatter_array(dev_array, maps, out_col=None):
 
     in_col = columnops.as_column(dev_array)
     return apply_scatter_column(in_col, maps, out_col)
+
+
+def copy_column(input_col):
+    """
+        Call cudf::copy
+    """
+    cdef gdf_column* c_input_col = column_view_from_column(input_col)
+    cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
+
+    with nogil:
+        output[0] = copy(c_input_col[0])
+
+    data, mask = gdf_column_to_column_mem(output)
+    from cudf.dataframe.column import Column
+
+    free(c_input_col)
+    free(output)
+
+    return Column.from_mem_views(data, mask, output.null_count)

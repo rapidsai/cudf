@@ -61,6 +61,8 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
+                    "${ZLIB_INCLUDE_DIRS}"
+                    "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
 
@@ -98,11 +100,6 @@ ConfigureTest(ERROR_TEST "${ERROR_TEST_SRC}")
 
 ###################################################################################################
 # - groupby tests ---------------------------------------------------------------------------------
-
-set(GROUPBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/groupby_test.cu")
-
-ConfigureTest(GROUPBY_TEST "${GROUPBY_TEST_SRC}")
 
 set(HASH_GROUPBY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_count.cu"
