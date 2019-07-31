@@ -20,6 +20,20 @@ def indices_from_labels(obj, labels):
     return lhs.join(rhs)["_"]
 
 
+class _SeriesIlocIndexer(object):
+    """
+    For integer-location based selection.
+    """
+
+    def __init__(self, sr):
+        self._sr = sr
+
+    def __getitem__(self, arg):
+        if isinstance(arg, tuple):
+            arg = list(arg)
+        return self._sr[arg]
+
+
 class _SeriesLocIndexer(object):
     """
     Label-based selection
@@ -62,20 +76,6 @@ class _SeriesLocIndexer(object):
                     type(arg).__name__
                 )
             )
-
-
-class _SeriesIlocIndexer(object):
-    """
-    For integer-location based selection.
-    """
-
-    def __init__(self, sr):
-        self._sr = sr
-
-    def __getitem__(self, arg):
-        if isinstance(arg, tuple):
-            arg = list(arg)
-        return self._sr[arg]
 
 
 class _DataFrameIndexer(object):
