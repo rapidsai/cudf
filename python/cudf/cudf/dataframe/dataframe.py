@@ -1094,16 +1094,12 @@ class DataFrame(object):
     def take(self, positions, ignore_index=False):
         out = DataFrame()
         if self._cols:
-            positions = columnops.as_column(positions).astype("int32").data.mem
-            cols = [s._column for s in self._cols.values()]
-            result_cols = cpp_copying.apply_gather(cols, positions)
             for i, col_name in enumerate(self._cols):
-                out[col_name] = result_cols[i]
-
+                out[col_name] = self[col_name][positions]
             if ignore_index:
                 out.index = RangeIndex(len(out))
             else:
-                out.index = self.index.take(positions)
+                out.index = self.index[positions]
         return out
 
     def copy(self, deep=True):
