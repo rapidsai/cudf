@@ -1825,7 +1825,9 @@ class Series(object):
         rhs = None
 
         try:
-            rhs = Series(columnops.as_column(test, dtype=self.dtype))
+            rhs = columnops.as_column(test, dtype=self.dtype)
+            # if necessary, convert values via typecast.apply_cast
+            rhs = Series(rhs.astype(self.dtype))
         except Exception:
             # pandas functionally returns all False when cleansing via
             # typecasting fails

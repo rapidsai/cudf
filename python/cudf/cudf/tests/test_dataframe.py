@@ -3690,7 +3690,12 @@ def test_series_value_counts():
 
 @pytest.mark.parametrize(
     "data",
-    [[], np.random.randint(-100, 100, 100), pd.Series([0.0, 1.0, None, 10.0])],
+    [
+        [],
+        [0, 12, 14],
+        np.random.randint(-100, 100, 200),
+        pd.Series([0.0, 1.0, None, 10.0])
+    ],
 )
 @pytest.mark.parametrize(
     "values",

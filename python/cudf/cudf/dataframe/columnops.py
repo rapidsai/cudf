@@ -116,10 +116,7 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def astype(self, dtype, **kwargs):
-        if (
-            pd.api.types.pandas_dtype(dtype).type
-            is pd.core.dtypes.dtypes.CategoricalDtypeType
-        ):
+        if is_categorical_dtype(dtype):
             return self.as_categorical_column(dtype, **kwargs)
         elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
             return self.as_string_column(dtype, **kwargs)
@@ -578,13 +575,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                     nan_as_null=nan_as_null,
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
-                if np_type in (np.object_, np.str_):
-                    data = as_column(
-                        as_nvstrings(arbitrary),
-                        dtype=dtype,
-                        nan_as_null=nan_as_null,
-                    )
-                elif is_categorical_dtype(dtype):
+                if is_categorical_dtype(dtype):
                     data = as_column(
                         pd.Series(arbitrary, dtype="category"),
                         nan_as_null=nan_as_null,
@@ -597,25 +588,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     if hasattr(data, "name") and (name is not None):
         data.name = name
     return data
-
-
-def as_nvstrings(arbitrary):
-    representative = None
-    for x in arbitrary:
-        if x is not None:
-            representative = x
-            break
-    if representative is None:
-        return nvstrings.to_device([])
-    if isinstance(representative, str):
-        return nvstrings.to_device(arbitrary)
-    if isinstance(representative, bool):
-        return nvstrings.from_booleans(arbitrary)
-    if isinstance(representative, float):
-        return nvstrings.dtos(arbitrary)
-    if isinstance(representative, int):
-        return nvstrings.ltos(arbitrary)
-    raise TypeError("cannot convert arbitrary input to nvstrings")
 
 
 def column_applymap(udf, column, out_dtype):
