@@ -195,17 +195,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
 
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
-
     def all(self):
         return bool(self.min(dtype=np.bool_))
 

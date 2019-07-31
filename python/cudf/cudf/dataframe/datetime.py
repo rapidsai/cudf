@@ -15,9 +15,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.numerical import NumericalColumn
-from cudf.util import cudautils, internalutil
-from cudf.util.internalutil import is_single_value
+from cudf.util.internalutil import is_single_value, scalar_broadcast_to
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -98,14 +96,14 @@ class DatetimeColumn(columnops.TypedColumnBase):
             other = np.datetime64(other)
 
         if isinstance(other, pd.Timestamp):
-            ary = internalutil.scalar_broadcast_to(
+            ary = scalar_broadcast_to(
                 other.value * self._pandas_conversion_factor,
                 shape=len(self),
                 dtype=self._npdatetime64_dtype,
             )
         elif isinstance(other, np.datetime64):
             other = other.astype(self._npdatetime64_dtype)
-            ary = internalutil.scalar_broadcast_to(
+            ary = scalar_broadcast_to(
                 other, shape=len(self), dtype=self._npdatetime64_dtype
             )
         else:
@@ -249,17 +247,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
 
     @property
     def is_unique(self):
