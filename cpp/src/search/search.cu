@@ -15,8 +15,8 @@
  */
 
 #include <iterator/iterator.cuh>
-#include <table/device_table.cuh>
-#include <table/device_table_row_operators.cuh>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
 
@@ -109,20 +109,6 @@ gdf_column search_ordered(table const& t,
   }
 
   return result;
-}
-
-gdf_column search_ordered(gdf_column const& column,
-                          gdf_column const& values,
-                          bool find_first,
-                          bool descending,
-                          bool nulls_as_largest,
-                          cudaStream_t stream = 0)
-{
-  const table t{const_cast<gdf_column*>(&column)};
-  const table val{const_cast<gdf_column*>(&values)};
-  std::vector<bool> desc_flags{descending};
-
-  return search_ordered(t, val, find_first, desc_flags, nulls_as_largest, stream);
 }
 
 } // namespace detail
