@@ -64,6 +64,7 @@
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
 - PR #2350 Performance related changes to get_dummies
+- PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
 
 ## Bug Fixes
 
@@ -106,6 +107,7 @@
 - PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
 - PR #2401 Fix to a scalar datetime(of type Days) issue
 - PR #2386 Correctly allocate output valids in groupby
+- PR #2411 Fixed failures on binary op on single element string column
 
 
 # cuDF 0.8.0 (27 June 2019)
