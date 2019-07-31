@@ -17,7 +17,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <cudf/predicates.hpp>
 
 #include <utilities/error_utils.hpp>
