@@ -105,7 +105,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE} ${INSTALL_TARGET}
 fi
 
-# Build and install the cudf Python package
+# Build and install the nvstrings and cudf Python packages
 if (( ${NUMARGS} == 0 )) || hasArg cudf; then
 
     cd ${REPODIR}/python/cudf
@@ -114,6 +114,14 @@ if (( ${NUMARGS} == 0 )) || hasArg cudf; then
     python setup.py install --single-version-externally-managed --record=record.txt
     else
     python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}
+    fi
+
+    cd ${REPODIR}/python/nvstrings
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+    python setup.py build_ext --inplace
+    python setup.py install --single-version-externally-managed --record=record.txt
+    else
+    python setup.py build_ext --inplace --library-dir=${LIBCUDF_BUILD_DIR}/nvstrings
     fi
 fi
 

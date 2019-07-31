@@ -94,6 +94,9 @@ else
     cd $WORKSPACE/python/cudf
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
     
+    cd $WORKSPACE/python/nvstrings
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
+
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
