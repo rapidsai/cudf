@@ -5,6 +5,7 @@ from math import floor
 
 import numpy as np
 import pytest
+
 from cudf import Series
 from cudf.tests import utils
 

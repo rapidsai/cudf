@@ -1,10 +1,11 @@
-import dask_cudf
 import pandas as pd
 import pytest
 
 import dask.dataframe as dd
 
 import cudf
+
+import dask_cudf
 
 
 def test_get_dummies_cat():

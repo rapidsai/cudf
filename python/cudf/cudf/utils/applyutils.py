@@ -2,13 +2,14 @@
 
 import functools
 
-from cudf.dataframe.series import Series
-from cudf.utils import cudautils
-from cudf.utils.docutils import docfmt_partial
 from numba import cuda, six
 from numba.utils import exec_, pysignature
 
 from librmm_cffi import librmm as rmm
+
+from cudf.dataframe.series import Series
+from cudf.utils import cudautils
+from cudf.utils.docutils import docfmt_partial
 
 _doc_applyparams = """
 func : function

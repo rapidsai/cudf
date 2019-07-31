@@ -2,7 +2,6 @@
 
 import nvstrings
 import nvtext
-
 from utils import assert_eq
 
 hstrs = [

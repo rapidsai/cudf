@@ -3,6 +3,7 @@
 import warnings
 
 import pyarrow.parquet as pq
+
 from cudf.bindings.parquet import cpp_read_parquet
 from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils

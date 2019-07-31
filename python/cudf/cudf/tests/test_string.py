@@ -6,13 +6,14 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pytest
+from numba import cuda
+
+from librmm_cffi import librmm as rmm
+
 from cudf import concat
 from cudf.dataframe import DataFrame, Series
 from cudf.dataframe.index import StringColumn, StringIndex
 from cudf.tests.utils import assert_eq
-from numba import cuda
-
-from librmm_cffi import librmm as rmm
 
 data_list = [
     ["AbC", "de", "FGHI", "j", "kLm"],

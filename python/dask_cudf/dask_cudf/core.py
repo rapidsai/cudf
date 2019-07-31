@@ -4,12 +4,6 @@ from collections import OrderedDict
 
 import numpy as np
 import pandas as pd
-from dask_cudf import batcher_sortnet, join_impl
-from dask_cudf.accessor import (
-    CachedAccessor,
-    CategoricalAccessor,
-    DatetimeAccessor,
-)
 from toolz import partition_all
 
 import dask
@@ -28,6 +22,13 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
 import cudf.bindings.reduce as cpp_reduce
+
+from dask_cudf import batcher_sortnet, join_impl
+from dask_cudf.accessor import (
+    CachedAccessor,
+    CategoricalAccessor,
+    DatetimeAccessor,
+)
 
 
 def optimize(dsk, keys, **kwargs):

@@ -1,10 +1,10 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 import numpy as np
-import nvcategory
-import nvstrings
 import pytest
 
+import nvcategory
+import nvstrings
 from utils import assert_eq
 
 

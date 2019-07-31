@@ -1,8 +1,9 @@
 import numpy as np
 import pytest
-from dask_cudf import batcher_sortnet
 
 import cudf
+
+from dask_cudf import batcher_sortnet
 
 
 @pytest.mark.parametrize("n", list(range(1, 40)))

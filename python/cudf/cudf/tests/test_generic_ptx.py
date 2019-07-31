@@ -5,10 +5,11 @@ from __future__ import division
 import numba
 import numpy as np
 import pytest
-from cudf.bindings import binops
-from cudf.dataframe import Series
 from numba import cuda, types
 from packaging.version import Version
+
+from cudf.bindings import binops
+from cudf.dataframe import Series
 
 
 @pytest.mark.skipif(

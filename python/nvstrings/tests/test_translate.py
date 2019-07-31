@@ -2,10 +2,10 @@
 
 import string
 
-import nvstrings
 import pandas as pd
 import pytest
 
+import nvstrings
 from utils import assert_eq
 
 

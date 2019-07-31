@@ -6,14 +6,15 @@ from collections.abc import Sequence
 import numba.cuda.cudadrv.driver
 import numpy as np
 import pyarrow as pa
+
+from librmm_cffi import librmm as rmm
+
 from cudf.bindings.arrow._cuda import CudaBuffer
 from cudf.bindings.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
 from cudf.dataframe import Series
 from cudf.utils.utils import mask_bitsize, mask_dtype
-
-from librmm_cffi import librmm as rmm
 
 
 class CudaRecordBatchStreamReader(_CudaRecordBatchStreamReader):

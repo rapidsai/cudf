@@ -3,7 +3,6 @@
 import urllib.parse
 
 import nvstrings
-
 from utils import assert_eq
 
 urls1 = ["http://www.hellow.com", "/home/nvidia/nfs", "123.45 ~ABCDEF"]

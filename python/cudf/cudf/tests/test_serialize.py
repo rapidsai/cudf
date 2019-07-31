@@ -2,11 +2,12 @@
 
 import functools
 
-import cudf
 import msgpack
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
 

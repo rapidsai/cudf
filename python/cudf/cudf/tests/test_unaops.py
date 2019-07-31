@@ -1,9 +1,10 @@
 from __future__ import division
 
-import cudf
 import numpy as np
 import pandas as pd
 import pytest
+
+import cudf
 from cudf.dataframe import Series
 from cudf.tests import utils
 
