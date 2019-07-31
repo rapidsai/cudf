@@ -22,7 +22,7 @@
 - PR #2049 Implemented merge functionality
 - PR #2356 Java column vector standard deviation support
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
-- PR #2396 Add support for cudf.util.hash_cudf_object
+- PR #2396 Add support for `cudf.util.hash_cudf_object` & refactor `cudf.utils` to `cudf.util`
 
 ## Improvements
 
