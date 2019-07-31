@@ -23,6 +23,7 @@
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
+- PR #2438 Build GBench Benchmarks in CI
 
 ## Improvements
 
