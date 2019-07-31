@@ -61,7 +61,6 @@ def apply_rolling(inp, window, min_periods, center, op):
             mask = cudautils.make_empty_mask(len(inp))
     else:
         if isinstance(op, tuple):
-            print("Here!")
             cpp_str = op[0].encode('UTF-8')
             g_type = dtypes[op[1]]
             with nogil:

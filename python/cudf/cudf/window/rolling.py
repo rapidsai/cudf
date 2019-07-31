@@ -164,6 +164,9 @@ class Rolling:
     def count(self):
         return self._apply_agg("count")
 
+    def udf(self, op):
+        return self._apply_agg(op)
+
     def _normalize(self):
         """
         Normalize the *window* and *min_periods* args
