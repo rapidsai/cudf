@@ -2396,7 +2396,7 @@ class Series(object):
 
         Parameters
         ----------
-        value : Column
+        value : array_like
             Column of values to search for
         side : str {‘left’, ‘right’} optional
             If ‘left’, the index of the first suitable location found is given.
