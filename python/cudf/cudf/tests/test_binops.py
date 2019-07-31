@@ -471,7 +471,7 @@ def test_boolean_scalar_binop(op):
     utils.assert_eq(op(psr, False), op(gsr, False))
 
 
-_operators_arithmatic = [
+_operators_arithmetic = [
     "add",
     "radd",
     "sub",
@@ -488,83 +488,83 @@ _operators_arithmatic = [
     "rtruediv",
 ]
 
-_operators_logical = ["eq", "ne", "lt", "le", "gt", "ge"]
+_operators_comparison = ["eq", "ne", "lt", "le", "gt", "ge"]
 
 
-@pytest.mark.parametrize("func", _operators_arithmatic)
+@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_between_series(dtype, func, has_nulls, fill_value):
     count = 1000
-    cs_a = utils.gen_rand_series(
+    gdf_series_a = utils.gen_rand_series(
         dtype, count, has_nulls=has_nulls, stride=10000
     )
-    cs_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
-    ps_a = cs_a.to_pandas()
-    ps_b = cs_b.to_pandas()
+    gdf_series_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
+    pdf_series_a = gdf_series_a.to_pandas()
+    pdf_series_b = gdf_series_b.to_pandas()
 
-    cs_result = getattr(cs_a, func)(cs_b, fill_value=fill_value)
-    ps_result = getattr(ps_a, func)(ps_b, fill_value=fill_value)
+    gdf_result = getattr(gdf_series_a, func)(gdf_series_b, fill_value=fill_value)
+    pdf_result = getattr(pdf_series_a, func)(pdf_series_b, fill_value=fill_value)
 
-    utils.assert_eq(ps_result, cs_result)
+    utils.assert_eq(pdf_result, gdf_result)
 
 
-@pytest.mark.parametrize("func", _operators_arithmatic)
+@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("has_nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 def test_operator_func_series_and_scalar(dtype, func, has_nulls, fill_value):
     count = 1000
     scalar = 59
-    cs = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=10000)
-    ps = cs.to_pandas()
+    gdf_series = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=10000)
+    pdf_series = gdf_series.to_pandas()
 
-    cs_result = getattr(cs, func)(scalar, fill_value=fill_value)
-    ps_result = getattr(ps, func)(scalar, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series, func)(scalar, fill_value=fill_value)
+    pdf_series_result = getattr(pdf_series, func)(scalar, fill_value=fill_value)
 
-    utils.assert_eq(ps_result, cs_result)
+    utils.assert_eq(pdf_series_result, gdf_series_result)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-@pytest.mark.parametrize("func", _operators_logical)
+@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("has_nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, True, False, 1.0])
 def test_operator_func_between_series_logical(
     dtype, func, has_nulls, fill_value
 ):
     count = 1000
-    cs_a = utils.gen_rand_series(
+    gdf_series_a = utils.gen_rand_series(
         dtype, count, has_nulls=has_nulls, stride=10000
     )
-    cs_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
-    ps_a = cs_a.to_pandas()
-    ps_b = cs_b.to_pandas()
+    gdf_series_b = utils.gen_rand_series(dtype, count, has_nulls=has_nulls, stride=100)
+    pdf_series_a = gdf_series_a.to_pandas()
+    pdf_series_b = gdf_series_b.to_pandas()
 
-    cs_result = getattr(cs_a, func)(cs_b, fill_value=fill_value)
-    ps_result = getattr(ps_a, func)(ps_b, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series_a, func)(gdf_series_b, fill_value=fill_value)
+    pdf_series_result = getattr(pdf_series_a, func)(pdf_series_b, fill_value=fill_value)
 
-    utils.assert_eq(ps_result, cs_result)
+    utils.assert_eq(pdf_series_result, gdf_series_result)
 
 
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
-@pytest.mark.parametrize("func", _operators_logical)
+@pytest.mark.parametrize("func", _operators_comparison)
 @pytest.mark.parametrize("has_nulls", _nulls)
 @pytest.mark.parametrize("scalar", [-59.0, np.nan, 0, 59.0])
 @pytest.mark.parametrize("fill_value", [None, True, False, 1.0])
 def test_operator_func_series_and_scalar_logical(
     dtype, func, has_nulls, scalar, fill_value
 ):
-    cs = utils.gen_rand_series(dtype, 1000, has_nulls=has_nulls, stride=10000)
-    ps = cs.to_pandas()
+    gdf_series = utils.gen_rand_series(dtype, 1000, has_nulls=has_nulls, stride=10000)
+    pdf_series = gdf_series.to_pandas()
 
-    cs_result = getattr(cs, func)(scalar, fill_value=fill_value)
-    ps_result = getattr(ps, func)(scalar, fill_value=fill_value)
+    gdf_series_result = getattr(gdf_series, func)(scalar, fill_value=fill_value)
+    pdf_series_result = getattr(pdf_series, func)(scalar, fill_value=fill_value)
 
-    utils.assert_eq(ps_result, cs_result)
+    utils.assert_eq(pdf_series_result, gdf_series_result)
 
 
-@pytest.mark.parametrize("func", _operators_arithmatic)
+@pytest.mark.parametrize("func", _operators_arithmetic)
 @pytest.mark.parametrize("nulls", _nulls)
 @pytest.mark.parametrize("fill_value", [None, 27])
 @pytest.mark.parametrize("other", ["df", "scalar"])
@@ -600,7 +600,7 @@ def test_operator_func_dataframe(func, nulls, fill_value, other):
     utils.assert_eq(expect, got)
 
 
-@pytest.mark.parametrize("func", _operators_arithmatic + _operators_logical)
+@pytest.mark.parametrize("func", _operators_arithmetic + _operators_comparison)
 @pytest.mark.parametrize("rhs", [0, 1, 2, 128])
 def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
