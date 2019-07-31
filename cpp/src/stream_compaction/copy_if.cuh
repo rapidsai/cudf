@@ -146,8 +146,8 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
 
       constexpr int num_warps = block_size / warp_size;
       // account for partial blocks with non-warp-aligned offsets
-      int last_warp = min(num_warps, 
-                          (block_sum + block_offset % warp_size) / warp_size);
+      const int last_index = block_sum + (block_offset % warp_size) - 1;
+      const int last_warp = min(num_warps, last_index / warp_size);
       const int wid = threadIdx.x / warp_size;
       const int lane = threadIdx.x % warp_size;
       
