@@ -1,5 +1,6 @@
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
 from dask.dataframe.methods import concat_dispatch
+from dask.dataframe.utils import hash_object_dispatch
 
 import cudf
 
@@ -33,3 +34,18 @@ def concat_cudf(
     assert axis == 0
     assert join == "outer"
     return cudf.concat(dfs)
+
+
+@hash_object_dispatch.register(
+    (cudf.DataFrame, cudf.Series, cudf.Index, cudf.MultiIndex)
+)
+def hash_object_cudf(
+    obj, index=True, encoding="utf8", hash_key=None, categorize=True
+):
+    return cudf.util.hash_cudf_object(
+        obj,
+        index=index,
+        encoding=encoding,
+        hash_key=hash_key,
+        categorize=categorize,
+    )
