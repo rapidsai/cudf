@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf -v -g -n -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libcudf cudf dask_cudf bench -v -g -n -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [bench] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
    libcudf      - build the cudf C++ code only
