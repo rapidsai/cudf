@@ -29,6 +29,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
    -g           - build for debug
    -n           - no install step
    -h           - print this text
+   -b           - enable benchmark builds
 
    default action (no args) is to build and install 'libcudf' then 'cudf' then
    'dask_cudf' targets
@@ -78,6 +79,9 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
 fi
+if hasArg -b; then
+    BUILD_BENCHMARKS=ON
+fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -101,6 +105,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     cd ${LIBCUDF_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
+          -DBUILD_BENCHMARKS=${BUILD_BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE} ${INSTALL_TARGET}
 fi
