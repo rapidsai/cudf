@@ -1,10 +1,13 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from string import ascii_lowercase
+
 import numpy as np
+import pandas as pd
 import pytest
 
+import cudf
 from cudf.dataframe import DataFrame, GenericIndex, Series
-from cudf.reshape import get_dummies
 from cudf.tests import utils
 
 
@@ -94,47 +97,81 @@ def test_onehot_generic_index():
     np.testing.assert_array_equal(values == 3, out.fo_3.to_array())
 
 
-def test_onehot_get_dummies_simple():
-    df = DataFrame({"x": np.arange(10)})
-    original = df.copy()
-    encoded = get_dummies(df, prefix="test")
+@pytest.mark.parametrize(
+    "data",
+    [
+        np.arange(10),
+        ["abc", "zyx", "pppp"],
+        [],
+        pd.Series(["cudf", "hello", "pandas"] * 10, dtype="category"),
+    ],
+)
+def test_get_dummies(data):
+    gdf = DataFrame({"x": data})
+    pdf = pd.DataFrame({"x": data})
 
-    assert df == original  # the original df should be unchanged
-    cols = list(encoded.columns)[1:]
-    actual = DataFrame(dict(zip(cols, np.eye(len(cols)))))
-    assert (encoded.loc[:, cols] == actual).all().all()
+    encoded_expected = pd.get_dummies(pdf, prefix="test")
+    encoded_actual = cudf.get_dummies(gdf, prefix="test")
+
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+    encoded_actual = cudf.get_dummies(gdf, prefix="test", dtype=np.uint8)
+
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
 
 @pytest.mark.parametrize("n_cols", [5, 10, 20])
 def test_onehot_get_dummies_multicol(n_cols):
-    from string import ascii_lowercase
-
     n_categories = 5
-    df = DataFrame(
-        dict(
-            zip(
-                ascii_lowercase,
-                (np.arange(n_categories) for _ in range(n_cols)),
-            )
-        )
+    data = dict(
+        zip(ascii_lowercase, (np.arange(n_categories) for _ in range(n_cols)))
     )
-    original = df.copy()
-    encoded = get_dummies(df, prefix="test")
 
-    assert df == original
+    gdf = cudf.DataFrame(data)
+    pdf = pd.DataFrame(data)
 
-    cols = list(encoded.columns)[n_cols:]
-    actual = DataFrame(
-        dict(
-            zip(
-                cols,
-                np.concatenate(
-                    list(np.eye(n_categories) for _ in range(n_cols))
-                ),
-            )
-        )
+    encoded_expected = pd.get_dummies(pdf, prefix="test")
+    encoded_actual = cudf.get_dummies(gdf, prefix="test")
+
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "prefix",
+    [
+        ["a", "b", "c"],
+        "",
+        None,
+        {"first": "one", "second": "two", "third": "three"},
+        "--",
+    ],
+)
+@pytest.mark.parametrize(
+    "prefix_sep",
+    [
+        ["a", "b", "c"],
+        "",
+        "++",
+        {"first": "*******", "second": "__________", "third": "#########"},
+    ],
+)
+def test_get_dummies_prefix_sep(prefix, prefix_sep):
+    data = {
+        "first": ["1", "2", "3"],
+        "second": ["abc", "def", "ghi"],
+        "third": ["ji", "ji", "ji"],
+    }
+
+    gdf = DataFrame(data)
+    pdf = pd.DataFrame(data)
+
+    encoded_expected = pd.get_dummies(
+        pdf, prefix=prefix, prefix_sep=prefix_sep
     )
-    assert (encoded.loc[:, cols] == actual).all().all()
+    encoded_actual = cudf.get_dummies(
+        gdf, prefix=prefix, prefix_sep=prefix_sep
+    )
+
+    utils.assert_eq(encoded_expected, encoded_actual, check_dtype=False)
 
 
 if __name__ == "__main__":

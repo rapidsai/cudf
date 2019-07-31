@@ -10,7 +10,7 @@ import pandas as pd
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.index import Index, StringIndex, as_index
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils
 
 
 class MultiIndex(Index):
@@ -369,9 +369,7 @@ class MultiIndex(Index):
         elif isinstance(indices, Series):
             indices = indices.to_gpu_array()
         elif isinstance(indices, slice):
-            start, stop, step, sln = utils.standard_python_slice(
-                len(self), indices
-            )
+            start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
         result.names = self.names
@@ -534,6 +532,31 @@ class MultiIndex(Index):
                 names=multiindex.names,
             )
         return mi
+
+    @property
+    def is_unique(self):
+        if not hasattr(self, "_is_unique"):
+            self._is_unique = (
+                self._source_data._size
+                == self._source_data.drop_duplicates()._size
+            )
+        return self._is_unique
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, "_is_monotonic_increasing"):
+            self._is_monotonic_increasing = self._source_data.argsort(
+                ascending=True
+            ).is_monotonic_increasing
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            self._is_monotonic_decreasing = self._source_data.argsort(
+                ascending=True
+            ).is_monotonic_decreasing
+        return self._is_monotonic_decreasing
 
 
 register_distributed_serializer(MultiIndex)

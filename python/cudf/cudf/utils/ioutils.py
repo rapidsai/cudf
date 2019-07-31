@@ -702,8 +702,9 @@ chunksize : int or None, default None
 
 Notes
 -----
-Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
-If `to_csv` leads to memory errors consider setting the `chunksize` parameter.
+- Follows the standard of Pandas csv.QUOTE_NONNUMERIC for all output.
+- If `to_csv` leads to memory errors consider setting the `chunksize` argument.
+
 Examples
 --------
 

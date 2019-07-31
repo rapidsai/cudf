@@ -16,7 +16,7 @@ class _SeriesLocIndexer(object):
 
     def __getitem__(self, arg):
         from cudf.dataframe.series import Series
-        from cudf.dataframe.index import Index
+        from cudf.dataframe.index import Index, RangeIndex
 
         if isinstance(
             arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
@@ -31,7 +31,11 @@ class _SeriesLocIndexer(object):
             # To do this efficiently we need a solution to
             # https://github.com/rapidsai/cudf/issues/1087
             out = Series(
-                [], dtype=self._sr.dtype, index=self._sr.index.__class__([])
+                [],
+                dtype=self._sr.dtype,
+                index=self._sr.index.__class__(start=0)
+                if isinstance(self._sr.index, RangeIndex)
+                else self._sr.index.__class__([]),
             )
             for s in arg:
                 out = out.append(self._sr.loc[s:s], ignore_index=False)
@@ -178,7 +182,10 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             df.add_column(name=col, data=self._df[col].loc[arg[0]])
         if df.shape[0] == 1:  # we have a single row
             if isinstance(arg[0], slice):
-                df.index = as_index(arg[0].start)
+                start = arg[0].start
+                if start is None:
+                    start = self._df.index[0]
+                df.index = as_index(start)
             else:
                 df.index = as_index(arg[0])
         return df
@@ -234,7 +241,10 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
         if df.shape[0] == 1:  # we have a single row without an index
             if isinstance(arg[0], slice):
-                df.index = as_index(self._df.index[arg[0].start])
+                start = arg[0].start
+                if start is None:
+                    start = 0
+                df.index = as_index(self._df.index[start])
             else:
                 df.index = as_index(self._df.index[arg[0]])
         return df

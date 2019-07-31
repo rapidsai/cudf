@@ -144,18 +144,60 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, name_series=None, index=None):
+    def __init__(self, data=None, index=None, columns=None):
+        keys = index
         if index is None:
             index = RangeIndex(start=0)
         self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
-        if name_series is not None:
-            if isinstance(name_series, dict):
-                name_series = name_series.items()
-            for k, series in name_series:
-                self.add_column(k, series, forceindex=index is not None)
+
+        if data is not None:
+            if isinstance(data, dict):
+                data = data.items()
+            elif utils.is_list_like(data) and len(data) > 0:
+                if not isinstance(data[0], (list, tuple)):
+                    # a nested list is something pandas supports and
+                    # we don't support list-like values in a record yet
+                    self._add_rows(data, index, keys)
+                    return
+            for col_name, series in data:
+                self.add_column(col_name, series, forceindex=index is not None)
+
+        self._add_empty_columns(columns, index)
+
+    def _add_rows(self, data, index, keys):
+        if keys is None:
+            data = {i: element for i, element in enumerate(data)}.items()
+        else:
+            data = dict(zip(keys, data)).items()
+            self._index = as_index(RangeIndex(start=0))
+            self._size = len(RangeIndex(start=0))
+        for col_name, series in data:
+            self.add_column(col_name, series, forceindex=index is not None)
+        transposed = self.T
+        self._cols = OrderedDict()
+        self._size = transposed._size
+        self._index = as_index(transposed.index)
+        for col_name in transposed.columns:
+            self.add_column(
+                col_name,
+                transposed._cols[col_name],
+                forceindex=index is not None,
+            )
+
+    def _add_empty_columns(self, columns, index):
+        if columns is not None:
+            for col_name in columns:
+                if col_name not in self._cols:
+                    self.add_column(
+                        col_name,
+                        columnops.column_empty(
+                            self._size, dtype="object", masked=True
+                        ),
+                        forceindex=index is not None,
+                    )
 
     def serialize(self, serialize):
         header = {}
@@ -365,6 +407,36 @@ class DataFrame(object):
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
             return func(self)
+        else:
+            return NotImplemented
+
+    def __array_function__(self, func, types, args, kwargs):
+
+        cudf_df_module = DataFrame
+        cudf_series_module = Series
+
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_df_module, submodule):
+                cudf_df_module = getattr(cudf_df_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_df_module, cudf_series_module]
+
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_df_module, fname):
+            cudf_func = getattr(cudf_df_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
         else:
             return NotImplemented
 
@@ -1025,19 +1097,18 @@ class DataFrame(object):
         return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
-        positions = columnops.as_column(positions).astype("int32").data.mem
         out = DataFrame()
-        cols = [s._column for s in self._cols.values()]
+        if self._cols:
+            positions = columnops.as_column(positions).astype("int32").data.mem
+            cols = [s._column for s in self._cols.values()]
+            result_cols = cpp_copying.apply_gather(cols, positions)
+            for i, col_name in enumerate(self._cols):
+                out[col_name] = result_cols[i]
 
-        result_cols = cpp_copying.apply_gather(cols, positions)
-
-        for i, col_name in enumerate(self._cols):
-            out[col_name] = result_cols[i]
-
-        if ignore_index:
-            out.index = RangeIndex(len(out))
-        else:
-            out.index = self.index.take(positions)
+            if ignore_index:
+                out.index = RangeIndex(len(out))
+            else:
+                out.index = self.index.take(positions)
         return out
 
     def copy(self, deep=True):
@@ -1117,6 +1188,10 @@ class DataFrame(object):
            being added
         """
         if SCALAR:
+            if hasattr(series, "dtype") and np.issubdtype(
+                series.dtype, np.datetime64
+            ):
+                series = series.astype("datetime64[ms]")
             col = series
 
         if (utils.is_list_like(series)) or (isinstance(series, Series)):
@@ -1321,7 +1396,7 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if len(self.index) == len(new_index) and self.index.equals(new_index):
+        if self.index.equals(new_index):
             new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
@@ -1645,6 +1720,11 @@ class DataFrame(object):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
+        if hasattr(cats, "to_pandas"):
+            cats = cats.to_pandas()
+        else:
+            cats = pd.Series(cats)
+
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
@@ -1685,13 +1765,6 @@ class DataFrame(object):
 
         return outdf
 
-    def _sort_by(self, sorted_indices):
-        df = DataFrame()
-        # Perform out = data[index] for all columns
-        for k in self.columns:
-            df[k] = self[k].take(sorted_indices.to_gpu_array())
-        return df
-
     def argsort(self, ascending=True, na_position="last"):
         cols = [series._column for series in self._cols.values()]
         return get_sorted_inds(
@@ -1701,7 +1774,7 @@ class DataFrame(object):
     def sort_index(self, ascending=True):
         """Sort by the index
         """
-        return self._sort_by(self.index.argsort(ascending=ascending))
+        return self.take(self.index.argsort(ascending=ascending))
 
     def sort_values(self, by, ascending=True, na_position="last"):
         """
@@ -1741,7 +1814,7 @@ class DataFrame(object):
         1  1  2
         """
         # argsort the `by` column
-        return self._sort_by(
+        return self.take(
             self[by].argsort(ascending=ascending, na_position=na_position)
         )
 
@@ -1837,43 +1910,6 @@ class DataFrame(object):
         from cudf.reshape.general import melt
 
         return melt(self, **kwargs)
-
-    def get_dummies(self, **kwargs):
-        """ Returns a dataframe whose columns are the one hot encodings of all
-        columns in `df`
-
-        Parameters
-        ----------
-        df : cudf.DataFrame
-            dataframe to encode
-        prefix : str, dict, or sequence, optional
-            prefix to append. Either a str (to apply a constant prefix), dict
-            mapping column names to prefixes, or sequence of prefixes to apply
-            with the same length as the number of columns. If not supplied,
-            defaults to the empty string
-        prefix_sep : str, optional
-            separator to use when appending prefixes
-        dummy_na : boolean, optional
-            Right now this is NON-FUNCTIONAL argument in rapids.
-        cats : dict, optional
-            dictionary mapping column names to sequences of integers
-            representing that column's category.
-            See `cudf.DataFrame.one_hot_encoding` for more information.
-            if not supplied, it will be computed
-        sparse : boolean, optional
-            Right now this is NON-FUNCTIONAL argument in rapids.
-        drop_first : boolean, optional
-            Right now this is NON-FUNCTIONAL argument in rapids.
-        columns : sequence of str, optional
-            Names of columns to encode. If not provided, will attempt to encode
-            all columns. Note this is different from pandas default behavior,
-            which encodes all columns with dtype object or categorical
-        dtype : str, optional
-            output dtype, default 'float64'
-        """
-        from cudf.reshape import get_dummies
-
-        return get_dummies(self, **kwargs)
 
     def merge(
         self,
@@ -2846,6 +2882,21 @@ class DataFrame(object):
 
         return output_frame
 
+    def isnull(self, **kwargs):
+        """Identify missing values in a DataFrame.
+        """
+        return self._apply_support_method("isnull", **kwargs)
+
+    def isna(self, **kwargs):
+        """Identify missing values in a DataFrame. Alias for isnull.
+        """
+        return self.isnull(**kwargs)
+
+    def notna(self, **kwargs):
+        """Identify non-missing values in a DataFrame.
+        """
+        return self._apply_support_method("notna", **kwargs)
+
     def to_pandas(self):
         """
         Convert to a Pandas DataFrame.
@@ -2949,6 +3000,7 @@ class DataFrame(object):
         types = []
         index_names = []
         index_columns = []
+        index_descriptors = []
 
         for name, column in self._cols.items():
             names.append(name)
@@ -2957,21 +3009,38 @@ class DataFrame(object):
             types.append(arrow_col.type)
 
         index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
-        index_names.append(index_name)
         index_columns.append(self.index)
+
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
         # conversions
-        index_arrow = self.index.to_arrow()
-        types.append(index_arrow.type)
         if preserve_index:
-            arrays.append(index_arrow)
-            names.append(index_name)
+            if isinstance(self.index, cudf.dataframe.index.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                index_arrow = self.index.to_arrow()
+                descr = index_name
+                types.append(index_arrow.type)
+                arrays.append(index_arrow)
+                names.append(index_name)
+                index_names.append(index_name)
+            index_descriptors.append(descr)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
         metadata = pa.pandas_compat.construct_metadata(
-            self, names, index_columns, index_names, preserve_index, types
+            self,
+            names,
+            index_columns,
+            index_descriptors,
+            preserve_index,
+            types,
         )
 
         return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
@@ -2999,22 +3068,20 @@ class DataFrame(object):
         >>> cudf.DataFrame.from_arrow(table)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
-        import json
 
         if not isinstance(table, pa.Table):
             raise TypeError("not a pyarrow.Table")
 
         index_col = None
         dtypes = None
-        if isinstance(table.schema.metadata, dict):
-            if b"pandas" in table.schema.metadata:
-                metadata = json.loads(table.schema.metadata[b"pandas"])
-                index_col = metadata["index_columns"]
-                dtypes = {
-                    col["field_name"]: col["pandas_type"]
-                    for col in metadata["columns"]
-                    if "field_name" in col
-                }
+        if isinstance(table.schema.pandas_metadata, dict):
+            metadata = table.schema.pandas_metadata
+            index_col = metadata["index_columns"]
+            dtypes = {
+                col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
 
         df = cls()
         for col in table.columns:
@@ -3029,11 +3096,21 @@ class DataFrame(object):
 
             df[col.name] = columnops.as_column(col.data, dtype=dtype)
         if index_col:
-            df = df.set_index(index_col[0])
-            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-                df.index.name, df.index.name
-            )
-            df.index.name = new_index_name
+            if isinstance(index_col[0], dict):
+                assert index_col[0]["kind"] == "range"
+                df = df.set_index(
+                    RangeIndex(
+                        index_col[0]["start"],
+                        index_col[0]["stop"],
+                        name=index_col[0]["name"],
+                    )
+                )
+            else:
+                df = df.set_index(index_col[0])
+                new_index_name = pa.pandas_compat._backwards_compatible_index_name(  # noqa: E501
+                    df.index.name, df.index.name
+                )
+                df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):
@@ -3210,7 +3287,6 @@ class DataFrame(object):
             columns = self.columns
 
         result = DataFrame()
-        result["Quantile"] = q
         for k, col in self._cols.items():
             if k in columns:
                 res = col.quantile(
@@ -3221,10 +3297,16 @@ class DataFrame(object):
                 )
                 if not isinstance(res, numbers.Number) and len(res) == 0:
                     res = columnops.column_empty_like(
-                        q, dtype=col.dtype, masked=True, newsize=len(q)
+                        q, dtype="float64", masked=True, newsize=len(q)
                     )
                 result[k] = res
-        return result
+        if isinstance(q, numbers.Number):
+            result.index = [float(q)]
+            return result.iloc[0]
+        else:
+            q = list(map(float, q))
+            result.index = q
+            return result
 
     #
     # Stats
@@ -3349,11 +3431,18 @@ class DataFrame(object):
         if not isinstance(exclude, (list, tuple)):
             exclude = (exclude,) if exclude is not None else ()
 
-        df = DataFrame()
+        df = DataFrame(index=self.index)
 
         # cudf_dtype_from_pydata_dtype can distinguish between
         # np.float and np.number
         selection = tuple(map(frozenset, (include, exclude)))
+
+        if not any(selection):
+            raise ValueError(
+                "at least one of include or exclude must be \
+                             nonempty"
+            )
+
         include, exclude = map(
             lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
@@ -3376,8 +3465,7 @@ class DataFrame(object):
                 # category handling
                 if i_dtype is cat_type:
                     include_subtypes.add(i_dtype)
-                    break
-                if issubclass(dtype.type, i_dtype):
+                elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
 
         # exclude all subtypes
@@ -3387,20 +3475,21 @@ class DataFrame(object):
                 # category handling
                 if e_dtype is cat_type:
                     exclude_subtypes.add(e_dtype)
-                    break
-                if issubclass(dtype.type, e_dtype):
+                elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)
 
         include_all = set(
             [utils.cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
         )
 
+        if include:
+            inclusion = include_all & include_subtypes
+        elif exclude:
+            inclusion = include_all
+        else:
+            inclusion = set()
         # remove all exclude types
-        inclusion = include_all - exclude_subtypes
-
-        # keep only those included
-        if include_subtypes:
-            inclusion = inclusion & include_subtypes
+        inclusion = inclusion - exclude_subtypes
 
         for x in self._cols.values():
             infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)

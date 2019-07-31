@@ -5,7 +5,6 @@ import pandas as pd
 import pyarrow as pa
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
-import cudf.bindings.copying as cpp_copying
 import cudf.bindings.replace as cpp_replace
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
@@ -83,7 +82,9 @@ class CategoricalAccessor(object):
         new_codes = cudautils.arange(len(new_cats), dtype=cur_codes.dtype)
         old_codes = cudautils.arange(len(cur_cats), dtype=cur_codes.dtype)
 
-        cur_df = DataFrame({"old_codes": cur_codes})
+        cur_df = DataFrame(
+            {"old_codes": cur_codes, "order": cudautils.arange(len(cur_codes))}
+        )
         old_df = DataFrame({"old_codes": old_codes, "cats": cur_cats})
         new_df = DataFrame({"new_codes": new_codes, "cats": new_cats})
 
@@ -91,6 +92,7 @@ class CategoricalAccessor(object):
         df = old_df.merge(new_df, on="cats", how="left")
         # Join the old and new codes to "recode" the codes data buffer
         df = cur_df.merge(df, on="old_codes", how="left")
+        df = df.sort_values(by="order").reset_index(True)
 
         kwargs = df["new_codes"]._column._replace_defaults()
         kwargs.update(categories=new_cats)
@@ -220,13 +222,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         )
         return col
 
-    def astype(self, dtype):
-        # custom dtype can't be compared with `==`
-        if self.dtype is dtype:
-            return self
-        return self.as_numerical.astype(dtype)
-
-    def sort_by_values(self, ascending, na_position="last"):
+    def sort_by_values(self, ascending=True, na_position="last"):
         return self.as_numerical.sort_by_values(ascending, na_position)
 
     def element_indexing(self, index):
@@ -249,43 +245,11 @@ class CategoricalColumn(columnops.TypedColumnBase):
             dictionary=self._categories.to_arrow(),
         )
 
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
-        # sort the column
-        sortcol, _ = densecol.sort_by_values(ascending=True)
-        # find segments
-        sortedvals = sortcol.to_gpu_array()
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
-
     def unique(self, method=None):
         codes = self.as_numerical.unique(method).data
         return CategoricalColumn(
             data=codes, categories=self._categories, ordered=self._ordered
         )
-
-    def unique_count(self, method="sort", dropna=True):
-        if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
-        out = cudautils.value_count(segs, len(sortedvals))
-        out_vals = self.replace(data=out_col.data, mask=None)
-        out_counts = columnops.build_column(Buffer(out), np.intp)
-        return out_vals, out_counts
 
     def _encode(self, value):
         return self._categories.find_first_value(value)
@@ -366,6 +330,69 @@ class CategoricalColumn(columnops.TypedColumnBase):
         Returns offset of last value that matches
         """
         return self.as_numerical.find_last_value(self._encode(value))
+
+    @property
+    def is_monotonic_increasing(self):
+        if not hasattr(self, "_is_monotonic_increasing"):
+            self._is_monotonic_increasing = (
+                self._ordered and self.as_numerical.is_monotonic_increasing
+            )
+        return self._is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        if not hasattr(self, "_is_monotonic_decreasing"):
+            self._is_monotonic_decreasing = (
+                self._ordered and self.as_numerical.is_monotonic_decreasing
+            )
+        return self._is_monotonic_decreasing
+
+    def as_categorical_column(self, dtype, **kwargs):
+        return self
+
+    def as_numerical_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_numerical_column(
+            dtype, **kwargs
+        )
+
+    def as_string_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_string_column(
+            dtype, **kwargs
+        )
+
+    def as_datetime_column(self, dtype, **kwargs):
+        return self._get_decategorized_column().as_datetime_column(
+            dtype, **kwargs
+        )
+
+    def _get_decategorized_column(self):
+        gather_map = (
+            self.cat().codes.astype("int32").fillna(0)._column.data.mem
+        )
+        out = self._categories.take(gather_map)
+        return out.replace(mask=self.mask)
+
+    def copy(self, deep=True):
+        """Categorical Columns are immutable, so a deep copy produces a
+        copy of the underlying data, mask, categories and a shallow copy
+        creates a new column and copies the references of the data, mask
+        and categories.
+        """
+        if deep:
+            import cudf.bindings.copying as cpp_copy
+
+            copied_col = cpp_copy.copy_column(self)
+            category_col = cpp_copy.copy_column(self._categories)
+            return self.replace(
+                data=copied_col.data,
+                mask=copied_col.mask,
+                dtype=self.dtype,
+                categories=category_col,
+                ordered=self._ordered,
+            )
+        else:
+            params = self._replace_defaults()
+            return type(self)(**params)
 
 
 def pandas_categorical_as_column(categorical, codes=None):

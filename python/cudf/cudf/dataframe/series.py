@@ -15,6 +15,9 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.copying as cpp_copying
 from cudf import formatting
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
+from cudf.bindings.stream_compaction import (
+    apply_drop_duplicates as cpp_drop_duplicates,
+)
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
@@ -83,12 +86,16 @@ class Series(object):
         elif isinstance(data, Index):
             name = data.name
             data = data.as_column()
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if isinstance(data, Series):
             index = data._index if index is None else index
             if name is None:
                 name = data.name
             data = data._column
+            if dtype is not None:
+                data = data.astype(dtype)
 
         if data is None:
             data = {}
@@ -111,6 +118,15 @@ class Series(object):
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
+
+    @property
+    def values(self):
+        if self.dtype == np.dtype("object"):
+            return self.data.to_host()
+        elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            return self._column.to_pandas().values
+        else:
+            return self.data.mem.copy_to_host()
 
     @classmethod
     def from_arrow(cls, s):
@@ -308,6 +324,34 @@ class Series(object):
         if method == "__call__" and hasattr(cudf, ufunc.__name__):
             func = getattr(cudf, ufunc.__name__)
             return func(self)
+        else:
+            return NotImplemented
+
+    def __array_function__(self, func, types, args, kwargs):
+
+        cudf_series_module = Series
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf to the correct submodule
+            if hasattr(cudf_series_module, submodule):
+                cudf_series_module = getattr(cudf_series_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [cudf_series_module]
+        for t in types:
+            if t not in handled_types:
+                return NotImplemented
+
+        if hasattr(cudf_series_module, fname):
+            cudf_func = getattr(cudf_series_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+
         else:
             return NotImplemented
 
@@ -817,8 +861,7 @@ class Series(object):
         return ser.astype(np.bool_)
 
     def logical_not(self):
-        outcol = self._column.unary_logic_op("not")
-        return self._copy_construct(data=outcol)
+        return self._unaryop("not")
 
     def _normalize_binop_value(self, other):
         """Returns a *column* (not a Series) or scalar for performing
@@ -1041,6 +1084,33 @@ class Series(object):
         data = self._column.masked_assign(value, mask)
         return self._copy_construct(data=data)
 
+    def drop_duplicates(self, keep="first", inplace=False):
+        """
+        Return Series with duplicate values removed
+        """
+        in_cols = [self._column]
+        in_index = self.index
+        from cudf.dataframe.multiindex import MultiIndex
+
+        if isinstance(in_index, MultiIndex):
+            in_index = RangeIndex(len(in_index))
+        out_cols, new_index = cpp_drop_duplicates(
+            [in_index.as_column()], in_cols, None, keep
+        )
+        new_index = as_index(new_index)
+        if self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, MultiIndex):
+            new_index = self.index.take(new_index)
+
+        if inplace:
+            self._index = new_index
+            self._size = len(new_index)
+            self._column = out_cols[0]
+        else:
+            out = Series(out_cols[0], index=new_index, name=self.name)
+            return out
+
     def dropna(self):
         """
         Return a Series with null values removed.
@@ -1170,7 +1240,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.isnull_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.isnull_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def isna(self):
@@ -1188,7 +1258,7 @@ class Series(object):
                 index=self.index,
             )
 
-        mask = cudautils.notna_mask(self.data, self.nullmask.to_gpu_array())
+        mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
     def nans_to_nulls(self):
@@ -1326,19 +1396,26 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype):
-        """Convert to the given ``dtype``.
+    def astype(self, dtype, **kwargs):
+        """
+        Cast the Series to the given dtype
+
+        Parameters
+        ---------
+
+        dtype : data type
+        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
-        If the dtype changed, a new ``Series`` is returned by casting each
-        values to the given dtype.
-        If the dtype is not changed, ``self`` is returned.
+        out : Series
+            Copy of ``self`` cast to the given dtype. Returns
+            ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
-        return self._copy_construct(data=self._column.astype(dtype))
+        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
@@ -1528,9 +1605,10 @@ class Series(object):
         A sequence of new series for each category.  Its length is determined
         by the length of ``cats``.
         """
-        if self.dtype.kind not in "iuf":
-            raise TypeError("expecting integer or float dtype")
-
+        if hasattr(cats, "to_pandas"):
+            cats = cats.to_pandas()
+        else:
+            cats = pd.Series(cats)
         dtype = np.dtype(dtype)
         return ((self == cat).fillna(False).astype(dtype) for cat in cats)
 
@@ -1555,15 +1633,16 @@ class Series(object):
         if dtype is None:
             dtype = utils.min_scalar_type(len(cats), 32)
 
-        value = Series(cats).astype(self.dtype)
+        cats = Series(cats).astype(self.dtype)
         order = Series(cudautils.arange(len(self)))
-        codes = Series(cudautils.arange(len(value), dtype=dtype))
+        codes = Series(cudautils.arange(len(cats), dtype=dtype))
 
-        value = DataFrame({"value": value, "code": codes})
+        value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame({"value": self, "order": order})
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
+        cats.name = None  # because it was mutated to "value" above
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
@@ -1709,30 +1788,23 @@ class Series(object):
                 index=self.index,
             )
 
-    def mean(self, axis=None, skipna=True, dtype=None):
+    def mean(self, axis=None, skipna=True):
         """Compute the mean of the series
         """
         assert axis in (None, 0) and skipna is True
-        return self._column.mean(dtype=dtype)
+        return self._column.mean()
 
     def std(self, ddof=1, axis=None, skipna=True):
         """Compute the standard deviation of the series
         """
         assert axis in (None, 0) and skipna is True
-        return np.sqrt(self.var(ddof=ddof))
+        return self._column.std(ddof=ddof)
 
     def var(self, ddof=1, axis=None, skipna=True):
         """Compute the variance of the series
         """
         assert axis in (None, 0) and skipna is True
-        mu, var = self.mean_var(ddof=ddof)
-        return var
-
-    def mean_var(self, ddof=1):
-        """Compute mean and variance at the same time.
-        """
-        mu, var = self._column.mean_var(ddof=ddof)
-        return mu, var
+        return self._column.var(ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return self._column.sum_of_squares(dtype=dtype)
@@ -1778,16 +1850,16 @@ class Series(object):
         return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
-    def value_counts(self, method="sort", sort=True):
+    def value_counts(self, sort=True):
         """Returns unique values of this Series.
         """
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
+
         if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int64))
-        vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=as_index(vals))
+            return Series(np.array([], dtype=np.int32), name=self.name)
+
+        res = self.groupby(self).count()
+        res.index.name = None
+
         if sort:
             return res.sort_values(ascending=False)
         return res
@@ -1955,7 +2027,9 @@ class Series(object):
                 return res.pop()
 
         if not quant_index:
-            return Series(self._column.quantile(q, interpolation, exact))
+            return Series(
+                self._column.quantile(q, interpolation, exact), name=self.name
+            )
         else:
             from cudf.dataframe.columnops import column_empty_like
 
@@ -1969,7 +2043,7 @@ class Series(object):
                 )
             else:
                 result = self._column.quantile(q, interpolation, exact)
-            return Series(result, index=as_index(np_array_q))
+            return Series(result, index=as_index(np_array_q), name=self.name)
 
     def describe(self, percentiles=None, include=None, exclude=None):
         """Compute summary statistics of a Series. For numeric
@@ -2328,6 +2402,22 @@ class Series(object):
             out.name = index
 
         return out.copy(deep=copy)
+
+    @property
+    def is_unique(self):
+        return self._column.is_unique
+
+    @property
+    def is_monotonic(self):
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_increasing(self):
+        return self._column.is_monotonic_increasing
+
+    @property
+    def is_monotonic_decreasing(self):
+        return self._column.is_monotonic_decreasing
 
 
 register_distributed_serializer(Series)

@@ -20,18 +20,6 @@
 #include "cudf.h"
 
 /**
- * @brief These enums indicate the supported reduction operations that can be
- * performed on a column
- */
-typedef enum {
-  GDF_REDUCTION_SUM = 0,        ///< Computes the sum of all values in the column
-  GDF_REDUCTION_MIN,            ///< Computes the minimum of all values in the column
-  GDF_REDUCTION_MAX,            ///< Computes the maximum of all values in the column
-  GDF_REDUCTION_PRODUCT,        ///< Computes the multiplicative product of all values in the column
-  GDF_REDUCTION_SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
-} gdf_reduction_op;
-
-/**
  * @brief These enums indicate the supported operations of prefix scan that can be
  * performed on a column
  */
@@ -43,6 +31,25 @@ typedef enum {
 } gdf_scan_op;
 
 namespace cudf {
+
+namespace reduction {
+/**
+ * @brief These enums indicate the supported reduction operations that can be
+ * performed on a column
+ */
+enum operators {
+  SUM = 0,        ///< Computes the sum of all values in the column
+  MIN,            ///< Computes the minimum of all values in the column
+  MAX,            ///< Computes the maximum of all values in the column
+  PRODUCT,        ///< Computes the multiplicative product of all values in the column
+  SUMOFSQUARES,   ///< Computes the sum of squares of the values in the column
+  MEAN,           ///< Computes the arithmetic mean of the values in the column
+  VAR,            ///< Computes the variance of the values in the column
+  STD,            ///< Computes the standard deviation of the values in the column
+};
+}  // namespace reduction
+
+
 /** --------------------------------------------------------------------------*
  * @brief  Computes the reduction of the values in all rows of a column
  * This function does not detect overflows in reductions.
@@ -55,18 +62,22 @@ namespace cudf {
  *
  * @param[in] col Input column
  * @param[in] op  The operator applied by the reduction
- * @param[in] dtype The computation and output precision.
+ * @param[in] output_dtype  The computation and output precision.
  *     `dtype` must be a data type that is convertible from the input dtype.
- *     If the input column has arithmetic type, any arithmetic type can be specified.
+ *     If the input column has arithmetic type or cudf::bool8 type,
+ *     output_dtype can be any arithmetic type or cudf::bool8 type.
+ *     For `mean`, `var` and `std` ops, a floating point type must be specified.
  *     If the input column has non-arithmetic type
  *     (date32, timestamp, category...), the same type must be specified.
+ * @param[in] ddof Delta Degrees of Freedom: the divisor used in calculation of `std` and `var` is `N - ddof`, where `N` is the population size.`
  *
  * @returns  gdf_scalar the result value
  * If the reduction fails, the member is_valid of the output gdf_scalar
  * will contain `false`.
  * ----------------------------------------------------------------------------**/
-gdf_scalar reduction(const gdf_column *col, gdf_reduction_op op,
-                        gdf_dtype output_dtype);
+gdf_scalar reduce(const gdf_column *col, cudf::reduction::operators op,
+                        gdf_dtype output_dtype,
+                        gdf_size_type ddof = 1);
 
 /** --------------------------------------------------------------------------*
  * @brief  Computes the scan (a.k.a. prefix sum) of a column.

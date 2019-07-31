@@ -207,6 +207,48 @@ gdf_error gdf_column_free(gdf_column *column)
   return GDF_SUCCESS;
 }
 
+namespace cudf {
+
+namespace detail {
+
+void allocate_column_fields(gdf_column& column,
+                            bool allocate_mask,
+                            cudaStream_t stream)
+{
+  if (column.size > 0) {
+    const auto byte_width = (column.dtype == GDF_STRING)
+                          ? sizeof(std::pair<const char *, size_t>)
+                          : cudf::size_of(column.dtype);
+    RMM_TRY(RMM_ALLOC(&column.data, column.size * byte_width, stream));
+    if (allocate_mask) {
+      size_t valid_size = gdf_valid_allocation_size(column.size);
+      RMM_TRY(RMM_ALLOC(&column.valid, valid_size, stream));
+    }
+  }
+}
+
+} // namespace detail
+
+
+/*
+ * Allocates a new column of the given size and type.
+ */
+gdf_column allocate_column(gdf_dtype dtype, gdf_size_type size,
+                           bool allocate_mask,
+                           gdf_dtype_extra_info info,
+                           cudaStream_t stream)
+{  
+  gdf_column output{};
+  output.size = size;
+  output.dtype = dtype;
+  output.dtype_info = info;
+
+  detail::allocate_column_fields(output, allocate_mask, stream);
+
+  return output;
+}
+
+} // namespace cudf
 
 namespace{
   struct get_type_size{

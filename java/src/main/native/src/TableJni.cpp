@@ -17,8 +17,9 @@
 #include <cstring>
 
 #include "cudf/copying.hpp"
+#include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
-#include "cudf/table.hpp"
+#include "cudf/legacy/table.hpp"
 #include "cudf/types.hpp"
 
 #include "jni_utils.hpp"
@@ -203,10 +204,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
     read_arg.comment = comment;
 
     cudf::table result = read_csv(read_arg);
-    std::vector<gdf_column*> ptrs(result.begin(), result.end());
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
-                                                ptrs.size());
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -253,10 +253,57 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     read_arg.strings_to_categorical = false;
 
     cudf::table result = read_parquet(read_arg);
-    std::vector<gdf_column*> ptrs(result.begin(), result.end());
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(ptrs.data()),
-                                                ptrs.size());
+    return native_handles.get_jArray();
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
+    JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
+    jlong buffer, jlong buffer_length) {
+  bool read_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
+    read_buffer = false;
+  } else if (inputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an inputfilepath", NULL);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
+                  NULL);
+  }
+
+  try {
+    cudf::jni::native_jstring filename(env, inputfilepath);
+    if (!read_buffer && filename.is_empty()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
+                    NULL);
+    }
+
+    cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+
+    std::unique_ptr<cudf::source_info> source;
+    if (read_buffer) {
+      source.reset(new cudf::source_info(reinterpret_cast<char *>(buffer), buffer_length));
+    } else {
+      source.reset(new cudf::source_info(filename.get()));
+    }
+
+    cudf::orc_read_arg read_arg{*source};
+
+    read_arg.columns = n_filter_col_names.as_cpp_vector();
+
+    read_arg.stripe = -1;
+    read_arg.skip_rows = -1;
+    read_arg.num_rows = -1;
+    read_arg.use_index = false;
+
+    cudf::table result = read_orc(read_arg);
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
@@ -444,78 +491,53 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
-    JNIEnv *env, jclass clazz, jlong input_table, jintArray j_group_by_columns,
-    jint agg_column_index, jint agg_type) {
+    JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
+    jintArray aggregate_column_indices, jintArray agg_types) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
-  JNI_NULL_CHECK(env, j_group_by_columns, "j_group_by_columns is null", NULL);
+  JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
+  JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
+  JNI_NULL_CHECK(env, agg_types, "agg_types are null", NULL);
 
   try {
     cudf::table *n_input_table = reinterpret_cast<cudf::table *>(input_table);
-    cudf::jni::native_jintArray n_group_by_columns(env, j_group_by_columns);
-    gdf_agg_op op = static_cast<gdf_agg_op>(agg_type);
-    std::vector<gdf_column *> group_by_vector;
-    for (int i = 0; i < n_group_by_columns.size(); i++) {
-      group_by_vector.push_back(n_input_table->get_column(n_group_by_columns[i]));
+    cudf::jni::native_jintArray n_keys(env, keys);
+    cudf::jni::native_jintArray n_values(env, aggregate_column_indices);
+    cudf::jni::native_jintArray n_ops(env, agg_types);
+    std::vector<gdf_column *> n_keys_cols;
+    std::vector<gdf_column *> n_values_cols;
+
+    for (int i = 0; i < n_keys.size(); i++) {
+      n_keys_cols.push_back(n_input_table->get_column(n_keys[i]));
     }
 
-    cudf::table n_group_by_table(group_by_vector);
-    cudf::jni::output_table n_output_table(env, &n_group_by_table);
-    gdf_column *agg_column = n_input_table->get_column(agg_column_index);
-    gdf_dtype agg_dtype;
-    if (op == GDF_COUNT || op == GDF_COUNT_DISTINCT) {
-      agg_dtype = GDF_INT32;
-    } else if (op == GDF_AVG) {
-      agg_dtype = GDF_FLOAT64;
-    } else {
-      agg_dtype = agg_column->dtype;
-    }
-    cudf::jni::gdf_column_wrapper output_agg_column(agg_column->size, agg_dtype, false);
-    gdf_context ctxt{0, GDF_SORT, 0, 0};
-    std::vector<gdf_column *> cols = n_output_table.get_gdf_columns();
-    switch (op) {
-      case GDF_COUNT:
-        JNI_GDF_TRY(env, NULL,
-                    gdf_group_by_count(n_group_by_table.num_columns(), n_group_by_table.begin(),
-                                       agg_column, nullptr, cols.data(), output_agg_column.get(),
-                                       &ctxt));
-        break;
-      case GDF_MAX:
-        JNI_GDF_TRY(env, NULL,
-                    gdf_group_by_max(n_group_by_table.num_columns(), n_group_by_table.begin(),
-                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
-                                     &ctxt));
-        break;
-
-      case GDF_MIN:
-        JNI_GDF_TRY(env, NULL,
-                    gdf_group_by_min(n_group_by_table.num_columns(), n_group_by_table.begin(),
-                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
-                                     &ctxt));
-        break;
-
-      case GDF_SUM:
-        JNI_GDF_TRY(env, NULL,
-                    gdf_group_by_sum(n_group_by_table.num_columns(), n_group_by_table.begin(),
-                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
-                                     &ctxt));
-        break;
-
-      case GDF_AVG:
-        JNI_GDF_TRY(env, NULL,
-                    gdf_group_by_avg(n_group_by_table.num_columns(), n_group_by_table.begin(),
-                                     agg_column, nullptr, cols.data(), output_agg_column.get(),
-                                     &ctxt));
-        break;
+    for (int i = 0; i < n_values.size(); i++) {
+      n_values_cols.push_back(n_input_table->get_column(n_values[i]));
     }
 
-    cols.push_back(output_agg_column.get());
+    cudf::table const n_keys_table(n_keys_cols);
+    cudf::table const n_values_table(n_values_cols);
 
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(cols.data()),
-                                                cols.size());
-    n_output_table.get_native_handles_and_release();
-    output_agg_column.release();
+    std::vector<cudf::groupby::hash::operators> ops;
+    for (int i = 0; i < n_ops.size(); i++) {
+      ops.push_back(static_cast<cudf::groupby::hash::operators>(n_ops[i]));
+    }
 
-    return native_handles.get_jArray();
+    std::pair<cudf::table, cudf::table> result =
+        cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops);
+
+    try {
+      std::vector<gdf_column *> output_columns;
+      output_columns.reserve(result.first.num_columns() + result.second.num_columns());
+      output_columns.insert(output_columns.end(), result.first.begin(), result.first.end());
+      output_columns.insert(output_columns.end(), result.second.begin(), result.second.end());
+      cudf::jni::native_jlongArray native_handles(
+          env, reinterpret_cast<jlong *>(output_columns.data()), output_columns.size());
+      return native_handles.get_jArray();
+    } catch (...) {
+      result.first.destroy();
+      result.second.destroy();
+      throw;
+    }
   }
   CATCH_STD(env, NULL);
 }
