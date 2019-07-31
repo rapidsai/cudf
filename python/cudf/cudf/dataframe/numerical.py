@@ -135,14 +135,21 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.dataframe import datetime
+        import cudf.bindings.typecast as typecast
 
-        return self.astype("int64", **kwargs).view(
-            datetime.DatetimeColumn, dtype=dtype, data=self.data.astype(dtype)
+        return self.view(
+            datetime.DatetimeColumn,
+            dtype=dtype,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        col = self.replace(data=self.data.astype(dtype), dtype=np.dtype(dtype))
-        return col
+        import cudf.bindings.typecast as typecast
+
+        return self.replace(
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            dtype=np.dtype(dtype),
+        )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)

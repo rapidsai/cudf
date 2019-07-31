@@ -116,20 +116,25 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @property
     def as_numerical(self):
         from cudf.dataframe import numerical
+        import cudf.bindings.typecast as typecast
 
         return self.view(
             numerical.NumericalColumn,
             dtype="int64",
-            data=self.data.astype("int64"),
+            data=typecast.apply_cast(self, dtype=np.int64).data,
         )
 
     def as_datetime_column(self, dtype, **kwargs):
-        # TODO: this needs to change after
-        # we support more than just datetime64[ms]
-        return self
+        import cudf.bindings.typecast as typecast
+
+        return typecast.apply_cast(self, dtype=np.dtype(dtype).type)
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self.as_numerical.astype(dtype, **kwargs)
+        import cudf.bindings.typecast as typecast
+
+        return typecast.apply_cast(
+            self.as_numerical, dtype=np.dtype(dtype).type
+        )
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string

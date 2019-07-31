@@ -134,16 +134,7 @@ def test_series_append():
     np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
 
 
-index_dtypes = [
-    np.int64,
-    np.int32,
-    np.int16,
-    np.int8,
-    np.uint64,
-    np.uint32,
-    np.uint16,
-    np.uint8,
-]
+index_dtypes = [np.int64, np.int32, np.int16, np.int8]
 
 
 @pytest.mark.parametrize(
