@@ -25,11 +25,11 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
    libcudf      - build the cudf C++ code only
    cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
+   bench        - build libcudf gbench benchmarks
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
    -h           - print this text
-   -b           - enable benchmark builds
 
    default action (no args) is to build and install 'libcudf' then 'cudf' then
    'dask_cudf' targets
@@ -79,7 +79,7 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
 fi
-if hasArg -b; then
+if hasArg bench; then
     BUILD_BENCHMARKS=ON
 fi
 
