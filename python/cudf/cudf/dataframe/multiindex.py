@@ -47,8 +47,6 @@ class MultiIndex(Index):
             self._source_data = kwargs["source_data"].reset_index(drop=True)
             self._codes = codes
             self._levels = levels
-            if names is None:
-                self.names = self._source_data.columns
             return
 
         # name setup

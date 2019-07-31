@@ -550,16 +550,17 @@ class DataFrame(object):
             output = self.copy(deep=False)
         else:
             uppercols = len(self.columns) - ncols - 1
-            upper_left = self.head(nrows).loc[:, :ncols]
-            upper_right = self.head(nrows).loc[:, uppercols:]
-            lower_left = self.tail(nrows).loc[:, :ncols]
-            lower_right = self.tail(nrows).loc[:, uppercols:]
+            upper_left = self.head(nrows).iloc[:, :ncols]
+            upper_right = self.head(nrows).iloc[:, uppercols:]
+            lower_left = self.tail(nrows).iloc[:, :ncols]
+            lower_right = self.tail(nrows).iloc[:, uppercols:]
             output = cudf.concat(
                 [
                     cudf.concat([upper_left, upper_right], axis=1),
                     cudf.concat([lower_left, lower_right], axis=1),
                 ]
             )
+        temp_mi_columns = output.columns
         for col in output._cols:
             if self._cols[col].null_count > 0:
                 output[col] = (
@@ -568,7 +569,7 @@ class DataFrame(object):
             else:
                 output[col] = output._cols[col]
         if isinstance(self.columns, cudf.MultiIndex):
-            output.columns = self.columns
+            output.columns = temp_mi_columns
         return output
 
     def __repr__(self):
@@ -1143,6 +1144,7 @@ class DataFrame(object):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
+        from cudf import MultiIndex
         df = DataFrame()
         df._size = self._size
         if deep:
@@ -1153,6 +1155,8 @@ class DataFrame(object):
             df._index = self._index
             for k in self._cols:
                 df._cols[k] = self._cols[k]
+        if isinstance(self.columns, MultiIndex):
+            df.columns = self.columns.copy(deep)
         return df
 
     def __copy__(self):
