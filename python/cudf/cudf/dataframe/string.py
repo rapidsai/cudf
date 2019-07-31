@@ -509,7 +509,8 @@ class StringColumn(columnops.TypedColumnBase):
                 arg = len(self) + arg
             if arg > (len(self) - 1):
                 raise IndexError
-            out = self._data[arg]
+            out = self._data[arg].to_host()[0]
+            return out
         elif isinstance(arg, slice):
             out = self._data[arg]
         elif isinstance(arg, list):
@@ -529,10 +530,7 @@ class StringColumn(columnops.TypedColumnBase):
         else:
             raise NotImplementedError(type(arg))
 
-        if len(out) == 1:
-            return out.to_host()[0]
-        else:
-            return columnops.as_column(out)
+        return columnops.as_column(out)
 
     def __getitem__(self, arg):
         return self.element_indexing(arg)
