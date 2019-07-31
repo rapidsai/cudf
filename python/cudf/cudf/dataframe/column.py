@@ -612,11 +612,12 @@ class Column(object):
         """Return Column by taking values from the corresponding *indices*.
         """
         import cudf.bindings.copying as cpp_copying
+        from cudf.dataframe.columnops import column_empty_like
 
         indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
-            return self.copy()
+            return column_empty_like(self, newsize=0)
 
         # Returns a new column
         return cpp_copying.apply_gather(self, indices)

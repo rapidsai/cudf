@@ -1348,7 +1348,8 @@ class Series(object):
         values to the given dtype.
         If the dtype is not changed, ``self`` is returned.
         """
-        if dtype == self.dtype:
+
+        if utils.dtype_equals(dtype, self.dtype):
             return self
 
         return self._copy_construct(data=self._column.astype(dtype))
