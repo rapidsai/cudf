@@ -204,4 +204,3 @@ gdf_error sync_column_categories(const gdf_column* const input_columns[], gdf_co
 
   return GDF_SUCCESS;
 }
-

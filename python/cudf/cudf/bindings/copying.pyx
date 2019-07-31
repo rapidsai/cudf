@@ -7,7 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
-from cudf.utils.cudautils import astype, modulo
+from cudf.utils.cudautils import modulo
 from librmm_cffi import librmm as rmm
 
 import numpy as np
@@ -54,7 +54,10 @@ def apply_gather(in_cols, maps, out_cols=None):
     else:
         in_size = in_cols[0].data.size
 
-    maps = astype(maps, 'int32')
+    import cudf.bindings.typecast as typecast
+    from cudf.dataframe import columnops
+    col = typecast.apply_cast(columnops.as_column(maps), dtype=np.int32)
+    maps = col.data.mem
     # TODO: replace with libcudf pymod when available
     maps = modulo(maps, in_size)
 

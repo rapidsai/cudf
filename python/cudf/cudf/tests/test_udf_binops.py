@@ -5,18 +5,19 @@ from __future__ import division
 import numba
 import numpy as np
 import pytest
-from numba import cuda, types
 from packaging.version import Version
 
 from cudf.bindings import binops
 from cudf.dataframe import Series
+
+supported_types = ["int16", "int32", "int64", "float32", "float64"]
 
 
 @pytest.mark.skipif(
     Version(numba.__version__) < Version("0.44.0a"),
     reason="Numba 0.44.0a or newer required",
 )
-@pytest.mark.parametrize("dtype", ["int32", "int64", "float32", "float64"])
+@pytest.mark.parametrize("dtype", supported_types)
 def test_generic_ptx(dtype):
 
     size = 500
@@ -27,28 +28,20 @@ def test_generic_ptx(dtype):
     rhs_arr = np.random.random(size).astype(dtype)
     rhs_col = Series(rhs_arr)._column
 
-    out_arr = np.random.random(size).astype(dtype)
-    out_col = Series(out_arr)._column
-
-    @cuda.jit(device=True)
-    def add(a, b):
+    @numba.cuda.jit(device=True)
+    def generic_function(a, b):
         return a ** 3 + b
 
-    if dtype == "float32":
-        type_signature = (types.float32, types.float32)
-    elif dtype == "float64":
-        type_signature = (types.float64, types.float64)
-    elif dtype == "int32":
-        type_signature = (types.int32, types.int32)
-    elif dtype == "int64":
-        type_signature = (types.int64, types.int64)
+    nb_type = numba.numpy_support.from_dtype(np.dtype(dtype))
+    type_signature = (nb_type, nb_type)
 
-    add.compile(type_signature)
-    ptx = add.inspect_ptx(type_signature)
-
+    result = generic_function.compile(type_signature)
+    ptx = generic_function.inspect_ptx(type_signature)
     ptx_code = ptx.decode("utf-8")
 
-    binops.apply_op_udf(lhs_col, rhs_col, out_col, ptx_code)
+    output_type = numba.numpy_support.as_dtype(result.signature.return_type)
+
+    out_col = binops.apply_op_udf(lhs_col, rhs_col, ptx_code, output_type.type)
 
     result = lhs_arr ** 3 + rhs_arr
 
