@@ -4,21 +4,11 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
+from dask.dataframe.io.parquet.arrow import ArrowEngine
 from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key
 
 import dask_cudf
-
-try:
-    from dask.dataframe.io.parquet.arrow import ArrowEngine
-except ImportError:
-    ArrowEngine = None
-
-
-def check_arrow_engine():
-    if ArrowEngine is None:
-        pytest.skip("ArrowEngine needed for full dask-parquet support.")
-
 
 nrows = 40
 npartitions = 15
@@ -105,7 +95,6 @@ def test_roundtrip_from_pandas(tmpdir):
 
 
 def test_strings(tmpdir):
-    check_arrow_engine()
 
     fn = str(tmpdir)
     dfp = pd.DataFrame(
@@ -120,7 +109,6 @@ def test_strings(tmpdir):
 
 @pytest.mark.parametrize("index", [False, True])
 def test_empty(tmpdir, index):
-    check_arrow_engine()
 
     fn = str(tmpdir)
     dfp = pd.DataFrame({"a": [11.0, 12.0, 12.0], "b": [4, 5, 6]})[:0]
@@ -134,7 +122,6 @@ def test_empty(tmpdir, index):
 
 
 def test_filters(tmpdir):
-    check_arrow_engine()
 
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
