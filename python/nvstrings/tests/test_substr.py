@@ -3,9 +3,8 @@
 import numpy as np
 import pandas as pd
 import pytest
-from librmm_cffi import librmm as rmm
-
 import nvstrings
+from librmm_cffi import librmm as rmm
 from utils import assert_eq
 
 

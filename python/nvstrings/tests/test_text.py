@@ -3,7 +3,6 @@
 import numpy as np
 import nvstrings
 import nvtext
-
 from librmm_cffi import librmm as rmm
 
 
