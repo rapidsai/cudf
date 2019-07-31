@@ -17,20 +17,17 @@
  * limitations under the License.
  */
 
-#ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
-#define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
+#ifndef GDF_JIT_UTIL_TYPE_H
+#define GDF_JIT_UTIL_TYPE_H
 
 #include <cudf/binaryop.hpp>
-#include <jit/type.h>
 #include <string>
 
 namespace cudf {
-namespace binops {
 namespace jit {
 
-    std::string getOperatorName(gdf_binary_operator ope);
+    std::string getTypeName(gdf_dtype type);
 
-}
 }
 }
 

@@ -146,8 +146,9 @@
 - PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
-- PR #1652 Added `Series.where()` feature
-- PR #2074 Java Aggregates, logical ops, and better RMM support
+- PR #1652 Added `Series.where()` feature 
+- PR #2074 Java Aggregates, logical ops, and better RMM support 
+- PR #2140 Add a `cudf::transform` function
 
 ## Improvements
 

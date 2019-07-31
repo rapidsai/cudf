@@ -1,9 +1,6 @@
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
- * Copyright 2018-2019 BlazingDB, Inc.
- *     Copyright 2018 Christian Noboa Mardini <christian@blazingdb.com>
- *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -17,21 +14,21 @@
  * limitations under the License.
  */
 
-#ifndef GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
-#define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
-
-#include <cudf/binaryop.hpp>
-#include <jit/type.h>
-#include <string>
+#ifndef GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
+#define GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
 
 namespace cudf {
-namespace binops {
+namespace transformation {
 namespace jit {
+namespace code {
 
-    std::string getOperatorName(gdf_binary_operator ope);
+extern const char* kernel;
+extern const char* traits;
+extern const char* operation;
 
-}
-}
-}
+}  // namespace code
+}  // namespace jit
+}  // namespace transformation
+}  // namespace cudf
 
 #endif

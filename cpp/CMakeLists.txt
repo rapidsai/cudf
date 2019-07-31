@@ -329,10 +329,15 @@ add_library(cudf SHARED
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
-            src/binaryop/jit/core/parser.cpp
-            src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
+            src/jit/type.cpp
+            src/jit/types_h_jit.cpp
+            src/jit/parser.cpp
+            src/jit/cache.cpp
+            src/transform/transform.cpp
+            src/transform/jit/code/kernel.cpp
+            src/transform/jit/core/launcher.cpp
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
