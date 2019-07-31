@@ -3,7 +3,7 @@ from cudf.dataframe.index import Index
 from cudf.dataframe.series import Series
 
 
-def concat(objs, axis=0, ignore_index=False):
+def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
 
     Parameters
@@ -18,6 +18,9 @@ def concat(objs, axis=0, ignore_index=False):
     -------
     A new object of like type with rows from each object in ``objs``.
     """
+    if sort not in (None, False):
+        raise NotImplementedError("sort parameter is not yet supported")
+
     if not objs:
         raise ValueError("Need at least one object to concatenate")
 
