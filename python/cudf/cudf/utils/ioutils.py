@@ -786,6 +786,26 @@ def is_url(url):
         return False
 
 
+def _is_hdfs_url(url):
+    """Check if a string is a hdfs url
+
+    Parameters
+    ----------
+    url : str
+        String containing a possible URL
+
+    Returns
+    -------
+    bool : bool
+        If `url` is a hdfs url return True otherwise False.
+    """
+    schemes = ["hdfs"]
+    try:
+        return urllib.parse.urlparse(url).scheme in schemes
+    except Exception:
+        return False
+
+
 def is_file_like(obj):
     """Check if the object is a file-like object, per PANDAS' definition.
     An object is considered file-like if it has an iterator AND has a either or
@@ -809,7 +829,7 @@ def is_file_like(obj):
         return True
 
 
-def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
+def get_filepath_or_buffer(path_or_data, compression=None, iotypes=(BytesIO)):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
     If buffer, then data is returned in-memory as bytes or a ByteIO object.
@@ -835,6 +855,12 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
             compression = url.headers.get("Content-Encoding", None)
             buffer = BytesIO(url.read())
         return buffer, compression
+
+    elif _is_hdfs_url(path_or_data):
+        from cudf.io.protocols import hdfs
+
+        return hdfs.get_filepath_or_buffer(path_or_data, compression)
+
     elif isinstance(path_or_data, str):
         return os.path.expanduser(path_or_data), compression
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
