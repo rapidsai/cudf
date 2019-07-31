@@ -17,7 +17,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         KEEP_LAST
         KEEP_NONE
 
-    #defined in cpp/include/stream_compaction.hpp
+    # defined in cpp/include/stream_compaction.hpp
     ctypedef enum any_or_all:
         ANY
         ALL
