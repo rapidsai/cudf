@@ -230,7 +230,7 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_size_type null_count,
         gdf_dtype_extra_info extra_info,
         const char* name) except +
-                                            
+
     # version without name parameter
     cdef gdf_error gdf_column_view_augmented(
         gdf_column *column,

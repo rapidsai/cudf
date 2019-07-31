@@ -239,7 +239,7 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         c_col.col_name = NULL
     else:
         c_col.col_name = col_name
-    
+
     with nogil:
         gdf_column_view_augmented(
             <gdf_column*>c_col,
@@ -416,7 +416,7 @@ cdef gdf_column* column_view_from_string_column(
         c_col.col_name = NULL
     else:
         c_col.col_name = col_name
-    
+
     with nogil:
         gdf_column_view_augmented(
             <gdf_column*>c_col,
