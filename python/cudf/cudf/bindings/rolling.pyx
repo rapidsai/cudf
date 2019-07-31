@@ -78,7 +78,7 @@ def apply_rolling(inp, window, min_periods, center, op):
                 )
             data, mask = gdf_column_to_column_mem(&c_output_col)
         else:
-            c_op = agg_ops[ops]
+            c_op = agg_ops[op]
             with nogil:
                 output_col = rolling_window(
                     inp_col[0],
