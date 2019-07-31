@@ -37,7 +37,7 @@ from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.series import Series
 from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
-from cudf.util import applyutils, cudautils, utils, ioutils, queryutils
+from cudf.util import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.util.docutils import copy_docstring
 from cudf.window import Rolling
 
@@ -1170,9 +1170,7 @@ class DataFrame(object):
             if self[next(iter(self._cols))].dtype == np.dtype("object"):
                 dtype = np.dtype("object")
             arr = rmm.device_array(shape=len(ind), dtype=dtype)
-            size = utils.calc_chunk_size(
-                arr.size, utils.mask_bitsize
-            )
+            size = utils.calc_chunk_size(arr.size, utils.mask_bitsize)
             mask = cudautils.zeros(size, dtype=utils.mask_dtype)
             val = Series.from_masked_array(arr, mask, null_count=len(ind))
             for name in self._cols:
@@ -3341,9 +3339,7 @@ class DataFrame(object):
             )
 
         include, exclude = map(
-            lambda x: frozenset(
-                map(utils.cudf_dtype_from_pydata_dtype, x)
-            ),
+            lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
             selection,
         )
 

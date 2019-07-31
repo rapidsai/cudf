@@ -18,7 +18,7 @@ from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
-from cudf.util import cudautils, utils, ioutils
+from cudf.util import cudautils, ioutils, utils
 
 
 class Column(object):
@@ -296,9 +296,7 @@ class Column(object):
         If ``all_valid`` is False, the new mask is set to all null.
         """
         nelem = len(self)
-        mask_sz = utils.calc_chunk_size(
-            nelem, utils.mask_bitsize
-        )
+        mask_sz = utils.calc_chunk_size(nelem, utils.mask_bitsize)
         mask = rmm.device_array(mask_sz, dtype=utils.mask_dtype)
         if nelem > 0:
             cudautils.fill_value(mask, 0xFF if all_valid else 0)

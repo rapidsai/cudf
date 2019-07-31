@@ -577,9 +577,7 @@ class StringColumn(columnops.TypedColumnBase):
         sbuf = np.empty(self._data.byte_count(), dtype="int8")
         obuf = np.empty(len(self._data) + 1, dtype="int32")
 
-        mask_size = utils.calc_chunk_size(
-            len(self._data), utils.mask_bitsize
-        )
+        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
         nbuf = np.empty(mask_size, dtype="int8")
 
         self.str().to_offsets(sbuf, obuf, nbuf=nbuf)
@@ -624,9 +622,7 @@ class StringColumn(columnops.TypedColumnBase):
 
         sbuf = rmm.device_array(self._data.byte_count(), dtype="int8")
         obuf = rmm.device_array(len(self._data) + 1, dtype="int32")
-        mask_size = utils.calc_chunk_size(
-            len(self._data), utils.mask_bitsize
-        )
+        mask_size = utils.calc_chunk_size(len(self._data), utils.mask_bitsize)
         nbuf = rmm.device_array(mask_size, dtype="int8")
         self.data.to_offsets(
             get_ctype_ptr(sbuf),

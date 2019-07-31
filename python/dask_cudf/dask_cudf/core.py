@@ -244,9 +244,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
                 mask_size = cudf.util.utils.calc_chunk_size(
                     data.size, cudf.util.utils.mask_bitsize
                 )
-                mask = np.zeros(
-                    mask_size, dtype=cudf.util.utils.mask_dtype
-                )
+                mask = np.zeros(mask_size, dtype=cudf.util.utils.mask_dtype)
                 sr = cudf.Series.from_masked_array(
                     data=data, mask=mask, null_count=data.size
                 )
