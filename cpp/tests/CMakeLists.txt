@@ -132,6 +132,14 @@ set(ORDERBY_TEST_SRC
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 
 ###################################################################################################
+# - is_sorted tests ---------------------------------------------------------------------------------
+
+set(IS_SORTED_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/is_sorted_tests.cu")
+
+ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
+
+###################################################################################################
 # - legacy bitmask tests ---------------------------------------------------------------------------------
 
 set(LEGACY_BITMASK_TEST_SRC
