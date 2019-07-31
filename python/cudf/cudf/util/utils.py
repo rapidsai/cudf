@@ -311,7 +311,7 @@ def hash_cudf_object(
     elif isinstance(obj, MultiIndex):
         columns = [obj.codes[col]._column for col in obj.codes.columns]
     elif isinstance(obj, Index):
-        columns = [obj.to_series()._column]
+        columns = [obj.as_column()]
     else:
         raise TypeError("Unsupported type to hash")
 
