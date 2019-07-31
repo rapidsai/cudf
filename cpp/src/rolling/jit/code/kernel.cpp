@@ -40,8 +40,6 @@ void gpu_rolling(gdf_size_type nrows,
 {
   constexpr int warp_size = 32;
 
-  // const bool is_nullable = (in_col_valid != nullptr);
-
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
 

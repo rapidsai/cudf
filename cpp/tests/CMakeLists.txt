@@ -379,11 +379,6 @@ set(ROLLING_TEST_SRC
 
 ConfigureTest(ROLLING_TEST "${ROLLING_TEST_SRC}")
 
-set(xROLLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/rolling/test.cu")
-
-ConfigureTest(test.x "${xROLLING_TEST_SRC}")
-
 ###################################################################################################
 # - point in polygon test --------------------------------------------------------------------------
 
@@ -399,16 +394,6 @@ set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
-
-###################################################################################################
-# - filling test --------------------------------------------------------------------------
-
-set(PARSER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/jit/parser_tests.cpp")
-
-ConfigureTest(PARSER_TEST "${PARSER_TEST_SRC}")
-
-
 
 ###################################################################################################
 ### enable testing ################################################################################

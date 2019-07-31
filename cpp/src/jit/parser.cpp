@@ -191,7 +191,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
         cpp_typename = register_type_to_cppname(register_type);
-        if (cpp_typename == "int" || cpp_typename == "short" || cpp_typename == "char") {
+        if (cpp_typename == "int" || cpp_typename == "short int" || cpp_typename == "char") {
           // The trick to support `ld` statement whose destination reg. wider than 
           // the instruction width, e.g.
           //      
@@ -322,23 +322,23 @@ std::string ptx_parser::parse_param_list(const std::string& src) {
       stop++;
     }
     std::string name = parse_param(std::string(src, start, stop - start));
-    if(input_arg_list.count(name)){
-      if(pointer_arg_list.find(item_count) != pointer_arg_list.end()){
-        if(item_count == 0){
-          output += output_arg_type + "* " + name;
-        }else{
-          // On a 64-bit machine inside the PTX function body a pointer is
-          // literally just a uint_64 so here is doesn't make sense to
-          // have the type of the pointer. Thus we will just use void* here.
-          output += ",\n  const void* " + name;
-        }
+    if(pointer_arg_list.find(item_count) != pointer_arg_list.end()){
+      if(item_count == 0){
+        output += output_arg_type + "* " + name;
       }else{
-        output += ", \n  " + input_arg_list[name] + " " + name;
+        // On a 64-bit machine inside the PTX function body a pointer is
+        // literally just a uint_64 so here is doesn't make sense to
+        // have the type of the pointer. Thus we will just use void* here.
+        output += ",\n  const void* " + name;
       }
     }else{
-      // This parameter isn't used in the function body so we just pretend
-      // it's an int. After being inlined they are gone anyway.
-      output += ", \n  int " + name;
+      if(input_arg_list.count(name)){
+        output += ", \n  " + input_arg_list[name] + " " + name;
+      }else{
+        // This parameter isn't used in the function body so we just pretend
+        // it's an int. After being inlined they are gone anyway.
+        output += ", \n  int " + name;
+      }
     }
     stop++;
     start = stop;

@@ -306,7 +306,7 @@ gdf_column rolling_window(gdf_column const& input,
 {
   CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
 
-  gdf_column output = allocate_column(output_type, input.size, is_nullable(input));
+  gdf_column output = allocate_column(output_type, input.size, true);
 
   // If there are no rows in the input, return successfully
   if (input.size == 0)
@@ -317,15 +317,25 @@ gdf_column rolling_window(gdf_column const& input,
 
   std::string hash = "prog_rolling." 
     + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
-  std::string cuda_source = 
-    cudf::jit::parse_single_function_ptx(
-      user_defined_aggregator, 
-      cudf::rolling::jit::get_function_name(agg_op), 
-      cudf::jit::getTypeName(output_type),
-      {0,5}
-    ) + cudf::rolling::jit::code::kernel;
-
-  // Launch the kernel
+  
+  std::string cuda_source;
+  switch(agg_op){            
+    case GDF_NUMBA_GENERIC_AGG_OPS:
+      cuda_source = 
+        cudf::jit::parse_single_function_ptx(
+          user_defined_aggregator, 
+          cudf::rolling::jit::get_function_name(agg_op), 
+          cudf::jit::getTypeName(output_type), {0, 5}
+        ) + cudf::rolling::jit::code::kernel;
+      break; 
+    case GDF_CUDA_GENERIC_AGG_OPS:
+      cuda_source = user_defined_aggregator + cudf::rolling::jit::code::kernel;
+      break;
+    default:
+      CUDF_FAIL("Unsupported UDF type.");
+  }
+  
+  // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
     { cudf::rolling::jit::code::operation_h , cudf_types_h },
@@ -348,7 +358,11 @@ gdf_column rolling_window(gdf_column const& input,
     min_periods_col,
     forward_window_col
   );
-                       
+
+  CHECK_STREAM(0);
+
+  set_null_count(output);
+
   return output;
 }
 
