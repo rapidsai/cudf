@@ -369,32 +369,12 @@ class Series(object):
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        from cudf import Series
-
-        if len(indices) == 0:
-            return self._copy_construct(
-                data=self.data[:0], index=self.index[:0]
-            )
-
-        indices = columnops.as_column(indices).data.mem
-
-        if self.dtype == np.dtype("object"):
-            return self[indices]
-
-        col = cpp_copying.apply_gather(self._column, indices)
-
-        if self._column.mask:
-            mask = self._get_mask_as_series().take(indices).as_mask()
-            mask = Buffer(mask)
-        else:
-            mask = None
+        result = self[indices]
         if ignore_index:
-            index = RangeIndex(indices.size)
+            index = RangeIndex(len(result))
+            return result._copy_construct(index=index)
         else:
-            index = self.index.take(indices)
-
-        col = self._column.replace(data=col.data, mask=mask)
-        return self._copy_construct(data=col, index=index)
+            return result
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
