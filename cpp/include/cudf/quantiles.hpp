@@ -23,7 +23,8 @@ namespace cudf {
 
 gdf_column group_quantiles(cudf::table const& input_table,
                            double quantile,
-                           gdf_context const& context);
+                           gdf_quantile_method interpolation = GDF_QUANT_LINEAR,
+                           gdf_context const& context = gdf_context{});
 
 
 } // namespace cudf

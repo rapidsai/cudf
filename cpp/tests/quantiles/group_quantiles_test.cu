@@ -29,11 +29,10 @@ TEST_F(group_quantile, SingleColumn)
 
                                                 //  { 1, 1, 1, 2, 2, 2, 2, 3, 3, 3}
                                                 //  { 0, 4, 6, 1, 3, 5, 9, 2, 7, 8}
-    auto expect = cudf::test::column_wrapper<float> {    4,          5,       7   };
+    auto expect = cudf::test::column_wrapper<double>{    4,         4,        7   };
     
-    gdf_context ctxt{};
-    auto result_col = cudf::group_quantiles({keys, vals}, 0.5, ctxt);
-    auto result = cudf::test::column_wrapper<float>(result_col);
+    auto result_col = cudf::group_quantiles({keys, vals}, 0.5);
+    auto result = cudf::test::column_wrapper<double>(result_col);
 
     ASSERT_EQ(result, expect) << "Expected: " << expect.to_str()
                               << "  Actual: " << result.to_str();

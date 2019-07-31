@@ -33,14 +33,55 @@ namespace cudf {
 
 namespace {
 
+template <typename T>
+CUDA_HOST_DEVICE_CALLABLE
+double select_quantile(T const* devarr, gdf_size_type size, double quantile,
+                       gdf_quantile_method interpolation)
+{
+  T temp[2];
+  double result;
+  
+  detail::QuantileIndex qi(size, quantile);
+
+  switch( interpolation )
+  {
+  case GDF_QUANT_LINEAR:
+    temp[0] = devarr[qi.lower_bound];
+    temp[1] = devarr[qi.upper_bound];
+    cudf::interpolate::linear(result, temp[0], temp[1], qi.fraction);
+    break;
+  case GDF_QUANT_MIDPOINT:
+    temp[0] = devarr[qi.lower_bound];
+    temp[1] = devarr[qi.upper_bound];
+    cudf::interpolate::midpoint(result, temp[0], temp[1]);
+    break;
+  case GDF_QUANT_LOWER:
+    temp[0] = devarr[qi.lower_bound];
+    result = static_cast<double>( temp[0] );
+    break;
+  case GDF_QUANT_HIGHER:
+    temp[0] = devarr[qi.upper_bound];
+    result = static_cast<double>( temp[0] );
+    break;
+  case GDF_QUANT_NEAREST:
+    temp[0] = devarr[qi.nearest];
+    result = static_cast<double>( temp[0] );
+    break;
+  }
+
+  return result;
+}
+
 struct quantiles_functor {
 
   template <typename T>
-  void operator()(gdf_column const& values_col, gdf_column const& group_indices,
-                  gdf_column& quants_col, double quantile)
+  std::enable_if_t<std::is_arithmetic<T>::value, void >
+  operator()(gdf_column const& values_col, gdf_column const& group_indices,
+             gdf_column& quants_col, double quantile,
+             gdf_quantile_method interpolation)
   {
     // prepare args to be used by lambda below
-    auto quants = reinterpret_cast<T*>(quants_col.data);
+    auto quants = reinterpret_cast<double*>(quants_col.data);
     auto values = reinterpret_cast<T*>(values_col.data);
     auto grp_id = reinterpret_cast<gdf_size_type*>(group_indices.data);
     auto num_vals = values_col.size;
@@ -54,10 +95,17 @@ struct quantiles_functor {
         gdf_size_type upper_limit = (i < num_grps-1)
                                   ? grp_id[i + 1]
                                   : num_vals;
-        gdf_size_type q_idx = quantile * (upper_limit - grp_id[i]) + grp_id[i];
-        quants[i] = values[q_idx];
+        gdf_size_type segment_size = (upper_limit - grp_id[i]);
+        quants[i] = select_quantile(values + grp_id[i], segment_size, quantile,
+                                    interpolation);
       }
     );
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_arithmetic<T>::value, void >
+  operator()(Args&&... args) {
+    CUDF_FAIL("Only arithmetic types are supported in quantile");
   }
 };
 
@@ -105,6 +153,7 @@ auto group_values_and_indices(cudf::table const& input_table,
 // TODO: add optional check for is_sorted. Use context.flag_sorted
 gdf_column group_quantiles(cudf::table const& input_table,
                            double quantile,
+                           gdf_quantile_method interpolation,
                            gdf_context const& context)
 {
   gdf_column grouped_values, group_indices;
@@ -113,10 +162,11 @@ gdf_column group_quantiles(cudf::table const& input_table,
 
   // TODO: currently ignoring nulls
   gdf_size_type num_grps = group_indices.size;
-  auto quants_col = cudf::allocate_column(grouped_values.dtype, num_grps, false);
+  auto quants_col = cudf::allocate_column(GDF_FLOAT64, num_grps, false);
 
   type_dispatcher(grouped_values.dtype, quantiles_functor{},
-                  grouped_values, group_indices, quants_col, quantile);
+                  grouped_values, group_indices, quants_col, quantile,
+                  interpolation);
 
   gdf_column_free(&grouped_values);
   gdf_column_free(&group_indices);
