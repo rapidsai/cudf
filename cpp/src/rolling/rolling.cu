@@ -292,7 +292,6 @@ gdf_column* rolling_window(const gdf_column &input_col,
   return output_col.release();
 }
 
-
 gdf_column rolling_window(gdf_column const& input,
                            gdf_size_type window,
                            gdf_size_type min_periods,
@@ -312,6 +311,11 @@ gdf_column rolling_window(gdf_column const& input,
   if (input.size == 0)
     return output;
 
+  if (input.null_count > 0) {
+    CUDF_FAIL("Currently the UDF version of rolling window"
+        " does NOT support inputs with nulls.");
+  }
+
   // At least one observation is required to procure a valid output
   min_periods = std::max(min_periods, 1);
 
@@ -325,11 +329,16 @@ gdf_column rolling_window(gdf_column const& input,
         cudf::jit::parse_single_function_ptx(
           user_defined_aggregator, 
           cudf::rolling::jit::get_function_name(agg_op), 
-          cudf::jit::getTypeName(output_type), {0, 5}
+          cudf::jit::getTypeName(output_type), {0, 5} // {0, 5} means the first and sixth args are pointers.
         ) + cudf::rolling::jit::code::kernel;
       break; 
     case GDF_CUDA_GENERIC_AGG_OPS:
-      cuda_source = user_defined_aggregator + cudf::rolling::jit::code::kernel;
+      cuda_source = 
+        cudf::jit::parse_single_function_cuda(
+          user_defined_aggregator, 
+          cudf::rolling::jit::get_function_name(agg_op), 
+          cudf::jit::getTypeName(output_type)
+        ) + cudf::rolling::jit::code::kernel;
       break;
     default:
       CUDF_FAIL("Unsupported UDF type.");
@@ -358,8 +367,6 @@ gdf_column rolling_window(gdf_column const& input,
     min_periods_col,
     forward_window_col
   );
-
-  CHECK_STREAM(0);
 
   set_null_count(output);
 
