@@ -212,7 +212,13 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     case FLOAT64:
       return f.template operator()<typename IdTypeMap<FLOAT64>::type>(
           std::forward<Ts>(args)...);
-    default: { CUDF_FAIL("Unsupported type_id."); }
+    default: {
+#ifndef __CUDA_ARCH__
+      CUDF_FAIL("Unsupported type_id.");
+#else
+      release_assert(false && "Unsuported type_id.");
+#endif
+    }
   }
   // The following code will never be reached, but the compiler generates a
   // warning if there isn't a return value.
