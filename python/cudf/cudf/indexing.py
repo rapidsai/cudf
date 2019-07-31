@@ -33,6 +33,10 @@ class _SeriesLocIndexer(object):
         arg = self._loc_to_iloc(arg)
         return self._sr.iloc[arg]
 
+    def __setitem__(self, key, value):
+        key = self._loc_to_iloc(key)
+        self._sr.iloc[key] = value
+
     def _loc_to_iloc(self, arg):
         from cudf.dataframe.series import Series
         from cudf.dataframe.index import Index
@@ -77,6 +81,11 @@ class _SeriesIlocIndexer(object):
         if isinstance(arg, tuple):
             arg = list(arg)
         return self._sr[arg]
+
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            key = list(key)
+        self._sr[key] = value
 
 
 class _DataFrameIndexer(object):
