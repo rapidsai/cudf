@@ -2,6 +2,7 @@
 
 import numpy as np
 from librmm_cffi import librmm as rmm
+
 import nvstrings
 from utils import assert_eq
 
