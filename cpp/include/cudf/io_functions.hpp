@@ -24,6 +24,15 @@
 namespace cudf {
 
 /*
+ * @brief Interface to parse Avro data to cuDF columns.
+ *
+ * @param[in] args Arguments for controlling reading behavior
+ *
+ * @return cudf::table Object that contains the array of gdf_columns
+ */
+cudf::table read_avro(avro_read_arg const &args);
+
+/*
  * @brief Interface to parse CSV data to cuDF columns.
  *
  * @param[in] args Arguments for controlling reading behavior
