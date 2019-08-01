@@ -1,11 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-import pandas as pd
 
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.util import cudautils
+from cudf.util.dtypes import is_categorical_dtype
 from cudf.util.utils import is_list_like
 
 
@@ -100,7 +100,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(pd.api.types.is_categorical_dtype(t) for t in dtypes):
+    if any(is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet " "supported for function"
         )

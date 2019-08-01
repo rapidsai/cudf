@@ -9,6 +9,8 @@ from numba import njit
 
 from librmm_cffi import librmm as rmm
 
+from cudf.util.dtypes import is_categorical_dtype
+
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8
 mask_byte_padding = 64
@@ -150,10 +152,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
             _get_dtype_from_object as infer_dtype_from_object,
         )
 
-    if (
-        pd.api.types.pandas_dtype(dtype).type
-        is pd.core.dtypes.dtypes.CategoricalDtypeType
-    ):
+    if is_categorical_dtype(dtype):
         pass
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64

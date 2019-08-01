@@ -24,6 +24,7 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.indexing import _IndexLocIndexer
 from cudf.util import cudautils, ioutils
+from cudf.util.dtypes import is_categorical_dtype
 from cudf.util.utils import normalize_index
 
 
@@ -325,6 +326,9 @@ class Index(object):
     def get_slice_bound(self, label, side, kind):
         raise (NotImplementedError)
 
+    def isin(self, values):
+        return self.to_series().isin(values)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -606,6 +610,27 @@ class GenericIndex(Index):
             end += 1
         return begin, end
 
+    def searchsorted(self, value, side="left"):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : Column
+            Column of values to search for
+        side : str {‘left’, ‘right’} optional
+            If ‘left’, the index of the first suitable location found is given.
+            If ‘right’, return the last such index
+
+        Returns
+        -------
+        An index series of insertion points with the same shape as value
+        """
+        from cudf.dataframe.series import Series
+
+        idx_series = Series(self, name=self.name)
+        result = idx_series.searchsorted(value, side)
+        return as_index(result)
+
     @property
     def is_unique(self):
         return self._values.is_unique
@@ -703,8 +728,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(values, CategoricalColumn):
             values = values
         elif isinstance(values, pd.Series) and (
-            pd.api.types.pandas_dtype(values.dtype).type
-            is pd.core.dtypes.dtypes.CategoricalDtypeType
+            is_categorical_dtype(values.dtype)
         ):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
