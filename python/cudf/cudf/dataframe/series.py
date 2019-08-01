@@ -28,6 +28,7 @@ from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -123,7 +124,7 @@ class Series(object):
     def values(self):
         if self.dtype == np.dtype("object"):
             return self.data.to_host()
-        elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+        elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
             return self.data.mem.copy_to_host()
@@ -498,11 +499,21 @@ class Series(object):
             more_rows=more_rows,
             series_spacing=True,
         )
-        return (
-            output + "\nName: {}, dtype: {}".format(self.name, str_dtype)
-            if self.name is not None
-            else output + "\ndtype: {}".format(str_dtype)
-        )
+        if self.name is None:
+            output += "\ndtype: {}".format(str_dtype)
+        else:
+            output += "\nName: {}, dtype: {}".format(self.name, str_dtype)
+
+        if is_categorical_dtype(self.dtype):
+            cat = self.cat
+            str_dtype = cat.categories.dtype.name
+            categories = cat.categories.to_array()
+            separator = " < " if cat.ordered else ", "
+            desc = "({}, {})".format(len(categories), str_dtype)
+            categories = "[{}]".format(separator.join(categories))
+            output += "\nCategories {}: {}".format(desc, categories)
+
+        return output
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -1806,6 +1817,54 @@ class Series(object):
             index=self.index,
         )
 
+    def isin(self, test):
+
+        from cudf import DataFrame
+
+        lhs = self
+        rhs = None
+
+        try:
+            rhs = columnops.as_column(test, dtype=self.dtype)
+            # if necessary, convert values via typecast.apply_cast
+            rhs = Series(rhs.astype(self.dtype))
+        except Exception:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return Series(cudautils.zeros(len(self), dtype="bool"))
+
+        # If categorical, combine categories first
+        if is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat.categories.as_column()
+            rhs_cats = rhs.cat.categories.as_column()
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat.set_categories(cats, is_unique=True)
+                rhs = rhs.cat.set_categories(cats, is_unique=True)
+            else:
+                # If they're not the same dtype, short-circuit if the test
+                # list doesn't have any nulls. If it does have nulls, make
+                # the test list a Categorical with a single null
+                if rhs.null_count == 0:
+                    return Series(cudautils.zeros(len(self), dtype="bool"))
+                rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
+
+        # fillna so we can find nulls
+        if rhs.null_count > 0:
+            lhs = lhs.fillna(lhs._column.default_na_value())
+            rhs = rhs.fillna(lhs._column.default_na_value())
+
+        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+        res.name = self.name
+
+        return res
+
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
@@ -2390,6 +2449,24 @@ class Series(object):
             out.name = index
 
         return out.copy(deep=copy)
+
+    def searchsorted(self, value, side="left"):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : array_like
+            Column of values to search for
+        side : str {‘left’, ‘right’} optional
+            If ‘left’, the index of the first suitable location found is given.
+            If ‘right’, return the last such index
+
+        Returns
+        -------
+        A Column of insertion points with the same shape as value
+        """
+        outcol = self._column.searchsorted(value, side)
+        return Series(outcol)
 
     @property
     def is_unique(self):

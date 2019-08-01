@@ -8,6 +8,7 @@
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2156 Add `upper_bound()` and `lower_bound()` for libcudf tables and `searchsorted()` for cuDF Series
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
@@ -26,6 +27,7 @@
 - PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
+- PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 
 ## Improvements
 
