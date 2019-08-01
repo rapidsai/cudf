@@ -39,7 +39,22 @@ namespace jit {
     class launcher {
     public:
         launcher() = delete;
-        
+         
+        /**---------------------------------------------------------------------------*
+         * @brief C'tor of the launcher class
+         * 
+         * Method to generate vector containing all template types for a JIT kernel.
+         *  This vector is used to get the compiled kernel for one set of types and set
+         *  it as the kernel to launch using this launcher.
+         * 
+         * @param hash The hash to be used as the key for caching
+         * @param cuda_code The CUDA code that contains the kernel to be launched
+         * @param header_names Strings of header_names or strings that contain content
+         * of the header files
+         * @param compiler_flags Strings of compiler flags
+         * @param file_callback a function that returns header file contents given header
+         * file names.
+         *---------------------------------------------------------------------------**/
         launcher(
           const std::string& hash,
           const std::string& cuda_source,
@@ -65,9 +80,8 @@ namespace jit {
          *  This vector is used to get the compiled kernel for one set of types and set
          *  it as the kernel to launch using this launcher.
          * 
-         * @tparam Args  Output dtype, LHS dtype, RHS dtype
-         * @param type   Operator type (direct (lhs op rhs) or reverse (rhs op lhs))
-         * @param args   gdf_column* output, lhs, rhs
+         * @param kernel_name The kernel to be launched
+         * @param arguments   The template arguments to be used to instantiate the kernel
          * @return launcher& ref to this launcehr object
          *---------------------------------------------------------------------------**/
         launcher& set_kernel_inst(
@@ -80,14 +94,11 @@ namespace jit {
         }
 
         /**---------------------------------------------------------------------------*
-          TODO: Update doc.
-         * @brief Handle the Jitify API to instantiate and launch using information 
+         * @brief Handle the Jitify API to launch using information 
          *  contained in the members of `this`
          * 
-         * @param out[out] Output column
-         * @param lhs[in]  LHS column
-         * @param rhs[in]  RHS column
-         * @return gdf_error 
+         * @tparam All parameters to launch the kernel
+         * @return Return GDF_SUCCESS if successful
          *---------------------------------------------------------------------------**/
         template <typename ... Args>
         gdf_error launch(Args ... args){
