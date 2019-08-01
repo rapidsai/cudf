@@ -118,6 +118,7 @@
 - PR #2411 Fixed failures on binary op on single element string column
 - PR #2422 Fix Pandas logical binary operation incompatibilites
 - PR #2447 Fix CodeCov posting build statuses temporarily
+- PR #2450 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
 
 
 # cuDF 0.8.0 (27 June 2019)

@@ -7,6 +7,8 @@ from numba.utils import exec_, pysignature
 
 from librmm_cffi import librmm as rmm
 
+import cudf.bindings.binops as cpp_binops
+from cudf.dataframe import columnops
 from cudf.dataframe.series import Series
 from cudf.utils import cudautils
 from cudf.utils.docutils import docfmt_partial
@@ -92,7 +94,7 @@ class ApplyKernelCompilerBase(object):
 
     def run(self, df, **launch_params):
         # Get input columns
-        inputs = {k: df[k].to_gpu_array() for k in self.incols}
+        inputs = {k: df[k].data.mem for k in self.incols}
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
@@ -104,10 +106,28 @@ class ApplyKernelCompilerBase(object):
         bound = self.sig.bind(**args)
         # Launch kernel
         self.launch_kernel(df, bound.args, **launch_params)
+
+        # Prepare pessimistic nullmask
+        out_mask = None
+        for k in df.columns:
+            if not df[k].has_null_mask:
+                continue
+
+            if out_mask is None:
+                out_mask = columnops.as_column(df[k].nullmask.copy())
+                continue
+
+            cpp_binops.apply_op(
+                columnops.as_column(df[k].nullmask), out_mask, out_mask, "and"
+            )
+
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
+            if out_mask is not None:
+                outdf[k] = outdf[k].set_mask(out_mask.data.mem)
+
         return outdf
 
 
