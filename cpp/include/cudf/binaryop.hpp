@@ -23,33 +23,34 @@
  * @brief Types of binary operations that can be performed on data.
  */
 typedef enum {
-  GDF_ADD,            ///< operator +
-  GDF_SUB,            ///< operator -
-  GDF_MUL,            ///< operator *
-  GDF_DIV,            ///< operator / using common type of lhs and rhs
-  GDF_TRUE_DIV,       ///< operator / after promoting type to floating point
-  GDF_FLOOR_DIV,      ///< operator / after promoting to float and then flooring the result
-  GDF_MOD,            ///< operator %
-  GDF_PYMOD,          ///< operator % but following python's sign rules for negatives
-  GDF_POW,            ///< lhs ^ rhs
-  GDF_EQUAL,          ///< operator ==
-  GDF_NOT_EQUAL,      ///< operator !=
-  GDF_LESS,           ///< operator <
-  GDF_GREATER,        ///< operator >
-  GDF_LESS_EQUAL,     ///< operator <=
-  GDF_GREATER_EQUAL,  ///< operator >=
-  GDF_BITWISE_AND,    ///< operator &
-  GDF_BITWISE_OR,     ///< operator |
-  GDF_BITWISE_XOR,    ///< operator ^
-  GDF_LOGICAL_AND,    ///< operator &&
-  GDF_LOGICAL_OR,     ///< operator ||
-  GDF_COALESCE,       ///< operator x,y  x is null ? y : x
-  GDF_GENERIC_OP,     ///< generic binary operator to be generated with input ptx code
-  GDF_INVALID_BINARY  ///< invalid operation
+  GDF_ADD,        ///< operator +
+  GDF_SUB,        ///< operator -
+  GDF_MUL,        ///< operator *
+  GDF_DIV,        ///< operator / using common type of lhs and rhs
+  GDF_TRUE_DIV,   ///< operator / after promoting type to floating point
+  GDF_FLOOR_DIV,  ///< operator / after promoting to float and then flooring the
+                  ///< result
+  GDF_MOD,        ///< operator %
+  GDF_PYMOD,  ///< operator % but following python's sign rules for negatives
+  GDF_POW,    ///< lhs ^ rhs
+  GDF_EQUAL,  ///< operator ==
+  GDF_NOT_EQUAL,       ///< operator !=
+  GDF_LESS,            ///< operator <
+  GDF_GREATER,         ///< operator >
+  GDF_LESS_EQUAL,      ///< operator <=
+  GDF_GREATER_EQUAL,   ///< operator >=
+  GDF_BITWISE_AND,     ///< operator &
+  GDF_BITWISE_OR,      ///< operator |
+  GDF_BITWISE_XOR,     ///< operator ^
+  GDF_LOGICAL_AND,     ///< operator &&
+  GDF_LOGICAL_OR,      ///< operator ||
+  GDF_COALESCE,        ///< operator x,y  x is null ? y : x
+  GDF_GENERIC_BINARY,  ///< generic binary operator to be generated with input
+                       ///< ptx code
+  GDF_INVALID_BINARY   ///< invalid operation
 } gdf_binary_operator;
 
-namespace cudf
-{
+namespace cudf {
 
 /**
  * @brief Performs a binary operation between a gdf_scalar and a gdf_column.
@@ -65,10 +66,8 @@ namespace cudf
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation(gdf_column*           out,
-                      gdf_scalar*           lhs,
-                      gdf_column*           rhs,
-                      gdf_binary_operator   ope);
+void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs,
+                      gdf_binary_operator ope);
 
 /**
  * @brief Performs a binary operation between a gdf_column and a gdf_scalar.
@@ -84,10 +83,8 @@ void binary_operation(gdf_column*           out,
  * @param rhs (gdf_scalar) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation(gdf_column*           out,
-                      gdf_column*           lhs,
-                      gdf_scalar*           rhs,
-                      gdf_binary_operator   ope);
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs,
+                      gdf_binary_operator ope);
 
 /**
  * @brief Performs a binary operation between two gdf_columns.
@@ -102,35 +99,34 @@ void binary_operation(gdf_column*           out,
  * @param rhs (gdf_column) Second operand of the operation.
  * @param ope (enum) The binary operator to use
  */
-void binary_operation(gdf_column*           out,
-                      gdf_column*           lhs,
-                      gdf_column*           rhs,
-                      gdf_binary_operator   ope);
-
+void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
+                      gdf_binary_operator ope);
 
 /**
- * @brief Performs a binary operation between two gdf_columns using a user-defined PTX function.
+ * @brief Performs a binary operation between two gdf_columns using a
+ * user-defined PTX function.
  *
  * Accepts a user-defined PTX function to apply between the `lhs` and `rhs`.
  *
- * The desired output type must be specified in out->dtype.
+ * The desired output type must be specified in output_type. It is assumed that
+ * this output type is compatable with the output type in the PTX code.
+ *
+ * The output column will be allocated and it is the user's reponsibility to
+ * free the device memory
  *
  * If the valid field in the gdf_column output is not nullptr, then it will be
  * filled with the bitwise AND of the valid masks of lhs and rhs gdf_columns
  *
- * @param out (gdf_column) Output of the operation.
+ * @return A gdf_column as the output of the operation.
  * @param lhs (gdf_column) First operand of the operation.
  * @param rhs (gdf_column) Second operand of the operation.
- * @param ptx String containing the PTX of a binary function to apply between `lhs` and `rhs`
+ * @param ptx String containing the PTX of a binary function to apply between
+ * `lhs` and `rhs`
+ * @param output_type The desired output type
  */
-void binary_operation(gdf_column*           out,
-                      gdf_column*           lhs,
-                      gdf_column*           rhs,
-                      const std::string&    ptx);
+gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
+                            const std::string& ptx, gdf_dtype output_type);
 
-} // namespace cudf
+}  // namespace cudf
 
-
-#endif // BINARYOP_HPP
-
-
+#endif  // BINARYOP_HPP
