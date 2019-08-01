@@ -1,4 +1,3 @@
-import numpy as np
 import pytest
 
 import cudf
@@ -10,31 +9,16 @@ def _kernel_multiply(a, b, out):
         out[i] = x * y
 
 
-def _expect_multiply(a, b, out):
-    for i, (x, y) in enumerate(zip(a, b)):
-        if x is None or y is None:
-            out[i] = None
-            return
-
-        if x is np.nan or y is np.nan:
-            out[i] = np.nan
-            return
-
-        out[i] = x * y
-
-
-@pytest.mark.parametrize("dtype", ["float32", "float64", "int8", "bool"])
-@pytest.mark.parametrize("has_nulls", ["some", "none"])
+@pytest.mark.parametrize("dtype", ["float32", "float64"])
+@pytest.mark.parametrize("has_nulls", [False, True])
 def test_dataframe_apply_rows(dtype, has_nulls):
     count = 1000
     gdf_series_a = gen_rand_series(dtype, count, has_nulls=has_nulls)
     gdf_series_b = gen_rand_series(dtype, count, has_nulls=has_nulls)
-    gdf_series_out = [0] * count
-
-    _expect_multiply(gdf_series_a, gdf_series_b, gdf_series_out)
+    gdf_series_expected = gdf_series_a * gdf_series_b
 
     df_expected = cudf.DataFrame(
-        {"a": gdf_series_a, "b": gdf_series_b, "out": gdf_series_out}
+        {"a": gdf_series_a, "b": gdf_series_b, "out": gdf_series_expected}
     )
 
     df_original = cudf.DataFrame({"a": gdf_series_a, "b": gdf_series_b})
