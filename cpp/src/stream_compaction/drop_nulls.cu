@@ -62,17 +62,15 @@ struct valid_table_filter
   bit_mask_t **d_masks;
 };
 
-bit_mask_t** get_bitmasks(cudf::table const &table,
-                          std::vector<gdf_index_type> const &column_indices,
-                          cudaStream_t stream = 0) {
-  bit_mask_t** h_masks = new bit_mask_t*[column_indices.size()];
+bit_mask_t** get_bitmasks(cudf::table const &table, cudaStream_t stream = 0) {
+  bit_mask_t** h_masks = new bit_mask_t*[table.num_columns()];
   
   int i = 0;
-  for (auto index : column_indices) {
-    h_masks[i++] = reinterpret_cast<bit_mask_t*>(table.get_column(index)->valid);
+  for (auto col : table) {
+    h_masks[i++] = reinterpret_cast<bit_mask_t*>(col->valid);
   }
 
-  size_t masks_size = sizeof(bit_mask_t*) * column_indices.size();
+  size_t masks_size = sizeof(bit_mask_t*) * table.num_columns();
 
   bit_mask_t **d_masks = nullptr;
   RMM_ALLOC(&d_masks, masks_size, stream);
@@ -83,12 +81,11 @@ bit_mask_t** get_bitmasks(cudf::table const &table,
 }
 
 valid_table_filter make_valid_table_filter(cudf::table const &table,
-                                           std::vector<gdf_index_type> const &column_indices,
                                            cudf::any_or_all drop_if,
                                            cudaStream_t stream=0)
 {
-  return valid_table_filter(get_bitmasks(table, column_indices, stream),
-                            column_indices.size(), table.num_rows(),
+  return valid_table_filter(get_bitmasks(table, stream),
+                            table.num_columns(), table.num_rows(),
                             drop_if);
 }
 
@@ -104,18 +101,21 @@ namespace cudf {
 /*
  * Filters a table to remove null elements.
  */
-table drop_nulls(table const &input, 
-                 std::vector<gdf_index_type> const& column_indices,
+table drop_nulls(table const &input,
+                 table const &keys,
                  any_or_all drop_if) {
-  if (cudf::has_nulls(input)) {
-    valid_table_filter filter =
-      make_valid_table_filter(input, column_indices, drop_if);
-    table result = detail::copy_if(input, filter);
-    destroy_valid_table_filter(filter);
-    return result;
-  }
-  else
+  if (keys.num_columns() == 0 || keys.num_rows() == 0 ||
+      not cudf::has_nulls(keys))
     return cudf::copy(input);
+
+  CUDF_EXPECTS(keys.num_rows() <= input.num_rows(), 
+               "Column size mismatch");
+  
+  valid_table_filter filter =
+    make_valid_table_filter(keys, drop_if);
+  table result = detail::copy_if(input, filter);
+  destroy_valid_table_filter(filter);
+  return result;
 }
 
 }  // namespace cudf

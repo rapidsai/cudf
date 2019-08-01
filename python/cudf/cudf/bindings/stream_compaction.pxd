@@ -29,7 +29,7 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
 
     cdef cudf_table drop_nulls(
         const cudf_table &input,
-        const vector[gdf_index_type]& column_indices,
+        const cudf_table &keys,
         const any_or_all drop_if
     ) except +
 
