@@ -30,7 +30,7 @@ namespace cudf {
 constexpr int warp_size = 32;
 
 template <bool source_mask_valid, typename BitContainer, typename Predicate, typename Size>
-__global__ void null_if_kernel(
+__global__ void valid_if_kernel(
     const BitContainer* source_mask, 
     BitContainer* destination_mask, 
     Predicate p,
@@ -48,9 +48,8 @@ __global__ void null_if_kernel(
   while (bit_index < num_bits) {
     
     bool const predicate_is_true = p(bit_index);
-    // This function name is `null_if` so if predicate is true the bit is to be set to off
     const BitContainer ballot_result =
-        __ballot_sync(active_threads, !predicate_is_true);
+        __ballot_sync(active_threads, predicate_is_true);
 
     const Size container_index = 
       util::detail::bit_container_index<BitContainer>(bit_index);
@@ -71,7 +70,7 @@ __global__ void null_if_kernel(
 }
 
 template <typename BitContainer, typename Predicate, typename Size>
-BitContainer* null_if(
+BitContainer* valid_if(
     const BitContainer* source_mask, 
     const Predicate& p,
     Size num_bits
@@ -81,13 +80,13 @@ BitContainer* null_if(
   CUDF_EXPECTS(GDF_SUCCESS == bit_mask::create_bit_mask(&destination_mask, num_bits), 
       "Failed to allocate bit_mask buffer.");
 
-  auto f = source_mask ? null_if_kernel<true, BitContainer, Predicate, Size> :
+  auto kernel = source_mask ? valid_if_kernel<true, BitContainer, Predicate, Size> :
     null_if_kernel<false, BitContainer, Predicate, Size> ;
 
   constexpr int block_size = 256;
   const int grid_size = util::cuda::grid_config_1d(num_bits, block_size).num_blocks;
   // launch the kernel
-  f<<<grid_size, block_size>>>(source_mask, destination_mask, p, num_bits);
+  kernel<<<grid_size, block_size>>>(source_mask, destination_mask, p, num_bits);
   return destination_mask;
 
 }

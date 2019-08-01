@@ -14,16 +14,18 @@
  * limitations under the License.
  */ 
 
-#include <utilities/column_utils.cuh>
+#include <bitmask/valid_if.cuh>
 
 namespace cudf {
+
+namespace detail {
 
 template <typename T>
 struct predicate_is_nan{
   
   CUDA_HOST_DEVICE_CALLABLE
   bool operator()(gdf_index_type index) const {
-      return isnan(static_cast<T*>(input.data)[index]);
+      return !isnan(static_cast<T*>(input.data)[index]);
   }
   
   gdf_column input;
@@ -34,8 +36,7 @@ struct predicate_is_nan{
 
 };
 
-
-} // namespace cudf
+} // namespace detail
 
 bit_mask_t* nans_to_nulls(gdf_column const* col){
   
@@ -43,12 +44,14 @@ bit_mask_t* nans_to_nulls(gdf_column const* col){
   
   switch(col->dtype){
     case GDF_FLOAT32:
-      return cudf::null_if(source_mask, cudf::predicate_is_nan<float>(*col), col->size);
+      return cudf::valid_if(source_mask, cudf::predicate_is_nan<float>(*col), col->size);
     case GDF_FLOAT64:
-      return cudf::null_if(source_mask, cudf::predicate_is_nan<double>(*col), col->size);
+      return cudf::valid_if(source_mask, cudf::predicate_is_nan<double>(*col), col->size);
     default:
       CUDF_EXPECTS(false, "Unsupported data type for is_nan()");
       return nullptr;
   }
+
+} 
 
 } // namespace cudf
