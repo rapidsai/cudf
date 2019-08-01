@@ -102,6 +102,8 @@ class MultiIndex(Index):
             level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
             self._source_data[name] = level[name].reset_index(drop=True)
+        
+        self.names = [None]*len(self._levels) if names is None else names
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -458,7 +460,7 @@ class MultiIndex(Index):
             raise StopIteration
 
     def __getitem__(self, index):
-        # TODO: This could be a join on the _source_data
+        # TODO: This should be a take of the _source_data only
         match = self.take(index)
         if isinstance(index, slice):
             return match
