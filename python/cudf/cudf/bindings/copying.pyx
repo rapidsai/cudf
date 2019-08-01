@@ -53,20 +53,6 @@ def _normalize_maps(maps, size):
     return maps
 
 
-def _normalize_column_types(source, target):
-    """
-    Normalize the types of source/target for scatter
-    """
-    if (
-        pd.api.types.is_numeric_dtype(source.dtype) and
-        pd.api.types.is_numeric_dtype(target.dtype)
-    ):
-        return numeric_normalize_types(source, target)
-    else:
-        source = source.astype(target.dtype)
-        return source, target
-
-
 def apply_gather(source, maps, dest=None):
     """
     Gathers elements from source into dest (if given) using the gathermap maps.
@@ -178,8 +164,7 @@ def apply_scatter(source, maps, target):
     for i in range(len(target_cols)):
         target_cols[i] = columnops.as_column(target_cols[i])
         source_cols[i] = columnops.as_column(source_cols[i])
-        source_cols[i], target_cols[i] = _normalize_column_types(
-            source_cols[i], target_cols[i])
+        assert source_cols[i].dtype == target_cols[i].dtype
 
     c_source_table = table_from_columns(source_cols)
     c_target_table = table_from_columns(target_cols)
@@ -238,8 +223,6 @@ def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
 
     if out_begin > out_end:
         return out_col
-
-    in_col, out_col = _normalize_column_types(in_col, out_col)
 
     if out_col.null_count == 0 and in_col.has_null_mask:
         mask = utils.make_mask(len(out_col))

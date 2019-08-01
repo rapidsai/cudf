@@ -368,6 +368,21 @@ class Series(object):
     def __setitem__(self, key, value):
         from cudf.indexing import indices_from_labels
 
+        # first, coerce value into a scalar or column
+        if utils.is_single_value(value):
+            value = pd.api.types.pandas_dtype(type(value)).type(value)
+        else:
+            value = columnops.as_column(value)
+
+        if pd.api.types.is_numeric_dtype(value.dtype):
+            # normalize types if necessary:
+            if not isinstance(key, int):
+                to_dtype = np.result_type(value.dtype, self._column.dtype)
+                value = value.astype(to_dtype)
+                self._column = self._column.astype(to_dtype)
+        else:
+            value = value.astype(self.dtype)
+
         self._column[key] = value
 
     def take(self, indices, ignore_index=False):

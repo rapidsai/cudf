@@ -481,6 +481,12 @@ class Column(object):
                 raise NotImplementedError(type(arg))
 
     def __setitem__(self, key, value):
+        """
+        Set the value of self[key] to value.
+        
+        If value and self are of different types,
+        value is coerced to self.dtype
+        """
         import cudf.bindings.copying as cpp_copying
         from cudf.dataframe import columnops
 
@@ -494,9 +500,18 @@ class Column(object):
             nelem = len(key)
 
         if utils.is_single_value(value):
-            value = utils.scalar_broadcast_to(value, nelem, self.dtype)
+            to_dtype = pd.api.types.pandas_dtype(self.dtype)
+            value = utils.scalar_broadcast_to(value, nelem, to_dtype)
 
-        value = columnops.as_column(value)
+        value = columnops.as_column(value).astype(self.dtype)
+
+        if len(value) != nelem:
+            msg = (
+                f"Size mismatch: cannot set value "
+                f"of size {len(value)} to indexing result of size "
+                f"{nelem}"
+            )
+            raise ValueError(msg)
 
         if isinstance(key, slice):
             out = cpp_copying.apply_copy_range(

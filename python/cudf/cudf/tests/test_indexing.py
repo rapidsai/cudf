@@ -657,7 +657,13 @@ def test_series_setitem_basics(key, value, nulls):
 
 
 @pytest.mark.parametrize(
-    "key, value", [(0, 0.5), ([0, 1], [0.5, 2.5]), (slice(0, 2), [0.5, 0.25])]
+    "key, value",
+    [
+        (0, 0.5),
+        ([0, 1], 0.5),
+        ([0, 1], [0.5, 2.5]),
+        (slice(0, 2), [0.5, 0.25]),
+    ],
 )
 def test_series_setitem_dtype(key, value):
     psr = pd.Series([1, 2, 3], dtype="int32")
