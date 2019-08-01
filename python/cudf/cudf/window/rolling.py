@@ -164,7 +164,12 @@ class Rolling:
     def count(self):
         return self._apply_agg("count")
 
-    def udf(self, op):
+    def apply(self, udf, *args, **kwargs):
+        
+        nb_type = numba.numpy_support.from_dtype(self.obj.dtype)
+        type_signature = (nb_type[:],)
+
+        op = cudautils.compile_udf(udf, type_signature)
         return self._apply_agg(op)
 
     def _normalize(self):

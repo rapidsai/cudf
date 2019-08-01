@@ -691,70 +691,54 @@ R"***(
 .target sm_70
 .address_size 64
 
-	// .globl	_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii
-.common .global .align 8 .u64 _ZN08NumbaEnv8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii;
+	// .globl	_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE
+.common .global .align 8 .u64 _ZN08NumbaEnv8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE;
 
-.visible .func  (.param .b32 func_retval0) _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii(
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_0,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_1,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_2,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_3,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_4,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_5,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_6,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_7,
-	.param .b32 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_8,
-	.param .b32 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_9
+.visible .func  (.param .b32 func_retval0) _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE(
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_0,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_1,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_2,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_3,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_4,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_5,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_6,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_7
 )
 {
-	.reg .pred 	%p<7>;
-	.reg .b32 	%r<19>;
-	.reg .b64 	%rd<22>;
+	.reg .pred 	%p<3>;
+	.reg .b32 	%r<6>;
+	.reg .b64 	%rd<18>;
 
 
-	ld.param.u64 	%rd5, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_0];
-	ld.param.u64 	%rd6, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_5];
-	ld.param.u64 	%rd7, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_6];
-	ld.param.u64 	%rd8, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_7];
-	ld.param.u32 	%r8, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_8];
-	ld.param.u32 	%r9, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedEii_param_9];
-	setp.gt.s32	%p6, %r9, 0;
-	mov.u64 	%rd21, 0;
-	setp.lt.s32	%p4, %r9, 1;
-	@%p4 bra 	BB0_3;
+	ld.param.u64 	%rd6, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_0];
+	ld.param.u64 	%rd7, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_5];
+	ld.param.u64 	%rd8, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_6];
+	ld.param.u64 	%rd9, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_7];
+	mov.u64 	%rd15, 0;
+	mov.u64 	%rd16, %rd15;
 
-	mov.u32 	%r18, 0;
-	selp.u32	%r16, 1, 0, %p6;
-	max.s32 	%r11, %r9, %r18;
-	selp.s32	%r12, -1, 0, %p6;
-	add.s32 	%r17, %r12, %r11;
-	cvt.s64.s32	%rd1, %r8;
-	mov.u64 	%rd21, 0;
+BB0_1:
+	mov.u64 	%rd2, %rd16;
+	mov.u32 	%r5, 0;
+	setp.ge.s64	%p1, %rd15, %rd8;
+	mov.u64 	%rd17, %rd15;
+	@%p1 bra 	BB0_3;
 
-BB0_2:
-	mov.u32 	%r3, %r16;
-	cvt.s64.s32	%rd11, %r18;
-	selp.b64	%rd12, %rd11, 0, %p6;
-	add.s64 	%rd13, %rd12, %rd1;
-	shr.s64 	%rd14, %rd13, 63;
-	and.b64  	%rd15, %rd14, %rd7;
-	add.s64 	%rd16, %rd15, %rd13;
-	mul.lo.s64 	%rd17, %rd16, %rd8;
-	add.s64 	%rd18, %rd17, %rd6;
-	ld.s32 	%rd19, [%rd18];
-	add.s64 	%rd21, %rd19, %rd21;
-	setp.gt.s32	%p6, %r17, 0;
-	selp.b32	%r13, -1, 0, %p6;
-	add.s32 	%r17, %r13, %r17;
-	selp.u32	%r14, 1, 0, %p6;
-	add.s32 	%r16, %r14, %r3;
-	mov.u32 	%r18, %r3;
-	@%p6 bra 	BB0_2;
+	mul.lo.s64 	%rd12, %rd15, %rd9;
+	add.s64 	%rd13, %rd12, %rd7;
+	ld.u32 	%r5, [%rd13];
+	add.s64 	%rd17, %rd15, 1;
 
 BB0_3:
-	st.u64 	[%rd5], %rd21;
-	mov.u32 	%r15, 0;
-	st.param.b32	[func_retval0+0], %r15;
+	cvt.s64.s32	%rd14, %r5;
+	add.s64 	%rd16, %rd14, %rd2;
+	setp.lt.s64	%p2, %rd15, %rd8;
+	mov.u64 	%rd15, %rd17;
+	@%p2 bra 	BB0_1;
+
+	st.u64 	[%rd6], %rd2;
+	mov.u32 	%r4, 0;
+	st.param.b32	[func_retval0+0], %r4;
 	ret;
 }
 )***";
@@ -772,10 +756,15 @@ BB0_3:
 
   auto output_wrapper = cudf::test::column_wrapper<int64_t>(output);
 
-  output_wrapper.print();
+  cudf::test::column_wrapper<int64_t> expect{
+    size,
+    [](gdf_index_type row) { return static_cast<int>(row*4+2); },
+    [](gdf_index_type row) { return (row != 0 && row != size-2 && row != size-1); }
+  };
+
+  EXPECT_TRUE(output_wrapper == expect);
 
   gdf_column_free(&output);
-  
 
 }
 

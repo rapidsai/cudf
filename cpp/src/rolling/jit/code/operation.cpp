@@ -32,7 +32,7 @@ R"***(operation.h
     {
       OutType ret;
       NUMBA_GENERIC_AGGREGATOR(
-        &ret, 0, 0, 0, 0, in_col, 0, sizeof(InType), start, count);
+        &ret, 0, 0, 0, 0, &in_col[start], count, sizeof(InType));
       return ret;
     }
   };

@@ -162,3 +162,45 @@ def test_rolling_getitem_window():
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
+
+
+@pytest.mark.parametrize(
+    "data,index",
+    [
+        ([1, 4, 5, 2, 9, 7], None)
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none"])
+@pytest.mark.parametrize("center", [True, False])
+def test_rollling_series_numba_udf(data, index, nulls, center):
+    if len(data) > 0:
+        if nulls == "one":
+            p = np.random.randint(0, len(data))
+            data[p] = None
+        elif nulls == "some":
+            p1, p2 = np.random.randint(0, len(data), (2,))
+            data[p1] = None
+            data[p2] = None
+        elif nulls == "all":
+            data = [None] * len(data)
+
+    psr = pd.Series(data, index=index)
+    gsr = cudf.from_pandas(psr)
+
+    def generic_sum(A):
+        accumulation = 0
+        for a in A:
+            accumulation = accumulation + a
+        return accumulation
+
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
+            assert_eq(
+                getattr(
+                    psr.rolling(window_size, min_periods, center), "sum"
+                )().fillna(-1),
+                getattr(
+                    gsr.rolling(window_size, min_periods, center), "apply"
+                )(generic_sum).fillna(-1),
+                check_dtype=False,
+            )
