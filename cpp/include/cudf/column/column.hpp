@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018-2019, NVIDIA CORPORATION.
+ * Copyright (c) 2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -15,12 +15,14 @@
  */
 #pragma once
 
-#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include "column_view.hpp"
 
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
+
+#include <type_traits>
+#include <utility>
 #include <vector>
 
 namespace cudf {
@@ -53,30 +55,7 @@ class column {
   column(column&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column and allocate sufficient storage to hold
-   * `size` elements of the specified `type` with an optional null mask
-   * allocation.
-   *
-   * @note This constructor only supports fixed-width, simple types.
-   *
-   * @throws cudf::logic_error if `type` is not a fixed-width, simple type.
-   *
-   * @param[in] type The element type
-   * @param[in] size The number of elements in the column
-   * @param[in] state Optional, controls allocation/initialization of the
-   * column's null mask. By default, no null mask is allocated.
-   * @param[in] stream Optional stream on which all memory allocation and device
-   * kernels will be issued.
-   * @param[in] mr Optional resource that will be used for device memory
-   * allocation of the column's `data` and `null_mask`.
-   *---------------------------------------------------------------------------**/
-  column(data_type type, size_type size, mask_state state = UNALLOCATED,
-         cudaStream_t stream = 0,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column by copying from `device_buffer`s for the
-   * column's `data` and `null_mask`.
+   * @brief Construct a new column 
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
@@ -94,53 +73,17 @@ class column {
    * @param mr Optional, `device_memory_resource` that is used for device memory
    * allocation
    *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer data,
-         rmm::device_buffer null_mask = {},
+  template <typename B1, typename B2 = rmm::device_buffer>
+  column(data_type dtype, size_type size, B1&& data, B2&& null_mask = {},
          size_type null_count = UNKNOWN_NULL_COUNT,
          std::vector<column> const& children = {}, cudaStream_t stream = 0,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from a type, and device_buffers for data and
-   * bitmask that will be *shallow* copied.
-   *
-   * This constructor uses move semantics to take ownership of the
-   *device_buffer's device memory. The `device_buffer` passed into this
-   *constructor will not longer be valid to use. Furthermore, it will result in
-   *undefined behavior if the device_buffer`s associated memory is modified or
-   *freed after invoking this constructor.
-   *
-   * @param dtype The element type
-   * @param[in] size The number of elements in the column
-   * @param data device_buffer whose data will be moved from into this column
-   * @param mask bitmask whose data will be moved into this column
-   *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer&& data,
-         rmm::device_buffer&& mask);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from a type, size, and deep copied device
-   * buffer for data, and moved bitmask.
-   *
-   * @param dtype The element type
-   * @param size The number of elements
-   * @param data device_buffer whose data will be *deep* copied
-   * @param mask bitmask whose data will be moved into this column
-   *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer data,
-         rmm::device_buffer&& mask);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from a type, size, and moved device
-   * buffer for data, and deep copied bitmask.
-   *
-   * @param dtype The element type
-   * @param size The number of elements
-   * @param data device_buffer whose data will be moved into this column
-   * @param mask bitmask whose data will be deep copied into this column
-   *---------------------------------------------------------------------------**/
-  column(data_type dtype, size_type size, rmm::device_buffer&& data,
-         rmm::device_buffer mask);
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+      : _type{dtype},
+        _size{size},
+        _data{std::forward<B1>(data)},
+        _null_mask{std::forward<B2>(null_mask)},
+        _null_count{null_count},
+        _children{children} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying from a `column_view`.
@@ -231,7 +174,7 @@ class column {
    * children.
    *
    * @note Creating a mutable view of a `column` will invalidate the `column`'s
-   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. This will require the
+   * `null_count()` by setting it to `UNKNOWN_NULL_COUNT`. This will require the
    * user to either explicitly update the null count with `set_null_count()`,
    * else, the null count to be recomputed on the next invocation of
    *`null_count()`.
@@ -263,8 +206,10 @@ class column {
                                ///< buffer containing the column elements
   rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
                                     ///< May be empty if `null_count() == 0`
-  size_type _null_count{UNKNOWN_NULL_COUNT};  ///< The number of null elements
+  mutable size_type _null_count{
+      UNKNOWN_NULL_COUNT};          ///< The number of null elements
   std::vector<column> _children{};  ///< Depending on element type, child
                                     ///< columns may contain additional data
 };
+
 }  // namespace cudf
