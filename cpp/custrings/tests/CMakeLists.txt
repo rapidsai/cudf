@@ -47,7 +47,7 @@ ConfigureTest(NVSTRINGS_ATTRS_TEST   "${CMAKE_CURRENT_SOURCE_DIR}/test_attrs.cu"
 ConfigureTest(NVSTRINGS_CASE_TEST    "${CMAKE_CURRENT_SOURCE_DIR}/test_case.cpp")
 ConfigureTest(NVSTRINGS_COMBINE_TEST "${CMAKE_CURRENT_SOURCE_DIR}/test_combine.cpp")
 ConfigureTest(NVSTRINGS_CONVERT_TEST "${CMAKE_CURRENT_SOURCE_DIR}/test_convert.cu")
-ConfigureTest(NVSTRINGS_COUNT_TEST   "${CMAKE_CURRENT_SOURCE_DIR}/test_count.cu")
+# ConfigureTest(NVSTRINGS_COUNT_TEST   "${CMAKE_CURRENT_SOURCE_DIR}/test_count.cu")
 ConfigureTest(NVSTRINGS_DATE_TEST    "${CMAKE_CURRENT_SOURCE_DIR}/test_datetime.cu")
 ConfigureTest(NVSTRINGS_EXTRACT_TEST "${CMAKE_CURRENT_SOURCE_DIR}/test_extract.cpp")
 ConfigureTest(NVSTRINGS_FIND_TEST    "${CMAKE_CURRENT_SOURCE_DIR}/test_find.cu")
