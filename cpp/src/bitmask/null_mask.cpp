@@ -60,11 +60,10 @@ rmm::device_buffer create_null_mask(size_type size, mask_state state,
     mask_size = bitmask_allocation_size_bytes(size);
   }
 
-  uint8_t fill_value = (state == ALL_VALID) ? 0xff : 0x00;
-
   rmm::device_buffer mask(mask_size, stream, mr);
 
   if (state != UNINITIALIZED) {
+    uint8_t fill_value = (state == ALL_VALID) ? 0xff : 0x00;
     CUDA_TRY(cudaMemsetAsync(static_cast<bitmask_type *>(mask.data()),
                              fill_value, mask_size, stream));
   }
