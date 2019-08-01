@@ -184,7 +184,7 @@ def test_typecast_from_datetime(data, dtype):
     ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
 )
 def test_typecast_from_datetime_to_int64_to_datetime(data, dtype):
-    pd_data = pd.Series(data.copy()).astype(dtype)
+    pd_data = pd.Series(data.copy())
     np_data = np.array(pd_data)
     gdf_data = Series(pd_data)
 

@@ -1397,7 +1397,10 @@ def test_index_in_dataframe_constructor():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_from_arrow(nelem, data_type):
@@ -1435,7 +1438,10 @@ def test_from_arrow(nelem, data_type):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_to_arrow(nelem, data_type):
@@ -1646,7 +1652,10 @@ def test_dataframe_shape_empty():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
@@ -2069,7 +2078,10 @@ def test_cuda_array_interface(dtype):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
@@ -2304,7 +2316,10 @@ def test_series_rename():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 @pytest.mark.parametrize("nelem", [0, 100])
@@ -2607,8 +2622,11 @@ def test_dataframe_empty_sort_index():
         "int64",
         "float32",
         "float64",
-        "datetime64[ms]",
         "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_dataframe_0_row_dtype(dtype):
@@ -3370,7 +3388,17 @@ def test_series_astype_numeric_to_numeric_nulls(dtype, as_dtype):
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.parametrize("as_dtype", ["str", "datetime64[ms]", "category"])
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
 def test_series_astype_numeric_to_other(dtype, as_dtype):
     psr = pd.Series([1, 2, 3], dtype=dtype)
     gsr = gd.from_pandas(psr)
@@ -3378,10 +3406,20 @@ def test_series_astype_numeric_to_other(dtype, as_dtype):
 
 
 @pytest.mark.parametrize(
-    "as_dtype", ["int32", "float32", "category", "datetime64[ms]", "str"]
+    "as_dtype",
+    [
+        "str",
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
 )
 def test_series_astype_string_to_other(as_dtype):
-    if as_dtype == "datetime64[ms]":
+    if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05"]
         kwargs = {"format": "%Y-%m-%d"}
     else:
@@ -3392,7 +3430,17 @@ def test_series_astype_string_to_other(as_dtype):
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
 
 
-@pytest.mark.parametrize("as_dtype", ["category", "datetime64[ms]", "str"])
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
 def test_series_astype_datetime_to_other(as_dtype):
     data = ["2001-01-01", "2002-02-02", "2001-01-05"]
     psr = pd.Series(data)
@@ -3401,10 +3449,20 @@ def test_series_astype_datetime_to_other(as_dtype):
 
 
 @pytest.mark.parametrize(
-    "as_dtype", ["int32", "float32", "category", "datetime64[ms]", "str"]
+    "as_dtype",
+    [
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
 )
 def test_series_astype_categorical_to_other(as_dtype):
-    if as_dtype == "datetime64[ms]":
+    if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
         kwargs = {"format": "%Y-%m-%d"}
     else:
