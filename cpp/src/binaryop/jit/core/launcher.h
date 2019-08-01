@@ -20,8 +20,8 @@
 #ifndef GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 #define GDF_BINARY_OPERATION_JIT_CORE_LAUNCHER_H
 
-#include "cache.h"
-#include "../util/type.h"
+#include <jit/cache.h>
+#include <jit/type.h>
 #include "../util/operator.h"
 #include <jitify.hpp>
 #include <unordered_map>
@@ -44,7 +44,7 @@ namespace jit {
     public:
         Launcher();
         
-        Launcher(const std::string& ptx);
+        Launcher(const std::string& ptx, const std::string& output_type);
 
         Launcher(Launcher&&);
 
@@ -77,7 +77,7 @@ namespace jit {
         {
             Operator operatorSelector;
             std::vector<std::string> arguments;
-            arguments.assign({getTypeName(args->dtype)..., operatorSelector.getOperatorName(ope, type)});
+            arguments.assign({cudf::jit::getTypeName(args->dtype)..., operatorSelector.getOperatorName(ope, type)});
             kernel_inst = cacheInstance.getKernelInstantiation(kernName, program, arguments);
             return *this;
         }
@@ -99,7 +99,7 @@ namespace jit {
          * 
          * @return Launcher& ref to this launcher object
          *---------------------------------------------------------------------------**/
-        Launcher& setProgram(std::string prog_file_name, std::string ptx);
+        Launcher& setProgram(std::string prog_file_name, std::string ptx, std::string output_type);
 
         /**---------------------------------------------------------------------------*
          * @brief Handle the Jitify API to instantiate and launch using information 
@@ -121,7 +121,7 @@ namespace jit {
          * @param rhs[in]  RHS column
          * @return gdf_error 
          *---------------------------------------------------------------------------**/
-        gdf_error launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs);
+        gdf_error launch(gdf_column* out, const gdf_column* lhs, const gdf_column* rhs);
 
     private:
         static const std::vector<std::string> compilerFlags;

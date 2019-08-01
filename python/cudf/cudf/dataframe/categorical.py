@@ -6,6 +6,7 @@ import pyarrow as pa
 from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
@@ -330,6 +331,16 @@ class CategoricalColumn(columnops.TypedColumnBase):
         Returns offset of last value that matches
         """
         return self.as_numerical.find_last_value(self._encode(value))
+
+    def searchsorted(self, value, side="left"):
+        if not self._ordered:
+            raise ValueError("Requires ordered categories")
+
+        value_col = columnops.as_column(value)
+        if not self.is_type_equivalent(value_col):
+            raise TypeError("Categoricals can only compare with the same type")
+
+        return cpp_search.search_sorted(self, value_col, side)
 
     @property
     def is_monotonic_increasing(self):
