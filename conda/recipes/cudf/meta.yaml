@@ -20,6 +20,7 @@ requirements:
   build:
     - python
     - cython >=0.29,<0.30
+    - cmake_setuptools
     - setuptools
     - numba >=0.41,<0.45
     - dlpack
@@ -38,6 +39,9 @@ requirements:
 
 test:
   commands:
+    - python -c "import nvstrings"
+    - python -c "import nvtext"
+    - python -c "import nvcategory"
     - python -c "import cudf"
 
 about:
