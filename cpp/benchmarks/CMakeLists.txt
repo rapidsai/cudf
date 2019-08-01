@@ -84,6 +84,15 @@ set(JOIN_BENCH_SRC
 ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
 
 ###################################################################################################
+# - search benchmark ------------------------------------------------------------------------------
+
+set(SEARCH_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/search/search_benchmark.cu")
+
+ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
+
+
+###################################################################################################
 # - type_dispatcher benchmark ---------------------------------------------------------------------
 
 set(TD_BENCH_SRC

@@ -132,6 +132,7 @@ class reader::Impl {
   std::vector<int> selected_cols_;
   bool has_timestamp_column_ = false;
   bool use_index_ = true;
+  bool use_np_dtypes_ = true;
 };
 
 } // namespace orc
