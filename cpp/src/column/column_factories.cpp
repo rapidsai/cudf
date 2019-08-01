@@ -54,6 +54,6 @@ std::unique_ptr<column> make_numeric_column(
   return std::make_unique<column>(
       type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
       create_null_mask(size, state, stream, mr), state_null_count(state, size),
-      std::vector<column>{}, stream, mr);
+      std::vector<std::unique_ptr<column>>{});
 }
 }  // namespace cudf

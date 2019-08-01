@@ -21,6 +21,7 @@
 #include <rmm/device_buffer.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
+#include <memory>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -43,7 +44,7 @@ class column {
    *
    * @param other The other column to copy
    *---------------------------------------------------------------------------**/
-  column(column const& other) = default;
+  column(column const& other);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column object from the contents of another `column`
@@ -55,7 +56,7 @@ class column {
   column(column&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column 
+   * @brief Construct a new column
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
@@ -68,22 +69,17 @@ class column {
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
    * @param children Optional, vector of child columns
-   * @param stream Optional, stream on which all memory allocation and copy will
-   * be issued.
-   * @param mr Optional, `device_memory_resource` that is used for device memory
-   * allocation
    *---------------------------------------------------------------------------**/
   template <typename B1, typename B2 = rmm::device_buffer>
   column(data_type dtype, size_type size, B1&& data, B2&& null_mask = {},
          size_type null_count = UNKNOWN_NULL_COUNT,
-         std::vector<column> const& children = {}, cudaStream_t stream = 0,
-         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource())
+         std::vector<std::unique_ptr<column>>&& children = {})
       : _type{dtype},
         _size{size},
         _data{std::forward<B1>(data)},
         _null_mask{std::forward<B2>(null_mask)},
         _null_count{null_count},
-        _children{children} {}
+        _children{std::move(children)} {}
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying from a `column_view`.
@@ -152,6 +148,31 @@ class column {
   bool has_nulls() const noexcept { return (null_count() > 0); }
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns the number of child columns
+   *---------------------------------------------------------------------------**/
+  size_type num_children() const noexcept { return _children.size(); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a reference to the specified child
+   *
+   * @param child_index Index of the desired child
+   * @return column& Reference to the desired child
+   *---------------------------------------------------------------------------**/
+  column& child(size_type child_index) noexcept {
+    return *_children[child_index];
+  };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a const reference to the specified child
+   *
+   * @param child_index Index of the desired child
+   * @return column const& Const reference to the desired child
+   *---------------------------------------------------------------------------**/
+  column const& child(size_type child_index) const noexcept {
+    return *_children[child_index];
+  };
+
+  /**---------------------------------------------------------------------------*
    * @brief Creates an immutable, non-owning view of the column's data and
    * children.
    *
@@ -207,9 +228,10 @@ class column {
   rmm::device_buffer _null_mask{};  ///< Bitmask used to represent null values.
                                     ///< May be empty if `null_count() == 0`
   mutable size_type _null_count{
-      UNKNOWN_NULL_COUNT};          ///< The number of null elements
-  std::vector<column> _children{};  ///< Depending on element type, child
-                                    ///< columns may contain additional data
+      UNKNOWN_NULL_COUNT};  ///< The number of null elements
+  std::vector<std::unique_ptr<column>>
+      _children{};  ///< Depending on element type, child
+                    ///< columns may contain additional data
 };
 
 }  // namespace cudf

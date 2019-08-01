@@ -28,6 +28,19 @@
 
 namespace cudf {
 
+// Copy constructor
+column::column(column const &other)
+    : _type{other._type},
+      _size{other._size},
+      _data{other._data},
+      _null_mask{other._null_mask},
+      _null_count{other._null_count} {
+  _children.reserve(other.num_children());
+  for (auto const &c : other._children) {
+    _children.emplace_back(std::make_unique<column>(*c));
+  }
+}
+
 // Move constructor
 column::column(column &&other)
     : _type{other._type},
@@ -41,28 +54,30 @@ column::column(column &&other)
   other._type = data_type{EMPTY};
 }
 
-
-
 // Create immutable view
 column_view column::view() const {
   // Create views of children
-  std::vector<column_view> child_views(_children.size());
-  std::copy(begin(_children), end(_children), begin(child_views));
+  std::vector<column_view> child_views;
+  child_views.reserve(_children.size());
+  for (auto const &c : _children) {
+    child_views.emplace_back(*c);
+  }
 
-  return column_view{_type,
-                     _size,
-                     _data.data(),
-                     static_cast<bitmask_type const *>(_null_mask.data()),
-                     _null_count,
-                     0,
-                     std::move(child_views)};
+  return column_view{
+      _type,        _size,
+      _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
+      _null_count,  0,
+      child_views};
 }
 
 // Create mutable view
 mutable_column_view column::mutable_view() {
   // create views of children
-  std::vector<mutable_column_view> child_views(_children.size());
-  std::copy(begin(_children), end(_children), begin(child_views));
+  std::vector<mutable_column_view> child_views;
+  child_views.reserve(_children.size());
+  for (auto const &c : _children) {
+    child_views.emplace_back(*c);
+  }
 
   // Store the old null count
   auto current_null_count = _null_count;
@@ -79,7 +94,7 @@ mutable_column_view column::mutable_view() {
                              static_cast<bitmask_type *>(_null_mask.data()),
                              current_null_count,
                              0,
-                             std::move(child_views)};
+                             child_views};
 }
 
 // If the null count is known, return it. Else, compute and return it
