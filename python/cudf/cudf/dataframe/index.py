@@ -68,17 +68,15 @@ class Index(object):
         ---
         indices: An array-like that maps to values contained in this Index.
         """
-        assert indices.dtype.kind in "iu"
-        if indices.size == 0:
-            # Empty indices
-            return RangeIndex(indices.size)
-        else:
-            # Gather
-            index = cpp_copying.apply_gather_array(self.gpu_values, indices)
-            col = self.as_column().replace(data=index.data)
-            new_index = as_index(col)
-            new_index.name = self.name
-            return new_index
+        # Gather
+        indices = columnops.as_column(indices)
+        index = cpp_copying.apply_gather_array(
+            self.gpu_values, indices.data.mem
+        )
+        col = self.as_column().replace(data=index.data)
+        new_index = col
+        new_index.name = self.name
+        return new_index
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
@@ -787,7 +785,7 @@ class StringIndex(GenericIndex):
         return result
 
     def take(self, indices):
-        return columnops.as_column(self._values).element_indexing(indices)
+        return self._values.element_indexing(indices)
 
     def __repr__(self):
         return (
