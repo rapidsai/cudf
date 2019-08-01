@@ -22,6 +22,43 @@
 #include <type_traits>
 
 namespace cudf {
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if the type `T` is a numeric type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is numeric
+ * @return false  `T` is not numeric
+ *---------------------------------------------------------------------------**/
+template <typename T>
+constexpr inline bool is_numeric() {
+  return std::is_integral<T>::value or std::is_floating_point<T>::value;
+}
+
+namespace detail {
+struct numeric {
+  template <typename T>
+  constexpr bool operator()() const noexcept {
+    return is_numeric<T>();
+  }
+};
+}  // namespace detail
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if `type` is a numeric `data_type`.
+ *
+ * "Numeric" types are fundamental integral/floating point types such as `INT*`
+ * or `FLOAT*`. Types that wrap a numeric type are not considered numeric, e.g.,
+ *`TIMESTAMP` or `DATE32`.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is numeric
+ * @return false `type` is not numeric
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_numeric(data_type type) {
+  return cudf::exp::type_dispatcher(type, detail::numeric{});
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether the concerete C++ type `T` corresponds to a
  * fixed-width element type.
@@ -81,8 +118,8 @@ constexpr inline bool is_compound() {
 /**---------------------------------------------------------------------------*
  * @brief Indicates if the concrete C++ type `T` corresponds to a "simple"
  * element type.
- * 
- * "Simple" element types are implemented with only a single column, i.e., 
+ *
+ * "Simple" element types are implemented with only a single column, i.e.,
  * `num_children() == 0` for columns of "simple" elements
  *
  * @tparam T The C++ type to verify
@@ -121,17 +158,18 @@ constexpr inline bool is_compound(data_type type) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of the specified `data_type` are a "simple" type.
- * 
- * "Simple" element types are implemented with only a single column, i.e., 
+ * @brief Indicates if elements of the specified `data_type` are a "simple"
+ *type.
+ *
+ * "Simple" element types are implemented with only a single column, i.e.,
  * `num_children() == 0` for columns of "simple" elements
- * 
+ *
  * @param type The `data_type` to verify
  * @return true `type` is a simple type
  * @return false `type` is a compound type
-*---------------------------------------------------------------------------**/
-constexpr inline bool is_simple(data_type type){
-    return not is_compound(type);
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_simple(data_type type) {
+  return not is_compound(type);
 }
 
 }  // namespace cudf
