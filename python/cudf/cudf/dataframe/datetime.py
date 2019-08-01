@@ -45,6 +45,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             The Column name
         """
         super(DatetimeColumn, self).__init__(**kwargs)
+        assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def serialize(self, serialize):
@@ -144,12 +145,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @property
     def as_numerical(self):
         from cudf.dataframe import numerical
-        import cudf.bindings.typecast as typecast
 
+        data = Buffer(self.data.mem.view(np.int64))
         return self.view(
-            numerical.NumericalColumn,
-            dtype="int64",
-            data=typecast.apply_cast(self, dtype=np.int64).data,
+            numerical.NumericalColumn, data=data, dtype=data.dtype
         )
 
     def as_datetime_column(self, dtype, **kwargs):
@@ -239,11 +238,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
         return self._mimic_inplace(result, inplace)
 
     def sort_by_values(self, ascending=True, na_position="last"):
-        sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
-        col_inds = self.replace(
-            data=sort_inds.data, mask=sort_inds.mask
-        ).astype(sort_inds.data.dtype)
+        col_inds = get_sorted_inds(self, ascending, na_position)
+        col_keys = cpp_copying.apply_gather_column(self, col_inds.data.mem)
+        col_inds.name = self.name
         return col_keys, col_inds
 
     def min(self, dtype=None):

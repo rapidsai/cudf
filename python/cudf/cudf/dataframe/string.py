@@ -548,20 +548,23 @@ class StringColumn(columnops.TypedColumnBase):
         return self.element_indexing(arg)
 
     def as_numerical_column(self, dtype, **kwargs):
-        if dtype in (np.dtype("int8"), np.dtype("int16")):
-            out_dtype = np.dtype(dtype)
-            dtype = np.dtype("int32")
-        else:
-            out_dtype = np.dtype(dtype)
 
-        out_arr = rmm.device_array(shape=len(self), dtype=dtype)
+        mem_dtype = np.dtype(dtype)
+        str_dtype = mem_dtype
+        out_dtype = mem_dtype
+
+        if mem_dtype.type in (np.int8, np.int16):
+            mem_dtype = np.dtype(np.int32)
+            str_dtype = mem_dtype
+        elif mem_dtype.type is np.datetime64:
+            kwargs.update(units=np.datetime_data(mem_dtype)[0])
+            mem_dtype = np.dtype(np.int64)
+
+        out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
         out_ptr = get_ctype_ptr(out_arr)
         kwargs.update({"devptr": out_ptr})
-        if dtype == np.dtype("datetime64[ms]"):
-            kwargs["units"] = "ms"
-        _str_to_numeric_typecast_functions[np.dtype(dtype)](
-            self.str(), **kwargs
-        )
+
+        _str_to_numeric_typecast_functions[str_dtype](self.str(), **kwargs)
 
         out_col = columnops.as_column(out_arr)
 
