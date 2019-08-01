@@ -39,6 +39,7 @@ from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -444,7 +445,7 @@ class DataFrame(object):
         columns = [
             c
             for c, dt in self.dtypes.items()
-            if dt != object and not pd.api.types.is_categorical_dtype(dt)
+            if dt != object and not is_categorical_dtype(dt)
         ]
         return self[columns]
 
@@ -1995,7 +1996,7 @@ class DataFrame(object):
         categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
-            if pd.api.types.is_categorical_dtype(col):
+            if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
@@ -2194,13 +2195,13 @@ class DataFrame(object):
 
         cat_join = False
 
-        if pd.api.types.is_categorical_dtype(lhs[idx_col_name]):
+        if is_categorical_dtype(lhs[idx_col_name]):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
 
             def set_categories(col, cats):
-                return col.cat._set_categories(cats, True).fillna(-1)
+                return col.cat.set_categories(cats, is_unique=True).fillna(-1)
 
             if how == "left":
                 cats = lcats
@@ -2209,7 +2210,8 @@ class DataFrame(object):
                 cats = rcats
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
-                cats = columnops.as_column(lcats).append(rcats).unique()
+                cats = columnops.as_column(lcats).append(rcats)
+                cats = Series(cats).drop_duplicates()._column
 
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
@@ -3351,14 +3353,12 @@ class DataFrame(object):
                 )
             )
 
-        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
-
         # include all subtypes
         include_subtypes = set()
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if i_dtype is cat_type:
+                if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
                 elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
@@ -3368,7 +3368,7 @@ class DataFrame(object):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if e_dtype is cat_type:
+                if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
                 elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)

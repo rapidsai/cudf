@@ -16,6 +16,7 @@ import pandas as pd
 import pyarrow as pa
 
 from cudf.utils import cudautils
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
 import cudf.dataframe.columnops
 from librmm_cffi import librmm as rmm
@@ -124,8 +125,7 @@ def check_gdf_compatibility(col):
     """
     Raise TypeError when a column type does not have gdf support.
     """
-    if not (col.dtype.type in dtypes or
-            pd.api.types.is_categorical_dtype(col)):
+    if not (col.dtype.type in dtypes or is_categorical_dtype(col)):
         raise TypeError('column type `%s` not supported in gdf' % (col.dtype))
 
 
@@ -174,7 +174,7 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
     """
     dtype = col.dtype if dtype is None else np.dtype(dtype)
     # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
-    if pd.api.types.is_categorical_dtype(dtype):
+    if is_categorical_dtype(dtype):
         if col is None:
             return dtypes[np.int8]
         if hasattr(col, 'data') and col.data is not None:
