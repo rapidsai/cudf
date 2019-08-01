@@ -126,7 +126,11 @@ class MultiIndex(Index):
     def copy(self, deep=True):
         mi = MultiIndex(source_data=self._source_data.copy(deep))
         if self._levels is not None:
-            mi._levels = np.array([s.copy(deep) for s in self._levels])
+            y = []
+            for level in self._levels:
+                unnamed = level.copy(deep)
+                y.append(unnamed)
+            mi._levels = np.array(y)
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if self.names is not None:
@@ -190,14 +194,11 @@ class MultiIndex(Index):
         from cudf import DataFrame
 
         codes = DataFrame()
-        # Note: This is an O(N^2) solution using gpu masking
-        # to compute new codes for the MultiIndex. There may be
-        # a faster solution that could be executed on gpu at the same
-        # time the groupby is calculated.
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
-            levels.append(cats.reset_index(drop=True))
+            level = cats.reset_index(drop=True)
+            levels.append(level)
 
         self._levels = levels
         self._codes = codes
@@ -443,6 +444,10 @@ class MultiIndex(Index):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
+        if self._codes is not None:
+            result._codes = self._codes.take(indices)
+        if self._levels is not None:
+            result._levels = self._levels
         result.names = self.names
         return result
 
@@ -459,6 +464,7 @@ class MultiIndex(Index):
             raise StopIteration
 
     def __getitem__(self, index):
+        # TODO: This could be a join on the _source_data
         match = self.take(index)
         if isinstance(index, slice):
             return match
@@ -559,18 +565,22 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
+        pandas_levels = [level.to_pandas() if hasattr(
+            level, 'to_pandas') else level for level in self.levels]
         # Backwards compatibility:
         # Construct a dummy MultiIndex and check for the codes attr.
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            return pd.MultiIndex(
-                levels=self.levels, codes=pandas_codes, names=self.names
+            pandas_mi = pd.MultiIndex(
+                levels=pandas_levels, codes=pandas_codes
             )
         else:
-            return pd.MultiIndex(
-                levels=self.levels, labels=pandas_codes, names=self.names
+            pandas_mi = pd.MultiIndex(
+                levels=pandas_levels, labels=pandas_codes
             )
+        pandas_mi.names = self.names if self.names else self._source_data.columns
+        return pandas_mi
 
     @classmethod
     def from_pandas(cls, multiindex):

@@ -57,8 +57,10 @@ def test_MI():
     pd.options.display.max_rows = 999
     gdf = gdf.set_index(cudf.MultiIndex(levels=levels, codes=codes))
     pdf = gdf.to_pandas()
+    gdfT = gdf.T
+    pdfT = pdf.T
     assert gdf.__repr__() == pdf.__repr__()
-    assert gdf.T.__repr__() == pdf.T.__repr__()
+    assert gdfT.__repr__() == pdfT.__repr__()
 
 
 @pytest.mark.parametrize('nrows', [0, 1, 3, 5, 10])

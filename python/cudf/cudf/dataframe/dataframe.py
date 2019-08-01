@@ -540,7 +540,7 @@ class DataFrame(object):
         return self.to_string(nrows=nrows, ncols=ncols)
 
     def get_renderable_dataframe(self):
-        nrows = pd.options.display.max_rows
+        nrows = np.max([pd.options.display.max_rows, 1])
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns
@@ -1798,7 +1798,12 @@ class DataFrame(object):
         self.columns = pd.Index(range(len(self.columns)))
         result = cpp_transpose(self)
         self.columns = temp_columns
-        result = result.rename(dict(zip(result.columns, self.index)))
+        result_columns = result.columns
+        self_index = self.index
+        mapper = {}
+        for idx, col in enumerate(self_index):
+            mapper[result_columns[idx]] = col
+        result = result.rename(mapper)
         result = result.set_index(temp_columns)
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             result.columns = self.index
