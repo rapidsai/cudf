@@ -39,6 +39,7 @@ from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -143,18 +144,60 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, name_series=None, index=None):
+    def __init__(self, data=None, index=None, columns=None):
+        keys = index
         if index is None:
             index = RangeIndex(start=0)
         self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
-        if name_series is not None:
-            if isinstance(name_series, dict):
-                name_series = name_series.items()
-            for k, series in name_series:
-                self.add_column(k, series, forceindex=index is not None)
+
+        if data is not None:
+            if isinstance(data, dict):
+                data = data.items()
+            elif utils.is_list_like(data) and len(data) > 0:
+                if not isinstance(data[0], (list, tuple)):
+                    # a nested list is something pandas supports and
+                    # we don't support list-like values in a record yet
+                    self._add_rows(data, index, keys)
+                    return
+            for col_name, series in data:
+                self.add_column(col_name, series, forceindex=index is not None)
+
+        self._add_empty_columns(columns, index)
+
+    def _add_rows(self, data, index, keys):
+        if keys is None:
+            data = {i: element for i, element in enumerate(data)}.items()
+        else:
+            data = dict(zip(keys, data)).items()
+            self._index = as_index(RangeIndex(start=0))
+            self._size = len(RangeIndex(start=0))
+        for col_name, series in data:
+            self.add_column(col_name, series, forceindex=index is not None)
+        transposed = self.T
+        self._cols = OrderedDict()
+        self._size = transposed._size
+        self._index = as_index(transposed.index)
+        for col_name in transposed.columns:
+            self.add_column(
+                col_name,
+                transposed._cols[col_name],
+                forceindex=index is not None,
+            )
+
+    def _add_empty_columns(self, columns, index):
+        if columns is not None:
+            for col_name in columns:
+                if col_name not in self._cols:
+                    self.add_column(
+                        col_name,
+                        columnops.column_empty(
+                            self._size, dtype="object", masked=True
+                        ),
+                        forceindex=index is not None,
+                    )
 
     def serialize(self, serialize):
         header = {}
@@ -397,7 +440,7 @@ class DataFrame(object):
         columns = [
             c
             for c, dt in self.dtypes.items()
-            if dt != object and not pd.api.types.is_categorical_dtype(dt)
+            if dt != object and not is_categorical_dtype(dt)
         ]
         return self[columns]
 
@@ -1122,7 +1165,7 @@ class DataFrame(object):
 
         return out
 
-    def take_columns(self, positions):
+    def _take_columns(self, positions):
         positions = Series(positions)
         column_names = list(self._cols.keys())
         column_values = list(self._cols.values())
@@ -1647,6 +1690,11 @@ class DataFrame(object):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
+        if hasattr(cats, "to_pandas"):
+            cats = cats.to_pandas()
+        else:
+            cats = pd.Series(cats)
+
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
@@ -2031,7 +2079,7 @@ class DataFrame(object):
         categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
-            if pd.api.types.is_categorical_dtype(col):
+            if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
@@ -2230,13 +2278,13 @@ class DataFrame(object):
 
         cat_join = False
 
-        if pd.api.types.is_categorical_dtype(lhs[idx_col_name]):
+        if is_categorical_dtype(lhs[idx_col_name]):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
 
             def set_categories(col, cats):
-                return col.cat._set_categories(cats, True).fillna(-1)
+                return col.cat.set_categories(cats, is_unique=True).fillna(-1)
 
             if how == "left":
                 cats = lcats
@@ -2245,7 +2293,8 @@ class DataFrame(object):
                 cats = rcats
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
-                cats = columnops.as_column(lcats).append(rcats).unique()
+                cats = columnops.as_column(lcats).append(rcats)
+                cats = Series(cats).drop_duplicates()._column
 
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
@@ -3390,14 +3439,12 @@ class DataFrame(object):
                 )
             )
 
-        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
-
         # include all subtypes
         include_subtypes = set()
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if i_dtype is cat_type:
+                if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
                 elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
@@ -3407,7 +3454,7 @@ class DataFrame(object):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if e_dtype is cat_type:
+                if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
                 elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)

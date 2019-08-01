@@ -18,6 +18,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utilities/error_utils.hpp>
 
 constexpr char percent_escape[] = "_";
 
@@ -71,7 +72,9 @@ std::string get_rid_of_nonalnum_sqrbra(const std::string& src) {
 }
 
 std::string parse_register_type(const std::string& src) {
-  if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
+  if (src == ".b8" || src == ".u8" || src == ".s8")
+    return "h";
+  else if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
     return "h";
   else if (src == ".b32" || src == ".u32" || src == ".s32" || src == ".f16x2")
     return "r";
@@ -82,11 +85,13 @@ std::string parse_register_type(const std::string& src) {
   else if (src == ".f64")
     return "d";
   else
-    return "x";
+    return "x_reg";
 }
 
 std::string register_type_to_cppname(const std::string& register_type) {
-  if (register_type == ".u16")
+  if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
+    return "char";
+  else if (register_type == ".u16")
     return "short";
   else if (register_type == ".s16")
     return "short";
@@ -107,7 +112,7 @@ std::string register_type_to_cppname(const std::string& register_type) {
   else if (register_type == ".f64")
     return "double";
   else
-    return "x";
+    return "x_cpptype";
 }
 
 std::string find_register_type(const std::string& src) {
@@ -142,7 +147,9 @@ std::string parse_instruction(const std::string& src) {
   std::string output;
   std::string suffix;
 
-  std::string original_code = "\n  /** Input ptx: \n    " + src + "\n  */\n";
+  std::string original_code = "\n   /**   " + src + "  */\n";
+
+  int piece_count = 0;
 
   size_t start = 0;
   size_t stop = 0;
@@ -150,6 +157,7 @@ std::string parse_instruction(const std::string& src) {
   std::string constraint;
   std::string register_type;
   bool blank = true;
+  std::string cpp_typename;
   while (stop < length) {
     while (start < length &&
            (is_white(src[start]) || src[start] == ',' || src[start] == '{' ||
@@ -182,10 +190,20 @@ std::string parse_instruction(const std::string& src) {
       if (piece.find("ld.param") != std::string::npos) {
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
-        if (register_type_to_cppname(register_type) == "int") {
-          // The trick to support statement like "ld.param.s32 %rd0, [...];",
-          // where %rd0 is a 64-bit register.
-          output += " cvt.s32.s32";
+        cpp_typename = register_type_to_cppname(register_type);
+        if (cpp_typename == "int" || cpp_typename == "short" || cpp_typename == "char") {
+          // The trick to support `ld` statement whose destination reg. wider than 
+          // the instruction width, e.g.
+          //      
+          //  "ld.param.s32 %rd0, [...];",
+          //
+          // where %rd0 is a 64-bit register. Directly converting to "mov" instruction
+          // does not work since "register widening" is ONLY allowed for 
+          // "ld", "st", and "cvt". So we use cvt instead and something like
+          // "cvt.s32.s32". This keep the same operation behavior and when compiling to
+          // SASS code "usually" (in cases I have seen) this is optimized away, thus
+          // gives no performance panelty.
+          output += " cvt" + register_type + register_type;
         } else {
           output += " mov" + register_type;
         }
@@ -200,9 +218,15 @@ std::string parse_instruction(const std::string& src) {
     } else {
       // Here it should be the registers.
       if (piece.find("_param_") != std::string::npos) {
+        // This is the source of the parameter loading instruction
         output += " %0";
-        suffix = ": : \"" + constraint + "\"(" +
+        if(cpp_typename == "char"){
+          suffix = ": : \"" + constraint + "\"( static_cast<short>(" +
+                 get_rid_of_nonalnum_sqrbra(piece) + "))";
+        }else{  
+          suffix = ": : \"" + constraint + "\"(" +
                  get_rid_of_nonalnum_sqrbra(piece) + ")";
+        }
         // Here we get to see the actual type of the input arguments.
         get_input_arg_list()[get_rid_of_nonalnum_sqrbra(piece)] =
             register_type_to_cppname(register_type);
@@ -211,6 +235,7 @@ std::string parse_instruction(const std::string& src) {
       }
     }
     start = stop;
+    piece_count++;
   }
   if (!blank) output += ";";
   return "asm volatile (\"" + output + "\"" + suffix + ");" + original_code;
@@ -281,7 +306,7 @@ std::string parse_param(const std::string& src, bool first = false) {
   return name;
 }
 
-std::string parse_param_list(const std::string& src) {
+std::string parse_param_list(const std::string& src, const std::string& output_arg_type) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -295,8 +320,7 @@ std::string parse_param_list(const std::string& src) {
     while (stop < length && src[stop] != ',') {
       stop++;
     }
-    item_count++;
-    if (item_count == 1) {  // The first input argument is always a pointer.
+    if (item_count == 0) {  // The first input argument is always a pointer.
       first_name = parse_param(std::string(src, start, stop - start));
     } else {
       std::string name = parse_param(std::string(src, start, stop - start));
@@ -305,13 +329,15 @@ std::string parse_param_list(const std::string& src) {
     }
     stop++;
     start = stop;
+    item_count++;
   }
 
-  return "\n  " + arg_type + "* " + first_name + output + "\n";
+  return "\n  " + output_arg_type + "* " + first_name + output + "\n";
 }
 
 std::string parse_function_header(const std::string& src,
-                                  const std::string& function_name) {
+                                  const std::string& function_name,
+                                  const std::string& output_arg_type) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -358,7 +384,7 @@ std::string parse_function_header(const std::string& src,
     stop++;
   }
   std::string input_arg =
-      parse_param_list(std::string(src, start, stop - start));
+      parse_param_list(std::string(src, start, stop - start), output_arg_type);
   return "\n__device__ __inline__ void " + function_name + "(" + input_arg +
          "){" + "\n";
 }
@@ -400,7 +426,8 @@ std::string remove_comments(const std::string& src) {
 
 // The interface
 std::string parse_single_function_ptx(const std::string& src,
-                                      const std::string& function_name) {
+                                      const std::string& function_name,
+                                      const std::string& output_arg_type) {
   std::string no_comments = remove_comments(src);
 
   get_input_arg_list().clear();
@@ -438,7 +465,7 @@ std::string parse_single_function_ptx(const std::string& src,
       parse_function_body(std::string(no_comments, start, stop - start));
 
   std::string function_header_output =
-      parse_function_header(function_header, function_name);
+      parse_function_header(function_header, function_name, output_arg_type);
 
   std::string final_output = function_header_output + "\n";
   for (int i = 0; i < function_body_output.size(); i++) {
@@ -451,4 +478,44 @@ std::string parse_single_function_ptx(const std::string& src,
   final_output += "}";
 
   return final_output;
+}
+
+// The interface
+std::string parse_single_function_cuda(const std::string& src,
+                                       const std::string& function_name,
+                                       const std::string& output_arg_type) {
+  std::string no_comments = remove_comments(src);
+
+  // For CUDA device function we just need to find the function 
+  // name and replace it with the specified one.
+  const size_t length = no_comments.size();
+  size_t start = 0;
+  size_t stop = start;
+  
+  while (stop < length && no_comments[stop] != '(') {
+    stop++;
+  }
+  CUDF_EXPECTS(stop != length && stop != 0,
+    "No CUDA device function found in the input CUDA code.\n");
+  
+  stop--;
+
+  while (stop > 0 && is_white(no_comments[stop]) ){
+    stop--;
+  }
+  CUDF_EXPECTS(stop != 0 || !is_white(no_comments[0]),
+    "No CUDA device function name found in the input CUDA code.\n");
+  
+  start = stop;
+  while (start > 0 && !is_white(no_comments[start])){
+    start--;
+  }
+  start++;
+  stop++;
+  CUDF_EXPECTS(start < stop,
+    "No CUDA device function name found in the input CUDA code.\n");
+ 
+  no_comments.replace(start, stop-start, function_name);
+
+  return no_comments;
 }
