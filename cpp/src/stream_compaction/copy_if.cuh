@@ -384,34 +384,6 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   return output;
 }
 
-/*
- * @brief Filters a column using a Filter function object
- * 
- * @p filter must be a functor or lambda with the following signature:
- * __device__ bool operator()(gdf_index_type i);
- * It returns true if element i of @p input should be copied, false otherwise.
- * 
- * @note: filter must return false if its input i is out of bounds for any 
- * memory accesses, therefore it is expected to know the bounds of any 
- * arrays it uses internally.
- *
- * @tparam Filter the filter functor type
- * @param[in] input The column to filter-copy
- * @param[in] filter A function object that takes an index and returns a bool
- * @return The filter-copied result column
- */
-template <typename Filter>
-gdf_column copy_if(gdf_column const &input, Filter filter,
-                   cudaStream_t stream = 0)
-{
-  // convert column to table
-  gdf_column * cols[1];
-  cols[0] = const_cast<gdf_column*>(&input);
-  const table input_table(cols, 1);
-  table output_table = copy_if(input_table, filter, stream);
-  return *output_table.get_column(0);
-}
-
 } // namespace detail
 
 }  // namespace cudf

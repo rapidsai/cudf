@@ -37,18 +37,18 @@ TEST_F(DropNullsErrorTest, EmptyInput)
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
 
   // zero size, so expect no error, just empty output column
-  gdf_column output{};
-  CUDF_EXPECT_NO_THROW(output = cudf::drop_nulls(bad_input));
-  EXPECT_EQ(output.size, 0);
-  EXPECT_EQ(output.null_count, 0);
-  EXPECT_EQ(output.data, nullptr);
-  EXPECT_EQ(output.valid, nullptr);
+  cudf::table output;
+  CUDF_EXPECT_NO_THROW(output = cudf::drop_nulls({&bad_input}, {0}, cudf::ALL));
+  EXPECT_EQ(output.num_columns(), 1);
+  EXPECT_EQ(output.num_rows(), 0);
+  EXPECT_EQ(output.get_column(0)->null_count, 0);
 
   bad_input.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
   bad_input.null_count = 1;
   bad_input.size = 2; 
   // nonzero, with non-null valid mask, so non-null input expected
-  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls(bad_input), "Null input data");
+  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {0}, cudf::ALL),
+                            "Null input data");
 }
 
 /*
@@ -59,22 +59,25 @@ template <typename T>
 void DropNulls(column_wrapper<T> const& source,
                column_wrapper<T> const& expected)
 {
-  gdf_column result{};
-  EXPECT_NO_THROW(result = cudf::drop_nulls(source));
-  EXPECT_EQ(result.null_count, 0);
+  cudf::table result;
+  
+  EXPECT_NO_THROW(result = cudf::drop_nulls({const_cast<gdf_column*>(source.get())},
+                                            {0}, cudf::ALL));
+  gdf_column *res = result.get_column(0);
+  EXPECT_EQ(res->null_count, 0);
   bool columns_equal{false};
-  EXPECT_TRUE(columns_equal = (expected == result));
+  EXPECT_TRUE(columns_equal = (expected == *res));
 
   if (!columns_equal) {
     std::cout << "expected\n";
     expected.print();
     std::cout << expected.get()->null_count << "\n";
     std::cout << "result\n";
-    print_gdf_column(&result);
-    std::cout << result.null_count << "\n";
+    print_gdf_column(res);
+    std::cout << res->null_count << "\n";
   }
 
-  gdf_column_free(&result);
+  result.destroy();
 }
 
 constexpr gdf_size_type column_size{100000};

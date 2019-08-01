@@ -19,33 +19,6 @@
  
 namespace {
 
-// Returns true if the valid mask is true for index i
-// Note we use a functor here so we can cast to a bitmask_t __restrict__
-// pointer on the host side, which we can't do with a lambda.
-struct valid_column_filter
-{
-  valid_column_filter(gdf_column const & column) :
-    size{column.size},
-    bitmask{reinterpret_cast<bit_mask_t *>(column.valid)}
-    {}
-
-  __device__ inline 
-  bool operator()(gdf_index_type i)
-  {
-    if (bitmask == nullptr) return true;
-    if (i < size) {
-      bool valid = bit_mask::is_valid(bitmask, i);
-      return valid;
-    }
-    return false;
-  }
-
-  bool all_true;
-  gdf_size_type size;
-  bit_mask_t const  * __restrict__ bitmask;
-};
-
-
 // Returns false if the valid mask is false for index i in ANY/ALL columns of
 // table indicated by column_indices, where ANY/ALL is the value of drop_if.
 // Columns not indexed by column_indices are not checked
@@ -127,16 +100,6 @@ void destroy_valid_table_filter(valid_table_filter const& filter,
 }  // namespace
 
 namespace cudf {
-
-/*
- * Filters a column to remove null elements.
- */
-gdf_column drop_nulls(gdf_column const &input) {
-  if (input.valid != nullptr && input.null_count != 0)
-    return detail::copy_if(input, valid_column_filter{input});
-  else // no null bitmask, so just copy
-    return cudf::copy(input);
-}
 
 /*
  * Filters a table to remove null elements.

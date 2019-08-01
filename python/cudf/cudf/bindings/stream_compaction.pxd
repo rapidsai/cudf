@@ -22,18 +22,9 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         ANY
         ALL
 
-    cdef gdf_column apply_boolean_mask(
-        const gdf_column &input,
-        const gdf_column &boolean_mask
-    ) except +
-
     cdef cudf_table apply_boolean_mask(
         const cudf_table &input,
         const gdf_column &boolean_mask
-    ) except +
-
-    cdef gdf_column drop_nulls(
-        const gdf_column &input
     ) except +
 
     cdef cudf_table drop_nulls(
