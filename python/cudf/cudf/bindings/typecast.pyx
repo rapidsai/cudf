@@ -29,7 +29,6 @@ def apply_cast(incol, **kwargs):
     """
 
     check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
 

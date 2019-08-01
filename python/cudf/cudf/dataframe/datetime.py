@@ -8,6 +8,7 @@ import cudf.bindings.binops as cpp_binops
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
@@ -15,8 +16,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.numerical import NumericalColumn
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 from cudf.utils.utils import is_single_value
 
 
@@ -118,20 +118,25 @@ class DatetimeColumn(columnops.TypedColumnBase):
     @property
     def as_numerical(self):
         from cudf.dataframe import numerical
+        import cudf.bindings.typecast as typecast
 
         return self.view(
             numerical.NumericalColumn,
             dtype="int64",
-            data=self.data.astype("int64"),
+            data=typecast.apply_cast(self, dtype=np.int64).data,
         )
 
     def as_datetime_column(self, dtype, **kwargs):
-        # TODO: this needs to change after
-        # we support more than just datetime64[ms]
-        return self
+        import cudf.bindings.typecast as typecast
+
+        return typecast.apply_cast(self, dtype=np.dtype(dtype).type)
 
     def as_numerical_column(self, dtype, **kwargs):
-        return self.as_numerical.astype(dtype, **kwargs)
+        import cudf.bindings.typecast as typecast
+
+        return typecast.apply_cast(
+            self.as_numerical, dtype=np.dtype(dtype).type
+        )
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
@@ -239,6 +244,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
         value = columnops.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value)
 
+    def searchsorted(self, value, side="left"):
+        value_col = columnops.as_column(value)
+        return cpp_search.search_sorted(self, value_col, side)
+
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
@@ -249,17 +258,6 @@ class DatetimeColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
 
     @property
     def is_unique(self):

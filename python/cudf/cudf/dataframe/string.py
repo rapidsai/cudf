@@ -503,13 +503,16 @@ class StringColumn(columnops.TypedColumnBase):
         return self._indices
 
     def element_indexing(self, arg):
+        from cudf.dataframe.numerical import NumericalColumn
+
         if isinstance(arg, Number):
             arg = int(arg)
             if arg < 0:
                 arg = len(self) + arg
             if arg > (len(self) - 1):
                 raise IndexError
-            out = self._data[arg]
+            out = self._data[arg].to_host()[0]
+            return out
         elif isinstance(arg, slice):
             out = self._data[arg]
         elif isinstance(arg, list):
@@ -519,20 +522,21 @@ class StringColumn(columnops.TypedColumnBase):
             return self.element_indexing(gpu_arr)
         elif isinstance(arg, DeviceNDArray):
             # NVStrings gather call expects an array of int32s
-            arg = cudautils.astype(arg, np.dtype("int32"))
-            arg = cudautils.modulo(arg, len(self))
+            import cudf.bindings.typecast as typecast
+
+            arg = typecast.apply_cast(columnops.as_column(arg), dtype=np.int32)
+            arg = cudautils.modulo(arg.data.mem, len(self))
             if len(arg) > 0:
                 gpu_ptr = get_ctype_ptr(arg)
                 out = self._data.gather(gpu_ptr, len(arg))
             else:
                 out = self._data.gather([])
+        elif isinstance(arg, NumericalColumn):
+            return self.element_indexing(arg.data.mem)
         else:
             raise NotImplementedError(type(arg))
 
-        if len(out) == 1:
-            return out.to_host()[0]
-        else:
-            return columnops.as_column(out)
+        return columnops.as_column(out)
 
     def __getitem__(self, arg):
         return self.element_indexing(arg)
@@ -741,8 +745,10 @@ class StringColumn(columnops.TypedColumnBase):
         return self._mimic_inplace(result, inplace)
 
     def _find_first_and_last(self, value):
-        found_indices = self.str().contains(f"^{value}$").data.mem
-        found_indices = cudautils.astype(found_indices, "int32")
+        found_indices = self.str().contains(f"^{value}$")._column
+        import cudf.bindings.typecast as typecast
+
+        found_indices = typecast.apply_cast(found_indices, dtype=np.int32)
         first = columnops.as_column(found_indices).find_first_value(1)
         last = columnops.as_column(found_indices).find_last_value(1)
         return first, last

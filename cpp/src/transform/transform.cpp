@@ -118,18 +118,6 @@ gdf_column transform(const gdf_column& input,
 
   transformation::jit::unary_operation(output, input, unary_udf, output_type, is_ptx);
 
-  if(input.dtype == GDF_STRING_CATEGORY){
-    CUDF_EXPECTS(output_type == GDF_STRING_CATEGORY,
-        "If input column has type GDF_STRING_CATEGORY then "
-        "output_type HAS to be GDF_STRING_CATEGORY as well.");
-    output.dtype_info.category = static_cast<NVCategory*>(input.dtype_info.category)->copy();
-    gdf_column actual_output = copy(output);
-    CUDF_EXPECTS(GDF_SUCCESS == clear_column_categories(&output, &actual_output),
-         "Failed to clear NVCategory");
-    gdf_column_free(&output);
-    return actual_output;
-  }
-
   return output;
 }
 

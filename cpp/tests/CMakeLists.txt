@@ -132,6 +132,14 @@ set(ORDERBY_TEST_SRC
 ConfigureTest(ORDERBY_TEST "${ORDERBY_TEST_SRC}")
 
 ###################################################################################################
+# - is_sorted tests ---------------------------------------------------------------------------------
+
+set(IS_SORTED_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/orderby/is_sorted/is_sorted_tests.cu")
+
+ConfigureTest(IS_SORTED_TEST "${IS_SORTED_TEST_SRC}")
+
+###################################################################################################
 # - legacy bitmask tests ---------------------------------------------------------------------------------
 
 set(LEGACY_BITMASK_TEST_SRC
@@ -250,6 +258,9 @@ ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
+set(AVRO_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
@@ -258,6 +269,7 @@ set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
+ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
@@ -302,10 +314,19 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
+# - nvstring scatter tests ------------------------------------------------------------------------
+
+set(NVSTRING_SCATTER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/nvstring_scatter_tests.cu")
+
+  ConfigureTest(NVSTRING_SCATTER_TEST "${NVSTRING_SCATTER_TEST_SRC}")
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -394,6 +415,16 @@ set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+
+###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+
+
 
 ###################################################################################################
 ### enable testing ################################################################################

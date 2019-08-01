@@ -316,6 +316,7 @@ add_library(cudf SHARED
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/predicates/is_sorted.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
@@ -364,6 +365,9 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro_gpu.cu
+            src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
@@ -395,7 +399,8 @@ add_library(cudf SHARED
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
-            src/filling/fill.cu)
+            src/filling/fill.cu
+            src/search/search.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

@@ -257,6 +257,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Retrieve the number of characters in each string. Null strings will have value of null.
+   *
+   * @return ColumnVector holding length of string at index 'i' in the original vector
+   */
+  public ColumnVector getLengths() {
+    assert DType.STRING == type : "length only available for String type";
+    return new ColumnVector(cudfLengths(getNativeCudfColumnAddress()));
+  }
+
+  /**
    * Returns the type of this vector.
    */
   @Override
@@ -269,6 +279,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public long getNullCount() {
     return nullCount;
+  }
+
+  /**
+   * Retrieve the number of bytes for each string. Null strings will have value of null.
+   *
+   * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
+   */
+  public ColumnVector getByteCount() {
+    assert type == DType.STRING : "type has to be a String";
+    return new ColumnVector(cudfByteCount(getNativeCudfColumnAddress()));
   }
 
   /**
@@ -1390,6 +1410,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long allocateCudfColumn() throws CudfException;
 
+  private native static long cudfByteCount(long cudfColumnHandle) throws CudfException;
+
   /**
    * Set a CuDF column given data and validity bitmask pointers, size, and datatype, and
    * count of null (non-valid) elements
@@ -1433,6 +1455,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
 
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
+
+  private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
 
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses
