@@ -300,10 +300,7 @@ class MultiIndex(Index):
             series_name = []
             for idx, code in enumerate(index._source_data.columns):
                 series_name.append(result.columns._source_data[code][0])
-            result = Series(
-                list(result._cols.values())[0],
-                index=result.index,
-            )
+            result = Series(list(result._cols.values())[0], index=result.index)
             result.name = tuple(series_name)
         elif len(result) == 0 and slice_access is False:
             # Pandas returns an empty Series with a tuple as name
