@@ -66,8 +66,16 @@ class Column(object):
         # we cast them to a common dtype.
         # Notice, we can always cast pure null columns
         not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
-        if len([o for o in not_null_cols if
-                not isinstance(o, NumericalColumn)]) == 0:
+        if (
+            len(
+                [
+                    o
+                    for o in not_null_cols
+                    if not isinstance(o, NumericalColumn)
+                ]
+            )
+            == 0
+        ):
             col_dtypes = [o.dtype for o in not_null_cols]
             # Use NumPy to find a common dtype
             common_dtype = np.find_common_type(col_dtypes, [])

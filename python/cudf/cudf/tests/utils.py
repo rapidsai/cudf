@@ -5,9 +5,17 @@ import pandas.util.testing as tm
 from cudf import Series
 from cudf.utils import utils
 
-supported_numpy_dtypes = ['bool', 'int8', 'int16', 'int32',
-                          'int64', 'float32', 'float64',
-                          'datetime64[ms]', 'datetime64[us]']
+supported_numpy_dtypes = [
+    "bool",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+    "datetime64[ms]",
+    "datetime64[us]",
+]
 
 
 def random_bitmask(size):
