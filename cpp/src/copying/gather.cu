@@ -14,25 +14,32 @@
  * limitations under the License.
  */
 
-#include "gather.hpp"
 #include <cudf/copying.hpp>
 #include <cudf/cudf.h>
-#include <rmm/thrust_rmm_allocator.h>
+#include <utilities/bit_util.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/type_dispatcher.hpp>
-#include <bitmask/legacy/legacy_bitmask.hpp>
+
 #include <cudf/legacy/table.hpp>
 #include <string/nvcategory_util.hpp>
 
 #include <algorithm>
+
+#include <table/legacy/device_table.cuh>
 #include <thrust/gather.h>
 
-/**
- * @brief Operations for copying from one column to another
- * @file copying_ops.cu
- */
+#include <cub/cub.cuh>
+#include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
+#include <string/nvcategory_util.hpp>
+#include <utilities/column_utils.hpp>
+#include <utilities/cuda_utils.hpp>
+using bit_mask::bit_mask_t;
 
-namespace {
+namespace cudf {
+namespace detail {
+
+constexpr int warp_size = 32;
 
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
@@ -51,224 +58,108 @@ struct bounds_checker {
   }
 };
 
-/**---------------------------------------------------------------------------*
- * @brief Conditionally gathers the bits of a validity bitmask.
- *
- * Gathers the bits of a validity bitmask according to a gather map.
- * If `pred(stencil[i])` evaluates to true, then bit `i` in `destination_mask`
- * will equal bit `gather_map[i]` from the `source_mask`.
- *
- * If `pred(stencil[i])` evaluates to false, then bit `i` in `destination_mask`
- * will be set to 0.
- *
- * If any value appears in `gather_map` more than once, the result is undefined.
- *
- * If any of the range [source_mask, source_mask + num_source_rows) overlaps
- * [destination_mask, destination_mask + num_destination_rows), the result is
- * undefined.
- *
- * @tparam T The type of the stencil array
- * @tparam P The type of the predicate
- * @param[in] source_mask The mask whose bits will be gathered
- * @param[in] num_source_rows The number of bits in the source_mask
- * @param[out] destination_mask The output after gathering the input
- * @param[in] num_destination_rows The number of bits in the
- * destination_mask
- * @param[in] gather_map The map that indicates where elements from the
- * input will be gathered to in the output. Length must be equal to
- * `num_destination_rows`.
- * @param[in] stencil An array of values that will be evaluated by the
- * predicate. Length must be equal to `num_destination_rows`.
- * @param[in] pred Unary predicate applied to the stencil values
- *---------------------------------------------------------------------------**/
-template <typename T, typename P>
-__global__ void gather_bitmask_if_kernel(
-    gdf_valid_type const* const __restrict__ source_mask,
-    gdf_size_type const num_source_rows, gdf_valid_type* const destination_mask,
-    gdf_size_type const num_destination_rows, gdf_index_type const* gather_map,
-    T const* stencil, P pred) {
-  using MaskType = uint32_t;
-  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
+/**
+ * @brief for each warp in the block do a reduction (summation) of the
+ * `__popc(bit_mask)` on a certain lane (default is lane 0).
+ * @param[in] bit_mask The bit_mask to be reduced.
+ * @return[out] result of each block is returned in thread 0.
+ */
+template <class bit_mask_type, int lane = 0>
+__device__ __inline__ gdf_size_type single_lane_reduce(bit_mask_type bit_mask) {
+  static __shared__ gdf_size_type smem[warp_size];
 
-  // TODO: Update to use new bit_mask_t
-  MaskType* const __restrict__ destination_mask32 =
-      reinterpret_cast<MaskType*>(destination_mask);
+  int lane_id = (threadIdx.x % warp_size);
+  int warp_id = (threadIdx.x / warp_size);
 
-  gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
-
-  auto active_threads =
-      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
-
-  while (destination_row < num_destination_rows) {
-    bool source_bit_is_valid{false};
-    bool const predicate_is_true{pred(stencil[destination_row])};
-    if (predicate_is_true) {
-      // If the predicate for `destination_row` is false, it's valid for
-      // `gather_map[destination_row]` to be out of bounds,
-      // therefore, only use it if the predicate evaluates to true
-      source_bit_is_valid =
-          gdf_is_valid(source_mask, gather_map[destination_row]);
-    }
-
-    bool const destination_bit_is_valid{
-        gdf_is_valid(destination_mask, destination_row)};
-
-    // Use ballot to find all valid bits in this warp and create the output
-    // bitmask element
-    // If the predicate is false, and the destination bit was valid, don't
-    // overwrite it
-    MaskType const result_mask =
-        __ballot_sync(active_threads,
-                      (predicate_is_true and source_bit_is_valid) or
-                          (not predicate_is_true and destination_bit_is_valid));
-
-    gdf_index_type const output_element = destination_row / BITS_PER_MASK;
-
-    // Only one thread writes output
-    if (0 == threadIdx.x % warpSize) {
-      destination_mask32[output_element] = result_mask;
-    }
-
-    destination_row += blockDim.x * gridDim.x;
-    active_threads =
-        __ballot_sync(active_threads, destination_row < num_destination_rows);
+  // Assuming one lane of each warp holds the value that we want to perform
+  // reduction
+  if (lane_id == lane) {
+    smem[warp_id] = __popc(bit_mask);
   }
+  __syncthreads();
+
+  if (warp_id == 0) {
+    // Here I am assuming maximum block size is 1024 and 1024 / 32 = 32
+    // so one single warp is enough to do the reduction over different warps
+    bit_mask = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
+
+    __shared__
+        typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
+    bit_mask = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(bit_mask);
+  }
+
+  return bit_mask;
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Gathers the bits of a validity bitmask.
- *
- * Gathers the bits from the source bitmask into the destination bitmask
- * according to a `gather_map` such that bit `i` in `destination_mask` will be
- * equal to bit `gather_map[i]` from `source_bitmask`.
- *
- * Undefined behavior results if any value in `gather_map` is outside the range
- * [0, num_source_rows).
- *
- * If any value appears in `gather_map` more than once, the result is undefined.
- *
- * If any of the range [source_mask, source_mask + num_source_rows) overlaps
- * [destination_mask, destination_mask + num_destination_rows), the result is
- * undefined.
- *
- * @param[in] source_mask The mask whose bits will be gathered
- * @param[in] num_source_rows The number of bits in the source_mask
- * @param[out] destination_mask The output after gathering the input
- * @param[in] num_destination_rows The number of bits in the
- * destination_mask
- * @param[in] gather_map The map that indicates where elements from the
- * input will be gathered to in the output. Length must be equal to
- * `num_destination_rows`.
- *---------------------------------------------------------------------------**/
-__global__ void gather_bitmask_kernel(
-    gdf_valid_type const* const __restrict__ source_mask,
-    gdf_size_type const num_source_rows, gdf_valid_type* const destination_mask,
-    gdf_size_type const num_destination_rows,
-    gdf_index_type const* __restrict__ gather_map) {
-  using MaskType = uint32_t;
-  constexpr uint32_t BITS_PER_MASK{sizeof(MaskType) * 8};
+template <bool check_bounds>
+__global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
+                                      gdf_size_type num_source_rows,
+                                      const gdf_index_type *gather_map,
+                                      bit_mask_t **destination_valid,
+                                      gdf_size_type num_destination_rows,
+                                      gdf_size_type *d_count,
+                                      gdf_size_type num_columns) {
+  for (gdf_index_type i = 0; i < num_columns; i++) {
+    const bit_mask_t *__restrict__ source_valid_col = source_valid[i];
+    bit_mask_t *__restrict__ destination_valid_col = destination_valid[i];
 
-  // Cast bitmask to a type to a 4B type
-  // TODO: Update to use new bit_mask_t
-  MaskType* const __restrict__ destination_mask32 =
-      reinterpret_cast<MaskType*>(destination_mask);
+    const bool src_has_nulls = source_valid_col != nullptr;
+    const bool dest_has_nulls = destination_valid_col != nullptr;
 
-  gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+    if (dest_has_nulls) {
+      gdf_index_type destination_row_base = blockIdx.x * blockDim.x;
 
-  auto active_threads =
-      __ballot_sync(0xffffffff, destination_row < num_destination_rows);
+      gdf_size_type valid_count_accumulate = 0;
 
-  while (destination_row < num_destination_rows) {
-    bool const source_bit_is_valid{
-        gdf_is_valid(source_mask, gather_map[destination_row])};
+      while (destination_row_base < num_destination_rows) {
+        gdf_index_type destination_row = destination_row_base + threadIdx.x;
 
-    // Use ballot to find all valid bits in this warp and create the output
-    // bitmask element
-    MaskType const result_mask{
-        __ballot_sync(active_threads, source_bit_is_valid)};
+        const bool thread_active = destination_row < num_destination_rows;
+        gdf_index_type source_row =
+            thread_active ? gather_map[destination_row] : 0;
 
-    gdf_index_type const output_element = destination_row / BITS_PER_MASK;
+        const uint32_t active_threads =
+            __ballot_sync(0xffffffff, thread_active);
 
-    // Only one thread writes output
-    if (0 == threadIdx.x % warpSize) {
-      destination_mask32[output_element] = result_mask;
+        bool source_bit_is_valid;
+        if (check_bounds) {
+          if (0 <= source_row && source_row < num_source_rows) {
+            source_bit_is_valid =
+                src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
+                              : true;
+          } else {
+            // If gather_map does not include this row we should just keep the
+            // original value,
+            source_bit_is_valid =
+                bit_mask::is_valid(destination_valid_col, destination_row);
+          }
+        } else {
+          source_bit_is_valid =
+              src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
+                            : true;
+        }
+
+        // Use ballot to find all valid bits in this warp and create the output
+        // bitmask element
+        const uint32_t valid_warp =
+            __ballot_sync(active_threads, source_bit_is_valid);
+
+        const gdf_index_type valid_index =
+            cudf::util::detail::bit_container_index<bit_mask_t>(
+                destination_row);
+        // Only one thread writes output
+        if (0 == threadIdx.x % warp_size && thread_active) {
+          destination_valid_col[valid_index] = valid_warp;
+        }
+        valid_count_accumulate += single_lane_reduce(valid_warp);
+
+        destination_row_base += blockDim.x * gridDim.x;
+      }
+      if (threadIdx.x == 0) {
+        atomicAdd(d_count + i, valid_count_accumulate);
+      }
     }
-
-    destination_row += blockDim.x * gridDim.x;
-    active_threads =
-        __ballot_sync(active_threads, destination_row < num_destination_rows);
   }
-}
-
-/**---------------------------------------------------------------------------*
- * @brief Gathers the bits from a source bitmask into a destination bitmask
- * based on a map.
- *
- * Gathers the bits from the source bitmask into the destination bitmask
- * according to a `gather_map` such that bit `i` in `destination_mask` will be
- * equal to bit `gather_map[i]` from `source_bitmask`.
- *
- * Optionally performs bounds checking on the values of the `gather_map` that
- * ignores values outside [0, num_source_rows). It is undefined behavior if a
- * value in `gather_map` is outside these bounds and bounds checking is not
- * enabled.
- *
- * If the same value appears more than once in `gather_map`, the result is
- * undefined.
- *
- * @param[in] source_mask The mask from which bits will be gathered
- * @param[in] num_source_rows The number of bits in the source_mask
- * @param[in,out] destination_mask The mask to which bits will be gathered.
- * Buffer must be preallocated with sufficient storage to hold
- * `num_destination_rows` bits.
- * @param[in] num_destination_rows The number of bits in the destionation_mask
- * @param[in] gather_map An array of indices that maps the bits in the source
- * bitmask to bits in the destination bitmask. The number of elements in the
- * `gather_map` must be equal to `num_destination_rows`.
- * @param[in] check_bounds Optionally perform bounds checking of values in
- * `gather_map`
- * @param[in] stream Optional CUDA stream on which to execute kernels
- *---------------------------------------------------------------------------**/
-void gather_bitmask(gdf_valid_type const* source_mask,
-                    gdf_size_type num_source_rows,
-                    gdf_valid_type* destination_mask,
-                    gdf_size_type num_destination_rows,
-                    gdf_index_type const gather_map[],
-                    bool check_bounds = false, cudaStream_t stream = 0) {
-  CUDF_EXPECTS(destination_mask != nullptr, "Missing valid buffer allocation");
-
-  constexpr gdf_size_type BLOCK_SIZE{256};
-  const gdf_size_type gather_grid_size =
-      (num_destination_rows + BLOCK_SIZE - 1) / BLOCK_SIZE;
-
-  gdf_valid_type* output_bitmask{destination_mask};
-
-  // Allocate a temporary results buffer if gathering in-place
-  bool const in_place{source_mask == destination_mask};
-  rmm::device_vector<gdf_valid_type> temp_bitmask;
-  if (in_place) {
-    temp_bitmask.resize(gdf_valid_allocation_size(num_destination_rows));
-    output_bitmask = temp_bitmask.data().get();
-  }
-
-  if (check_bounds) {
-    gather_bitmask_if_kernel<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
-        source_mask, num_source_rows, output_bitmask, num_destination_rows,
-        gather_map, gather_map, bounds_checker{0, num_source_rows});
-  } else {
-    gather_bitmask_kernel<<<gather_grid_size, BLOCK_SIZE, 0, stream>>>(
-        source_mask, num_source_rows, output_bitmask, num_destination_rows,
-        gather_map);
-  }
-
-  CHECK_STREAM(stream);
-
-  if (in_place) {
-    thrust::copy(rmm::exec_policy(stream)->on(stream), temp_bitmask.begin(),
-                 temp_bitmask.end(), destination_mask);
-  }
-
-  CHECK_STREAM(stream);
 }
 
 /**---------------------------------------------------------------------------*
@@ -291,24 +182,46 @@ struct column_gatherer {
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
   template <typename ColumnType>
-  void operator()(gdf_column const* source_column,
+  void operator()(gdf_column const *source_column,
                   gdf_index_type const gather_map[],
-                  gdf_column* destination_column, bool check_bounds = false,
-                  cudaStream_t stream = 0) {
-    ColumnType const* const source_data{
-        static_cast<ColumnType const*>(source_column->data)};
-    ColumnType* destination_data{
-        static_cast<ColumnType*>(destination_column->data)};
+                  gdf_column *destination_column, bool check_bounds,
+                  cudaStream_t stream, bool sync_nvstring_category = false) {
+    ColumnType const *source_data{
+        static_cast<ColumnType const *>(source_column->data)};
+    ColumnType *destination_data{
+        static_cast<ColumnType *>(destination_column->data)};
 
     gdf_size_type const num_destination_rows{destination_column->size};
 
-    // If gathering in-place, allocate temporary buffers to hold intermediate
-    // results
-    bool const in_place{source_data == destination_data};
-    rmm::device_vector<ColumnType> temp_destination;
+    // If gathering in-place or scattering nvstring
+    // (in which case the sync_nvstring_category should be set to true)
+    // allocate temporary buffers to hold intermediate results
+    bool const sync_category =
+        std::is_same<ColumnType, nvstring_category>::value &&
+        sync_nvstring_category;
+    bool const in_place = !sync_category && (source_data == destination_data);
+
+    gdf_column temp_src{};
+    gdf_column temp_dest{};
+
+    if (sync_category) {
+      // sync the categories.
+      temp_src = cudf::copy(*source_column);
+      temp_dest = cudf::copy(*destination_column);
+      const gdf_column *const input_columns[2] = {source_column, &temp_dest};
+      gdf_column *output_columns[2] = {&temp_src, destination_column};
+
+      CUDF_EXPECTS(GDF_SUCCESS ==
+                       sync_column_categories(input_columns, output_columns, 2),
+                   "Failed to synchronize NVCategory");
+
+      source_data = static_cast<ColumnType *>(temp_src.data);
+    }
+
+    rmm::device_vector<ColumnType> in_place_buffer;
     if (in_place) {
-      temp_destination.resize(num_destination_rows);
-      destination_data = temp_destination.data().get();
+      in_place_buffer.resize(num_destination_rows);
+      destination_data = in_place_buffer.data().get();
     }
 
     if (check_bounds) {
@@ -322,32 +235,25 @@ struct column_gatherer {
                      destination_data);
     }
 
-    // Copy temporary buffers used for in-place gather to destination column
-    if (in_place) {
-      thrust::copy(rmm::exec_policy(stream)->on(stream),
-                   temp_destination.begin(), temp_destination.end(),
-                   static_cast<ColumnType*>(destination_column->data));
+    if (sync_category) {
+      gdf_column_free(&temp_src);
+      gdf_column_free(&temp_dest);
     }
 
-    if (destination_column->valid != nullptr) {
-      gather_bitmask(source_column->valid, source_column->size,
-                     destination_column->valid, num_destination_rows,
-                     gather_map, check_bounds, stream);
-
-      // TODO compute the null count in the gather_bitmask kernels
-      set_null_count(*destination_column);
+    // Copy temporary buffers used for in-place gather to destination column
+    if (in_place) {
+      thrust::copy(rmm::exec_policy(stream)->on(stream), destination_data,
+                   destination_data + num_destination_rows,
+                   static_cast<ColumnType *>(destination_column->data));
     }
 
     CHECK_STREAM(stream);
   }
 };
-}  // namespace
 
-namespace cudf {
-namespace detail {
-
-void gather(table const* source_table, gdf_index_type const gather_map[],
-            table* destination_table, bool check_bounds, cudaStream_t stream) {
+void gather(table const *source_table, gdf_index_type const gather_map[],
+            table *destination_table, bool check_bounds,
+            bool sync_nvstring_category) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -360,38 +266,100 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
   CUDF_EXPECTS(nullptr != gather_map, "gather_map is null");
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
+  const gdf_size_type n_cols = source_table->num_columns();
 
-  auto gather_column = [gather_map, check_bounds, stream](
-                           gdf_column const* source, gdf_column* destination) {
-    CUDF_EXPECTS(source->dtype == destination->dtype, "Column type mismatch");
+  // We create `n_cols` streams for the `n_cols` kernels we are gonna launch.
+  std::vector<util::cuda::scoped_stream> v_stream(n_cols);
 
-    // If the source column has a valid buffer, the destination column must
-    // also have one
-    bool const source_has_nulls{source->valid != nullptr};
-    bool const dest_has_nulls{destination->valid != nullptr};
-    CUDF_EXPECTS((source_has_nulls && dest_has_nulls) || (not source_has_nulls),
-                 "Missing destination validity buffer");
+  for (gdf_size_type i = 0; i < n_cols; i++) {
+    // Perform sanity checks
+    gdf_column *dest_col = destination_table->get_column(i);
+    const gdf_column *src_col = source_table->get_column(i);
 
-    // TODO: Each column could be gathered on a separate stream
-    cudf::type_dispatcher(source->dtype, column_gatherer{}, source, gather_map,
-                          destination, check_bounds, stream);
+    CUDF_EXPECTS(src_col->dtype == dest_col->dtype, "Column type mismatch");
 
-    return destination;
-  };
+    CUDF_EXPECTS(dest_col->data != nullptr, "Missing source data buffer.");
 
-  // Gather columns one-by-one
-  std::transform(source_table->begin(), source_table->end(),
-                 destination_table->begin(), destination_table->begin(),
-                 gather_column);
+    // The data gather for n columns will be put on the first n streams
+    cudf::type_dispatcher(src_col->dtype, column_gatherer{}, src_col,
+                          gather_map, dest_col, check_bounds, v_stream[i],
+                          sync_nvstring_category);
 
+    if (cudf::has_nulls(*src_col)) {
+      CUDF_EXPECTS(cudf::is_nullable(*dest_col),
+                   "Missing destination null mask.");
+    }
+  }
+
+  rmm::device_vector<gdf_size_type> null_counts(n_cols, 0);
+
+  std::vector<bit_mask_t*> source_bitmasks_host(n_cols);
+  std::vector<bit_mask_t*> destination_bitmasks_host(n_cols);
+
+  std::vector<rmm::device_vector<bit_mask_t>> inplace_buffers(n_cols);
+
+  // loop over each column, check if inplace and allocate buffer if true.
+  for (gdf_size_type i = 0; i < n_cols; i++) {
+    const gdf_column *dest_col = destination_table->get_column(i);
+    source_bitmasks_host[i] =
+        reinterpret_cast<bit_mask_t *>(source_table->get_column(i)->valid);
+    // Allocate inplace buffer
+    if (cudf::is_nullable(*dest_col) &&
+        dest_col->valid == source_table->get_column(i)->valid) {
+      inplace_buffers[i].resize(gdf_valid_allocation_size(dest_col->size));
+      destination_bitmasks_host[i] = inplace_buffers[i].data().get();
+    } else {
+      destination_bitmasks_host[i] = reinterpret_cast<bit_mask_t *>(dest_col->valid);
+    }
+  }
+
+  // In the following we allocate the device array thats hold the valid
+  // bits.
+  rmm::device_vector<bit_mask_t*> source_bitmasks(source_bitmasks_host);
+  rmm::device_vector<bit_mask_t*> destination_bitmasks(destination_bitmasks_host);
+
+  auto bitmask_kernel =
+      check_bounds ? gather_bitmask_kernel<true> : gather_bitmask_kernel<false>;
+
+  int gather_grid_size;
+  int gather_block_size;
+  CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(
+      &gather_grid_size, &gather_block_size, bitmask_kernel));
+
+  bitmask_kernel<<<gather_grid_size, gather_block_size>>>(
+      source_bitmasks.data().get(), source_table->num_rows(), gather_map,
+      destination_bitmasks.data().get(), destination_table->num_rows(),
+      null_counts.data().get(), n_cols);
+
+  std::vector<gdf_size_type> h_count(n_cols);
+  CUDA_TRY(cudaMemcpy(h_count.data(), null_counts.data().get(),
+                      sizeof(gdf_size_type) * n_cols, cudaMemcpyDeviceToHost));
+
+  // loop over each column, check if inplace and copy the result from the
+  // buffer back to destination if true.
+  for (gdf_size_type i = 0; i < destination_table->num_columns(); i++) {
+    gdf_column *dest_col = destination_table->get_column(i);
+    if (is_nullable(*dest_col)) {
+      // Copy temp buffer content back to column
+      if (dest_col->valid == source_table->get_column(i)->valid) {
+        gdf_size_type num_bitmask_elements =
+            gdf_num_bitmask_elements(dest_col->size);
+        CUDA_TRY(cudaMemcpy(dest_col->valid, destination_bitmasks_host[i],
+                            num_bitmask_elements, cudaMemcpyDeviceToDevice));
+      }
+      dest_col->null_count = dest_col->size - h_count[i];
+    } else {
+      dest_col->null_count = 0;
+    }
+  }
 }
 
-}  // namespace detail
+} // namespace detail
 
-void gather(table const* source_table, gdf_index_type const gather_map[],
-            table* destination_table) {
-  detail::gather(source_table, gather_map, destination_table);
+void gather(table const *source_table, gdf_index_type const gather_map[],
+            table *destination_table) {
+  detail::gather(source_table, gather_map, destination_table, false, false);
   nvcategory_gather_table(*source_table, *destination_table);
 }
 
-}  // namespace cudf
+} // namespace cudf

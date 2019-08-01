@@ -126,10 +126,10 @@ void BooleanMaskTest(column_wrapper<T> const& source,
 
   if (!(expected == result)) {
     std::cout << "expected\n";
-    expected.print();
+//    expected.print();
     std::cout << expected.get()->null_count << "\n";
     std::cout << "result\n";
-    print_gdf_column(&result);
+//     print_gdf_column(&result);
     std::cout << result.null_count << "\n";
   }
 
