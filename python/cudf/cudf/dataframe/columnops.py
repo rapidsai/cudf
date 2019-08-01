@@ -114,6 +114,9 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
+    def searchsorted(self, value, side="left"):
+        raise NotImplementedError
+
     def astype(self, dtype, **kwargs):
         if (
             pd.api.types.pandas_dtype(dtype).type
