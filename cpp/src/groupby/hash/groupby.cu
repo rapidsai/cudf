@@ -19,11 +19,11 @@
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
 #include <string/nvcategory_util.hpp>
-#include <table/device_table.cuh>
-#include <table/device_table_row_operators.cuh>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/type_dispatcher.hpp>
@@ -251,9 +251,9 @@ auto extract_results(table const& input_keys, table const& input_values,
                      device_table const& d_input_keys,
                      table const& sparse_output_values, Map* map,
                      cudaStream_t stream) {
-  cudf::table output_keys{cudf::allocate_like(input_keys, true, stream)};
+  cudf::table output_keys{cudf::allocate_like(input_keys, keys_have_nulls, stream)};
   cudf::table output_values{
-      cudf::allocate_like(sparse_output_values, true, stream)};
+      cudf::allocate_like(sparse_output_values, values_have_nulls, stream)};
 
   auto d_sparse_output_values =
       device_table::create(sparse_output_values, stream);

@@ -27,7 +27,9 @@ def make_meta_cudf_index(x, index=None):
 
 
 @concat_dispatch.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def concat_cudf(dfs, axis=0, join="outer", uniform=False, filter_warning=True):
+def concat_cudf(
+    dfs, axis=0, join="outer", uniform=False, filter_warning=True, sort=None
+):
     assert axis == 0
     assert join == "outer"
     return cudf.concat(dfs)
