@@ -573,7 +573,8 @@ class MultiIndex(Index):
             pandas_mi = pd.MultiIndex(
                 levels=pandas_levels, labels=pandas_codes
             )
-        pandas_mi.names = self.names if self.names else self._source_data.columns
+        if self.names is not None:
+            pandas_mi.names = self.names
         return pandas_mi
 
     @classmethod
