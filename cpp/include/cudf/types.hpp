@@ -41,7 +41,7 @@ class device_buffer;
 namespace mr {
 class device_memory_resource;
 device_memory_resource* get_default_resource();
-}
+}  // namespace mr
 
 }  // namespace rmm
 
@@ -50,6 +50,14 @@ namespace cudf {
 // Forward declaration
 struct table;
 class column;
+class column_view;
+class mutable_column_view;
+
+namespace exp {
+class table;
+}
+class table_view;
+class mutable_table_view;
 
 using size_type = int32_t;
 using bitmask_type = uint32_t;
