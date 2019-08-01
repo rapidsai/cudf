@@ -84,9 +84,6 @@ struct table {
    * @note It is the caller's responsibility to free the array of gdf_columns
    *and their associated device memory.
    *
-   * @note Does not support `GDF_TIMESTAMP` columns as this would require
-   * passing in additional timestamp resolution information.
-   *
    * @param[in] num_rows The size of each gdf_column
    * @param[in] dtypes The type of each column
    * @param[in] dtype_infos The gdf_extra_dtype_info for each column
