@@ -35,15 +35,6 @@ constexpr inline bool is_numeric() {
   return std::is_integral<T>::value or std::is_floating_point<T>::value;
 }
 
-namespace detail {
-struct numeric {
-  template <typename T>
-  constexpr bool operator()() const noexcept {
-    return is_numeric<T>();
-  }
-};
-}  // namespace detail
-
 /**---------------------------------------------------------------------------*
  * @brief Indicates if `type` is a numeric `data_type`.
  *
@@ -56,12 +47,12 @@ struct numeric {
  * @return false `type` is not numeric
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_numeric(data_type type) {
-  return cudf::exp::type_dispatcher(type, detail::numeric{});
+  return cudf::exp::type_dispatcher(
+      type, [](auto dummy) { return is_numeric<decltype(dummy)>(); }, 0);
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates whether the concerete C++ type `T` corresponds to a
- * fixed-width element type.
+ * @brief Indicates if elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
  *
@@ -73,39 +64,32 @@ template <typename T>
 constexpr inline bool is_fixed_width() {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return std::is_integral<T>::value or std::is_floating_point<T>::value;
+  return cudf::is_numeric<T>();
 }
 
-namespace detail {
-struct fixed_width {
-  template <typename T>
-  constexpr bool operator()() const noexcept {
-    return is_fixed_width<T>();
-  }
-};
-}  // namespace detail
-
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of the specified `data_type` have a fixed-width.
+ * @brief Indicates if elements of `type` are fixed-width.
+ *
+ * Elements of a fixed-width type all have the same size in bytes.
  *
  * @param type The `data_type` to verify
  * @return true `type` is fixed-width
  * @return false  `type` is variable-width
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_fixed_width(data_type type) {
-  return cudf::exp::type_dispatcher(type, detail::fixed_width{});
+  return cudf::exp::type_dispatcher(
+      type, [](auto dummy) { return is_fixed_width<decltype(dummy)>(); }, 0);
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if the concrete C++ type `T` corresponds to a compound
- * element type.
+ * @brief Indictates if the type `T` is a compound type.
  *
  * `column`s with "compound" elements are logically a single column of elements,
  * but may be concretely implemented with two or more `column`s. For example, a
  * `STRING` column could contain a `column` of offsets and a child `column` of
  * characters.
  *
- * @tparam T The C++ type to verify
+ * @tparam T The type to verify
  * @return true `T` corresponds to a "compound" type
  * @return false `T` corresponds to a "simple" type
  *---------------------------------------------------------------------------**/
@@ -116,13 +100,12 @@ constexpr inline bool is_compound() {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if the concrete C++ type `T` corresponds to a "simple"
- * element type.
+ * @brief Indicates if the type `T` is a simple type.
  *
  * "Simple" element types are implemented with only a single column, i.e.,
  * `num_children() == 0` for columns of "simple" elements
  *
- * @tparam T The C++ type to verify
+ * @tparam T The type to verify
  * @return true `T` corresponds to a simple type
  * @return false `T` corresponds to a compound type
  *---------------------------------------------------------------------------**/
@@ -131,18 +114,8 @@ constexpr inline bool is_simple() {
   return not is_compound<T>();
 }
 
-namespace detail {
-struct compound {
-  template <typename T>
-  constexpr bool operator()() const noexcept {
-    return is_compound<T>();
-  }
-};
-}  // namespace detail
-
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of the sepcified `data_type` are a "compound"
- * type.
+ * @brief Indicates if elements of `type` are compound.
  *
  * `column`s with "compound" elements are logically a single column of elements,
  * but may be concretely implemented with two or more `column`s. For example, a
@@ -150,16 +123,16 @@ struct compound {
  * characters.
  *
  * @param type The `data_type` to verify
- * @return true `type` is a "compound" type
- * @return false `type` is a "simple" type
+ * @return true `type` is a compound type
+ * @return false `type` is a simple type
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_compound(data_type type) {
-  return cudf::exp::type_dispatcher(type, detail::compound{});
+  return cudf::exp::type_dispatcher(
+      type, [](auto dummy) { return is_compound<decltype(dummy)>(); }, 0);
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of the specified `data_type` are a "simple"
- *type.
+ * @brief Indicates if elements of `type` are simple.
  *
  * "Simple" element types are implemented with only a single column, i.e.,
  * `num_children() == 0` for columns of "simple" elements
