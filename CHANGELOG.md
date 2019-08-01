@@ -27,6 +27,7 @@
 - PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
+- PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 
 ## Improvements
 
