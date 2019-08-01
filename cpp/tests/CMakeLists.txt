@@ -225,21 +225,30 @@ ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 set(BINARY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/binop-verify-input-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-operands-null-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-generic-ptx-test.cu")
 
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
+# - unary transform tests -------------------------------------------------------------------------
+
+set(TRANSFORM_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-operation-integration-test.cu")
+
+ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
 # - jit cache tests -------------------------------------------------------------------------------
 
 set(JITCACHE_TEST_SRC 
-    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-test.cu")
 
 ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
 
 set(JITCACHE_MULTI_TEST_SRC 
-    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-multiprocess-test.cpp")
 
 ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
@@ -249,6 +258,9 @@ ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
+set(AVRO_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
@@ -257,6 +269,7 @@ set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
+ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
@@ -393,6 +406,14 @@ set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+
+###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
 
 

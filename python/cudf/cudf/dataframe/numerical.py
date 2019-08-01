@@ -14,6 +14,7 @@ import cudf.bindings.copying as cpp_copying
 import cudf.bindings.hash as cpp_hash
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
@@ -268,6 +269,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         )
         return self.replace(data=out, dtype=out_dtype)
 
+    def applymap_ptx(self, udf_ptx, np_dtype):
+        return cpp_unaryops.column_applymap(self, udf_ptx, np_dtype)
+
     def default_na_value(self):
         """Returns the default NA value for this column
         """
@@ -362,6 +366,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         elif found == -1:
             raise ValueError("value not found")
         return found
+
+    def searchsorted(self, value, side="left"):
+        value_col = columnops.as_column(value)
+        return cpp_search.search_sorted(self, value_col, side)
 
     @property
     def is_monotonic_increasing(self):
