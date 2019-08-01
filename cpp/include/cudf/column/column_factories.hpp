@@ -21,9 +21,11 @@
 
 namespace cudf {
 /**---------------------------------------------------------------------------*
- * @brief Construct a new column and allocate sufficient uninitialized storage
+ * @brief Construct column with sufficient uninitialized storage
  * to hold `size` elements of the specified numeric `data_type` with an optional
- * null mask allocation.
+ * null mask.
+ * 
+ * @note `null_count()` will be determined by the requested null mask `state`
  *
  * @throws std::bad_alloc if device memory allocation fails
  * @throws cudf::logic_error if `type` is not a numeric type
