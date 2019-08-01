@@ -8,6 +8,7 @@
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2156 Add `upper_bound()` and `lower_bound()` for libcudf tables and `searchsorted()` for cuDF Series
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
@@ -23,8 +24,12 @@
 - PR #2049 Implemented merge functionality
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
+- PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
+- PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2446 Add __array_function__ for index
+- PR #2437 ORC reader: Add 'use_np_dtypes' option
+- PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 
 ## Improvements
 
@@ -113,6 +118,7 @@
 - PR #2386 Correctly allocate output valids in groupby
 - PR #2411 Fixed failures on binary op on single element string column
 - PR #2422 Fix Pandas logical binary operation incompatibilites
+- PR #2447 Fix CodeCov posting build statuses temporarily
 
 
 # cuDF 0.8.0 (27 June 2019)
@@ -564,6 +570,7 @@
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
 - PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
+- PR #2037 Optimize the existing `gather` and `scatter` routines in `libcudf`
 
 ## Bug Fixes
 
