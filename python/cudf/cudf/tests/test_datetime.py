@@ -20,9 +20,7 @@ def data1():
 
 
 def data2():
-    return pd.date_range(
-        "20010101", "20020215", freq="400h", tz="US/Eastern", name="times"
-    )
+    return pd.date_range("20010101", "20020215", freq="400h", name="times")
 
 
 def timeseries_us_data():
@@ -30,7 +28,6 @@ def timeseries_us_data():
         "2019-07-16 00:00:00",
         "2019-07-16 00:00:01",
         freq="5555us",
-        tz="US/Eastern",
         name="times",
     )
 
