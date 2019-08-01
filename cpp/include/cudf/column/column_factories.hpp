@@ -26,60 +26,6 @@
 
 namespace cudf {
 
-namespace {
-struct size_of_helper {
-  template <typename T>
-  constexpr int operator()() const noexcept {
-    return sizeof(T);
-  }
-};
-
-/**
- * @brief Returns the size in bytes of elements of the specified `data_type`
- *
- * @note Only fixed-width types are supported
- *
- * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
- *
- * TODO: This should go somewhere else
- */
-constexpr inline std::size_t size_of(data_type element_type) {
-  CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::exp::type_dispatcher(element_type, size_of_helper{});
-}
-
-data_type verify_fixed_width_and_simple(data_type type) {
-  CUDF_EXPECTS(cudf::is_fixed_width(type) and cudf::is_simple(type),
-               "Invalid element type.");
-  return type;
-}
-
-}  // namespace
-
-// Allocate storage for a specified number of fixed-width elements
-/*
-column::column(data_type type, size_type size, mask_state state,
-               cudaStream_t stream, rmm::mr::device_memory_resource *mr)
-    : _type{verify_fixed_width_and_simple(type)},
-      _size{size},
-      _data{size * cudf::size_of(type), stream, mr},
-      _null_mask{create_null_mask(size, state, stream, mr)} {
-  switch (state) {
-    case UNALLOCATED:
-      _null_count = 0;
-      break;
-    case UNINITIALIZED:
-      _null_count = UNKNOWN_NULL_COUNT;
-      break;
-    case ALL_NULL:
-      _null_count = size;
-      break;
-    case ALL_VALID:
-      _null_count = 0;
-      break;
-  }
-}
-*/
 
 /**---------------------------------------------------------------------------*
  * @brief Construct a new column and allocate sufficient uninitialized storage

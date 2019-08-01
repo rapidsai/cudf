@@ -15,14 +15,45 @@
  */
 
 #include <cudf/column/column_factories.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/utils/traits.hpp>
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
 
+namespace {
+struct size_of_helper {
+  template <typename T>
+  constexpr int operator()() const noexcept {
+    return sizeof(T);
+  }
+};
+
+/**
+ * @brief Returns the size in bytes of elements of the specified `data_type`
+ *
+ * @note Only fixed-width types are supported
+ *
+ * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
+ *
+ * TODO: This should go somewhere else
+ */
+constexpr inline std::size_t size_of(data_type element_type) {
+  CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
+  return cudf::exp::type_dispatcher(element_type, size_of_helper{});
+}
+
+}  // namespace
+
+// Allocate storage for a specified number of numeric elements
 std::unique_ptr<column> make_numeric_column(
     data_type type, size_type size, mask_state state, cudaStream_t stream,
     rmm::mr::device_memory_resource* mr) {
   CUDF_EXPECTS(is_numeric(type), "Invalid, non-numeric type.");
+
+  return std::make_unique<column>(
+      type, size, rmm::device_buffer{size * cudf::size_of(type), stream, mr},
+      create_null_mask(size, state, stream, mr), state_null_count(state, size),
+      std::vector<column>{}, stream, mr);
 }
 }  // namespace cudf
