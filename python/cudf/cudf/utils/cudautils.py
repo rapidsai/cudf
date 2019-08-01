@@ -1,7 +1,8 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from math import fmod, isnan
 from functools import lru_cache
+from math import fmod, isnan
+
 import numpy as np
 from numba import cuda, int32, numpy_support
 
@@ -960,6 +961,6 @@ def window_sizes_from_offset(arr, offset):
 def compile_udf(udf, type_signature):
     decorated_udf = cuda.jit(udf, device=True)
     compiled = decorated_udf.compile(type_signature)
-    ptx_code = decorated_udf.inspect_ptx(type_signature).decode('utf-8')
+    ptx_code = decorated_udf.inspect_ptx(type_signature).decode("utf-8")
     output_type = numpy_support.as_dtype(compiled.signature.return_type)
     return (ptx_code, output_type.type)

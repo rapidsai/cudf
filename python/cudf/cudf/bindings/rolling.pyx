@@ -19,7 +19,7 @@ def apply_rolling(inp, window, min_periods, center, op):
     cdef gdf_index_type *c_window_col = NULL
     cdef gdf_index_type *c_min_periods_col = NULL
     cdef gdf_index_type *c_forward_window_col = NULL
-    
+
     cdef string cpp_str
     cdef gdf_dtype g_type
 

@@ -164,12 +164,7 @@ def test_rolling_getitem_window():
     assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
 
 
-@pytest.mark.parametrize(
-    "data,index",
-    [
-        ([1, 4, 5, 2, 9, 7], None)
-    ],
-)
+@pytest.mark.parametrize("data,index", [([1, 4, 5, 2, 9, 7], None)])
 @pytest.mark.parametrize("nulls", ["none"])
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf(data, index, nulls, center):

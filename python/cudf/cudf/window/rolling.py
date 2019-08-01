@@ -165,7 +165,7 @@ class Rolling:
         return self._apply_agg("count")
 
     def apply(self, udf, *args, **kwargs):
-        
+
         nb_type = numba.numpy_support.from_dtype(self.obj.dtype)
         type_signature = (nb_type[:],)
 
