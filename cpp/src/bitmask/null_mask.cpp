@@ -22,6 +22,21 @@
 
 namespace cudf {
 
+size_type state_null_count(mask_state state, size_type size) {
+  switch (state) {
+    case UNALLOCATED:
+      return 0;
+    case UNINITIALIZED:
+      return UNKNOWN_NULL_COUNT;
+    case ALL_NULL:
+      return size;
+    case ALL_VALID:
+      return 0;
+    default:
+      CUDF_FAIL("Invalid null mask state.");
+  }
+}
+
 // Computes required allocation size of a bitmask
 std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
                                           std::size_t padding_boundary) {

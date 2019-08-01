@@ -13,6 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+#pragma once
 
 #include <cudf/types.hpp>
 
@@ -30,6 +31,16 @@ enum mask_state {
   ALL_VALID,      ///< Null mask allocated, initialized to all valid values
   ALL_NULL        ///< Null mask allocated, initialized to all NULL
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief Returns the null count for a null mask of the specified `state`
+ * representing `size` elements.
+ *
+ * @param state The state of the null mask
+ * @param size The number of elements represented by the mask
+ * @return size_type The count of null elements
+ *---------------------------------------------------------------------------**/
+size_type state_null_count(mask_state state, size_type size);
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the required bytes neccessary to represent the specified
