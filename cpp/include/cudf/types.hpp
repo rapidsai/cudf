@@ -35,6 +35,16 @@ namespace bit_mask {
 using bit_mask_t = uint32_t;
 }
 
+// Forward declarations
+namespace rmm {
+class device_buffer;
+namespace mr {
+class device_memory_resource;
+device_memory_resource* get_default_resource();
+}
+
+}  // namespace rmm
+
 namespace cudf {
 
 // Forward declaration

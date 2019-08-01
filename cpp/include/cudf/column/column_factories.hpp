@@ -17,16 +17,9 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utils/traits.hpp>
 #include "column.hpp"
 
-#include <rmm/mr/device_memory_resource.hpp>
-
-#include <memory>
-
 namespace cudf {
-
-
 /**---------------------------------------------------------------------------*
  * @brief Construct a new column and allocate sufficient uninitialized storage
  * to hold `size` elements of the specified numeric `data_type` with an optional
