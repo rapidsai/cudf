@@ -215,7 +215,7 @@ def test_series_init_none():
     sr1 = Series()
     got = sr1.to_string()
     print(got)
-    expect = "<empty Series of dtype=float64>"
+    expect = "Series([], dtype: float64)"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -223,7 +223,7 @@ def test_series_init_none():
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
-    expect = "<empty Series of dtype=float64>"
+    expect = "Series([], dtype: float64)"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -798,7 +798,7 @@ def test_dataframe_to_string():
             assert values[i] is None
 
     pd.options.display.max_rows = 10
-    got = df.to_string(nrows=None)
+    got = df.to_string()
     print(got)
     expect = """
 a b  c

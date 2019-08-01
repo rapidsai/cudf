@@ -19,6 +19,16 @@ def test_integer_dataframe(x):
     assert gdf.__repr__() == pdf.__repr__()
 
 
+@given(st.lists(st.integers(-9223372036854775808, 9223372036854775807)))
+@settings(deadline=None)
+def test_integer_series(x):
+    sr = cudf.Series(x)
+    ps = pd.Series(x)
+    print(sr)
+    print(ps)
+    assert sr.__repr__() == ps.__repr__()
+
+
 @given(st.lists(st.floats()))
 def test_float_dataframe(x):
     if not hasattr(pd, 'Int64Dtype'):
@@ -26,6 +36,13 @@ def test_float_dataframe(x):
     gdf = cudf.DataFrame({'x': cudf.Series(x, nan_as_null=False)})
     pdf = gdf.to_pandas()
     assert gdf.__repr__() == pdf.__repr__()
+
+
+@given(st.lists(st.floats()))
+def test_float_series(x):
+    sr = cudf.Series(x, nan_as_null=False)
+    ps = pd.Series(x)
+    assert sr.__repr__() == ps.__repr__()
 
 
 def test_mixed_dataframe():
