@@ -141,7 +141,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         return self.view(
             datetime.DatetimeColumn,
             dtype=dtype,
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype)).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):

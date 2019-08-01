@@ -155,7 +155,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def as_datetime_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
-        return typecast.apply_cast(self, dtype=np.dtype(dtype).type)
+        return typecast.apply_cast(self, dtype=np.dtype(dtype))
 
     def as_numerical_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
