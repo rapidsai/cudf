@@ -13,6 +13,7 @@ from libc.stdlib cimport free
 
 import numpy as np
 
+
 def apply_cast(incol, dtype=np.float64):
     """
       Cast from incol.dtype to outcol.dtype
