@@ -87,7 +87,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
     with pytest.raises(TypeError):
         func(cudf_df)
 
-# we only impliment sum among all non numpy ufuncs
+# we only implement sum among all numpy non-ufuncs
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("np_ar", [np.random.random(100)])
 @pytest.mark.parametrize("func", [lambda x: np.sum(x)])
