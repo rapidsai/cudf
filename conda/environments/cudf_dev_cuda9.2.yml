@@ -6,9 +6,9 @@ channels:
 - conda-forge
 - defaults
 dependencies:
-- nvstrings=0.9.*
 - rmm=0.9.*
 - cmake>=3.12
+- cmake_setuptools
 - python>=3.6,<3.8
 - numba>=0.41,<0.45
 - pandas>=0.24.2,<0.25
