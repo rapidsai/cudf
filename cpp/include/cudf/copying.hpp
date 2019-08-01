@@ -124,44 +124,6 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
                 gdf_index_type in_begin);
 
 /**
- * @brief Scatters the rows (including null values) of a set of source columns
- * into a set of destination columns.
- * 
- * The two sets of columns must have equal numbers of columns.
- *
- * Scatters the rows of the source columns into the destination columns
- * according to a scatter map such that row "i" from the source columns will be
- * scattered to row "scatter_map[i]" in the destination columns.
- *
- * `data` and `valid` of a specific row of the destination_column is kept 
- * unchanged if the `scatter_map` does not map to that row.
- * 
- * The datatypes between coresponding columns in the source and destination
- * columns must be the same.
- *
- * The number of elements in the scatter_map must equal the number of rows in
- * the source columns.
- *
- * If any index in scatter_map is outside the range of [0, num rows in
- * destination_columns), the result is undefined.
- *
- * If the same index appears more than once in scatter_map, the result is
- * undefined.
- *
- * @Param[in] source_table The columns whose rows will be scattered
- * @Param[in] scatter_map An array that maps rows in the input columns
- * to rows in the output columns.
- * @Param[out] destination_table A preallocated set of columns with a number
- * of rows equal in size to the maximum index contained in scatter_map
- *
- * @return GDF_SUCCESS upon successful completion
- */
-
-// TODO: to be removed
-// void scatter(table const* source_table, gdf_index_type const scatter_map[],
-//                   table* destination_table);
-
-/**
  * @brief Creates a new `table` as if an in-place scatter from a `source` table 
  * was performed on the `target` table.
  *

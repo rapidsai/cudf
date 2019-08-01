@@ -179,14 +179,6 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 
 }  // namespace detail
 
-// TODO: to be removed
-/**
-void scatter(table const* source_table, gdf_index_type const scatter_map[],
-             table* destination_table) {
-  detail::scatter(source_table, scatter_map, destination_table);
-}
-*/
-
 table scatter(table const& source, gdf_index_type const scatter_map[], 
     table const& target) {
   

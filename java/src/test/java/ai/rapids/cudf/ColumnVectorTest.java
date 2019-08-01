@@ -403,4 +403,37 @@ public class ColumnVectorTest {
       assertTrue(cv.isNull(3));
     }
   }
+
+  @Test
+  void testStringLengths() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", null, "123", "1234");
+      ColumnVector lengths = cv.getLengths()) {
+      lengths.ensureOnHost();
+      assertEquals(5, lengths.getRowCount());
+      for (int i = 0 ; i < lengths.getRowCount() ; i++) {
+        if (cv.isNull(i)) {
+          assertTrue(lengths.isNull(i));
+        } else {
+          assertEquals(cv.getJavaString(i).length(), lengths.getInt(i));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGetByteCount() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
+         ColumnVector byteLengthVector = cv.getByteCount()) {
+      byteLengthVector.ensureOnHost();
+      assertEquals(5, byteLengthVector.getRowCount());
+      for (int i = 0; i < byteLengthVector.getRowCount(); i++) {
+        if (cv.isNull(i)) {
+          assertTrue(byteLengthVector.isNull(i));
+        } else {
+          assertEquals(cv.getJavaString(i).length(), byteLengthVector.getInt(i));
+
+        }
+      }
+    }
+  }
 }

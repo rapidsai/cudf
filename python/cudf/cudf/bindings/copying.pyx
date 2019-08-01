@@ -11,7 +11,6 @@ from cudf.dataframe.numerical import numeric_normalize_types
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.copying cimport *
-from cudf.utils.cudautils import astype, modulo
 import cudf.utils.utils as utils
 from cudf.bindings.utils cimport columns_from_table, table_from_columns
 from librmm_cffi import librmm as rmm
@@ -47,6 +46,11 @@ def clone_columns_with_size(in_cols, row_size):
 
 
 def _normalize_maps(maps, size):
+
+    import cudf.bindings.typecast as typecast
+    from cudf.dataframe import columnops
+    
+    col = typecast.apply_cast(columnops.as_column(maps), dtype=np.int32)
     maps = columnops.as_column(maps).astype("int32")
     maps = maps.binary_operator("mod", maps.normalize_binop_value(size))
     maps = maps.data.mem
