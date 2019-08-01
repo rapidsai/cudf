@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
+#include <utilities/release_assert.cuh>
 
 #ifndef CUDA_HOST_DEVICE_CALLABLE
 #ifdef __CUDACC__
@@ -217,9 +218,7 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
       CUDF_FAIL("Unsupported type_id.");
 #else
       release_assert(false && "Unsuported type_id.");
-#endif
-    }
-  }
+
   // The following code will never be reached, but the compiler generates a
   // warning if there isn't a return value.
 
@@ -229,6 +228,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
   using return_type =
       decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
   return return_type();
+#endif
+    }
+  }
 }
 
 }  // namespace exp
