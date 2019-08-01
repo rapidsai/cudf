@@ -356,7 +356,7 @@ class Index(object):
 
         else:
             return NotImplemented
-    
+
     def isin(self, values):
         return self.to_series().isin(values)
 
