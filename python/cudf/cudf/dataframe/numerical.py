@@ -265,10 +265,10 @@ class NumericalColumn(columnops.TypedColumnBase):
 
     def clip(self, lower=None, upper=None, inplace=False):
         mask = None
-        if self.has_null_mas:
+        if self.has_null_mask:
             mask = self.nullmask
 
-        # TODO: direct copy when both lower and upper are None
+        # TODO: if both lower and upper are None, just copy or leave it
         if lower is not None and upper is not None:
             if np.isscalar(lower) and np.isscalar(upper):
                 lower, upper = min(lower, upper), max(lower, upper)

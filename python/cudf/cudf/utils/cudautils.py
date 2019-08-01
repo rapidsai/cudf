@@ -626,40 +626,40 @@ def apply_round(data, decimal):
 
 
 @cuda.jit
-def gpu_clip(in_col, lower, upper, inplace, out_col=None):
+def gpu_clip_inplace(in_col, lower, upper):
     i = cuda.grid(1)
-
-    # make sure out_col is not None when inplace is False
-    if not inplace:
-        assert out_col is not None
 
     if i < in_col.size:
         if lower is not None and in_col[i] < lower:
-            if inplace:
-                in_col[i] = lower
-            else:
-                out_col[i] = lower
+            in_col[i] = lower
         elif upper is not None and in_col[i] > upper:
-            if inplace:
-                in_col[i] = upper
-            else:
-                out_col[i] = upper
+            in_col[i] = upper
+
+
+@cuda.jit
+def gpu_clip_not_inplace(in_col, lower, upper, out_col):
+    i = cuda.grid(1)
+
+    if i < in_col.size:
+        if lower is not None and in_col[i] < lower:
+            out_col[i] = lower
+        elif upper is not None and in_col[i] > upper:
+            out_col[i] = upper
         else:
-            if not inplace:
-                out_col[i] = in_col[i]
+            out_col[i] = in_col[i]
 
 
 def apply_clip(data, lower, upper, inplace):
     if not inplace:
-        output_dary = rmm.device_arrya_like(data)
+        output_dary = rmm.device_array_like(data)
         if data.size > 0:
-            gpu_clip.forall(data.size)(
-                data, lower, upper, inplace, output_dary
+            gpu_clip_not_inplace.forall(data.size)(
+                data, lower, upper, output_dary
             )
         return output_dary
     else:
         if data.size > 0:
-            gpu_clip.forall(data.size)(data, lower, upper, inplace)
+            gpu_clip_inplace.forall(data.size)(data, lower, upper)
         return data
 
 

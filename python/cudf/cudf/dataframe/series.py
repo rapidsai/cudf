@@ -1786,6 +1786,15 @@ class Series(object):
             index=self.index,
         )
 
+    def clip(self, lower=None, upper=None, inplace=False):
+        """Clip a Series.
+        """
+        return Series(
+            self._column.clip(lower=lower, upper=upper, inplace=inplace),
+            name=self.name,
+            index=self.index,
+        )
+
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()

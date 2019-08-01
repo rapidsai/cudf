@@ -3156,7 +3156,7 @@ def test_clip_inplace(lower, upper):
     # run both inplace and not inplace
     result_inplace = ser.clip(lower=-10, upper=10, inplace=True)
     expected = pser.clip(lower=-10, upper=10)
-    assert result_inplace is ser  # check inplace identity
+    assert result_inplace.data.mem is ser.data.mem  # check inplace identity
     np.testing.assert_array_almost_equal(
         result_inplace.to_pandas(), expected, decimal=10
     )
@@ -3173,7 +3173,7 @@ def test_clip_not_inplace(lower, upper):
     # run both inplace and not inplace
     result_not_inplace = ser.clip(lower=-10, upper=10, inplace=False)
     expected = pser.clip(lower=-10, upper=10)
-    assert result_not_inplace is not ser  # check not inplace
+    assert result_not_inplace.data.mem is not ser.data.mem  # check not inplace
     np.testing.assert_array_almost_equal(
         result_not_inplace.to_pandas(), expected, decimal=10
     )
@@ -3188,7 +3188,6 @@ def test_clip_null_mask():
     ser = Series(arr)
     result = ser.clip(lower=-10, upper=10)
     expected = pser.clip(lower=-10, upper=10)
-    assert result is ser  # check inplace
     np.testing.assert_array_almost_equal(
         result.to_pandas(), expected, decimal=10
     )
