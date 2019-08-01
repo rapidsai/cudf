@@ -20,7 +20,7 @@
 #include <vector>
 
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include "../csv/type_conversion.cuh"
 #include <io/utilities/file_utils.hpp>

@@ -14,6 +14,7 @@ import cudf.bindings.copying as cpp_copying
 import cudf.bindings.hash as cpp_hash
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
@@ -114,50 +115,43 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-    def astype(self, dtype):
-        from cudf.dataframe import datetime, string
+    def as_string_column(self, dtype, **kwargs):
+        from cudf.dataframe import string
 
-        if self.dtype == dtype:
-            return self
-
-        elif dtype == np.dtype("object") or np.issubdtype(
-            dtype, np.dtype("U").type
-        ):
-            if len(self) > 0:
-                if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                    dev_array = self.astype("int32").data.mem
-                else:
-                    dev_array = self.data.mem
-                dev_ptr = get_ctype_ptr(dev_array)
-                null_ptr = None
-                if self.mask is not None:
-                    null_ptr = get_ctype_ptr(self.mask.mem)
-                kwargs = {
-                    "count": len(self),
-                    "nulls": null_ptr,
-                    "bdevmem": True,
-                }
-                data = string._numeric_to_str_typecast_functions[
-                    np.dtype(dev_array.dtype)
-                ](dev_ptr, **kwargs)
-
+        if len(self) > 0:
+            if self.dtype in (np.dtype("int8"), np.dtype("int16")):
+                dev_array = self.astype("int32", **kwargs).data.mem
             else:
-                data = []
-
-            return string.StringColumn(data=data)
-
-        elif np.issubdtype(dtype, np.datetime64):
-            return self.astype("int64").view(
-                datetime.DatetimeColumn,
-                dtype=dtype,
-                data=self.data.astype(dtype),
-            )
-
+                dev_array = self.data.mem
+            dev_ptr = get_ctype_ptr(dev_array)
+            null_ptr = None
+            if self.mask is not None:
+                null_ptr = get_ctype_ptr(self.mask.mem)
+            kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
+            data = string._numeric_to_str_typecast_functions[
+                np.dtype(dev_array.dtype)
+            ](dev_ptr, **kwargs)
         else:
-            col = self.replace(
-                data=self.data.astype(dtype), dtype=np.dtype(dtype)
-            )
-            return col
+            data = []
+        return string.StringColumn(data=data)
+
+    def as_datetime_column(self, dtype, **kwargs):
+        from cudf.dataframe import datetime
+        import cudf.bindings.typecast as typecast
+
+        return self.view(
+            datetime.DatetimeColumn,
+            dtype=dtype,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+        )
+
+    def as_numerical_column(self, dtype, **kwargs):
+        import cudf.bindings.typecast as typecast
+
+        return self.replace(
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            dtype=np.dtype(dtype),
+        )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
@@ -209,17 +203,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         # gather result
         out_col = cpp_copying.apply_gather_array(sortedvals, segs)
         return out_col
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
 
     def all(self):
         return bool(self.min(dtype=np.bool_))
@@ -285,6 +268,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             udf=udf, column=self, out_dtype=out_dtype
         )
         return self.replace(data=out, dtype=out_dtype)
+
+    def applymap_ptx(self, udf_ptx, np_dtype):
+        return cpp_unaryops.column_applymap(self, udf_ptx, np_dtype)
 
     def default_na_value(self):
         """Returns the default NA value for this column
@@ -381,6 +367,10 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise ValueError("value not found")
         return found
 
+    def searchsorted(self, value, side="left"):
+        value_col = columnops.as_column(value)
+        return cpp_search.search_sorted(self, value_col, side)
+
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
@@ -417,11 +407,17 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
         masked = lhs.has_null_mask or rhs.has_null_mask
         row_count = len(lhs)
 
+    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+
     out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
-    out = out.replace(null_count=null_count)
+    if is_op_comparison:
+        out.fillna(op == "ne", inplace=True)
+    else:
+        out = out.replace(null_count=null_count)
+
     result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     nvtx_range_pop()
     return result

@@ -19,8 +19,8 @@
 
 #include "../core/launcher.h"
 #include "../code/code.h"
-#include "../core/parser.h"
-#include <types.h.jit>
+#include <jit/parser.h>
+#include <jit/types_h_jit.h>
 #include <cstdint>
 #include <chrono>
 
@@ -30,7 +30,7 @@ namespace jit {
 
     const std::vector<std::string> Launcher::compilerFlags { "-std=c++14" };
     const std::vector<std::string> Launcher::headersName 
-        { "operation.h" , "traits.h" , cudf_types_h };
+        { "operation.h" , "traits.h", cudf_types_h };
 
     /**---------------------------------------------------------------------------*
      * @brief  Used to provide Jitify with strings that should be used as headers
@@ -61,10 +61,10 @@ namespace jit {
                                            headersCode);
     }
     
-    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx)
+    Launcher& Launcher::setProgram(std::string prog_file_name, std::string ptx, std::string output_type)
     {
         std::string combined_kernel = 
-          parse_single_function_ptx(ptx, "GENERIC_BINARY_OP") + code::kernel;
+          parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type) + code::kernel;
         program = cacheInstance.getProgram(prog_file_name,
                                            combined_kernel.c_str(),
                                            headersName,
@@ -78,11 +78,11 @@ namespace jit {
         this->setProgram("prog_binop");
     }
 
-    Launcher::Launcher(const std::string& ptx)
+    Launcher::Launcher(const std::string& ptx, const std::string& output_type)
      : cacheInstance{cudf::jit::cudfJitCache::Instance()}
     {
-        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx) ); 
-        this->setProgram("prog_binop." + ptx_hash_str, ptx);
+        std::string ptx_hash_str = std::to_string( std::hash<std::string>{}(ptx + output_type) ); 
+        this->setProgram("prog_binop." + ptx_hash_str, ptx, output_type);
     }
  
     Launcher::Launcher(Launcher&& launcher)
@@ -100,7 +100,7 @@ namespace jit {
         return GDF_SUCCESS;
     }
 
-    gdf_error Launcher::launch(gdf_column* out, gdf_column* lhs, gdf_column* rhs) {
+    gdf_error Launcher::launch(gdf_column* out, const gdf_column* lhs, const gdf_column* rhs) {
 
         getKernel().configure_1d_max_occupancy()
                       .launch(out->size,

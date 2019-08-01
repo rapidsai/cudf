@@ -102,6 +102,17 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - conda environment -----------------------------------------------------------------------------
+
+if ("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif (DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif ()
+
+###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
 include(ConfigureArrow)
@@ -116,6 +127,10 @@ endif(ARROW_FOUND)
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
+
+message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
+
 if(ZLIB_FOUND)
     message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
@@ -123,16 +138,37 @@ else()
 endif(ZLIB_FOUND)
 
 ###################################################################################################
+# - find boost ------------------------------------------------------------------------------------
+
+# Don't look for a CMake configuration file
+set(Boost_NO_BOOST_CMAKE ON)
+
+find_package(
+    Boost REQUIRED MODULE
+    COMPONENTS filesystem
+)
+
+message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
+message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+
+if(Boost_FOUND)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "Boost not found, please check your settings.")
+endif(Boost_FOUND)
+
+###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/rmm"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    RMM_INCLUDE "rmm"
+    HINTS "$ENV{RMM_ROOT}/include"
+)
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    RMM_LIBRARY "rmm"
+    HINTS "$ENV{RMM_ROOT}/lib"
+)
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -155,22 +191,25 @@ message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
-find_path(NVSTRINGS_INCLUDE "nvstrings"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/nvstrings"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    NVSTRINGS_INCLUDE "nvstrings"
+    HINTS "$ENV{NVSTRINGS_ROOT}/include"
+)
 
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    NVSTRINGS_LIBRARY "NVStrings"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    NVCATEGORY_LIBRARY "NVCategory"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
-find_library(NVTEXT_LIBRARY "NVText"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    NVTEXT_LIBRARY "NVText"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
 message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
 message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
@@ -249,8 +288,9 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
+                    "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-		    "${DLPACK_INCLUDE}"
+                    "${DLPACK_INCLUDE}"
                     "${NVSTRINGS_INCLUDE}")
 
 ###################################################################################################
@@ -269,13 +309,14 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 # - library targets -------------------------------------------------------------------------------
 
 add_library(cudf SHARED
-            src/comms/ipc/ipc.cu
+            src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
-            src/table/table.cpp
+            src/table/legacy/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/predicates/is_sorted.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
@@ -288,10 +329,15 @@ add_library(cudf SHARED
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/core/launcher.cpp
-            src/binaryop/jit/core/parser.cpp
-            src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
+            src/jit/type.cpp
+            src/jit/types_h_jit.cpp
+            src/jit/parser.cpp
+            src/jit/cache.cpp
+            src/transform/transform.cpp
+            src/transform/jit/code/kernel.cpp
+            src/transform/jit/core/launcher.cpp
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
@@ -317,6 +363,9 @@ add_library(cudf SHARED
             src/io/utilities/parsing_utils.cu
             src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro_gpu.cu
+            src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
@@ -348,7 +397,8 @@ add_library(cudf SHARED
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
-            src/filling/fill.cu)
+            src/filling/fill.cu
+            src/search/search.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
@@ -393,8 +443,9 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
+SET(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
+target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
