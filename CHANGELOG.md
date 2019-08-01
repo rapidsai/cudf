@@ -69,6 +69,7 @@
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2373 cudf.DataFrame enchancements & Series.values support
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
+- PR #2430 Updated Java bindings to use the new unary API
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
 - PR #2350 Performance related changes to get_dummies
 - PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
