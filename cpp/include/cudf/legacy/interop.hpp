@@ -67,11 +67,14 @@ mutable_column_view gdf_column_to_mutable_view(gdf_column* col);
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a `gdf_column` referencing the data contained in a
- * `column_view`.
+ * `mutable_column_view`.
+ *
+ * @note Conversion from a `column_view` to `gdf_column` is disallowed as it
+ * would allow mutable access to the underlying data.
  *
  * @param view The view containing the data to wrap in a `gdf_column`
  * @return gdf_column The `gdf_column` referencing the data from `view`
  *---------------------------------------------------------------------------**/
-gdf_column view_to_gdf_column(column_view view);
+gdf_column view_to_gdf_column(mutable_column_view view);
 }  // namespace legacy
 }  // namespace cudf
