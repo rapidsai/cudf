@@ -268,7 +268,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = self.nullmask
 
-        # TODO: if both lower and upper are None, just copy or leave it
+        # if both lower and upper are None, return itself or simply copy it
+        if lower is None and upper is None:
+            if inplace:
+                return self
+            else:
+                copy = cudautils.copy_array(self.data.mem)
+                return NumericalColumn(
+                    data=Buffer(copy), mask=mask, dtype=self.dtype
+                )
+
+        # check value of lower and upper, and switch them if needed
         if lower is not None and upper is not None:
             if np.isscalar(lower) and np.isscalar(upper):
                 lower, upper = min(lower, upper), max(lower, upper)

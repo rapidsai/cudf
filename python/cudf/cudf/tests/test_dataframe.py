@@ -3154,8 +3154,8 @@ def test_clip_inplace(lower, upper):
     pser = pd.Series(arr)
     ser = Series(arr)
     # run both inplace and not inplace
-    result_inplace = ser.clip(lower=-10, upper=10, inplace=True)
-    expected = pser.clip(lower=-10, upper=10)
+    result_inplace = ser.clip(lower=lower, upper=upper, inplace=True)
+    expected = pser.clip(lower=lower, upper=upper)
     assert result_inplace.data.mem is ser.data.mem  # check inplace identity
     np.testing.assert_array_almost_equal(
         result_inplace.to_pandas(), expected, decimal=10
@@ -3171,8 +3171,8 @@ def test_clip_not_inplace(lower, upper):
     pser = pd.Series(arr)
     ser = Series(arr)
     # run both inplace and not inplace
-    result_not_inplace = ser.clip(lower=-10, upper=10, inplace=False)
-    expected = pser.clip(lower=-10, upper=10)
+    result_not_inplace = ser.clip(lower=lower, upper=upper, inplace=False)
+    expected = pser.clip(lower=lower, upper=upper)
     assert result_not_inplace.data.mem is not ser.data.mem  # check not inplace
     np.testing.assert_array_almost_equal(
         result_not_inplace.to_pandas(), expected, decimal=10
