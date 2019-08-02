@@ -18,8 +18,6 @@ import cudf
 )
 @settings(deadline=None)
 def test_integer_dataframe(x):
-    if not hasattr(pd, "Int64Dtype"):
-        pytest.skip(msg="Test only supported with Pandas >= 0.24.2")
     gdf = cudf.DataFrame({"x": x})
     pdf = gdf.to_pandas()
     assert gdf.__repr__() == pdf.__repr__()
@@ -42,8 +40,6 @@ def test_integer_series(x):
 
 @given(st.lists(st.floats()))
 def test_float_dataframe(x):
-    if not hasattr(pd, "Int64Dtype"):
-        pytest.skip(msg="Test only supported with Pandas >= 0.24.2")
     gdf = cudf.DataFrame({"x": cudf.Series(x, nan_as_null=False)})
     pdf = gdf.to_pandas()
     assert gdf.__repr__() == pdf.__repr__()
@@ -56,9 +52,8 @@ def test_float_series(x):
     assert sr.__repr__() == ps.__repr__()
 
 
-def test_mixed_dataframe_and_series():
-    if not hasattr(pd, "Int64Dtype"):
-        pytest.skip(msg="Test only supported with Pandas >= 0.24.2")
+@pytest.fixture
+def mixed_pdf():
     pdf = pd.DataFrame()
     pdf["Integer"] = np.array([2345, 11987, 9027, 9027])
     pdf["Date"] = np.array(
@@ -69,15 +64,24 @@ def test_mixed_dataframe_and_series():
     pdf["Category"] = np.array(["M", "F", "F", "F"])
     pdf["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     pdf["Boolean"] = np.array([True, False, True, False])
-    gdf = cudf.from_pandas(pdf)
-    for col in gdf.columns:
-        assert gdf[col].__repr__() == pdf[col].__repr__()
-    assert gdf.__repr__() == pdf.__repr__()
+    return pdf
+
+
+@pytest.fixture
+def mixed_gdf(mixed_pdf):
+    return cudf.from_pandas(mixed_pdf)
+
+
+def test_mixed_dataframe(mixed_pdf, mixed_gdf):
+    assert mixed_gdf.__repr__() == mixed_pdf.__repr__()
+
+
+def test_mixed_series(mixed_pdf, mixed_gdf):
+    for col in mixed_gdf.columns:
+        assert mixed_gdf[col].__repr__() == mixed_pdf[col].__repr__()
 
 
 def test_MI():
-    if not hasattr(pd, "Int64Dtype"):
-        pytest.skip(msg="Test only supported with Pandas >= 0.24.2")
     gdf = cudf.DataFrame(
         {
             "a": np.random.randint(0, 4, 10),
@@ -105,8 +109,6 @@ def test_MI():
 @pytest.mark.parametrize("nrows", [0, 1, 3, 5, 10])
 @pytest.mark.parametrize("ncols", [0, 1, 2, 3])
 def test_groupby_MI(nrows, ncols):
-    if not hasattr(pd, "Int64Dtype"):
-        pytest.skip(msg="Test only supported with Pandas >= 0.24.2")
     gdf = cudf.DataFrame(
         {
             "a": np.random.randint(0, 4, 10),
