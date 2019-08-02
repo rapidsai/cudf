@@ -109,11 +109,21 @@ table compute_original_requests(
         simple_outputs.get_column(i);
   }
 
+  // Calculate processing order so that the compound operators are
+  // processed first
+  std::vector<gdf_size_type> processing_order(original_requests.size());
+  std::iota(processing_order.begin(), processing_order.end(), 0);
+  std::sort(processing_order.begin(), processing_order.end(),
+            [&original_requests](gdf_size_type a, gdf_size_type b) {
+              return original_requests[a].second > original_requests[b].second;
+            });
+
   std::vector<gdf_column*> final_value_columns;
 
   // Iterate requests. For any compound request, compute the compound result
   // from the corresponding simple requests
-  for (auto const& req : original_requests) {
+  for (auto i : processing_order) {
+    auto const& req = original_requests[i];
     if (req.second == MEAN) {
       auto found = simple_requests_to_outputs.find({req.first, SUM});
       CUDF_EXPECTS(found != simple_requests_to_outputs.end(),
@@ -152,7 +162,13 @@ table compute_original_requests(
     delete p.second;
   }
 
-  return cudf::table{final_value_columns};
+  // Restore original columns order
+  std::vector<gdf_column*> ordered_final_value_columns(final_value_columns);
+  for (gdf_size_type i = 0; i < final_value_columns.size(); i++) {
+    ordered_final_value_columns[processing_order[i]] = final_value_columns[i];
+  }
+
+  return cudf::table{ordered_final_value_columns};
 }
 }  // namespace hash
 }  // namespace groupby
