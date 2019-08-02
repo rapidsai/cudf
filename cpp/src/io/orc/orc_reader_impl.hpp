@@ -21,7 +21,7 @@
 #include <vector>
 
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -132,6 +132,7 @@ class reader::Impl {
   std::vector<int> selected_cols_;
   bool has_timestamp_column_ = false;
   bool use_index_ = true;
+  bool use_np_dtypes_ = true;
 };
 
 } // namespace orc

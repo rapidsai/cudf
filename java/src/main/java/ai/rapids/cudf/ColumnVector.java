@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 /**
  * A Column Vector. This class represents the immutable vector of data.  This class holds
@@ -256,6 +257,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Retrieve the number of characters in each string. Null strings will have value of null.
+   *
+   * @return ColumnVector holding length of string at index 'i' in the original vector
+   */
+  public ColumnVector getLengths() {
+    assert DType.STRING == type : "length only available for String type";
+    return new ColumnVector(cudfLengths(getNativeCudfColumnAddress()));
+  }
+
+  /**
    * Returns the type of this vector.
    */
   @Override
@@ -268,6 +279,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public long getNullCount() {
     return nullCount;
+  }
+
+  /**
+   * Retrieve the number of bytes for each string. Null strings will have value of null.
+   *
+   * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
+   */
+  public ColumnVector getByteCount() {
+    assert type == DType.STRING : "type has to be a String";
+    return new ColumnVector(cudfByteCount(getNativeCudfColumnAddress()));
   }
 
   /**
@@ -915,6 +936,75 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Slices a column (including null values) into a set of columns
+   * according to a set of indices. The caller owns the ColumnVectors and is responsible
+   * closing them
+   *
+   * The "slice" function divides part of the input column into multiple intervals
+   * of rows using the indices values and it stores the intervals into the output
+   * columns. Regarding the interval of indices, a pair of values are taken from
+   * the indices array in a consecutive manner. The pair of indices are left-closed
+   * and right-open.
+   *
+   * The pairs of indices in the array are required to comply with the following
+   * conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of a is less or equal to the position of b.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function returns an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty vector of columns is returned.
+   *
+   * The caller owns the output ColumnVectors and is responsible for closing them.
+   *
+   * @param indices
+   * @return A new ColumnVector array with slices from the original ColumnVector
+   */
+  public ColumnVector[] slice(int... indices) {
+    return slice(ColumnVector.fromInts(indices));
+  }
+
+  /**
+   * Slices a column (including null values) into a set of columns
+   * according to a set of indices. The caller owns the ColumnVectors and is responsible
+   * closing them
+   *
+   * The "slice" function divides part of the input column into multiple intervals
+   * of rows using the indices values and it stores the intervals into the output
+   * columns. Regarding the interval of indices, a pair of values are taken from
+   * the indices array in a consecutive manner. The pair of indices are left-closed
+   * and right-open.
+   *
+   * The pairs of indices in the array are required to comply with the following
+   * conditions:
+   * a, b belongs to Range[0, input column size]
+   * a <= b, where the position of a is less or equal to the position of b.
+   *
+   * Exceptional cases for the indices array are:
+   * When the values in the pair are equal, the function returns an empty column.
+   * When the values in the pair are 'strictly decreasing', the outcome is
+   * undefined.
+   * When any of the values in the pair don't belong to the range[0, input column
+   * size), the outcome is undefined.
+   * When the indices array is empty, an empty vector of columns is returned.
+   *
+   * The caller owns the output ColumnVectors and is responsible for closing them.
+   *
+   * @param indices
+   * @return A new ColumnVector array with slices from the original ColumnVector
+   */
+  public ColumnVector[] slice(ColumnVector indices) {
+    long[] nativeHandles = cudfSlice(this.getNativeCudfColumnAddress(), indices.getNativeCudfColumnAddress());
+    ColumnVector[] columnVectors = new ColumnVector[nativeHandles.length];
+    IntStream.range(0, nativeHandles.length).forEach(i -> columnVectors[i] = new ColumnVector(nativeHandles[i]));
+    return columnVectors;
+  }
+
+  /**
    * Fill the current vector (note this is in-place) with a Scalar value.
    *
    * String categories are not supported by cudf::fill. Additionally, Scalar
@@ -1320,6 +1410,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private static native long allocateCudfColumn() throws CudfException;
 
+  private native static long cudfByteCount(long cudfColumnHandle) throws CudfException;
+
   /**
    * Set a CuDF column given data and validity bitmask pointers, size, and datatype, and
    * count of null (non-valid) elements
@@ -1335,6 +1427,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                                      long valid,
                                                      int size, int dtype, int null_count,
                                                      int timeUnit) throws CudfException;
+
+  private native long[] cudfSlice(long nativeHandle, long indices) throws CudfException;
 
   /**
    * Translate the host side string representation of strings into the device side representation
@@ -1361,6 +1455,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
 
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
+
+  private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
 
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses

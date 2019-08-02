@@ -10,7 +10,7 @@ from cudf.bindings.cudf_cpp cimport *
 from libcpp.vector cimport vector
 
 
-cdef extern from "table.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
     cdef cppclass table:
 
