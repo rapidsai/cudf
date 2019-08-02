@@ -28,7 +28,7 @@ struct boolean_mask_filter
 {
   boolean_mask_filter(gdf_column const & boolean_mask) :
     size{boolean_mask.size},
-    data{reinterpret_cast<cudf::bool8 *>(boolean_mask.data)},
+    data{static_cast<cudf::bool8 *>(boolean_mask.data)},
     bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask.valid)}
     {}
 
