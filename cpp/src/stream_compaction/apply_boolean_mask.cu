@@ -70,7 +70,7 @@ table apply_boolean_mask(table const &input,
 
   if (boolean_mask.data == nullptr)
     return detail::copy_if(input, boolean_mask_filter<false, true>{boolean_mask});
-  else if (boolean_mask.valid == nullptr || boolean_mask.null_count == 0)
+  else if (not cudf::has_nulls(boolean_mask))
     return detail::copy_if(input, boolean_mask_filter<true, false>{boolean_mask});
   else
     return detail::copy_if(input, boolean_mask_filter<true, true>{boolean_mask});
