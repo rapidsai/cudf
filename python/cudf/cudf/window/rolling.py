@@ -102,9 +102,9 @@ class Rolling:
     2019-01-01T09:00:07.000
     2019-01-01T09:00:08.000    1
     dtype: int64
-    
+
     Apply custom function on the window with the *apply* method
-    
+
     >>> import numpy as np
     >>> import math
     >>> b = cudf.Series([16, 25, 36, 49, 64, 81], dtype=np.float64)
@@ -113,7 +113,7 @@ class Rolling:
     ...     for a in A:
     ...         b = b + math.sqrt(a)
     ...     return b
-    ... 
+    ...
     >>> print(b.rolling(3, min_periods=1).apply(some_func))
     0     4.0
     1     9.0
@@ -122,7 +122,7 @@ class Rolling:
     4    21.0
     5    24.0
     dtype: float64
-    
+
     And this also works for window rolling set by an offset
 
     >>> import pandas as pd
@@ -212,13 +212,13 @@ class Rolling:
         """
         Counterpart of pandas.core.window.Rolling.apply
 
-        *func* is a user defined function (UDF) that takes an 1D array as input:
+        *func* is a user defined function that takes an 1D array as input:
 
         * We are using `numba` CUDA compiler and the supported Python features
           are listed in
-            
+
             https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
-          
+
           with the exception that math functions in `cmath` are not supported
           since `libcudf` does not have complex number support and output of
           `cmath` functions are most likely complex numbers
@@ -231,7 +231,7 @@ class Rolling:
         else:
             for col in self.obj._cols:
                 if col.null_count > 0:
-                    has_nulls = True 
+                    has_nulls = True
         if has_nulls:
             raise NotImplementedError(
                 "Handling UDF with null values is not yet supported"

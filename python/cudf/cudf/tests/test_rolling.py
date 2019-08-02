@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -5,7 +7,6 @@ import pytest
 import cudf
 from cudf.tests.utils import assert_eq
 
-import math
 
 @pytest.mark.parametrize(
     "data,index",
@@ -165,9 +166,9 @@ def test_rolling_getitem_window():
     assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
 
 
-@pytest.mark.parametrize("data,index", 
-    [([1.2, 4.5, 5.9, 2.4, 9.3, 7.1], None), ([], []),],
-    )
+@pytest.mark.parametrize(
+    "data,index", [([1.2, 4.5, 5.9, 2.4, 9.3, 7.1], None), ([], [])]
+)
 @pytest.mark.parametrize("center", [True, False])
 def test_rollling_series_numba_udf_basic(data, index, center):
 
@@ -183,11 +184,15 @@ def test_rollling_series_numba_udf_basic(data, index, center):
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
             assert_eq(
-                psr.rolling(window_size, min_periods, center).apply(some_func).fillna(-1),
-                gsr.rolling(window_size, min_periods, center).apply(some_func).fillna(-1),
+                psr.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                gsr.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
                 check_dtype=False,
             )
-            
+
 
 def test_rolling_numba_udf_with_offset():
     psr = pd.Series(
@@ -202,7 +207,7 @@ def test_rolling_numba_udf_with_offset():
         ],
     )
     gsr = cudf.from_pandas(psr)
-    
+
     def some_func(A):
         b = 0
         for a in A:

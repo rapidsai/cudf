@@ -18,6 +18,7 @@ from cudf.utils.utils import (
     mask_set,
 )
 
+
 def optimal_block_count(minblkct):
     """Return the optimal block count for a CUDA kernel launch.
     """
