@@ -251,8 +251,13 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = self.nullmask
 
-        # if both lower and upper are None, return itself or simply copy it
-        if lower is None and upper is None:
+        if lower is not None and upper is not None:
+            # check value of lower and upper, and switch them if needed
+            if np.isscalar(lower) and np.isscalar(upper):
+                lower, upper = min(lower, upper), max(lower, upper)
+
+        elif lower is None and upper is None:
+            # if both lower and upper are None, return itself or simply copy it
             if inplace:
                 return self
             else:
@@ -260,11 +265,10 @@ class NumericalColumn(columnops.TypedColumnBase):
                 return NumericalColumn(
                     data=Buffer(copy), mask=mask, dtype=self.dtype
                 )
-
-        # check value of lower and upper, and switch them if needed
-        if lower is not None and upper is not None:
-            if np.isscalar(lower) and np.isscalar(upper):
-                lower, upper = min(lower, upper), max(lower, upper)
+        elif lower is None:
+            lower = np.NINF
+        else:   # upper is None
+            upper = np.inf
 
         # TODO: add support for array-like lower and upper
         clipped = cudautils.apply_clip(self.data.mem, lower, upper, inplace)

@@ -613,9 +613,9 @@ def gpu_clip_inplace(in_col, lower, upper):
     i = cuda.grid(1)
 
     if i < in_col.size:
-        if lower is not None and in_col[i] < lower:
+        if in_col[i] < lower:
             in_col[i] = lower
-        elif upper is not None and in_col[i] > upper:
+        elif in_col[i] > upper:
             in_col[i] = upper
 
 
@@ -624,9 +624,9 @@ def gpu_clip_not_inplace(in_col, lower, upper, out_col):
     i = cuda.grid(1)
 
     if i < in_col.size:
-        if lower is not None and in_col[i] < lower:
+        if in_col[i] < lower:
             out_col[i] = lower
-        elif upper is not None and in_col[i] > upper:
+        elif in_col[i] > upper:
             out_col[i] = upper
         else:
             out_col[i] = in_col[i]
