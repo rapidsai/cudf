@@ -282,6 +282,16 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Retrieve the number of bytes for each string. Null strings will have value of null.
+   *
+   * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
+   */
+  public ColumnVector getByteCount() {
+    assert type == DType.STRING : "type has to be a String";
+    return new ColumnVector(cudfByteCount(getNativeCudfColumnAddress()));
+  }
+
+  /**
    * Returns if the vector has a validity vector allocated or not.
    */
   public boolean hasValidityVector() {
@@ -1399,6 +1409,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   private static native long allocateCudfColumn() throws CudfException;
+
+  private native static long cudfByteCount(long cudfColumnHandle) throws CudfException;
 
   /**
    * Set a CuDF column given data and validity bitmask pointers, size, and datatype, and
