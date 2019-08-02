@@ -162,7 +162,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
       const int last_warp = min(num_warps, last_index / warp_size);
       const int wid = threadIdx.x / warp_size;
       const int lane = threadIdx.x % warp_size;
-      
+
       if (block_sum > 0 && wid <= last_warp) {
         int valid_index = (block_offset / warp_size) + wid;
 
