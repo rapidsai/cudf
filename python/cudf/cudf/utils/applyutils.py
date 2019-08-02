@@ -10,8 +10,9 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.binops as cpp_binops
 from cudf.dataframe import columnops
 from cudf.dataframe.series import Series
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
+
 
 _doc_applyparams = """
 func : function
@@ -81,6 +82,26 @@ def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
 
+def make_aggregate_nullmask(df, columns=None, op="and"):
+    out_mask = None
+    for k in columns or df.columns:
+        if not df[k].has_null_mask:
+            continue
+
+        nullmask = df[k].nullmask
+        if out_mask is None:
+            out_mask = columnops.as_column(
+                nullmask.copy(), dtype=utils.mask_dtype
+            )
+            continue
+
+        cpp_binops.apply_op(
+            columnops.as_column(nullmask), out_mask, out_mask, op
+        )
+
+    return out_mask
+
+
 class ApplyKernelCompilerBase(object):
     def __init__(self, func, incols, outcols, kwargs, cache_key):
         # Get signature of user function
@@ -106,21 +127,8 @@ class ApplyKernelCompilerBase(object):
         bound = self.sig.bind(**args)
         # Launch kernel
         self.launch_kernel(df, bound.args, **launch_params)
-
         # Prepare pessimistic nullmask
-        out_mask = None
-        for k in df.columns:
-            if not df[k].has_null_mask:
-                continue
-
-            if out_mask is None:
-                out_mask = columnops.as_column(df[k].nullmask.copy())
-                continue
-
-            cpp_binops.apply_op(
-                columnops.as_column(df[k].nullmask), out_mask, out_mask, "and"
-            )
-
+        out_mask = make_aggregate_nullmask(df)
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
