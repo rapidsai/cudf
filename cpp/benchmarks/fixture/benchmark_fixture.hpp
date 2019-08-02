@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <rmm/thrust_rmm#include <rmm/thrust_rmm_allocator.h>
+#include <rmm/thrust_rmm_allocator.h>
 #include <benchmark/benchmark.h>
 
 namespace cudf {

@@ -15,9 +15,9 @@
  */
 
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
-#include <fixture/benchmark_fixtures.hpp>
+#include <fixture/benchmark_fixture.hpp>
 
 #include <benchmark/benchmark.h>
 #include <random>
