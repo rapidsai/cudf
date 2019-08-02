@@ -26,7 +26,8 @@ std::pair<gdf_col_pointer, gdf_col_pointer> resolve_common_time_unit(gdf_column 
 
 	auto gdf_col_deleter = [](gdf_column* col) { gdf_column_free(col); };
 
-	gdf_col_pointer lhs_out, rhs_out;
+	gdf_col_pointer lhs_out{nullptr, gdf_col_deleter};
+	gdf_col_pointer rhs_out{nullptr, gdf_col_deleter};
 
 	if ((lhs.dtype == GDF_TIMESTAMP || lhs.dtype == GDF_DATE64) &&
 		(rhs.dtype == GDF_TIMESTAMP || rhs.dtype == GDF_DATE64)) {
@@ -46,10 +47,10 @@ std::pair<gdf_col_pointer, gdf_col_pointer> resolve_common_time_unit(gdf_column 
 			gdf_dtype_extra_info out_info{std::max(lhs_unit, rhs_unit)};
 			if (lhs_unit > rhs_unit) {
 				out_col = cudf::cast(rhs, GDF_TIMESTAMP, out_info);
-				rhs_out = {&out_col, gdf_col_deleter};
+				rhs_out.reset(&out_col);
 			} else {
 				out_col = cudf::cast(lhs, GDF_TIMESTAMP, out_info);
-				lhs_out = {&out_col, gdf_col_deleter};
+				lhs_out.reset(&out_col);
 			}
 		}
 	}

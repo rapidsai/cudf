@@ -28,18 +28,20 @@ using gdf_col_pointer =
 /**
  * @brief Ensures GDF_DATE64 or GDF_TIMESTAMP columns share the same time unit.
  * 
- * If they aren't, cast the values of the less granular column to the more granular resolution.
+ * If they don't, this function casts the values of the less granular column
+ * to the more granular time unit.
  * 
- * If their time units are the same, or either column's dtype isn't GDF_DATE64 or GDF_TIMESTAMP,
- * no cast is performed and a pair of null_ptrs is returned.
+ * If the time units are the same, or either column's dtype isn't GDF_DATE64 or
+ * GDF_TIMESTAMP, no cast is performed and the unique_ptr pairs will reference
+ * null_ptr.
  * 
  * @note This method treats GDF_DATE64 columns like GDF_TIMESTAMP[ms]
  *
  * @param[in] gdf_column* lhs column to compare against rhs
  * @param[in] gdf_column* rhs column to compare against lhs
  *
- * @returns std::pair<gdf_col_pointer, gdf_col_pointer> whose left or right side is either nullptr,
- *                                                      or unique_ptr<gdf_column>, indicating which column arg was chosen
+ * @returns std::pair<gdf_col_pointer, gdf_col_pointer> pair of unique_ptrs
+ * whose initialization status indicates which input column was cast, if any.
  */
 std::pair<gdf_col_pointer, gdf_col_pointer> resolve_common_time_unit(gdf_column const& lhs, gdf_column const& rhs);
 
