@@ -46,13 +46,15 @@ static constexpr int warp_size = 32;
 // Compute the count of elements that pass the mask within each block
 template <typename Filter, int block_size, int per_thread>
 __global__ void compute_block_counts(gdf_size_type  * __restrict__ block_counts,
+                                     gdf_size_type size,
                                      Filter filter)
 {
   int tid = threadIdx.x + per_thread * block_size * blockIdx.x;
   int count = 0;
 
   for (int i = 0; i < per_thread; i++) {
-    count += __syncthreads_count(filter(tid));
+    bool mask_true = (tid < size) && filter(tid);
+    count += __syncthreads_count(mask_true);
     tid += block_size;
   }
 
@@ -86,7 +88,7 @@ __device__ gdf_index_type block_scan_mask(bool mask_true,
 // The has_validity template parameter specializes this kernel for the 
 // non-nullable case for performance without writing another kernel.
 //
-// Note: `filter` is expected to return false if the index is out of bounds.
+// Note: `filter` is not run on indices larger than the input column size
 template <typename T, typename Filter, 
           int block_size, int per_thread, bool has_validity>
 __launch_bounds__(block_size, 2048/block_size)
@@ -96,6 +98,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
                                T const * __restrict__ input_data,
                                bit_mask_t const * __restrict__ input_valid,
                                gdf_size_type  * __restrict__ block_offsets,
+                               gdf_size_type size,
                                Filter filter)
 {
   static_assert(block_size <= 1024, "Maximum thread block size exceeded");
@@ -111,7 +114,7 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
   // gdf_size_type, this loop is sufficient to cover our maximum column size
   // regardless of the value of block_size and per_thread.
   for (int i = 0; i < per_thread; i++) {
-    bool mask_true = filter(tid);
+    bool mask_true = (tid < size) && filter(tid);
 
     // get output location using a scan of the mask result
     gdf_index_type block_sum = 0;
@@ -242,7 +245,7 @@ struct scatter_functor
     scatter<<<grid.num_blocks, block_size, 0, stream>>>
       (static_cast<T*>(output_column.data), output_valid, null_count,
        static_cast<T const*>(input_column.data), input_valid,
-       block_offsets, filter);
+       block_offsets, input_column.size, filter);
 
     if (has_valid) {
       CUDA_TRY(cudaMemcpyAsync(&output_column.null_count, null_count,
@@ -319,7 +322,9 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
 
   // 1. Find the count of elements in each block that "pass" the mask
   compute_block_counts<Filter, block_size, per_thread>
-    <<<grid.num_blocks, block_size, 0, stream>>>(block_counts, filter);
+    <<<grid.num_blocks, block_size, 0, stream>>>(block_counts,
+                                                 input.num_rows(),
+                                                 filter);
 
   CHECK_STREAM(stream);
 

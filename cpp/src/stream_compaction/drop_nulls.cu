@@ -26,39 +26,33 @@ struct valid_table_filter
 {
   valid_table_filter(bit_mask_t **masks,
                      gdf_size_type num_columns,
-                     gdf_size_type num_rows,
                      cudf::any_or_all drop_if) 
   : drop_if(drop_if),
     num_columns(num_columns),
-    num_rows(num_rows),
     d_masks(masks) {}
 
   __device__ inline 
   bool operator()(gdf_index_type i)
   {
-    if (i < num_rows) {
-      int c = 0;
-      if (drop_if == cudf::ALL) {
-        while (c < num_columns) {
-          bit_mask_t *mask = d_masks[c++];
-          if (mask == nullptr || bit_mask::is_valid(mask, i)) return true;
-        }
-        return false;
+    int c = 0;
+    if (drop_if == cudf::ALL) {
+      while (c < num_columns) {
+        bit_mask_t *mask = d_masks[c++];
+        if (mask == nullptr || bit_mask::is_valid(mask, i)) return true;
       }
-      else { // drop_if == cudf::ANY => all columns must be valid
-        while (c < num_columns) {
-          bit_mask_t *mask = d_masks[c++];
-          if (mask != nullptr && !bit_mask::is_valid(mask, i)) return false;
-        }
-        return true;
-      }
+      return false;
     }
-    return false;
+    else { // drop_if == cudf::ANY => all columns must be valid
+      while (c < num_columns) {
+        bit_mask_t *mask = d_masks[c++];
+        if (mask != nullptr && !bit_mask::is_valid(mask, i)) return false;
+      }
+      return true;
+    }
   }
 
   cudf::any_or_all drop_if;
   gdf_size_type num_columns;
-  gdf_size_type num_rows;
   bit_mask_t **d_masks;
 };
 
@@ -85,7 +79,7 @@ valid_table_filter make_valid_table_filter(cudf::table const &table,
                                            cudaStream_t stream=0)
 {
   return valid_table_filter(get_bitmasks(table, stream),
-                            table.num_columns(), table.num_rows(),
+                            table.num_columns(),
                             drop_if);
 }
 
