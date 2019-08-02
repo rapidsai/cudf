@@ -5,6 +5,7 @@ import pytest
 import cudf
 from cudf.tests.utils import assert_eq
 
+import math
 
 @pytest.mark.parametrize(
     "data,index",
@@ -164,38 +165,52 @@ def test_rolling_getitem_window():
     assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
 
 
-@pytest.mark.parametrize("data,index", [([1, 4, 5, 2, 9, 7], None)])
-@pytest.mark.parametrize("nulls", ["none"])
+@pytest.mark.parametrize("data,index", 
+    [([1.2, 4.5, 5.9, 2.4, 9.3, 7.1], None), ([], []),],
+    )
 @pytest.mark.parametrize("center", [True, False])
-def test_rollling_series_numba_udf(data, index, nulls, center):
-    if len(data) > 0:
-        if nulls == "one":
-            p = np.random.randint(0, len(data))
-            data[p] = None
-        elif nulls == "some":
-            p1, p2 = np.random.randint(0, len(data), (2,))
-            data[p1] = None
-            data[p2] = None
-        elif nulls == "all":
-            data = [None] * len(data)
+def test_rollling_series_numba_udf_basic(data, index, center):
 
     psr = pd.Series(data, index=index)
     gsr = cudf.from_pandas(psr)
 
-    def generic_sum(A):
-        accumulation = 0
+    def some_func(A):
+        b = 0
         for a in A:
-            accumulation = accumulation + a
-        return accumulation
+            b = max(b, math.sqrt(a))
+        return b
 
     for window_size in range(1, len(data) + 1):
         for min_periods in range(1, window_size + 1):
             assert_eq(
-                getattr(
-                    psr.rolling(window_size, min_periods, center), "sum"
-                )().fillna(-1),
-                getattr(
-                    gsr.rolling(window_size, min_periods, center), "apply"
-                )(generic_sum).fillna(-1),
+                psr.rolling(window_size, min_periods, center).apply(some_func).fillna(-1),
+                gsr.rolling(window_size, min_periods, center).apply(some_func).fillna(-1),
                 check_dtype=False,
             )
+            
+
+def test_rolling_numba_udf_with_offset():
+    psr = pd.Series(
+        [1, 2, 4, 4, 8, 9],
+        index=[
+            pd.Timestamp("20190101 09:00:00"),
+            pd.Timestamp("20190101 09:00:01"),
+            pd.Timestamp("20190101 09:00:02"),
+            pd.Timestamp("20190101 09:00:04"),
+            pd.Timestamp("20190101 09:00:07"),
+            pd.Timestamp("20190101 09:00:08"),
+        ],
+    )
+    gsr = cudf.from_pandas(psr)
+    
+    def some_func(A):
+        b = 0
+        for a in A:
+            b = b + a
+        return b / len(A)
+
+    assert_eq(
+        psr.rolling("2s").apply(some_func).fillna(-1),
+        gsr.rolling("2s").apply(some_func).fillna(-1),
+        check_dtype=False,
+    )

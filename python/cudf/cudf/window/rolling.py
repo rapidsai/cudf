@@ -102,6 +102,50 @@ class Rolling:
     2019-01-01T09:00:07.000
     2019-01-01T09:00:08.000    1
     dtype: int64
+    
+    Apply custom function on the window with the *apply* method
+    
+    >>> import numpy as np
+    >>> import math
+    >>> b = cudf.Series([16, 25, 36, 49, 64, 81], dtype=np.float64)
+    >>> def some_func(A):
+    ...     b = 0
+    ...     for a in A:
+    ...         b = b + math.sqrt(a)
+    ...     return b
+    ... 
+    >>> print(b.rolling(3, min_periods=1).apply(some_func))
+    0     4.0
+    1     9.0
+    2    15.0
+    3    18.0
+    4    21.0
+    5    24.0
+    dtype: float64
+    
+    And this also works for window rolling set by an offset
+
+    >>> import pandas as pd
+    >>> c = cudf.Series(
+    ...     [16, 25, 36, 49, 64, 81],
+    ...     index=[
+    ...          pd.Timestamp('20190101 09:00:00'),
+    ...          pd.Timestamp('20190101 09:00:01'),
+    ...          pd.Timestamp('20190101 09:00:02'),
+    ...          pd.Timestamp('20190101 09:00:04'),
+    ...          pd.Timestamp('20190101 09:00:07'),
+    ...          pd.Timestamp('20190101 09:00:08')
+    ...      ],
+    ...     dtype=np.float64
+    ... )
+    >>> print(c.rolling('2s').apply(some_func))
+    2019-01-01T09:00:00.000     4.0
+    2019-01-01T09:00:01.000     9.0
+    2019-01-01T09:00:02.000    11.0
+    2019-01-01T09:00:04.000     7.0
+    2019-01-01T09:00:07.000     8.0
+    2019-01-01T09:00:08.000    17.0
+    dtype: float64
     """
 
     def __init__(self, obj, window, min_periods=None, center=False):
@@ -164,12 +208,39 @@ class Rolling:
     def count(self):
         return self._apply_agg("count")
 
-    def apply(self, udf, *args, **kwargs):
+    def apply(self, func, *args, **kwargs):
+        """
+        Counterpart of pandas.core.window.Rolling.apply
+
+        *func* is a user defined function (UDF) that takes an 1D array as input:
+
+        * We are using `numba` CUDA compiler and the supported Python features
+          are listed in
+            
+            https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
+          
+          with the exception that math functions in `cmath` are not supported
+          since `libcudf` does not have complex number support and output of
+          `cmath` functions are most likely complex numbers
+
+        """
+        has_nulls = False
+        if isinstance(self.obj, cudf.Series):
+            if self.obj._column.null_count > 0:
+                has_nulls = True
+        else:
+            for col in self.obj._cols:
+                if col.null_count > 0:
+                    has_nulls = True 
+        if has_nulls:
+            raise NotImplementedError(
+                "Handling UDF with null values is not yet supported"
+            )
 
         nb_type = numba.numpy_support.from_dtype(self.obj.dtype)
         type_signature = (nb_type[:],)
 
-        op = cudautils.compile_udf(udf, type_signature)
+        op = cudautils.compile_udf(func, type_signature)
         return self._apply_agg(op)
 
     def _normalize(self):

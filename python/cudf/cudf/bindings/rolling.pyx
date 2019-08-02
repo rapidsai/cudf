@@ -62,6 +62,8 @@ def apply_rolling(inp, window, min_periods, center, op):
     else:
         if isinstance(op, tuple):
             cpp_str = op[0].encode('UTF-8')
+            if op[1] not in dtypes:
+                raise TypeError("Type '%s' is not supported in cuDF", op[1])
             g_type = dtypes[op[1]]
             with nogil:
                 c_output_col = rolling_window(
