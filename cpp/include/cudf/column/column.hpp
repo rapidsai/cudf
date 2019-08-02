@@ -211,10 +211,10 @@ class column {
    *`mutable_column_view` and the conversion will happen automatically.
 
    * @note Creating a mutable view of a `column` will invalidate the `column`'s
-   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. This will require the
-   * user to either explicitly update the null count with `set_null_count()`,
-   * else, the null count to be recomputed on the next invocation of
-   *`null_count()`.
+   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. For best performance,
+   * the user should explicitly update the null count with `set_null_count()`.
+   * Otherwise, the null count will be recomputed on the next invocation of
+   * `null_count()`.
    *
    * @return mutable_column_view Mutable, non-owning `mutable_column_view`
    *---------------------------------------------------------------------------**/
