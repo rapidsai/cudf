@@ -267,7 +267,7 @@ class NumericalColumn(columnops.TypedColumnBase):
                 )
         elif lower is None:
             lower = np.NINF
-        else:   # upper is None
+        else:  # upper is None
             upper = np.inf
 
         # TODO: add support for array-like lower and upper
