@@ -73,7 +73,7 @@ class table_view_base {
   auto begin() const noexcept { return _columns.begin(); }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns an iterator one past the last view in the `table`.
+   * @brief Returns an iterator one past the last column view in the `table`.
    *
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
@@ -84,12 +84,12 @@ class table_view_base {
    * @brief Returns a reference to the view of the specified column
    *
    * @param column_index The index of the desired column
-   * @return column_view A `column_view` of the desired column
+   * @return A reference to the desired column
    *---------------------------------------------------------------------------**/
   ColumnView& column(size_type column_index) noexcept;
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the number of columns in the table
+   * @brief Returns the number of columns
    *---------------------------------------------------------------------------**/
   size_type num_columns() const noexcept { return _columns.size(); }
 
