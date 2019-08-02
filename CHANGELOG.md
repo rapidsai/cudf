@@ -75,6 +75,7 @@
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
 - PR #2350 Performance related changes to get_dummies
 - PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
+- PR #2459 IO Readers: Consolidate all readers to use `datasource` class
 
 ## Bug Fixes
 
