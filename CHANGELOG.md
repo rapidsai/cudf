@@ -24,10 +24,13 @@
 - PR #2049 Implemented merge functionality
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
+- PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
 - PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
+- PR #2446 Add __array_function__ for index
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
+- PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 
 ## Improvements
@@ -69,6 +72,7 @@
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2373 cudf.DataFrame enchancements & Series.values support
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
+- PR #2430 Updated Java bindings to use the new unary API
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
 - PR #2350 Performance related changes to get_dummies
 - PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
@@ -117,6 +121,7 @@
 - PR #2386 Correctly allocate output valids in groupby
 - PR #2411 Fixed failures on binary op on single element string column
 - PR #2422 Fix Pandas logical binary operation incompatibilites
+- PR #2447 Fix CodeCov posting build statuses temporarily
 
 
 # cuDF 0.8.0 (27 June 2019)
@@ -568,6 +573,7 @@
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
 - PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
+- PR #2037 Optimize the existing `gather` and `scatter` routines in `libcudf`
 
 ## Bug Fixes
 

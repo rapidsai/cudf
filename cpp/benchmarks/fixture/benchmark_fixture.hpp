@@ -1,5 +1,3 @@
-// This is from the WIP PR #1744
-
 #include <benchmark/benchmark.h>
 
 namespace cudf {
