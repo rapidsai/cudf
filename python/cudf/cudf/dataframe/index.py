@@ -324,6 +324,40 @@ class Index(object):
     def get_slice_bound(self, label, side, kind):
         raise (NotImplementedError)
 
+    def __array_function__(self, func, types, args, kwargs):
+        from cudf.dataframe.series import Series
+
+        # check if the function is implemented for the current type
+        cudf_index_module = type(self)
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf_index_module to the correct submodule
+            if hasattr(cudf_index_module, submodule):
+                cudf_index_module = getattr(cudf_index_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [Index, Series]
+
+        # check if  we don't handle any of the types (including sub-class)
+        for t in types:
+            if not any(
+                issubclass(t, handled_type) for handled_type in handled_types
+            ):
+                return NotImplemented
+
+        if hasattr(cudf_index_module, fname):
+            cudf_func = getattr(cudf_index_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+
+        else:
+            return NotImplemented
+
     def isin(self, values):
         return self.to_series().isin(values)
 
