@@ -23,7 +23,6 @@
 #include <thrust/iterator/iterator_adaptor.h>
 
 #include <cudf/cudf.h>
-#include <cudf/unary.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <rmm/thrust_rmm_allocator.h>
@@ -556,35 +555,4 @@ gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output) {
 	cudaStreamDestroy(stream);
 
 	return GDF_SUCCESS;
-}
-
-gdf_error gdf_cast_column_to_common_time_unit(gdf_column* lhs, gdf_column* rhs) {
-
-	if ((lhs->dtype == GDF_TIMESTAMP || lhs->dtype == GDF_DATE64) &&
-		(rhs->dtype == GDF_TIMESTAMP || rhs->dtype == GDF_DATE64)) {
-
-		gdf_time_unit lhs_unit = lhs->dtype_info.time_unit;
-		gdf_time_unit rhs_unit = rhs->dtype_info.time_unit;
-
-		// GDF_DATE64 and TIME_UNIT_NONE are always int64_t milliseconds
-		if (lhs->dtype == GDF_DATE64 || lhs_unit == TIME_UNIT_NONE) {
-			lhs_unit = TIME_UNIT_ms;
-		}
-		if (rhs->dtype == GDF_DATE64 || rhs_unit == TIME_UNIT_NONE) {
-			rhs_unit = TIME_UNIT_ms;
-		}
-		if (lhs_unit != rhs_unit) {
-			gdf_dtype_extra_info out_info;
-			if (lhs_unit > rhs_unit) {
-				out_info.time_unit = lhs_unit;
-				*rhs = cudf::cast(*rhs, GDF_TIMESTAMP, out_info);
-			} else {
-				out_info.time_unit = rhs_unit;
-				*lhs = cudf::cast(*lhs, GDF_TIMESTAMP, out_info);
-			}
-		}
-		return GDF_SUCCESS;
-	}
-
-	return GDF_UNSUPPORTED_DTYPE;
 }
