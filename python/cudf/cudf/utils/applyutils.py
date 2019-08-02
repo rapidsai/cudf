@@ -7,9 +7,32 @@ from numba.utils import exec_, pysignature
 
 from librmm_cffi import librmm as rmm
 
+import cudf.bindings.binops as cpp_binops
+from cudf.dataframe import columnops
 from cudf.dataframe.series import Series
-from cudf.utils import cudautils
+from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
+
+
+def make_aggregate_nullmask(df, columns=None, op="and"):
+    out_mask = None
+    for k in columns or df.columns:
+        if not df[k].has_null_mask:
+            continue
+
+        nullmask = df[k].nullmask
+        if out_mask is None:
+            out_mask = columnops.as_column(
+                nullmask.copy(), dtype=utils.mask_dtype
+            )
+            continue
+
+        cpp_binops.apply_op(
+            columnops.as_column(nullmask), out_mask, out_mask, op
+        )
+
+    return out_mask
+
 
 _doc_applyparams = """
 func : function
@@ -92,7 +115,7 @@ class ApplyKernelCompilerBase(object):
 
     def run(self, df, **launch_params):
         # Get input columns
-        inputs = {k: df[k].to_gpu_array() for k in self.incols}
+        inputs = {k: df[k].data.mem for k in self.incols}
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
@@ -104,10 +127,15 @@ class ApplyKernelCompilerBase(object):
         bound = self.sig.bind(**args)
         # Launch kernel
         self.launch_kernel(df, bound.args, **launch_params)
+        # Prepare pessimistic nullmask
+        out_mask = make_aggregate_nullmask(df)
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
+            if out_mask is not None:
+                outdf[k] = outdf[k].set_mask(out_mask.data.mem)
+
         return outdf
 
 

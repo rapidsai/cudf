@@ -1838,7 +1838,7 @@ def test_unaryops_df(pdf, gdf, unaryop):
     [
         lambda df: df.empty,
         lambda df: df.x.empty,
-        lambda df: df.x.fillna(123, limit=None, method=None, axis=None),
+        lambda df: df.x.fill_mask(123, limit=None, method=None, axis=None),
         lambda df: df.drop("x", axis=1, errors="raise"),
     ],
 )

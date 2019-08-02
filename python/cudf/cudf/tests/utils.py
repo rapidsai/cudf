@@ -103,4 +103,4 @@ def gen_rand_series(dtype, size, **kwargs):
     if kwargs.get("has_nulls", False):
         return Series(values)
 
-    return Series.from_masked_array(values, utils.random_bitmask(size))
+    return Series.from_masked_array(values, random_bitmask(size))

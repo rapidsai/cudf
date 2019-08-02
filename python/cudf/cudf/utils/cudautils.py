@@ -386,15 +386,6 @@ def gpu_fill_masked(value, validity, out):
             out[tid] = value
 
 
-def fillna(data, mask, value):
-    out = rmm.device_array_like(data)
-    out.copy_to_device(data)
-    if data.size > 0:
-        configured = gpu_fill_masked.forall(data.size)
-        configured(value, mask, out)
-    return out
-
-
 @cuda.jit
 def gpu_isnull(validity, out):
     tid = cuda.grid(1)
