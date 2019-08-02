@@ -501,45 +501,6 @@ class StringColumn(columnops.TypedColumnBase):
             self._indices = Buffer(out_dev_arr)
         return self._indices
 
-    def element_indexing(self, arg):
-        from cudf.dataframe.numerical import NumericalColumn
-
-        if isinstance(arg, Number):
-            arg = int(arg)
-            if arg < 0:
-                arg = len(self) + arg
-            if arg > (len(self) - 1):
-                raise IndexError
-            out = self._data[arg].to_host()[0]
-            return out
-        elif isinstance(arg, slice):
-            out = self._data[arg]
-        elif isinstance(arg, list):
-            out = self._data[arg]
-        elif isinstance(arg, np.ndarray):
-            gpu_arr = rmm.to_device(arg)
-            return self.element_indexing(gpu_arr)
-        elif isinstance(arg, DeviceNDArray):
-            # NVStrings gather call expects an array of int32s
-            import cudf.bindings.typecast as typecast
-
-            arg = typecast.apply_cast(columnops.as_column(arg), dtype=np.int32)
-            arg = cudautils.modulo(arg.data.mem, len(self))
-            if len(arg) > 0:
-                gpu_ptr = get_ctype_ptr(arg)
-                out = self._data.gather(gpu_ptr, len(arg))
-            else:
-                out = self._data.gather([])
-        elif isinstance(arg, NumericalColumn):
-            return self.element_indexing(arg.data.mem)
-        else:
-            raise NotImplementedError(type(arg))
-
-        return columnops.as_column(out)
-
-    def __getitem__(self, arg):
-        return self.element_indexing(arg)
-
     def as_numerical_column(self, dtype, **kwargs):
         if dtype in (np.dtype("int8"), np.dtype("int16")):
             out_dtype = np.dtype(dtype)
