@@ -67,8 +67,9 @@ bit_mask_t** get_bitmasks(cudf::table const &table, cudaStream_t stream = 0) {
   size_t masks_size = sizeof(bit_mask_t*) * table.num_columns();
 
   bit_mask_t **d_masks = nullptr;
-  RMM_ALLOC(&d_masks, masks_size, stream);
-  cudaMemcpyAsync(d_masks, h_masks, masks_size, cudaMemcpyHostToDevice, stream);
+  RMM_TRY(RMM_ALLOC(&d_masks, masks_size, stream));
+  CUDA_TRY(cudaMemcpyAsync(d_masks, h_masks, masks_size,
+                           cudaMemcpyHostToDevice, stream));
   CHECK_STREAM(stream);
 
   return d_masks;
