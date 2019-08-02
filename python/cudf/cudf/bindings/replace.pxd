@@ -7,7 +7,7 @@
 
 from cudf.bindings.cudf_cpp cimport *
 
-cdef extern from "replace.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/replace.hpp" namespace "cudf" nogil:
 
     cdef gdf_column replace_nulls(
         const gdf_column& inp,

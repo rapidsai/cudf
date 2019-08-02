@@ -24,6 +24,7 @@ from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
 from cudf.indexing import _IndexLocIndexer
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 class Index(object):
@@ -67,17 +68,15 @@ class Index(object):
         ---
         indices: An array-like that maps to values contained in this Index.
         """
-        assert indices.dtype.kind in "iu"
-        if indices.size == 0:
-            # Empty indices
-            return RangeIndex(indices.size)
-        else:
-            # Gather
-            index = cpp_copying.apply_gather_array(self.gpu_values, indices)
-            col = self.as_column().replace(data=index.data)
-            new_index = as_index(col)
-            new_index.name = self.name
-            return new_index
+        # Gather
+        indices = columnops.as_column(indices)
+        index = cpp_copying.apply_gather_array(
+            self.gpu_values, indices.data.mem
+        )
+        col = self.as_column().replace(data=index.data)
+        new_index = col
+        new_index.name = self.name
+        return new_index
 
     def argsort(self, ascending=True):
         return self.as_column().argsort(ascending=ascending)
@@ -324,6 +323,43 @@ class Index(object):
     def get_slice_bound(self, label, side, kind):
         raise (NotImplementedError)
 
+    def __array_function__(self, func, types, args, kwargs):
+        from cudf.dataframe.series import Series
+
+        # check if the function is implemented for the current type
+        cudf_index_module = type(self)
+        for submodule in func.__module__.split(".")[1:]:
+            # point cudf_index_module to the correct submodule
+            if hasattr(cudf_index_module, submodule):
+                cudf_index_module = getattr(cudf_index_module, submodule)
+            else:
+                return NotImplemented
+
+        fname = func.__name__
+
+        handled_types = [Index, Series]
+
+        # check if  we don't handle any of the types (including sub-class)
+        for t in types:
+            if not any(
+                issubclass(t, handled_type) for handled_type in handled_types
+            ):
+                return NotImplemented
+
+        if hasattr(cudf_index_module, fname):
+            cudf_func = getattr(cudf_index_module, fname)
+            # Handle case if cudf_func is same as numpy function
+            if cudf_func is func:
+                return NotImplemented
+            else:
+                return cudf_func(*args, **kwargs)
+
+        else:
+            return NotImplemented
+
+    def isin(self, values):
+        return self.to_series().isin(values)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -381,9 +417,9 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            start, stop, step, sln = utils.standard_python_slice(
-                len(self), index
-            )
+            start, stop, step = index.indices(len(self))
+            sln = (stop - start) // step
+            sln = max(0, sln)
             start += self._start
             stop += self._start
             if sln == 0:
@@ -605,6 +641,27 @@ class GenericIndex(Index):
             end += 1
         return begin, end
 
+    def searchsorted(self, value, side="left"):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : Column
+            Column of values to search for
+        side : str {‘left’, ‘right’} optional
+            If ‘left’, the index of the first suitable location found is given.
+            If ‘right’, return the last such index
+
+        Returns
+        -------
+        An index series of insertion points with the same shape as value
+        """
+        from cudf.dataframe.series import Series
+
+        idx_series = Series(self, name=self.name)
+        result = idx_series.searchsorted(value, side)
+        return as_index(result)
+
     @property
     def is_unique(self):
         return self._values.is_unique
@@ -702,8 +759,7 @@ class CategoricalIndex(GenericIndex):
         if isinstance(values, CategoricalColumn):
             values = values
         elif isinstance(values, pd.Series) and (
-            pd.api.types.pandas_dtype(values.dtype).type
-            is pd.core.dtypes.dtypes.CategoricalDtypeType
+            is_categorical_dtype(values.dtype)
         ):
             values = CategoricalColumn(
                 data=Buffer(values.cat.codes.values),
@@ -728,7 +784,7 @@ class CategoricalIndex(GenericIndex):
 
     @property
     def codes(self):
-        return self._values.codes
+        return self._values.cat().codes
 
     @property
     def categories(self):
@@ -758,20 +814,12 @@ class StringIndex(GenericIndex):
         assert self._values.null_count == 0
         self.name = name
 
-    @property
-    def codes(self):
-        return self._values.codes
-
-    @property
-    def categories(self):
-        return self._values.categories
-
     def to_pandas(self):
         result = pd.Index(self.values, name=self.name, dtype="object")
         return result
 
     def take(self, indices):
-        return columnops.as_column(self._values).element_indexing(indices)
+        return self._values.element_indexing(indices)
 
     def __repr__(self):
         return (
@@ -822,6 +870,10 @@ def as_index(arbitrary, name=None):
         return DatetimeIndex(arbitrary, name=name)
     elif isinstance(arbitrary, CategoricalColumn):
         return CategoricalIndex(arbitrary, name=name)
+    elif isinstance(arbitrary, pd.RangeIndex):
+        return RangeIndex(
+            start=arbitrary._start, stop=arbitrary._stop, name=name
+        )
     else:
         return as_index(columnops.as_column(arbitrary), name=name)
 

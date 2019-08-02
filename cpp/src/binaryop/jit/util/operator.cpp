@@ -36,7 +36,7 @@ namespace jit {
             buffer[0] = 'R';
             buffer[1] = '\0';
         }
-        strcat(buffer, jit::getOperatorName(ope).data());
+        strcat(buffer, cudf::binops::jit::getOperatorName(ope).data());
         return buffer;
     }
 

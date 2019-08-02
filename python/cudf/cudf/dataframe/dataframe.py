@@ -39,6 +39,7 @@ from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -143,18 +144,60 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, name_series=None, index=None):
+    def __init__(self, data=None, index=None, columns=None):
+        keys = index
         if index is None:
             index = RangeIndex(start=0)
         self._index = as_index(index)
         self._size = len(index)
         self._cols = OrderedDict()
         # has initializer?
-        if name_series is not None:
-            if isinstance(name_series, dict):
-                name_series = name_series.items()
-            for k, series in name_series:
-                self.add_column(k, series, forceindex=index is not None)
+
+        if data is not None:
+            if isinstance(data, dict):
+                data = data.items()
+            elif utils.is_list_like(data) and len(data) > 0:
+                if not isinstance(data[0], (list, tuple)):
+                    # a nested list is something pandas supports and
+                    # we don't support list-like values in a record yet
+                    self._add_rows(data, index, keys)
+                    return
+            for col_name, series in data:
+                self.add_column(col_name, series, forceindex=index is not None)
+
+        self._add_empty_columns(columns, index)
+
+    def _add_rows(self, data, index, keys):
+        if keys is None:
+            data = {i: element for i, element in enumerate(data)}.items()
+        else:
+            data = dict(zip(keys, data)).items()
+            self._index = as_index(RangeIndex(start=0))
+            self._size = len(RangeIndex(start=0))
+        for col_name, series in data:
+            self.add_column(col_name, series, forceindex=index is not None)
+        transposed = self.T
+        self._cols = OrderedDict()
+        self._size = transposed._size
+        self._index = as_index(transposed.index)
+        for col_name in transposed.columns:
+            self.add_column(
+                col_name,
+                transposed._cols[col_name],
+                forceindex=index is not None,
+            )
+
+    def _add_empty_columns(self, columns, index):
+        if columns is not None:
+            for col_name in columns:
+                if col_name not in self._cols:
+                    self.add_column(
+                        col_name,
+                        columnops.column_empty(
+                            self._size, dtype="object", masked=True
+                        ),
+                        forceindex=index is not None,
+                    )
 
     def serialize(self, serialize):
         header = {}
@@ -201,7 +244,7 @@ class DataFrame(object):
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
-        return len(self), len(self._cols)
+        return len(self._index), len(self._cols)
 
     @property
     def ndim(self):
@@ -213,12 +256,7 @@ class DataFrame(object):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(
-            c
-            for c in self.columns
-            if (
-                isinstance(c, pd.compat.string_types)
-                and pd.compat.isidentifier(c)
-            )
+            c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
 
@@ -402,7 +440,7 @@ class DataFrame(object):
         columns = [
             c
             for c, dt in self.dtypes.items()
-            if dt != object and not pd.api.types.is_categorical_dtype(dt)
+            if dt != object and not is_categorical_dtype(dt)
         ]
         return self[columns]
 
@@ -895,8 +933,7 @@ class DataFrame(object):
                 msg = (
                     f"Length mismatch: Expected axis has "
                     "%d elements, new values "
-                    "have %d elements"
-                    % (len(self[self.columns[0]]), len(_index))
+                    "have %d elements" % (len(self), len(_index))
                 )
                 raise ValueError(msg)
             self._index = _index
@@ -1027,8 +1064,8 @@ class DataFrame(object):
             index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
             df._index = index
-            for k in self.columns:
-                df[k] = self[k].set_index(index)
+            for k, c in self._cols.items():
+                df[k] = c.set_index(index)
             return df
 
     def reset_index(self, drop=False):
@@ -1051,6 +1088,7 @@ class DataFrame(object):
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
+
         if self._cols:
             positions = columnops.as_column(positions).astype("int32").data.mem
             cols = [s._column for s in self._cols.values()]
@@ -1058,11 +1096,29 @@ class DataFrame(object):
             for i, col_name in enumerate(self._cols):
                 out[col_name] = result_cols[i]
 
-            if ignore_index:
-                out.index = RangeIndex(len(out))
-            else:
-                out.index = self.index.take(positions)
+            if isinstance(self.columns, cudf.MultiIndex):
+                out.columns = self.columns
+
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        elif len(out) == 0:
+            out = out.set_index(self.index.take(positions))
+        else:
+            out.index = self.index.take(positions)
+
         return out
+
+    def _take_columns(self, positions):
+        positions = Series(positions)
+        column_names = list(self._cols.keys())
+        column_values = list(self._cols.values())
+        result = DataFrame()
+        for idx in range(len(positions)):
+            result[column_names[positions[idx]]] = column_values[
+                positions[idx]
+            ]
+        result._index = self._index
+        return result
 
     def copy(self, deep=True):
         """
@@ -1141,6 +1197,10 @@ class DataFrame(object):
            being added
         """
         if SCALAR:
+            if hasattr(series, "dtype") and np.issubdtype(
+                series.dtype, np.datetime64
+            ):
+                series = series.astype("datetime64[ms]")
             col = series
 
         if (utils.is_list_like(series)) or (isinstance(series, Series)):
@@ -1325,7 +1385,7 @@ class DataFrame(object):
             subset = self._cols
         elif (
             not np.iterable(subset)
-            or isinstance(subset, pd.compat.string_types)
+            or isinstance(subset, str)
             or isinstance(subset, tuple)
             and subset in self.columns
         ):
@@ -1345,8 +1405,6 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
         if inplace:
@@ -1406,16 +1464,19 @@ class DataFrame(object):
         out = out.set_index(self.index)
         if isinstance(mapper, Mapping):
             postfix = 1
-            for column in self.columns:
-                if column in mapper:
-                    if mapper[column] in out.columns:
-                        out_column = str(mapper[column]) + "_" + str(postfix)
+            # It is possible for DataFrames with a MultiIndex columns object
+            # to have columns with the same name. The followig use of
+            # _cols.items and ("cudf_"... allows the use of rename in this case
+            for key, column in self._cols.items():
+                if key in mapper:
+                    if mapper[key] in out.columns:
+                        out_column = mapper[key] + ("cudf_" + str(postfix),)
                         postfix += 1
                     else:
-                        out_column = mapper[column]
-                    out[out_column] = self[column]
+                        out_column = mapper[key]
+                    out[out_column] = column
                 else:
-                    out[column] = self[column]
+                    out[key] = column
         elif callable(mapper):
             for column in self.columns:
                 out[mapper(column)] = self[column]
@@ -1569,6 +1630,11 @@ class DataFrame(object):
         3         4      bird          0          1.0          0.0          0.0
         4         5      fish          2          0.0          0.0          1.0
         """
+        if hasattr(cats, "to_pandas"):
+            cats = cats.to_pandas()
+        else:
+            cats = pd.Series(cats)
+
         newnames = [prefix_sep.join([prefix, str(cat)]) for cat in cats]
         newcols = self[column].one_hot_encoding(cats=cats, dtype=dtype)
         outdf = self.copy()
@@ -1714,12 +1780,16 @@ class DataFrame(object):
         """
         from cudf.bindings.transpose import transpose as cpp_transpose
 
+        # Never transpose a MultiIndex - remove the existing columns and
+        # replace with a RangeIndex. Afterward, reassign.
+        temp_columns = self.columns.copy(deep=False)
+        self.columns = pd.Index(range(len(self.columns)))
         result = cpp_transpose(self)
+        self.columns = temp_columns
         result = result.rename(dict(zip(result.columns, self.index)))
-        index = self.index
-        result = result.set_index(self.columns)
-        if isinstance(index, cudf.dataframe.multiindex.MultiIndex):
-            result.columns = index
+        result = result.set_index(temp_columns)
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            result.columns = self.index
         return result
 
     @property
@@ -1944,7 +2014,7 @@ class DataFrame(object):
         categorical_dtypes = {}
         col_with_categories = {}
         for name, col in itertools.chain(lhs._cols.items(), rhs._cols.items()):
-            if pd.api.types.is_categorical_dtype(col):
+            if is_categorical_dtype(col):
                 categorical_dtypes[name] = col.dtype
                 col_with_categories[name] = col.cat.categories
 
@@ -2143,13 +2213,13 @@ class DataFrame(object):
 
         cat_join = False
 
-        if pd.api.types.is_categorical_dtype(lhs[idx_col_name]):
+        if is_categorical_dtype(lhs[idx_col_name]):
             cat_join = True
             lcats = lhs[idx_col_name].cat.categories
             rcats = rhs[idx_col_name].cat.categories
 
             def set_categories(col, cats):
-                return col.cat._set_categories(cats, True).fillna(-1)
+                return col.cat.set_categories(cats, is_unique=True).fillna(-1)
 
             if how == "left":
                 cats = lcats
@@ -2158,7 +2228,8 @@ class DataFrame(object):
                 cats = rcats
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
             elif how in ["inner", "outer"]:
-                cats = columnops.as_column(lcats).append(rcats).unique()
+                cats = columnops.as_column(lcats).append(rcats)
+                cats = Series(cats).drop_duplicates()._column
 
                 lhs[idx_col_name] = set_categories(lhs[idx_col_name], cats)
                 lhs[idx_col_name] = lhs[idx_col_name]._column.as_numerical
@@ -2844,6 +2915,7 @@ class DataFrame(object):
         types = []
         index_names = []
         index_columns = []
+        index_descriptors = []
 
         for name, column in self._cols.items():
             names.append(name)
@@ -2852,21 +2924,38 @@ class DataFrame(object):
             types.append(arrow_col.type)
 
         index_name = pa.pandas_compat._index_level_name(self.index, 0, names)
-        index_names.append(index_name)
         index_columns.append(self.index)
+
         # It would be better if we didn't convert this if we didn't have to,
         # but we first need better tooling for cudf --> pyarrow type
         # conversions
-        index_arrow = self.index.to_arrow()
-        types.append(index_arrow.type)
         if preserve_index:
-            arrays.append(index_arrow)
-            names.append(index_name)
+            if isinstance(self.index, cudf.dataframe.index.RangeIndex):
+                descr = {
+                    "kind": "range",
+                    "name": self.index.name,
+                    "start": self.index._start,
+                    "stop": self.index._stop,
+                    "step": 1,
+                }
+            else:
+                index_arrow = self.index.to_arrow()
+                descr = index_name
+                types.append(index_arrow.type)
+                arrays.append(index_arrow)
+                names.append(index_name)
+                index_names.append(index_name)
+            index_descriptors.append(descr)
 
         # We may want to add additional metadata to this in the future, but
         # for now lets just piggyback off of what's done for Pandas
         metadata = pa.pandas_compat.construct_metadata(
-            self, names, index_columns, index_names, preserve_index, types
+            self,
+            names,
+            index_columns,
+            index_descriptors,
+            preserve_index,
+            types,
         )
 
         return pa.Table.from_arrays(arrays, names=names, metadata=metadata)
@@ -2894,22 +2983,20 @@ class DataFrame(object):
         >>> cudf.DataFrame.from_arrow(table)
         <cudf.DataFrame ncols=2 nrows=3 >
         """
-        import json
 
         if not isinstance(table, pa.Table):
             raise TypeError("not a pyarrow.Table")
 
         index_col = None
         dtypes = None
-        if isinstance(table.schema.metadata, dict):
-            if b"pandas" in table.schema.metadata:
-                metadata = json.loads(table.schema.metadata[b"pandas"])
-                index_col = metadata["index_columns"]
-                dtypes = {
-                    col["field_name"]: col["pandas_type"]
-                    for col in metadata["columns"]
-                    if "field_name" in col
-                }
+        if isinstance(table.schema.pandas_metadata, dict):
+            metadata = table.schema.pandas_metadata
+            index_col = metadata["index_columns"]
+            dtypes = {
+                col["field_name"]: col["pandas_type"]
+                for col in metadata["columns"]
+                if "field_name" in col
+            }
 
         df = cls()
         for col in table.columns:
@@ -2924,11 +3011,21 @@ class DataFrame(object):
 
             df[col.name] = columnops.as_column(col.data, dtype=dtype)
         if index_col:
-            df = df.set_index(index_col[0])
-            new_index_name = pa.pandas_compat._backwards_compatible_index_name(
-                df.index.name, df.index.name
-            )
-            df.index.name = new_index_name
+            if isinstance(index_col[0], dict):
+                assert index_col[0]["kind"] == "range"
+                df = df.set_index(
+                    RangeIndex(
+                        index_col[0]["start"],
+                        index_col[0]["stop"],
+                        name=index_col[0]["name"],
+                    )
+                )
+            else:
+                df = df.set_index(index_col[0])
+                new_index_name = pa.pandas_compat._backwards_compatible_index_name(  # noqa: E501
+                    df.index.name, df.index.name
+                )
+                df.index.name = new_index_name
         return df
 
     def to_records(self, index=True):
@@ -3105,7 +3202,6 @@ class DataFrame(object):
             columns = self.columns
 
         result = DataFrame()
-        result["Quantile"] = q
         for k, col in self._cols.items():
             if k in columns:
                 res = col.quantile(
@@ -3116,10 +3212,19 @@ class DataFrame(object):
                 )
                 if not isinstance(res, numbers.Number) and len(res) == 0:
                     res = columnops.column_empty_like(
-                        q, dtype=col.dtype, masked=True, newsize=len(q)
+                        q, dtype="float64", masked=True, newsize=len(q)
                     )
                 result[k] = res
-        return result
+        if isinstance(q, numbers.Number):
+            result = result.fillna(np.nan)
+            result = result.iloc[0]
+            result.index = as_index(self.columns)
+            result.name = q
+            return result
+        else:
+            q = list(map(float, q))
+            result.index = q
+            return result
 
     #
     # Stats
@@ -3269,14 +3374,12 @@ class DataFrame(object):
                 )
             )
 
-        cat_type = pd.core.dtypes.dtypes.CategoricalDtypeType
-
         # include all subtypes
         include_subtypes = set()
         for dtype in self.dtypes:
             for i_dtype in include:
                 # category handling
-                if i_dtype is cat_type:
+                if is_categorical_dtype(i_dtype):
                     include_subtypes.add(i_dtype)
                 elif issubclass(dtype.type, i_dtype):
                     include_subtypes.add(dtype.type)
@@ -3286,7 +3389,7 @@ class DataFrame(object):
         for dtype in self.dtypes:
             for e_dtype in exclude:
                 # category handling
-                if e_dtype is cat_type:
+                if is_categorical_dtype(e_dtype):
                     exclude_subtypes.add(e_dtype)
                 elif issubclass(dtype.type, e_dtype):
                     exclude_subtypes.add(dtype.type)

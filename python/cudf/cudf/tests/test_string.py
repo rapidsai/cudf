@@ -898,6 +898,19 @@ def test_string_equality():
 
     assert_eq(expect, got.fillna(False))
 
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got.fillna(False))
+
+    ps1 = pd.Series(["a"])
+    gs1 = Series(["a"])
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got)
+
 
 @pytest.mark.parametrize(
     "lhs",
