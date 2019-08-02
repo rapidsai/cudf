@@ -1090,22 +1090,12 @@ class DataFrame(object):
         out = DataFrame()
 
         if self._cols:
-            positions = columnops.as_column(positions).astype("int32").data.mem
-            cols = [s._column for s in self._cols.values()]
-            result_cols = cpp_copying.apply_gather(cols, positions)
             for i, col_name in enumerate(self._cols):
-                out[col_name] = result_cols[i]
-
-            if isinstance(self.columns, cudf.MultiIndex):
-                out.columns = self.columns
-
-        if ignore_index:
-            out.index = RangeIndex(len(out))
-        elif len(out) == 0:
-            out = out.set_index(self.index.take(positions))
-        else:
-            out.index = self.index.take(positions)
-
+                out[col_name] = self[col_name][positions]
+            if ignore_index:
+                out.index = RangeIndex(len(out))
+            else:
+                out.index = self.index[positions]
         return out
 
     def _take_columns(self, positions):
