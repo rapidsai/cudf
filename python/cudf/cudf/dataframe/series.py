@@ -2,7 +2,6 @@
 
 import operator
 import warnings
-from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
@@ -484,9 +483,12 @@ class Series(object):
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        if preprocess.has_null_mask:
-            output = preprocess.astype(
-                    "O").fillna("null").to_pandas().__repr__()
+        if is_categorical_dtype(preprocess.dtype):
+            return preprocess.to_pandas().__repr__()
+        if preprocess.has_null_mask and not preprocess.dtype == "O":
+            output = (
+                preprocess.astype("O").fillna("null").to_pandas().__repr__()
+            )
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
@@ -494,7 +496,7 @@ class Series(object):
             if lines[-1].startswith("N"):
                 lines = lines[:-1]
                 lines.append("Name: %s" % str(self.name))
-                if len(self) > len(preprocess) / 2:
+                if len(self) > len(preprocess):
                     lines[-1] = lines[-1] + ", Length: %d" % len(self)
                 lines[-1] = lines[-1] + ", "
             elif lines[-1].startswith("L"):
@@ -504,9 +506,9 @@ class Series(object):
             else:
                 lines = lines[:-1]
                 lines[-1] = lines[-1] + "\n"
-            lines[-1] = lines[-1] + 'dtype: %s' % self.dtype
+            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
         else:
-            lines = output.split(',')
+            lines = output.split(",")
             return lines[0] + ", dtype: %s)" % self.dtype
         return "\n".join(lines)
 
