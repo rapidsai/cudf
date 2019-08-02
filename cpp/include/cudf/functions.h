@@ -452,7 +452,17 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
-
+/**
+ * @brief  Compares the input column time units and casts the values in the column with the least granularity to the other's resolution
+ * 
+ * @note This method treats GDF_DATE64 columns like GDF_TIMESTAMP[ms]
+ *
+ * @param[lhs] output gdf_column to compare. If this column is cast, the result is placed in lhs
+ * @param[rhs] output gdf_column to compare. If this column is cast, the result is placed in rhs
+ *
+ * @returns GDF_SUCCESS if no cast is necessary or upon a successful cast, otherwise GDF_UNSUPPORTED_DTYPE
+ */
+gdf_error gdf_cast_column_to_common_time_unit(gdf_column* lhs, gdf_column* rhs);
 
 /**
  * @brief  Computes exact quantile

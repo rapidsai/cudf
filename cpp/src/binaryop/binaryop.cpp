@@ -285,6 +285,11 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
         reinterpret_cast<NVCategory*>(temp_rhs.dtype_info.category));
     return;
   }
+
+  // If the columns are GDF_DATE64 or timestamps with different time resolutions,
+  // cast the least-granular column to the other's resolution before the binop
+  gdf_cast_column_to_common_time_unit(lhs, rhs);
+
   auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
   if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
     binops::jit::binary_operation(out, lhs, rhs, ope);
