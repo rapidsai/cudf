@@ -18,6 +18,7 @@
 #define DATETIME_HPP
 
 #include "cudf.h"
+#include <functional>
 
 namespace cudf {
 namespace datetime {
