@@ -1,9 +1,28 @@
 import numpy as np
 
+import time
+"""
+print("buffer")
+
+st=time.perf_counter_ns()
+from librmm_cffi import librmm as rmm
+print((time.perf_counter_ns()-st)/1e9)
+
+st=time.perf_counter_ns()
+from cudf.comm.serialize import register_distributed_serializer
+print((time.perf_counter_ns()-st)/1e9)
+st=time.perf_counter_ns()
+from cudf.utils import cudautils
+print((time.perf_counter_ns()-st)/1e9)
+st=time.perf_counter_ns()
+from cudf.utils import utils
+print((time.perf_counter_ns()-st)/1e9)
+"""
 from librmm_cffi import librmm as rmm
 
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils
+from cudf.utils import utils
 
 
 class Buffer(object):
@@ -190,5 +209,9 @@ class _BufferSentry(object):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError("non contiguous")
 
-
+"""
+st=time.perf_counter_ns()
+register_distributed_serializer(Buffer)
+print((time.perf_counter_ns()-st)/1e9)
+"""
 register_distributed_serializer(Buffer)
