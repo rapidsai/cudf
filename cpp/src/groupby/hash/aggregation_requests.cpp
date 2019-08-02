@@ -118,7 +118,7 @@ table compute_original_requests(
               return original_requests[a].second > original_requests[b].second;
             });
 
-  std::vector<gdf_column*> final_value_columns;
+  std::vector<gdf_column*> final_value_columns(original_requests.size());
 
   // Iterate requests. For any compound request, compute the compound result
   // from the corresponding simple requests
@@ -139,7 +139,7 @@ table compute_original_requests(
 
       CUDF_EXPECTS(count != nullptr, "COUNT column is null.");
 
-      final_value_columns.push_back(compute_average(*sum, *count, stream));
+      final_value_columns[i] = compute_average(*sum, *count, stream);
     } else {
       // For non-compound requests, append the result to the final output
       // and remove it from the map
@@ -150,7 +150,7 @@ table compute_original_requests(
       CUDF_EXPECTS(found->second != nullptr,
                    "Simple aggregation result is null.");
 
-      final_value_columns.push_back(found->second);
+      final_value_columns[i] = found->second;
       simple_requests_to_outputs.erase(req);
     }
   }
@@ -162,13 +162,7 @@ table compute_original_requests(
     delete p.second;
   }
 
-  // Restore original columns order
-  std::vector<gdf_column*> ordered_final_value_columns(final_value_columns);
-  for (gdf_size_type i = 0; i < final_value_columns.size(); i++) {
-    ordered_final_value_columns[processing_order[i]] = final_value_columns[i];
-  }
-
-  return cudf::table{ordered_final_value_columns};
+  return cudf::table{final_value_columns};
 }
 }  // namespace hash
 }  // namespace groupby
