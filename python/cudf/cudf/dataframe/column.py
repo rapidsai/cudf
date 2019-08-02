@@ -19,6 +19,7 @@ from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 class Column(object):
@@ -44,6 +45,7 @@ class Column(object):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.series import Series
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
@@ -51,7 +53,7 @@ class Column(object):
             dtype = pd.api.types.pandas_dtype(dtype)
             if dtype.type in (np.object_, np.str_):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
-            elif dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+            elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
                     data=Column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
@@ -80,8 +82,14 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            cats = Column._concat([o.categories for o in objs]).unique()
-            objs = [o.cat()._set_categories(cats, True) for o in objs]
+            cats = (
+                Series(Column._concat([o.categories for o in objs]))
+                .drop_duplicates()
+                ._column
+            )
+            objs = [
+                o.cat()._set_categories(cats, is_unique=True) for o in objs
+            ]
 
         head = objs[0]
         for obj in objs:

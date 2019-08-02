@@ -8,13 +8,7 @@
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "copying.hpp" namespace "cudf" nogil:
-
-    cdef void scatter(
-        const cudf_table* source_table,
-        const gdf_index_type* scatter_map,
-        cudf_table* destination_table
-    ) except +
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
     cdef void gather(
         const cudf_table * source_table,

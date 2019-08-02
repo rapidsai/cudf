@@ -8,7 +8,7 @@
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.cudf_cpp cimport *
 
-cdef extern from "groupby.hpp" namespace "cudf::groupby":
+cdef extern from "cudf/groupby.hpp" namespace "cudf::groupby":
     cdef cppclass Options:
         Options(bool _ignore_null_keys) except +
         Options() except +

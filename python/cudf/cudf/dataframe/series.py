@@ -28,6 +28,7 @@ from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.settings import NOTSET, settings
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -118,6 +119,15 @@ class Series(object):
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
+
+    @property
+    def values(self):
+        if self.dtype == np.dtype("object"):
+            return self.data.to_host()
+        elif is_categorical_dtype(self.dtype):
+            return self._column.to_pandas().values
+        else:
+            return self.data.mem.copy_to_host()
 
     @classmethod
     def from_arrow(cls, s):
@@ -496,11 +506,21 @@ class Series(object):
             more_rows=more_rows,
             series_spacing=True,
         )
-        return (
-            output + "\nName: {}, dtype: {}".format(self.name, str_dtype)
-            if self.name is not None
-            else output + "\ndtype: {}".format(str_dtype)
-        )
+        if self.name is None:
+            output += "\ndtype: {}".format(str_dtype)
+        else:
+            output += "\nName: {}, dtype: {}".format(self.name, str_dtype)
+
+        if is_categorical_dtype(self.dtype):
+            cat = self.cat
+            str_dtype = cat.categories.dtype.name
+            categories = cat.categories.to_array()
+            separator = " < " if cat.ordered else ", "
+            desc = "({}, {})".format(len(categories), str_dtype)
+            categories = "[{}]".format(separator.join(categories))
+            output += "\nCategories {}: {}".format(desc, categories)
+
+        return output
 
     def __str__(self):
         return self.to_string(nrows=10)
@@ -859,8 +879,7 @@ class Series(object):
         return ser.astype(np.bool_)
 
     def logical_not(self):
-        outcol = self._column.unary_logic_op("not")
-        return self._copy_construct(data=outcol)
+        return self._unaryop("not")
 
     def _normalize_binop_value(self, other):
         """Returns a *column* (not a Series) or scalar for performing
@@ -1383,19 +1402,26 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype):
-        """Convert to the given ``dtype``.
+    def astype(self, dtype, **kwargs):
+        """
+        Cast the Series to the given dtype
+
+        Parameters
+        ---------
+
+        dtype : data type
+        **kwargs : extra arguments to pass on to the constructor
 
         Returns
         -------
-        If the dtype changed, a new ``Series`` is returned by casting each
-        values to the given dtype.
-        If the dtype is not changed, ``self`` is returned.
+        out : Series
+            Copy of ``self`` cast to the given dtype. Returns
+            ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
-        if dtype == self.dtype:
+        if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
 
-        return self._copy_construct(data=self._column.astype(dtype))
+        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
@@ -1585,7 +1611,10 @@ class Series(object):
         A sequence of new series for each category.  Its length is determined
         by the length of ``cats``.
         """
-
+        if hasattr(cats, "to_pandas"):
+            cats = cats.to_pandas()
+        else:
+            cats = pd.Series(cats)
         dtype = np.dtype(dtype)
         return ((self == cat).fillna(False).astype(dtype) for cat in cats)
 
@@ -1610,15 +1639,16 @@ class Series(object):
         if dtype is None:
             dtype = utils.min_scalar_type(len(cats), 32)
 
-        value = Series(cats).astype(self.dtype)
+        cats = Series(cats).astype(self.dtype)
         order = Series(cudautils.arange(len(self)))
-        codes = Series(cudautils.arange(len(value), dtype=dtype))
+        codes = Series(cudautils.arange(len(cats), dtype=dtype))
 
-        value = DataFrame({"value": value, "code": codes})
+        value = DataFrame({"value": cats, "code": codes})
         codes = DataFrame({"value": self, "order": order})
         codes = codes.merge(value, on="value", how="left")
         codes = codes.sort_values("order")["code"].fillna(na_sentinel)
 
+        cats.name = None  # because it was mutated to "value" above
         return codes._copy_construct(name=None, index=self.index)
 
     def factorize(self, na_sentinel=-1):
@@ -1794,6 +1824,54 @@ class Series(object):
             index=self.index,
         )
 
+    def isin(self, test):
+
+        from cudf import DataFrame
+
+        lhs = self
+        rhs = None
+
+        try:
+            rhs = columnops.as_column(test, dtype=self.dtype)
+            # if necessary, convert values via typecast.apply_cast
+            rhs = Series(rhs.astype(self.dtype))
+        except Exception:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return Series(cudautils.zeros(len(self), dtype="bool"))
+
+        # If categorical, combine categories first
+        if is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat.categories.as_column()
+            rhs_cats = rhs.cat.categories.as_column()
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat.set_categories(cats, is_unique=True)
+                rhs = rhs.cat.set_categories(cats, is_unique=True)
+            else:
+                # If they're not the same dtype, short-circuit if the test
+                # list doesn't have any nulls. If it does have nulls, make
+                # the test list a Categorical with a single null
+                if rhs.null_count == 0:
+                    return Series(cudautils.zeros(len(self), dtype="bool"))
+                rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
+
+        # fillna so we can find nulls
+        if rhs.null_count > 0:
+            lhs = lhs.fillna(lhs._column.default_na_value())
+            rhs = rhs.fillna(lhs._column.default_na_value())
+
+        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+        res.name = self.name
+
+        return res
+
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
         return self.unique()
@@ -1826,16 +1904,16 @@ class Series(object):
         return self._column.unique_count(method=method, dropna=dropna)
         # return len(self._column.unique())
 
-    def value_counts(self, method="sort", sort=True):
+    def value_counts(self, sort=True):
         """Returns unique values of this Series.
         """
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
+
         if self.null_count == len(self):
-            return Series(np.array([], dtype=np.int64))
-        vals, cnts = self._column.value_counts(method=method)
-        res = Series(cnts, index=as_index(vals))
+            return Series(np.array([], dtype=np.int32), name=self.name)
+
+        res = self.groupby(self).count()
+        res.index.name = None
+
         if sort:
             return res.sort_values(ascending=False)
         return res
@@ -2378,6 +2456,24 @@ class Series(object):
             out.name = index
 
         return out.copy(deep=copy)
+
+    def searchsorted(self, value, side="left"):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : array_like
+            Column of values to search for
+        side : str {‘left’, ‘right’} optional
+            If ‘left’, the index of the first suitable location found is given.
+            If ‘right’, return the last such index
+
+        Returns
+        -------
+        A Column of insertion points with the same shape as value
+        """
+        outcol = self._column.searchsorted(value, side)
+        return Series(outcol)
 
     @property
     def is_unique(self):
