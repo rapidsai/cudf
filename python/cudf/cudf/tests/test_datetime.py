@@ -93,11 +93,21 @@ def test_datetime_series_binops_numpy(lhs_dtype, rhs_dtype):
     np_data_2 = np.array(pd_data_2).astype(rhs_dtype)
     np.testing.assert_equal(np_data_1, np.array(gdf_data_1))
     np.testing.assert_equal(np_data_2, np.array(gdf_data_2))
-    np.testing.assert_equal(np.less(np_data_1, np_data_2), gdf_data_1 < gdf_data_2)
-    np.testing.assert_equal(np.greater(np_data_1, np_data_2), gdf_data_1 > gdf_data_2)
-    np.testing.assert_equal(np.equal(np_data_1, np_data_2), gdf_data_1 == gdf_data_2)
-    np.testing.assert_equal(np.less_equal(np_data_1, np_data_2), gdf_data_1 <= gdf_data_2)
-    np.testing.assert_equal(np.greater_equal(np_data_1, np_data_2), gdf_data_1 >= gdf_data_2)
+    np.testing.assert_equal(
+        np.less(np_data_1, np_data_2), gdf_data_1 < gdf_data_2
+    )
+    np.testing.assert_equal(
+        np.greater(np_data_1, np_data_2), gdf_data_1 > gdf_data_2
+    )
+    np.testing.assert_equal(
+        np.equal(np_data_1, np_data_2), gdf_data_1 == gdf_data_2
+    )
+    np.testing.assert_equal(
+        np.less_equal(np_data_1, np_data_2), gdf_data_1 <= gdf_data_2
+    )
+    np.testing.assert_equal(
+        np.greater_equal(np_data_1, np_data_2), gdf_data_1 >= gdf_data_2
+    )
 
 
 @pytest.mark.parametrize("data", [data1(), data2()])
