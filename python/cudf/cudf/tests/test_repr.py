@@ -1,12 +1,12 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import pytest
-import pandas as pd
+import hypothesis.strategies as st
 import numpy as np
+import pandas as pd
+import pytest
+from hypothesis import given, settings
 
 import cudf
-from hypothesis import given, settings
-import hypothesis.strategies as st
 
 
 @given(
@@ -56,7 +56,7 @@ def test_float_series(x):
     assert sr.__repr__() == ps.__repr__()
 
 
-def test_mixed_dataframe():
+def test_mixed_dataframe_and_series():
     if not hasattr(pd, "Int64Dtype"):
         pytest.skip(msg="Test only supported with Pandas >= 0.24.2")
     pdf = pd.DataFrame()
@@ -70,6 +70,8 @@ def test_mixed_dataframe():
     pdf["String"] = np.array(["Alpha", "Beta", "Gamma", "Delta"])
     pdf["Boolean"] = np.array([True, False, True, False])
     gdf = cudf.from_pandas(pdf)
+    for col in gdf.columns:
+        assert gdf[col].__repr__() == pdf[col].__repr__()
     assert gdf.__repr__() == pdf.__repr__()
 
 
