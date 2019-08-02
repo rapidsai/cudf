@@ -22,12 +22,13 @@
 namespace cudf {
 namespace exp {
 
-// Create permuted row indices if the input were sorted
+// Create permuted row indices that would materialize sorted order
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      null_size size_of_nulls) {
   auto sorted_indices =
       cudf::make_numeric_column(data_type{INT32}, input.num_rows());
+
   return sorted_indices;
 }
 }  // namespace exp
