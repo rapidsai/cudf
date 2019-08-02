@@ -298,9 +298,6 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
   auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
   if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
     binops::jit::binary_operation(out, lhs, rhs, ope);
-
-  lhs_cast = nullptr;
-  rhs_cast = nullptr;
 }
 
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
