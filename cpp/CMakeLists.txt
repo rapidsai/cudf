@@ -396,7 +396,8 @@ add_library(cudf SHARED
             src/table/table_view.cpp
             src/table/table.cpp
             src/bitmask/null_mask.cpp
-            src/sort/sort.cu)
+            src/sort/sort.cu
+            src/column/legacy/interop.cpp)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
