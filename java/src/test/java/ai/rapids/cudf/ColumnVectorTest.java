@@ -419,4 +419,21 @@ public class ColumnVectorTest {
       }
     }
   }
+
+  @Test
+  void testGetByteCount() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
+         ColumnVector byteLengthVector = cv.getByteCount()) {
+      byteLengthVector.ensureOnHost();
+      assertEquals(5, byteLengthVector.getRowCount());
+      for (int i = 0; i < byteLengthVector.getRowCount(); i++) {
+        if (cv.isNull(i)) {
+          assertTrue(byteLengthVector.isNull(i));
+        } else {
+          assertEquals(cv.getJavaString(i).length(), byteLengthVector.getInt(i));
+
+        }
+      }
+    }
+  }
 }
