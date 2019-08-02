@@ -25,7 +25,8 @@ _time_unit = {
 
 def apply_cast(incol, dtype="float64", time_unit=None):
     """
-    Cast from incol.dtype to outcol.dtype
+    Return a Column with values in `incol` casted to `dtype`.
+    Currently supports numeric and datetime dtypes.
     """
 
     check_gdf_compatibility(incol)
