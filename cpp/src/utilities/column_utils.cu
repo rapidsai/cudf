@@ -32,24 +32,28 @@ struct predicate_is_nan{
 
   predicate_is_nan() = delete;
   
-  predicate_is_nan(const gdf_column input_): input(input_) {}
+  predicate_is_nan(gdf_column const& input_): input(input_) {}
 
 };
 
 } // namespace detail
 
-bit_mask_t* nans_to_nulls(gdf_column const* col){
+std::pair<bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input){
   
-  const bit_mask_t* source_mask = reinterpret_cast<bit_mask_t*>(col->valid);
+  if(input.size == 0){
+    return std::pair<bit_mask_t*, gdf_size_type>(nullptr, 0);
+  }
   
-  switch(col->dtype){
+  const bit_mask_t* source_mask = reinterpret_cast<bit_mask_t*>(input.valid);
+  
+  switch(input.dtype){
     case GDF_FLOAT32:
-      return cudf::valid_if(source_mask, cudf::predicate_is_nan<float>(*col), col->size);
+      return cudf::valid_if(source_mask, cudf::detail::predicate_is_nan<float>(input), input.size);
     case GDF_FLOAT64:
-      return cudf::valid_if(source_mask, cudf::predicate_is_nan<double>(*col), col->size);
+      return cudf::valid_if(source_mask, cudf::detail::predicate_is_nan<double>(input), input.size);
     default:
-      CUDF_EXPECTS(false, "Unsupported data type for is_nan()");
-      return nullptr;
+      CUDF_FAIL("Unsupported data type for is_nan()");
+      return std::pair<bit_mask_t*, gdf_size_type>(nullptr, 0);
   }
 
 } 
