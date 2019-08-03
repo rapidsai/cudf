@@ -591,4 +591,3 @@ gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_size_type num_columns);
 
 
-bit_mask::bit_mask_t* nans_to_nulls(gdf_column const* col);

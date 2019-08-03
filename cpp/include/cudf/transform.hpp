@@ -44,6 +44,9 @@ gdf_column transform(const gdf_column &input,
                      const std::string &unary_udf,
                      gdf_dtype output_type, bool is_ptx);
 
+// TODO: Add doc
+std::pair<bit_mask::bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input);
+
 }  // namespace cudf
 
 #endif
