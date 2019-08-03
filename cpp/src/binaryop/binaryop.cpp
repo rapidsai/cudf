@@ -302,8 +302,6 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
 
   gdf_column_free(&lhs_tmp);
   gdf_column_free(&rhs_tmp);
-  // if (lhs_tmp.size > 0) { gdf_column_free(&lhs_tmp); }
-  // else if (rhs_tmp.size > 0) { gdf_column_free(&rhs_tmp); }
 }
 
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
