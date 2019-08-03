@@ -21,7 +21,7 @@ namespace cudf {
 namespace detail {
 
 template <typename T>
-struct predicate_is_nan{
+struct predicate_not_nan{
   
   CUDA_HOST_DEVICE_CALLABLE
   bool operator()(gdf_index_type index) const {
@@ -30,9 +30,9 @@ struct predicate_is_nan{
   
   gdf_column input;
 
-  predicate_is_nan() = delete;
+  predicate_not_nan() = delete;
   
-  predicate_is_nan(gdf_column const& input_): input(input_) {}
+  predicate_not_nan(gdf_column const& input_): input(input_) {}
 
 };
 
@@ -48,12 +48,11 @@ std::pair<bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input){
   
   switch(input.dtype){
     case GDF_FLOAT32:
-      return cudf::valid_if(source_mask, cudf::detail::predicate_is_nan<float>(input), input.size);
+      return cudf::valid_if(source_mask, cudf::detail::predicate_not_nan<float>(input), input.size);
     case GDF_FLOAT64:
-      return cudf::valid_if(source_mask, cudf::detail::predicate_is_nan<double>(input), input.size);
+      return cudf::valid_if(source_mask, cudf::detail::predicate_not_nan<double>(input), input.size);
     default:
       CUDF_FAIL("Unsupported data type for is_nan()");
-      return std::pair<bit_mask_t*, gdf_size_type>(nullptr, 0);
   }
 
 } 
