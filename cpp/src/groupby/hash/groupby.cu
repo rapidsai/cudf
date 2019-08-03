@@ -200,7 +200,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
 
   cudf::table sparse_output_values{
       output_size_estimate, target_dtypes(column_dtypes(input_values), ops),
-      values_have_nulls, false, stream};
+      column_dtype_infos(input_values), values_have_nulls, false, stream};
 
   initialize_with_identity(sparse_output_values, ops, stream);
 
@@ -438,7 +438,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
   if (keys.num_rows() == 0) {
     return std::make_pair(
         cudf::empty_like(keys),
-        cudf::table(0, target_dtypes(column_dtypes(values), ops)));
+        cudf::table(0, target_dtypes(column_dtypes(values), ops), column_dtype_infos(values)));
   }
 
   auto compute_groupby = groupby_null_specialization(keys, values);

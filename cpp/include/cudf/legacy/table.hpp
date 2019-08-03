@@ -64,26 +64,6 @@ struct table {
    * @note It is the caller's responsibility to free the array of gdf_columns
    *and their associated device memory.
    *
-   * @note Does not support `GDF_TIMESTAMP` columns as this would require
-   * passing in additional timestamp resolution information.
-   *
-   * @param[in] num_rows The size of each gdf_column
-   * @param[in] dtypes The type of each column
-   * @param[in] allocate_bitmasks If `true`, each column will be allocated an
-   * appropriately sized bitmask
-   *---------------------------------------------------------------------------**/
-  table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
-        bool allocate_bitmasks = false, bool all_valid = false,
-        cudaStream_t stream = 0);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Allocates and constructs a set of `gdf_column`s.
-   *
-   * Allocates an array of `gdf_column`s of the specified size and type.
-   *
-   * @note It is the caller's responsibility to free the array of gdf_columns
-   *and their associated device memory.
-   *
    * @param[in] num_rows The size of each gdf_column
    * @param[in] dtypes The type of each column
    * @param[in] dtype_infos The gdf_extra_dtype_info for each column
