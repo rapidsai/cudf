@@ -15,7 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -28,7 +28,7 @@
 #include <utilities/wrapper_types.hpp>
 
 #include <random>
-#include <cudf/functions.h>
+#include <cudf/transform.hpp>
 
 using bit_mask::bit_mask_t;
 
@@ -53,9 +53,12 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskValid) {
   const auto num_bytes = cudf::util::packed_bit_sequence_size_in_bytes<bit_mask_t>(source_size)*sizeof(bit_mask_t);
   std::vector<bit_mask_t> result_mask_host(num_bytes);
 
-  EXPECT_NO_THROW(result_mask_device = nans_to_nulls(raw_source));
+  std::pair<bit_mask_t*, gdf_size_type> result;
+  EXPECT_NO_THROW(result = cudf::nans_to_nulls(*raw_source));
+  
+  EXPECT_EQ(result.second, 2*(source_size/3 + 1));
 
-  CUDA_TRY(cudaMemcpy(result_mask_host.data(), result_mask_device, num_bytes, cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpy(result_mask_host.data(), result.first, num_bytes, cudaMemcpyDeviceToHost));
   
   for (gdf_index_type i = 0; i < source_size; i++) {
     // The first half of the destination column should be all valid
@@ -77,7 +80,7 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskNull) {
   
   cudf::test::column_wrapper<TypeParam> source_column{
       source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); }
-      };
+  };
 
   gdf_column* raw_source = source_column.get();
 
@@ -86,9 +89,12 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskNull) {
   const auto num_bytes = cudf::util::packed_bit_sequence_size_in_bytes<bit_mask_t>(source_size)*sizeof(bit_mask_t);
   std::vector<bit_mask_t> result_mask_host(num_bytes);
 
-  EXPECT_NO_THROW(result_mask_device = nans_to_nulls(raw_source));
+  std::pair<bit_mask_t*, gdf_size_type> result;
+  EXPECT_NO_THROW(result = cudf::nans_to_nulls(*raw_source));
 
-  CUDA_TRY(cudaMemcpy(result_mask_host.data(), result_mask_device, num_bytes, cudaMemcpyDeviceToHost));
+  EXPECT_EQ(result.second, source_size/3 + 1);
+
+  CUDA_TRY(cudaMemcpy(result_mask_host.data(), result.first, num_bytes, cudaMemcpyDeviceToHost));
   
   for (gdf_index_type i = 0; i < source_size; i++) {
     // The first half of the destination column should be all valid

@@ -148,5 +148,5 @@ void ASSERT_BINOP(cudf::test::column_wrapper<TypeOut>& out,
 } // namespace binop
 } // namespace test
 } // namespace cudf
-//
+
 #endif
