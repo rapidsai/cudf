@@ -14,48 +14,45 @@
  * limitations under the License.
  */
 
+#include <iostream>
 #include <cudf/cudf.h>
 #include <cudf/unary.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/datetime.hpp>
 
 namespace cudf {
 namespace datetime {
 
-std::pair<gdf_col_pointer, gdf_col_pointer> resolve_common_time_unit(gdf_column const& lhs,
-																  	 gdf_column const& rhs) {
+std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs,
+                                                           gdf_column const& rhs) {
 
-	auto gdf_col_deleter = [](gdf_column* col) { gdf_column_free(col); };
+  gdf_column lhs_out = cudf::empty_like(lhs);
+  gdf_column rhs_out = cudf::empty_like(rhs);
 
-	gdf_col_pointer lhs_out{nullptr, gdf_col_deleter};
-	gdf_col_pointer rhs_out{nullptr, gdf_col_deleter};
+  if ((lhs.dtype == GDF_TIMESTAMP || lhs.dtype == GDF_DATE64) &&
+      (rhs.dtype == GDF_TIMESTAMP || rhs.dtype == GDF_DATE64)) {
 
-	if ((lhs.dtype == GDF_TIMESTAMP || lhs.dtype == GDF_DATE64) &&
-		(rhs.dtype == GDF_TIMESTAMP || rhs.dtype == GDF_DATE64)) {
+    gdf_time_unit lhs_unit = lhs.dtype_info.time_unit;
+    gdf_time_unit rhs_unit = rhs.dtype_info.time_unit;
 
-		gdf_time_unit lhs_unit = lhs.dtype_info.time_unit;
-		gdf_time_unit rhs_unit = rhs.dtype_info.time_unit;
+    // GDF_DATE64 and TIME_UNIT_NONE are always int64_t milliseconds
+    if (lhs.dtype == GDF_DATE64 || lhs_unit == TIME_UNIT_NONE) {
+      lhs_unit = TIME_UNIT_ms;
+    }
+    if (rhs.dtype == GDF_DATE64 || rhs_unit == TIME_UNIT_NONE) {
+      rhs_unit = TIME_UNIT_ms;
+    }
+    if (lhs_unit != rhs_unit) {
+      gdf_dtype_extra_info out_info{std::max(lhs_unit, rhs_unit)};
+      if (lhs_unit > rhs_unit) {
+        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, out_info);
+      } else {
+        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, out_info);
+      }
+    }
+  }
 
-		// GDF_DATE64 and TIME_UNIT_NONE are always int64_t milliseconds
-		if (lhs.dtype == GDF_DATE64 || lhs_unit == TIME_UNIT_NONE) {
-			lhs_unit = TIME_UNIT_ms;
-		}
-		if (rhs.dtype == GDF_DATE64 || rhs_unit == TIME_UNIT_NONE) {
-			rhs_unit = TIME_UNIT_ms;
-		}
-		if (lhs_unit != rhs_unit) {
-			gdf_column out_col;
-			gdf_dtype_extra_info out_info{std::max(lhs_unit, rhs_unit)};
-			if (lhs_unit > rhs_unit) {
-				out_col = cudf::cast(rhs, GDF_TIMESTAMP, out_info);
-				rhs_out.reset(&out_col);
-			} else {
-				out_col = cudf::cast(lhs, GDF_TIMESTAMP, out_info);
-				lhs_out.reset(&out_col);
-			}
-		}
-	}
-
-	return std::make_pair(std::move(lhs_out), std::move(rhs_out));
+  return std::make_pair(lhs_out, rhs_out);
 }
 
 }  // namespace datetime

@@ -23,9 +23,6 @@
 namespace cudf {
 namespace datetime {
 
-using gdf_col_pointer =
-    typename std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-
 /**
  * @brief Ensures GDF_DATE64 or GDF_TIMESTAMP columns share the same time unit.
  * 
@@ -33,18 +30,16 @@ using gdf_col_pointer =
  * to the more granular time unit.
  * 
  * If the time units are the same, or either column's dtype isn't GDF_DATE64 or
- * GDF_TIMESTAMP, no cast is performed and the unique_ptr pairs will reference
- * null_ptr.
+ * GDF_TIMESTAMP, no cast is performed and both returned columns will be empty.
  * 
  * @note This method treats GDF_DATE64 columns like GDF_TIMESTAMP[ms]
  *
  * @param[in] gdf_column* lhs column to compare against rhs
  * @param[in] gdf_column* rhs column to compare against lhs
  *
- * @returns std::pair<gdf_col_pointer, gdf_col_pointer> pair of unique_ptrs
- * whose initialization status indicates which input column was cast, if any.
+ * @returns std::pair<gdf_column, gdf_column> pair of gdf_columns corresponding to the input cols
  */
-std::pair<gdf_col_pointer, gdf_col_pointer> resolve_common_time_unit(gdf_column const& lhs, gdf_column const& rhs);
+std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs, gdf_column const& rhs);
 
 }  // namespace datetime 
 }  // namespace cudf

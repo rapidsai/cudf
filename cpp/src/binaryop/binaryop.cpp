@@ -287,17 +287,23 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
     return;
   }
 
+  gdf_column lhs_tmp;
+  gdf_column rhs_tmp;
   // If the columns are GDF_DATE64 or timestamps with different time resolutions,
   // cast the least-granular column to the other's resolution before the binop
-  cudf::datetime::gdf_col_pointer lhs_cast, rhs_cast;
-  std::tie(lhs_cast, rhs_cast) = cudf::datetime::resolve_common_time_unit(*lhs, *rhs);
+  std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::resolve_common_time_unit(*lhs, *rhs);
 
-  if (lhs_cast.get() != nullptr) { lhs = lhs_cast.get(); }
-  if (rhs_cast.get() != nullptr) { rhs = rhs_cast.get(); }
+  if (lhs_tmp.size > 0) { lhs = &lhs_tmp; }
+  else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
 
   auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
   if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
     binops::jit::binary_operation(out, lhs, rhs, ope);
+
+  gdf_column_free(&lhs_tmp);
+  gdf_column_free(&rhs_tmp);
+  // if (lhs_tmp.size > 0) { gdf_column_free(&lhs_tmp); }
+  // else if (rhs_tmp.size > 0) { gdf_column_free(&rhs_tmp); }
 }
 
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,
