@@ -10,8 +10,14 @@ from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 
-def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=(),
-               with_datetime=False):
+def make_frame(
+    dataframe_class,
+    nelem,
+    seed=0,
+    extra_levels=(),
+    extra_vals=(),
+    with_datetime=False,
+):
     np.random.seed(seed)
 
     df = dataframe_class()
@@ -26,12 +32,12 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=(),
         df[val] = np.random.random(nelem)
 
     if with_datetime:
-        now = np.datetime64('now')
-        tomorrow = now + np.timedelta64(1, 'D')
-        now = np.int64(now.astype('datetime64[ns]'))
-        tomorrow = np.int64(tomorrow.astype('datetime64[ns]'))
+        now = np.datetime64("now")
+        tomorrow = now + np.timedelta64(1, "D")
+        now = np.int64(now.astype("datetime64[ns]"))
+        tomorrow = np.int64(tomorrow.astype("datetime64[ns]"))
         timestamps = np.random.randint(now, tomorrow, nelem, dtype=np.int64)
-        df['datetime'] = timestamps.astype('datetime64[ns]')
+        df["datetime"] = timestamps.astype("datetime64[ns]")
 
     return df
 
@@ -761,12 +767,12 @@ def test_groupby_datetime(nelem, as_index, agg):
     check_dtype = agg not in ("mean", "count")
     pdf = make_frame(pd.DataFrame, nelem=nelem, with_datetime=True)
     gdf = make_frame(cudf.DataFrame, nelem=nelem, with_datetime=True)
-    pdg = pdf.groupby('datetime', as_index=as_index)
-    gdg = gdf.groupby('datetime', as_index=as_index)
+    pdg = pdf.groupby("datetime", as_index=as_index)
+    gdg = gdf.groupby("datetime", as_index=as_index)
     if as_index is False:
         pdres = getattr(pdg, agg)()
         gdres = getattr(gdg, agg)()
     else:
-        pdres = pdg.agg({'datetime': agg})
-        gdres = gdg.agg({'datetime': agg})
+        pdres = pdg.agg({"datetime": agg})
+        gdres = gdg.agg({"datetime": agg})
     assert_eq(pdres, gdres, check_dtype=check_dtype)
