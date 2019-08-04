@@ -22,6 +22,7 @@
 - PR #2316 Unique, nunique, and value_counts for datetime columns
 - PR #2337 Add Java support for slicing a ColumnVector
 - PR #2049 Implemented merge functionality
+- PR #2368 Full cudf+dask Parquet Support
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
 - PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
