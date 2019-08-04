@@ -624,9 +624,7 @@ def gpu_clip(in_col, out_col, lower, upper):
 def apply_clip(data, lower, upper, inplace):
     output_dary = data if inplace else rmm.device_array_like(data)
     if data.size > 0:
-        gpu_clip.forall(data.size)(
-            data, output_dary, lower, upper
-        )
+        gpu_clip.forall(data.size)(data, output_dary, lower, upper)
     return output_dary
 
 
