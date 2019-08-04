@@ -48,7 +48,8 @@ def test_cuda_array_interface_interop_in(dtype, module):
 
     expectation = does_not_raise()
     if module == "cupy":
-        pytest.skipif(not _have_cupy, reason="no cupy")
+        if not _have_cupy:
+            pytest.skip("no cupy")
         if dtype in datetime_dtypes:
             expectation = pytest.raises([KeyError])
         with expectation:
@@ -81,7 +82,8 @@ def test_cuda_array_interface_interop_out(dtype, module):
     if dtype in string_dtypes:
         expectation = pytest.raises(NotImplementedError)
     if module == "cupy":
-        pytest.skipif(not _have_cupy, reason="no cupy")
+        if not _have_cupy:
+            pytest.skip("no cupy")
         if dtype in datetime_dtypes:
             expectation = pytest.raises([KeyError])
         with expectation:
