@@ -16,6 +16,7 @@
 
 #include "copy_if.cuh"
 #include <cudf/legacy/table.hpp>
+#include <thrust/logical.h>
  
 namespace {
 
@@ -34,21 +35,14 @@ struct valid_table_filter
   __device__ inline 
   bool operator()(gdf_index_type i)
   {
-    int c = 0;
-    if (drop_if == cudf::ALL) {
-      while (c < num_columns) {
-        bit_mask_t *mask = d_masks[c++];
-        if (mask == nullptr || bit_mask::is_valid(mask, i)) return true;
-      }
-      return false;
-    }
-    else { // drop_if == cudf::ANY => all columns must be valid
-      while (c < num_columns) {
-        bit_mask_t *mask = d_masks[c++];
-        if (mask != nullptr && !bit_mask::is_valid(mask, i)) return false;
-      }
-      return true;
-    }
+    auto valid = [i](auto mask) { 
+      return (mask == nullptr) || bit_mask::is_valid(mask, i);
+    };
+
+    if (drop_if == cudf::ALL) // drop rows that have a null in all columns
+      return thrust::any_of(thrust::seq, d_masks, d_masks + num_columns, valid);
+    else // drop_if == cudf::ANY => drop rows that have any nulls
+      return thrust::all_of(thrust::seq, d_masks, d_masks + num_columns, valid); 
   }
 
   cudf::any_or_all drop_if;
