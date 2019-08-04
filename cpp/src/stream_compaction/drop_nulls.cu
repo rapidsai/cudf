@@ -20,18 +20,13 @@
  
 namespace {
 
+using bit_mask_t = bit_mask::bit_mask_t;
+
 // Returns false if the valid mask is false for index i in ANY/ALL columns of
 // table indicated by column_indices, where ANY/ALL is the value of drop_if.
 // Columns not indexed by column_indices are not checked
 struct valid_table_filter
 {
-  valid_table_filter(bit_mask_t **masks,
-                     gdf_size_type num_columns,
-                     cudf::any_or_all drop_if) 
-  : drop_if(drop_if),
-    num_columns(num_columns),
-    d_masks(masks) {}
-
   __device__ inline 
   bool operator()(gdf_index_type i)
   {
@@ -45,43 +40,62 @@ struct valid_table_filter
       return thrust::all_of(thrust::seq, d_masks, d_masks + num_columns, valid); 
   }
 
+  static auto create(cudf::table const &table,
+                     cudf::any_or_all drop_if,
+                     cudaStream_t stream = 0)
+  {
+    auto deleter = [stream](valid_table_filter* f) { f->destroy(stream); };
+    std::unique_ptr<valid_table_filter, decltype(deleter)> p{
+      new valid_table_filter(valid_table_filter::get_bitmasks(table, stream),
+                             table.num_columns(),
+                             drop_if), deleter};
+
+    CHECK_STREAM(stream);
+
+    return p;
+  }
+
+  __host__ void destroy(cudaStream_t stream = 0) {
+    RMM_FREE(d_masks, stream);
+    delete this;
+  }
+
+  valid_table_filter() = delete;
+  ~valid_table_filter() = default;
+
+protected:
+
+  valid_table_filter(bit_mask_t **masks,
+                     gdf_size_type num_columns,
+                     cudf::any_or_all drop_if) 
+  : drop_if(drop_if),
+    num_columns(num_columns),
+    d_masks(masks) {}
+
+  static bit_mask_t** get_bitmasks(cudf::table const &table,
+                                   cudaStream_t stream = 0) {
+    bit_mask_t** h_masks = new bit_mask_t*[table.num_columns()];
+    
+    int i = 0;
+    for (auto col : table) {
+      h_masks[i++] = reinterpret_cast<bit_mask_t*>(col->valid);
+    }
+
+    size_t masks_size = sizeof(bit_mask_t*) * table.num_columns();
+
+    bit_mask_t **d_masks = nullptr;
+    RMM_TRY(RMM_ALLOC(&d_masks, masks_size, stream));
+    CUDA_TRY(cudaMemcpyAsync(d_masks, h_masks, masks_size,
+                            cudaMemcpyHostToDevice, stream));
+    CHECK_STREAM(stream);
+
+    return d_masks;
+  }
+
   cudf::any_or_all drop_if;
   gdf_size_type num_columns;
   bit_mask_t **d_masks;
 };
-
-bit_mask_t** get_bitmasks(cudf::table const &table, cudaStream_t stream = 0) {
-  bit_mask_t** h_masks = new bit_mask_t*[table.num_columns()];
-  
-  int i = 0;
-  for (auto col : table) {
-    h_masks[i++] = reinterpret_cast<bit_mask_t*>(col->valid);
-  }
-
-  size_t masks_size = sizeof(bit_mask_t*) * table.num_columns();
-
-  bit_mask_t **d_masks = nullptr;
-  RMM_TRY(RMM_ALLOC(&d_masks, masks_size, stream));
-  CUDA_TRY(cudaMemcpyAsync(d_masks, h_masks, masks_size,
-                           cudaMemcpyHostToDevice, stream));
-  CHECK_STREAM(stream);
-
-  return d_masks;
-}
-
-valid_table_filter make_valid_table_filter(cudf::table const &table,
-                                           cudf::any_or_all drop_if,
-                                           cudaStream_t stream=0)
-{
-  return valid_table_filter(get_bitmasks(table, stream),
-                            table.num_columns(),
-                            drop_if);
-}
-
-void destroy_valid_table_filter(valid_table_filter const& filter,
-                                cudaStream_t stream = 0) {
-  RMM_FREE(filter.d_masks, stream);
-}
 
 }  // namespace
 
@@ -100,11 +114,7 @@ table drop_nulls(table const &input,
   CUDF_EXPECTS(keys.num_rows() <= input.num_rows(), 
                "Column size mismatch");
   
-  valid_table_filter filter =
-    make_valid_table_filter(keys, drop_if);
-  table result = detail::copy_if(input, filter);
-  destroy_valid_table_filter(filter);
-  return result;
+  return detail::copy_if(input, *valid_table_filter::create(keys, drop_if).get());
 }
 
 }  // namespace cudf
