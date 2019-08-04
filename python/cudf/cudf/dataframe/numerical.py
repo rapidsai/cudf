@@ -249,7 +249,7 @@ class NumericalColumn(columnops.TypedColumnBase):
     def clip(self, lower=None, upper=None, inplace=False):
         mask = None
         if self.has_null_mask:
-            mask = self.nullmask
+            mask = self.nullmask if inplace else self.nullmask.copy()
 
         if lower is not None and upper is not None:
             # check value of lower and upper, and switch them if needed

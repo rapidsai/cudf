@@ -3183,6 +3183,7 @@ def test_clip_null_mask():
     np.testing.assert_array_almost_equal(
         result.to_pandas(), expected, decimal=10
     )
+    assert ser.nullmask is not result.nullmask  # check nullmask is deep copied
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
 
 
