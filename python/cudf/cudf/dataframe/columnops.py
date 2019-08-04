@@ -164,6 +164,37 @@ class TypedColumnBase(Column):
     def as_string_column(self, dtype, **kwargs):
         raise NotImplementedError
 
+    @property
+    def __cuda_array_interface__(self):
+        mask = None
+        if self.has_null_mask:
+            from types import SimpleNamespace
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (
+                        self.nullmask.mem.device_ctypes_pointer.value,
+                        True,
+                    ),
+                    "version": 1,
+                    "strides": None,
+                    "mask": None,
+                }
+            )
+        return {
+            "shape": (len(self),),
+            "typestr": self.dtype.str,
+            "data": (self.data.mem.device_ctypes_pointer.value, True),
+            "version": 1,
+            "strides": None,
+            "mask": mask,
+        }
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
