@@ -261,10 +261,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             if inplace:
                 return self
             else:
-                copy = cudautils.copy_array(self.data.mem)
-                return NumericalColumn(
-                    data=Buffer(copy), mask=mask, dtype=self.dtype
-                )
+                return self.copy()
         elif lower is None:
             lower = np.NINF
         else:  # upper is None

@@ -609,18 +609,7 @@ def apply_round(data, decimal):
 
 
 @cuda.jit
-def gpu_clip_inplace(in_col, lower, upper):
-    i = cuda.grid(1)
-
-    if i < in_col.size:
-        if in_col[i] < lower:
-            in_col[i] = lower
-        elif in_col[i] > upper:
-            in_col[i] = upper
-
-
-@cuda.jit
-def gpu_clip_not_inplace(in_col, lower, upper, out_col):
+def gpu_clip(in_col, out_col, lower, upper):
     i = cuda.grid(1)
 
     if i < in_col.size:
@@ -633,17 +622,12 @@ def gpu_clip_not_inplace(in_col, lower, upper, out_col):
 
 
 def apply_clip(data, lower, upper, inplace):
-    if not inplace:
-        output_dary = rmm.device_array_like(data)
-        if data.size > 0:
-            gpu_clip_not_inplace.forall(data.size)(
-                data, lower, upper, output_dary
-            )
-        return output_dary
-    else:
-        if data.size > 0:
-            gpu_clip_inplace.forall(data.size)(data, lower, upper)
-        return data
+    output_dary = data if inplace else rmm.device_array_like(data)
+    if data.size > 0:
+        gpu_clip.forall(data.size)(
+            data, output_dary, lower, upper
+        )
+    return output_dary
 
 
 MAX_FAST_UNIQUE_K = 2 * 1024
