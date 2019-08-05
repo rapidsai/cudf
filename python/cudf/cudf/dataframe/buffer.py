@@ -126,16 +126,13 @@ class Buffer(object):
         self.extend(np.asarray(element, dtype=self.dtype))
 
     def extend(self, array):
-
-        import cudf.bindings.typecast as typecast
         from cudf.dataframe import columnops
 
         needed = array.size
         self._sentry_capacity(needed)
 
-        array = typecast.apply_cast(
-            columnops.as_column(array), dtype=self.dtype.type
-        ).data.mem
+        array = columnops.as_column(array).astype(self.dtype).data.mem
+
         self.mem[self.size : self.size + needed].copy_to_device(array)
         self.size += needed
 
