@@ -125,7 +125,7 @@
 - PR #2422 Fix Pandas logical binary operation incompatibilites
 - PR #2447 Fix CodeCov posting build statuses temporarily
 - PR #2450 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
-- PR #1466 Fix `dataframe.query` returning null rows erroneously
+- PR #2466 Fix `dataframe.query` returning null rows erroneously
 
 
 # cuDF 0.8.0 (27 June 2019)
