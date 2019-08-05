@@ -475,6 +475,7 @@ class Series(object):
 
     def __repr__(self):
         mr = pd.options.display.max_rows
+        breakpoint()
         if len(self) > mr and mr != 0:
             top = self.head(int(mr / 2 + 1))
             bottom = self.tail(int(mr / 2 + 1))
@@ -483,7 +484,11 @@ class Series(object):
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        if preprocess.has_null_mask and not preprocess.dtype == "O":
+        if (
+            preprocess.has_null_mask
+            and not preprocess.dtype == "O"
+            and not is_categorical_dtype(preprocess.dtype)
+        ):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
             )
