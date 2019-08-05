@@ -5,13 +5,16 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from libc.stdlib cimport free
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.utils cimport *
 
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
 from cudf.dataframe.column import Column
-from cudf.bindings.stream_compaction import *
+from cudf.bindings.stream_compaction cimport *
 
 
 def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
@@ -70,24 +73,36 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     return (out_cols[:-1], out_cols[-1])
 
 
-def cpp_apply_boolean_mask(inp, mask):
-    from cudf.dataframe.columnops import column_empty_like
+def apply_apply_boolean_mask(cols, mask):
+    cdef cudf_table  c_out_table
+    cdef cudf_table* c_in_table = table_from_columns(cols)
+    cdef gdf_column* c_mask_col = column_view_from_column(mask)
 
-    cdef gdf_column *inp_col = column_view_from_column(inp)
-    cdef gdf_column *mask_col = column_view_from_column(mask)
-    cdef gdf_column result
     with nogil:
-        result = apply_boolean_mask(inp_col[0], mask_col[0])
-    if result.data is NULL:
-        return column_empty_like(inp, newsize=0)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+        result = apply_boolean_mask(c_in_table[0], c_mask_col[0])
+    
+    free(c_in_table)
+    free(c_mask_col)
+
+    return columns_from_table(&c_out_table)
 
 
-def cpp_drop_nulls(inp):
-    cdef gdf_column *inp_col = column_view_from_column(inp)
-    cdef gdf_column result
+def apply_drop_nulls(cols, how="any", subset=None):
+    cdef cudf_table c_out_table
+    cdef cudf_table* c_in_table = table_from_columns(cols)
+    cdef cudf_table* c_keys_table = (table_from_columns(cols) 
+        if subset is None else table_from_columns(subset))
+
+    cdef any_or_all drop_if
+    if how == "any":
+        drop_if = ANY
+    else:
+        drop_if = ALL
+
     with nogil:
-        result = drop_nulls(inp_col[0])
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+        c_out_table = drop_nulls(c_in_table[0], c_keys_table[0], drop_if)
+
+    free(c_in_table)
+    free(c_keys_table)
+
+    return columns_from_table(&c_out_table)
