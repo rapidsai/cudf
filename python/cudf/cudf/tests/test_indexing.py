@@ -650,6 +650,34 @@ def test_series_setitem_basics(key, value, nulls):
 @pytest.mark.parametrize(
     "key, value",
     [
+        (0, 4),
+        (1, 4),
+        ([0, 1], 4),
+        ([0, 1], [4, 5]),
+        (slice(0, 2), [4, 5]),
+        (slice(1, None), [4, 5, 6, 7]),
+        ([], 1),
+        ([], []),
+        (slice(None, None), 1),
+        (slice(-1, -3), 7),
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some", "all"])
+def test_series_setitem_iloc(key, value, nulls):
+    psr = pd.Series([1, 2, 3, 4, 5])
+    if nulls == "some":
+        psr[[0, 4]] = None
+    elif nulls == "all":
+        psr[:] = None
+    gsr = cudf.from_pandas(psr)
+    psr.iloc[key] = value
+    gsr.iloc[key] = value
+    assert_eq(psr, gsr, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
         (0, 0.5),
         ([0, 1], 0.5),
         ([0, 1], [0.5, 2.5]),
@@ -664,6 +692,29 @@ def test_series_setitem_dtype(key, value):
     assert_eq(psr, gsr)
 
 
+def test_series_setitem_datetime():
+    psr = pd.Series(["2001", "2002", "2003"], dtype="datetime64[ns]")
+    gsr = cudf.from_pandas(psr)
+
+    psr[0] = "2005"
+    gsr[0] = "2005"
+
+    assert_eq(psr, gsr)
+
+
+def test_series_setitem_categorical():
+    psr = pd.Series(["a", "b", "a", "c", "d"], dtype="category")
+    gsr = cudf.from_pandas(psr)
+
+    psr[0] = "d"
+    gsr[0] = "d"
+    assert_eq(psr, gsr)
+
+    psr[0] = "e"
+    gsr[0] = "e"
+    assert_eq(psr, gsr)
+
+
 @pytest.mark.parametrize(
     "key, value", [("a", 4), ("b", 4), (["a", "b"], 4), (["a", "b"], [4, 5])]
 )
@@ -673,3 +724,28 @@ def test_series_setitem_loc(key, value):
     psr.loc[key] = value
     gsr.loc[key] = value
     assert_eq(psr, gsr)
+
+
+def pdf_gdf():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": ["c", "d", "e"]}, index=["one", "two", "three"]
+    )
+    gdf = cudf.from_pandas(pdf)
+    return pdf, gdf
+
+
+def test_dataframe_setitem_iloc(key, value):
+    pdf, gdf = pdf_gdf()
+    pdf.iloc[0, 0] = 5
+    gdf.iloc[0, 0] = 5
+    assert_eq(pdf, gdf)
+
+    pdf, gdf = pdf_gdf()
+    pdf.iloc[:, 0] = 5
+    gdf.iloc[:, 0] = 5
+    assert_eq(pdf, gdf)
+
+    pdf, gdf = pdf_gdf()
+    pdf.iloc[:, 0] = range(len(pdf))
+    gdf.iloc[:, 0] = range(len(gdf))
+    assert_eq(pdf, gdf)

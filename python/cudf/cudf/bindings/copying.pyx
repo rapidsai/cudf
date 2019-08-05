@@ -33,7 +33,6 @@ pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
 
 def clone_columns_with_size(in_cols, row_size):
-    from cudf.dataframe import columnops
     out_cols = []
     for col in in_cols:
         o_col = columnops.column_empty_like(col,
@@ -46,10 +45,6 @@ def clone_columns_with_size(in_cols, row_size):
 
 
 def _normalize_maps(maps, size):
-
-    import cudf.bindings.typecast as typecast
-    from cudf.dataframe import columnops
-
     maps = columnops.as_column(maps).astype("int32")
     maps = maps.binary_operator("mod", maps.normalize_binop_value(size))
     maps = maps.data.mem

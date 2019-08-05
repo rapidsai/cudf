@@ -106,6 +106,11 @@ class _DataFrameIndexer(object):
                 arg = (arg, slice(None))
             return self._getitem_tuple_arg(arg)
 
+    def __setitem__(self, key, value):
+        if not isinstance(key, tuple):
+            arg = (key, slice(None))
+        return self._setitem_tuple_arg(key, value)
+
     def _can_downcast_to_series(self, df, arg):
         """
         This method encapsulates the logic used
@@ -215,6 +220,12 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
         return df
+
+    def _setitem_tuple_arg(self, key, value):
+        columns = self._get_column_selection(key[1])
+
+        for col in columns:
+            self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
         if is_single_value(arg):
@@ -330,6 +341,12 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             start, stop, step = arg[0].indices(slice_len)
             df._index = RangeIndex(start, stop)
         return df
+
+    def _setitem_tuple_arg(self, key, value):
+        columns = self._get_column_selection(key[1])
+
+        for col in columns:
+            self._df[col].iloc[key[0]] = value
 
     def _getitem_scalar(self, arg):
         col = self._df.columns[arg[1]]
