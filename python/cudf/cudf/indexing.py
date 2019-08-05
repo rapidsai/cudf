@@ -34,6 +34,11 @@ class _SeriesIlocIndexer(object):
             arg = list(arg)
         return self._sr[arg]
 
+    def __setitem__(self, key, value):
+        if isinstance(key, tuple):
+            key = list(key)
+        self._sr[key] = value
+
 
 class _SeriesLocIndexer(object):
     """

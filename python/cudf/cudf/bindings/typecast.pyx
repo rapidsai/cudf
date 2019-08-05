@@ -21,15 +21,10 @@ _time_unit = {
     'us': TIME_UNIT_us,
     'ns': TIME_UNIT_ns,
 }
-
-
 def apply_cast(incol, **kwargs):
     """
-      Cast from incol.dtype to outcol.dtype
+    Cast from incol.dtype to outcol.dtype
     """
-
-    check_gdf_compatibility(incol)
-
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
     npdtype = kwargs.get("dtype", np.float64)

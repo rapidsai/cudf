@@ -1088,14 +1088,13 @@ class DataFrame(object):
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
-
         if self._cols:
             for i, col_name in enumerate(self._cols):
                 out[col_name] = self[col_name][positions]
-            if ignore_index:
-                out.index = RangeIndex(len(out))
-            else:
-                out.index = self.index[positions]
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        else:
+            out._index = self.index.take(positions)
         return out
 
     def _take_columns(self, positions):
@@ -1390,7 +1389,7 @@ class DataFrame(object):
         ]
         in_index = self.index
         if isinstance(in_index, cudf.dataframe.multiindex.MultiIndex):
-            in_index = RangeIndex(len(in_index))
+            in_index = RangeIndex(len(in_index), name=in_index.name)
         out_cols, new_index = cpp_drop_duplicates(
             [in_index.as_column()], in_cols, subset_cols, keep
         )

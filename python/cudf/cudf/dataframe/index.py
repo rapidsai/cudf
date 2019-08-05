@@ -67,20 +67,12 @@ class Index(object):
         ---
         indices: An array-like that maps to values contained in this Index.
         """
-        assert indices.dtype.kind in "iu"
-        if indices.size == 0:
-            # Empty indices
-            return RangeIndex(indices.size)
-        else:
-            # Gather
-            index = cpp_copying.apply_gather(self.as_column(), indices)
-            col = self.as_column().replace(data=index.data)
-            new_index = as_index(col)
-            new_index.name = self.name
-            return new_index
+        return self[indices]
 
     def argsort(self, ascending=True):
-        return self.as_column().argsort(ascending=ascending)
+        indices = self.as_column().argsort(ascending=ascending)
+        indices.name = self.name
+        return indices
 
     @property
     def values(self):
@@ -441,7 +433,7 @@ class RangeIndex(Index):
                 index = utils.min_signed_type(index)(index)
             index = columnops.as_column(index).data.mem
 
-        return as_index(self.as_column()[index])
+        return as_index(self.as_column()[index], name=self.name)
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
@@ -497,7 +489,9 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
+        return NumericalColumn(
+            data=Buffer(vals), dtype=vals.dtype, name=self.name
+        )
 
     def to_gpu_array(self):
         return self.as_column().to_gpu_array()
@@ -610,16 +604,19 @@ class GenericIndex(Index):
         )
 
     def __getitem__(self, index):
-        res = self._values[index]
+        res = self.as_column()[index]
         if not isinstance(index, int):
-            return as_index(res)
+            res = as_index(res)
+            return res
         else:
             return res
 
     def as_column(self):
         """Convert the index as a Series.
         """
-        return self._values
+        col = self._values
+        col.name = self.name
+        return col
 
     @property
     def dtype(self):
@@ -821,7 +818,7 @@ class StringIndex(GenericIndex):
         return result
 
     def take(self, indices):
-        return self._values.element_indexing(indices)
+        return self._values[indices]
 
     def __repr__(self):
         return (

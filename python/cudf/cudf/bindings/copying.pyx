@@ -50,7 +50,6 @@ def _normalize_maps(maps, size):
     import cudf.bindings.typecast as typecast
     from cudf.dataframe import columnops
     
-    col = typecast.apply_cast(columnops.as_column(maps), dtype=np.int32)
     maps = columnops.as_column(maps).astype("int32")
     maps = maps.binary_operator("mod", maps.normalize_binop_value(size))
     maps = maps.data.mem

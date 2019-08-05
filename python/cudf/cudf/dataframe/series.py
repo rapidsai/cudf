@@ -361,7 +361,7 @@ class Series(object):
 
     def __getitem__(self, arg):
         data = self._column[arg]
-        index = self.index[arg]
+        index = self.index.take(arg)
         if utils.is_single_value(data) or data is None:
             return data
         return self._copy_construct(data=data, index=index)
