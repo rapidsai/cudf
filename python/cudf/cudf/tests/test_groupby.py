@@ -14,6 +14,7 @@ _tomorrow = _now + np.timedelta64(1, "D")
 _now = np.int64(_now.astype("datetime64[ns]"))
 _tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 
+
 def make_frame(
     dataframe_class,
     nelem,
@@ -765,7 +766,7 @@ def test_groupby_index_type():
 @pytest.mark.parametrize("as_index", [True, False])
 @pytest.mark.parametrize("agg", ["min", "max", "mean", "count"])
 def test_groupby_datetime(nelem, as_index, agg):
-    if agg == 'mean' and as_index is True:
+    if agg == "mean" and as_index is True:
         return
     check_dtype = agg not in ("mean", "count")
     pdf = make_frame(pd.DataFrame, nelem=nelem, with_datetime=True)
