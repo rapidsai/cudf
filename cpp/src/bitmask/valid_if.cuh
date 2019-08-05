@@ -23,6 +23,8 @@
 #include <utilities/cuda_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 
+#include <cub/cub.cuh>
+
 using bit_mask::bit_mask_t;
 
 namespace cudf {

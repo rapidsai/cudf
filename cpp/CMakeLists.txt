@@ -387,7 +387,7 @@ add_library(cudf SHARED
             src/io/io_functions.cpp
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
-            src/utilities/column_utils.cu
+            src/utilities/nans_to_nulls.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
