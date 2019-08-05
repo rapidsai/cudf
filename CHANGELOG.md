@@ -78,6 +78,7 @@
 - PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
 - PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
+- PR #2459 IO Readers: Consolidate all readers to use `datasource` class
 
 ## Bug Fixes
 
