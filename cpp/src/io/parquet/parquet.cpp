@@ -48,6 +48,9 @@ bool CompactProtocolReader::skip_struct_field(int t, int depth)
     case ST_FLD_I64:
         get_u64();
         break;
+    case ST_FLD_BYTE:
+        skip_bytes(1);
+        break;
     case ST_FLD_DOUBLE:
         skip_bytes(8);
         break;
