@@ -102,6 +102,26 @@ def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
 
+def make_aggregate_nullmask(df, columns=None, op="and"):
+    out_mask = None
+    for k in columns or df.columns:
+        if not df[k].has_null_mask:
+            continue
+
+        nullmask = df[k].nullmask
+        if out_mask is None:
+            out_mask = columnops.as_column(
+                nullmask.copy(), dtype=utils.mask_dtype
+            )
+            continue
+
+        cpp_binops.apply_op(
+            columnops.as_column(nullmask), out_mask, out_mask, op
+        )
+
+    return out_mask
+
+
 class ApplyKernelCompilerBase(object):
     def __init__(self, func, incols, outcols, kwargs, cache_key):
         # Get signature of user function
@@ -134,7 +154,7 @@ class ApplyKernelCompilerBase(object):
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
             if out_mask is not None:
-                outdf[k] = outdf[k].set_mask(out_mask.data.mem)
+                outdf[k] = outdf[k].set_mask(out_mask.data)
 
         return outdf
 

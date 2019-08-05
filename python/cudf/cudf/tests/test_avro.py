@@ -2,11 +2,11 @@
 
 from io import BytesIO
 
+import fastavro as fa
 import pandas as pd
 import pytest
 
 import cudf
-import fastavro as fa
 from cudf.tests.utils import assert_eq
 
 
