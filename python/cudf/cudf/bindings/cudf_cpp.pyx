@@ -537,4 +537,3 @@ cpdef count_nonzero_mask(mask, size):
             )
 
     return nnz
-

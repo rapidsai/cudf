@@ -20,6 +20,7 @@ from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 
+
 class TypedColumnBase(Column):
     """Base class for all typed column
     e.g. NumericalColumn, CategoricalColumn

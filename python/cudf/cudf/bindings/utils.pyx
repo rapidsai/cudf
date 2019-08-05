@@ -57,11 +57,11 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
 
 
 def mask_from_devary(py_col):
-    
+
     cdef gdf_column* c_col = column_view_from_column(py_col)
 
     cdef pair[bit_mask_t_ptr, gdf_size_type] result
-    
+
     with nogil:
         result = nans_to_nulls(c_col[0])
 

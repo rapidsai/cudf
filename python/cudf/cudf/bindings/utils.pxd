@@ -20,4 +20,3 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
     cdef pair[bit_mask_t_ptr, gdf_size_type] nans_to_nulls(
         const gdf_column& input
     ) except +
-
