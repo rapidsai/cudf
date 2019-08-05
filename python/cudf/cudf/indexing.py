@@ -108,7 +108,7 @@ class _DataFrameIndexer(object):
 
     def __setitem__(self, key, value):
         if not isinstance(key, tuple):
-            arg = (key, slice(None))
+            key = (key, slice(None))
         return self._setitem_tuple_arg(key, value)
 
     def _can_downcast_to_series(self, df, arg):
