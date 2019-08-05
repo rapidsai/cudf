@@ -134,7 +134,7 @@ class ApplyKernelCompilerBase(object):
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
             if out_mask is not None:
-                outdf[k] = outdf[k].set_mask(out_mask.data.mem)
+                outdf[k] = outdf[k].set_mask(out_mask.data)
 
         return outdf
 
