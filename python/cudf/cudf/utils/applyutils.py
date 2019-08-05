@@ -13,7 +13,6 @@ from cudf.dataframe.series import Series
 from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
 
-
 _doc_applyparams = """
 func : function
     The transformation function that will be executed on the CUDA GPU.
