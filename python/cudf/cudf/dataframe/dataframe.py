@@ -527,6 +527,8 @@ class DataFrame(object):
 
     def get_renderable_dataframe(self):
         nrows = np.max([pd.options.display.max_rows, 1])
+        if pd.options.display.max_rows == 0:
+            nrows = len(self)
         ncols = (
             pd.options.display.max_columns
             if pd.options.display.max_columns

@@ -1,11 +1,89 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-import cudf
 import hypothesis.strategies as st
 import numpy as np
 import pandas as pd
 import pytest
 from hypothesis import given, settings
+
+import cudf
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ms]",
+        "str",
+        "category",
+    ],
+)
+@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 10, 11, 19, 20, 21])
+def test_full_series(nrows, dtype):
+    size = 20
+    ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
+    sr = cudf.from_pandas(ps)
+    pd.options.display.max_rows = int(nrows)
+    psrepr = ps.__repr__()
+    psrepr = psrepr.replace("[ns]", "[ms]")
+    assert psrepr == sr.__repr__()
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ms]",
+        "str",
+        "category",
+    ],
+)
+@pytest.mark.parametrize("nrows", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
+@pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
+def test_full_dataframe_20(dtype, nrows, ncols):
+    size = 20
+    pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
+    gdf = cudf.from_pandas(pdf)
+    pd.options.display.max_rows = int(nrows)
+    pd.options.display.max_columns = int(ncols)
+    assert pdf.__repr__() == gdf.__repr__()
+    assert pdf._repr_html_() == gdf._repr_html_()
+    assert pdf._repr_latex_() == gdf._repr_latex_()
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ms]",
+        "str",
+        "category",
+    ],
+)
+@pytest.mark.parametrize("nrows", [9, 21 / 2, 11, 21 - 1])
+@pytest.mark.parametrize("ncols", [9, 21 / 2, 11, 21 - 1])
+def test_full_dataframe_21(dtype, nrows, ncols):
+    size = 21
+    pdf = pd.DataFrame(np.random.randint(0, 100, (size, size))).astype(dtype)
+    gdf = cudf.from_pandas(pdf)
+    pd.options.display.max_rows = int(nrows)
+    pd.options.display.max_columns = int(ncols)
+    assert pdf.__repr__() == gdf.__repr__()
 
 
 @given(

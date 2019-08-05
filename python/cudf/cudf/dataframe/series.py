@@ -475,16 +475,14 @@ class Series(object):
 
     def __repr__(self):
         mr = pd.options.display.max_rows
-        if len(self) > mr:
-            top = self.head(int(mr))
-            bottom = self.tail(int(mr))
+        if len(self) > mr and mr != 0:
+            top = self.head(int(mr / 2 + 1))
+            bottom = self.tail(int(mr / 2 + 1))
             from cudf import concat
 
             preprocess = concat([top, bottom])
         else:
             preprocess = self
-        if is_categorical_dtype(preprocess.dtype):
-            return preprocess.to_pandas().__repr__()
         if preprocess.has_null_mask and not preprocess.dtype == "O":
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
@@ -492,6 +490,9 @@ class Series(object):
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
+        if is_categorical_dtype(preprocess.dtype):
+            category_memory = lines[-1]
+            lines = lines[:-1]
         if len(lines) > 1:
             if lines[-1].startswith("N"):
                 lines = lines[:-1]
@@ -510,6 +511,8 @@ class Series(object):
         else:
             lines = output.split(",")
             return lines[0] + ", dtype: %s)" % self.dtype
+        if is_categorical_dtype(preprocess.dtype):
+            lines.append(category_memory)
         return "\n".join(lines)
 
     def _binaryop(self, other, fn, reflect=False):
