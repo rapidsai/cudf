@@ -110,4 +110,13 @@ mutable_column_view::operator column_view() const {
                      std::move(child_views)};
 }
 
+
+size_type count_descendants(column_view parent) {
+  size_type count{parent.num_children()};
+  for (size_type i = 0; i < parent.num_children(); ++i) {
+    count += count_descendants(parent.child(i));
+  }
+  return count;
+}
+
 }  // namespace cudf

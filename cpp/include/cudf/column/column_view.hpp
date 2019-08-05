@@ -412,4 +412,12 @@ class mutable_column_view : public detail::column_view_base {
   std::vector<mutable_column_view> mutable_children;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Counts the number of descendants of the specified parent.
+ *
+ * @param parent The parent whose descendants will be counted
+ * @return size_type The number of descendants of the parent
+ *---------------------------------------------------------------------------**/
+size_type count_descendants(column_view parent);
+
 }  // namespace cudf

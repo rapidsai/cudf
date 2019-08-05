@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include <cudf/column/column_device_view.cuh>
+#include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
 
@@ -21,21 +22,6 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 namespace cudf {
-namespace {
-/**---------------------------------------------------------------------------*
- * @brief Counts the number of descendants of the specified parent.
- *
- * @param parent The parent whose descendants will be counted
- * @return size_type The number of descendants of the parent
- *---------------------------------------------------------------------------**/
-size_type count_descendants(column_view parent) {
-  size_type count{parent.num_children()};
-  for (size_type i = 0; i < parent.num_children(); ++i) {
-    count += count_descendants(parent.child(i));
-  }
-  return count;
-}
-}  // namespace
 
 // Trivially copy all members but the children
 column_device_view::column_device_view(column_view source)
@@ -43,7 +29,6 @@ column_device_view::column_device_view(column_view source)
                                       source.head(),       source.null_mask(),
                                       source.null_count(), source.offset()},
       _num_children{source.num_children()} {}
-
 
 // Free device memory allocated for children
 void column_device_view::destroy() {
