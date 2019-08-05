@@ -1,12 +1,11 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import cudf
 import hypothesis.strategies as st
 import numpy as np
 import pandas as pd
 import pytest
 from hypothesis import given, settings
-
-import cudf
 
 
 @given(
