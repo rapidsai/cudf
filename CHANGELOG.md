@@ -76,6 +76,7 @@
 - PR #2406 Moved all existing `table` related files to a `legacy/` directory
 - PR #2350 Performance related changes to get_dummies
 - PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
+- PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 
 ## Bug Fixes
