@@ -56,7 +56,7 @@ def apply_gather(in_cols, maps, out_cols=None):
 
     from cudf.dataframe import columnops
     maps = columnops.as_column(maps).astype("int32")
-    maps = col.data.mem
+    maps = maps.data.mem
     # TODO: replace with libcudf pymod when available
     maps = modulo(maps, in_size)
 
