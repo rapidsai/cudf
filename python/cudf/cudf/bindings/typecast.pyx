@@ -21,6 +21,8 @@ _time_unit = {
     'us': TIME_UNIT_us,
     'ns': TIME_UNIT_ns,
 }
+
+
 def apply_cast(incol, **kwargs):
     """
     Cast from incol.dtype to outcol.dtype

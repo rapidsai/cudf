@@ -49,7 +49,7 @@ def _normalize_maps(maps, size):
 
     import cudf.bindings.typecast as typecast
     from cudf.dataframe import columnops
-    
+
     maps = columnops.as_column(maps).astype("int32")
     maps = maps.binary_operator("mod", maps.normalize_binop_value(size))
     maps = maps.data.mem
@@ -148,6 +148,7 @@ def apply_gather(source, maps, dest=None):
     else:
         return out_cols[0]
 
+
 def apply_scatter(source, maps, target):
     cdef cudf_table* c_source_table
     cdef cudf_table* c_target_table
@@ -213,7 +214,8 @@ def copy_column(input_col):
     return Column.from_mem_views(data, mask, output.null_count)
 
 
-def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
+def apply_copy_range(out_col, in_col, int out_begin, int out_end,
+                     int in_begin):
     from cudf.dataframe.column import Column
 
     if abs(out_end - out_begin) <= 1:
@@ -248,7 +250,6 @@ def apply_copy_range(out_col, in_col, int out_begin, int out_end, int in_begin):
                    out_begin,
                    out_end,
                    in_begin)
-
 
     out_col._update_null_count(c_out_col.null_count)
 
