@@ -417,6 +417,7 @@ class RangeIndex(Index):
 
     def __getitem__(self, index):
         from numbers import Number
+
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             sln = (stop - start) // step
