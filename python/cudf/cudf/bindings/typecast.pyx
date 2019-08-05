@@ -12,7 +12,7 @@ from cudf.dataframe.column import Column
 from libc.stdlib cimport free
 
 import numpy as np
-import pandas as pd
+
 
 def apply_cast(incol, dtype=np.float64):
     """
@@ -21,7 +21,6 @@ def apply_cast(incol, dtype=np.float64):
     """
 
     check_gdf_compatibility(incol)
-    dtype = pd.api.types.pandas_dtype(dtype).type
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
