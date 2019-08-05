@@ -394,6 +394,7 @@ add_library(cudf SHARED
             src/column/column_device_view.cu
             src/column/column_factories.cpp
             src/table/table_view.cpp
+            src/table/table_device_view.cu
             src/table/table.cpp
             src/bitmask/null_mask.cpp
             src/sort/sort.cu
