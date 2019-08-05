@@ -315,7 +315,7 @@ class _GroupbyHelper(object):
                 source_data=dataframe_from_columns(
                     key_columns, columns=key_names
                 ),
-                names=key_names
+                names=key_names,
             )
 
     def compute_result_column_index(self):

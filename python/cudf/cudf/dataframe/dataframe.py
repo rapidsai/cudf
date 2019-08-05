@@ -1131,6 +1131,7 @@ class DataFrame(object):
            create a new allocation with references.
         """
         from cudf import MultiIndex
+
         df = DataFrame()
         df._size = self._size
         if deep:
