@@ -40,28 +40,28 @@ namespace{ // anonymous
                           bool flag_sorted,
                           cudaStream_t stream)
   {
-    std::vector<T> hvalue(2);
+    T hvalue;
 
     if( n < 2 )
     {
-      cudf::detail::singleMemcpy(hvalue[0], devarr);
-      result = static_cast<RetT>( hvalue[0] );
+      cudf::detail::singleMemcpy(hvalue, devarr);
+      result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
 
     if( quant >= 1.0 && !flag_sorted )
     {
       T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      cudf::detail::singleMemcpy(hvalue[0], d_res);
-      result = static_cast<RetT>( hvalue[0] );
+      cudf::detail::singleMemcpy(hvalue, d_res);
+      result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
 
     if( quant <= 0.0 && !flag_sorted )
     {
       T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      cudf::detail::singleMemcpy(hvalue[0], d_res);
-      result = static_cast<RetT>( hvalue[0] );
+      cudf::detail::singleMemcpy(hvalue, d_res);
+      result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
 
