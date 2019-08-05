@@ -179,6 +179,8 @@ cdef extern from "cudf/cudf.h" nogil:
         int flag_distinct
         int flag_sort_result
         int flag_sort_inplace
+        bool flag_groupby_include_nulls
+        gdf_null_sort_behavior flag_null_sort_behavior
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,

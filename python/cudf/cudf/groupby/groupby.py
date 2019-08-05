@@ -7,6 +7,9 @@ import cudf
 from cudf import MultiIndex
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
+from cudf.bindings.quantile import (
+    apply_group_quantile as cpp_apply_group_quantile,
+)
 from cudf.utils.utils import is_single_value
 
 
@@ -55,6 +58,9 @@ class SeriesGroupBy(_Groupby):
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
 
+    def quantile(self, q=0.5, interpolation="linear"):
+        raise NotImplementedError
+
 
 class DataFrameGroupBy(_Groupby):
     def __init__(
@@ -100,10 +106,27 @@ class DataFrameGroupBy(_Groupby):
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
         )
 
+    def quantile(self, q=0.5, interpolation="linear"):
+        print("this will do chief")
+        # Get Key_cols from _GroupbyHelper. It's generated at init.
+        key_cols = self._groupby.key_columns
+        # Do the things that'll make it generate the value columns
+        self._groupby.normalize_agg("quantile")
+        self._groupby.normalize_values()
+        # Get the value_columns
+        val_cols = self._groupby.value_columns
+
+        out_key_columns, out_value_column = cpp_apply_group_quantile(
+            key_cols, val_cols[0], q, interpolation
+        )
+        return self._groupby.construct_result(
+            out_key_columns, [out_value_column]
+        )
+
 
 class _GroupbyHelper(object):
 
-    NAMED_AGGS = ("sum", "mean", "min", "max", "count")
+    NAMED_AGGS = ("sum", "mean", "min", "max", "count", "quantile")
 
     def __init__(self, obj, by=None, level=None, as_index=True, sort=None):
         """

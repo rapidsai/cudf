@@ -743,3 +743,25 @@ def test_groupby_index_type():
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
     assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+
+
+@pytest.mark.parametrize(
+    "interpolation", ["linear", "lower", "higher", "midpoint", "nearest"]
+)
+def test_groupby_quantile(interpolation):
+    raw_data = {
+        "x": [0, 1, 0, 1, 0, 1, 0, 1],
+        "y": [25000., 35000, 45000, 50000, 60000, 70000, 65000, 36000],
+    }
+    pdf = pd.DataFrame(raw_data)
+    gdf = DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby("x")
+    gdg = gdf.groupby("x")
+    pdresult = pdg.quantile(interpolation=interpolation)
+    gdresult = gdg.quantile(interpolation=interpolation)
+
+    # There's a lot left to add to python bindings like index name
+    # so this is a temporary workaround
+    pdresult = pdresult["y"].reset_index(drop=True)
+    gdresult = gdresult["y"].reset_index(drop=True)
+    assert_eq(pdresult, gdresult)

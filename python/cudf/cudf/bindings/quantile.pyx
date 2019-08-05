@@ -9,6 +9,8 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.quantile import *
+from cudf.bindings.utils cimport *
 
 import numpy as np
 import pandas as pd
@@ -19,6 +21,7 @@ from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
+from libcpp.utility cimport pair
 
 
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
@@ -78,3 +81,44 @@ def apply_quantile(column, quant, method, exact):
     free(ctx)
 
     return res
+
+def apply_group_quantile(key_columns, value_column, quant, method):
+    """ Calculate the group wise `quant` quantile for the value_columns
+    Returns column of group wise quantile specified by quant
+    """
+
+    cdef cudf_table *c_t = table_from_columns(key_columns)
+    cdef gdf_column *c_val = column_view_from_column(value_column)
+    cdef double q = quant
+    cdef gdf_quantile_method c_interpolation = get_quantile_method(method)
+    cdef gdf_context* ctx = create_context_view(
+        0,
+        'sort',
+        0,
+        0,
+        0,
+        'null_as_largest'
+    )
+
+    ctx.flag_groupby_include_nulls = False
+
+    cdef pair[cudf_table, gdf_column] c_result
+    with nogil:
+        c_result = group_quantiles(c_t[0],
+                                   c_val[0],
+                                   q,
+                                   c_interpolation,
+                                   ctx[0])
+
+    result_key_cols = columns_from_table(&c_result.first)
+    data, mask = gdf_column_to_column_mem(&c_result.second)
+    
+    from cudf.dataframe.column import Column
+
+    result_val_col = Column.from_mem_views(data)
+
+    free(c_t)
+    free(c_val)
+    free(ctx)
+
+    return (result_key_cols, result_val_col)
