@@ -128,11 +128,7 @@ class MultiIndex(Index):
     def copy(self, deep=True):
         mi = MultiIndex(source_data=self._source_data.copy(deep))
         if self._levels is not None:
-            y = []
-            for level in self._levels:
-                unnamed = level.copy(deep)
-                y.append(unnamed)
-            mi._levels = np.array(y)
+            mi._levels = np.array([level.copy(deep) for level in self._levels])
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if self.names is not None:
@@ -199,8 +195,7 @@ class MultiIndex(Index):
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
-            level = cats.reset_index(drop=True)
-            levels.append(level)
+            levels.append(cats.reset_index(drop=True))
 
         self._levels = levels
         self._codes = codes
