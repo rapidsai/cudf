@@ -85,6 +85,8 @@ table empty_like(table const& t);
  */
 table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 
+table allocate_like_of_size(table const& t, gdf_index_type size, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+
 /**
  * @brief Creates a table of columns and deep copies the data from an input
  * table.

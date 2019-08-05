@@ -20,6 +20,7 @@
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/copying.hpp>
 #include <cudf/legacy/column.hpp>
 
 #include <rmm/rmm.h>
@@ -113,17 +114,30 @@ auto group_values_and_indices(cudf::table const& input_table,
 } // namespace detail
 
 // TODO: add optional check for is_sorted. Use context.flag_sorted
-gdf_column group_quantiles(cudf::table const& input_table,
-                           double quantile,
-                           gdf_quantile_method interpolation,
-                           gdf_context const& context)
+std::pair<cudf::table, gdf_column>
+group_quantiles(cudf::table const& key_table,
+                gdf_column const& values,
+                double quantile,
+                gdf_quantile_method interpolation,
+                gdf_context const& context)
 {
+  // Merge the key_table and values column because we want to sort them together
+  std::vector<gdf_column*> input_columns(key_table.get_columns());
+  input_columns.push_back(const_cast<gdf_column*>(&values));
+  cudf::table input_table(input_columns);
+
   gdf_column grouped_values, group_indices;
   std::tie(grouped_values, group_indices) = 
     detail::group_values_and_indices(input_table, context);
 
-  // TODO: currently ignoring nulls
+  // Get output_keys using group_indices and input table
   gdf_size_type num_grps = group_indices.size;
+  auto out_key_table = cudf::allocate_like_of_size(key_table, num_grps);
+  cudf::gather(&key_table,
+               reinterpret_cast<gdf_index_type*>(group_indices.data),
+               &out_key_table);
+
+  // TODO: currently ignoring nulls
   auto quants_col = cudf::allocate_column(GDF_FLOAT64, num_grps, false);
 
   type_dispatcher(grouped_values.dtype, quantiles_functor{},
@@ -133,7 +147,7 @@ gdf_column group_quantiles(cudf::table const& input_table,
   gdf_column_free(&grouped_values);
   gdf_column_free(&group_indices);
 
-  return quants_col;
+  return std::make_pair(out_key_table, quants_col);
 }
     
 } // namespace cudf

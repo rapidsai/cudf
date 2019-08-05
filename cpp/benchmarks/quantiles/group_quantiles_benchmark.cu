@@ -61,16 +61,24 @@ void BM_table(benchmark::State& state){
     return cudf::table{raw_cols.data(), num_columns};
   };
 
-  auto input_table = make_table(columns, column_size);
-  gdf_context context{};
+  auto key_table = make_table(columns, column_size);
+  auto val_col = wrapper(column_size,
+    [=](gdf_index_type row) { return random_int(0, 10); }
+  );
 
   // std::vector<bool> desc_flags(num_columns, false);
   // sort_table(data_table, desc_flags);
   
   for(auto _ : state){
     cuda_event_timer timer(state, true);
-    auto col = cudf::group_quantiles(input_table, 0.5, context);
-    gdf_column_free(&col);
+
+    cudf::table out_keys;
+    gdf_column quant_vals;
+    std::tie(out_keys, quant_vals) = 
+      cudf::group_quantiles(key_table, val_col, 0.5);
+    
+    gdf_column_free(&quant_vals);
+    out_keys.destroy();
   }
 }
 
@@ -79,7 +87,7 @@ BENCHMARK_DEFINE_F(Quantiles, Table)(::benchmark::State& state) {
 }
 
 static void CustomArguments(benchmark::internal::Benchmark* b) {
-  for (int num_cols = 2; num_cols <= 4; num_cols *= 2)
+  for (int num_cols = 1; num_cols <= 3; num_cols++)
     for (int col_size = 1000; col_size <= 100000000; col_size *= 10)
       b->Args({num_cols, col_size});
 }

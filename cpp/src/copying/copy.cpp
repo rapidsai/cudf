@@ -118,6 +118,22 @@ table allocate_like(table const& t, bool allocate_mask_if_exists, cudaStream_t s
   return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
 }
 
+table allocate_like_of_size(table const& t, gdf_size_type size, bool allocate_mask_if_exists, cudaStream_t stream) {
+  std::vector<gdf_column*> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+                 [&](gdf_column* out_col, gdf_column const* in_col) {
+                   out_col = new gdf_column{};
+                   *out_col = allocate_column(in_col->dtype,
+                                              size,
+                                              allocate_mask_if_exists && (in_col->valid != nullptr),
+                                              in_col->dtype_info,
+                                              stream);
+                   return out_col;
+                 });
+
+  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+}
+
 table copy(table const& t, cudaStream_t stream) {
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
