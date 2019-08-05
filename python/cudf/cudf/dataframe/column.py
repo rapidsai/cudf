@@ -508,8 +508,21 @@ class Column(object):
             nelem = len(key)
 
         if utils.is_single_value(value):
-            to_dtype = pd.api.types.pandas_dtype(self.dtype)
-            value = utils.scalar_broadcast_to(value, nelem, to_dtype)
+            if pd.api.types.is_categorical_dtype(self.dtype):
+                from cudf.dataframe.categorical import CategoricalColumn
+                from cudf.dataframe.buffer import Buffer
+                from cudf.utils.cudautils import fill_value
+
+                data = rmm.device_array(nelem, dtype="int8")
+                fill_value(data, self._encode(value))
+                value = CategoricalColumn(
+                    data=Buffer(data),
+                    categories=self._categories,
+                    ordered=False,
+                )
+            else:
+                to_dtype = pd.api.types.pandas_dtype(self.dtype)
+                value = utils.scalar_broadcast_to(value, nelem, to_dtype)
 
         value = columnops.as_column(value).astype(self.dtype)
 
