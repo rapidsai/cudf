@@ -34,12 +34,13 @@
 #include <string/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
+
+#include <bitmask/valid_if.cuh>
+
 using bit_mask::bit_mask_t;
 
 namespace cudf {
 namespace detail {
-
-constexpr int warp_size = 32;
 
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
@@ -118,8 +119,7 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
         if (0 == threadIdx.x % warp_size && thread_active) {
           destination_valid_col[valid_index] = valid_warp;
         }
-        valid_count_accumulate += 
-          cudf::util::single_lane_popc_block_reduce(valid_warp);
+        valid_count_accumulate += single_lane_popc_block_reduce(valid_warp);
 
         destination_row_base += blockDim.x * gridDim.x;
       }

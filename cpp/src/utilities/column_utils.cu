@@ -52,7 +52,7 @@ std::pair<bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input){
     case GDF_FLOAT64:
       return cudf::valid_if(source_mask, cudf::detail::predicate_not_nan<double>(input), input.size);
     default:
-      CUDF_FAIL("Unsupported data type for is_nan()");
+      CUDF_FAIL("Unsupported data type for isnan()");
   }
 
 } 

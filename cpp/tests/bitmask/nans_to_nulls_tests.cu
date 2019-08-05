@@ -33,13 +33,13 @@
 using bit_mask::bit_mask_t;
 
 template <typename T>
-struct BitMaskTest : GdfTest {};
+struct bitmask_test : GdfTest {};
 
 using test_types =
     ::testing::Types<float, double>;
-TYPED_TEST_CASE(BitMaskTest, test_types);
+TYPED_TEST_CASE(bitmask_test, test_types);
 
-TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskValid) {
+TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_valid) {
   constexpr gdf_size_type source_size{2000};
   
   cudf::test::column_wrapper<TypeParam> source_column{
@@ -47,8 +47,6 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskValid) {
       [](gdf_index_type row) { return row % 3 != 1; }};
 
   gdf_column* raw_source = source_column.get();
-
-  bit_mask_t* result_mask_device = nullptr;
 
   const auto num_bytes = cudf::util::packed_bit_sequence_size_in_bytes<bit_mask_t>(source_size)*sizeof(bit_mask_t);
   std::vector<bit_mask_t> result_mask_host(num_bytes);
@@ -72,10 +70,10 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskValid) {
     }
   }
 
-  RMM_TRY(RMM_FREE(result_mask_device, 0));
+  RMM_TRY(RMM_FREE(result.first, 0));
 }
 
-TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskNull) {
+TYPED_TEST(bitmask_test, nans_to_nulls_source_mask_null) {
   constexpr gdf_size_type source_size{2000};
   
   cudf::test::column_wrapper<TypeParam> source_column{
@@ -83,8 +81,6 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskNull) {
   };
 
   gdf_column* raw_source = source_column.get();
-
-  bit_mask_t* result_mask_device = nullptr;
 
   const auto num_bytes = cudf::util::packed_bit_sequence_size_in_bytes<bit_mask_t>(source_size)*sizeof(bit_mask_t);
   std::vector<bit_mask_t> result_mask_host(num_bytes);
@@ -108,5 +104,35 @@ TYPED_TEST(BitMaskTest, NaNsToNullsSourceMaskNull) {
     }
   }
 
-  RMM_TRY(RMM_FREE(result_mask_device, 0));
+  RMM_TRY(RMM_FREE(result.first, 0));
+}
+
+TYPED_TEST(bitmask_test, nans_to_nulls_source_empty) {
+ 
+  gdf_column source{};
+
+  std::pair<bit_mask_t*, gdf_size_type> result;
+
+  EXPECT_NO_THROW(result = cudf::nans_to_nulls(source));
+
+  EXPECT_EQ(result.second, 0);
+  EXPECT_EQ(result.first, nullptr);
+
+}
+
+TEST_F(GdfTest, nans_to_nulls_wrong_type) {
+  
+  using TypeParam = int;
+
+  constexpr gdf_size_type source_size{2000};
+  
+  cudf::test::column_wrapper<TypeParam> source_column{
+      source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(nan("")); },
+      [](gdf_index_type row) { return row % 3 != 1; }};
+
+  gdf_column* raw_source = source_column.get();
+
+  std::pair<bit_mask_t*, gdf_size_type> result;
+  EXPECT_THROW(result = cudf::nans_to_nulls(*raw_source), cudf::logic_error);
+  
 }

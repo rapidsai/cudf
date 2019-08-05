@@ -27,8 +27,6 @@
 #include <climits>
 #include <string>
 
-#include <cub/cub.cuh>
-
 #ifndef CUDA_HOST_DEVICE_CALLABLE
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
@@ -117,48 +115,6 @@ inline constexpr gdf_size_type packed_bit_sequence_size_in_bytes (Size num_bits)
     return cudf::util::div_rounding_up_safe<Size>(num_bits, size_in_bits<BitContainer>());
 }
 
-/**
- * @brief for each warp in the block do a reduction (summation) of the
- * `__popc(bit_mask)` on a certain lane (default is lane 0).
- * @param[in] bit_mask The bit_mask to be reduced.
- * @return[out] result of each block is returned in thread 0.
- */
-template <class bit_container, int lane = 0>
-__device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container bit_mask) {
-  
-  constexpr int warp_size = 32;
-  
-  static __shared__ gdf_size_type smem[warp_size];
-  
-  int lane_id = (threadIdx.x % warp_size);
-  int warp_id = (threadIdx.x / warp_size);
-
-  // Assuming one lane of each warp holds the value that we want to perform
-  // reduction
-  if (lane_id == lane) {
-    smem[warp_id] = __popc(bit_mask);
-  }
-  __syncthreads();
-
-  if (warp_id == 0) {
-    // Here I am assuming maximum block size is 1024 and 1024 / 32 = 32
-    // so one single warp is enough to do the reduction over different warps
-    bit_mask = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
-    
-    // The cub::warpReduce could be replaced with a __shfl_down_sync?
-    /**
-      #pragma unroll
-      for(int offset = warp_size/2; offset > 0; offset /= 2){
-        bit_mask += __shfl_down_sync(0xffffffffu, bit_mask, offset);
-      }
-    */
-    __shared__
-        typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
-    bit_mask = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(bit_mask);
-  }
-
-  return bit_mask;
-}
 
 } // namespace util
 } // namespace cudf

@@ -27,7 +27,51 @@ using bit_mask::bit_mask_t;
 
 namespace cudf {
 
+namespace detail {
+
 constexpr int warp_size = 32;
+
+/**
+ * @brief for each warp in the block do a reduction (summation) of the
+ * `__popc(bit_mask)` on a certain lane (default is lane 0).
+ * @param[in] bit_mask The bit_mask to be reduced.
+ * @return[out] result of each block is returned in thread 0.
+ */
+template <class bit_container, int lane = 0>
+__device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container bit_mask) {
+  
+  static __shared__ gdf_size_type smem[warp_size];
+  
+  int lane_id = (threadIdx.x % warp_size);
+  int warp_id = (threadIdx.x / warp_size);
+
+  // Assuming one lane of each warp holds the value that we want to perform
+  // reduction
+  if (lane_id == lane) {
+    smem[warp_id] = __popc(bit_mask);
+  }
+  __syncthreads();
+
+  if (warp_id == 0) {
+    // Here I am assuming maximum block size is 1024 and 1024 / 32 = 32
+    // so one single warp is enough to do the reduction over different warps
+    bit_mask = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
+    
+    // The cub::warpReduce could be replaced with a __shfl_down_sync?
+    /**
+      #pragma unroll
+      for(int offset = warp_size/2; offset > 0; offset /= 2){
+        bit_mask += __shfl_down_sync(0xffffffffu, bit_mask, offset);
+      }
+    */
+    __shared__
+        typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
+    bit_mask = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(bit_mask);
+  }
+
+  return bit_mask;
+
+}
 
 template <bool source_mask_valid, typename bit_container, typename predicate, typename size_type>
 __global__ void valid_if_kernel(
@@ -71,7 +115,7 @@ __global__ void valid_if_kernel(
     
     }
     
-    result_mask = cudf::util::single_lane_popc_block_reduce(result_mask);
+    result_mask = single_lane_popc_block_reduce(result_mask);
     if(0 == threadIdx.x){
       atomicAdd(p_valid_count, result_mask);
     }
@@ -81,6 +125,8 @@ __global__ void valid_if_kernel(
   }
 
 }
+
+} // namespace detail
 
 template <typename bit_container, typename predicate, typename size_type>
 std::pair<bit_container*, size_type> valid_if(
@@ -95,8 +141,8 @@ std::pair<bit_container*, size_type> valid_if(
       "Failed to allocate bit_mask buffer.");
 
   auto kernel = source_mask ? 
-    valid_if_kernel<true,  bit_container, predicate, size_type> :
-    valid_if_kernel<false, bit_container, predicate, size_type> ;
+    detail::valid_if_kernel<true,  bit_container, predicate, size_type> :
+    detail::valid_if_kernel<false, bit_container, predicate, size_type> ;
 
   rmm::device_vector<size_type> valid_count(1);
   
