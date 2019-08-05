@@ -710,6 +710,8 @@ def test_series_setitem_categorical():
     gsr[0] = "d"
     assert_eq(psr, gsr)
 
+    psr = psr.cat.add_categories(["e"])
+    gsr = gsr.cat.add_categories(["e"])
     psr[0] = "e"
     gsr[0] = "e"
     assert_eq(psr, gsr)
@@ -734,7 +736,7 @@ def pdf_gdf():
     return pdf, gdf
 
 
-def test_dataframe_setitem_iloc(key, value):
+def test_dataframe_setitem_iloc():
     pdf, gdf = pdf_gdf()
     pdf.iloc[0, 0] = 5
     gdf.iloc[0, 0] = 5

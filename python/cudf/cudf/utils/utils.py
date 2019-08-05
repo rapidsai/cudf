@@ -75,6 +75,9 @@ def require_writeable_array(arr):
 def scalar_broadcast_to(scalar, shape, dtype):
     from cudf.utils.cudautils import fill_value
 
+    scalar = pd.api.types.pandas_dtype(type(scalar)).type(scalar)
+    scalar = scalar.astype(dtype)
+
     if not isinstance(shape, tuple):
         shape = (shape,)
 
