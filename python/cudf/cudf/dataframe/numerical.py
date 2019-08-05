@@ -149,8 +149,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         import cudf.bindings.typecast as typecast
 
         return self.replace(
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
-            dtype=np.dtype(dtype),
+            data=typecast.apply_cast(self, dtype).data, dtype=np.dtype(dtype)
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):
