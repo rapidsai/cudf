@@ -13,27 +13,6 @@ from cudf.dataframe.series import Series
 from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
 
-
-def make_aggregate_nullmask(df, columns=None, op="and"):
-    out_mask = None
-    for k in columns or df.columns:
-        if not df[k].has_null_mask:
-            continue
-
-        nullmask = df[k].nullmask
-        if out_mask is None:
-            out_mask = columnops.as_column(
-                nullmask.copy(), dtype=utils.mask_dtype
-            )
-            continue
-
-        cpp_binops.apply_op(
-            columnops.as_column(nullmask), out_mask, out_mask, op
-        )
-
-    return out_mask
-
-
 _doc_applyparams = """
 func : function
     The transformation function that will be executed on the CUDA GPU.
