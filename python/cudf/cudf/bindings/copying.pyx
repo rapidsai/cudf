@@ -54,9 +54,8 @@ def apply_gather(in_cols, maps, out_cols=None):
     else:
         in_size = in_cols[0].data.size
 
-    import cudf.bindings.typecast as typecast
     from cudf.dataframe import columnops
-    col = typecast.apply_cast(columnops.as_column(maps), dtype=np.int32)
+    maps = columnops.as_column(maps).astype("int32")
     maps = col.data.mem
     # TODO: replace with libcudf pymod when available
     maps = modulo(maps, in_size)
