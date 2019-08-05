@@ -7,7 +7,6 @@ from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.search as cpp_search
-from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer

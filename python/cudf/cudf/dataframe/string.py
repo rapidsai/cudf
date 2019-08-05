@@ -16,7 +16,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,

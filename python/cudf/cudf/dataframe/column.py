@@ -491,7 +491,7 @@ class Column(object):
     def __setitem__(self, key, value):
         """
         Set the value of self[key] to value.
-        
+
         If value and self are of different types,
         value is coerced to self.dtype
         """

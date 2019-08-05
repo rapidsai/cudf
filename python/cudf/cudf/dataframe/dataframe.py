@@ -24,7 +24,6 @@ import cudf.bindings.hash as cpp_hash
 import cudf.bindings.join as cpp_join
 from cudf import formatting
 from cudf._sort import get_sorted_inds
-from cudf.bindings import copying as cpp_copying
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,

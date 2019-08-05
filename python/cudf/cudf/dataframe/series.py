@@ -19,7 +19,6 @@ from cudf.bindings.stream_compaction import (
 )
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
-from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
@@ -367,9 +366,7 @@ class Series(object):
         return self._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
-        from cudf.indexing import indices_from_labels
-
-        # first, coerce value into a scalar or column
+        # coerce value into a scalar or column
         if utils.is_single_value(value):
             value = pd.api.types.pandas_dtype(type(value)).type(value)
         else:
