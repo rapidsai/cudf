@@ -23,7 +23,6 @@ from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory
 
-
 dtypes = {
     np.float64: GDF_FLOAT64,
     np.float32: GDF_FLOAT32,
@@ -538,3 +537,4 @@ cpdef count_nonzero_mask(mask, size):
             )
 
     return nnz
+

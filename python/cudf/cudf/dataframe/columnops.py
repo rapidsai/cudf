@@ -20,7 +20,6 @@ from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 
-
 class TypedColumnBase(Column):
     """Base class for all typed column
     e.g. NumericalColumn, CategoricalColumn
@@ -369,7 +368,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = cudautils.mask_from_devary(arbitrary)
+                mask = cudf.bindings.utils.mask_from_devary(data)
                 data = data.set_mask(mask)
 
     elif cuda.is_cuda_array(arbitrary):
