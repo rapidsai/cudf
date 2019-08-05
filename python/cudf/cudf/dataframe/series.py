@@ -475,7 +475,6 @@ class Series(object):
 
     def __repr__(self):
         mr = pd.options.display.max_rows
-        breakpoint()
         if len(self) > mr and mr != 0:
             top = self.head(int(mr / 2 + 1))
             bottom = self.tail(int(mr / 2 + 1))
