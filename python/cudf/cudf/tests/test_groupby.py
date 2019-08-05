@@ -9,6 +9,10 @@ import cudf
 from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
+_now = np.datetime64("now")
+_tomorrow = _now + np.timedelta64(1, "D")
+_now = np.int64(_now.astype("datetime64[ns]"))
+_tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 
 def make_frame(
     dataframe_class,
@@ -32,12 +36,9 @@ def make_frame(
         df[val] = np.random.random(nelem)
 
     if with_datetime:
-        now = np.datetime64("now")
-        tomorrow = now + np.timedelta64(1, "D")
-        now = np.int64(now.astype("datetime64[ns]"))
-        tomorrow = np.int64(tomorrow.astype("datetime64[ns]"))
-        timestamps = np.random.randint(now, tomorrow, nelem, dtype=np.int64)
-        df["datetime"] = timestamps.astype("datetime64[ns]")
+        df["datetime"] = np.random.randint(
+            _now, _tomorrow, nelem, dtype=np.int64
+        ).astype("datetime64[ns]")
 
     return df
 
@@ -762,8 +763,10 @@ def test_groupby_index_type():
 
 @pytest.mark.parametrize("nelem", get_nelem())
 @pytest.mark.parametrize("as_index", [True, False])
-@pytest.mark.parametrize("agg", ["min", "max", "count"])
+@pytest.mark.parametrize("agg", ["min", "max", "mean", "count"])
 def test_groupby_datetime(nelem, as_index, agg):
+    if agg == 'mean' and as_index is True:
+        return
     check_dtype = agg not in ("mean", "count")
     pdf = make_frame(pd.DataFrame, nelem=nelem, with_datetime=True)
     gdf = make_frame(cudf.DataFrame, nelem=nelem, with_datetime=True)
