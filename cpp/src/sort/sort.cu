@@ -18,6 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_view.hpp>
+#include <utilities/error_utils.hpp>
 
 namespace cudf {
 namespace exp {
@@ -26,6 +27,9 @@ namespace exp {
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      null_size size_of_nulls) {
+  CUDF_EXPECTS(
+      static_cast<std::size_t>(input.num_columns()) == column_order.size(),
+      "Mismatch between number of columns and column order.");
   auto sorted_indices =
       cudf::make_numeric_column(data_type{INT32}, input.num_rows());
 
