@@ -287,8 +287,8 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
     return;
   }
 
-  gdf_column lhs_tmp;
-  gdf_column rhs_tmp;
+  gdf_column lhs_tmp{};
+  gdf_column rhs_tmp{};
   // If the columns are GDF_DATE64 or timestamps with different time resolutions,
   // cast the least-granular column to the other's resolution before the binop
   std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::resolve_common_time_unit(*lhs, *rhs);

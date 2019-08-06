@@ -86,12 +86,7 @@ TYPED_TEST(TableTest, ConstructColumns) {
   std::vector<gdf_dtype> dtypes{GDF_INT8, GDF_INT32, GDF_FLOAT32,
                                 cudf::gdf_dtype_of<TypeParam>()};
 
-  std::vector<gdf_dtype_extra_info> dtype_infos{
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE}
-  };
+  std::vector<gdf_dtype_extra_info> dtype_infos{4, {TIME_UNIT_NONE}};
 
   if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
     dtype_infos[3].time_unit = TIME_UNIT_ns;
@@ -123,12 +118,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksNulls) {
   std::vector<gdf_dtype> dtypes{GDF_INT64, GDF_FLOAT64, GDF_INT8,
                                 cudf::gdf_dtype_of<TypeParam>()};
 
-  std::vector<gdf_dtype_extra_info> dtype_infos{
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE}
-  };
+  std::vector<gdf_dtype_extra_info> dtype_infos{4, {TIME_UNIT_NONE}};
 
   if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
     dtype_infos[3].time_unit = TIME_UNIT_ns;
@@ -166,12 +156,7 @@ TYPED_TEST(TableTest, ConstructColumnsWithBitmasksValid) {
                                 cudf::gdf_dtype_of<TypeParam>()};
 
 
-  std::vector<gdf_dtype_extra_info> dtype_infos{
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE},
-    gdf_dtype_extra_info{TIME_UNIT_NONE}
-  };
+  std::vector<gdf_dtype_extra_info> dtype_infos{4, {TIME_UNIT_NONE}};
 
   if (GDF_TIMESTAMP == cudf::gdf_dtype_of<TypeParam>()) {
     dtype_infos[3].time_unit = TIME_UNIT_ns;

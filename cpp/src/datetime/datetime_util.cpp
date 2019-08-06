@@ -43,11 +43,22 @@ std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs
       rhs_unit = TIME_UNIT_ms;
     }
     if (lhs_unit != rhs_unit) {
-      gdf_dtype_extra_info out_info{std::max(lhs_unit, rhs_unit)};
-      if (lhs_unit > rhs_unit) {
-        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, out_info);
-      } else {
-        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, out_info);
+      if (lhs_unit == TIME_UNIT_ns) {
+        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
+      } else if (rhs_unit == TIME_UNIT_ns) {
+        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
+      } else if (lhs_unit == TIME_UNIT_us) {
+        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
+      } else if (rhs_unit == TIME_UNIT_us) {
+        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
+      } else if (lhs_unit == TIME_UNIT_ms) {
+        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
+      } else if (rhs_unit == TIME_UNIT_ms) {
+        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
+      } else if (lhs_unit == TIME_UNIT_s) {
+        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
+      } else if (rhs_unit == TIME_UNIT_s) {
+        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
       }
     }
   }

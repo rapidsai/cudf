@@ -27,7 +27,8 @@ namespace datetime {
  * @brief Ensures GDF_DATE64 or GDF_TIMESTAMP columns share the same time unit.
  * 
  * If they don't, this function casts the values of the less granular column
- * to the more granular time unit.
+ * to the more granular time unit. This creates an intermediate gdf_column which
+ * must be freed by the caller.
  * 
  * If the time units are the same, or either column's dtype isn't GDF_DATE64 or
  * GDF_TIMESTAMP, no cast is performed and both returned columns will be empty.
@@ -37,7 +38,9 @@ namespace datetime {
  * @param[in] gdf_column* lhs column to compare against rhs
  * @param[in] gdf_column* rhs column to compare against lhs
  *
- * @returns std::pair<gdf_column, gdf_column> pair of gdf_columns corresponding to the input cols
+ * @returns std::pair<gdf_column, gdf_column> pair of gdf_columns corresponding to the input cols.
+ * If a column was cast, the corresponding pair will be a new intermediate gdf_column, which must
+ * be freed by the caller.
  */
 std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs, gdf_column const& rhs);
 
