@@ -74,13 +74,14 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
 
 
 def apply_apply_boolean_mask(cols, mask):
+
     cdef cudf_table  c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
 
     with nogil:
-        result = apply_boolean_mask(c_in_table[0], c_mask_col[0])
-    
+        c_out_table = apply_boolean_mask(c_in_table[0], c_mask_col[0])
+
     free(c_in_table)
     free(c_mask_col)
 
