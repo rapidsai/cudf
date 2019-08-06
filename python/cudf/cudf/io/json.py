@@ -38,14 +38,23 @@ def read_json(
             "Using CPU via Pandas to read JSON dataset, this may "
             "be GPU accelerated in the future"
         )
-        pd_value = pd.read_json(
-            path_or_buf,
-            lines=lines,
-            dtype=dtype,
-            compression=compression,
-            *args,
-            **kwargs,
-        )
+        if kwargs.get("orient") == "table":
+            pd_value = pd.read_json(
+                path_or_buf,
+                lines=lines,
+                compression=compression,
+                *args,
+                **kwargs,
+            )
+        else:
+            pd_value = pd.read_json(
+                path_or_buf,
+                lines=lines,
+                dtype=dtype,
+                compression=compression,
+                *args,
+                **kwargs,
+            )
         df = cudf.from_pandas(pd_value)
 
     return df

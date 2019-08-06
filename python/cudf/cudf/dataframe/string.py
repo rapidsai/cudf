@@ -503,6 +503,8 @@ class StringColumn(columnops.TypedColumnBase):
         return self._indices
 
     def element_indexing(self, arg):
+        from cudf.dataframe.numerical import NumericalColumn
+
         if isinstance(arg, Number):
             arg = int(arg)
             if arg < 0:
@@ -529,6 +531,8 @@ class StringColumn(columnops.TypedColumnBase):
                 out = self._data.gather(gpu_ptr, len(arg))
             else:
                 out = self._data.gather([])
+        elif isinstance(arg, NumericalColumn):
+            return self.element_indexing(arg.data.mem)
         else:
             raise NotImplementedError(type(arg))
 

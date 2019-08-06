@@ -244,7 +244,7 @@ class DataFrame(object):
     def shape(self):
         """Returns a tuple representing the dimensionality of the DataFrame.
         """
-        return len(self), len(self._cols)
+        return len(self._index), len(self._cols)
 
     @property
     def ndim(self):
@@ -256,12 +256,7 @@ class DataFrame(object):
         o = set(dir(type(self)))
         o.update(self.__dict__)
         o.update(
-            c
-            for c in self.columns
-            if (
-                isinstance(c, pd.compat.string_types)
-                and pd.compat.isidentifier(c)
-            )
+            c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
 
@@ -938,8 +933,7 @@ class DataFrame(object):
                 msg = (
                     f"Length mismatch: Expected axis has "
                     "%d elements, new values "
-                    "have %d elements"
-                    % (len(self[self.columns[0]]), len(_index))
+                    "have %d elements" % (len(self), len(_index))
                 )
                 raise ValueError(msg)
             self._index = _index
@@ -1070,8 +1064,8 @@ class DataFrame(object):
             index = index if isinstance(index, Index) else as_index(index)
             df = DataFrame()
             df._index = index
-            for k in self.columns:
-                df[k] = self[k].set_index(index)
+            for k, c in self._cols.items():
+                df[k] = c.set_index(index)
             return df
 
     def reset_index(self, drop=False):
@@ -1094,6 +1088,7 @@ class DataFrame(object):
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
+
         if self._cols:
             positions = columnops.as_column(positions).astype("int32").data.mem
             cols = [s._column for s in self._cols.values()]
@@ -1101,11 +1096,29 @@ class DataFrame(object):
             for i, col_name in enumerate(self._cols):
                 out[col_name] = result_cols[i]
 
-            if ignore_index:
-                out.index = RangeIndex(len(out))
-            else:
-                out.index = self.index.take(positions)
+            if isinstance(self.columns, cudf.MultiIndex):
+                out.columns = self.columns
+
+        if ignore_index:
+            out.index = RangeIndex(len(out))
+        elif len(out) == 0:
+            out = out.set_index(self.index.take(positions))
+        else:
+            out.index = self.index.take(positions)
+
         return out
+
+    def _take_columns(self, positions):
+        positions = Series(positions)
+        column_names = list(self._cols.keys())
+        column_values = list(self._cols.values())
+        result = DataFrame()
+        for idx in range(len(positions)):
+            result[column_names[positions[idx]]] = column_values[
+                positions[idx]
+            ]
+        result._index = self._index
+        return result
 
     def copy(self, deep=True):
         """
@@ -1372,7 +1385,7 @@ class DataFrame(object):
             subset = self._cols
         elif (
             not np.iterable(subset)
-            or isinstance(subset, pd.compat.string_types)
+            or isinstance(subset, str)
             or isinstance(subset, tuple)
             and subset in self.columns
         ):
@@ -1392,8 +1405,6 @@ class DataFrame(object):
             [in_index.as_column()], in_cols, subset_cols, keep
         )
         new_index = as_index(new_index)
-        if self.index.equals(new_index):
-            new_index = self.index
         if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
             new_index = self.index.take(new_index)
         if inplace:
@@ -1453,16 +1464,19 @@ class DataFrame(object):
         out = out.set_index(self.index)
         if isinstance(mapper, Mapping):
             postfix = 1
-            for column in self.columns:
-                if column in mapper:
-                    if mapper[column] in out.columns:
-                        out_column = str(mapper[column]) + "_" + str(postfix)
+            # It is possible for DataFrames with a MultiIndex columns object
+            # to have columns with the same name. The followig use of
+            # _cols.items and ("cudf_"... allows the use of rename in this case
+            for key, column in self._cols.items():
+                if key in mapper:
+                    if mapper[key] in out.columns:
+                        out_column = mapper[key] + ("cudf_" + str(postfix),)
                         postfix += 1
                     else:
-                        out_column = mapper[column]
-                    out[out_column] = self[column]
+                        out_column = mapper[key]
+                    out[out_column] = column
                 else:
-                    out[column] = self[column]
+                    out[key] = column
         elif callable(mapper):
             for column in self.columns:
                 out[mapper(column)] = self[column]
@@ -1766,12 +1780,16 @@ class DataFrame(object):
         """
         from cudf.bindings.transpose import transpose as cpp_transpose
 
+        # Never transpose a MultiIndex - remove the existing columns and
+        # replace with a RangeIndex. Afterward, reassign.
+        temp_columns = self.columns.copy(deep=False)
+        self.columns = pd.Index(range(len(self.columns)))
         result = cpp_transpose(self)
+        self.columns = temp_columns
         result = result.rename(dict(zip(result.columns, self.index)))
-        index = self.index
-        result = result.set_index(self.columns)
-        if isinstance(index, cudf.dataframe.multiindex.MultiIndex):
-            result.columns = index
+        result = result.set_index(temp_columns)
+        if isinstance(self.index, cudf.dataframe.multiindex.MultiIndex):
+            result.columns = self.index
         return result
 
     @property
@@ -3198,8 +3216,11 @@ class DataFrame(object):
                     )
                 result[k] = res
         if isinstance(q, numbers.Number):
-            result.index = [float(q)]
-            return result.iloc[0]
+            result = result.fillna(np.nan)
+            result = result.iloc[0]
+            result.index = as_index(self.columns)
+            result.name = q
+            return result
         else:
             q = list(map(float, q))
             result.index = q
