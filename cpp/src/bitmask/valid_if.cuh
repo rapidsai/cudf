@@ -33,6 +33,8 @@ namespace detail {
 
 constexpr int warp_size = 32;
 
+constexpr int block_size = 256;
+
 /**
  * @brief for each warp in the block do a reduction (summation) of the
  * `__popc(bit_mask)` on a certain lane (default is lane 0).
@@ -42,7 +44,7 @@ constexpr int warp_size = 32;
 template <class bit_container, int lane = 0>
 __device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container bit_mask) {
   
-  static __shared__ gdf_size_type smem[warp_size];
+  static __shared__ gdf_size_type warp_count[warp_size];
   
   int lane_id = (threadIdx.x % warp_size);
   int warp_id = (threadIdx.x / warp_size);
@@ -50,28 +52,29 @@ __device__ __inline__ gdf_size_type single_lane_popc_block_reduce(bit_container 
   // Assuming one lane of each warp holds the value that we want to perform
   // reduction
   if (lane_id == lane) {
-    smem[warp_id] = __popc(bit_mask);
+    warp_count[warp_id] = __popc(bit_mask);
   }
   __syncthreads();
 
+  gdf_size_type block_count = 0;
+
   if (warp_id == 0) {
-    // Here I am assuming maximum block size is 1024 and 1024 / 32 = 32
-    // so one single warp is enough to do the reduction over different warps
-    bit_mask = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
     
-    // The cub::warpReduce could be replaced with a __shfl_down_sync?
-    /**
-      #pragma unroll
-      for(int offset = warp_size/2; offset > 0; offset /= 2){
-        bit_mask += __shfl_down_sync(0xffffffffu, bit_mask, offset);
-      }
-    */
+    static_assert(block_size <= 1024,
+      "Reduction code only works with a block size less or equal to 1024.");
+
+    // Maximum block size is 1024 and 1024 / 32 = 32
+    // so one single warp is enough to do the reduction over different warps
+    gdf_size_type count = 
+      (lane_id < (blockDim.x / warp_size)) ? warp_count[lane_id] : 0;
+    
     __shared__
         typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
-    bit_mask = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(bit_mask);
+    block_count = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(count);
+
   }
 
-  return bit_mask;
+  return block_count;
 
 }
 
@@ -148,16 +151,15 @@ std::pair<bit_container*, size_type> valid_if(
 
   rmm::device_vector<size_type> valid_count(1);
   
-  constexpr int block_size = 256;
-  const int grid_size = util::cuda::grid_config_1d(num_bits, block_size).num_blocks;
+  const int grid_size = util::cuda::grid_config_1d(num_bits, detail::block_size).num_blocks;
   
   // launch the kernel
-  kernel<<<grid_size, block_size, 0, stream>>>(
+  kernel<<<grid_size, detail::block_size, 0, stream>>>(
       source_mask, destination_mask, p, num_bits, valid_count.data().get());
 
   size_type valid_count_host;
-  CUDA_TRY(cudaMemcpy(&valid_count_host, valid_count.data().get(),
-        sizeof(size_type), cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaMemcpyAsync(&valid_count_host, valid_count.data().get(),
+        sizeof(size_type), cudaMemcpyDeviceToHost, stream));
   
   // Synchronize the stream before null_count is updated on the host.
   cudaStreamSynchronize(stream);

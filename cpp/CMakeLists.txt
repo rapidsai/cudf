@@ -338,6 +338,7 @@ add_library(cudf SHARED
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/jit/core/launcher.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
@@ -387,7 +388,6 @@ add_library(cudf SHARED
             src/io/io_functions.cpp
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
-            src/utilities/nans_to_nulls.cu
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
