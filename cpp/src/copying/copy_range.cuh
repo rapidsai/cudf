@@ -20,7 +20,7 @@
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 
 #include <cub/cub.cuh>
 

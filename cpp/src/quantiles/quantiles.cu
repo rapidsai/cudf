@@ -21,7 +21,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/wrapper_types.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/device_vector.h>

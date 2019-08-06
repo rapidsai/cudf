@@ -23,7 +23,7 @@
 #include <utilities/error_utils.hpp>
 #include <cudf/utils/legacy/type_dispatcher.hpp>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/gather.hpp>
 #include "joining.h"

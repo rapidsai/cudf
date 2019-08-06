@@ -25,7 +25,7 @@
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cuda_runtime_api.h>
 #include <algorithm>

@@ -21,7 +21,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>

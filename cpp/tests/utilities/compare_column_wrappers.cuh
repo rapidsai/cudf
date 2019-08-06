@@ -23,7 +23,7 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/bit_util.cuh>
 #include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/wrapper_types.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
 
 #include <cudf/cudf.h>

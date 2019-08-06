@@ -26,7 +26,7 @@
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 

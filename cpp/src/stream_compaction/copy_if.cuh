@@ -24,10 +24,10 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/wrapper_types.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 

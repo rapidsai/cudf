@@ -25,9 +25,8 @@
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/utils/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
-#include <cudf/utils/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>
 #include "compiled/binary_ops.hpp"
 #include "jit/core/launcher.h"

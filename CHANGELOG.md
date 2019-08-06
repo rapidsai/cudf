@@ -79,6 +79,7 @@
 - PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
+- PR #2475 Exposed type_dispatcher.hpp, nvcategory_util.hpp and wrapper_types.hpp in the include folder
 
 ## Bug Fixes
 

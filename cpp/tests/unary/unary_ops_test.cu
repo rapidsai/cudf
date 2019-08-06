@@ -18,7 +18,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/cudf_utils.h>
-#include <cudf/utils/wrapper_types.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
 #include <cudf/unary.hpp>
 
