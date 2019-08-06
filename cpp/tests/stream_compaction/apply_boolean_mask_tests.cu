@@ -234,34 +234,6 @@ TEST_F(ApplyBooleanMaskErrorTest, Gaps)
       [](gdf_index_type row) { return true; }));
 }
 
-TEST_F(ApplyBooleanMaskErrorTest, Dates)
-{
-  std::vector<int> valids{3, 4, 5,
-                          259, 260, 261, 262,
-                          291, 292, 293, 294,
-                          323, 324, 325, 326,
-                          355, 356, 357,
-                          387, 388, 389,
-                          419, 420, 421,
-                          451, 452, 453,
-                          483, 484, 485,
-                          506, 507, 508};
-
-  std::vector<int> v(512, 0);
-  for (auto x : valids) v[x] = 1;
-
-  BooleanMaskTest<int>(
-    column_wrapper<int>(512,
-      [](gdf_index_type row) { return 1; },
-      [&](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>(512,
-      [&](gdf_index_type row) { return cudf::bool8{v[row] == 1}; },
-      [](gdf_index_type row) { return true; }),
-    column_wrapper<int>(valids.size(),
-      [](gdf_index_type row) { return 1; },
-      [](gdf_index_type row) { return true; }));
-}
-
 constexpr gdf_size_type column_size{100000};
 
 TYPED_TEST(ApplyBooleanMaskTest, Identity)
