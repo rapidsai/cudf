@@ -222,6 +222,14 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
         return df
 
     def _setitem_tuple_arg(self, key, value):
+        if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
+            self._df.columns, cudf.MultIndex
+        ):
+            raise NotImplementedError(
+                "Setting values using df.loc[] not supported on "
+                "DataFrames with a MultiIndex"
+            )
+
         columns = self._get_column_selection(key[1])
 
         for col in columns:
