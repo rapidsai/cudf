@@ -116,7 +116,9 @@ class TypedColumnBase(Column):
         if not data:
             return column_empty_like(self, newsize=0)
         else:
-            return self.replace(data=data[0].data, mask=data[0].mask)
+            return self.replace(data=data[0].data, mask=data[0].mask,
+                                null_count=data[0].null_count)
+
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
