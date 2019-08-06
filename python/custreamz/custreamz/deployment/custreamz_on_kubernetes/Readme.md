@@ -1,7 +1,7 @@
 **cuStreamz Kubernetes Setup**
 
 *"The following instruction set is for setting up the cuStreamz pipeline on Google Kubernetes Engine (GKE). But, the overall process for deploying cuStreamz 
-on any Kubernetes cluster would be the same."*
+on any Kubernetes cluster would be similar."*
  — cuStreamz team
 
 
@@ -11,12 +11,12 @@ on any Kubernetes cluster would be the same."*
 
 **Step 2: Create and push the component Docker containers to Google Cloud's Container Registry**
 1. Install gcloud by following the instructions here: [https://cloud.google.com/sdk/docs/downloads-apt-get](https://cloud.google.com/sdk/docs/downloads-apt-get)
-2. Configure authorization permissions for gclud using: `gcloud auth configure-docker`. This might prompt you to follow-up with: `gcloud auth login`
+2. Configure authorization permissions for gcloud using: `gcloud auth configure-docker`. This might prompt you to follow-up with: `gcloud auth login`
 3. Now we are all set to build Docker containers from the Dockerfiles included in this repository and push them to the container registry. 
 4. Go to each of the four folders having the Dockerfiles and use: `docker build . -t gcr.io/<name of Google Cloud Project>/<name of the image>:<version>`
-   For example, `sudo docker build . -t gcr.io/nv-ai-infra/cc-custreamz_dask_client:0.1`. 
+   For example, `sudo docker build . -t gcr.io/example_project/cc-custreamz_dask_client:0.1`. 
 5. Then, push this container to the container registry using: `docker push gcr.io/<name of GC project>/<name of the image>:<version>`
-   For example, `docker push gcr.io/nv-ai-infra/cc-custreamz_dask_client:0.1`.
+   For example, `docker push gcr.io/example_project/cc-custreamz_dask_client:0.1`.
 
 
 **Step 3: Connect to your GKE cluster using Cloud Shell**

@@ -1,6 +1,6 @@
 #!/bin/bash
 
-echo Please have a CUDA-compatible GPU, NVIDIA Drivers and CUDA installed beforehand. 
+echo Please have a Pascal or later NVIDIA GPU, with CUDA 9.2 or 10.0 compatible drivers installed beforehand. 
 
 echo Installing Anaconda3
 curl -O https://repo.anaconda.com/archive/Anaconda3-2019.07-Linux-x86_64.sh

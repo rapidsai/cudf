@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: daskscheduler
-        image: gcr.io/nv-ai-infra/dask_scheduler:0.1
+        image: gcr.io/example_project/dask_scheduler:0.1
         imagePullPolicy: Always
         ports:
         - containerPort: 8888

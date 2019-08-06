@@ -16,7 +16,7 @@ spec:
     spec:
       containers:
       - name: custreamzjob
-        image: gcr.io/nv-ai-infra/custreamz-dask_client:0.1
+        image: gcr.io/example_project/custreamz-dask_client:0.1
         imagePullPolicy: Always
         ports:
         - containerPort: 8888
