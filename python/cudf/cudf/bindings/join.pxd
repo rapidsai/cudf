@@ -5,52 +5,45 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from libcpp.utility cimport pair
+from libcpp.vector cimport vector
 from cudf.bindings.cudf_cpp cimport *
 
 
-cdef extern from "cudf/cudf.h" nogil:
+cdef extern from "cudf/join.hpp" nogil:
 
-    cdef gdf_error gdf_inner_join(
-        gdf_column **left_cols,
-        int num_left_cols,
-        int left_join_cols[],
-        gdf_column **right_cols,
-        int num_right_cols,
-        int right_join_cols[],
-        int num_cols_to_join,
-        int result_num_cols,
-        gdf_column **result_cols,
+    cdef pair[cudf_table, cudf_table] gdf_inner_join(
+        const cudf_table left_cols,
+        const vector [int] left_join_cols,
+        const cudf_table right_cols,
+        const vector [int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        gdf_context *join_context
+        gdf_context *join_context,
+        const vector [int] left_join_result_cols,
+        const vector [int] right_join_result_cols
     ) except +
 
-    cdef gdf_error gdf_left_join(
-        gdf_column **left_cols,
-        int num_left_cols,
-        int left_join_cols[],
-        gdf_column **right_cols,
-        int num_right_cols,
-        int right_join_cols[],
-        int num_cols_to_join,
-        int result_num_cols,
-        gdf_column **result_cols,
+    cdef pair[cudf_table, cudf_table] gdf_left_join(
+        const cudf_table left_cols,
+        const vector [int] left_join_cols,
+        const cudf_table right_cols,
+        const vector [int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        gdf_context *join_context
+        gdf_context *join_context,
+        const vector [int] left_join_result_cols,
+        const vector [int] right_join_result_cols
     ) except +
 
-    cdef gdf_error gdf_full_join(
-        gdf_column **left_cols,
-        int num_left_cols,
-        int left_join_cols[],
-        gdf_column **right_cols,
-        int num_right_cols,
-        int right_join_cols[],
-        int num_cols_to_join,
-        int result_num_cols,
-        gdf_column **result_cols,
+    cdef pair[cudf_table, cudf_table] gdf_full_join(
+        const cudf_table left_cols,
+        const vector [int] left_join_cols,
+        const cudf_table right_cols,
+        const vector [int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        gdf_context *join_context
+        gdf_context *join_context,
+        const vector [int] left_join_result_cols,
+        const vector [int] right_join_result_cols
     ) except +

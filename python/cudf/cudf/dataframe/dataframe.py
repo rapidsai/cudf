@@ -1949,6 +1949,8 @@ class DataFrame(object):
                 [right_on] if isinstance(right_on, str) else list(right_on)
             )
 
+        print ("Before left_on : ", left_on)
+        print ("Before right_on : ", right_on)
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
 
@@ -1997,9 +1999,11 @@ class DataFrame(object):
                     "right_on and left_on must have same " "number of columns"
                 )
 
+        print ("left_on", left_on)
+        print ("right_on", right_on)
         # Fix column names by appending `suffixes`
         for name in same_named_columns:
-            if name not in left_on and name not in right_on:
+            if not (name in left_on and name in right_on and (left_on.index(name) == right_on.index(name))):
                 if not (lsuffix or rsuffix):
                     raise ValueError(
                         "there are overlapping columns but "
@@ -2008,6 +2012,10 @@ class DataFrame(object):
                 else:
                     lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
                     rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
+                    #if name in left_on:
+                    #    left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
+                    #if name in right_on:
+                    #    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         # We save the original categories for the reconstruction of the
         # final data frame
@@ -2030,6 +2038,7 @@ class DataFrame(object):
         # whereas Pandas keeps the "right_on" columns if its name differ
         # from the one in the "left_on". Thus, here we duplicate the column if
         # the name differ.
+        """
         for left, right in zip(left_on, right_on):
             if left != right:
                 for col, valid, name in gdf_result:
@@ -2038,6 +2047,7 @@ class DataFrame(object):
                         break
                 else:
                     assert False
+        """
 
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.

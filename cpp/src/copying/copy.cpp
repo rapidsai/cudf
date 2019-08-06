@@ -95,6 +95,8 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
 }
 
 table empty_like(table const& t) {
+  if (t.num_columns() == 0)
+      return table{};
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
                  [](gdf_column* out_col, gdf_column const* in_col) {
