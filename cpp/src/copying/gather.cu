@@ -238,6 +238,7 @@ struct column_gatherer {
     if (sync_category) {
       gdf_column_free(&temp_src);
       gdf_column_free(&temp_dest);
+      nvcategory_gather(destination_column, static_cast<NVCategory*>(destination_column->dtype_info.category));
     }
 
     // Copy temporary buffers used for in-place gather to destination column
@@ -353,6 +354,7 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
     }
   }
 }
+
 
 } // namespace detail
 
