@@ -169,6 +169,9 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
         // compute the valid mask for this warp
         uint32_t valid_warp = __ballot_sync(0xffffffff, temp_valids[threadIdx.x]);
 
+        // Note the atomicOr's below assume that output_valid has been set to 
+        // all zero before the kernel
+
         if (lane == 0 && valid_warp != 0) {
           warp_valid_counts[wid] = __popc(valid_warp);
           if (wid > 0 && wid < last_warp)
@@ -234,6 +237,11 @@ struct scatter_functor
     if (has_valid) {
       RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
       CUDA_TRY(cudaMemsetAsync(null_count, 0, sizeof(gdf_size_type), stream));
+      // Have to initialize the output mask to all zeros because we may update 
+      // it with atomicOr().
+      CUDA_TRY(cudaMemsetAsync(output_column.valid, 0,
+                               gdf_valid_allocation_size(output_column.size),
+                               stream));
     }
 
     bit_mask_t * __restrict__ output_valid =
