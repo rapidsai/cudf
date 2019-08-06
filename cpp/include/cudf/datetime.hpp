@@ -22,6 +22,17 @@
 
 namespace cudf {
 namespace datetime {
+namespace detail {
+
+  /**
+   * @brief Compare the input time units and returns whichever is more granular,
+   * i.e. the gdf_time_unit that can represent the highest precision timestamps.
+   * 
+   * @returns gdf_time_unit the more granular of the two input gdf_time_units.
+   */
+  gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit);
+
+} // namespace detail
 
 /**
  * @brief Ensures GDF_DATE64 or GDF_TIMESTAMP columns share the same time unit.
@@ -42,7 +53,7 @@ namespace datetime {
  * If a column was cast, the corresponding pair will be a new intermediate gdf_column, which must
  * be freed by the caller.
  */
-std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs, gdf_column const& rhs);
+std::pair<gdf_column, gdf_column> cast_to_common_resolution(gdf_column const& lhs, gdf_column const& rhs);
 
 }  // namespace datetime 
 }  // namespace cudf

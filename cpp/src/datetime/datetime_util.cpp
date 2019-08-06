@@ -23,8 +23,35 @@
 namespace cudf {
 namespace datetime {
 
-std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs,
-                                                           gdf_column const& rhs) {
+namespace detail {
+
+gdf_time_unit common_resolution(gdf_time_unit lhs_unit, gdf_time_unit rhs_unit) {
+  if (lhs_unit == TIME_UNIT_NONE || rhs_unit == TIME_UNIT_NONE) {
+    return TIME_UNIT_NONE;
+  } else if (lhs_unit == TIME_UNIT_ns) {
+    return lhs_unit;
+  } else if (rhs_unit == TIME_UNIT_ns) {
+    return rhs_unit;
+  } else if (lhs_unit == TIME_UNIT_us) {
+    return lhs_unit;
+  } else if (rhs_unit == TIME_UNIT_us) {
+    return rhs_unit;
+  } else if (lhs_unit == TIME_UNIT_ms) {
+    return lhs_unit;
+  } else if (rhs_unit == TIME_UNIT_ms) {
+    return rhs_unit;
+  } else if (lhs_unit == TIME_UNIT_s) {
+    return lhs_unit;
+  } else if (rhs_unit == TIME_UNIT_s) {
+    return rhs_unit;
+  }
+  return TIME_UNIT_NONE;
+}
+
+} // namespace detail
+
+std::pair<gdf_column, gdf_column> cast_to_common_resolution(gdf_column const& lhs,
+                                                            gdf_column const& rhs) {
 
   gdf_column lhs_out = cudf::empty_like(lhs);
   gdf_column rhs_out = cudf::empty_like(rhs);
@@ -43,22 +70,11 @@ std::pair<gdf_column, gdf_column> resolve_common_time_unit(gdf_column const& lhs
       rhs_unit = TIME_UNIT_ms;
     }
     if (lhs_unit != rhs_unit) {
-      if (lhs_unit == TIME_UNIT_ns) {
-        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
-      } else if (rhs_unit == TIME_UNIT_ns) {
-        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
-      } else if (lhs_unit == TIME_UNIT_us) {
-        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
-      } else if (rhs_unit == TIME_UNIT_us) {
-        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
-      } else if (lhs_unit == TIME_UNIT_ms) {
-        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
-      } else if (rhs_unit == TIME_UNIT_ms) {
-        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
-      } else if (lhs_unit == TIME_UNIT_s) {
-        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lhs_unit});
-      } else if (rhs_unit == TIME_UNIT_s) {
-        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{rhs_unit});
+      auto lcd_unit = detail::common_resolution(lhs_unit, rhs_unit);
+      if (lcd_unit == lhs_unit) {
+        rhs_out = cudf::cast(rhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lcd_unit});
+      } else if (lcd_unit == rhs_unit) {
+        lhs_out = cudf::cast(lhs, GDF_TIMESTAMP, gdf_dtype_extra_info{lcd_unit});
       }
     }
   }
