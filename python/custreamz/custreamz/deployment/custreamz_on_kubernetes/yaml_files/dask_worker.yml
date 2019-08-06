@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  labels:
+    foo: bar
+spec:
+  #restartPolicy: Never
+  containers:
+    - image: gcr.io/nv-ai-infra/dask_worker:0.1
+      imagePullPolicy: IfNotPresent
+      command: ["/bin/bash", "-c"]
+      args: ["source activate rapids && dask-worker --nthreads '2' --nprocs '8' --no-bokeh --death-timeout '60'"]
+      name: daskworker
+      env:
+        - name: EXTRA_PIP_PACKAGES
+          value: fastparquet git+https://github.com/dask/distributed
+      resources:
+        limits:
+          cpu: "16"
+          nvidia.com/gpu: 1
+        requests:
+          cpu: "16"
+          nvidia.com/gpu: 1

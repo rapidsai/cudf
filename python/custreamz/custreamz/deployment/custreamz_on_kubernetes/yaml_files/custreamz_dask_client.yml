@@ -1,0 +1,37 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: custreamzjob
+  labels:
+    app: custreamzjob
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: custreamzjob
+  template:
+    metadata:
+      labels:
+        app: custreamzjob
+    spec:
+      containers:
+      - name: custreamzjob
+        image: gcr.io/nv-ai-infra/custreamz-dask_client:0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8888
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: custreamzjob
+spec:
+  type: NodePort
+  selector:
+    app: custreamzjob
+  ports:
+  - protocol: TCP
+    nodePort: 30043
+    port: 8888
+    targetPort: 8888
+    name: jupyter

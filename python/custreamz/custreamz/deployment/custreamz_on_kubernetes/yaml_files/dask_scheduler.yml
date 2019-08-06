@@ -1,0 +1,49 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: daskscheduler
+  labels:
+    app: daskscheduler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: daskscheduler
+  template:
+    metadata:
+      labels:
+        app: daskscheduler
+    spec:
+      containers:
+      - name: daskscheduler
+        image: gcr.io/nv-ai-infra/dask_scheduler:0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8888
+        - containerPort: 8786
+        - containerPort: 8787
+---
+kind: Service
+apiVersion: v1
+metadata:
+  name: daskscheduler
+spec:
+  type: NodePort
+  selector:
+    app: daskscheduler
+  ports:
+  - protocol: TCP
+    nodePort: 30040
+    port: 8888
+    targetPort: 8888
+    name: jupyter
+  - protocol: TCP
+    nodePort: 30041
+    port: 8786
+    targetPort: 8786
+    name: dask-scheduler
+  - protocol: TCP
+    nodePort: 30042
+    port: 8787
+    targetPort: 8787
+    name: dask-dashboard

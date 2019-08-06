@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: kafka
+  labels:
+    foo: bar
+spec:
+  containers:
+  - name: kafka-cluster
+    image: gcr.io/nv-ai-infra/kafka:0.1
+    imagePullPolicy: Always
+    command: ["/bin/bash", "-c"]
+    args: ["./start_kafka.sh && sleep infinity"]
+    ports:
+    - containerPort: 9092
