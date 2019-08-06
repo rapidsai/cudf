@@ -14,29 +14,21 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
+#define GDF_UNARY_TRANSFORM_JIT_CODE_CODE_H
 
-#include <stdlib.h>
+namespace cudf {
+namespace transformation {
+namespace jit {
+namespace code {
 
+extern const char* kernel;
+extern const char* traits;
+extern const char* operation;
 
-// TODO merge with DataSource
-/**
- * @brief Helper class for memory mapping a file source
- **/
-class MappedFile {
-  int fd_ = -1;
-  size_t size_ = 0;
-  void *map_data_ = nullptr;
-  size_t map_size_ = 0;
-  size_t map_offset_ = 0;
+}  // namespace code
+}  // namespace jit
+}  // namespace transformation
+}  // namespace cudf
 
-public:
-  MappedFile(const char *path, int oflag);
-  MappedFile() noexcept = default;
-  ~MappedFile();
-
-  auto size() { return size_; }
-  auto data() { return map_data_; }
-
-  void map(size_t size, off_t offset);
-};
+#endif

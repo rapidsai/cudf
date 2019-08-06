@@ -321,8 +321,8 @@ def test_parquet_writer(tmpdir, pdf, gdf):
     pdf_fname = tmpdir.join("pdf.parquet")
     gdf_fname = tmpdir.join("gdf.parquet")
 
-    pdf.to_parquet(pdf_fname)
-    gdf.to_parquet(gdf_fname)
+    pdf.to_parquet(pdf_fname.strpath)
+    gdf.to_parquet(gdf_fname.strpath)
 
     assert os.path.exists(pdf_fname)
     assert os.path.exists(gdf_fname)

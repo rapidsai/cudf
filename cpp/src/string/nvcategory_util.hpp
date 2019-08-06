@@ -24,7 +24,7 @@ typedef int nv_category_index_type;
  * @param[in] nv_category the category that contains the data these indices map to
  * @return a gdf_error indicating success or failure type
  */
-gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category);
+gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category);
 
 /**
  * @brief Takes an array of input_columns and concatenates them into one long column.
@@ -33,7 +33,7 @@ gdf_error nvcategory_gather(gdf_column * column, NVCategory * nv_category);
  * @param[out] Concatted output
  * @param[in] number of input columns
  */
-gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_column, int num_columns);
+gdf_error concat_categories(const gdf_column* const input_columns[], gdf_column* output_column, int num_columns);
 
 /**
  * @brief Takes an array of input_columns and makes it so that they all share the same keys in NVCategory
@@ -42,8 +42,7 @@ gdf_error concat_categories(gdf_column * input_columns[],gdf_column * output_col
  * @param[out] output_columns same data as input_columns but with categories syncrhonized
  * @param[in] num_columns number of input columns
  */
-gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * output_columns[], int num_columns);
-
+gdf_error sync_column_categories(const gdf_column* const input_columns[], gdf_column* output_columns[], int num_columns);
 
 /**
  * @brief Takes two tables and gathers the destination table's data interpreted as int32 from the dictionary of the source table's NVCategory.
@@ -52,4 +51,5 @@ gdf_error sync_column_categories(gdf_column * input_columns[],gdf_column * outpu
  * @param[in,out] destination_table Contains columns that contain indices that map into source_table dictionaries.
  */
 gdf_error nvcategory_gather_table(cudf::table source_table, cudf::table destination_table);
+
 #endif
