@@ -306,6 +306,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns this column's current refcount
+   */
+  int getRefCount() {
+    return refCount;
+  }
+
+  /**
    * Retrieve the number of bytes for each string. Null strings will have value of null.
    *
    * @return ColumnVector, where each element at i = byte count of string at index 'i' in the original vector
