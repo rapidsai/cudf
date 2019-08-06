@@ -79,6 +79,7 @@
 - PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
+- PR ##2484 Enabled building a libcudf as a static library
 
 ## Bug Fixes
 
