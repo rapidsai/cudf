@@ -21,9 +21,9 @@
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utils/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/gather.hpp>
 #include "joining.h"

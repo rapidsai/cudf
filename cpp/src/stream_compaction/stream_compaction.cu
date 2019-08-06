@@ -19,7 +19,7 @@
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <rmm/thrust_rmm_allocator.h>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utils/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
  
 namespace {

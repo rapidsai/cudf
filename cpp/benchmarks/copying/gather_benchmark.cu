@@ -25,7 +25,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utils/wrapper_types.hpp>
 
 #include <random>
 #include <algorithm>
