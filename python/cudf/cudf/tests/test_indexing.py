@@ -728,6 +728,7 @@ def test_series_setitem_loc(key, value):
     assert_eq(psr, gsr)
 
 
+@pytest.fixture
 def pdf_gdf():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": ["c", "d", "e"]}, index=["one", "two", "three"]
@@ -736,18 +737,58 @@ def pdf_gdf():
     return pdf, gdf
 
 
-def test_dataframe_setitem_iloc():
-    pdf, gdf = pdf_gdf()
-    pdf.iloc[0, 0] = 5
-    gdf.iloc[0, 0] = 5
+@pytest.fixture
+def pdf_gdf_multi():
+    pdf = pd.DataFrame(np.random.rand(7, 5))
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+            ["fire", "smoke", "clear"],
+        ],
+        [
+            [0, 0, 0, 0, 1, 1, 2],
+            [1, 1, 1, 1, 0, 0, 2],
+            [0, 0, 2, 2, 2, 0, 1],
+            [0, 0, 0, 1, 2, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather", "sign"]
+    pdf.index = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    return pdf, gdf
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        ((0, 0), 5),
+        ((slice(None), 0), 5),
+        ((slice(None), 0), range(3)),
+        ((slice(None, -1), 0), range(2)),
+        (([0, 1], 0), 5),
+    ],
+)
+def test_dataframe_setitem_iloc(key, value, pdf_gdf):
+    pdf, gdf = pdf_gdf
+    pdf.iloc[key] = value
+    gdf.iloc[key] = value
     assert_eq(pdf, gdf)
 
-    pdf, gdf = pdf_gdf()
-    pdf.iloc[:, 0] = 5
-    gdf.iloc[:, 0] = 5
-    assert_eq(pdf, gdf)
 
-    pdf, gdf = pdf_gdf()
-    pdf.iloc[:, 0] = range(len(pdf))
-    gdf.iloc[:, 0] = range(len(gdf))
+@pytest.mark.parametrize(
+    "key,value",
+    [
+        ((0, 0), 5.0),
+        ((slice(None), 0), 5.0),
+        ((slice(None), 0), np.arange(7, dtype="float64")),
+    ],
+)
+def test_dataframe_setitem_iloc_multiindex(key, value, pdf_gdf_multi):
+    pdf, gdf = pdf_gdf_multi
+
+    pdf.iloc[key] = value
+    gdf.iloc[key] = value
+
     assert_eq(pdf, gdf)
