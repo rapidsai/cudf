@@ -695,14 +695,14 @@ R"***(
 .common .global .align 8 .u64 _ZN08NumbaEnv8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE;
 
 .visible .func  (.param .b32 func_retval0) _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE(
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_0,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_1,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_2,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_3,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_4,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_5,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_6,
-	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_7
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_0,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_1,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_2,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_3,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_4,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_5,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_6,
+	.param .b64 _ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_7
 )
 {
 	.reg .pred 	%p<3>;
@@ -710,10 +710,10 @@ R"***(
 	.reg .b64 	%rd<18>;
 
 
-	ld.param.u64 	%rd6, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_0];
-	ld.param.u64 	%rd7, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_5];
-	ld.param.u64 	%rd8, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_6];
-	ld.param.u64 	%rd9, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_param_7];
+	ld.param.u64 	%rd6, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_0];
+	ld.param.u64 	%rd7, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_5];
+	ld.param.u64 	%rd8, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_6];
+	ld.param.u64 	%rd9, [_ZN8__main__7add$241E5ArrayIiLi1E1A7mutable7alignedE_paam_7];
 	mov.u64 	%rd15, 0;
 	mov.u64 	%rd16, %rd15;
 

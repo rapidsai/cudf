@@ -71,7 +71,7 @@ std::string ptx_parser::remove_nonalphanumeric(const std::string& src) {
   return output.substr(start, stop - start);
 }
 
-std::string ptx_parser::parse_register_type(const std::string& src) {
+std::string ptx_parser::register_type_to_contraint(const std::string& src) {
   if (src == ".b8" || src == ".u8" || src == ".s8")
     return "h";
   else if (src == ".u16" || src == ".s16" || src == ".b16" || src == ".f16")
@@ -115,31 +115,6 @@ std::string ptx_parser::register_type_to_cpp_type(const std::string& register_ty
     return "x_cpptype";
 }
 
-std::string ptx_parser::find_register_type(const std::string& src) {
-  const size_t length = src.size();
-  size_t start = 0;
-  size_t stop = 0;
-  while (start < length) {
-    while (start < length && src[start] != '.') {
-      start++;
-    }
-    stop = start + 1;
-    while (stop < length && src[stop] != '.') {
-      stop++;
-    }
-
-    std::string code =
-        register_type_to_cpp_type(std::string(src, start, stop - start));
-    if (code != "x") {
-      return code;
-    } else {
-      start = stop;
-    }
-  }
-  printf("Cannot determine point type!\n");
-  exit(1);
-}
-
 std::string ptx_parser::parse_instruction(const std::string& src) {
   // I am assumming for an instruction statement the starting phrase is an
   // instruction.
@@ -154,6 +129,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
   size_t start = 0;
   size_t stop = 0;
   bool is_instruction = true;
+  bool is_param_loading_instruction = false;
   std::string constraint;
   std::string register_type;
   bool blank = true;
@@ -188,6 +164,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
     std::string piece = std::string(src, start, stop - start);
     if (is_instruction) {
       if (piece.find("ld.param") != std::string::npos) {
+        is_param_loading_instruction = true;
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
         cpp_typename = register_type_to_cpp_type(register_type);
@@ -207,7 +184,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
         } else {
           output += " mov" + register_type;
         }
-        constraint = parse_register_type(register_type);
+        constraint = register_type_to_contraint(register_type);
       } else if (piece.find("st.param") != std::string::npos) {
         return "// Out port does not support return value!" +
                original_code;  // Our port does not support return value;
@@ -219,7 +196,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
       is_instruction = false;
     } else {
       // Here it should be the registers.
-      if (piece.find("_param_") != std::string::npos) {
+      if (piece_count == 2 && is_param_loading_instruction) {
         // This is the source of the parameter loading instruction
         output += " %0";
         if(cpp_typename == "char"){
@@ -272,10 +249,8 @@ std::vector<std::string> ptx_parser::parse_function_body(const std::string& src)
     while (stop < length && src[stop] != ';') {
       stop++;
     }
-    // statements.push_back(std::string(src, start, stop-start));
     statements.push_back(
         parse_statement(std::string(src, start, stop - start)));
-    // parse_sentence();
     stop++;
     start = stop;
   }
@@ -381,8 +356,6 @@ std::string ptx_parser::parse_function_header(const std::string& src) {
   while (stop < length && !is_white(src[stop]) && src[stop] != '(') {
     stop++;
   }
-  // std::string function_name = remove_nonalphanumeric( std::string(src,
-  // start, stop-start) );
 
   start = stop;
   // Second Pass: input param list
@@ -505,8 +478,7 @@ ptx_parser::ptx_parser(
 
 // The interface
 std::string parse_single_function_cuda(const std::string& src,
-                                       const std::string& function_name,
-                                       const std::string& output_arg_type) {
+                                       const std::string& function_name){
   std::string no_comments = remove_comments(src);
 
   // For CUDA device function we just need to find the function 

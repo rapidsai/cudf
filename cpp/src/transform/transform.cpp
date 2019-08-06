@@ -64,9 +64,7 @@ void unary_operation(gdf_column& output, const gdf_column& input,
   }else{  
     cuda_source = 
       cudf::jit::parse_single_function_cuda(
-          udf, "GENERIC_UNARY_OP",
-          cudf::jit::getTypeName(output_type)
-          ) + code::kernel;
+          udf, "GENERIC_UNARY_OP") + code::kernel;
   }
   
   // Launch the jitify kernel

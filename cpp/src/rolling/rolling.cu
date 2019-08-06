@@ -336,8 +336,7 @@ gdf_column rolling_window(gdf_column const& input,
       cuda_source = 
         cudf::jit::parse_single_function_cuda(
           user_defined_aggregator, 
-          cudf::rolling::jit::get_function_name(agg_op), 
-          cudf::jit::getTypeName(output_type)
+          cudf::rolling::jit::get_function_name(agg_op) 
         ) + cudf::rolling::jit::code::kernel;
       break;
     default:
