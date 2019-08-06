@@ -22,6 +22,7 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -765,6 +766,20 @@ public class TableTest {
         }
       }
     }
+  }
+  
+  @Test
+  void testValidityCopyLastByte() {
+    try (ColumnVector column =
+          ColumnVector.fromBoxedLongs(null, 2L, 3L, 4L, 5L, 6L, 7L, 8L, null, 10L, null, 12L, null, 14L, 15L)) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      DataOutputStream dos = new DataOutputStream(baos);
+      byte[] buff = new byte[1024 * 128];
+      JCudfSerialization.copyValidityData(dos, column, 4, 11, buff);
+      byte[] output = baos.toByteArray();
+      assertEquals(output[0], 0xFFFFFFAF);   // 1010 1111 => 12, null, 10, null, 8, 7, 6, 5
+      assertEquals(output[1], 0x0000000E);   // 0000 1110 => ..., 15, 14, null
+    } catch (Exception e){}
   }
 
   @Test
