@@ -100,6 +100,7 @@ struct DropNullsTest : GdfTest
 
 using test_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
+                     cudf::timestamp, cudf::date32, cudf::date64,
                      cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(DropNullsTest, test_types);
 
