@@ -360,12 +360,14 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
             return cols[arg]
 
 
-def _normalize_dtypes(df):
-    dtypes = df.dtypes.values.tolist()
-    normalized_dtype = np.result_type(*dtypes)
-    for name, col in df._cols.items():
-        df[name] = col.astype(normalized_dtype)
-    return df
+class _IndexIlocIndexer(object):
+    def __init__(self, idx):
+        self.idx = idx
+
+    def __getitem__(self, arg):
+        from cudf.dataframe.index import as_index
+
+        return as_index(self.idx.to_series().iloc[arg])
 
 
 class _IndexLocIndexer(object):
@@ -376,3 +378,11 @@ class _IndexLocIndexer(object):
         from cudf.dataframe.index import as_index
 
         return as_index(self.idx.to_series().loc[arg])
+
+
+def _normalize_dtypes(df):
+    dtypes = df.dtypes.values.tolist()
+    normalized_dtype = np.result_type(*dtypes)
+    for name, col in df._cols.items():
+        df[name] = col.astype(normalized_dtype)
+    return df

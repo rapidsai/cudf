@@ -20,7 +20,7 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
-from cudf.indexing import _IndexLocIndexer
+from cudf.indexing import _IndexIlocIndexer, _IndexLocIndexer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
 
@@ -291,6 +291,10 @@ class Index(object):
         from cudf.dataframe.series import Series
 
         return Series(self._values)
+
+    @property
+    def iloc(self):
+        return _IndexIlocIndexer(self)
 
     @property
     def loc(self):
