@@ -210,7 +210,7 @@ class MultiIndex(Index):
         from cudf import DataFrame
         from cudf import Series
         from cudf import concat
-        from cudf.utils.cudautils import arange
+        from cudf.util.cudautils import arange
 
         lookup = DataFrame()
         for idx, row in enumerate(row_tuple):
@@ -236,7 +236,7 @@ class MultiIndex(Index):
         return result
 
     def _get_valid_indices_by_tuple(self, index, row_tuple, max_length):
-        from cudf.utils.cudautils import arange
+        from cudf.util.cudautils import arange
         from cudf import Series
 
         # Instructions for Slicing

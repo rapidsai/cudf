@@ -158,7 +158,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
     def _getitem_tuple_arg(self, arg):
         from cudf.dataframe.dataframe import DataFrame
         from cudf.dataframe.index import as_index
-        from cudf.utils.cudautils import arange
+        from cudf.util.cudautils import arange
         from cudf import MultiIndex
 
         # Step 1: Gather columns
