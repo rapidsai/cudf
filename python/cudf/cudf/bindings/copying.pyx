@@ -7,7 +7,6 @@
 
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.numerical import numeric_normalize_types
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.copying cimport *
