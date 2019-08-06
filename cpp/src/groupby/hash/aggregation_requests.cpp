@@ -114,20 +114,11 @@ table compute_original_requests(
         simple_outputs.get_column(i), simple_requests[i].second};
   }
 
-  // Calculate processing order so that the compound operators are
-  // processed first
-  std::vector<gdf_size_type> processing_order(original_requests.size());
-  std::iota(processing_order.begin(), processing_order.end(), 0);
-  std::sort(processing_order.begin(), processing_order.end(),
-            [&original_requests](gdf_size_type a, gdf_size_type b) {
-              return original_requests[a].second > original_requests[b].second;
-            });
-
   std::vector<gdf_column*> final_value_columns(original_requests.size());
 
-  // Iterate requests. For any compound request, compute the compound result
-  // from the corresponding simple requests
-  for (auto i : processing_order) {
+  // Process compound requests. For any compound request, compute the compound
+  // result from the corresponding simple requests
+  for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& req = original_requests[i];
     if (req.second == MEAN) {
       auto found = simple_requests_to_outputs.find({req.first, SUM});
@@ -149,7 +140,13 @@ table compute_original_requests(
       final_value_columns[i] = compute_average(*sum, *count, stream);
       --pair_sum_col_counter.second;
       --pair_count_col_counter.second;
-    } else {
+    }
+  }
+
+  // Process simple requests
+  for (size_t i = 0; i < original_requests.size(); ++i) {
+    auto const& req = original_requests[i];
+    if (req.second != MEAN) {
       // For non-compound requests, append the result to the final output
       // and remove it from the map
       auto found = simple_requests_to_outputs.find(req);
