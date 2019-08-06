@@ -199,7 +199,7 @@ public final class Table implements AutoCloseable {
                                           String filePath, long address, long length) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                   int[] aggTypes) throws CudfException;
+                                                   int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -533,8 +533,8 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true);
   }
 
-  public static Aggregate count() {
-    return Aggregate.count();
+  public static Aggregate count(int index) {
+    return Aggregate.count(index);
   }
 
   public static Aggregate max(int index) {
@@ -553,9 +553,18 @@ public final class Table implements AutoCloseable {
     return Aggregate.mean(index);
   }
 
+  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+    return groupByInternal(groupByOptions, indices);
+  }
+
   public AggregateOperation groupBy(int... indices) {
+    return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
+        indices);
+  }
+
+  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, operationIndicesArray);
+    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
   }
 
   public TableOperation onColumns(int... indices) {
@@ -606,9 +615,11 @@ public final class Table implements AutoCloseable {
   public static final class AggregateOperation {
 
     private final Operation operation;
+    private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, final int... indices) {
+    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
+      this.groupByOptions = groupByOptions;
     }
 
     /**
@@ -638,8 +649,9 @@ public final class Table implements AutoCloseable {
         ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
       }
 
+      boolean ignoreNullKeys = false;
       Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
-          operation.indices, aggregateColumnIndices, ops));
+          operation.indices, aggregateColumnIndices, ops, groupByOptions.getIgnoreNullKeys()));
       return aggregate;
     }
   }
