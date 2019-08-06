@@ -230,18 +230,13 @@ class Rolling:
                 has_nulls = True
         else:
             for col in self.obj._cols:
-                if col.null_count > 0:
+                if self.obj[col].null_count > 0:
                     has_nulls = True
         if has_nulls:
             raise NotImplementedError(
                 "Handling UDF with null values is not yet supported"
             )
-
-        nb_type = numba.numpy_support.from_dtype(self.obj.dtype)
-        type_signature = (nb_type[:],)
-
-        op = cudautils.compile_udf(func, type_signature)
-        return self._apply_agg(op)
+        return self._apply_agg(func)
 
     def _normalize(self):
         """

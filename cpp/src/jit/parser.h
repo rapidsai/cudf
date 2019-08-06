@@ -55,9 +55,23 @@ private:
   std::map<std::string, std::string> input_arg_list;
 
 private:
-  
+ 
+  /**
+   * @brief parse and transform header part of the PTX code into a CUDA header
+   *
+   * The result always has `__device__ __inline__ void`. The types of the input
+   * parameters are determined from, in descending order of priority:
+   *  1. The first parameter is always of type "`output_arg_type`*"
+   *  2. All other parameters marked in pointer_arg_list are of type "const void*"
+   *  3. For parameters that are used in the function body their types are 
+   *      inferred from their corresponding parameter loading instructions
+   *  4. Unused parameters are always of type "int"
+   *
+   * @param src The header part of the PTX code
+   * @return The parsed CUDA header
+   */ 
   std::string parse_function_header(const std::string& src);
-  
+
   std::string parse_param_list(const std::string& src);
 
   static std::string parse_param(const std::string& src);
@@ -70,11 +84,11 @@ private:
   
   static std::string find_register_type(const std::string& src);
   
-  static std::string register_type_to_cppname(const std::string& register_type);
+  static std::string register_type_to_cpp_type(const std::string& register_type);
   
   static std::string parse_register_type(const std::string& src);
   
-  static std::string get_rid_of_nonalnum_sqrbra(const std::string& src);
+  static std::string remove_nonalphanumeric(const std::string& src);
   
   static std::string escape_percent(const std::string& src);
 

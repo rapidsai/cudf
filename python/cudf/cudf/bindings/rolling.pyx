@@ -2,12 +2,15 @@ from libc.stdlib cimport calloc, malloc, free
 from libc.stdint cimport uintptr_t
 
 import numba.cuda
+import numba.numpy_support
 
 from cudf.dataframe.column import Column
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.rolling cimport *
+
+from cudf.utils import cudautils
 
 
 def apply_rolling(inp, window, min_periods, center, op):
@@ -60,14 +63,17 @@ def apply_rolling(inp, window, min_periods, center, op):
             cudautils.fill_value(data, inp.default_na_value())
             mask = cudautils.make_empty_mask(len(inp))
     else:
-        if isinstance(op, tuple):
-            cpp_str = op[0].encode('UTF-8')
-            if op[1] not in dtypes:
+        if callable(op):
+            nb_type = numba.numpy_support.from_dtype(inp.dtype)
+            type_signature = (nb_type[:],)
+            compiled_op = cudautils.compile_udf(op, type_signature)
+            cpp_str = compiled_op[0].encode('UTF-8')
+            if compiled_op[1] not in dtypes:
                 raise TypeError(
                     "Result of window function has unsupported dtype {}"
                     .format(op[1])
                 )
-            g_type = dtypes[op[1]]
+            g_type = dtypes[compiled_op[1]]
             with nogil:
                 c_output_col = rolling_window(
                     inp_col[0],

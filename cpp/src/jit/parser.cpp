@@ -53,7 +53,7 @@ std::string ptx_parser::escape_percent(const std::string& src) {
   }
 }
 
-std::string ptx_parser::get_rid_of_nonalnum_sqrbra(const std::string& src) {
+std::string ptx_parser::remove_nonalphanumeric(const std::string& src) {
   const size_t length = src.size();
   size_t start = 0;
   size_t stop = 0;
@@ -88,7 +88,7 @@ std::string ptx_parser::parse_register_type(const std::string& src) {
     return "x_reg";
 }
 
-std::string ptx_parser::register_type_to_cppname(const std::string& register_type) {
+std::string ptx_parser::register_type_to_cpp_type(const std::string& register_type) {
   if (register_type == ".b8" || register_type == ".s8" || register_type == ".u8")
     return "char";
   else if (register_type == ".u16")
@@ -129,7 +129,7 @@ std::string ptx_parser::find_register_type(const std::string& src) {
     }
 
     std::string code =
-        register_type_to_cppname(std::string(src, start, stop - start));
+        register_type_to_cpp_type(std::string(src, start, stop - start));
     if (code != "x") {
       return code;
     } else {
@@ -190,7 +190,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
       if (piece.find("ld.param") != std::string::npos) {
         register_type = std::string(piece, 8, stop - 8);
         // This is the ld.param sentence
-        cpp_typename = register_type_to_cppname(register_type);
+        cpp_typename = register_type_to_cpp_type(register_type);
         if (cpp_typename == "int" || cpp_typename == "short int" || cpp_typename == "char") {
           // The trick to support `ld` statement whose destination reg. wider than 
           // the instruction width, e.g.
@@ -212,7 +212,7 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
         return "// Out port does not support return value!" +
                original_code;  // Our port does not support return value;
       } else if (piece[0] == '@') {
-        output += " @" + get_rid_of_nonalnum_sqrbra(piece.substr(1, piece.size()-1));
+        output += " @" + remove_nonalphanumeric(piece.substr(1, piece.size()-1));
       } else {
         output += " " + piece;
       }
@@ -224,14 +224,14 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
         output += " %0";
         if(cpp_typename == "char"){
           suffix = ": : \"" + constraint + "\"( static_cast<short>(" +
-                 get_rid_of_nonalnum_sqrbra(piece) + "))";
+                 remove_nonalphanumeric(piece) + "))";
         }else{  
           suffix = ": : \"" + constraint + "\"(" +
-                 get_rid_of_nonalnum_sqrbra(piece) + ")";
+                 remove_nonalphanumeric(piece) + ")";
         }
         // Here we get to see the actual type of the input arguments.
-        input_arg_list[get_rid_of_nonalnum_sqrbra(piece)] =
-            register_type_to_cppname(register_type);
+        input_arg_list[remove_nonalphanumeric(piece)] =
+            register_type_to_cpp_type(register_type);
       } else {
         output += escape_percent(std::string(src, start, stop - start));
       }
@@ -300,7 +300,7 @@ std::string ptx_parser::parse_param(const std::string& src) {
     }
     item_count++;
     if (item_count == 3) {
-      name = get_rid_of_nonalnum_sqrbra(std::string(src, start, stop - start));
+      name = remove_nonalphanumeric(std::string(src, start, stop - start));
     }
     start = stop;
   }
@@ -381,7 +381,7 @@ std::string ptx_parser::parse_function_header(const std::string& src) {
   while (stop < length && !is_white(src[stop]) && src[stop] != '(') {
     stop++;
   }
-  // std::string function_name = get_rid_of_nonalnum_sqrbra( std::string(src,
+  // std::string function_name = remove_nonalphanumeric( std::string(src,
   // start, stop-start) );
 
   start = stop;

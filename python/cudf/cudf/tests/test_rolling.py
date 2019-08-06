@@ -194,6 +194,43 @@ def test_rollling_series_numba_udf_basic(data, index, center):
             )
 
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [], "b": []},
+        {"a": [1, 2, 3, 4], "b": [1, 2, 3, 4]},
+        {"a": [1, 2, 4, 9, 9, 4], "b": [1, 2, 4, 9, 9, 4]},
+        {
+            "a": np.array([1, 2, 4, 9, 9, 4]),
+            "b": np.array([1.5, 2.2, 2.2, 8.0, 9.1, 4.2]),
+        },
+    ],
+)
+@pytest.mark.parametrize("center", [True, False])
+def test_rolling_dataframe_numba_udf_basic(data, center):
+
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    def some_func(A):
+        b = 0
+        for a in A:
+            b = b + a ** 2
+        return b / len(A)
+
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
+            assert_eq(
+                pdf.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                gdf.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                check_dtype=False,
+            )
+
+
 def test_rolling_numba_udf_with_offset():
     psr = pd.Series(
         [1, 2, 4, 4, 8, 9],
