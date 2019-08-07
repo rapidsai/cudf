@@ -685,10 +685,10 @@ def test_merge_sort(kwargs, hows):
 
 
 def test_join_with_different_names():
-    left = pd.DataFrame({'a': [0, 1, 2.0, 3, 4, 5, 9]})
-    right = pd.DataFrame({'b': [12, 5, 3, 9.0, 5], 'c': [1, 2, 3, 4, 5.0]})
+    left = pd.DataFrame({"a": [0, 1, 2.0, 3, 4, 5, 9]})
+    right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
-    pd_merge = left.merge(right, how='outer', left_on=['a'], right_on=['b'])
-    gd_merge = gleft.merge(gright, how='outer', left_on=['a'], right_on=['b'])
-    assert_eq(pd_merge, gd_merge.sort_values(by=['a']).reset_index(drop=True))
+    pd_merge = left.merge(right, how="outer", left_on=["a"], right_on=["b"])
+    gd_merge = gleft.merge(gright, how="outer", left_on=["a"], right_on=["b"])
+    assert_eq(pd_merge, gd_merge.sort_values(by=["a"]).reset_index(drop=True))
