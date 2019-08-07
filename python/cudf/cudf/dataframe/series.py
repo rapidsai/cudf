@@ -361,18 +361,20 @@ class Series(object):
     def __getitem__(self, arg):
         data = self._column[arg]
         index = self.index.take(arg)
-        if utils.is_single_value(data) or data is None:
+        if utils.is_scalar(data) or data is None:
             return data
         return self._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
         # coerce value into a scalar or column
-        if utils.is_single_value(value):
-            value = pd.api.types.pandas_dtype(type(value)).type(value)
+        if utils.is_scalar(value):
+            value = utils.to_cudf_compatible_scalar(value)
         else:
             value = columnops.as_column(value)
 
-        if pd.api.types.is_numeric_dtype(value.dtype):
+        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
+            value.dtype
+        ):
             # normalize types if necessary:
             if not isinstance(key, int):
                 to_dtype = np.result_type(value.dtype, self._column.dtype)

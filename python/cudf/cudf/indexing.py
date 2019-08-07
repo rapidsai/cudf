@@ -4,7 +4,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
 from cudf.utils.cudautils import arange
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 
 def indices_from_labels(obj, labels):
@@ -72,7 +72,7 @@ class _SeriesLocIndexer(object):
                 return arg
             else:
                 return indices_from_labels(self._sr, arg)
-        elif is_single_value(arg):
+        elif is_scalar(arg):
             found_index = self._sr.index.find_label_range(arg, None)[0]
             return found_index
         elif isinstance(arg, slice):
@@ -123,7 +123,7 @@ class _DataFrameIndexer(object):
         nrows, ncols = df.shape
         if nrows == 1:
             if type(arg[0]) is slice:
-                if not is_single_value(arg[1]):
+                if not is_scalar(arg[1]):
                     return False
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
@@ -134,7 +134,7 @@ class _DataFrameIndexer(object):
                 return True
         if ncols == 1:
             if type(arg[1]) is slice:
-                if not is_single_value(arg[0]):
+                if not is_scalar(arg[0]):
                     return False
             return True
         return False
@@ -147,7 +147,7 @@ class _DataFrameIndexer(object):
         nrows, ncols = df.shape
         # determine the axis along which the Series is taken:
         if nrows == 1 and ncols == 1:
-            if not is_single_value(arg[0]):
+            if not is_scalar(arg[0]):
                 axis = 1
             else:
                 axis = 0
@@ -223,7 +223,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def _setitem_tuple_arg(self, key, value):
         if isinstance(self._df.index, cudf.MultiIndex) or isinstance(
-            self._df.columns, cudf.MultIndex
+            self._df.columns, cudf.MultiIndex
         ):
             raise NotImplementedError(
                 "Setting values using df.loc[] not supported on "
@@ -236,7 +236,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
             self._df[col].loc[key[0]] = value
 
     def _get_column_selection(self, arg):
-        if is_single_value(arg):
+        if is_scalar(arg):
             return [arg]
 
         elif isinstance(arg, slice):
@@ -362,7 +362,7 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     def _get_column_selection(self, arg):
         cols = self._df.columns
-        if is_single_value(arg):
+        if is_scalar(arg):
             return [cols[arg]]
         else:
             return cols[arg]

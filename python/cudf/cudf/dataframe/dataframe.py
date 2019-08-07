@@ -311,7 +311,7 @@ class DataFrame(object):
             self.columns, cudf.dataframe.multiindex.MultiIndex
         ) and isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if utils.is_single_value(arg) or isinstance(arg, tuple):
+        if utils.is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index

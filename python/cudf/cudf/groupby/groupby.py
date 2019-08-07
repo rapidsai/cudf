@@ -7,7 +7,7 @@ import cudf
 from cudf import MultiIndex
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 
 def columns_from_dataframe(df):
@@ -74,7 +74,7 @@ class DataFrameGroupBy(_Groupby):
         return result
 
     def __getitem__(self, arg):
-        if is_single_value(arg):
+        if is_scalar(arg):
             return self.__getattr__(arg)
         else:
             arg = list(arg)
@@ -159,7 +159,7 @@ class _GroupbyHelper(object):
         """
         Get (key_name, key_column) pair from a single *by* argument
         """
-        if is_single_value(by):
+        if is_scalar(by):
             key_name = by
             key_column = self.obj[by]._column
         else:

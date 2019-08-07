@@ -17,7 +17,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 
 class DatetimeColumn(columnops.TypedColumnBase):
@@ -198,7 +198,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             )
 
     def fillna(self, fill_value, inplace=False):
-        if is_single_value(fill_value):
+        if is_scalar(fill_value):
             fill_value = np.datetime64(fill_value, "ms")
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)

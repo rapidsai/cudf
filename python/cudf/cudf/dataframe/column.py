@@ -507,7 +507,7 @@ class Column(object):
             key = columnops.as_column(key)
             nelem = len(key)
 
-        if utils.is_single_value(value):
+        if utils.is_scalar(value):
             if pd.api.types.is_categorical_dtype(self.dtype):
                 from cudf.dataframe.categorical import CategoricalColumn
                 from cudf.dataframe.buffer import Buffer
