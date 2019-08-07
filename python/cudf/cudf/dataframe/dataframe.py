@@ -2012,10 +2012,10 @@ class DataFrame(object):
                 else:
                     lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
                     rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
-                    #if name in left_on:
-                    #    left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
-                    #if name in right_on:
-                    #    right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
+                    if name in left_on:
+                        left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
+                    if name in right_on:
+                        right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
 
         # We save the original categories for the reconstruction of the
         # final data frame

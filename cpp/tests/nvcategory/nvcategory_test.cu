@@ -23,10 +23,12 @@
 #include <cudf/binaryop.hpp>
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
+#include <cudf/join.hpp>
 
 #include <cudf/functions.h>
 #include <cudf/types.h>
-#include <cudf/join.hpp>
+#include <cudf/copying.hpp>
+#include <utilities/column_utils.hpp>
 #include <iostream>
 #include <random>
 
@@ -534,38 +536,38 @@ struct NVCategoryJoinTest : public GdfTest
     size_t num_columns = gdf_raw_left_columns.size();
     size_t result_num_cols = gdf_raw_left_columns.size() + gdf_raw_right_columns.size() - left_join_idx.size();
 
-    std::pair<cudf::table, cudf::table> result;
-
     cudf::table left_gdf_columns (gdf_raw_left_columns);
     cudf::table right_gdf_columns (gdf_raw_right_columns);
+    std::pair <cudf::table, cudf::table> result;
+    gdf_column * result_col = new gdf_column{};;
 
     switch(op)
     {
       case join_op::LEFT:
         {
           result = cudf::gdf_left_join(
-                                       left_gdf_columns, left_join_idx,
-                                       right_gdf_columns, right_join_idx,
-                                       &left_result, &right_result,
-                                       &ctxt, left_join_idx, right_join_idx);
+                          left_gdf_columns, left_join_idx,
+                          right_gdf_columns, right_join_idx,
+                          &left_result, &right_result,
+                          &ctxt, left_join_idx, left_join_idx);
           break;
         }
       case join_op::INNER:
         {
-          result  =  cudf::gdf_inner_join(
-                                       left_gdf_columns, left_join_idx,
-                                       right_gdf_columns, right_join_idx,
-                                       &left_result, &right_result,
-                                       &ctxt, left_join_idx, right_join_idx);
+          result = cudf::gdf_inner_join(
+                          left_gdf_columns, left_join_idx,
+                          right_gdf_columns, right_join_idx,
+                          &left_result, &right_result,
+                          &ctxt, left_join_idx, left_join_idx);
           break;
         }
       case join_op::FULL:
         {
-          result =  cudf::gdf_full_join(
-                                       left_gdf_columns, left_join_idx,
-                                       right_gdf_columns, right_join_idx,
-                                       &left_result, &right_result,
-                                       &ctxt, left_join_idx, right_join_idx);
+          result = cudf::gdf_full_join(
+                          left_gdf_columns, left_join_idx,
+                          right_gdf_columns, right_join_idx,
+                          &left_result, &right_result,
+                          &ctxt, left_join_idx, left_join_idx);
           break;
         }
       default:
@@ -573,19 +575,20 @@ struct NVCategoryJoinTest : public GdfTest
         EXPECT_TRUE(false);
     }
    
-    #if 0  
-    EXPECT_EQ(expected_result, result_error) << "The gdf join function did not complete successfully";
-
-    // If the expected result was not GDF_SUCCESS, then this test was testing for a
-    // specific error condition, in which case we return imediately and do not do
-    // any further work on the output
-    if(GDF_SUCCESS != expected_result){
-      return std::vector<result_type>();
-    }
-
-    #endif
- 
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
+
+    // Copy result of gdf join to local result
+    EXPECT_EQ(RMM_ALLOC(&result_col->data, result.first.get_column(0)->size * cudf::size_of(result.first.get_column(0)->dtype), 0), RMM_SUCCESS);
+    EXPECT_EQ(RMM_ALLOC(&result_col->valid, gdf_valid_allocation_size(result.first.get_column(0)->size) * sizeof(gdf_valid_type), 0), RMM_SUCCESS);
+    result_col->size = result.first.get_column(0)->size;
+    result_col->dtype = result.first.get_column(0)->dtype;
+    result_col->null_count = 0;
+    result_col->dtype_info = result.first.get_column(0)->dtype_info;
+    EXPECT_EQ(cudaMemcpy(result_col->data, result.first.get_column(0)->data, 
+               result.first.get_column(0)->size * cudf::size_of(result.first.get_column(0)->dtype), cudaMemcpyDeviceToDevice), cudaSuccess);
+    EXPECT_EQ(cudaMemcpy(result_col->valid, result.first.get_column(0)->valid, 
+               gdf_valid_allocation_size(result.first.get_column(0)->size) * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice), cudaSuccess);
+    gdf_raw_result_columns.push_back (result_col);
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices
     size_t total_pairs = left_result.size;
@@ -709,7 +712,6 @@ TEST_F(NVCategoryJoinTest, join_test){
 
 	gdf_column * left_column = cudf::test::create_nv_category_column_strings(left_string_data, rows_size);
   gdf_column * right_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
-  gdf_column * result_column = cudf::test::create_nv_category_column_strings(right_string_data, rows_size);
 	
 	if(print){
 		std::cout<<"Raw string indexes:\n";
@@ -719,7 +721,6 @@ TEST_F(NVCategoryJoinTest, join_test){
 
 	gdf_raw_left_columns.push_back(left_column);
   gdf_raw_right_columns.push_back(right_column);
-  gdf_raw_result_columns.push_back(result_column);
 
 	std::vector<result_type> reference_result = this->compute_reference_solution(op, print);
 

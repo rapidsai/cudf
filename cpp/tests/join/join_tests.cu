@@ -758,7 +758,7 @@ TYPED_TEST(JoinValidTest, ReportValidMaskError)
                      100,100,
                      false, 1);
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
+  CUDF_EXPECT_THROW_MESSAGE (this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED), "GDF Error");
 }
 
 
@@ -789,9 +789,7 @@ TYPED_TEST(MaxJoinTest, InputTooLarge)
     // We expect the function to fail when the input is this large
     const gdf_error expected_error{GDF_COLUMN_SIZE_TOO_BIG};
 
-    std::vector<result_type> gdf_result = this->compute_gdf_result(print_result, 
-                                                                   sort_result, 
-                                                                   expected_error);
+    CUDF_EXPECT_THROW_MESSAGE ( this->compute_gdf_result(print_result, sort_result, expected_error), "right column size is too big");
 }
 
 // These tests will only fail on a non-release build where `assert`s are enabled
