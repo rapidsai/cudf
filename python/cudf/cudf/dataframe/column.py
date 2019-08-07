@@ -526,6 +526,8 @@ class Column(object):
                     categories=self._categories,
                     ordered=False,
                 )
+            elif value is None:
+                value = columnops.column_empty(nelem, self.dtype, masked=True)
             else:
                 to_dtype = pd.api.types.pandas_dtype(self.dtype)
                 value = utils.scalar_broadcast_to(value, nelem, to_dtype)
