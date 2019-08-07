@@ -24,16 +24,17 @@
 #include <algorithm>
 
 namespace cudf {
-
 namespace detail {
-template <typename ColumnDeviceView>
-void table_device_view_base<ColumnDeviceView>::destroy() {
+
+template <typename ColumnDeviceView, typename HostTableView>
+void table_device_view_base<ColumnDeviceView, HostTableView>::destroy() {
   RMM_TRY(RMM_FREE(_columns, _stream));
   delete this;
 }
-}  // namespace detail
 
-auto table_device_view::create(table_view source_view, cudaStream_t stream) {
+template <typename ColumnDeviceView, typename HostTableView>
+auto table_device_view_base<ColumnDeviceView, HostTableView>::create(
+    HostTableView source_view, cudaStream_t stream) {
   size_type total_descendants =
       std::accumulate(source_view.begin(), source_view.end(), 0,
                       [](size_type init, column_view col) {
@@ -48,40 +49,17 @@ auto table_device_view::create(table_view source_view, cudaStream_t stream) {
       new table_device_view(source_view, stream), deleter};
 }
 
-table_device_view::table_device_view(table_view source_view,
-                                     cudaStream_t stream)
-    : detail::table_device_view_base<column_device_view>(
-          source_view.num_rows(), source_view.num_columns(), stream) {
+template <typename ColumnDeviceView, typename HostTableView>
+table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
+    HostTableView source_view, cudaStream_t stream)
+    : _num_rows{source_view.num_rows()},
+      _num_columns{source_view.num_columns()},
+      _stream{stream} {
   auto views_size_bytes =
-      source_view.num_columns() * sizeof(column_device_view);
+      source_view.num_columns() * sizeof(*source_view.begin());
   RMM_TRY(RMM_ALLOC(_columns, views_size_bytes, stream));
-  CUDA_TRY(cudaMemcpy(_columns, source_view.begin(), views_size_bytes));
+  CUDA_TRY(
+      cudaMemcpyAsync(_columns, source_view.begin(), views_size_bytes, stream));
 }
-
-auto mutable_table_device_view::create(mutable_table_view source_view,
-                                       cudaStream_t stream) {
-  size_type total_descendants =
-      std::accumulate(source_view.begin(), source_view.end(), 0,
-                      [](size_type init, column_view col) {
-                        return init + count_descendants(col);
-                      });
-  CUDF_EXPECTS(0 == total_descendants,
-               "Columns with descendants are not yet supported.");
-
-  auto deleter = [](mutable_table_device_view* t) { t->destroy(); };
-
-  return std::unique_ptr<mutable_table_device_view, decltype(deleter)>{
-      new mutable_table_device_view(source_view, stream), deleter};
-}
-
-mutable_table_device_view::mutable_table_device_view(
-    mutable_table_view source_view, cudaStream_t stream)
-    : detail::table_device_view_base<mutable_column_device_view>(
-          source_view.num_rows(), source_view.num_columns(), stream) {
-  auto views_size_bytes =
-      source_view.num_columns() * sizeof(mutable_column_device_view);
-  RMM_TRY(RMM_ALLOC(_columns, views_size_bytes, stream));
-  CUDA_TRY(cudaMemcpy(_columns, source_view.begin(), views_size_bytes));
-}
-
+}  // namespace detail
 }  // namespace cudf
