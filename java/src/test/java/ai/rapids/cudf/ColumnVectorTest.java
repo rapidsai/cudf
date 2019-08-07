@@ -436,4 +436,38 @@ public class ColumnVectorTest {
       }
     }
   }
+
+  @Test
+  void testEmptyStringColumnOpts() {
+    try (ColumnVector cv = ColumnVector.fromStrings()) {
+      try (ColumnVector emptyCats = cv.asStringCategories()) {
+        assertEquals(0, emptyCats.getRowCount());
+      }
+
+      try (ColumnVector len = cv.getLengths()) {
+        assertEquals(0, len.getRowCount());
+      }
+
+      try (ColumnVector len = cv.getByteCount()) {
+        assertEquals(0, len.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testEmptyStringCatColumnOpts() {
+    try (ColumnVector cv = ColumnVector.categoryFromStrings()) {
+      try (ColumnVector empty = cv.asStrings()) {
+        assertEquals(0, empty.getRowCount());
+      }
+
+      Scalar index = cv.getCategoryIndex(Scalar.fromString("TEST"));
+      assertEquals(-1, index.getInt());
+
+      try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
+        ColumnVector filtered = cv.filter(mask)) {
+        assertEquals(0, filtered.getRowCount());
+      }
+    }
+  }
 }
