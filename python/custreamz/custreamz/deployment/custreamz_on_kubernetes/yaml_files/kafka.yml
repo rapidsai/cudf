@@ -13,3 +13,4 @@ spec:
     args: ["./start_kafka.sh && sleep infinity"]
     ports:
     - containerPort: 9092
+

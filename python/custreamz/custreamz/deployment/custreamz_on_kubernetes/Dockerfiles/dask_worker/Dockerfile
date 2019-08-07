@@ -6,7 +6,7 @@ RUN source activate rapids && \
     conda update -n base -c defaults conda && \
     conda install -y -c anaconda ipywidgets && \
     conda install -y -c anaconda ipykernel && \
-    pip install confluent-kafka
+    conda install -c conda-forge python-confluent-kafka
 
 #Installs streamz
 RUN source activate rapids && \
