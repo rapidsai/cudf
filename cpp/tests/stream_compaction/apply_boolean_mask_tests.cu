@@ -312,20 +312,24 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalseOrNull)
 
 TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
 {
-  const int start{1}, end{column_size / 4};
+  std::vector<gdf_size_type> column_sizes{8, 20, 60, 2700, 100000, 1000000};
 
-  BooleanMaskTest<TypeParam>(
-    this->factory.make(column_size,
-      [](gdf_index_type row) { return row; },
-      [](gdf_index_type row) { return true; }),
-    column_wrapper<cudf::bool8>(column_size,
-      [](gdf_index_type row) { return cudf::bool8{(row < start) || (row >= end)}; },
-      [](gdf_index_type row) { return true; }),
-    this->factory.make(column_size - (end - start),
-      [](gdf_index_type row) { 
-        return (row < start) ? row : row + end - start; 
-      },
-      [](gdf_index_type row) { return true; }));
+  for (auto column_size : column_sizes) {
+    const int start{1}, end{column_size / 4};
+
+    BooleanMaskTest<TypeParam>(
+      this->factory.make(column_size,
+        [](gdf_index_type row) { return row; },
+        [](gdf_index_type row) { return true; }),
+      column_wrapper<cudf::bool8>(column_size,
+        [start, end](gdf_index_type row) { return cudf::bool8{(row < start) || (row >= end)}; },
+        [](gdf_index_type row) { return true; }),
+      this->factory.make(column_size - (end - start),
+        [start, end](gdf_index_type row) { 
+          return (row < start) ? row : row + end - start; 
+        },
+        [](gdf_index_type row) { return true; }));
+  }
 }
 
 TYPED_TEST(ApplyBooleanMaskTest, NoNullMask)
