@@ -717,7 +717,7 @@ public final class Table implements AutoCloseable {
       Table aggregate = new Table(gdfGroupByAggregate(
           operation.table.nativeHandle,
           operation.indices,
-          // one way of converting List[Integer] to int[]
+          // one way of converting List[Integer] to int[
           aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
           ops.stream().mapToInt(i->i).toArray()));
 
