@@ -41,13 +41,15 @@ struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void >
   operator()(gdf_column const& values_col, gdf_column const& group_indices,
-             gdf_column& quants_col, double quantile,
+             gdf_column& result_col, rmm::device_vector<double> const& quantile,
              gdf_quantile_method interpolation)
   {
     // prepare args to be used by lambda below
-    auto quants = reinterpret_cast<double*>(quants_col.data);
+    auto result = reinterpret_cast<double*>(result_col.data);
     auto values = reinterpret_cast<T*>(values_col.data);
     auto grp_id = reinterpret_cast<gdf_size_type*>(group_indices.data);
+    auto d_quants = quantile.data().get();
+    auto num_qnts = quantile.size();
     auto num_vals = values_col.size;
     auto num_grps = group_indices.size;
 
@@ -60,8 +62,12 @@ struct quantiles_functor {
                                   ? grp_id[i + 1]
                                   : num_vals;
         gdf_size_type segment_size = (upper_limit - grp_id[i]);
-        quants[i] = detail::select_quantile(values + grp_id[i], segment_size,
-                                            quantile, interpolation);
+
+        for (gdf_size_type j = 0; j < num_qnts; j++) {
+          gdf_size_type k = i * num_qnts + j;
+          result[k] = detail::select_quantile(values + grp_id[i], segment_size,
+                                              d_quants[j], interpolation);
+        }
       }
     );
   }
@@ -112,7 +118,7 @@ auto group_values_and_indices(cudf::table const& key_table,
 std::pair<cudf::table, gdf_column>
 group_quantiles(cudf::table const& key_table,
                 gdf_column const& values,
-                double quantile,
+                std::vector<double> const& quantiles,
                 gdf_quantile_method interpolation,
                 gdf_context const& context)
 {
@@ -122,6 +128,7 @@ group_quantiles(cudf::table const& key_table,
   std::tie(out_key_table, group_indices) = 
     detail::group_values_and_indices(key_table, context);
 
+  rmm::device_vector<double> dv_quantiles(quantiles);
 
   // Per column =============================
   // Merge the key_table and values column because we want to sort them together
@@ -130,7 +137,9 @@ group_quantiles(cudf::table const& key_table,
   auto combined_table = cudf::table(input_columns);
 
   // Get sorted indices
-  auto idx_col = allocate_column(GDF_INT32, combined_table.num_rows(), false);
+  auto idx_col = allocate_column(gdf_dtype_of<gdf_index_type>(),
+                                 combined_table.num_rows(),
+                                 false);
   gdf_order_by(combined_table.begin(), nullptr,
                combined_table.num_columns(), &idx_col,
                const_cast<gdf_context*>(&context));
@@ -145,10 +154,12 @@ group_quantiles(cudf::table const& key_table,
 
   // Go forth and calculate the quantiles
   // TODO: currently ignoring nulls
-  auto quants_col = cudf::allocate_column(GDF_FLOAT64, group_indices.size, false);
+  auto result_col = cudf::allocate_column(GDF_FLOAT64,
+                                          group_indices.size * quantiles.size(),
+                                          false);
 
   type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                  sorted_values, group_indices, quants_col, quantile,
+                  sorted_values, group_indices, result_col, dv_quantiles,
                   interpolation);
 
   gdf_column_free(&idx_col);
@@ -157,7 +168,7 @@ group_quantiles(cudf::table const& key_table,
 
   gdf_column_free(&group_indices);
 
-  return std::make_pair(out_key_table, quants_col);
+  return std::make_pair(out_key_table, result_col);
 }
     
 } // namespace cudf
