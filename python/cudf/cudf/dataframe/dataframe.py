@@ -874,6 +874,18 @@ class DataFrame(object):
         """
         return _DataFrameIlocIndexer(self)
 
+    def iat(self):
+        """
+        Alias for ``DataFrame.iloc``; provided for compatibility with Pandas.
+        """
+        return self.iloc
+
+    def at(self):
+        """
+        Alias for ``DataFrame.loc``; provided for compatibility with Pandas.
+        """
+        return self.loc
+
     @property
     def columns(self):
         """Returns a tuple of columns
