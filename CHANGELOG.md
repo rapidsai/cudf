@@ -80,6 +80,9 @@
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
 - PR #2475 Exposed type_dispatcher.hpp, nvcategory_util.hpp and wrapper_types.hpp in the include folder
+- PR #2483 Bundle Boost filesystem dependency in the Java jar
+- PR #2481 Adds the ignore_null_keys option to the java api
+
 
 ## Bug Fixes
 
@@ -127,6 +130,8 @@
 - PR #2422 Fix Pandas logical binary operation incompatibilites
 - PR #2447 Fix CodeCov posting build statuses temporarily
 - PR #2450 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
+- PR #2470 Fix issues with empty strings and string categories (Java)
+- PR #2471 Fix String Column Validity.
 
 
 # cuDF 0.8.0 (27 June 2019)
