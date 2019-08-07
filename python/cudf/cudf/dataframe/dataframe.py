@@ -1949,8 +1949,6 @@ class DataFrame(object):
                 [right_on] if isinstance(right_on, str) else list(right_on)
             )
 
-        print ("Before left_on : ", left_on)
-        print ("Before right_on : ", right_on)
         lhs = self.copy(deep=False)
         rhs = right.copy(deep=False)
 
@@ -1999,8 +1997,6 @@ class DataFrame(object):
                     "right_on and left_on must have same " "number of columns"
                 )
 
-        print ("left_on", left_on)
-        print ("right_on", right_on)
         # Fix column names by appending `suffixes`
         for name in same_named_columns:
             if not (name in left_on and name in right_on and (left_on.index(name) == right_on.index(name))):
@@ -2033,21 +2029,6 @@ class DataFrame(object):
         gdf_result = cpp_join.join(
             lhs._cols, rhs._cols, left_on, right_on, how, method
         )
-
-        # GDF always removes the "right_on" columns from the result
-        # whereas Pandas keeps the "right_on" columns if its name differ
-        # from the one in the "left_on". Thus, here we duplicate the column if
-        # the name differ.
-        """
-        for left, right in zip(left_on, right_on):
-            if left != right:
-                for col, valid, name in gdf_result:
-                    if name == left:
-                        gdf_result.append((col, valid, right))
-                        break
-                else:
-                    assert False
-        """
 
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.

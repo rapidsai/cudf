@@ -197,7 +197,7 @@ void join_call( int num_cols, cudf::table leftcols, cudf::table rightcols,
     if (GDF_TIMESTAMP == rightcols.get_column(i)->dtype) {
       CUDF_EXPECTS(
           rightcols.get_column(i)->dtype_info.time_unit == leftcols.get_column(i)->dtype_info.time_unit,
-          "Timestamp resolution mis-match");
+          "Timestamp resolution mismatch");
     }
   }
 
@@ -525,8 +525,6 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
 
   cudf::table  updated_left_cols(new_left_cols);
   cudf::table  updated_right_cols(new_right_cols);
-  
-
   // If index outputs are not requested, create columns to store them
   // for computing combined join output
   gdf_column *left_index_out = left_indices;

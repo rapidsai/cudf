@@ -34,12 +34,10 @@ namespace cudf {
  * to join on
  * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
- * @param[in] l_common_name_join_ind is a vector of column indices in left dataframe which has same name as on right dataframe,
- * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_left] 
- * would be this vector.              
- * @param[in] r_common_name_join_ind is a vector of column indices in right dataframe which has same name as on left dataframe,
- * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_right] 
- * would be this vector.
+ * @param[in] l_common_name_join_ind Indices of left dataframe in join list which have same name as one on right dataframe join 
+ * list at same index in join list.  
+ * @param[in] r_common_name_join_ind Indices of right dataframe in join list which have same name as one on left dataframe join 
+ * list at same index in join list.  
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
@@ -71,12 +69,10 @@ std::pair<cudf::table, cudf::table> gdf_inner_join(
  * to join on
  * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left tablei
- * @param[in] l_common_name_join_ind is a vector of column indices in left dataframe which has same name as on right dataframe,
- * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_left] 
- * would be this vector.              
- * @param[in] r_common_name_join_ind is a vector of column indices in right dataframe which has same name as on left dataframe,
- * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_right] 
- * would be this vector.
+ * @param[in] l_common_name_join_ind Indices of left dataframe in join list which have same name as one on right dataframe join 
+ * list at same index in join list.  
+ * @param[in] r_common_name_join_ind Indices of right dataframe in join list which have same name as one on left dataframe join 
+ * list at same index in join list.  
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
@@ -108,12 +104,10 @@ std::pair<cudf::table, cudf::table> gdf_left_join(
  * to join on
  * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
- * @param[in] l_common_name_join_ind is a vector of column indices in left dataframe which has same name as on right dataframe,
- * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_left] 
- * would be this vector.              
- * @param[in] r_common_name_join_ind is a vector of column indices in right dataframe which has same name as on left dataframe,
- * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_right] 
- * would be this vector.
+ * @param[in] l_common_name_join_ind Indices of left dataframe in join list which have same name as one on right dataframe join 
+ * list at same index in join list.  
+ * @param[in] r_common_name_join_ind Indices of right dataframe in join list which have same name as one on left dataframe join 
+ * list at same index in join list.  
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
