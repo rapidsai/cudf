@@ -16,80 +16,73 @@
 
 #pragma once
 
-#include <cudf/cudf.h>
-#include <utilities/error_utils.hpp>
-
 #include <arrow/buffer.h>
 #include <arrow/io/file.h>
 #include <arrow/io/interfaces.h>
 #include <arrow/io/memory.h>
 
+#include <algorithm>
 #include <memory>
+#include <string>
+
+namespace cudf {
+namespace io {
 
 /**
- * @brief Class for reading from a file or buffer source
+ * @brief Class for reading from a file or memory source
  **/
-class DataSource {
+class datasource {
  public:
   /**
-   * @brief Constructor for creating source from a file path
+   * @brief Create a source from a file path
+   *
+   * @param[in] filepath Path to the file to use
+   * @param[in] offset Bytes from the start of the file
+   * @param[in] size Bytes from the offset; use zero for entire file
+   **/
+  static std::unique_ptr<datasource> create(const std::string filepath,
+                                            size_t offset = 0, size_t size = 0);
+
+  /**
+   * @brief Create a source from a memory buffer
    *
    * @param[in] filepath Path to the file to use
    **/
-  explicit DataSource(const char *filepath) {
-    std::shared_ptr<arrow::io::ReadableFile> file;
-    CUDF_EXPECTS(
-        arrow::io::ReadableFile::Open(std::string(filepath), &file).ok(),
-        "Cannot open file");
-    rd_file = file;
-  }
+  static std::unique_ptr<datasource> create(const char *data, size_t length);
 
   /**
-   * @brief Constructor for creating a source from a memory buffer
+   * @brief Create a source from a from an Arrow file
    *
-   * @param[in] bufferpath Memory buffer to use
-   * @param[in] length Length in bytes of the buffer
+   * @param[in] filepath Path to the file to use
    **/
-  explicit DataSource(const char *bufferpath, size_t length) {
-    rd_file = std::make_shared<arrow::io::BufferReader>(
-        reinterpret_cast<const uint8_t *>(bufferpath), length);
-  }
-
-  /**
-   * @brief Constructor for creating a source from an existing Arrow file
-   *
-   * @param[in] file Arrow file instance
-   **/
-  explicit DataSource(std::shared_ptr<arrow::io::RandomAccessFile> file)
-      : rd_file(file) {}
+  static std::unique_ptr<datasource> create(
+      std::shared_ptr<arrow::io::RandomAccessFile> file);
 
   /**
    * @brief Returns a buffer with a subset of data from the source
    *
-   * @param[in] position Starting offset
-   * @param[in] length Number of bytes to read
+   * @param[in] offset Bytes from the start
+   * @param[in] size Bytes to read
    *
-   * @return std::shared_ptr<arrow::Buffer The data buffer
+   * @return std::shared_ptr<arrow::Buffer> The data buffer
    **/
-  const std::shared_ptr<arrow::Buffer> get_buffer(size_t position,
-                                                  size_t length) const {
-    std::shared_ptr<arrow::Buffer> out;
-    CUDF_EXPECTS(rd_file->ReadAt(position, length, &out).ok(),
-                 "Cannot read file data");
-    return out;
-  }
+  virtual const std::shared_ptr<arrow::Buffer> get_buffer(size_t offset,
+                                                          size_t size) = 0;
 
   /**
    * @brief Returns the size of the data in the source
    *
    * @return size_t The size of the source data in bytes
    **/
-  size_t size() const {
-    int64_t size;
-    CUDF_EXPECTS(rd_file->GetSize(&size).ok(), "Cannot get file size");
-    return size;
-  }
+  virtual size_t size() const = 0;
 
- private:
-  std::shared_ptr<arrow::io::RandomAccessFile> rd_file;
+  /**
+   * @brief Returns whether the data source contains any actual data
+   *
+   * @return bool True if there is data, False otherwise
+   **/
+  virtual bool empty() const { return size() == 0; }
 };
+
+}  // namespace io
+}  // namespace cudf

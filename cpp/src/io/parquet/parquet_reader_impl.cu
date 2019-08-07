@@ -102,7 +102,7 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(DataSource *source) {
+  explicit ParquetMetadata(datasource *source) {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
 
@@ -516,7 +516,7 @@ void reader::Impl::decode_page_data(
   }
 }
 
-reader::Impl::Impl(std::unique_ptr<DataSource> source,
+reader::Impl::Impl(std::unique_ptr<datasource> source,
                    reader_options const &options)
     : source_(std::move(source)) {
 
@@ -702,17 +702,15 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(filepath.c_str()), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(buffer, length), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(buffer, length),
+                                   options)) {}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(file), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
 
 std::string reader::get_index_column() {
   return impl_->get_index_column();
