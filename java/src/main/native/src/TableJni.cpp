@@ -19,6 +19,7 @@
 
 #include <unordered_set>
 
+#include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/copying.hpp"
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
@@ -478,15 +479,33 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
 
-    cudf::jni::output_table output(env, n_input_table);
-
+    cudf::jni::output_table output(env, n_input_table, true);
     std::vector<gdf_column *> cols = output.get_gdf_columns();
+
+    for (int i = 0; i < cols.size(); i++) {
+      gdf_column * col = cols[i];
+      if (col->dtype == GDF_STRING_CATEGORY) {
+        // We need to add in the category for partition to work at all...
+        NVCategory * orig = static_cast<NVCategory *>(n_input_table->get_column(i)->dtype_info.category);
+        col->dtype_info.category = orig;
+      }
+    }
 
     JNI_GDF_TRY(env, NULL,
                 gdf_hash_partition(n_input_table->num_columns(), n_input_table->begin(),
                                    n_columns_to_hash.data(), n_columns_to_hash.size(),
                                    n_number_of_partitions, cols.data(), n_output_offsets.data(),
                                    n_cudf_hash_function));
+
+    // Need to gather the string categories after partitioning.
+    for (int i = 0; i < cols.size(); i++) {
+      gdf_column * col = cols[i];
+      if (col->dtype == GDF_STRING_CATEGORY) {
+        // We need to fix it up...
+        NVCategory * orig = static_cast<NVCategory *>(n_input_table->get_column(i)->dtype_info.category);
+        nvcategory_gather(col, orig);
+      }
+    }
 
     return output.get_native_handles_and_release();
   }
