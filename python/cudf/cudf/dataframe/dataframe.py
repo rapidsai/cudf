@@ -1462,19 +1462,15 @@ class DataFrame(object):
 
         input_cols = index_cols + data_cols
 
-        if subset is None:
-            subset_indices = range(len(index_cols), len(input_cols))
+        if subset is not None:
+            subset = _columns_from_dataframe(self._columns_view(subset))
         else:
-            subset_indices = []
-            # TODO: there are better ways to do this
-            for i, col in enumerate(self.columns):
-                for subset_col in subset:
-                    if col == subset_col:
-                        subset_indices.append(i + len(index_cols))
+            subset = _columns_from_dataframe(self)
 
-        result_cols = cpp_drop_nulls(
-            input_cols, how=how, subset=subset_indices
-        )
+        if len(subset) == 0:
+            return self
+
+        result_cols = cpp_drop_nulls(input_cols, how=how, subset=subset)
 
         result_index_cols, result_data_cols = (
             result_cols[: len(index_cols)],
