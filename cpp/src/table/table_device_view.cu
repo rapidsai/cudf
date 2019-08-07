@@ -33,8 +33,14 @@ void table_device_view_base<ColumnDeviceView, HostTableView>::destroy() {
 }
 
 template <typename ColumnDeviceView, typename HostTableView>
-auto table_device_view_base<ColumnDeviceView, HostTableView>::create(
-    HostTableView source_view, cudaStream_t stream) {
+table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
+    HostTableView source_view, cudaStream_t stream)
+    : _num_rows{source_view.num_rows()},
+      _num_columns{source_view.num_columns()},
+      _stream{stream} {
+  CUDF_EXPECTS(source_view.num_columns() > 0,
+               "Device table cannot have zero columns.");
+
   size_type total_descendants =
       std::accumulate(source_view.begin(), source_view.end(), 0,
                       [](size_type init, column_view col) {
@@ -43,23 +49,19 @@ auto table_device_view_base<ColumnDeviceView, HostTableView>::create(
   CUDF_EXPECTS(0 == total_descendants,
                "Columns with descendants are not yet supported.");
 
-  auto deleter = [](table_device_view* t) { t->destroy(); };
-
-  return std::unique_ptr<table_device_view, decltype(deleter)>{
-      new table_device_view(source_view, stream), deleter};
-}
-
-template <typename ColumnDeviceView, typename HostTableView>
-table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
-    HostTableView source_view, cudaStream_t stream)
-    : _num_rows{source_view.num_rows()},
-      _num_columns{source_view.num_columns()},
-      _stream{stream} {
   auto views_size_bytes =
-      source_view.num_columns() * sizeof(*source_view.begin());
-  RMM_TRY(RMM_ALLOC(_columns, views_size_bytes, stream));
-  CUDA_TRY(
-      cudaMemcpyAsync(_columns, source_view.begin(), views_size_bytes, stream));
+      source_view.num_columns() * sizeof(source_view.column(0));
+  RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
+  CUDA_TRY(cudaMemcpyAsync(_columns, &source_view.column(0), views_size_bytes,
+                           cudaMemcpyDefault, stream));
 }
+
+// Explicit instantiation for a device table of immutable views
+template class table_device_view_base<column_device_view, table_view>;
+
+// Explicit instantiation for a device table of mutable views
+template class table_device_view_base<mutable_column_device_view,
+                                      mutable_table_view>;
+
 }  // namespace detail
 }  // namespace cudf
