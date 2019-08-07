@@ -19,6 +19,7 @@ from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 class Column(object):
@@ -44,20 +45,21 @@ class Column(object):
 
     @classmethod
     def _concat(cls, objs, dtype=None):
+        from cudf.dataframe.series import Series
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
 
         if len(objs) == 0:
-            if pd.api.types.is_categorical_dtype(dtype):
+            dtype = pd.api.types.pandas_dtype(dtype)
+            if dtype.type in (np.object_, np.str_):
+                return StringColumn(data=nvstrings.to_device([]), null_count=0)
+            elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
                     data=Column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
                     ordered=False,
                 )
-            elif dtype == np.dtype("object"):
-                return StringColumn(data=nvstrings.to_device([]), null_count=0)
             else:
-                dtype = np.dtype(dtype)
                 return Column(Buffer.null(dtype))
 
         # Find the first non-null column:
@@ -80,8 +82,14 @@ class Column(object):
 
         # Handle categories for categoricals
         if all(isinstance(o, CategoricalColumn) for o in objs):
-            cats = Column._concat([o.categories for o in objs]).unique()
-            objs = [o.cat()._set_categories(cats, True) for o in objs]
+            cats = (
+                Series(Column._concat([o.categories for o in objs]))
+                .drop_duplicates()
+                ._column
+            )
+            objs = [
+                o.cat()._set_categories(cats, is_unique=True) for o in objs
+            ]
 
         head = objs[0]
         for obj in objs:
@@ -114,20 +122,29 @@ class Column(object):
         return col
 
     @staticmethod
-    def from_mem_views(data_mem, mask_mem=None):
+    def from_mem_views(data_mem, mask_mem=None, null_count=None):
         """Create a Column object from a data device array (or nvstrings
            object), and an optional mask device array
         """
         from cudf.dataframe import columnops
 
         if isinstance(data_mem, nvstrings.nvstrings):
-            return columnops.build_column(data_mem, np.dtype("object"))
+            return columnops.build_column(
+                buffer=data_mem,
+                dtype=np.dtype("object"),
+                null_count=null_count,
+            )
         else:
             data_buf = Buffer(data_mem)
             mask = None
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
-            return columnops.build_column(data_buf, data_mem.dtype, mask=mask)
+            return columnops.build_column(
+                buffer=data_buf,
+                dtype=data_mem.dtype,
+                mask=mask,
+                null_count=null_count,
+            )
 
     def __init__(self, data, mask=None, null_count=None, name=None):
         """
@@ -371,13 +388,9 @@ class Column(object):
         copies the references of the data and mask.
         """
         if deep:
-            deep = self.copy_data()
-            if self.has_null_mask:
-                return deep.set_mask(
-                    mask=self.mask.copy(), null_count=self.null_count
-                )
-            else:
-                return deep.allocate_mask()
+            import cudf.bindings.copying as cpp_copy
+
+            return cpp_copy.copy_column(self)
         else:
             params = self._replace_defaults()
             return type(self)(**params)
@@ -585,7 +598,7 @@ class Column(object):
 
     def quantile(self, q, interpolation, exact):
         if isinstance(q, Number):
-            quant = [q]
+            quant = [float(q)]
         elif isinstance(q, list) or isinstance(q, np.ndarray):
             quant = q
         else:
@@ -639,11 +652,11 @@ class Column(object):
 
     @property
     def is_monotonic_increasing(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     @property
     def is_monotonic_decreasing(self):
-        raise(NotImplementedError)
+        raise (NotImplementedError)
 
     def get_slice_bound(self, label, side, kind):
         """
@@ -656,18 +669,42 @@ class Column(object):
         side : {'left', 'right'}
         kind : {'ix', 'loc', 'getitem'}
         """
-        assert kind in ['ix', 'loc', 'getitem', None]
-        if side not in ('left', 'right'):
-            raise ValueError("Invalid value for side kwarg,"
-                             " must be either 'left' or 'right': %s" %
-                             (side, ))
+        assert kind in ["ix", "loc", "getitem", None]
+        if side not in ("left", "right"):
+            raise ValueError(
+                "Invalid value for side kwarg,"
+                " must be either 'left' or 'right': %s" % (side,)
+            )
 
         # TODO: Handle errors/missing keys correctly
         #       Not currently using `kind` argument.
-        if side == 'left':
+        if side == "left":
             return self.find_first_value(label)
-        if side == 'right':
-            return (self.find_last_value(label) + 1)
+        if side == "right":
+            return self.find_last_value(label) + 1
+
+    def sort_by_values(self):
+        raise NotImplementedError
+
+    def _unique_segments(self):
+        """ Common code for unique, unique_count and value_counts"""
+        # make dense column
+        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
+        # sort the column
+        sortcol, _ = densecol.sort_by_values()
+        # find segments
+        sortedvals = sortcol.data.mem
+        segs, begins = cudautils.find_segments(sortedvals)
+        return segs, sortedvals
+
+    def unique_count(self, method="sort", dropna=True):
+        if method != "sort":
+            msg = "non sort based unique_count() not implemented yet"
+            raise NotImplementedError(msg)
+        segs, _ = self._unique_segments()
+        if dropna is False and self.null_count > 0:
+            return len(segs) + 1
+        return len(segs)
 
 
 register_distributed_serializer(Column)

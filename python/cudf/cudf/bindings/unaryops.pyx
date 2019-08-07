@@ -4,55 +4,78 @@
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
-
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
+from cudf.bindings.GDFError import GDFError
+from cudf.dataframe.column import Column
+from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 
+from libcpp.string cimport string
 
-_MATH_OP = {
-    'sin'   : GDF_SIN,
-    'cos'   : GDF_COS,
-    'tan'   : GDF_TAN,
-    'asin'  : GDF_ARCSIN,
-    'acos'  : GDF_ARCCOS,
-    'atan'  : GDF_ARCTAN,
-    'exp'   : GDF_EXP,
-    'log'   : GDF_LOG,
-    'sqrt'  : GDF_SQRT,
-    'ceil'  : GDF_CEIL,
-    'floor' : GDF_FLOOR,
-    'abs'   : GDF_ABS,
-    'invert': GDF_BIT_INVERT,
-    'not'   : GDF_NOT,
+import numpy as np
+
+_UNARY_OP = {
+    'sin': SIN,
+    'cos': COS,
+    'tan': TAN,
+    'asin': ARCSIN,
+    'acos': ARCCOS,
+    'atan': ARCTAN,
+    'exp': EXP,
+    'log': LOG,
+    'sqrt': SQRT,
+    'ceil': CEIL,
+    'floor': FLOOR,
+    'abs': ABS,
+    'invert': BIT_INVERT,
+    'not': NOT,
 }
 
-def apply_math_op(incol, outcol, op):
+
+def apply_unary_op(incol, op):
     """
-    Call Unary math ops.
+    Call Unary ops.
     """
 
     check_gdf_compatibility(incol)
-    check_gdf_compatibility(outcol)
-    
+
     cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef gdf_column* c_outcol = column_view_from_column(outcol)
 
-    cdef gdf_error result
-    cdef gdf_unary_math_op c_op = _MATH_OP[op]
-    with nogil:    
-        result = gdf_unary_math(
-            <gdf_column*>c_incol,
-            <gdf_column*>c_outcol,
-            c_op)
-    
+    cdef gdf_column result
+    cdef unary_op c_op = _UNARY_OP[op]
+    with nogil:
+        result = unary_operation(
+            c_incol[0],
+            c_op
+        )
+
     free(c_incol)
-    free(c_outcol)
+    data, mask = gdf_column_to_column_mem(&result)
+    return Column.from_mem_views(data, mask)
 
-    check_gdf_error(result)
+
+def column_applymap(incol, udf_ptx, np_dtype):
+
+    cdef gdf_column* c_incol = column_view_from_column(incol)
+
+    cdef string cpp_str = udf_ptx.encode('UTF-8')
+    cdef gdf_column c_outcol
+
+    # get the gdf_type related to the input np type
+    cdef gdf_dtype g_type = dtypes[np_dtype]
+
+    with nogil:
+        c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type, True)
+
+    data, mask = gdf_column_to_column_mem(&c_outcol)
+
+    free(c_incol)
+
+    return Column.from_mem_views(data, mask)
 
 
 def apply_dt_extract_op(incol, outcol, op):

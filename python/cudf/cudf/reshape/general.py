@@ -1,11 +1,11 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import numpy as np
-import pandas as pd
 
 from cudf.dataframe import Buffer, DataFrame, Series
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils import cudautils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def melt(
@@ -99,7 +99,7 @@ def melt(
 
     # Error for unimplemented support for datatype
     dtypes = [frame[col].dtype for col in id_vars + value_vars]
-    if any(pd.api.types.is_categorical_dtype(t) for t in dtypes):
+    if any(is_categorical_dtype(t) for t in dtypes):
         raise NotImplementedError(
             "Categorical columns are not yet " "supported for function"
         )
@@ -215,23 +215,30 @@ def get_dummies(
 
     from cudf.multi import concat
 
-    encode_fallback_dtypes = ['object', 'category']
+    # TODO: This has to go away once we start supporting uint8.
+    if dtype == np.uint8:
+        dtype = "int8"
+
+    encode_fallback_dtypes = ["object", "category"]
 
     if columns is None or len(columns) == 0:
         columns = df.select_dtypes(include=encode_fallback_dtypes).columns
 
     def length_check(obj, name):
-        err_msg = ("Length of '{name}' ({len_obj}) did not match the "
-                   "length of the columns being encoded ({len_required}).")
+        err_msg = (
+            "Length of '{name}' ({len_obj}) did not match the "
+            "length of the columns being encoded ({len_required})."
+        )
 
         if utils.is_list_like(obj):
             if len(obj) != len(columns):
-                err_msg = err_msg.format(name=name, len_obj=len(obj),
-                                         len_required=len(columns))
+                err_msg = err_msg.format(
+                    name=name, len_obj=len(obj), len_required=len(columns)
+                )
                 raise ValueError(err_msg)
 
-    length_check(prefix, 'prefix')
-    length_check(prefix_sep, 'prefix_sep')
+    length_check(prefix, "prefix")
+    length_check(prefix_sep, "prefix_sep")
 
     if prefix is None:
         prefix = columns
@@ -257,10 +264,15 @@ def get_dummies(
         df_list = []
 
         for name in columns:
+            if hasattr(df[name]._column, "categories"):
+                unique = df[name]._column.categories
+            else:
+                unique = df[name].unique()
+
             col_enc_df = df.one_hot_encoding(
                 name,
                 prefix=prefix_map.get(name, prefix),
-                cats=cats.get(name, df[name].unique()),
+                cats=cats.get(name, unique),
                 prefix_sep=prefix_sep_map.get(name, prefix_sep),
                 dtype=dtype,
             )

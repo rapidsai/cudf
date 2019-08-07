@@ -58,14 +58,15 @@ def apply_rolling(inp, window, min_periods, center, op):
             mask = cudautils.make_empty_mask(len(inp))
     else:
         with nogil:
-            output_col = rolling_window(inp_col[0],
-                                        c_window,
-                                        c_min_periods,
-                                        c_forward_window,
-                                        c_op,
-                                        c_window_col,
-                                        c_min_periods_col,
-                                        c_forward_window_col
+            output_col = rolling_window(
+                inp_col[0],
+                c_window,
+                c_min_periods,
+                c_forward_window,
+                c_op,
+                c_window_col,
+                c_min_periods_col,
+                c_forward_window_col
             )
         data, mask = gdf_column_to_column_mem(output_col)
 

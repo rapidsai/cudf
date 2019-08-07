@@ -4,9 +4,11 @@
 
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
+- PR #2097 Add GPU-accelerated AVRO reader
 - PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
+- PR #2156 Add `upper_bound()` and `lower_bound()` for libcudf tables and `searchsorted()` for cuDF Series
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
@@ -14,8 +16,22 @@
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
+- PR #2304 gdf_group_by_without_aggregations returns gdf_column
 - PR #2105 Add google benchmark for hash-based join
-- PR #2453 Streamline CUDA_REL environment variable
+- PR #2293 Improve `compute_join_output_size` performance
+- PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2337 Add Java support for slicing a ColumnVector
+- PR #2049 Implemented merge functionality
+- PR #2368 Full cudf+dask Parquet Support
+- PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
+- PR #2356 Java column vector standard deviation support
+- PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
+- PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
+- PR #2415 Revamp `value_counts` to use groupby count series of any type
+- PR #2446 Add __array_function__ for index
+- PR #2437 ORC reader: Add 'use_np_dtypes' option
+- PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
+- PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
 
 ## Improvements
 
@@ -42,16 +58,34 @@
 - PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
 - PR #2224 implement isna, isnull, notna as dataframe functions
+- PR #2232 Move CodeCov upload from build script to Jenkins
 - PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
 - PR #2309 Java readers: remove redundant copy of result pointers
+- PR #2307 Add `black` and `isort` to style checker script
+- PR #2345 Restore removal of old groupby implementation
+- PR #2342 Improve `astype()` to operate all ways
+- PR #2329 using libcudf cudf::copy for column deep copy
+- PR #2344 Add docs on how code formatting works for contributors
+- PR #2353 Bump Arrow and Dask versions
+- PR #2377 Replace `standard_python_slice` with just `slice.indices()`
+- PR #2373 cudf.DataFrame enchancements & Series.values support
+- PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
+- PR #2430 Updated Java bindings to use the new unary API
+- PR #2406 Moved all existing `table` related files to a `legacy/` directory
+- PR #2350 Performance related changes to get_dummies
+- PR #2420 Remove `cudautils.astype` and replace with `typecast.apply_cast`
+- PR #2456 Small improvement to typecast utility
+- PR #2458 Fix handling of thirdparty packages in `isort` config
+- PR #2459 IO Readers: Consolidate all readers to use `datasource` class
+- PR #2453 Streamline CUDA_REL environment variable
 
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2128 Add offset param to host buffer readers in java API.
-- PR #2145 Work around binops validity checks for java
+- PR #2145 Work around binops validity checks for java 
 - PR #2146 Work around unary_math validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
@@ -69,7 +103,32 @@
 - PR #2244 Fix ORC RLEv2 delta mode decoding with nonzero residual delta width
 - PR #2297 Work around `var/std` unsupported only at debug build
 - PR #2302 Fixed java serialization corner case
+- PR #2355 Handle float16 in binary operations
 - PR #2311 Fix copy behaviour for GenericIndex
+- PR #2349 Fix issues with String filter in java API
+- PR #2323 Fix groupby on categoricals
+- PR #2328 Ensure order is preserved in CategoricalAccessor._set_categories
+- PR #2202 Fix issue with unary ops mishandling empty input
+- PR #2326 Fix for bug in DLPack when reading multiple columns
+- PR #2324 Fix cudf Docker build
+- PR #2325 Fix ORC RLEv2 patched base mode decoding with nonzero patch width
+- PR #2235 Fix get_dummies to be compatible with dask
+- PR #2332 Zero initialize gdf_dtype_extra_info
+- PR #2355 Handle float16 in binary operations
+- PR #2360 Fix missing dtype handling in cudf.Series & columnops.as_column
+- PR #2364 Fix quantile api and other trivial issues around it
+- PR #2361 Fixed issue with `codes` of CategoricalIndex
+- PR #2357 Fixed inconsistent type of index created with from_pandas vs direct construction
+- PR #2389 Fixed Rolling __getattr__ and __getitem__ for offset based windows
+- PR #2402 Fixed bug in valid mask computation in cudf::copy_if (apply_boolean_mask)
+- PR #2401 Fix to a scalar datetime(of type Days) issue
+- PR #2386 Correctly allocate output valids in groupby
+- PR #2411 Fixed failures on binary op on single element string column
+- PR #2422 Fix Pandas logical binary operation incompatibilites
+- PR #2447 Fix CodeCov posting build statuses temporarily
+- PR #2450 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
+- PR #2470 Fix issues with empty strings and string categories (Java)
+- PR #2471 Fix String Column Validity.
 
 
 # cuDF 0.8.0 (27 June 2019)
@@ -104,8 +163,9 @@
 - PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
-- PR #1652 Added `Series.where()` feature
-- PR #2074 Java Aggregates, logical ops, and better RMM support
+- PR #1652 Added `Series.where()` feature 
+- PR #2074 Java Aggregates, logical ops, and better RMM support 
+- PR #2140 Add a `cudf::transform` function
 
 ## Improvements
 
@@ -520,6 +580,7 @@
 - PR #1183 Bump Arrow version to 0.12.1
 - PR #1208 Default to CXX11_ABI=ON
 - PR #1252 Fix NVStrings dependencies for cuda 9.2 and 10.0
+- PR #2037 Optimize the existing `gather` and `scatter` routines in `libcudf`
 
 ## Bug Fixes
 

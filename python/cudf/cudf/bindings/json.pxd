@@ -12,14 +12,14 @@ from libcpp.string cimport string
 from libcpp.vector cimport vector
 
 
-cdef extern from "cudf.h" namespace "cudf::io::json" nogil:
+cdef extern from "cudf/cudf.h" namespace "cudf::io::json" nogil:
 
     cdef struct reader_options:
-        gdf_input_type  source_type;
-        string          source;
-        vector[string]  dtype;
-        string          compression;
-        bool            lines;
+        gdf_input_type source_type
+        string source
+        vector[string] dtype
+        string compression
+        bool lines
 
         reader_options() except +
 

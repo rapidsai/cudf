@@ -13,9 +13,11 @@ from numba import cuda, njit
 import nvstrings
 from librmm_cffi import librmm as rmm
 
+import cudf
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
 
 
@@ -113,6 +115,55 @@ class TypedColumnBase(Column):
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
 
+    def searchsorted(self, value, side="left"):
+        raise NotImplementedError
+
+    def astype(self, dtype, **kwargs):
+        if is_categorical_dtype(dtype):
+            return self.as_categorical_column(dtype, **kwargs)
+        elif pd.api.types.pandas_dtype(dtype).type in (np.str_, np.object_):
+            return self.as_string_column(dtype, **kwargs)
+
+        elif np.issubdtype(dtype, np.datetime64):
+            return self.as_datetime_column(dtype, **kwargs)
+
+        else:
+            return self.as_numerical_column(dtype, **kwargs)
+
+    def as_categorical_column(self, dtype, **kwargs):
+        if "ordered" in kwargs:
+            ordered = kwargs["ordered"]
+        else:
+            ordered = False
+
+        sr = cudf.Series(self)
+        labels, cats = sr.factorize()
+
+        # string columns include null index in factorization; remove:
+        if (
+            pd.api.types.pandas_dtype(self.dtype).type in (np.str_, np.object_)
+        ) and self.null_count > 0:
+            cats = cats.dropna()
+            labels = labels - 1
+
+        return cudf.dataframe.categorical.CategoricalColumn(
+            data=labels._column.data,
+            mask=self.mask,
+            null_count=self.null_count,
+            categories=cats._column,
+            ordered=ordered,
+        )
+        raise NotImplementedError
+
+    def as_numerical_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_datetime_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
+    def as_string_column(self, dtype, **kwargs):
+        raise NotImplementedError
+
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
     """Allocate a new column like the given *column*
@@ -121,7 +172,7 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
         dtype = column.dtype
     row_count = len(column) if newsize is None else newsize
     categories = None
-    if pd.api.types.is_categorical_dtype(dtype):
+    if is_categorical_dtype(dtype):
         categories = column.cat().categories
         dtype = column.data.dtype
     return column_empty(row_count, dtype, masked, categories=categories)
@@ -131,13 +182,12 @@ def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
     dtype = pd.api.types.pandas_dtype(dtype)
-
     if masked:
         mask = cudautils.make_empty_mask(row_count)
     else:
         mask = None
 
-    if categories is None and pd.api.types.is_categorical_dtype(dtype):
+    if categories is None and is_categorical_dtype(dtype):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
@@ -219,10 +269,13 @@ def column_select_by_position(column, positions):
     )
 
 
-def build_column(buffer, dtype, mask=None, categories=None, name=None):
+def build_column(
+    buffer, dtype, mask=None, categories=None, name=None, null_count=None
+):
     from cudf.dataframe import numerical, categorical, datetime, string
 
-    if pd.api.types.is_categorical_dtype(dtype):
+    dtype = pd.api.types.pandas_dtype(dtype)
+    if is_categorical_dtype(dtype):
         return categorical.CategoricalColumn(
             data=buffer,
             dtype="categorical",
@@ -230,26 +283,35 @@ def build_column(buffer, dtype, mask=None, categories=None, name=None):
             ordered=False,
             mask=mask,
             name=name,
+            null_count=null_count,
         )
-    elif np.dtype(dtype).type == np.datetime64:
+    elif dtype.type is np.datetime64:
         return datetime.DatetimeColumn(
-            data=buffer, dtype=np.dtype(dtype), mask=mask, name=name
+            data=buffer,
+            dtype=dtype,
+            mask=mask,
+            name=name,
+            null_count=null_count,
         )
-    elif np.dtype(dtype).type in (np.object_, np.str_):
+    elif dtype.type in (np.object_, np.str_):
         if not isinstance(buffer, nvstrings.nvstrings):
             raise TypeError
-        return string.StringColumn(data=buffer, name=name)
+        return string.StringColumn(
+            data=buffer, name=name, null_count=null_count
+        )
     else:
         return numerical.NumericalColumn(
-            data=buffer, dtype=dtype, mask=mask, name=name
+            data=buffer,
+            dtype=dtype,
+            mask=mask,
+            name=name,
+            null_count=null_count,
         )
 
 
 def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     """Create a Column from an arbitrary object
-
     Currently support inputs are:
-
     * ``Column``
     * ``Buffer``
     * ``Series``
@@ -259,12 +321,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     * numpy array
     * pyarrow array
     * pandas.Categorical
-
     Returns
     -------
     result : subclass of TypedColumnBase
         - CategoricalColumn for pandas.Categorical input.
-        - DatetimeColumn for datetime input
+        - DatetimeColumn for datetime input.
+        - StringColumn for string input.
         - NumericalColumn for all other inputs.
     """
     from cudf.dataframe import numerical, categorical, datetime, string
@@ -288,9 +350,12 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column
+        if dtype is not None:
+            data = data.astype(dtype)
     elif isinstance(arbitrary, Index):
         data = arbitrary._values
-
+        if dtype is not None:
+            data = data.astype(dtype)
     elif isinstance(arbitrary, Buffer):
         data = numerical.NumericalColumn(data=arbitrary, dtype=arbitrary.dtype)
 
@@ -358,11 +423,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 )
             )
         elif isinstance(arbitrary, pa.NullArray):
-            new_dtype = dtype
+            new_dtype = pd.api.types.pandas_dtype(dtype)
             if (type(dtype) == str and dtype == "empty") or dtype is None:
-                new_dtype = np.dtype(arbitrary.type.to_pandas_dtype())
+                new_dtype = pd.api.types.pandas_dtype(
+                    arbitrary.type.to_pandas_dtype()
+                )
 
-            if pd.api.types.is_categorical_dtype(new_dtype):
+            if is_categorical_dtype(new_dtype):
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
@@ -456,7 +523,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         data = Column._concat(gpu_cols, dtype=new_dtype)
 
     elif isinstance(arbitrary, (pd.Series, pd.Categorical)):
-        if pd.api.types.is_categorical_dtype(arbitrary):
+        if is_categorical_dtype(arbitrary):
             data = as_column(pa.array(arbitrary, from_pandas=True))
         elif arbitrary.dtype == np.bool:
             # Bug in PyArrow or HDF that requires us to do this
@@ -488,35 +555,35 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     else:
         try:
-            data = as_column(memoryview(arbitrary))
+            data = as_column(
+                memoryview(arbitrary), dtype=dtype, nan_as_null=nan_as_null
+            )
         except TypeError:
+            pa_type = None
+            np_type = None
             try:
-                pa_type = None
                 if dtype is not None:
-                    if pd.api.types.is_categorical_dtype(dtype):
+                    dtype = pd.api.types.pandas_dtype(dtype)
+                    if is_categorical_dtype(dtype):
                         raise TypeError
                     else:
                         np_type = np.dtype(dtype).type
                         if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = np_to_pa_dtype(np.dtype(dtype).type)
+                            pa_type = np_to_pa_dtype(np_type)
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
+                    dtype=dtype,
                     nan_as_null=nan_as_null,
                 )
             except (pa.ArrowInvalid, pa.ArrowTypeError, TypeError):
-                np_type = None
-                if pd.api.types.is_categorical_dtype(dtype):
+                if is_categorical_dtype(dtype):
                     data = as_column(
                         pd.Series(arbitrary, dtype="category"),
                         nan_as_null=nan_as_null,
                     )
                 else:
-                    if dtype is None:
-                        np_type = None
-                    else:
-                        np_type = np.dtype(dtype)
                     data = as_column(
                         np.array(arbitrary, dtype=np_type),
                         nan_as_null=nan_as_null,

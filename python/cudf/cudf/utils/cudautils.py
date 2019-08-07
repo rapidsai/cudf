@@ -112,23 +112,6 @@ def gpu_copy(inp, out):
         out[tid] = inp[tid]
 
 
-def astype(ary, dtype):
-    if ary.dtype == np.dtype(dtype):
-        return ary
-    elif (
-        ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")
-    ) and (dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")):
-        return ary.view(dtype)
-    elif ary.size == 0:
-        return rmm.device_array(shape=ary.shape, dtype=dtype)
-    else:
-        out = rmm.device_array(shape=ary.shape, dtype=dtype)
-        if out.size > 0:
-            configured = gpu_copy.forall(out.size)
-            configured(ary, out)
-        return out
-
-
 def copy_array(arr, out=None):
     if out is None:
         out = rmm.device_array_like(arr)
@@ -796,7 +779,7 @@ def gpu_mark_lt(arr, val, out, not_found):
             out[i] = not_found
 
 
-def find_first(arr, val, compare='eq'):
+def find_first(arr, val, compare="eq"):
     """
     Returns the index of the first occurrence of *val* in *arr*..
     Or the first occurence of *arr* *compare* *val*, if *compare* is not eq
@@ -810,9 +793,9 @@ def find_first(arr, val, compare='eq'):
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if compare == 'gt':
+        if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, arr.size)
-        elif compare == 'lt':
+        elif compare == "lt":
             gpu_mark_lt.forall(found.size)(arr, val, found, arr.size)
         else:
             if arr.dtype in ("float32", "float64"):
@@ -833,7 +816,7 @@ def find_first(arr, val, compare='eq'):
         return min_index
 
 
-def find_last(arr, val, compare='eq'):
+def find_last(arr, val, compare="eq"):
     """
     Returns the index of the last occurrence of *val* in *arr*.
     Or the last occurence of *arr* *compare* *val*, if *compare* is not eq
@@ -847,9 +830,9 @@ def find_last(arr, val, compare='eq'):
     """
     found = rmm.device_array_like(arr)
     if found.size > 0:
-        if compare == 'gt':
+        if compare == "gt":
             gpu_mark_gt.forall(found.size)(arr, val, found, -1)
-        elif compare == 'lt':
+        elif compare == "lt":
             gpu_mark_lt.forall(found.size)(arr, val, found, -1)
         else:
             if arr.dtype in ("float32", "float64"):
@@ -907,22 +890,6 @@ def find_segments(arr, segs=None, markers=None):
             markers, scanned, begins
         )
     return begins, markers
-
-
-@cuda.jit
-def gpu_value_counts(arr, counts, total_size):
-    i = cuda.grid(1)
-    if 0 <= i < arr.size - 1:
-        counts[i] = arr[i + 1] - arr[i]
-    elif i == arr.size - 1:
-        counts[i] = total_size - arr[i]
-
-
-def value_count(arr, total_size):
-    counts = rmm.device_array(shape=len(arr), dtype=np.intp)
-    if arr.size > 0:
-        gpu_value_counts.forall(arr.size)(arr, counts, total_size)
-    return counts
 
 
 @cuda.jit
