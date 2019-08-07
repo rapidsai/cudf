@@ -221,7 +221,15 @@ class Rolling:
 
           with the exception that math functions in `cmath` are not supported
           since `libcudf` does not have complex number support and output of
-          `cmath` functions are most likely complex numbers
+          `cmath` functions are most likely complex numbers. These five functions
+          in `math` are not supported either, since numba generates multiple PTX
+          functions for them ...
+
+            math.sin()
+            math.cos()
+            math.tan()
+            math.gamma()
+            math.lgamma()
 
         """
         has_nulls = False

@@ -157,8 +157,15 @@ std::string ptx_parser::parse_instruction(const std::string& src) {
       stop++;
     } else {
       while (stop < length && !is_white(src[stop]) && src[stop] != ',' &&
-             src[start] != '{' && src[start] != '}') {
+             src[stop] != ':') {
         stop++;
+      }
+      if(src[stop] == ':'){
+        // This is a branch
+        stop++;
+        output += std::string(src, start, stop - start);
+        start = stop;
+        continue;
       }
     }
     std::string piece = std::string(src, start, stop - start);
