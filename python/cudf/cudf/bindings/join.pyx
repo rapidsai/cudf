@@ -126,10 +126,10 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     valids = []
     cdef vector[gdf_column*] result_cols
 
-    for idx in range (result.first.num_columns()):
+    for idx in range(result.first.num_columns()):
         result_cols.push_back(result.first.get_column(idx))
 
-    for idx in range (result.second.num_columns()):
+    for idx in range(result.second.num_columns()):
         result_cols.push_back(result.second.get_column(idx))
 
     cdef uintptr_t data_ptr
