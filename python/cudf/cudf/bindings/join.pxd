@@ -19,9 +19,9 @@ cdef extern from "cudf/join.hpp" nogil:
         const vector [int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        gdf_context *join_context,
-        const vector [int] left_join_result_cols,
-        const vector [int] right_join_result_cols
+        const vector [int] left_common_name_join_cols,
+        const vector [int] right_common_name_join_cols,
+        gdf_context *join_context
     ) except +
 
     cdef pair[cudf_table, cudf_table] gdf_left_join(
@@ -31,9 +31,9 @@ cdef extern from "cudf/join.hpp" nogil:
         const vector [int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        gdf_context *join_context,
-        const vector [int] left_join_result_cols,
-        const vector [int] right_join_result_cols
+        const vector [int] left_common_name_join_cols,
+        const vector [int] right_common_name_join_cols,
+        gdf_context *join_context
     ) except +
 
     cdef pair[cudf_table, cudf_table] gdf_full_join(
@@ -43,7 +43,7 @@ cdef extern from "cudf/join.hpp" nogil:
         const vector [int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        gdf_context *join_context,
-        const vector [int] left_join_result_cols,
-        const vector [int] right_join_result_cols
+        const vector [int] left_common_name_join_cols,
+        const vector [int] right_common_name_join_cols,
+        gdf_context *join_context
     ) except +

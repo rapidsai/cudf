@@ -34,6 +34,12 @@ namespace cudf {
  * to join on
  * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @param[in] l_common_name_join_ind is a vector of column indices in left dataframe which has same name as on right dataframe,
+ * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_left] 
+ * would be this vector.              
+ * @param[in] r_common_name_join_ind is a vector of column indices in right dataframe which has same name as on left dataframe,
+ * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_right] 
+ * would be this vector.
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
@@ -47,9 +53,9 @@ std::pair<cudf::table, cudf::table> gdf_inner_join(
                          std::vector <int> right_join_cols,
                          gdf_column * left_indices,
                          gdf_column * right_indices,
-                         gdf_context *join_context,
-                         std::vector <int> left_join_result_cols,
-                         std::vector <int> right_join_result_cols);
+                         std::vector <int> l_common_name_join_ind,
+                         std::vector <int> r_common_name_join_ind,
+                         gdf_context *join_context);
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
@@ -64,7 +70,13 @@ std::pair<cudf::table, cudf::table> gdf_inner_join(
  * @param[in] right_join_cols The column indices of columns from the right dataframe
  * to join on
  * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
- * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left tablei
+ * @param[in] l_common_name_join_ind is a vector of column indices in left dataframe which has same name as on right dataframe,
+ * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_left] 
+ * would be this vector.              
+ * @param[in] r_common_name_join_ind is a vector of column indices in right dataframe which has same name as on left dataframe,
+ * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_right] 
+ * would be this vector.
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
@@ -77,9 +89,9 @@ std::pair<cudf::table, cudf::table> gdf_left_join(
                          std::vector <int> right_join_cols,
                          gdf_column * left_indices,
                          gdf_column * right_indices,
-                         gdf_context *join_context,
-                         std::vector <int> left_join_result_cols,
-                         std::vector <int> right_join_result_cols);
+                         std::vector <int> l_common_name_join_ind,
+                         std::vector <int> r_common_name_join_ind,
+                         gdf_context *join_context);
 
 /** 
  * @brief  Performs a full join (also known as full outer join) on the
@@ -96,6 +108,12 @@ std::pair<cudf::table, cudf::table> gdf_left_join(
  * to join on
  * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
  * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
+ * @param[in] l_common_name_join_ind is a vector of column indices in left dataframe which has same name as on right dataframe,
+ * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_left] 
+ * would be this vector.              
+ * @param[in] r_common_name_join_ind is a vector of column indices in right dataframe which has same name as on left dataframe,
+ * and both of them are listed in join list at same index like left_on = ['a', 'b'] right_on = ['a', 'c'], now a [index_of_a_in_right] 
+ * would be this vector.
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
@@ -108,7 +126,7 @@ std::pair<cudf::table, cudf::table> gdf_full_join(
                          std::vector <int> right_join_cols,
                          gdf_column * left_indices,
                          gdf_column * right_indices,
-                         gdf_context *join_context,
-                         std::vector <int> left_join_result_cols,
-                         std::vector <int> right_join_result_cols);
+                         std::vector <int> l_common_name_join_ind,
+                         std::vector <int> r_common_name_join_ind,
+                         gdf_context *join_context);
 } //namespace cudf

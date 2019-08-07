@@ -549,7 +549,7 @@ struct NVCategoryJoinTest : public GdfTest
                           left_gdf_columns, left_join_idx,
                           right_gdf_columns, right_join_idx,
                           &left_result, &right_result,
-                          &ctxt, left_join_idx, left_join_idx);
+                          left_join_idx, right_join_idx, &ctxt);
           break;
         }
       case join_op::INNER:
@@ -558,7 +558,7 @@ struct NVCategoryJoinTest : public GdfTest
                           left_gdf_columns, left_join_idx,
                           right_gdf_columns, right_join_idx,
                           &left_result, &right_result,
-                          &ctxt, left_join_idx, left_join_idx);
+                          left_join_idx, right_join_idx, &ctxt);
           break;
         }
       case join_op::FULL:
@@ -567,7 +567,7 @@ struct NVCategoryJoinTest : public GdfTest
                           left_gdf_columns, left_join_idx,
                           right_gdf_columns, right_join_idx,
                           &left_result, &right_result,
-                          &ctxt, left_join_idx, left_join_idx);
+                          left_join_idx, right_join_idx, &ctxt);
           break;
         }
       default:

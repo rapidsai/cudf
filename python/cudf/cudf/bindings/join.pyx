@@ -42,8 +42,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     cdef vector[int] left_idx
     cdef vector[int] right_idx
-    cdef vector[int] left_idx_result
-    cdef vector[int] right_idx_result
+    cdef vector[int] left_common_name_join_idx
+    cdef vector[int] right_common_name_join_idx
 
     assert(len(left_on) == len(right_on))
 
@@ -62,14 +62,14 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         col_lhs[name]
         left_idx.push_back(list(col_lhs.keys()).index(name))
         if (name in right_on and (left_on.index(name) == right_on.index(name))):
-            left_idx_result.push_back(list(col_lhs.keys()).index(name))
+            left_common_name_join_idx.push_back(list(col_lhs.keys()).index(name))
  
     for name in right_on:
         # This will ensure that the column name is valid
         col_rhs[name]
         right_idx.push_back(list(col_rhs.keys()).index(name))
         if (name in left_on and (left_on.index(name) == right_on.index(name))):
-            right_idx_result.push_back(list(col_rhs.keys()).index(name))
+            right_common_name_join_idx.push_back(list(col_rhs.keys()).index(name))
 
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)
@@ -87,9 +87,9 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 right_idx,
                 <gdf_column*> NULL,
                 <gdf_column*> NULL,
-                context,
-                left_idx_result,
-                right_idx_result
+                left_common_name_join_idx,
+                right_common_name_join_idx,
+                context
             )
 
         elif how == 'inner':
@@ -100,9 +100,9 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 right_idx,
                 <gdf_column*> NULL,
                 <gdf_column*> NULL,
-                context,
-                left_idx_result,
-                right_idx_result
+                left_common_name_join_idx,
+                right_common_name_join_idx,
+                context
             )
 
         elif how == 'outer':
@@ -113,9 +113,9 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 right_idx,
                 <gdf_column*> NULL,
                 <gdf_column*> NULL,
-                context,
-                left_idx_result,
-                right_idx_result
+                left_common_name_join_idx,
+                right_common_name_join_idx,
+                context
             )
 
     res = []
