@@ -341,6 +341,7 @@ add_library(cudf SHARED
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/stream_compaction.cu
             src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu

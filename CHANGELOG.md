@@ -33,6 +33,7 @@
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
+- PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 
 ## Improvements
 
