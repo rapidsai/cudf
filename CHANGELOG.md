@@ -33,6 +33,7 @@
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
 - PR #2489 Add drop argument to set_index
+- PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 
 ## Improvements
 
@@ -81,6 +82,7 @@
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
 - PR #2483 Bundle Boost filesystem dependency in the Java jar
+- PR #2481 Adds the ignore_null_keys option to the java api
 
 ## Bug Fixes
 
