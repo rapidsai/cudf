@@ -17,18 +17,9 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/utils/cuda.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/release_assert.cuh>
-
-#ifndef CUDA_HOST_DEVICE_CALLABLE
-#ifdef __CUDACC__
-#define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
-#define CUDA_DEVICE_CALLABLE __device__ inline
-#else
-#define CUDA_HOST_DEVICE_CALLABLE inline
-#define CUDA_DEVICE_CALLABLE inline
-#endif
-#endif
 
 /**---------------------------------------------------------------------------*
  * @file type_dispatcher.hpp
@@ -80,9 +71,15 @@ using id_to_type = typename id_to_type_impl<t>::type;
  * @param Id The `cudf::type_id` enum
  *---------------------------------------------------------------------------**/
 #ifndef CUDF_TYPE_MAPPING
-#define CUDF_TYPE_MAPPING(Type, Id) \
-  template <> constexpr inline type_id type_to_id<Type>() { return Id; } \
-  template <> struct id_to_type_impl<Id> { using type = Type; }
+#define CUDF_TYPE_MAPPING(Type, Id)             \
+  template <>                                   \
+  constexpr inline type_id type_to_id<Type>() { \
+    return Id;                                  \
+  }                                             \
+  template <>                                   \
+  struct id_to_type_impl<Id> {                  \
+    using type = Type;                          \
+  }
 #endif
 
 /**---------------------------------------------------------------------------*
@@ -124,7 +121,7 @@ CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
  * // This will always invoke `operator()<int32_t>`
  * cudf::type_dispatcher<always_int>(data_type, f);
  * ```
- * 
+ *
  * It is sometimes neccessary to customize the dispatched functor's
  * `operator()` for different types.  This can be done in several ways.
  *
@@ -152,27 +149,28 @@ CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
  * specializing for a set of types that share some property. For example, a
  * functor that prints `integral` or `floating point` for integral or floating
  * point types:
- * 
+ *
  * ```
  * struct integral_or_floating_point {
  *   template <typename ColumnType,
  *             std::enable_if_t<not std::is_integral<ColumnType>::value and
- *                              not std::is_floating_point<ColumnType>::value>* = nullptr>
- *   void operator()() { std::cout << "neither integral nor floating point\n"; }
- * 
+ *                              not std::is_floating_point<ColumnType>::value>*
+ *= nullptr> void operator()() { std::cout << "neither integral nor floating
+ *point\n"; }
+ *
  *   template <typename ColumnType,
  *             std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
  *   void operator()() { std::cout << "integral\n"; }
- * 
+ *
  *   template < typename ColumnType,
- *              std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr>
- *   void operator()() { std::cout << "floating point\n"; }
+ *              std::enable_if_t<std::is_floating_point<ColumnType>::value>* =
+ *nullptr> void operator()() { std::cout << "floating point\n"; }
  * };
  * ```
- * 
- * For more info on SFINAE and `std::enable_if`, see 
- * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/ 
- * 
+ *
+ * For more info on SFINAE and `std::enable_if`, see
+ * https://eli.thegreenplace.net/2014/sfinae-and-enable_if/
+ *
  * The return type for all template instantiations of the functor's "operator()"
  * lambda must be the same, else there will be a compiler error as you would be
  * trying to return different types from the same function.
@@ -219,15 +217,15 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
 #else
       release_assert(false && "Unsuported type_id.");
 
-  // The following code will never be reached, but the compiler generates a
-  // warning if there isn't a return value.
+      // The following code will never be reached, but the compiler generates a
+      // warning if there isn't a return value.
 
-  // Need to find out what the return type is in order to have a default
-  // return value and solve the compiler warning for lack of a default
-  // return
-  using return_type =
-      decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
-  return return_type();
+      // Need to find out what the return type is in order to have a default
+      // return value and solve the compiler warning for lack of a default
+      // return
+      using return_type =
+          decltype(f.template operator()<int8_t>(std::forward<Ts>(args)...));
+      return return_type();
 #endif
     }
   }
