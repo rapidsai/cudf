@@ -42,6 +42,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class TableTest {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
+  private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
+      "src/test/resources/timestamp-date-test.orc");
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
@@ -571,6 +573,25 @@ public class TableTest {
         .build();
          Table table = Table.readORC(TEST_ORC_FILE)) {
       assertTablesAreEqual(expected,  table);
+    }
+  }
+
+  @Test
+  void testReadORCNumPyTypes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // by default ORC will promote date and timestamp columns to DATE64
+    try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.DATE64, table.getColumn(0).getType());
+      assertEquals(DType.DATE64, table.getColumn(1).getType());
+    }
+
+    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    ORCOptions opts = ORCOptions.builder().withNumPyTypes(false).build();
+    try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
+      assertEquals(DType.DATE32, table.getColumn(1).getType());
     }
   }
 

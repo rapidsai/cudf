@@ -192,9 +192,12 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 for no buffer.
    * @param length            the length of the buffer to read from.
+   * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
+   *                          columns to DATE64 for compatibility with NumPy.
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
-                                          String filePath, long address, long length) throws CudfException;
+                                          String filePath, long address, long length,
+                                          boolean usingNumPyTypes) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
                                                    int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
@@ -413,7 +416,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes()));
   }
 
   /**
@@ -473,7 +476,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes()));
   }
 
   /**
