@@ -1,7 +1,6 @@
 **cuStreamz GCP Setup**
 
-*"The following instruction set is for setting up the cuStreamz pipeline on Google Cloud Platform (GCP). But, the overall process for deploying cuStreamz
-on any CSP would be the similar."*
+*"The following instruction set is for setting up the cuStreamz pipeline on Google Cloud Platform (GCP). But, the overall process for deploying cuStreamz on any CSP would be the similar."*
 — cuStreamz team
 
 **Step 1: Create a cuStreamz VM instance** 

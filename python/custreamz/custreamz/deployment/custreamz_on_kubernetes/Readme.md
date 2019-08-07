@@ -1,7 +1,6 @@
 **cuStreamz Kubernetes Setup**
 
-*"The following instruction set is for setting up the cuStreamz pipeline on Google Kubernetes Engine (GKE). But, the overall process for deploying cuStreamz 
-on any Kubernetes cluster would be similar."*
+*"The following instruction set is for setting up the cuStreamz pipeline on Google Kubernetes Engine (GKE). But, the overall process for deploying cuStreamz on any Kubernetes cluster would be similar."*
  — cuStreamz team
 
 
