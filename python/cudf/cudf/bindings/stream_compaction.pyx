@@ -91,8 +91,8 @@ def apply_apply_boolean_mask(cols, mask):
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
-    cdef cudf_table* c_keys_table = (table_from_columns(cols) 
-        if subset is None else table_from_columns(subset))
+    cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
+                                     else table_from_columns(subset))
 
     cdef any_or_all drop_if
     if how == "any":
