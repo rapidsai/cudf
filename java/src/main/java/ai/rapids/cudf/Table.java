@@ -19,9 +19,7 @@
 package ai.rapids.cudf;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -610,6 +608,34 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Keeps track of a gdf_column* and operator ids
+   */
+  private static final class ColumnOp {
+    private final long colNativeId;
+    private final int opNativeId;
+
+    ColumnOp(long column, int opNativeId){
+      this.colNativeId = column;
+      this.opNativeId = opNativeId;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof ColumnOp){
+        ColumnOp otherCop = (ColumnOp) other;
+        return otherCop.colNativeId == colNativeId &&
+            otherCop.opNativeId == opNativeId;
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(colNativeId, opNativeId);
+    }
+  }
+
+  /**
    * Class representing aggregate operations
    */
   public static final class AggregateOperation {
@@ -642,17 +668,82 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      int[] aggregateColumnIndices = new int[aggregates.length];
-      int[] ops = new int[aggregates.length];
+
+      // aggregateColumnIndices: the numeric indices of the columns to aggregate
+      // as provided by the user
+      List<Integer> aggregateColumnIndices = new ArrayList<>();
+      // ops: the corresponding cudf enum values for each aggregate
+      // operation, for each column index
+      List<Integer> ops = new ArrayList<>();
+      // finalAggColumns: this holds the user's desired list of aggregates,
+      // as specified in the variadic for this method
+      List<ColumnOp> finalAggColumns = new ArrayList<>();
+      // aggToCudfColumn: a map of ColumnOp (tuple of gdf_column* and enum for operation)
+      // to the index of the column that we asked cudf to compute. 
+      // These indices can then be used after the aggregate to find ColumnVector
+      // instances, we should place (and ref count) in the order as provided by the user.
+      HashMap<ColumnOp, Integer> aggToCudfColumn = new HashMap<>();
+
+      // keep track of the unique agg indices, starting at 1 after the
+      // grouping key
+      int uniqueAggIndex = operation.indices.length;
       for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
-        aggregateColumnIndices[aggregateIndex] = aggregates[aggregateIndex].getIndex();
-        ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
+        Aggregate agg = aggregates[aggregateIndex];
+        int origColumnIndex = agg.getIndex();
+        int origOpNativeId = agg.getNativeId();
+
+        // keep track of (gdf_column*, op) pairs, as that is what
+        // compute_original_requests does to track duplicates
+        ColumnOp cop = new ColumnOp(
+            operation.table.getColumn(origColumnIndex).getNativeCudfColumnAddress(),
+            origOpNativeId);
+
+        // if we haven't seen an aggregate for this (gdf_column *, agg id) pair
+        if (!aggToCudfColumn.containsKey(cop)) {
+          // add to the aggregates that cudf will perform
+          aggregateColumnIndices.add(agg.getIndex());
+          ops.add(agg.getNativeId());
+
+          // keep the index of the column where we can find the result later
+          aggToCudfColumn.put(cop, uniqueAggIndex++);
+        }
+        finalAggColumns.add(cop);
       }
 
-      boolean ignoreNullKeys = false;
-      Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
-          operation.indices, aggregateColumnIndices, ops, groupByOptions.getIgnoreNullKeys()));
-      return aggregate;
+      // aggregate with deduplicated operations
+      Table aggregate = new Table(gdfGroupByAggregate(
+          operation.table.nativeHandle,
+          operation.indices,
+          // one way of converting List[Integer] to int[]
+          aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
+          ops.stream().mapToInt(i->i).toArray(),
+          groupByOptions.getIgnoreNullKeys());
+
+      // prepare the final table
+      ColumnVector[] finalCols = new ColumnVector[operation.indices.length + aggregates.length];
+
+      int aggIndex = 0;
+
+      // increase ref counts for the grouping columns
+      for (int groupIndex : operation.indices) {
+        finalCols[groupIndex] = aggregate.getColumn(groupIndex);
+        finalCols[groupIndex].incRefCount();
+        aggIndex++;
+      }
+
+      // pick out the correct columns for the rhs, and increase
+      // their ref counts
+      for (ColumnOp cop : finalAggColumns) {
+        int originalIndex = aggToCudfColumn.get(cop);
+        finalCols[aggIndex] = aggregate.getColumn(originalIndex);
+        finalCols[aggIndex].incRefCount();
+        aggIndex++;
+      }
+
+      // returning a brand new table now, so we close the original
+      aggregate.close();
+
+      return new Table(finalCols);
     }
   }
 

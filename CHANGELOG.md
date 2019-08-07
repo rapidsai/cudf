@@ -79,6 +79,7 @@
 - PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
+- PR #2483 Bundle Boost filesystem dependency in the Java jar
 - PR #2481 Adds the ignore_null_keys option to the java api
 
 ## Bug Fixes
