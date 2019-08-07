@@ -505,6 +505,12 @@ class Column(object):
             nelem = abs(key_stop - key_start)
         else:
             key = columnops.as_column(key)
+            if pd.api.types.is_bool_dtype(key.dtype):
+                if not len(key) == len(self):
+                    raise ValueError(
+                        "Boolean mask must be of same length as column"
+                    )
+                key = columnops.as_column(cudautils.arange(len(self)))[key]
             nelem = len(key)
 
         if utils.is_scalar(value):
