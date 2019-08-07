@@ -15,9 +15,11 @@
  */
 
 #include <cudf/stream_compaction.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
-#include <fixture/benchmark_fixtures.hpp>
+#include <fixture/benchmark_fixture.hpp>
+#include <synchronization/synchronization.hpp>
+
 
 #include <benchmark/benchmark.h>
 #include <random>
@@ -114,7 +116,11 @@ void BM_apply_boolean_mask(benchmark::State& state, gdf_size_type num_columns) {
   cudf::table source_table{raw_columns.data(), num_columns};
 
   for(auto _ : state){
-    cudf::table result = cudf::apply_boolean_mask(source_table, *mask.get());
+    cudf::table result;
+    {
+      cuda_event_timer raii(state, true);
+      result = cudf::apply_boolean_mask(source_table, *mask.get());
+    }
     result.destroy();
   }
 

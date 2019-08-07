@@ -299,4 +299,51 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *
   }
   CATCH_STD(env, NULL);
 }
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfLengths(JNIEnv *env, jclass clazz,
+                                                                     jlong column_handle) {
+  JNI_NULL_CHECK(env, column_handle, "input column is null", 0);
+  try {
+    gdf_column *n_column = reinterpret_cast<gdf_column *>(column_handle);
+    cudf::jni::gdf_column_wrapper lengths(n_column->size, gdf_dtype::GDF_INT32,
+                                          n_column->null_count != 0);
+    if (n_column->size > 0) {
+      NVStrings *strings = static_cast<NVStrings *>(n_column->data);
+      JNI_ARG_CHECK(env, n_column->size == strings->size(),
+                    "NVStrings size and gdf_column size mismatch", 0);
+      strings->len(static_cast<int *>(lengths->data));
+      if (n_column->null_count > 0) {
+        CUDA_TRY(cudaMemcpy(lengths->valid, n_column->valid, gdf_num_bitmask_elements(n_column->size),
+                            cudaMemcpyDeviceToDevice));
+        lengths->null_count = n_column->null_count;
+      }
+    }
+    return reinterpret_cast<jlong>(lengths.release());
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfByteCount(JNIEnv *env, jclass clazz,
+                                                                       jlong column_handle) {
+  JNI_NULL_CHECK(env, column_handle, "input column is null", 0);
+  try {
+    gdf_column *n_column = reinterpret_cast<gdf_column *>(column_handle);
+    cudf::jni::gdf_column_wrapper byte_counts_vector(n_column->size, gdf_dtype::GDF_INT32,
+                                                     n_column->null_count != 0);
+
+    if (n_column->size > 0) {
+      NVStrings *strings = static_cast<NVStrings *>(n_column->data);
+      JNI_ARG_CHECK(env, n_column->size == strings->size(),
+                    "NVStrings size and gdf_column size mismatch", 0);
+      strings->byte_count(static_cast<int *>(byte_counts_vector->data));
+      if (n_column->null_count > 0) {
+        CUDA_TRY(cudaMemcpy(byte_counts_vector->valid, n_column->valid,
+                            gdf_num_bitmask_elements(n_column->size), cudaMemcpyDeviceToDevice));
+        byte_counts_vector->null_count = n_column->null_count;
+      }
+    }
+    return reinterpret_cast<jlong>(byte_counts_vector.release());
+  }
+  CATCH_STD(env, 0);
+}
 } // extern "C"

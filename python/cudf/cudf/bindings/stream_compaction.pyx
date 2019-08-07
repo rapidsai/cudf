@@ -19,7 +19,6 @@ from cudf.dataframe.buffer import Buffer
 from cudf.bindings.stream_compaction cimport *
 
 
-
 def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     """
     get unique entries of subset columns from input columns
@@ -78,42 +77,25 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     return (out_cols[:-1], out_cols[-1])
 
 
-def apply_boolean_mask_column(col, mask):
-    """
-    Apply the given boolean mask ``mask`` to the Column ``col``
-    """
-    from cudf.dataframe.columnops import column_empty_like
+def apply_apply_boolean_mask(cols, mask):
 
-    cdef gdf_column *c_col = column_view_from_column(col)
-    cdef gdf_column *c_mask = column_view_from_column(mask)
-    cdef gdf_column c_result
+    cdef cudf_table  c_out_table
+    cdef cudf_table* c_in_table = table_from_columns(cols)
+    cdef gdf_column* c_mask_col = column_view_from_column(mask)
+
     with nogil:
-        c_result = apply_boolean_mask(c_col[0], c_mask[0])
-    free(c_col)
-    free(c_mask)
-    if c_result.data is NULL:
-        return column_empty_like(col, newsize=0)
-    data, mask = gdf_column_to_column_mem(&c_result)
-    return Column.from_mem_views(data, mask)
+        c_out_table = apply_boolean_mask(c_in_table[0], c_mask_col[0])
 
+    free(c_in_table)
+    free(c_mask_col)
 
-def drop_nulls_column(col):
-    cdef gdf_column *c_col = column_view_from_column(col)
-    cdef gdf_column c_result
-    with nogil:
-        c_result = drop_nulls(c_col[0])
-    free(c_col)
-    data, mask = gdf_column_to_column_mem(&c_result)
-    return Column.from_mem_views(data, mask)
+    return columns_from_table(&c_out_table)
 
-
-def apply_boolean_mask_table(cols, mask):
-    pass
-
-
-def drop_nulls_table(cols, how="any", subset=None):
+def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
+    cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
+                                     else table_from_columns(subset))
 
     cdef any_or_all drop_if
     if how == "any":
@@ -121,29 +103,15 @@ def drop_nulls_table(cols, how="any", subset=None):
     else:
         drop_if = ALL
 
-    cdef vector[gdf_index_type] column_indices
-    if subset is not None:
-        column_indices = subset
-    else:
-        column_indices = range(len(cols))
+    cdef gdf_size_type valid_threshold = 0
+    if thresh:
+        valid_threshold = thresh
 
     with nogil:
-        c_out_table = drop_nulls(c_in_table[0], column_indices, drop_if)
+        c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
+                                 drop_if, valid_threshold)
 
     free(c_in_table)
+    free(c_keys_table)
 
     return columns_from_table(&c_out_table)
-
-
-def apply_apply_boolean_mask(inp, mask):
-    if isinstance(inp, Column):
-        return apply_boolean_mask_column(inp, mask)
-    else:
-        return apply_boolean_mask_table(inp, mask)
-
-
-def apply_drop_nulls(inp, how="any", subset=None):
-    if isinstance(inp, Column):
-        return drop_nulls_column(inp)
-    else:
-        return drop_nulls_table(inp, how=how, subset=subset)

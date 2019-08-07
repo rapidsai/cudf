@@ -65,9 +65,16 @@ ConfigureBench(TEST_BENCH "${TEST_BENCH_SRC}")
 # - gather benchmark ------------------------------------------------------------------------------
 
 set(GATHER_BENCH_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_benchmark.cpp")
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_benchmark.cu")
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
+
+# - scatter benchmark -----------------------------------------------------------------------------
+
+set(SCATTER_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
+
+ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
 
 ###################################################################################################
 # - apply_boolean_mask benchmark ------------------------------------------------------------------------------
@@ -85,8 +92,16 @@ set(JOIN_BENCH_SRC
 ConfigureBench(JOIN_BENCH "${JOIN_BENCH_SRC}")
 
 ###################################################################################################
-# - type_dispatcher benchmark ---------------------------------------------------------------------
+# - search benchmark ------------------------------------------------------------------------------
 
+set(SEARCH_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/search/search_benchmark.cu")
+
+ConfigureBench(SEARCH_BENCH "${SEARCH_BENCH_SRC}")
+
+
+###################################################################################################
+# - type_dispatcher benchmark ---------------------------------------------------------------------
 
 set(TD_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")

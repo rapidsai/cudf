@@ -23,7 +23,7 @@
 #include <cudf/legacy/table.hpp>
 
 #include "../csv/type_conversion.cuh"
-#include <io/utilities/file_utils.hpp>
+#include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
 namespace cudf {
@@ -48,11 +48,12 @@ public:
 private:
   const reader_options args_{};
 
-  std::unique_ptr<MappedFile> map_file_;
-  const char *input_data_ = nullptr;
-  size_t input_size_ = 0;
+  std::unique_ptr<datasource> source_;
+  std::shared_ptr<arrow::Buffer> buffer_;
+
   const char *uncomp_data_ = nullptr;
   size_t uncomp_size_ = 0;
+
   // Used when the input data is compressed, to ensure the allocated uncompressed data is freed
   std::vector<char> uncomp_data_owner_;
   device_buffer<char> d_data_;

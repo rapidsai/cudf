@@ -361,9 +361,8 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
+            src/io/io_functions.cpp
             src/io/convert/csr/cudf_to_csr.cu
-            src/io/utilities/parsing_utils.cu
-            src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/avro/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -386,7 +385,8 @@ add_library(cudf SHARED
             src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
-            src/io/io_functions.cpp
+            src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
@@ -399,7 +399,8 @@ add_library(cudf SHARED
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
-            src/filling/fill.cu)
+            src/filling/fill.cu
+            src/search/search.cu)
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

@@ -24,35 +24,6 @@
 namespace cudf {
 
 /**
- * @brief Filters a column using a column of boolean values as a mask.
- *
- * Given an input column and a mask column, an element `i` from the input column
- * is copied to the output if the corresponding element `i` in the mask is
- * non-null and `true`. This operation is stable: the input order is preserved.
- *
- * The input and mask columns must be of equal size.
- *
- * The output column has size equal to the number of elements in boolean_mask 
- * that are both non-null and `true`. Note that the output column memory is 
- * allocated by this function but must be freed by the caller when finished.
- * 
- * @note that the @p boolean_mask may have just boolean data (no valid bitmask), 
- * or just a valid bitmask (no boolean data), or it may have both. The filter
- * adapts to these three situations.
- * 
- * @note if @p input.size is zero, there is no error, and an empty column is 
- * returned.
- * 
- * @param[in] input The input column to filter
- * @param[in] boolean_mask A column of type GDF_BOOL8 used as a mask to filter
- * the input column corresponding index passes the filter.
-  * @return gdf_column Column containing copy of all elements of @p input passing
- * the filter defined by @p boolean_mask.
- */
-gdf_column apply_boolean_mask(gdf_column const &input,
-                              gdf_column const &boolean_mask);
-
-/**
  * @brief Filters a table using a column of boolean values as a mask.
  *
  * Given an input table and a mask column, an element `i` from each column of
@@ -84,27 +55,10 @@ table apply_boolean_mask(table const &input,
                          gdf_column const &boolean_mask);
 
 /**
- * @brief Filters a column to remove null elements.
- *
- * Given an input column an element `i` from the input column is copied to the
- * output if the corresponding element `i` in the input's valid bitmask is
- * non-null.
- *
- * Note that the output column memory is
- * allocated by this function but must be freed by the caller when finished.
- *
- * If the input column is not nullable, this function just returns a copy of the
- * input.
+ * @brief Enumeration used to indicate ALL true/valid or ANY true/valid
  * 
- * @note if @p input.size is zero, there is no error, and an empty column is
- * returned.
- *
- * @param[in] input The input column to filter
- * @return gdf_column Column containing copy of all non-null elements of @p input.
- */
-gdf_column drop_nulls(gdf_column const &input);
-
-
+ * Used by, for example, cudf::drop_nulls().
+ **/
 enum any_or_all {
   ANY = 0,
   ALL
@@ -118,10 +72,10 @@ enum any_or_all {
  * 
  * Given an input table, row `i` from the input columns is copied to the
  * output if the row is not null. Null means:
- *  - If @p drop_if is ANY, that there is a null in any column indexed by @p
- *    column_indices at that row.
- *  - If @p drop_if is ALL, that there are is a null in all columns indexed by
- *    @p column_indices at that row.
+ *  - If @p drop_if is ANY, that there is a null in any column of @p keys at
+ *    that row.
+ *  - If @p drop_if is ALL, that there are nulls in all columns of @p keys at
+ *    that row.
  *
  * This operation is stable: the input order is preserved in the output.
  * 
@@ -130,18 +84,22 @@ enum any_or_all {
  *
  * Any non-nullable column in the input is treated as all non-null.
  *
- * @note if @p input.num_rows() is zero, or column_indices is empty, there is no
- * error, and an empty table is returned
+ * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
+ * there is no error, and an empty table is returned
+ * 
+ * @throws cudf::logic_error if @p keys is non-empty and keys.num_rows() is less
+ * than input.num_rows()
  *
- * @param[in] input The input table to filter
- * @param[in] column_indices The indices of the columns to check for nulls
+ * @param[in] input The input table to filter.
+ * @param[in] key The table of columns to check for nulls.
  * @param[in] drop_if If ANY, drop rows that have a null in any column.
  *                    If ALL, drop rows that have a null in all columns.
- * @return cudf::table Table containing all non-null rows of the input table
+ * @param[in] valid_threshold Required number of non-null fields in a row to
+ *                            keep the row.
+ * @return cudf::table Table containing all non-null rows of the input table.
  */
-table drop_nulls(table const &input, 
-                 std::vector<gdf_index_type> const& column_indices,
-                 any_or_all drop_if);
+table drop_nulls(table const &input, table const &keys,
+                 any_or_all drop_if, gdf_size_type valid_threshold=0);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows

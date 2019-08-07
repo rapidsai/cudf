@@ -8,6 +8,7 @@ import cudf.bindings.binops as cpp_binops
 import cudf.bindings.copying as cpp_copying
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
@@ -122,20 +123,16 @@ class DatetimeColumn(columnops.TypedColumnBase):
         return self.view(
             numerical.NumericalColumn,
             dtype="int64",
-            data=typecast.apply_cast(self, dtype=np.int64).data,
+            data=typecast.apply_cast(self, np.int64).data,
         )
 
     def as_datetime_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
-        return typecast.apply_cast(self, dtype=np.dtype(dtype).type)
+        return typecast.apply_cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
-        import cudf.bindings.typecast as typecast
-
-        return typecast.apply_cast(
-            self.as_numerical, dtype=np.dtype(dtype).type
-        )
+        return self.as_numerical.astype(dtype)
 
     def as_string_column(self, dtype, **kwargs):
         from cudf.dataframe import string
@@ -242,6 +239,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
         value = pd.to_datetime(value)
         value = columnops.as_column(value).as_numerical[0]
         return self.as_numerical.find_last_value(value)
+
+    def searchsorted(self, value, side="left"):
+        value_col = columnops.as_column(value)
+        return cpp_search.search_sorted(self, value_col, side)
 
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
