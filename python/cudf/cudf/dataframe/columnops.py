@@ -106,8 +106,9 @@ class TypedColumnBase(Column):
         if not dropped_col:
             return column_empty_like(self, newsize=0)
         else:
-            return self.replace(data=dropped_col[0].data, mask=None,
-                                null_count=0)
+            return self.replace(
+                data=dropped_col[0].data, mask=None, null_count=0
+            )
 
     def apply_boolean_mask(self, mask):
         from cudf.bindings.stream_compaction import apply_apply_boolean_mask
@@ -117,8 +118,11 @@ class TypedColumnBase(Column):
         if not data:
             return column_empty_like(self, newsize=0)
         else:
-            return self.replace(data=data[0].data, mask=data[0].mask,
-                                null_count=data[0].null_count)
+            return self.replace(
+                data=data[0].data,
+                mask=data[0].mask,
+                null_count=data[0].null_count,
+            )
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
