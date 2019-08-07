@@ -23,7 +23,6 @@
 #include <memory>
 
 namespace cudf {
-
 namespace detail {
 
 template <typename ColumnDeviceView, typename HostTableView>
