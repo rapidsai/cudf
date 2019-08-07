@@ -192,12 +192,15 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 for no buffer.
    * @param length            the length of the buffer to read from.
+   * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
+   *                          columns to DATE64 for compatibility with NumPy.
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
-                                          String filePath, long address, long length) throws CudfException;
+                                          String filePath, long address, long length,
+                                          boolean usingNumPyTypes) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                   int[] aggTypes) throws CudfException;
+                                                   int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -413,7 +416,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes()));
   }
 
   /**
@@ -473,7 +476,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes()));
   }
 
   /**
@@ -531,8 +534,8 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true);
   }
 
-  public static Aggregate count() {
-    return Aggregate.count();
+  public static Aggregate count(int index) {
+    return Aggregate.count(index);
   }
 
   public static Aggregate max(int index) {
@@ -551,9 +554,18 @@ public final class Table implements AutoCloseable {
     return Aggregate.mean(index);
   }
 
+  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+    return groupByInternal(groupByOptions, indices);
+  }
+
   public AggregateOperation groupBy(int... indices) {
+    return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
+        indices);
+  }
+
+  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, operationIndicesArray);
+    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
   }
 
   public TableOperation onColumns(int... indices) {
@@ -632,9 +644,11 @@ public final class Table implements AutoCloseable {
   public static final class AggregateOperation {
 
     private final Operation operation;
+    private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, final int... indices) {
+    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
+      this.groupByOptions = groupByOptions;
     }
 
     /**
