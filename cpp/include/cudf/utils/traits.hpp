@@ -23,6 +23,40 @@
 
 namespace cudf {
 
+template <typename...>
+using void_t = void;
+
+template <typename L, typename R, typename = void>
+struct is_relationally_comparable_impl : std::false_type {};
+
+template <typename L, typename R>
+using less_comparable = decltype(std::declval<L>() < std::declval<R>());
+
+template <typename L, typename R>
+using greater_comparable = decltype(std::declval<L>() > std::declval<R>());
+
+template <typename L, typename R>
+struct is_relationally_comparable_impl<
+    L, R, void_t<less_comparable<L, R>, greater_comparable<L, R> > >
+    : std::true_type {};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if objects of types `L` and `R` can be relationally
+ *compared.
+ *
+ * Given two objects `L l`, and `R r`, returns true if `l < r` and `l > r` are
+ * well-formed expressions.
+ *
+ * @tparam L Type of the first object
+ * @tparam R Type of the second object
+ * @return true Objects of types `L` and `R` can be relationally be compared
+ * @return false Objects of types `L` and `R` cannot be compared
+ *---------------------------------------------------------------------------**/
+template <typename L, typename R>
+constexpr inline bool is_relationally_comparable() {
+  return is_relationally_comparable_impl<L, R>::value;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Indicates if the type `T` is a numeric type.
  *
