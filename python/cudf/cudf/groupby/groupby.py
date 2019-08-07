@@ -47,8 +47,8 @@ class _Groupby(object):
 
     def size(self):
         nrows = len(self._groupby.obj)
-        ones = cudf.Series(cudautils.ones(nrows, dtype="int64"))
-        return ones.groupby(self._groupby.key_columns).sum()
+        ones = cudf.Series(cudautils.ones(nrows, dtype="int8"))
+        return ones.groupby(self._groupby.key_columns).count()
 
 
 class SeriesGroupBy(_Groupby):

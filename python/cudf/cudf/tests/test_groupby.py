@@ -760,12 +760,17 @@ def test_groupby_size():
     )
     gdf = cudf.from_pandas(pdf)
 
-    assert_eq(pdf.groupby("a").size(), gdf.groupby("a").size())
+    assert_eq(
+        pdf.groupby("a").size(), gdf.groupby("a").size(), check_dtype=False
+    )
 
     assert_eq(
         pdf.groupby(["a", "b", "c"]).size(),
         gdf.groupby(["a", "b", "c"]).size(),
+        check_dtype=False,
     )
 
     sr = pd.Series(range(len(pdf)))
-    assert_eq(pdf.groupby(sr).size(), gdf.groupby(sr).size())
+    assert_eq(
+        pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False
+    )
