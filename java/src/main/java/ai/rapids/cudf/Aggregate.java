@@ -30,8 +30,8 @@ public final class Aggregate {
     this.index = index;
   }
 
-  static Aggregate count() {
-    return new Aggregate(AggregateOp.COUNT, 0/* for count index doesn't matter*/);
+  static Aggregate count(int index) {
+    return new Aggregate(AggregateOp.COUNT, index);
   }
 
   static Aggregate max(int index) {
