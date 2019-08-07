@@ -3,10 +3,12 @@
 from importlib import import_module
 
 # Define a mapping between cudf namespace variables and the corresponding
-# package/module they're imported from.  Variables are imported when initially
-# accessed from this namespace using this map.
+# package/module they're imported from. Actual imports of names into this
+# namespace occur when the names are accessed (eg. "import cudf; cudf.<name>")
+# or by explicitely importing them (eg. "from cudf import <name>"). Calls to
+# "import cudf" will not incur an import cost for variables that are never used.
 #
-# Keys are the resulting namespace vars, values are tuples containing the
+# Keys are the resulting namespace vars, and values are tuples containing the
 # package/module to import to define the namespace var. If the value is a
 # two-tuple, the 2nd item is the name of the var imported to be named after the
 # key in the namespace.
@@ -34,6 +36,7 @@ __namespaceVarModMap = {
     "merge" : ("cudf.dataframe",),
 
     "from_dlpack" : ("cudf.io",),
+    "from_avro" : ("cudf.io",),
     "read_csv" : ("cudf.io",),
     "read_feather" : ("cudf.io",),
     "read_hdf" : ("cudf.io",),
@@ -64,8 +67,11 @@ __namespaceVarModMap = {
 
 # Note: dunder vars such as __version__ are not part of __all__
 __all__ = list(__namespaceVarModMap.keys())
-
 __locals = locals()
+
+# Unconditionally create a CUDA context at import-time
+import numba.cuda
+numba.cuda.current_context()
 
 def __getattr__(var):
     """
@@ -86,7 +92,6 @@ def __getattr__(var):
     elif var == "__version__":
         from cudf._version import get_versions
         val = get_versions()["version"]
-        del get_versions
 
     else:
         raise AttributeError("module: 'cudf' has no attribute '%s'" % var)
