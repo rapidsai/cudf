@@ -128,6 +128,7 @@
 - PR #2450 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
 - PR #2470 Fix issues with empty strings and string categories (Java)
 - PR #2471 Fix String Column Validity.
+- PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
 
 
 # cuDF 0.8.0 (27 June 2019)
