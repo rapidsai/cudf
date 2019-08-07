@@ -115,9 +115,9 @@ auto group_values_and_indices(cudf::table const& key_table,
 } // namespace detail
 
 // TODO: add optional check for is_sorted. Use context.flag_sorted
-std::pair<cudf::table, gdf_column>
+std::pair<cudf::table, cudf::table>
 group_quantiles(cudf::table const& key_table,
-                gdf_column const& values,
+                cudf::table const& val_table,
                 std::vector<double> const& quantiles,
                 gdf_quantile_method interpolation,
                 gdf_context const& context)
@@ -130,45 +130,50 @@ group_quantiles(cudf::table const& key_table,
 
   rmm::device_vector<double> dv_quantiles(quantiles);
 
-  // Per column =============================
-  // Merge the key_table and values column because we want to sort them together
-  std::vector<gdf_column*> input_columns(key_table.get_columns());
-  input_columns.push_back(const_cast<gdf_column*>(&values));
-  auto combined_table = cudf::table(input_columns);
+  cudf::table result_table(group_indices.size * quantiles.size(),
+                           std::vector<gdf_dtype>(val_table.num_columns(),
+                                                  GDF_FLOAT64));
 
-  // Get sorted indices
-  auto idx_col = allocate_column(gdf_dtype_of<gdf_index_type>(),
-                                 combined_table.num_rows(),
-                                 false);
-  gdf_order_by(combined_table.begin(), nullptr,
-               combined_table.num_columns(), &idx_col,
-               const_cast<gdf_context*>(&context));
+  for (gdf_size_type i = 0; i < val_table.num_columns(); i++)
+  {
+    auto& values = *(val_table.get_column(i));
+    auto& result_col = *(result_table.get_column(i));
 
-  // Sort the values column
-  auto sorted_values = allocate_like(values);
-  auto val_table = cudf::table{const_cast<gdf_column*>(&values)};
-  auto sorted_val_table = cudf::table{&sorted_values};
-  cudf::gather(&val_table, 
-               reinterpret_cast<gdf_index_type*>(idx_col.data),
-               &sorted_val_table);
+    // Merge the key_table and values column because we want to sort them together
+    std::vector<gdf_column*> input_columns(key_table.get_columns());
+    input_columns.push_back(const_cast<gdf_column*>(&values));
+    auto combined_table = cudf::table(input_columns);
 
-  // Go forth and calculate the quantiles
-  // TODO: currently ignoring nulls
-  auto result_col = cudf::allocate_column(GDF_FLOAT64,
-                                          group_indices.size * quantiles.size(),
-                                          false);
+    // Get sorted indices
+    auto idx_col = allocate_column(gdf_dtype_of<gdf_index_type>(),
+                                   combined_table.num_rows(),
+                                   false);
+    gdf_order_by(combined_table.begin(), nullptr,
+                combined_table.num_columns(), &idx_col,
+                const_cast<gdf_context*>(&context));
 
-  type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                  sorted_values, group_indices, result_col, dv_quantiles,
-                  interpolation);
+    // Sort the values column
+    auto sorted_values = allocate_like(values);
+    auto val_col_table = cudf::table{const_cast<gdf_column*>(&values)};
+    // TODO: should be able to replace with table init list constructor in below call
+    auto sorted_val_col_table = cudf::table{&sorted_values};
+    cudf::gather(&val_col_table, 
+                reinterpret_cast<gdf_index_type*>(idx_col.data),
+                &sorted_val_col_table);
 
-  gdf_column_free(&idx_col);
-  gdf_column_free(&sorted_values);
-  // Per column =============================
+    // Go forth and calculate the quantiles
+    // TODO: currently ignoring nulls
+    type_dispatcher(sorted_values.dtype, quantiles_functor{},
+                    sorted_values, group_indices, result_col, dv_quantiles,
+                    interpolation);
 
+    gdf_column_free(&idx_col);
+    gdf_column_free(&sorted_values);
+  }
+  
   gdf_column_free(&group_indices);
 
-  return std::make_pair(out_key_table, result_col);
+  return std::make_pair(out_key_table, result_table);
 }
     
 } // namespace cudf

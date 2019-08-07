@@ -21,9 +21,9 @@
 
 namespace cudf {
 
-std::pair<cudf::table, gdf_column>
-group_quantiles(cudf::table const& input_table,
-                gdf_column const& values,
+std::pair<cudf::table, cudf::table>
+group_quantiles(cudf::table const& key_table,
+                cudf::table const& val_table,
                 std::vector<double> const& quantiles,
                 gdf_quantile_method interpolation = GDF_QUANT_LINEAR,
                 gdf_context const& context = gdf_context{});
