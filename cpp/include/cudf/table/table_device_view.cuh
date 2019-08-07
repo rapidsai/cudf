@@ -54,16 +54,33 @@ class table_device_view_base {
   ColumnDeviceView* _columns;  ///< Array of view objects in device memory
   size_type _num_rows{};
   size_type _num_columns{};
+  cudaStream_t _stream{};
+
+ protected:
+  table_device_view_base(size_type num_rows, size_type num_columns,
+                         cudaStream_t stream)
+      : _num_rows{num_rows}, _num_columns{num_columns}, _stream{stream} {}
+
+  void destroy();
 };
 }  // namespace detail
 
 class table_device_view
     : public detail::table_device_view_base<column_device_view> {
+ public:
   static auto create(table_view source_view, cudaStream_t stream = 0);
+
+ private:
+  table_device_view(table_view source_view, cudaStream_t stream);
 };
 
 class mutable_table_device_view
     : public detail::table_device_view_base<mutable_column_device_view> {
+ public:
   static auto create(mutable_table_view source_view, cudaStream_t stream = 0);
+
+ private:
+  mutable_table_device_view(mutable_table_view source_view,
+                            cudaStream_t stream);
 };
 }  // namespace cudf
