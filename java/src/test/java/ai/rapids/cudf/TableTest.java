@@ -1163,4 +1163,121 @@ public class TableTest {
       }
     }
   }
+
+  //
+  // FILTER TESTS
+  //
+
+  @Test
+  void testMaskWithValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        if (i % 2 != 0) {
+          builder.setNullAt(i);
+        }
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        filtered.ensureOnHost();
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(3, filtered.getRowCount());
+        assertEquals(1, filtered.getInt(0));
+        assertEquals(2, filtered.getInt(1));
+        assertTrue(filtered.isNull(2));
+      }
+    }
+  }
+
+  @Test
+  void testMaskDataOnly() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      filtered.ensureOnHost();
+      assertEquals(DType.INT8, filtered.getType());
+      assertEquals(3, filtered.getRowCount());
+      assertTrue(filtered.isNull(0));
+      assertEquals(3, filtered.getByte(1));
+      assertTrue(filtered.isNull(2));
+    }
+  }
+
+  @Test
+  void testAllFilteredFromData() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, false);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      assertEquals(DType.INT32, filtered.getType());
+      assertEquals(0, filtered.getRowCount());
+    }
+  }
+
+  @Test
+  void testAllFilteredFromValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        builder.setNullAt(i);
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(0, filtered.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testMismatchedSizes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[3];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  @Test
+  void testTableBasedFilter() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(
+             ColumnVector.fromBoxedInts(1, null, 2, 3, null),
+             ColumnVector.categoryFromStrings("one", "two", "three", null, "five"));
+         Table filtered = input.filter(mask);
+         Table expected = new Table(
+             ColumnVector.fromBoxedInts(null, 3, null),
+             ColumnVector.categoryFromStrings("two", null, "five"))) {
+      assertTablesAreEqual(filtered, expected);
+    }
+  }
+
+  @Test
+  void testStringsAreNotSupported() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
 }
