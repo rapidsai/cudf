@@ -46,8 +46,12 @@ class _Groupby(object):
 
 
 class SeriesGroupBy(_Groupby):
-    def __init__(self, sr, by=None, level=None, method="hash", sort=True):
+    def __init__(
+        self, sr, by=None, level=None, method="hash", sort=True, as_index=None
+    ):
         self._sr = sr
+        if as_index not in (True, None):
+            raise TypeError("as_index must be True for SeriesGroupBy")
         self._groupby = _GroupbyHelper(
             obj=self._sr, by=by, level=level, sort=sort
         )
@@ -83,7 +87,11 @@ class DataFrameGroupBy(_Groupby):
                 self._groupby.key_names, self._groupby.key_columns
             ):
                 by_list.append(cudf.Series(by, name=by_name))
-            return self._df[arg].groupby(by_list, sort=self._groupby.sort)
+            return self._df[arg].groupby(
+                by_list,
+                as_index=self._groupby.as_index,
+                sort=self._groupby.sort,
+            )
 
     def __getattr__(self, key):
         if key == "_df":
@@ -95,7 +103,11 @@ class DataFrameGroupBy(_Groupby):
                 self._groupby.key_names, self._groupby.key_columns
             ):
                 by_list.append(cudf.Series(by, name=by_name))
-            return self._df[key].groupby(by_list, sort=self._groupby.sort)
+            return self._df[key].groupby(
+                by_list,
+                as_index=self._groupby.as_index,
+                sort=self._groupby.sort,
+            )
         raise AttributeError(
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
         )
