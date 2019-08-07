@@ -764,6 +764,39 @@ def test_series_setitem_categorical():
     gsr[0] = "e"
     assert_eq(psr, gsr)
 
+    psr[[0, 1]] = "b"
+    gsr[[0, 1]] = "b"
+    assert_eq(psr, gsr)
+
+    psr[0:3] = "e"
+    gsr[0:3] = "e"
+    assert_eq(psr, gsr)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (0, "d"),
+        (0, "g"),
+        ([0, 1], "g"),
+        ([0, 1], None),
+        (slice(None, 2), "g"),
+        (slice(None, 2), ["g", None]),
+    ],
+)
+def test_series_setitem_string(key, value):
+    psr = pd.Series(["a", "b", "c", "d", "e"])
+    gsr = cudf.from_pandas(psr)
+    psr[key] = value
+    gsr[key] = value
+    assert_eq(psr, gsr)
+
+    psr = pd.Series(["a", None, "c", "d", "e"])
+    gsr = cudf.from_pandas(psr)
+    psr[key] = value
+    gsr[key] = value
+    assert_eq(psr, gsr)
+
 
 @pytest.mark.parametrize(
     "key, value",
