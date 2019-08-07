@@ -2368,6 +2368,12 @@ def test_reset_index(pdf, gdf, drop):
     assert_eq(pdf.x.reset_index(drop=drop), gdf.x.reset_index(drop=drop))
 
 
+@pytest.mark.parametrize("drop", [True, False])
+def test_set_index(pdf, gdf, drop):
+    for col in pdf.columns:
+        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
+
+
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_0(copy):
     # TODO (ptaylor): pandas changes `int` dtype to `float64`
