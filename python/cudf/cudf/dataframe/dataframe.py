@@ -1999,7 +1999,8 @@ class DataFrame(object):
 
         # Fix column names by appending `suffixes`
         for name in same_named_columns:
-            if not (name in left_on and name in right_on and (left_on.index(name) == right_on.index(name))):
+            if not (name in left_on and name in right_on
+               and (left_on.index(name) == right_on.index(name))):
                 if not (lsuffix or rsuffix):
                     raise ValueError(
                         "there are overlapping columns but "
@@ -2009,9 +2010,11 @@ class DataFrame(object):
                     lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
                     rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
                     if name in left_on:
-                        left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
+                        left_on[left_on.index(name)] = "%s%s" % (
+                            name, lsuffix)
                     if name in right_on:
-                        right_on[right_on.index(name)] = "%s%s" % (name, rsuffix)
+                        right_on[right_on.index(name)] = "%s%s" % (
+                            name, rsuffix)
 
         # We save the original categories for the reconstruction of the
         # final data frame
