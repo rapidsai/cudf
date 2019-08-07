@@ -91,6 +91,7 @@ def apply_apply_boolean_mask(cols, mask):
 
     return columns_from_table(&c_out_table)
 
+
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
