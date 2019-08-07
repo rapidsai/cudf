@@ -492,7 +492,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jintArray agg_types) {
+    jintArray aggregate_column_indices, jintArray agg_types,
+    jboolean ignore_null_keys) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
@@ -523,7 +524,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     }
 
     std::pair<cudf::table, cudf::table> result =
-        cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops);
+        cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops,
+            cudf::groupby::hash::Options(ignore_null_keys));
 
     try {
       std::vector<gdf_column *> output_columns;

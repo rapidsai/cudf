@@ -22,11 +22,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.acl.Group;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -766,6 +768,20 @@ public class TableTest {
       }
     }
   }
+  
+  @Test
+  void testValidityCopyLastByte() {
+    try (ColumnVector column =
+          ColumnVector.fromBoxedLongs(null, 2L, 3L, 4L, 5L, 6L, 7L, 8L, null, 10L, null, 12L, null, 14L, 15L)) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      DataOutputStream dos = new DataOutputStream(baos);
+      byte[] buff = new byte[1024 * 128];
+      JCudfSerialization.copyValidityData(dos, column, 4, 11, buff);
+      byte[] output = baos.toByteArray();
+      assertEquals(output[0], 0xFFFFFFAF);   // 1010 1111 => 12, null, 10, null, 8, 7, 6, 5
+      assertEquals(output[1], 0x0000000E);   // 0000 1110 => ..., 15, 14, null
+    } catch (Exception e){}
+  }
 
   @Test
   void testGroupByCount() {
@@ -773,7 +789,7 @@ public class TableTest {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(count())) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(count(0))) {
         // verify t3
         assertEquals(4, t3.getRowCount());
         ColumnVector aggOut1 = t3.getColumn(2);
@@ -795,6 +811,92 @@ public class TableTest {
             expectedAggregateResult.put(key, count - 1);
           }
         }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithNulls() {
+    try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
+                                           .column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    1, null, null,    1,    1)
+                                           .column(   1,    1,    1, null,    1,    1)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0).aggregate(count(1), count(2), count(3))
+            .orderBy(true, Table.asc(0))) {
+        // verify t3
+        assertEquals(2, t3.getRowCount());
+
+        ColumnVector groupCol = t3.getColumn(0);
+        ColumnVector countCol = t3.getColumn(1);
+        ColumnVector nullCountCol = t3.getColumn(2);
+        ColumnVector nullCountCol2 = t3.getColumn(3);
+
+        groupCol.ensureOnHost();
+        countCol.ensureOnHost();
+        nullCountCol.ensureOnHost();
+        nullCountCol2.ensureOnHost();
+
+        // compare the grouping columns
+        assertTrue(groupCol.isNull(0));
+        assertEquals(groupCol.getInt(1), 1);
+
+        // compare the agg columns
+        // count(1)
+        assertEquals(countCol.getInt(0), 2);
+        assertEquals(countCol.getInt(1), 4);
+
+        // count(2)
+        assertEquals(nullCountCol.getInt(0), 2);
+        assertEquals(nullCountCol.getInt(1), 2); // counts only the non-nulls
+
+        // count(3)
+        assertEquals(nullCountCol2.getInt(0), 2);
+        assertEquals(nullCountCol2.getInt(1), 3); // counts only the non-nulls
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithCollapsingNulls() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(null, null,    1,    1,    1,    1)
+        .column(   1,    1,    1,    1,    1,    1)
+        .column(   1,    1, null, null,    1,    1)
+        .column(   1,    1,    1, null,    1,    1)
+        .build()) {
+
+      GroupByOptions options = GroupByOptions.builder()
+          .withIgnoreNullKeys(true)
+          .build();
+
+      try (Table t3 = t1.groupBy(options, 0).aggregate(count(1), count(2), count(3))
+          .orderBy(true, Table.asc(0))) {
+        // (null, 1) => became (1) because we are ignoring nulls
+        assertEquals(1, t3.getRowCount());
+
+        ColumnVector groupCol = t3.getColumn(0);
+        ColumnVector countCol = t3.getColumn(1);
+        ColumnVector nullCountCol = t3.getColumn(2);
+        ColumnVector nullCountCol2 = t3.getColumn(3);
+
+        groupCol.ensureOnHost();
+        countCol.ensureOnHost();
+        nullCountCol.ensureOnHost();
+        nullCountCol2.ensureOnHost();
+
+        // compare the grouping columns
+        assertEquals(groupCol.getInt(0), 1);
+
+        // compare the agg columns
+        // count(1)
+        assertEquals(countCol.getInt(0), 4);
+
+        // count(2)
+        assertEquals(nullCountCol.getInt(0), 2); // counts only the non-nulls
+
+        // count(3)
+        assertEquals(nullCountCol2.getInt(0), 3); // counts only the non-nulls
       }
     }
   }
@@ -831,6 +933,30 @@ public class TableTest {
       }
     }
   }
+
+  @Test
+  void testGroupByDuplicateAggregates() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 15.0, 17.0, 18.0)
+                                           .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 1, 1, 1)
+             .column(1, 3, 5, 0)
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(12.0, 14.0, 17.0, 18.0).build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+          .aggregate(max(2), min(2), min(2), max(2))
+          .orderBy(false, Table.asc(2))) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+        assertTablesAreEqual(t3, expected);
+      }
+    }
+  }
+
 
   @Test
   void testGroupByMin() {
@@ -943,7 +1069,7 @@ public class TableTest {
                                            .column(5.0, 2.3, 3.4, 2.3, 1.3, 12.2)
                                            .column(  3,   1,   7,  -1,   9,    0)
                                            .build()) {
-      try (Table t2 = t1.groupBy(0, 1).aggregate(count(), max(3), min(2), mean(2), sum(2))) {
+      try (Table t2 = t1.groupBy(0, 1).aggregate(count(0), max(3), min(2), mean(2), sum(2))) {
         assertEquals(2, t2.getRowCount());
         ColumnVector countOut = t2.getColumn(2);
         ColumnVector maxOut = t2.getColumn(3);
