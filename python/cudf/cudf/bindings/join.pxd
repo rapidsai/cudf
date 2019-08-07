@@ -14,36 +14,36 @@ cdef extern from "cudf/join.hpp" nogil:
 
     cdef pair[cudf_table, cudf_table] gdf_inner_join(
         const cudf_table left_cols,
-        const vector [int] left_join_cols,
+        const vector[int] left_join_cols,
         const cudf_table right_cols,
-        const vector [int] right_join_cols,
+        const vector[int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        const vector [int] left_common_name_join_cols,
-        const vector [int] right_common_name_join_cols,
-        gdf_context *join_context
+        const vector[int] left_common_name_join_cols,
+        const vector[int] right_common_name_join_cols,
+        gdf_context * join_context
     ) except +
 
     cdef pair[cudf_table, cudf_table] gdf_left_join(
         const cudf_table left_cols,
-        const vector [int] left_join_cols,
+        const vector[int] left_join_cols,
         const cudf_table right_cols,
-        const vector [int] right_join_cols,
+        const vector[int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        const vector [int] left_common_name_join_cols,
-        const vector [int] right_common_name_join_cols,
-        gdf_context *join_context
+        const vector[int] left_common_name_join_cols,
+        const vector[int] right_common_name_join_cols,
+        gdf_context * join_context
     ) except +
 
     cdef pair[cudf_table, cudf_table] gdf_full_join(
         const cudf_table left_cols,
-        const vector [int] left_join_cols,
+        const vector[int] left_join_cols,
         const cudf_table right_cols,
-        const vector [int] right_join_cols,
+        const vector[int] right_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices,
-        const vector [int] left_common_name_join_cols,
-        const vector [int] right_common_name_join_cols,
-        gdf_context *join_context
+        const vector[int] left_common_name_join_cols,
+        const vector[int] right_common_name_join_cols,
+        gdf_context * join_context
     ) except +
