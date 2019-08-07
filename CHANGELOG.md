@@ -80,6 +80,7 @@
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
 - PR #2453 Streamline CUDA_REL environment variable
+- PR #2483 Bundle Boost filesystem dependency in the Java jar
 
 ## Bug Fixes
 
