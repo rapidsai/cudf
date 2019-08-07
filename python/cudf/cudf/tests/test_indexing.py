@@ -12,6 +12,38 @@ from cudf.tests.utils import assert_eq
 index_dtypes = [np.int64, np.int32, np.int16, np.int8]
 
 
+@pytest.fixture
+def pdf_gdf():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": ["c", "d", "e"]}, index=["one", "two", "three"]
+    )
+    gdf = cudf.from_pandas(pdf)
+    return pdf, gdf
+
+
+@pytest.fixture
+def pdf_gdf_multi():
+    pdf = pd.DataFrame(np.random.rand(7, 5))
+    pdfIndex = pd.MultiIndex(
+        [
+            ["a", "b", "c"],
+            ["house", "store", "forest"],
+            ["clouds", "clear", "storm"],
+            ["fire", "smoke", "clear"],
+        ],
+        [
+            [0, 0, 0, 0, 1, 1, 2],
+            [1, 1, 1, 1, 0, 0, 2],
+            [0, 0, 2, 2, 2, 0, 1],
+            [0, 0, 0, 1, 2, 0, 1],
+        ],
+    )
+    pdfIndex.names = ["alpha", "location", "weather", "sign"]
+    pdf.index = pdfIndex
+    gdf = cudf.from_pandas(pdf)
+    return pdf, gdf
+
+
 @pytest.mark.parametrize(
     "i1, i2, i3",
     (
@@ -647,6 +679,22 @@ def test_series_setitem_basics(key, value, nulls):
     assert_eq(psr, gsr, check_dtype=False)
 
 
+def test_series_setitem_null():
+    gsr = cudf.Series([1, 2, 3, 4])
+    gsr[0] = None
+
+    expect = cudf.Series([None, 2, 3, 4])
+    got = gsr
+    assert_eq(expect, got)
+
+    gsr = cudf.Series([None, 2, 3, 4])
+    gsr[0] = 1
+
+    expect = cudf.Series([1, 2, 3, 4])
+    got = gsr
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "key, value",
     [
@@ -718,7 +766,16 @@ def test_series_setitem_categorical():
 
 
 @pytest.mark.parametrize(
-    "key, value", [("a", 4), ("b", 4), (["a", "b"], 4), (["a", "b"], [4, 5])]
+    "key, value",
+    [
+        ("a", 4),
+        ("b", 4),
+        (["a", "b"], 4),
+        (["a", "b"], [4, 5]),
+        ([True, False, True], 4),
+        ([False, False, False], 4),
+        ([True, False, True], [4, 5]),
+    ],
 )
 def test_series_setitem_loc(key, value):
     psr = pd.Series([1, 2, 3], ["a", "b", "c"])
@@ -726,38 +783,6 @@ def test_series_setitem_loc(key, value):
     psr.loc[key] = value
     gsr.loc[key] = value
     assert_eq(psr, gsr)
-
-
-@pytest.fixture
-def pdf_gdf():
-    pdf = pd.DataFrame(
-        {"a": [1, 2, 3], "b": ["c", "d", "e"]}, index=["one", "two", "three"]
-    )
-    gdf = cudf.from_pandas(pdf)
-    return pdf, gdf
-
-
-@pytest.fixture
-def pdf_gdf_multi():
-    pdf = pd.DataFrame(np.random.rand(7, 5))
-    pdfIndex = pd.MultiIndex(
-        [
-            ["a", "b", "c"],
-            ["house", "store", "forest"],
-            ["clouds", "clear", "storm"],
-            ["fire", "smoke", "clear"],
-        ],
-        [
-            [0, 0, 0, 0, 1, 1, 2],
-            [1, 1, 1, 1, 0, 0, 2],
-            [0, 0, 2, 2, 2, 0, 1],
-            [0, 0, 0, 1, 2, 0, 1],
-        ],
-    )
-    pdfIndex.names = ["alpha", "location", "weather", "sign"]
-    pdf.index = pdfIndex
-    gdf = cudf.from_pandas(pdf)
-    return pdf, gdf
 
 
 @pytest.mark.parametrize(
@@ -774,6 +799,23 @@ def test_dataframe_setitem_iloc(key, value, pdf_gdf):
     pdf, gdf = pdf_gdf
     pdf.iloc[key] = value
     gdf.iloc[key] = value
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "key, value",
+    [
+        (("one", "a"), 5),
+        ((slice(None), "a"), 5),
+        ((slice(None), "a"), range(3)),
+        ((slice(None, "two"), "a"), range(2)),
+        ((["one", "two"], "a"), 5),
+    ],
+)
+def test_dataframe_setitem_loc(key, value, pdf_gdf):
+    pdf, gdf = pdf_gdf
+    pdf.loc[key] = value
+    gdf.loc[key] = value
     assert_eq(pdf, gdf)
 
 
