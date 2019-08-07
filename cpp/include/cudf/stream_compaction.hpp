@@ -90,13 +90,16 @@ enum any_or_all {
  * @throws cudf::logic_error if @p keys is non-empty and keys.num_rows() is less
  * than input.num_rows()
  *
- * @param[in] input The input table to filter
- * @param[in] column_indices The indices of the columns to check for nulls
+ * @param[in] input The input table to filter.
+ * @param[in] key The table of columns to check for nulls.
  * @param[in] drop_if If ANY, drop rows that have a null in any column.
  *                    If ALL, drop rows that have a null in all columns.
- * @return cudf::table Table containing all non-null rows of the input table
+ * @param[in] valid_threshold Required number of non-null fields in a row to
+ *                            keep the row.
+ * @return cudf::table Table containing all non-null rows of the input table.
  */
-table drop_nulls(table const &input, table const &keys, any_or_all drop_if);
+table drop_nulls(table const &input, table const &keys,
+                 any_or_all drop_if, gdf_size_type valid_threshold=0);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
