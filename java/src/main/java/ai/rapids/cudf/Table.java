@@ -717,7 +717,7 @@ public final class Table implements AutoCloseable {
       Table aggregate = new Table(gdfGroupByAggregate(
           operation.table.nativeHandle,
           operation.indices,
-          // one way of converting List[Integer] to int[]
+          // one way of converting List[Integer] to int[
           aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
           ops.stream().mapToInt(i->i).toArray(),
           groupByOptions.getIgnoreNullKeys()));
@@ -727,26 +727,30 @@ public final class Table implements AutoCloseable {
 
       int aggIndex = 0;
 
-      // increase ref counts for the grouping columns
+      // pick out the grouping columns
       for (int groupIndex : operation.indices) {
         finalCols[groupIndex] = aggregate.getColumn(groupIndex);
-        finalCols[groupIndex].incRefCount();
         aggIndex++;
       }
 
-      // pick out the correct columns for the rhs, and increase
-      // their ref counts
+      // pick out the aggregate columns (copying the reference for duplicate aggs)
       for (ColumnOp cop : finalAggColumns) {
         int originalIndex = aggToCudfColumn.get(cop);
         finalCols[aggIndex] = aggregate.getColumn(originalIndex);
-        finalCols[aggIndex].incRefCount();
         aggIndex++;
       }
 
+      // Note: Table will increase ref counts accordingly, which means
+      // that duplicate columns in finalCols, will get a refCount equal
+      // to the number of times their references appear on the table (good)
+      Table tbl = new Table(finalCols);
+
       // returning a brand new table now, so we close the original
+      // this brings the refCount down for each column, such that Table
+      // is the only holder
       aggregate.close();
 
-      return new Table(finalCols);
+      return tbl;
     }
   }
 

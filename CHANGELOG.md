@@ -84,6 +84,7 @@
 - PR #2483 Bundle Boost filesystem dependency in the Java jar
 - PR #2486 Java API hash functions
 - PR #2481 Adds the ignore_null_keys option to the java api
+- PR #2490 Java api: support multiple aggregates for the same column
 
 ## Bug Fixes
 
