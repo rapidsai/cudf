@@ -719,7 +719,8 @@ public final class Table implements AutoCloseable {
           operation.indices,
           // one way of converting List[Integer] to int[
           aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
-          ops.stream().mapToInt(i->i).toArray()));
+          ops.stream().mapToInt(i->i).toArray(),
+          groupByOptions.getIgnoreNullKeys()));
 
       // prepare the final table
       ColumnVector[] finalCols = new ColumnVector[operation.indices.length + aggregates.length];
