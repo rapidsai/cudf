@@ -4,6 +4,7 @@ import collections
 import itertools
 
 import cudf
+import cudf.utils.cudautils as cudautils
 from cudf import MultiIndex
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
@@ -43,6 +44,11 @@ class _Groupby(object):
 
     def agg(self, func):
         return self._apply_aggregation(func)
+
+    def size(self):
+        nrows = len(self._groupby.obj)
+        ones = cudf.Series(cudautils.ones(nrows, dtype="int64"))
+        return ones.groupby(self._groupby.key_columns).sum()
 
 
 class SeriesGroupBy(_Groupby):

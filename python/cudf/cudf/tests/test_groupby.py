@@ -748,3 +748,24 @@ def test_groupby_index_type():
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
     assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+
+
+def test_groupby_size():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(pdf.groupby("a").size(), gdf.groupby("a").size())
+
+    assert_eq(
+        pdf.groupby(["a", "b", "c"]).size(),
+        gdf.groupby(["a", "b", "c"]).size(),
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_eq(pdf.groupby(sr).size(), gdf.groupby(sr).size())
