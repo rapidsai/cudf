@@ -30,6 +30,7 @@
 #include <thrust/iterator/counting_iterator.h>
 
 #include <algorithm>
+#include <tuple>
 
 namespace cudf {
 
@@ -77,38 +78,32 @@ struct quantiles_functor {
 namespace detail {
 
 // TODO: optimize this so that it doesn't have to generate the sorted table
-auto group_values_and_indices(cudf::table const& input_table,
+// But that needs a cudf::gather that can take a transformed iterator
+auto group_values_and_indices(cudf::table const& key_table,
                               gdf_context const& context)
 {
   // Sort and groupby the input table
-  cudf::table grouped_table;
-  gdf_column discard_indices;
-  std::vector<gdf_index_type> key_col_indices(input_table.num_columns());
+  cudf::table sorted_key_table;
+  gdf_column group_indices;
+  std::vector<gdf_index_type> key_col_indices(key_table.num_columns());
   std::iota(key_col_indices.begin(), key_col_indices.end(), 0);
   
-  std::tie(grouped_table, discard_indices) = 
-    gdf_group_by_without_aggregations(input_table, input_table.num_columns(),
+  std::tie(sorted_key_table, group_indices) =
+    gdf_group_by_without_aggregations(key_table, key_table.num_columns(),
                                       key_col_indices.data(),
                                       const_cast<gdf_context*>(&context));
+  
+  // Get output_keys using group_indices and input table
+  gdf_size_type num_grps = group_indices.size;
+  auto out_key_table = cudf::allocate_like_of_size(key_table, num_grps);
+  cudf::gather(&sorted_key_table,
+               reinterpret_cast<gdf_index_type*>(group_indices.data),
+               &out_key_table);
 
-  gdf_column_free(&discard_indices);
+  // Temporary guest. Not needed because we'll sort again including value cols
+  sorted_key_table.destroy();
 
-  // discard_indices now contains the starting location of all the groups
-  // but we don't want that. WE want indices when the last column is NOT included
-  // So make a table without it and get the indices for it
-  std::vector<gdf_column*> key_cols(input_table.num_columns() - 1);
-  std::transform(key_col_indices.begin(), key_col_indices.end() - 1,
-                 key_cols.begin(),
-                 [&grouped_table](gdf_index_type const index) {
-                   return grouped_table.get_column(index);
-                 });
-  cudf::table key_table(key_cols);
-
-  // And get the group indices again, this time excluding the last (values) column
-  auto group_indices = gdf_unique_indices(key_table, context);
-  key_table.destroy();
-  auto grouped_values = **(grouped_table.end() - 1);
-  return std::make_pair(grouped_values, group_indices);
+  return std::make_pair(out_key_table, group_indices);
 }
 
 } // namespace detail
@@ -121,30 +116,45 @@ group_quantiles(cudf::table const& key_table,
                 gdf_quantile_method interpolation,
                 gdf_context const& context)
 {
+  // Get the group indices and table of unique keys. Latter is simply returned
+  cudf::table out_key_table;
+  gdf_column group_indices;
+  std::tie(out_key_table, group_indices) = 
+    detail::group_values_and_indices(key_table, context);
+
+
+  // Per column =============================
   // Merge the key_table and values column because we want to sort them together
   std::vector<gdf_column*> input_columns(key_table.get_columns());
   input_columns.push_back(const_cast<gdf_column*>(&values));
-  cudf::table input_table(input_columns);
+  auto combined_table = cudf::table(input_columns);
 
-  gdf_column grouped_values, group_indices;
-  std::tie(grouped_values, group_indices) = 
-    detail::group_values_and_indices(input_table, context);
+  // Get sorted indices
+  auto idx_col = allocate_column(GDF_INT32, combined_table.num_rows(), false);
+  gdf_order_by(combined_table.begin(), nullptr,
+               combined_table.num_columns(), &idx_col,
+               const_cast<gdf_context*>(&context));
 
-  // Get output_keys using group_indices and input table
-  gdf_size_type num_grps = group_indices.size;
-  auto out_key_table = cudf::allocate_like_of_size(key_table, num_grps);
-  cudf::gather(&key_table,
-               reinterpret_cast<gdf_index_type*>(group_indices.data),
-               &out_key_table);
+  // Sort the values column
+  auto sorted_values = allocate_like(values);
+  auto val_table = cudf::table{const_cast<gdf_column*>(&values)};
+  auto sorted_val_table = cudf::table{&sorted_values};
+  cudf::gather(&val_table, 
+               reinterpret_cast<gdf_index_type*>(idx_col.data),
+               &sorted_val_table);
 
+  // Go forth and calculate the quantiles
   // TODO: currently ignoring nulls
-  auto quants_col = cudf::allocate_column(GDF_FLOAT64, num_grps, false);
+  auto quants_col = cudf::allocate_column(GDF_FLOAT64, group_indices.size, false);
 
-  type_dispatcher(grouped_values.dtype, quantiles_functor{},
-                  grouped_values, group_indices, quants_col, quantile,
+  type_dispatcher(sorted_values.dtype, quantiles_functor{},
+                  sorted_values, group_indices, quants_col, quantile,
                   interpolation);
 
-  gdf_column_free(&grouped_values);
+  gdf_column_free(&idx_col);
+  gdf_column_free(&sorted_values);
+  // Per column =============================
+
   gdf_column_free(&group_indices);
 
   return std::make_pair(out_key_table, quants_col);
