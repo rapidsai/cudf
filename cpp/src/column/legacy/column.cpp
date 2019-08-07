@@ -86,7 +86,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
-  int column_byte_width = cudf::byte_width(*output_column);
+  std::size_t column_byte_width = cudf::byte_width(*output_column);
 
   // copy data
 
