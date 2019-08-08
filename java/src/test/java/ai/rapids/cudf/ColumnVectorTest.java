@@ -517,6 +517,12 @@ public class ColumnVectorTest {
       try (ColumnVector hash = cv.hash()) {
         assertEquals(0, hash.getRowCount());
       }
+
+      try (ColumnVector lower = cv.lower();
+           ColumnVector upper = cv.upper()) {
+        assertColumnsAreEqual(cv, lower);
+        assertColumnsAreEqual(cv, upper);
+      }
     }
   }
 
@@ -538,6 +544,50 @@ public class ColumnVectorTest {
       try (ColumnVector hash = cv.hash()) {
         assertEquals(0, hash.getRowCount());
       }
+    }
+  }
+
+  @Test
+  void testNVStringManipulationWithNulls() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+                                                   "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+                                                   "kl m", "Nop1", "\\qRs2", null,
+                                                   "3tuV\'", "wX4Yz", "\ud720\ud721");
+         ColumnVector e_lower = ColumnVector.fromStrings("a", "b", "cd", "\u0481\u0481", "e\tf",
+                                                         "g\nh", "ij\"\u0101\u0101\u0501\u0501",
+                                                         "kl m", "nop1", "\\qrs2", null,
+                                                         "3tuv\'", "wx4yz", "\ud720\ud721");
+         ColumnVector e_upper = ColumnVector.fromStrings("A", "B", "CD", "\u0480\u0480", "E\tF",
+                                                         "G\nH", "IJ\"\u0100\u0100\u0500\u0500",
+                                                         "KL M", "NOP1", "\\QRS2", null,
+                                                         "3TUV\'", "WX4YZ", "\ud720\ud721");
+         ColumnVector lower = v.lower();
+         ColumnVector upper = v.upper()) {
+      assertColumnsAreEqual(lower, e_lower);
+      assertColumnsAreEqual(upper, e_upper);
+    }
+  }
+
+  @Test
+  void testNVStringManipulation() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+                                                   "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+                                                   "kl m", "Nop1", "\\qRs2", "3tuV\'",
+                                                   "wX4Yz", "\ud720\ud721");
+         ColumnVector e_lower = ColumnVector.fromStrings("a", "b", "cd", "\u0481\u0481", "e\tf",
+                                                         "g\nh", "ij\"\u0101\u0101\u0501\u0501",
+                                                         "kl m", "nop1", "\\qrs2", "3tuv\'",
+                                                         "wx4yz", "\ud720\ud721");
+         ColumnVector e_upper = ColumnVector.fromStrings("A", "B", "CD", "\u0480\u0480", "E\tF",
+                                                         "G\nH", "IJ\"\u0100\u0100\u0500\u0500",
+                                                         "KL M", "NOP1", "\\QRS2", "3TUV\'",
+                                                         "WX4YZ", "\ud720\ud721");
+         ColumnVector lower = v.lower();
+         ColumnVector upper = v.upper()) {
+      assertColumnsAreEqual(lower, e_lower);
+      assertColumnsAreEqual(upper, e_upper);
     }
   }
 }
