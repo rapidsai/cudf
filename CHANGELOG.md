@@ -137,6 +137,7 @@
 - PR #2471 Fix String Column Validity.
 - PR #2481 Fix java validity buffer serialization
 - PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
+- PR #2503 Fix early bailout in multi-column sorting.
 
 
 # cuDF 0.8.0 (27 June 2019)
