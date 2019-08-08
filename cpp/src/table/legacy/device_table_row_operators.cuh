@@ -271,7 +271,7 @@ struct row_inequality_comparator
       case State::True:
         return true;
       case State::Undecided:
-        break;
+        continue;
       }
     }  
     return false;
