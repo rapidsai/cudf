@@ -254,10 +254,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         # TODO: add support for array-like lower and upper
         if lower is not None:
             if not np.isscalar(lower):
-                raise TypeError('lower should be either scalar or None.')
+                raise TypeError("lower should be either scalar or None.")
         if upper is not None:
             if not np.isscalar(upper):
-                raise TypeError('upper should be either scalar or None.')
+                raise TypeError("upper should be either scalar or None.")
 
         if lower is not None and upper is not None:
             # check value of lower and upper, and switch them if needed
