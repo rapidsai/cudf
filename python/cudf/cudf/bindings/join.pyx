@@ -9,6 +9,7 @@
 
 from __future__ import print_function
 import numpy as np
+from cudf.dataframe import columnops
 
 from librmm_cffi import librmm as rmm
 import nvcategory
@@ -40,10 +41,10 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         msg = "new join api only supports left, inner or outer"
         raise ValueError(msg)
 
-    cdef vector[int] left_idx
-    cdef vector[int] right_idx
-    cdef vector[int] left_common_name_join_idx
-    cdef vector[int] right_common_name_join_idx
+    left_idx =  []
+    right_idx = []
+    left_common_name_join_idx = []
+    right_common_name_join_idx = []
 
     assert(len(left_on) == len(right_on))
 
@@ -59,19 +60,19 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     for name in left_on:
         # This will ensure that the column name is valid
         col_lhs[name]
-        left_idx.push_back(list(col_lhs.keys()).index(name))
+        left_idx.append(list(col_lhs.keys()).index(name))
         if (name in right_on and
            (left_on.index(name) == right_on.index(name))):
-            left_common_name_join_idx.push_back(
+            left_common_name_join_idx.append(
                 list(col_lhs.keys()).index(name))
 
     for name in right_on:
         # This will ensure that the column name is valid
         col_rhs[name]
-        right_idx.push_back(list(col_rhs.keys()).index(name))
+        right_idx.append(list(col_rhs.keys()).index(name))
         if (name in left_on and (left_on.index(name)
            == right_on.index(name))):
-            right_common_name_join_idx.push_back(
+            right_common_name_join_idx.append(
                 list(col_rhs.keys()).index(name))
 
     for name, col in col_rhs.items():
@@ -80,45 +81,40 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
            and (left_on.index(name) == right_on.index(name))):
             result_col_names.append(name)
 
+
+  
+    j_cols = [columnops.as_column(L) for L in [left_idx, right_idx]]
+    j_col_com_name = [columnops.as_column(L) for L in [left_common_name_join_idx, right_common_name_join_idx]]
+    cdef cudf_table *join_cols = table_from_columns(j_cols)
+    cdef cudf_table *common_name_join_cols = table_from_columns(j_col_com_name)
     cdef pair[cudf_table, cudf_table] result
+
 
     with nogil:
         if how == 'left':
             result = left_join(
                 list_lhs[0],
-                left_idx,
                 list_rhs[0],
-                right_idx,
-                <gdf_column*> NULL,
-                <gdf_column*> NULL,
-                left_common_name_join_idx,
-                right_common_name_join_idx,
+                join_cols[0],
+                common_name_join_cols[0],
                 context
             )
 
         elif how == 'inner':
             result = inner_join(
                 list_lhs[0],
-                left_idx,
                 list_rhs[0],
-                right_idx,
-                <gdf_column*> NULL,
-                <gdf_column*> NULL,
-                left_common_name_join_idx,
-                right_common_name_join_idx,
+                join_cols[0],
+                common_name_join_cols[0],
                 context
             )
 
         elif how == 'outer':
             result = full_join(
                 list_lhs[0],
-                left_idx,
                 list_rhs[0],
-                right_idx,
-                <gdf_column*> NULL,
-                <gdf_column*> NULL,
-                left_common_name_join_idx,
-                right_common_name_join_idx,
+                join_cols[0],
+                common_name_join_cols[0],
                 context
             )
 
@@ -208,5 +204,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     del list_lhs
     del list_rhs
+    del join_cols
+    del common_name_join_cols
 
     return list(zip(res, valids, result_col_names))
