@@ -370,6 +370,7 @@ add_library(cudf SHARED
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader_impl.cu
+            src/io/orc/orc_writer_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu

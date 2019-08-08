@@ -40,3 +40,21 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::orc" nogil:
         cudf_table read_rows(size_t skip_rows, size_t num_rows) except +
 
         cudf_table read_stripe(size_t stripe) except +
+
+    cdef cppclass comp_codec:
+        pass
+
+    cdef cppclass writer_options:
+        comp_codec compression
+
+        writer_options() except +
+
+        writer_options(comp_codec compression) except +
+
+    cdef cppclass writer:
+        writer(
+            string filepath,
+            const writer_options &args
+        ) except +
+
+        void write_all(const cudf_table &table) except +

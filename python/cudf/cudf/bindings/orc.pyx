@@ -5,10 +5,15 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
+from cython.operator cimport dereference as deref
+
 from .cudf_cpp cimport *
 from .cudf_cpp import *
 from cudf.bindings.orc cimport reader as orc_reader
 from cudf.bindings.orc cimport reader_options as orc_reader_options
+from cudf.bindings.orc cimport writer as orc_writer
+from cudf.bindings.orc cimport writer_options as orc_writer_options
+from cudf.bindings.utils cimport *
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
 
@@ -94,3 +99,27 @@ cpdef cpp_read_orc(filepath_or_buffer, columns=None, stripe=None,
         df[k] = v
 
     return df
+
+
+cpdef cpp_write_orc(cols, filepath):
+    """
+    Cython function to call into libcudf API, see `write_orc`.
+
+    See Also
+    --------
+    cudf.io.orc.read_orc
+    """
+
+    # Setup writer options
+    cdef orc_writer_options options = orc_writer_options()
+
+    # Create writer
+    cdef unique_ptr[orc_writer] writer
+    writer = unique_ptr[orc_writer](
+        new orc_writer(str(filepath).encode(), options)
+    )
+
+    # Write data to output
+    cdef unique_ptr[cudf_table] table
+    table = unique_ptr[cudf_table](table_from_columns(cols))
+    writer.get().write_all(deref(table))

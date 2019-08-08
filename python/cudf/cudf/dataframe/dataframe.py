@@ -3479,6 +3479,13 @@ class DataFrame(object):
             chunksize,
         )
 
+    @ioutils.doc_to_orc()
+    def to_orc(self, fname, *args, **kwargs):
+        """{docstring}"""
+        import cudf.io.orc as orc
+
+        return orc.to_orc(self, fname, *args, **kwargs)
+
 
 def from_pandas(obj):
     """

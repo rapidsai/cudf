@@ -4,7 +4,7 @@ import warnings
 
 import pyarrow.orc as orc
 
-from cudf.bindings.orc import cpp_read_orc
+from cudf.bindings.orc import cpp_read_orc, cpp_write_orc
 from cudf.dataframe.dataframe import DataFrame
 from cudf.utils import ioutils
 
@@ -51,3 +51,10 @@ def read_orc(
         df = DataFrame.from_arrow(pa_table)
 
     return df
+
+
+@ioutils.doc_to_orc()
+def to_orc(df, path, *args, **kwargs):
+    """{docstring}"""
+
+    df = cpp_write_orc(df._cols, path)
