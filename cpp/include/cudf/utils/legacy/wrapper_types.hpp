@@ -17,7 +17,7 @@
 #define GDF_CPPTYPES_H
 
 #include <cudf/types.h>
-#include "cudf_utils.h"
+#include <utilities/cudf_utils.h>
 
 #include <cub/util_type.cuh>
 

@@ -83,11 +83,13 @@
 - PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
+- PR #2475 Exposed type_dispatcher.hpp, nvcategory_util.hpp and wrapper_types.hpp in the include folder
 - PR #2453 Streamline CUDA_REL environment variable
 - PR #2483 Bundle Boost filesystem dependency in the Java jar
 - PR #2486 Java API hash functions
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
+
 
 ## Bug Fixes
 
@@ -139,6 +141,7 @@
 - PR #2471 Fix String Column Validity.
 - PR #2481 Fix java validity buffer serialization
 - PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
+- PR #2461 Fix groupby multiple aggregations same column
 - PR #2514 Fix cudf::drop_nulls threshold handling in Cython
 
 

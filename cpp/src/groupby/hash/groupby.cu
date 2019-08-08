@@ -16,17 +16,17 @@
 
 #include <cudf/cudf.h>
 #include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
 #include "aggregation_requests.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
@@ -356,14 +356,16 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // translate these compound requests into simple requests, and compute the
   // groupby operation for these simple requests. Later, we translate the simple
   // requests back to compound request results.
-  std::vector<AggRequestType> simple_requests =
+  std::vector<SimpleAggRequestCounter> simple_requests =
       compound_to_simple(original_requests);
 
   std::vector<gdf_column*> simple_values_columns;
   std::vector<operators> simple_operators;
   for (auto const& p : simple_requests) {
-    simple_values_columns.push_back(const_cast<gdf_column*>(p.first));
-    simple_operators.push_back(p.second);
+    const AggRequestType& agg_req_type = p.first;
+    simple_values_columns.push_back(
+        const_cast<gdf_column*>(agg_req_type.first));
+    simple_operators.push_back(agg_req_type.second);
   }
 
   cudf::table simple_values_table{simple_values_columns};
