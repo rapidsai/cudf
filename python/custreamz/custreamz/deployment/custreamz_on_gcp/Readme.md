@@ -44,10 +44,10 @@ cd streamz
 python setup.py build
 python setup.py install
 ```
-6. Install cudf v0.8 from RAPIDS.ai, using specifications in: [https://rapids.ai/start.html](https://rapids.ai/start.html)
+6. Install cudf v0.9 from RAPIDS.ai, using specifications in: [https://rapids.ai/start.html](https://rapids.ai/start.html)
 ```
 conda install -c nvidia -c rapidsai -c numba -c conda-forge -c defaults \
-    cudf=0.8 python=3.7 cudatoolkit=10.0
+    cudf=0.9 python=3.7 cudatoolkit=10.0
 ```
 7. Start a Jupyter endpoint on port 8888 for writing cuStreamz code using: `nohup jupyter-notebook --no-browser --ip=0.0.0.0 --port=8888 --allow-root &`. 
 8. If you face problems importing cudf, try setting the NUMBAPRO_NVVM and NUMBAPRO_LIBDEVICE environment variables using: 

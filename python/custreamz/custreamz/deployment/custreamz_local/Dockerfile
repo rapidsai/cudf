@@ -1,4 +1,4 @@
-#Installs Anaconda3, cudf0.8, Dask by default
+#Installs Anaconda3, cudf0.9, Dask by default
 FROM rapidsai/rapidsai:cuda10.0-base-ubuntu16.04
 
 #Installs python-confluent-kafka, ipywidgets, ipykernel

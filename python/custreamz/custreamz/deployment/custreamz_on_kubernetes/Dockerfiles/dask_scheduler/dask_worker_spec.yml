@@ -6,7 +6,7 @@ metadata:
 spec:
   #restartPolicy: Never
   containers:
-    - image: gcr.io/nv-ai-infra/dask_worker:0.1
+    - image: gcr.io/example-project/dask_worker:0.1
       imagePullPolicy: IfNotPresent
       command: ["/bin/bash", "-c"]
       args: ["source activate rapids && dask-worker --nthreads '2' --nprocs '8' --no-bokeh --death-timeout '60'"]

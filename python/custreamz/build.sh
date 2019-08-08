@@ -25,7 +25,7 @@ echo Installing streamz
 git clone https://github.com/python-streamz/streamz.git 
 cd ./streamz && python setup.py build && python setup.py install
 
-echo \>\>\>Please enter the cudf version you need \(we recommend 0.8\)
+echo \>\>\>Please enter the cudf version you need \(we recommend 0.9\)
 read cudf_version
 echo \>\>\>Please enter the Python verison you have installed \(either 3.6 or 3.7\)
 read py_version
