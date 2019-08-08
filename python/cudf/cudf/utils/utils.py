@@ -220,20 +220,6 @@ def is_list_like(obj):
         return False
 
 
-def dtype_equals(left, right):
-    """
-    Check that the dtypes `left` and `right` are equal.
-    `right` can be a type or list of types.
-    """
-    if isinstance(right, (list, tuple)):
-        for rdtype in right:
-            if dtype_equals(left, rdtype):
-                return True
-        return False
-    else:
-        return pd.api.types.is_dtype_equal(left, right)
-
-
 def min_scalar_type(a, min_size=8):
     return min_signed_type(a, min_size=min_size)
 
