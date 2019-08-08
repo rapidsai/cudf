@@ -35,7 +35,7 @@ class DeviceMemoryBuffer extends MemoryBuffer {
     }
 
     @Override
-    public boolean clean(boolean logErrorIfNotClean) {
+    protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (address != 0) {
         Rmm.free(address, 0);
@@ -49,7 +49,6 @@ class DeviceMemoryBuffer extends MemoryBuffer {
       return neededCleanup;
     }
   }
-
 
   DeviceMemoryBuffer(long address, long lengthInBytes) {
     super(address, lengthInBytes, new DeviceBufferCleaner(address));
