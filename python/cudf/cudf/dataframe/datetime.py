@@ -225,7 +225,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def fillna(self, fill_value, inplace=False):
         if is_scalar(fill_value):
-            fill_value = np.datetime64(fill_value, "ms")
+            fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
 
