@@ -438,7 +438,6 @@ public class ColumnVectorTest {
   }
 
   @Test
-<<<<<<< HEAD
   void testStringHash() {
     try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
          ColumnVector hash = cv.hash();
@@ -534,6 +533,10 @@ public class ColumnVectorTest {
       try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
         Table filtered = new Table(cv).filter(mask)) {
         assertEquals(0, filtered.getColumn(0).getRowCount());
+      }
+
+      try (ColumnVector hash = cv.hash()) {
+        assertEquals(0, hash.getRowCount());
       }
     }
   }
