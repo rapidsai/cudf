@@ -250,7 +250,8 @@ TEST_F(DropNullsTableTest, AllNull)
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
-  cudf::table table_expected(0, column_dtypes(table_source), true, false);
+  cudf::table table_expected(0, column_dtypes(table_source),
+                             column_dtype_infos(table_source), true, false);
 
   DropNullsTable(table_source, table_source, table_expected);
 }

@@ -49,7 +49,8 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
     cols.push_back(&bad_input);
     cudf::table table_bad_input(cols);
     column_wrapper<int32_t> empty_column(cudf::empty_like(bad_input));
-    cudf::table table_expected(0, column_dtypes(table_bad_input), true, false);
+    cudf::table table_expected(0, column_dtypes(table_bad_input), 
+                               column_dtype_infos(table_bad_input), true, false);
     cudf::table output;
     CUDF_EXPECT_NO_THROW(output = cudf::apply_boolean_mask(table_bad_input, mask));
     EXPECT_TRUE(output.num_columns() == 1);
@@ -74,7 +75,9 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
     cols.push_back(source.get());
     cudf::table table_source(cols);
     cudf::table output;
-    cudf::table table_expected(0, cudf::column_dtypes(table_source), true, false);
+    cudf::table table_expected(0, cudf::column_dtypes(table_source),
+                               cudf::column_dtype_infos(table_source),
+                               true, false);
     CUDF_EXPECT_NO_THROW(output = cudf::apply_boolean_mask(table_source, bad_mask));
     EXPECT_TRUE(output.num_columns() == 1);
     EXPECT_TRUE(output.num_rows() == 0);
@@ -431,7 +434,8 @@ TEST_F(ApplyBooleanMaskTableTest, MaskAllNullOrFalse)
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
-  cudf::table table_expected(0, column_dtypes(table_source), true, false);
+  cudf::table table_expected(0, column_dtypes(table_source),
+                             column_dtype_infos(table_source), true, false);
 
   BooleanMaskTableTest(table_source, 
     cudf::test::column_wrapper<cudf::bool8>(column_size,
