@@ -86,6 +86,7 @@
 - PR #2486 Java API hash functions
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
+- PR #2444 IO Readers: Add support to read `avro, csv, json, orc, parquet` from hdfs
 
 ## Bug Fixes
 
