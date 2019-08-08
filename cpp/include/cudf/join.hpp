@@ -44,10 +44,10 @@ namespace cudf {
  * @returns If Success, pair of left and right table which are merged 
  * 
  */
-std::pair<cudf::table, cudf::table> gdf_inner_join(
-                         cudf::table & left_cols,
+std::pair<cudf::table, cudf::table> inner_join(
+                         cudf::table const& left_cols,
                          std::vector <int> left_join_cols,
-                         cudf::table & right_cols,
+                         cudf::table const& right_cols,
                          std::vector <int> right_join_cols,
                          gdf_column * left_indices,
                          gdf_column * right_indices,
@@ -78,10 +78,10 @@ std::pair<cudf::table, cudf::table> gdf_inner_join(
  * 
  * @returns If Success, pair of left and right table which are merged * 
  */
-std::pair<cudf::table, cudf::table> gdf_left_join(
-                         cudf::table & left_cols,
+std::pair<cudf::table, cudf::table> left_join(
+                         cudf::table const& left_cols,
                          std::vector <int> left_join_cols,
-                         cudf::table & right_cols,
+                         cudf::table const& right_cols,
                          std::vector <int> right_join_cols,
                          gdf_column * left_indices,
                          gdf_column * right_indices,
@@ -113,10 +113,10 @@ std::pair<cudf::table, cudf::table> gdf_left_join(
  * 
  * @returns If Success, pair of left and right table which are merged * 
  */
-std::pair<cudf::table, cudf::table> gdf_full_join(
-                         cudf::table & left_cols,
+std::pair<cudf::table, cudf::table> full_join(
+                         cudf::table const& left_cols,
                          std::vector <int> left_join_cols,
-                         cudf::table & right_cols,
+                         cudf::table const& right_cols,
                          std::vector <int> right_join_cols,
                          gdf_column * left_indices,
                          gdf_column * right_indices,

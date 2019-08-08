@@ -84,7 +84,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     with nogil:
         if how == 'left':
-            result = gdf_left_join(
+            result = left_join(
                 list_lhs[0],
                 left_idx,
                 list_rhs[0],
@@ -97,7 +97,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
             )
 
         elif how == 'inner':
-            result = gdf_inner_join(
+            result = inner_join(
                 list_lhs[0],
                 left_idx,
                 list_rhs[0],
@@ -110,7 +110,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
             )
 
         elif how == 'outer':
-            result = gdf_full_join(
+            result = full_join(
                 list_lhs[0],
                 left_idx,
                 list_rhs[0],

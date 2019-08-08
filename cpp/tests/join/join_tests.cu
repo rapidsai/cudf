@@ -424,7 +424,7 @@ struct JoinTest : public GdfTest
     {
       case join_op::LEFT:
         {
-          result = cudf::gdf_left_join(
+          result = cudf::left_join(
                                        left_gdf_columns, range,
                                        right_gdf_columns, range,
                                        &left_result, &right_result,
@@ -433,7 +433,7 @@ struct JoinTest : public GdfTest
         }
       case join_op::INNER:
         {
-          result =  cudf::gdf_inner_join(
+          result =  cudf::inner_join(
                                        left_gdf_columns, range,
                                        right_gdf_columns, range,
                                        &left_result, &right_result,
@@ -442,7 +442,7 @@ struct JoinTest : public GdfTest
         }
       case join_op::FULL:
         {
-          result =  cudf::gdf_full_join(
+          result =  cudf::full_join(
                                        left_gdf_columns, range,
                                        right_gdf_columns, range,
                                        &left_result, &right_result,
