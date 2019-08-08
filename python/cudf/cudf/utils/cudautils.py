@@ -625,7 +625,8 @@ def apply_clip(data, lower, upper, inplace):
     output_dary = data if inplace else rmm.device_array_like(data)
     if data.size > 0:
         gpu_clip.forall(data.size)(data, output_dary, lower, upper)
-    return output_dary
+    if not inplace:
+        return output_dary
 
 
 MAX_FAST_UNIQUE_K = 2 * 1024

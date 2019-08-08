@@ -1820,11 +1820,13 @@ class Series(object):
     def clip(self, lower=None, upper=None, inplace=False):
         """Clip a Series.
         """
-        return Series(
-            self._column.clip(lower=lower, upper=upper, inplace=inplace),
-            name=self.name,
-            index=self.index,
-        )
+        column = self._column.clip(lower=lower, upper=upper, inplace=inplace)
+        if not inplace:
+            return Series(
+                column,
+                name=self.name,
+                index=self.index,
+            )
 
     def isin(self, test):
 

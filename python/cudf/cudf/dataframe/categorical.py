@@ -508,6 +508,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
             params = self._replace_defaults()
             return type(self)(**params)
 
+    def clip(self, lower=None, upper=None, inplace=False):
+        raise TypeError('Unordered Categoricals cannot be clipped')
+
 
 def pandas_categorical_as_column(categorical, codes=None):
     """Creates a CategoricalColumn from a pandas.Categorical

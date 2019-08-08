@@ -279,6 +279,9 @@ class DatetimeColumn(columnops.TypedColumnBase):
             ).all()
         return self._is_monotonic_decreasing
 
+    def clip(self):
+        raise NotImplementedError()
+
 
 def binop(lhs, rhs, op, out_dtype):
     nvtx_range_push("CUDF_BINARY_OP", "orange")

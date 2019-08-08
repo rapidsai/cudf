@@ -251,10 +251,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.has_null_mask:
             mask = self.nullmask if inplace else self.nullmask.copy()
 
+        # TODO: add support for array-like lower and upper
+        if lower is not None:
+            if not np.isscalar(lower):
+                raise TypeError('lower should be either scalar or None.')
+        if upper is not None:
+            if not np.isscalar(upper):
+                raise TypeError('upper should be either scalar or None.')
+
         if lower is not None and upper is not None:
             # check value of lower and upper, and switch them if needed
-            if np.isscalar(lower) and np.isscalar(upper):
-                lower, upper = min(lower, upper), max(lower, upper)
+            lower, upper = min(lower, upper), max(lower, upper)
 
         elif lower is None and upper is None:
             # if both lower and upper are None, return itself or simply copy it
@@ -269,9 +276,10 @@ class NumericalColumn(columnops.TypedColumnBase):
 
         # TODO: add support for array-like lower and upper
         clipped = cudautils.apply_clip(self.data.mem, lower, upper, inplace)
-        return NumericalColumn(
-            data=Buffer(clipped), mask=mask, dtype=self.dtype
-        )
+        if not inplace:
+            return NumericalColumn(
+                data=Buffer(clipped), mask=mask, dtype=self.dtype
+            )
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
