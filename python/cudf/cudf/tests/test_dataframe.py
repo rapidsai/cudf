@@ -3146,7 +3146,6 @@ def test_round(decimal):
 )
 def test_clip_inplace(dtype, lower, upper):
     data = gen_rand(dtype, 100000)
-    # arr = np.random.normal(0, 100, 10000)
     pser = pd.Series(data)
     ser = Series(data)
     # run both inplace and not inplace
@@ -3167,7 +3166,6 @@ def test_clip_inplace(dtype, lower, upper):
 )
 def test_clip_not_inplace(dtype, lower, upper):
     data = gen_rand(dtype, 100000)
-    # arr = np.random.normal(0, 100, 10000)
     pser = pd.Series(data)
     ser = Series(data)
     # run both inplace and not inplace
