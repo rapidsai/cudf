@@ -29,6 +29,22 @@ def __getVarsLoaded(module):
     return set([k for k in module.__dict__.keys()
                 if not(k.startswith("__") or (k in extraVars))])
 
+########################################
+def test_import_package_module():
+    """
+    Ensure accessing a namespace var that represents a module in the package
+    works. Example: import cudf; cudf.datasets (datasets.py is a mod in the
+    cudf package)
+    """
+    exceptionRaised = None
+    import cudf
+    try:
+        cudf.datasets
+        cudf.dataframe
+    except Exception as e:
+        exceptionRaised = e
+    assert exceptionRaised is None
+
 def test_from_import_star():
     """
     Ensure a "from cudf import *" does an "actual" import of everything in the

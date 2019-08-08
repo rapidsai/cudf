@@ -8,25 +8,33 @@ from importlib import import_module
 # or by explicitely importing them (eg. "from cudf import <name>"). Calls to
 # "import cudf" will not incur an import cost for variables that are never used.
 #
-# Keys are the resulting namespace vars, and values are tuples containing the
-# package/module to import to define the namespace var. If the value is a
-# two-tuple, the 2nd item is the name of the var imported to be named after the
-# key in the namespace.
+# The map definition is based on the following examples:
 #
-# For example:
+#    "dataframe" : (None,)
+#  is treated as:
+#    from cudf import dataframe
+#  meaning:
+#    "import the dataframe.py module into the cudf namespace"
+#
 #    "DataFrame" : ("cudf.dataframe",)
 #  is treated as:
 #    from cudf.dataframe import DataFrame
+#  meaning:
+#    "import the DataFrame object from the dataframe.py module into the cudf
+#     namespace"
 #
-#    "rmm" : ("librmm_cffi", "librmm"),
+#    "rmm" : ("librmm_cffi", "librmm")
 #  is treated as:
 #    from librmm_cffi import librmm as rmm
+#  meaning:
+#    "import the librmm object from the librmm_cffi module into the cudf
+#     namespace as 'rmm'"
 #
 __namespaceVarModMap = {
     "rmm" : ("librmm_cffi", "librmm"),
 
-    "dataframe" : ("cudf.dataframe",),
-    "datasets" : ("cudf.datasets",),
+    "dataframe" : (None,),
+    "datasets" : (None,),
 
     "DataFrame" : ("cudf.dataframe",),
     "Index" : ("cudf.dataframe",),
@@ -82,11 +90,14 @@ def __getattr__(var):
     val = None
 
     if varInfo:
-        mod = import_module(varInfo[0])
-        if len(varInfo) == 2:
-            val = getattr(mod, varInfo[1])
+        if varInfo[0] is None:
+            val = import_module(".%s" % var, package="cudf")
         else:
-            val = getattr(mod, var)
+            mod = import_module(varInfo[0])
+            if len(varInfo) == 2:
+                val = getattr(mod, varInfo[1])
+            else:
+                val = getattr(mod, var)
 
     # special case: compute __version__
     elif var == "__version__":

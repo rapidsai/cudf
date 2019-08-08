@@ -6,6 +6,7 @@ from io import BytesIO
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.orc
 import pytest
 
 import cudf
@@ -74,11 +75,8 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
     path = datadir / inputfile
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read(columns=columns).to_pandas()
     got = cudf.read_orc(
@@ -90,6 +88,7 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
 
 def test_orc_reader_decimal(datadir):
     path = datadir / "TestOrcFile.decimal.orc"
+    orcfile = pa.orc.ORCFile(path)
     try:
         orcfile = pa.orc.ORCFile(path)
     except Exception as excpr:
