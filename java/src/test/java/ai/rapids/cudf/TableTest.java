@@ -42,6 +42,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class TableTest {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
+  private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
+      "src/test/resources/timestamp-date-test.orc");
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
@@ -575,6 +577,25 @@ public class TableTest {
   }
 
   @Test
+  void testReadORCNumPyTypes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // by default ORC will promote date and timestamp columns to DATE64
+    try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.DATE64, table.getColumn(0).getType());
+      assertEquals(DType.DATE64, table.getColumn(1).getType());
+    }
+
+    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    ORCOptions opts = ORCOptions.builder().withNumPyTypes(false).build();
+    try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
+      assertEquals(DType.DATE32, table.getColumn(1).getType());
+    }
+  }
+
+  @Test
   void testLeftJoinWithNulls() {
     try (Table leftTable = new Table.TestBuilder()
         .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
@@ -946,17 +967,25 @@ public class TableTest {
              .column(12.0, 14.0, 17.0, 18.0)
              .column(12.0, 13.0, 15.0, 18.0)
              .column(12.0, 13.0, 15.0, 18.0)
-             .column(12.0, 14.0, 17.0, 18.0).build()) {
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0).build()) {
       try (Table t3 = t1.groupBy(0, 1)
-          .aggregate(max(2), min(2), min(2), max(2))
-          .orderBy(false, Table.asc(2))) {
-        // verify t3
-        assertEquals(4, t3.getRowCount());
-        assertTablesAreEqual(t3, expected);
+          .aggregate(max(2), min(2), min(2), max(2), min(2));
+          Table t4 = t3.orderBy(false, Table.asc(2))) {
+        // verify t4
+        assertEquals(4, t4.getRowCount());
+        assertTablesAreEqual(t4, expected);
+
+        assertEquals(t3.getColumn(0).getRefCount(), 1);
+        assertEquals(t3.getColumn(1).getRefCount(), 1);
+        assertEquals(t3.getColumn(2).getRefCount(), 2);
+        assertEquals(t3.getColumn(3).getRefCount(), 3);
+        assertEquals(t3.getColumn(4).getRefCount(), 3);
+        assertEquals(t3.getColumn(5).getRefCount(), 2);
+        assertEquals(t3.getColumn(6).getRefCount(), 3);
       }
     }
   }
-
 
   @Test
   void testGroupByMin() {

@@ -23,9 +23,13 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
-cdef gdf_dtype get_dtype(dtype)
+cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
+cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
 
-cdef get_scalar_value(gdf_scalar scalar)
+cdef np_dtype_from_gdf_column(gdf_column* col)
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*)
+
+cdef get_scalar_value(gdf_scalar scalar, dtype)
 
 cdef gdf_column* column_view_from_column(col, col_name=*) except? NULL
 cdef gdf_column* column_view_from_NDArrays(
@@ -220,6 +224,18 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_dtype dtype
     ) except +
 
+    # version with name parameter
+    cdef gdf_error gdf_column_view_augmented(
+        gdf_column *column,
+        void *data,
+        gdf_valid_type *valid,
+        gdf_size_type size,
+        gdf_dtype dtype,
+        gdf_size_type null_count,
+        gdf_dtype_extra_info extra_info,
+        const char* name) except +
+
+    # version without name parameter
     cdef gdf_error gdf_column_view_augmented(
         gdf_column *column,
         void *data,

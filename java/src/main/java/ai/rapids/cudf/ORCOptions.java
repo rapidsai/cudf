@@ -25,8 +25,15 @@ public class ORCOptions extends ColumnFilterOptions {
 
   public static ORCOptions DEFAULT = new ORCOptions(new Builder());
 
+  private final boolean useNumPyTypes;
+
   private ORCOptions(Builder builder) {
     super(builder);
+    useNumPyTypes = builder.useNumPyTypes;
+  }
+
+  boolean usingNumPyTypes() {
+    return useNumPyTypes;
   }
 
   public static Builder builder() {
@@ -34,6 +41,20 @@ public class ORCOptions extends ColumnFilterOptions {
   }
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
+    private boolean useNumPyTypes = true;
+
+    /**
+     * Specify whether the parser should implicitly promote DATE32 and
+     * TIMESTAMP columns to DATE64 for compatibility with NumPy.
+     *
+     * @param useNumPyTypes true to request this conversion, false to avoid.
+     * @return builder for chaining
+     */
+    public Builder withNumPyTypes(boolean useNumPyTypes) {
+      this.useNumPyTypes = useNumPyTypes;
+      return this;
+    }
+
     public ORCOptions build() { return new ORCOptions(this); }
   }
 }

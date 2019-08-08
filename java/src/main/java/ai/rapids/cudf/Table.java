@@ -192,9 +192,12 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 for no buffer.
    * @param length            the length of the buffer to read from.
+   * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
+   *                          columns to DATE64 for compatibility with NumPy.
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
-                                          String filePath, long address, long length) throws CudfException;
+                                          String filePath, long address, long length,
+                                          boolean usingNumPyTypes) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
                                                    int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
@@ -413,7 +416,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes()));
   }
 
   /**
@@ -473,7 +476,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes()));
   }
 
   /**
@@ -714,7 +717,7 @@ public final class Table implements AutoCloseable {
       Table aggregate = new Table(gdfGroupByAggregate(
           operation.table.nativeHandle,
           operation.indices,
-          // one way of converting List[Integer] to int[]
+          // one way of converting List[Integer] to int[
           aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
           ops.stream().mapToInt(i->i).toArray(),
           groupByOptions.getIgnoreNullKeys()));
@@ -724,26 +727,30 @@ public final class Table implements AutoCloseable {
 
       int aggIndex = 0;
 
-      // increase ref counts for the grouping columns
+      // pick out the grouping columns
       for (int groupIndex : operation.indices) {
         finalCols[groupIndex] = aggregate.getColumn(groupIndex);
-        finalCols[groupIndex].incRefCount();
         aggIndex++;
       }
 
-      // pick out the correct columns for the rhs, and increase
-      // their ref counts
+      // pick out the aggregate columns (copying the reference for duplicate aggs)
       for (ColumnOp cop : finalAggColumns) {
         int originalIndex = aggToCudfColumn.get(cop);
         finalCols[aggIndex] = aggregate.getColumn(originalIndex);
-        finalCols[aggIndex].incRefCount();
         aggIndex++;
       }
 
+      // Note: Table will increase ref counts accordingly, which means
+      // that duplicate columns in finalCols, will get a refCount equal
+      // to the number of times their references appear on the table (good)
+      Table tbl = new Table(finalCols);
+
       // returning a brand new table now, so we close the original
+      // this brings the refCount down for each column, such that Table
+      // is the only holder
       aggregate.close();
 
-      return new Table(finalCols);
+      return tbl;
     }
   }
 

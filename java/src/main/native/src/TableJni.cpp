@@ -263,7 +263,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length) {
+    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -293,13 +293,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     }
 
     cudf::orc_read_arg read_arg{*source};
-
     read_arg.columns = n_filter_col_names.as_cpp_vector();
-
     read_arg.stripe = -1;
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.use_index = false;
+    read_arg.use_np_dtypes = static_cast<bool>(usingNumPyTypes);
 
     cudf::table result = read_orc(read_arg);
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
