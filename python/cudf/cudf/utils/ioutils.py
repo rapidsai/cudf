@@ -829,7 +829,9 @@ def is_file_like(obj):
         return True
 
 
-def get_filepath_or_buffer(path_or_data, compression=None, iotypes=(BytesIO)):
+def get_filepath_or_buffer(
+    path_or_data, compression=None, iotypes=(BytesIO), **kwargs
+):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
     If buffer, then data is returned in-memory as bytes or a ByteIO object.
@@ -859,7 +861,7 @@ def get_filepath_or_buffer(path_or_data, compression=None, iotypes=(BytesIO)):
     elif _is_hdfs_url(path_or_data):
         from cudf.io.protocols import hdfs
 
-        return hdfs.get_filepath_or_buffer(path_or_data, compression)
+        return hdfs.get_filepath_or_buffer(path_or_data, compression, **kwargs)
 
     elif isinstance(path_or_data, str):
         return os.path.expanduser(path_or_data), compression

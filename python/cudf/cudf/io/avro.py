@@ -11,11 +11,12 @@ def read_avro(
     columns=None,
     skip_rows=None,
     num_rows=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, None
+        filepath_or_buffer, None, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")

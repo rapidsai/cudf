@@ -40,11 +40,12 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, compression, (BytesIO, StringIO)
+        filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
     return cpp_read_csv(
         filepath_or_buffer,

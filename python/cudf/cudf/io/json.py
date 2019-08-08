@@ -29,7 +29,7 @@ def read_json(
         engine = "cudf" if lines else "pandas"
 
     path_or_buf, compression = ioutils.get_filepath_or_buffer(
-        path_or_buf, compression, (BytesIO, StringIO)
+        path_or_buf, compression, (BytesIO, StringIO), **kwargs
     )
     if engine == "cudf":
         df = cpp_read_json(path_or_buf, dtype, lines, compression, byte_range)
