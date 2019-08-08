@@ -335,7 +335,8 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
             len_col,
             c_dtype,
             c_null_count,
-            c_extra_dtype_info
+            c_extra_dtype_info,
+            c_col.col_name
         )
 
     return c_col
@@ -398,7 +399,8 @@ cdef gdf_column* column_view_from_NDArrays(
             c_size,
             c_dtype,
             c_null_count,
-            c_extra_dtype_info
+            c_extra_dtype_info,
+            NULL
         )
 
     return c_col
@@ -501,7 +503,8 @@ cdef gdf_column* column_view_from_string_column(
             len_col,
             c_dtype,
             c_null_count,
-            c_extra_dtype_info
+            c_extra_dtype_info,
+            c_col.col_name
         )
 
     return c_col

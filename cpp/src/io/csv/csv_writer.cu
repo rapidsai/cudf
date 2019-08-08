@@ -17,7 +17,7 @@
 #include <cudf/cudf.h>
 #include <io/utilities/wrapper_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
 #include <utilities/bit_util.cuh>
 
 #include <cuda_runtime.h>
