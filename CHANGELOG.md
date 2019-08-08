@@ -12,6 +12,7 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #1744 cudf::apply_boolean_mask and cudf::drop_nulls support for cudf::table inputs (multi-column)
 - PR #2215 `type_dispatcher` benchmark
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series

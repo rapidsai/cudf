@@ -100,17 +100,29 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def dropna(self):
-        from cudf.bindings.stream_compaction import cpp_drop_nulls
+        from cudf.bindings.stream_compaction import apply_drop_nulls
 
-        dropped_col = cpp_drop_nulls(self)
-        return self.replace(data=dropped_col.data, mask=None, null_count=0)
+        dropped_col = apply_drop_nulls([self])
+        if not dropped_col:
+            return column_empty_like(self, newsize=0)
+        else:
+            return self.replace(
+                data=dropped_col[0].data, mask=None, null_count=0
+            )
 
     def apply_boolean_mask(self, mask):
-        from cudf.bindings.stream_compaction import cpp_apply_boolean_mask
+        from cudf.bindings.stream_compaction import apply_apply_boolean_mask
 
         mask = as_column(mask, dtype="bool")
-        data = cpp_apply_boolean_mask(self, mask)
-        return self.replace(data=data.data, mask=data.mask)
+        data = apply_apply_boolean_mask([self], mask)
+        if not data:
+            return column_empty_like(self, newsize=0)
+        else:
+            return self.replace(
+                data=data[0].data,
+                mask=data[0].mask,
+                null_count=data[0].null_count,
+            )
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
