@@ -83,7 +83,6 @@
 - PR #2483 Bundle Boost filesystem dependency in the Java jar
 - PR #2481 Adds the ignore_null_keys option to the java api
 
-
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
