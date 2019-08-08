@@ -21,7 +21,7 @@
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
 #include "type_info.hpp"
 
 #include <rmm/rmm.h>
