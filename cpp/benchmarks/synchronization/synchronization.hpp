@@ -74,10 +74,13 @@ public:
    *
    * @param[in,out] state  This is the benchmark::State whose timer we are going 
    * to update.
-   * @param[in] flush_l2_cache_ whether or not to flush the L2 cache before every iteration
+   * @param[in] flush_l2_cache_ whether or not to flush the L2 cache before
+   *                            every iteration.
    * @param[in] stream_ The CUDA stream we are measuring time on.
    *---------------------------------------------------------------------------**/
-  cuda_event_timer(benchmark::State& state, bool flush_l2_cache_, cudaStream_t stream_ = 0);  
+  cuda_event_timer(benchmark::State& state,
+                   bool flush_l2_cache,
+                   cudaStream_t stream_ = 0);
  
   // The user will HAVE to provide a benchmark::State object to set 
   // the timer so we disable the default c'tor.
@@ -89,20 +92,10 @@ public:
   ~cuda_event_timer();
 
 private:
- 
   cudaEvent_t start;
   cudaEvent_t stop;
-  
-  int l2_cache_bytes = 0;
-  int current_device = 0;
-  int* l2_cache_buffer = nullptr;
-
-  bool flush_l2_cache;
-
   cudaStream_t stream;
-
   benchmark::State* p_state;
-
 };
 
 #endif

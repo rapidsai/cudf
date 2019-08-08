@@ -41,7 +41,7 @@ public class HostMemoryBuffer extends MemoryBuffer {
     }
 
     @Override
-    public boolean clean(boolean logErrorIfNotClean) {
+    protected boolean cleanImpl(boolean logErrorIfNotClean) {
       boolean neededCleanup = false;
       if (address != 0) {
         UnsafeMemoryAccessor.free(address);
