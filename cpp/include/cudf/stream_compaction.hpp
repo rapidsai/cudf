@@ -93,7 +93,7 @@ table drop_nulls(table const &input,
  * 
  * @overload drop_nulls
  * 
- * Same as drop_nulls but defaults keep_threshold to the number of rows in 
+ * Same as drop_nulls but defaults keep_threshold to the number of columns in 
  * @p keys.
  * 
  * @param[in] input The input table to filter.
