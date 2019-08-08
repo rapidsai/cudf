@@ -88,14 +88,10 @@ def test_orc_reader_basic(datadir, inputfile, columns, use_index, engine):
 
 def test_orc_reader_decimal(datadir):
     path = datadir / "TestOrcFile.decimal.orc"
-    orcfile = pa.orc.ORCFile(path)
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(path, engine="cudf").to_pandas()
@@ -140,11 +136,8 @@ def test_orc_reader_trailing_nulls(datadir):
     path = datadir / "TestOrcFile.nulls-at-end-snappy.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas().fillna(0)
     got = cudf.read_orc(path, engine="cudf").fillna(0)
@@ -165,11 +158,8 @@ def test_orc_reader_datetimestamp(datadir, inputfile):
     path = datadir / inputfile
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, engine="cudf")
@@ -187,11 +177,8 @@ def test_orc_reader_strings(datadir):
     path = datadir / "TestOrcFile.testStringAndBinaryStatistics.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read(columns=["string1"])
     got = cudf.read_orc(path, engine="cudf", columns=["string1"])
@@ -203,11 +190,9 @@ def test_orc_read_stripe(datadir):
     path = datadir / "TestOrcFile.testDate1900.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
+
     pdf = orcfile.read().to_pandas(date_as_object=False)
 
     num_rows, stripes, col_names = cudf.io.read_orc_metadata(path)
@@ -230,11 +215,8 @@ def test_orc_read_rows(datadir, skip_rows, num_rows):
     path = datadir / "TestOrcFile.decimal.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas()
     gdf = cudf.read_orc(
@@ -256,11 +238,8 @@ def test_orc_reader_uncompressed_block(datadir):
     path = datadir / "uncompressed_snappy.orc"
     try:
         orcfile = pa.orc.ORCFile(path)
-    except Exception as excpr:
-        if type(excpr).__name__ == "ArrowIOError":
-            pytest.skip(".orc file is not found")
-        else:
-            print(type(excpr).__name__)
+    except pa.ArrowIOError as e:
+        pytest.skip(".orc file is not found: %s" % e)
 
     expect = orcfile.read().to_pandas()
     got = cudf.read_orc(path, engine="cudf")
