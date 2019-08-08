@@ -3138,13 +3138,17 @@ def test_round(decimal):
 
 
 @pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
     "lower, upper",
     [(-10, 10), (-10, None), (None, 10), (None, None), (-1000, 20)],
 )
-def test_clip_inplace(lower, upper):
-    arr = np.random.normal(0, 100, 10000)
-    pser = pd.Series(arr)
-    ser = Series(arr)
+def test_clip_inplace(dtype, lower, upper):
+    data = gen_rand(dtype, 100000)
+    # arr = np.random.normal(0, 100, 10000)
+    pser = pd.Series(data)
+    ser = Series(data)
     # run both inplace and not inplace
     result_inplace = ser.clip(lower=lower, upper=upper, inplace=True)
     expected = pser.clip(lower=lower, upper=upper)
@@ -3155,13 +3159,17 @@ def test_clip_inplace(lower, upper):
 
 
 @pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
     "lower, upper",
     [(-10, 10), (-10, None), (None, 10), (None, None), (-1000, 20)],
 )
-def test_clip_not_inplace(lower, upper):
-    arr = np.random.normal(0, 100, 10000)
-    pser = pd.Series(arr)
-    ser = Series(arr)
+def test_clip_not_inplace(dtype, lower, upper):
+    data = gen_rand(dtype, 100000)
+    # arr = np.random.normal(0, 100, 10000)
+    pser = pd.Series(data)
+    ser = Series(data)
     # run both inplace and not inplace
     result_not_inplace = ser.clip(lower=lower, upper=upper, inplace=False)
     expected = pser.clip(lower=lower, upper=upper)
