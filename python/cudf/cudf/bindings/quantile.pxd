@@ -12,10 +12,10 @@ from cudf.bindings.cudf_cpp cimport *
 
 cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
 
-    cdef pair[cudf_table, gdf_column] group_quantiles(
+    cdef pair[cudf_table, cudf_table] group_quantiles(
         const cudf_table& key_table,
-        const gdf_column& value_column,
-        double q,
+        const cudf_table& val_table,
+        const vector[double]& quantiles,
         gdf_quantile_method interpolation,
         const gdf_context& context
     ) except +

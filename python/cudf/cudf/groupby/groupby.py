@@ -116,11 +116,11 @@ class DataFrameGroupBy(_Groupby):
         # Get the value_columns
         val_cols = self._groupby.value_columns
 
-        out_key_columns, out_value_column = cpp_apply_group_quantile(
-            key_cols, val_cols[0], q, interpolation
+        out_key_columns, out_value_columns = cpp_apply_group_quantile(
+            key_cols, val_cols, q, interpolation
         )
         return self._groupby.construct_result(
-            out_key_columns, [out_value_column]
+            out_key_columns, out_value_columns
         )
 
 

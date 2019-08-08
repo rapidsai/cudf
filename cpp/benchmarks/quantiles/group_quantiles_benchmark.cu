@@ -42,7 +42,8 @@ void BM_table(benchmark::State& state){
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
   const gdf_size_type column_size{(gdf_size_type)state.range(1)};
 
-  std::vector<wrapper> columns;
+  std::vector<wrapper> key_columns;
+  std::vector<wrapper> val_columns;
 
   auto make_table = [&] (std::vector<wrapper>& cols,
                          gdf_size_type col_size) -> cudf::table
@@ -61,24 +62,18 @@ void BM_table(benchmark::State& state){
     return cudf::table{raw_cols.data(), num_columns};
   };
 
-  auto key_table = make_table(columns, column_size);
-  auto val_col = wrapper(column_size,
-    [=](gdf_index_type row) { return random_int(0, 10); }
-  );
+  auto key_table = make_table(key_columns, column_size);
+  auto val_table = make_table(val_columns, column_size);
 
-  // std::vector<bool> desc_flags(num_columns, false);
-  // sort_table(data_table, desc_flags);
-  
   for(auto _ : state){
     cuda_event_timer timer(state, true);
 
-    cudf::table out_keys;
-    gdf_column quant_vals;
-    std::tie(out_keys, quant_vals) = 
-      cudf::group_quantiles(key_table, val_col, 0.5);
+    cudf::table out_keys, out_vals;
+    std::tie(out_keys, out_vals) = 
+      cudf::group_quantiles(key_table, val_table, {0.5});
     
-    gdf_column_free(&quant_vals);
     out_keys.destroy();
+    out_vals.destroy();
   }
 }
 

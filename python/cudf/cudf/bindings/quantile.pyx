@@ -82,14 +82,16 @@ def apply_quantile(column, quant, method, exact):
 
     return res
 
-def apply_group_quantile(key_columns, value_column, quant, method):
+def apply_group_quantile(key_columns, value_columns, quant, method):
     """ Calculate the group wise `quant` quantile for the value_columns
     Returns column of group wise quantile specified by quant
     """
 
     cdef cudf_table *c_t = table_from_columns(key_columns)
-    cdef gdf_column *c_val = column_view_from_column(value_column)
-    cdef double q = quant
+    cdef cudf_table *c_val = table_from_columns(value_columns)
+    if np.isscalar(quant):
+        quant = [quant]
+    cdef vector[double] q = quant
     cdef gdf_quantile_method c_interpolation = get_quantile_method(method)
     cdef gdf_context* ctx = create_context_view(
         0,
@@ -102,7 +104,7 @@ def apply_group_quantile(key_columns, value_column, quant, method):
 
     ctx.flag_groupby_include_nulls = False
 
-    cdef pair[cudf_table, gdf_column] c_result
+    cdef pair[cudf_table, cudf_table] c_result
     with nogil:
         c_result = group_quantiles(c_t[0],
                                    c_val[0],
@@ -111,14 +113,10 @@ def apply_group_quantile(key_columns, value_column, quant, method):
                                    ctx[0])
 
     result_key_cols = columns_from_table(&c_result.first)
-    data, mask = gdf_column_to_column_mem(&c_result.second)
-    
-    from cudf.dataframe.column import Column
-
-    result_val_col = Column.from_mem_views(data)
+    result_val_cols = columns_from_table(&c_result.second)
 
     free(c_t)
     free(c_val)
     free(ctx)
 
-    return (result_key_cols, result_val_col)
+    return (result_key_cols, result_val_cols)
