@@ -11,10 +11,12 @@ def indices_from_labels(obj, labels):
     from cudf.dataframe import columnops
 
     labels = columnops.as_column(labels)
+
     if pd.api.types.is_categorical_dtype(obj.index):
         labels = labels.astype("category")
-
         labels._data = labels.data.astype(obj.index._values.data.dtype)
+    else:
+        labels = labels.astype(obj.index.dtype)
 
     lhs = cudf.DataFrame({}, index=labels)
     rhs = cudf.DataFrame({"_": arange(len(obj))}, index=obj.index)
