@@ -20,6 +20,7 @@
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
 #include <cudf/utils/traits.hpp>
+#include <cudf/utils/type_dispatcher.hpp>
 #include <utilities/release_assert.cuh>
 
 namespace cudf {
@@ -32,10 +33,10 @@ template <bool has_nulls = true>
 struct element_relational_comparator {
   template <typename Element, std::enable_if_t<cudf::is_relationally_comparable<
                                   Element, Element>>* = nullptr>
-  __device__ bool operator()(column_device_view lhs,
-                             size_type lhs_element_index,
-                             column_device_view rhs,
-                             size_type rhs_element_index) {
+  __device__ comparison_state operator()(column_device_view lhs,
+                                         size_type lhs_element_index,
+                                         column_device_view rhs,
+                                         size_type rhs_element_index) {
     if (has_nulls) {
       bool const lhs_valid{not lhs.nullable() or
                            lhs.is_valid(lhs_element_index)};
@@ -48,10 +49,11 @@ struct element_relational_comparator {
     Element const rhs_element = rhs.data<Element>(rhs_element_index);
 
     if (lhs_element < rhs_element) {
-      return true;
+      return comparison_state::LESS;
     } else if (rhs_element < lhs_element) {
-      return false;
+      return comparison_state::GREATER;
     }
+    return comparison_state::EQUAL;
   }
 
   template <typename Element,
@@ -75,10 +77,39 @@ class row_lexicographic_comparator {
       : _lhs{lhs},
         _rhs{rhs},
         _size_of_nulls{size_of_nulls},
-        _column_order{column_order} {}
+        _column_order{column_order} {
+    CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
+                 "Mismatched number of columns.");
+  }
 
   __device__ bool operator()(size_type lhs_index, size_type rhs_index) const
-      noexcept {}
+      noexcept {
+    for (size_type i = 0; i < _lhs.num_columns(); ++i) {
+      bool ascending =
+          (_column_order == nullptr) or (_column_order[i] == order::ASCENDING);
+
+      comparison_state state{comparison_state::EQUAL};
+
+      if (ascending) {
+        state = cudf::exp::type_dispatcher(
+            _lhs.column(i).type(), element_relational_comparator<has_nulls>{},
+            _lhs.column(i), lhs_index, _rhs.column(i), rhs_index,
+            _size_of_nulls);
+      } else {
+        state = cudf::exp::type_dispatcher(
+            _lhs.column(i).type(), element_relational_comparator<has_nulls>{},
+            _rhs.column(i), rhs_index, _lhs.column(i), lhs_index,
+            _size_of_nulls);
+      }
+
+      if (state == comparison_state::EQUAL) {
+        continue;
+      }
+
+      return (state == comparison_state::LESS) ? true : false;
+    }
+    return false;
+  }
 
  private:
   table_device_view _lhs;
@@ -88,5 +119,4 @@ class row_lexicographic_comparator {
 };
 
 }  // namespace exp
-
 }  // namespace cudf
