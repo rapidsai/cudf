@@ -25,20 +25,30 @@
 namespace cudf {
 namespace exp {
 
+namespace detail {
+
 // Create permuted row indices that would materialize sorted order
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
-                                     null_size size_of_nulls) {
+                                     null_size size_of_nulls,
+                                     cudaStream_t stream = 0) {
   CUDF_EXPECTS(
       static_cast<std::size_t>(input.num_columns()) == column_order.size(),
       "Mismatch between number of columns and column order.");
 
-  auto sorted_indices =
-      cudf::make_numeric_column(data_type{INT32}, input.num_rows());
+  auto sorted_indices = cudf::make_numeric_column(
+      data_type{INT32}, input.num_rows(), mask_state::UNALLOCATED, stream);
 
-  auto device_table = table_device_view::create(input);
+  auto device_table = table_device_view::create(input, stream);
 
   return sorted_indices;
+}
+}  // namespace detail
+
+std::unique_ptr<column> sorted_order(table_view input,
+                                     std::vector<order> const& column_order,
+                                     null_size size_of_nulls) {
+  return detail::sorted_order(input, column_order, size_of_nulls);
 }
 }  // namespace exp
 }  // namespace cudf
