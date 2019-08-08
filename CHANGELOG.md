@@ -90,6 +90,7 @@
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
 
+
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
