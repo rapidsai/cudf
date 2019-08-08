@@ -105,7 +105,8 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
         keep_threshold = 0
 
     with nogil:
-        c_out_table = drop_nulls(c_in_table[0], c_keys_table[0], keep_threshold)
+        c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
+                                 keep_threshold)
 
     free(c_in_table)
     free(c_keys_table)
