@@ -55,27 +55,14 @@ table apply_boolean_mask(table const &input,
                          gdf_column const &boolean_mask);
 
 /**
- * @brief Enumeration used to indicate ALL true/valid or ANY true/valid
- * 
- * Used by, for example, cudf::drop_nulls().
- **/
-enum any_or_all {
-  ANY = 0,
-  ALL
-};
-
-/**
  * @brief Filters a table to remove null elements.
  *
  * Filters the rows of the input table considering only specified columns for
  * validity / null values.
  * 
  * Given an input table, row `i` from the input columns is copied to the
- * output if the row is not null. Null means:
- *  - If @p drop_if is ANY, that there is a null in any column of @p keys at
- *    that row.
- *  - If @p drop_if is ALL, that there are nulls in all columns of @p keys at
- *    that row.
+ * output if the same row `i` of @p keys has at leaast @p keep_threshold
+ * non-null fields.
  *
  * This operation is stable: the input order is preserved in the output.
  * 
@@ -91,15 +78,31 @@ enum any_or_all {
  * than input.num_rows()
  *
  * @param[in] input The input table to filter.
- * @param[in] key The table of columns to check for nulls.
- * @param[in] drop_if If ANY, drop rows that have a null in any column.
- *                    If ALL, drop rows that have a null in all columns.
- * @param[in] valid_threshold Required number of non-null fields in a row to
- *                            keep the row.
- * @return cudf::table Table containing all non-null rows of the input table.
+ * @param[in] keys The table of columns to check for nulls.
+ * @param[in] keep_threshold The minimum number of non-null fields in a row
+ *                           required to keep the row.
+ * @return cudf::table Table containing all rows of the input table with at 
+ *                     least @p keep_threshold non-null fields in @p keys.
  */
-table drop_nulls(table const &input, table const &keys,
-                 any_or_all drop_if, gdf_size_type valid_threshold=0);
+table drop_nulls(table const &input,
+                 table const &keys,
+                 gdf_size_type keep_threshold);
+
+/**
+ * @brief Filters a table to remove null elements.
+ * 
+ * @overload drop_nulls
+ * 
+ * Same as drop_nulls but defaults keep_threshold to the number of rows in 
+ * @p keys.
+ * 
+ * @param[in] input The input table to filter.
+ * @param[in] keys The table of columns to check for nulls.
+ * @return cudf::table Table containing all rows of the input table without
+ *                     nulls in the columns of @p keys.
+ */
+table drop_nulls(table const &input,
+                 table const &keys);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows
