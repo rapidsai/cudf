@@ -91,13 +91,18 @@ def apply_apply_boolean_mask(cols, mask):
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
+
+    # if subset is None, we use cols as keys
+    # if subset is empty, we pass an empty keys table, which will cause
+    # cudf::drop_nulls() to return a copy of the input table
     cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
                                      else table_from_columns(subset))
 
+    # default: "any" means threshold should be number of key columns
     cdef gdf_size_type c_keep_threshold = (len(cols) if subset is None
                                            else len(subset))
 
-    # Use threshold if specified, otherwise set it based on how
+    # Use `thresh` if specified, otherwise set threshold based on `how`
     if thresh:
         c_keep_threshold = thresh
     elif how == "all":
