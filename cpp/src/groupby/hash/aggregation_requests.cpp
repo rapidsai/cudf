@@ -79,13 +79,22 @@ struct avg_result_type {
   }
 };
 
-gdf_column* compute_average(gdf_column sum, gdf_column count,
-                            cudaStream_t stream) {
+gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t stream) {
   CUDF_EXPECTS(sum.size == count.size,
                "Size mismatch between sum and count columns.");
   gdf_column* avg = new gdf_column{};
+  gdf_binary_operator avg_binop = GDF_DIV;
 
   avg->dtype = cudf::type_dispatcher(sum.dtype, avg_result_type{});
+
+  // If the sum column is a GDF_TIMESTAMP, use floor_div binop instead of true_div
+  // and copy over the gdf_dtype_extra_info.time_unit
+  if (sum.dtype == GDF_TIMESTAMP) {
+    avg_binop = GDF_FLOOR_DIV;
+    avg->dtype = GDF_TIMESTAMP;
+    avg->dtype_info.time_unit = sum.dtype_info.time_unit;
+  }
+
   avg->size = sum.size;
   RMM_TRY(RMM_ALLOC(&avg->data, sizeof(double) * sum.size, stream));
   if (cudf::is_nullable(sum) or cudf::is_nullable(count)) {
@@ -93,7 +102,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count,
         &avg->valid,
         sizeof(gdf_size_type) * gdf_valid_allocation_size(sum.size), stream));
   }
-  cudf::binary_operation(avg, &sum, &count, GDF_DIV);
+  cudf::binary_operation(avg, &sum, &count, avg_binop);
   return avg;
 }
 

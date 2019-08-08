@@ -5,6 +5,7 @@ from collections.abc import Sequence
 
 import numba.cuda.cudadrv.driver
 import numpy as np
+import pandas as pd
 import pyarrow as pa
 
 from librmm_cffi import librmm as rmm
@@ -63,6 +64,7 @@ class GpuArrowNodeReader(object):
         self._table = table
         self._field = table.schema[index]
         self._series = array_to_series(table.column(index))
+        self._series.name = self.name
 
     def __len__(self):
         return len(self._series)
@@ -85,7 +87,7 @@ class GpuArrowNodeReader(object):
 
     @property
     def dtype(self):
-        return self._field.type.to_pandas_dtype()
+        return arrow_to_pandas_dtype(self._field.type)
 
     @property
     def index_dtype(self):
@@ -157,9 +159,9 @@ def make_device_arrays(array):
         dtypes[2] = np.dtype(np.int8)
         dtypes[1] = np.dtype(np.int32)
     elif not pa.types.is_dictionary(array.type):
-        dtypes[1] = np.dtype(array.type.to_pandas_dtype())
+        dtypes[1] = arrow_to_pandas_dtype(array.type)
     else:
-        dtypes[1] = np.dtype(array.type.index_type.to_pandas_dtype())
+        dtypes[1] = arrow_to_pandas_dtype(array.type.index_type)
 
     for i in range(len(buffers)):
         buffers[i] = (
@@ -182,16 +184,15 @@ def array_to_series(array):
             [array_to_series(chunk) for chunk in array.data.chunks]
         )
 
-    dtype = None
     array_len = len(array)
     null_count = array.null_count
     buffers = make_device_arrays(array)
     mask, data = buffers[0], buffers[1]
+    dtype = arrow_to_pandas_dtype(array.type)
 
     if pa.types.is_dictionary(array.type):
         from cudf.dataframe import CategoricalColumn
 
-        dtype = "category"
         codes = array_to_series(array.indices)
         categories = array_to_series(array.dictionary)
         data = CategoricalColumn(
@@ -216,10 +217,8 @@ def array_to_series(array):
             null_count,
             True,
         )
-    else:
-        dtype = array.type.to_pandas_dtype()
-        if data is not None:
-            data = data[array.offset : array.offset + len(array)]
+    elif data is not None:
+        data = data[array.offset : array.offset + len(array)]
 
     series = Series(data, dtype=dtype)
 
@@ -227,3 +226,13 @@ def array_to_series(array):
         return series.set_mask(mask, null_count)
 
     return series
+
+
+def arrow_to_pandas_dtype(pa_type):
+    if pa.types.is_dictionary(pa_type):
+        return pd.core.dtypes.dtypes.CategoricalDtype(ordered=pa_type.ordered)
+    if pa.types.is_date64(pa_type):
+        return np.dtype("datetime64[ms]")
+    if pa.types.is_timestamp(pa_type):
+        return np.dtype("M8[{}]".format(pa_type.unit))
+    return np.dtype(pa_type.to_pandas_dtype())
