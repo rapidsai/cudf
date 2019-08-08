@@ -509,7 +509,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
             return type(self)(**params)
 
     def clip(self, lower=None, upper=None, inplace=False):
-        raise TypeError('Unordered Categoricals cannot be clipped')
+        raise TypeError("Unordered Categoricals cannot be clipped")
 
 
 def pandas_categorical_as_column(categorical, codes=None):
