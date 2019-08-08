@@ -1,11 +1,9 @@
 import numpy as np
 
-import time
 from librmm_cffi import librmm as rmm
 
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.utils import cudautils
-from cudf.utils import utils
+from cudf.utils import cudautils, utils
 
 
 class Buffer(object):
@@ -187,5 +185,6 @@ class _BufferSentry(object):
     def contig(self):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError("non contiguous")
+
 
 register_distributed_serializer(Buffer)
