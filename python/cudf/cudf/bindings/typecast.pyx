@@ -14,6 +14,7 @@ from libc.stdlib cimport free
 import numpy as np
 import pandas as pd
 
+
 def apply_cast(incol, dtype=np.float64):
     """
     Return a Column with values in `incol` casted to `dtype`.
