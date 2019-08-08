@@ -1822,7 +1822,11 @@ class Series(object):
         """
         column = self._column.clip(lower=lower, upper=upper, inplace=inplace)
         if not inplace:
-            return Series(column, name=self.name, index=self.index)
+            return Series(
+                column,
+                name=self.name,
+                index=self.index,
+            )
 
     def isin(self, test):
 
