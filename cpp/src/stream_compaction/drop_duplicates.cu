@@ -160,7 +160,9 @@ rows in input table should be equal to number of rows in key colums table");
   std::tie(unique_indices, unique_count) =
     detail::get_unique_ordered_indices(key_columns, keep, nulls_are_equal);
   // Allocate output columns
-  cudf::table destination_table(unique_count, cudf::column_dtypes(input_table), true);
+  cudf::table destination_table(unique_count,
+                                cudf::column_dtypes(input_table),
+                                cudf::column_dtype_infos(input_table), true);
   // run gather operation to establish new order
   cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
   nvcategory_gather_table(input_table, destination_table);

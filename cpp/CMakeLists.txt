@@ -343,6 +343,7 @@ add_library(cudf SHARED
             src/stream_compaction/drop_nulls.cu
             src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu

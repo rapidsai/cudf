@@ -450,8 +450,6 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
-
-
 /**
  * @brief  Computes exact quantile
  * computes quantile as double. This function works with arithmetic colum.
