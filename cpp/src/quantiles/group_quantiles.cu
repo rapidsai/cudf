@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <tuple>
+#include <numeric>
 
 namespace cudf {
 
