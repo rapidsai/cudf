@@ -1164,10 +1164,6 @@ public class TableTest {
     }
   }
 
-  //
-  // FILTER TESTS
-  //
-
   @Test
   void testMaskWithValidity() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
