@@ -97,7 +97,7 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     cdef any_or_all drop_if
     cdef gdf_size_type keep_threshold = len(cols)
 
-    # If the threshold is speified, use it
+    # If the threshold is specified, use it
     # otherwise set it based on how
     if thresh:
         keep_threshold = thresh
