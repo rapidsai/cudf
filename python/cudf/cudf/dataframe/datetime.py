@@ -236,7 +236,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, col_inds.data.mem)
+        col_keys = cpp_copying.apply_gather(self, col_inds)
         col_inds.name = self.name
         return col_keys, col_inds
 
