@@ -903,7 +903,10 @@ def test_index_in_dataframe_constructor():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_from_arrow(nelem, data_type):
@@ -941,7 +944,10 @@ def test_from_arrow(nelem, data_type):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_to_arrow(nelem, data_type):
@@ -956,35 +962,13 @@ def test_to_arrow(nelem, data_type):
     pa_df = pa.Table.from_pandas(
         df, preserve_index=False
     ).replace_schema_metadata(None)
-    # Pandas uses ns so need to cast columns to ms
-    if data_type == "datetime64[ms]":
-        pa_df = (
-            pa_df.add_column(
-                0,
-                pa_df.column(1)
-                .cast(pa.timestamp("ms"))
-                .cast(pa.int64())
-                .cast(pa.date64()),
-            )
-            .add_column(
-                0,
-                pa_df.column(0)
-                .cast(pa.timestamp("ms"))
-                .cast(pa.int64())
-                .cast(pa.date64()),
-            )
-            .remove_column(2)
-            .remove_column(2)
-        )
+
     pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
 
     pa_s = pa.Array.from_pandas(df.a)
-    # Pandas uses ns so need to cast columns to ms
-    if data_type == "datetime64[ms]":
-        pa_s = pa_s.cast(pa.timestamp("ms")).cast(pa.int64()).cast(pa.date64())
     pa_gs = gdf["a"].to_arrow()
 
     assert isinstance(pa_gs, pa.Array)
@@ -1007,15 +991,20 @@ def test_to_arrow(nelem, data_type):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_to_from_arrow_nulls(data_type):
-    if data_type == "datetime64[ms]":
-        data_type = pa.date64()
     if data_type == "bool":
         s1 = pa.array([True, None, False, None, True], type=data_type)
     else:
+        dtype = np.dtype(data_type)
+        if dtype.type == np.datetime64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.timestamp(unit=time_unit)
         s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
@@ -1169,7 +1158,10 @@ def test_dataframe_shape_empty():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
@@ -1477,7 +1469,10 @@ def test_cuda_array_interface(dtype):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
@@ -1712,7 +1707,10 @@ def test_series_rename():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 @pytest.mark.parametrize("nelem", [0, 100])
@@ -1760,6 +1758,12 @@ def test_head_tail(nelem, data_type):
 def test_reset_index(pdf, gdf, drop):
     assert_eq(pdf.reset_index(drop=drop), gdf.reset_index(drop=drop))
     assert_eq(pdf.x.reset_index(drop=drop), gdf.x.reset_index(drop=drop))
+
+
+@pytest.mark.parametrize("drop", [True, False])
+def test_set_index(pdf, gdf, drop):
+    for col in pdf.columns:
+        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
 
 
 @pytest.mark.parametrize("copy", [True, False])
@@ -2015,8 +2019,11 @@ def test_dataframe_empty_sort_index():
         "int64",
         "float32",
         "float64",
-        "datetime64[ms]",
         "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_dataframe_0_row_dtype(dtype):
@@ -2778,7 +2785,17 @@ def test_series_astype_numeric_to_numeric_nulls(dtype, as_dtype):
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.parametrize("as_dtype", ["str", "datetime64[ms]", "category"])
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
 def test_series_astype_numeric_to_other(dtype, as_dtype):
     psr = pd.Series([1, 2, 3], dtype=dtype)
     gsr = gd.from_pandas(psr)
@@ -2786,10 +2803,20 @@ def test_series_astype_numeric_to_other(dtype, as_dtype):
 
 
 @pytest.mark.parametrize(
-    "as_dtype", ["int32", "float32", "category", "datetime64[ms]", "str"]
+    "as_dtype",
+    [
+        "str",
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
 )
 def test_series_astype_string_to_other(as_dtype):
-    if as_dtype == "datetime64[ms]":
+    if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05"]
         kwargs = {"format": "%Y-%m-%d"}
     else:
@@ -2800,7 +2827,17 @@ def test_series_astype_string_to_other(as_dtype):
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
 
 
-@pytest.mark.parametrize("as_dtype", ["category", "datetime64[ms]", "str"])
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
 def test_series_astype_datetime_to_other(as_dtype):
     data = ["2001-01-01", "2002-02-02", "2001-01-05"]
     psr = pd.Series(data)
@@ -2809,10 +2846,20 @@ def test_series_astype_datetime_to_other(as_dtype):
 
 
 @pytest.mark.parametrize(
-    "as_dtype", ["int32", "float32", "category", "datetime64[ms]", "str"]
+    "as_dtype",
+    [
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
 )
 def test_series_astype_categorical_to_other(as_dtype):
-    if as_dtype == "datetime64[ms]":
+    if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
         kwargs = {"format": "%Y-%m-%d"}
     else:

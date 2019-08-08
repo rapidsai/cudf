@@ -967,17 +967,25 @@ public class TableTest {
              .column(12.0, 14.0, 17.0, 18.0)
              .column(12.0, 13.0, 15.0, 18.0)
              .column(12.0, 13.0, 15.0, 18.0)
-             .column(12.0, 14.0, 17.0, 18.0).build()) {
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0).build()) {
       try (Table t3 = t1.groupBy(0, 1)
-          .aggregate(max(2), min(2), min(2), max(2))
-          .orderBy(false, Table.asc(2))) {
-        // verify t3
-        assertEquals(4, t3.getRowCount());
-        assertTablesAreEqual(t3, expected);
+          .aggregate(max(2), min(2), min(2), max(2), min(2));
+          Table t4 = t3.orderBy(false, Table.asc(2))) {
+        // verify t4
+        assertEquals(4, t4.getRowCount());
+        assertTablesAreEqual(t4, expected);
+
+        assertEquals(t3.getColumn(0).getRefCount(), 1);
+        assertEquals(t3.getColumn(1).getRefCount(), 1);
+        assertEquals(t3.getColumn(2).getRefCount(), 2);
+        assertEquals(t3.getColumn(3).getRefCount(), 3);
+        assertEquals(t3.getColumn(4).getRefCount(), 3);
+        assertEquals(t3.getColumn(5).getRefCount(), 2);
+        assertEquals(t3.getColumn(6).getRefCount(), 3);
       }
     }
   }
-
 
   @Test
   void testGroupByMin() {
