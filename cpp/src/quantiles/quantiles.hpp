@@ -129,14 +129,22 @@ void get_array_value(T& result, T const* devarr, gdf_size_type location)
 #endif
 }
 
-template <typename T>
+template <typename T,
+          typename RetT = double>
 CUDA_HOST_DEVICE_CALLABLE
-double select_quantile(T const* devarr, gdf_size_type size, double quantile,
+RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
                        gdf_quantile_method interpolation)
 {
     T temp[2];
-    double result;
+    RetT result;
     
+    if( size < 2 )
+    {
+        get_array_value(temp[0], devarr, 0);
+        result = static_cast<RetT>( temp[0] );
+        return result;
+    }
+
     QuantileIndex qi(size, quantile);
 
     switch( interpolation )
@@ -153,15 +161,15 @@ double select_quantile(T const* devarr, gdf_size_type size, double quantile,
         break;
     case GDF_QUANT_LOWER:
         get_array_value(temp[0], devarr, qi.lower_bound);
-        result = static_cast<double>( temp[0] );
+        result = static_cast<RetT>( temp[0] );
         break;
     case GDF_QUANT_HIGHER:
         get_array_value(temp[0], devarr, qi.upper_bound);
-        result = static_cast<double>( temp[0] );
+        result = static_cast<RetT>( temp[0] );
         break;
     case GDF_QUANT_NEAREST:
         get_array_value(temp[0], devarr, qi.nearest);
-        result = static_cast<double>( temp[0] );
+        result = static_cast<RetT>( temp[0] );
         break;
     default:
         release_assert(false && "Invalid interpolation operation for quantiles");

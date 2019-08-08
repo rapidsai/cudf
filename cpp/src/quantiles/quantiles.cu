@@ -42,13 +42,6 @@ namespace{ // anonymous
   {
     T hvalue;
 
-    if( n < 2 )
-    {
-      cudf::detail::singleMemcpy(hvalue, devarr);
-      result = static_cast<RetT>( hvalue );
-      return GDF_SUCCESS;
-    }
-
     if( quant >= 1.0 && !flag_sorted )
     {
       T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
