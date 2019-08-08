@@ -1,3 +1,14 @@
+# cuDF 0.10.0 (Date TBD)
+
+## New Features
+
+- PR #2507 Add GPU-accelerated ORC Writer
+
+## Improvements
+
+## Bug Fixes
+
+
 # cuDF 0.9.0 (Date TBD)
 
 ## New Features

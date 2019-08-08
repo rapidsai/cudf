@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <fstream>
 #include <memory>
 #include <string>
 #include <vector>
-#include <fstream>
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
@@ -29,34 +29,39 @@ namespace cudf {
 namespace io {
 namespace orc {
 
+// Forward internal classes
+class ProtobufWriter;
+
 /**
  * @brief Implementation for ORC writer
  **/
 class writer::Impl {
+  static constexpr const char* magic = "ORC";
+
  public:
   /**
    * @brief Constructor with writer options.
    **/
-  explicit Impl(std::string filepath, writer_options const &options);
+  explicit Impl(std::string filepath, writer_options const& options);
 
   /**
    * @brief Write an entire dataset to ORC format
-   * 
+   *
    * @param[in] table Table of columns
    **/
   void write(const cudf::table& table);
 
  private:
-  void write_metadata();
+  size_t write_stripes();
 
-  void write_postscript();
+  size_t write_filefooter(const cudf::table& table);
 
-  void write_footer();
-
-  void write_stripes();
+  size_t write_postscript(size_t ff_length);
 
  private:
   std::ofstream outfile_;
+  std::vector<uint8_t> filetail_buffer_;
+  std::unique_ptr<ProtobufWriter> pbw_;
 };
 
 }  // namespace orc
