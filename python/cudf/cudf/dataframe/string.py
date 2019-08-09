@@ -25,7 +25,12 @@ _str_to_numeric_typecast_functions = {
     np.dtype("float32"): nvstrings.nvstrings.stof,
     np.dtype("float64"): nvstrings.nvstrings.stod,
     np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    # TODO: support Date32 UNIX days
+    # np.dtype("datetime64[D]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[s]"): nvstrings.nvstrings.timestamp2int,
     np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[us]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[ns]"): nvstrings.nvstrings.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -34,7 +39,12 @@ _numeric_to_str_typecast_functions = {
     np.dtype("float32"): nvstrings.ftos,
     np.dtype("float64"): nvstrings.dtos,
     np.dtype("bool"): nvstrings.from_booleans,
+    # TODO: support Date32 UNIX days
+    # np.dtype("datetime64[D]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[s]"): nvstrings.int2timestamp,
     np.dtype("datetime64[ms]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[us]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[ns]"): nvstrings.int2timestamp,
 }
 
 
@@ -542,20 +552,23 @@ class StringColumn(columnops.TypedColumnBase):
         return self.element_indexing(arg)
 
     def as_numerical_column(self, dtype, **kwargs):
-        if dtype in (np.dtype("int8"), np.dtype("int16")):
-            out_dtype = np.dtype(dtype)
-            dtype = np.dtype("int32")
-        else:
-            out_dtype = np.dtype(dtype)
 
-        out_arr = rmm.device_array(shape=len(self), dtype=dtype)
+        mem_dtype = np.dtype(dtype)
+        str_dtype = mem_dtype
+        out_dtype = mem_dtype
+
+        if mem_dtype.type in (np.int8, np.int16):
+            mem_dtype = np.dtype(np.int32)
+            str_dtype = mem_dtype
+        elif mem_dtype.type is np.datetime64:
+            kwargs.update(units=np.datetime_data(mem_dtype)[0])
+            mem_dtype = np.dtype(np.int64)
+
+        out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
         out_ptr = get_ctype_ptr(out_arr)
         kwargs.update({"devptr": out_ptr})
-        if dtype == np.dtype("datetime64[ms]"):
-            kwargs["units"] = "ms"
-        _str_to_numeric_typecast_functions[np.dtype(dtype)](
-            self.str(), **kwargs
-        )
+
+        _str_to_numeric_typecast_functions[str_dtype](self.str(), **kwargs)
 
         out_col = columnops.as_column(out_arr)
 

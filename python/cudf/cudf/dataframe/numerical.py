@@ -139,15 +139,14 @@ class NumericalColumn(columnops.TypedColumnBase):
         return self.view(
             datetime.DatetimeColumn,
             dtype=dtype,
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype)).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
         return self.replace(
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
-            dtype=np.dtype(dtype),
+            data=typecast.apply_cast(self, dtype).data, dtype=np.dtype(dtype)
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):

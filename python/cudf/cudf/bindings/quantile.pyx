@@ -72,7 +72,7 @@ def apply_quantile(column, quant, method, exact):
                 ctx
             )
         if c_result.is_valid is True:
-            res.append(get_scalar_value(c_result[0]))
+            res.append(get_scalar_value(c_result[0], column.dtype))
 
     free(c_result)
     free(ctx)
