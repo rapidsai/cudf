@@ -93,6 +93,8 @@ def apply_apply_boolean_mask(cols, mask):
 
 
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
+    from cudf.dataframe.categorical import CategoricalColumn
+
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
@@ -102,7 +104,7 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
                                          else len(subset))
 
     # Use threshold if specified, otherwise set it based on how
-    if thresh:
+    if thresh is not None:
         keep_threshold = thresh
     elif how == "all":
         keep_threshold = 1
@@ -114,4 +116,14 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     free(c_in_table)
     free(c_keys_table)
 
-    return columns_from_table(&c_out_table)
+    result_cols = columns_from_table(&c_out_table)
+
+    for i, inp_col in enumerate(cols):
+        if isinstance(inp_col, CategoricalColumn):
+            result_cols[i] = CategoricalColumn(
+                data=result_cols[i].data,
+                mask=result_cols[i].mask,
+                categories=inp_col.cat().categories,
+                ordered=inp_col.cat().ordered)
+
+    return result_cols
