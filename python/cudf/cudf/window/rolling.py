@@ -214,22 +214,9 @@ class Rolling:
 
         *func* is a user defined function that takes an 1D array as input:
 
-        * We are using `numba` CUDA compiler and the supported Python features
-          are listed in
-
-            https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
-
-          with the exception that math functions in `cmath` are not supported
-          since `libcudf` does not have complex number support and output of
-          `cmath` functions are most likely complex numbers. These five
-          functions in `math` are not supported either, since numba generates
-          multiple PTX functions for them ...
-
-            math.sin()
-            math.cos()
-            math.tan()
-            math.gamma()
-            math.lgamma()
+        See also
+        --------
+        The Notes section in `utils/cudautils.py` for function `compile_udf`
 
         """
         has_nulls = False

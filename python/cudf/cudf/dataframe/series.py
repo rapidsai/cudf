@@ -1674,19 +1674,28 @@ class Series(object):
 
         Parameters
         ----------
-        udf : function
-            Wrapped by ``numba.cuda.jit`` for call on the GPU as a device
-            function.
+        udf : Either a callable python function or a python function already
+        decorated by ``numba.cuda.jit`` for call on the GPU as a device
+
         out_dtype  : numpy.dtype; optional
             The dtype for use in the output.
+            Only used for ``numba.cuda.jit`` decorated udf.
             By default, the result will have the same dtype as the source.
 
         Returns
         -------
         result : Series
             The mask and index are preserved.
+
+        See also
+        --------
+        The Notes section in `utils/cudautils.py` for function `compile_udf`
+
         """
-        res_col = self._column.applymap(udf, out_dtype=out_dtype)
+        if callable(udf):
+            res_col = self._unaryop(udf)
+        else:
+            res_col = self._column.applymap(udf, out_dtype=out_dtype)
         return self._copy_construct(data=res_col)
 
     # Find / Search

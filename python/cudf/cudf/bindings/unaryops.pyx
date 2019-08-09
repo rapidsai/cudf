@@ -51,7 +51,7 @@ def apply_unary_op(incol, op):
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
     cdef gdf_column result
-    
+
     cdef unary_op c_op
     cdef string cpp_str
     cdef gdf_dtype g_type

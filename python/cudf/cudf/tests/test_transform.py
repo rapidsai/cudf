@@ -27,7 +27,7 @@ def test_applymap(dtype):
     def generic_function(a):
         return a ** 3
 
-    out_col = lhs_col.unary_operator(generic_function)
+    out_col = lhs_col.applymap(generic_function)
 
     result = lhs_arr ** 3
 
