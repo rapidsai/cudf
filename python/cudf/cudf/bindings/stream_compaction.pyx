@@ -75,8 +75,8 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
 
 def apply_apply_boolean_mask(cols, mask):
     """
-	Filter the rows of a list of columns using a boolean mask
-	
+    Filter the rows of a list of columns using a boolean mask
+
     Parameters
     ----------
     cols : List of Columns
@@ -86,7 +86,6 @@ def apply_apply_boolean_mask(cols, mask):
     -------
     List of Columns
     """
- 
     cdef cudf_table  c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
@@ -102,8 +101,8 @@ def apply_apply_boolean_mask(cols, mask):
 
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     """
-	Drops null rows from cols. 
-	
+    Drops null rows from cols. 
+
     Parameters
     ----------
     cols : List of Columns
