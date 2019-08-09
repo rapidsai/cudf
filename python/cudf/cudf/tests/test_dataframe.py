@@ -3150,9 +3150,7 @@ def test_clip_inplace(dtype, lower, upper):
     ser = Series(data)
     ser.clip(lower=lower, upper=upper, inplace=True)
     expected = pser.clip(lower=lower, upper=upper)
-    np.testing.assert_array_almost_equal(
-        ser.to_pandas(), expected, decimal=10
-    )
+    np.testing.assert_array_almost_equal(ser.to_pandas(), expected, decimal=10)
 
 
 @pytest.mark.parametrize(
