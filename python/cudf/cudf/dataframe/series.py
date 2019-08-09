@@ -1699,8 +1699,8 @@ class Series(object):
           have complex number support and output of `cmath` functions are most
           likely complex numbers.
 
-        * These five functions in `math` are not supported since numba generates
-          multiple PTX functions from them
+        * These five functions in `math` are not supported since numba
+          generatesmultiple PTX functions from them
 
           * math.sin()
           * math.cos()
