@@ -810,65 +810,115 @@ class DataFrame(object):
     @property
     def loc(self):
         """
-        Returns a label-based indexer for row-slicing and column selection.
+        Selecting rows and columns by label or boolean mask.
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
 
-        Get the row by index label from 'a' and 'b' columns
+        DataFrame with string index.
 
-        >>> df.loc[0, ['a', 'b']]
-        a    0
-        b    0
-
-        Get rows from index 2 to index 5 from 'a' and 'b' columns.
-
-        >>> df.loc[2:5, ['a', 'b']]
+        >>> print(df)
            a  b
-        2  2  2
-        3  3  3
-        4  4  4
-        5  5  5
+        a  0  5
+        b  1  6
+        c  2  7
+        d  3  8
+        e  4  9
 
-        Get the every 3rd rows from index 2 to 10 from 'a' and 'b'
+        Select a single row by label.
 
-        >>> df.loc[2:10:3, ['a', 'b']]
-            a    b
-        2   2    2
-        5   5    5
-        8   8    8
+        >>> print(df.loc['a'])
+        a    0
+        b    5
+        Name: a, dtype: int64
+
+        Select multiple rows and a single column.
+
+        >>> print(df.loc[['a', 'c', 'e'], 'b'])
+        a    5
+        c    7
+        e    9
+        Name: b, dtype: int64
+
+        Selection by boolean mask.
+        >>> print(df.loc[df.a > 2])
+           a  b
+        d  3  8
+        e  4  9
+
+        Setting values using loc.
+        >>> df.loc[['a', 'c', 'e'], 'a'] = 0
+        >>> print(df)
+           a  b
+        a  0  5
+        b  1  6
+        c  0  7
+        d  3  8
+        e  0  9
         """
         return _DataFrameLocIndexer(self)
 
     @property
     def iloc(self):
         """
-        Returns a  integer-location based indexer for selection by position.
+        Selecting rows and column by position.
 
         Examples
         --------
         >>> df = DataFrame([('a', list(range(20))),
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
-        >>> df.iloc[1]  # get the row from index 1st
+
+        Select a single row using an integer index.
+
+        >>> print(df.iloc[1])
         a    1
         b    1
         c    1
-        >>> df.iloc[[0, 2, 9, 18]]  # get the rows from indices 0,2,9 and 18.
+
+        Select multiple rows using a list of integers.
+
+        >>> print(df.iloc[[0, 2, 9, 18]])
               a    b    c
          0    0    0    0
          2    2    2    2
          9    9    9    9
         18   18   18   18
-        >>> df.iloc[3:10:2]  # get the rows using slice indices
+
+        Select rows using a slice.
+
+        >>> print(df.iloc[3:10:2])
              a    b    c
         3    3    3    3
         5    5    5    5
         7    7    7    7
         9    9    9    9
+
+        Select both rows and columns.
+
+        >>> print(df.iloc[[1, 3, 5, 7], 2])                                                                                                                                                      
+        1    1
+        3    3
+        5    5
+        7    7
+        Name: c, dtype: int64
+
+        Setting values in a column using iloc.
+
+        >>> df.iloc[:4] = 0
+        >>> print(df)
+           a  b  c
+        0  0  0  0
+        1  0  0  0
+        2  0  0  0
+        3  0  0  0
+        4  4  4  4
+        5  5  5  5
+        6  6  6  6
+        7  7  7  7
+        8  8  8  8
+        9  9  9  9
+        [10 more rows]
         """
         return _DataFrameIlocIndexer(self)
 
