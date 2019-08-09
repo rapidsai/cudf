@@ -116,6 +116,25 @@ struct RowGroup
 
 
 /**
+ * @brief Struct to describe an encoder data chunk
+ **/
+struct EncChunk
+{
+    uint8_t *streams[CI_NUM_STREAMS];           // encoded output
+    int32_t strm_id[CI_NUM_STREAMS];            // stream id or -1 if not present
+    uint32_t strm_len[CI_NUM_STREAMS];          // in: max length, out: actual length
+    const uint32_t *valid_map_base;             // base ptr of input valid bit map
+    const void *column_data_base;               // base ptr of input column data
+    uint32_t start_row;                         // start row of this chunk
+    uint32_t num_rows;                          // number of rows in this chunk
+    uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
+    uint8_t type_kind;                          // column data type (orc::TypeKind)
+    uint8_t dtype_len;                          // data type length
+    uint8_t scale;                              // scale for decimals or timestamps
+};
+
+
+/**
  * @brief Launches kernel for parsing the compressed stripe data
  *
  * @param[in] strm_info List of compressed streams
@@ -190,6 +209,20 @@ cudaError_t DecodeNullsAndStringDictionaries(ColumnDesc *chunks, DictionaryEntry
 cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, uint32_t num_columns, uint32_t num_stripes, size_t max_rows = ~0,
                                 size_t first_row = 0, int64_t *tz_table = 0, size_t tz_len = 0,
                                 RowGroup *row_groups = 0, uint32_t num_rowgroups = 0, uint32_t rowidx_stride = 0, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for encoding column data
+ *
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_columns Number of columns
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream = (cudaStream_t)0);
+
 
 } // namespace gpu
 } // namespace orc

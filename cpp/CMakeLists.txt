@@ -375,6 +375,7 @@ add_library(cudf SHARED
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
             src/io/orc/stripe_init.cu
+            src/io/orc/stripe_enc.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader_impl.cu

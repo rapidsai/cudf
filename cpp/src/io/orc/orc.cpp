@@ -286,10 +286,58 @@ bool ProtobufReader::InitSchema(FileFooter *ff)
     }
 
 
+/**
+ * @Brief Add a single rowIndexEntry, negative input values treated as not present
+ *
+ */
+void ProtobufWriter::put_row_index_entry(int32_t present_blk, int32_t present_ofs, int32_t data_blk, int32_t data_ofs, int32_t data2_blk, int32_t data2_ofs, TypeKind kind)
+{
+    size_t sz = 1, lpos;
+    putb(1*8+PB_TYPE_FIXEDLEN); // 1:RowIndex.entry
+    lpos = m_buf->size();
+    putb(0xcd); // sz+2
+    putb(1*8+PB_TYPE_FIXEDLEN); // 1:positions[packed=true]
+    putb(0xcd); // sz
+    if (present_blk >= 0)
+        sz += put_uint(present_blk);
+    if (present_ofs >= 0)
+    {
+        sz += put_uint(present_ofs) + 2;
+        putb(0); // run pos = 0
+        putb(0); // bit pos = 0
+    }
+    if (data_blk >= 0)
+    {
+        sz += put_uint(data_blk);
+    }
+    if (data_ofs >= 0)
+    {
+        sz += put_uint(data_ofs) + 1;
+        putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+        if (kind == BOOLEAN)
+        {
+            putb(0); // bit position in byte, always zero
+            sz++;
+        }
+    }
+    if (data2_blk >= 0)
+    {
+        sz += put_uint(data2_blk);
+    }
+    if (data2_ofs >= 0)
+    {
+        sz += put_uint(data2_ofs) + 1;
+        putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+    }
+    m_buf->data()[lpos] = (uint8_t)(sz + 2);
+    m_buf->data()[lpos+2] = (uint8_t)(sz);
+}
+
+
 PBW_BEGIN_STRUCT(PostScript)
     PBW_FLD_UINT(1, footerLength)
     PBW_FLD_UINT(2, compression)
-    PBW_FLD_UINT(3, compressionBlockSize)
+    if (s->compression != NONE) { PBW_FLD_UINT(3, compressionBlockSize) }
     PBW_FLD_PACKED_UINT(4, version)
     PBW_FLD_UINT(5, metadataLength)
     PBW_FLD_STRING(8000, magic)
@@ -330,7 +378,7 @@ PBW_END_STRUCT()
 PBW_BEGIN_STRUCT(StripeFooter)
     PBW_FLD_REPEATED_STRUCT(1, streams)
     PBW_FLD_REPEATED_STRUCT(2, columns)
-    PBW_FLD_STRING(3, writerTimezone)
+    if (s->writerTimezone != "") { PBW_FLD_STRING(3, writerTimezone) }
 PBW_END_STRUCT()
 
 PBW_BEGIN_STRUCT(Stream)
@@ -341,14 +389,14 @@ PBW_END_STRUCT()
 
 PBW_BEGIN_STRUCT(ColumnEncoding)
     PBW_FLD_UINT(1, kind)
-    PBW_FLD_UINT(2, dictionarySize)
+    if (s->kind == DICTIONARY || s->kind == DICTIONARY_V2) { PBW_FLD_UINT(2, dictionarySize) }
 PBW_END_STRUCT()
 
 /* ----------------------------------------------------------------------------*/
 /**
-* @Brief ORC decompression class
-*
-*/
+ * @Brief ORC decompression class
+ *
+ */
 /* ----------------------------------------------------------------------------*/
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize):
