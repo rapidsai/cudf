@@ -22,7 +22,7 @@ def apply_cast(incol, dtype=np.float64):
     """
     check_gdf_compatibility(incol)
     dtype = np.dtype(np.float64 if dtype is None else dtype)
-    
+
     if pd.api.types.is_dtype_equal(incol.dtype, dtype):
         return incol
 
