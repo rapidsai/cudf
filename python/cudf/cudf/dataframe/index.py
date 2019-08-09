@@ -45,9 +45,7 @@ class Index(object):
     def deserialize(cls, header, frames):
         """Convert from pickle format into Index
         """
-        # payload = deserialize(
-        #     header["payload"], frames[: header["frame_count"]]
-        # )
+
         payload = b"".join(frames[: header["frame_count"]])
         return pickle.loads(payload)
 

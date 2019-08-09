@@ -252,17 +252,16 @@ class CategoricalColumn(columnops.TypedColumnBase):
     def deserialize(cls, header, frames):
         data, mask = super(CategoricalColumn, cls).deserialize(header, frames)
 
-        if "category_frame_count" not in header:
-            # Handle data from before categories was a cudf.Column
-            categories = header["categories"]
-        else:
-            # Handle categories that were serialized as a cudf.Column
-            categories = frames[len(frames) - header["category_frame_count"] :]
-            cat_typ = pickle.loads(header["categories"]["type"])
-            categories = cat_typ.deserialize(header["categories"], categories)
+        # Handle categories that were serialized as a cudf.Column
+        category_frames = frames[
+            len(frames) - header["category_frame_count"] :
+        ]
+        cat_typ = pickle.loads(header["categories"]["type"])
+        _categories = cat_typ.deserialize(
+            header["categories"], category_frames
+        )
 
-            # categories = deserialize(header["categories"], categories)
-            categories = columnops.as_column(categories)
+        categories = columnops.as_column(_categories)
 
         return cls(
             data=data,
