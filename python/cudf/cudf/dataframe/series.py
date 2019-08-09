@@ -1708,12 +1708,6 @@ class Series(object):
           * math.gamma()
           * math.lgamma()
 
-        * There should not be more than one return clause.
-
-          This is due to the fact that CUDA and CUDA PTX have very different
-          control flow structure and no solution has yet been found to support
-          multiple return clauses.
-
         """
         if callable(udf):
             res_col = self._unaryop(udf)
