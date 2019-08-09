@@ -146,3 +146,29 @@ def test_dropna_subset_cols(data, subset):
     assert_eq(
         pdf.dropna(axis=1, subset=subset), gdf.dropna(axis=1, subset=subset)
     )
+
+
+@pytest.mark.parametrize("thresh", [0, 1, 2])
+@pytest.mark.parametrize("subset", [None, ["a"], ["b"], ["a", "b"]])
+def test_dropna_thresh(thresh, subset):
+    pdf = pd.DataFrame({"a": [1, 2, None, None], "b": [1, 2, 3, None]})
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.dropna(axis=0, thresh=thresh, subset=subset),
+        gdf.dropna(axis=0, thresh=thresh, subset=subset),
+    )
+
+
+@pytest.mark.parametrize("thresh", [0, 1, 2])
+@pytest.mark.parametrize("subset", [None, [0], [1], [0, 1]])
+def test_dropna_thresh_cols(thresh, subset):
+    pdf = pd.DataFrame(
+        {"a": [1, 2], "b": [3, 4], "c": [5, None], "d": [np.nan, np.nan]}
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.dropna(axis=1, thresh=thresh, subset=subset),
+        gdf.dropna(axis=1, thresh=thresh, subset=subset),
+    )

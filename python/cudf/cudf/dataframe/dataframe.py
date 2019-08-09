@@ -1427,7 +1427,7 @@ class DataFrame(object):
             outdf = outdf.set_index(new_index)
             return outdf
 
-    def dropna(self, axis=0, how="any", subset=None):
+    def dropna(self, axis=0, how="any", subset=None, thresh=None):
         """
         Drops rows (or columns) containing nulls from a Column.
 
@@ -1445,13 +1445,16 @@ class DataFrame(object):
             List of columns to consider when dropping rows (all columns
             are considered by default). Alternatively, when dropping
             columns, subset is a list of rows to consider.
+        thresh: int, optional
+            If specified, then drops every row (or column) containing
+            less than `thresh` non-null values
         """
         if axis == 0:
-            return self._drop_na_rows(how=how, subset=subset)
+            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
         else:
-            return self._drop_na_columns(how=how, subset=subset)
+            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
 
-    def _drop_na_rows(self, how="any", subset=None):
+    def _drop_na_rows(self, how="any", subset=None, thresh=None):
         """
         Drop rows containing nulls.
         """
@@ -1473,7 +1476,9 @@ class DataFrame(object):
         if len(subset) == 0:
             return self
 
-        result_cols = cpp_drop_nulls(input_cols, how=how, subset=subset)
+        result_cols = cpp_drop_nulls(
+            input_cols, how=how, subset=subset, thresh=thresh
+        )
 
         result_index_cols, result_data_cols = (
             result_cols[: len(index_cols)],
@@ -1488,12 +1493,12 @@ class DataFrame(object):
         else:
             result_index = cudf.dataframe.index.as_index(result_index_cols[0])
 
-        df = _dataframe_from_columns(
-            result_data_cols, index=result_index, columns=self.columns
-        )
+            df = _dataframe_from_columns(
+                result_data_cols, index=result_index, columns=self.columns
+            )
         return df
 
-    def _drop_na_columns(self, how="any", subset=None):
+    def _drop_na_columns(self, how="any", subset=None, thresh=None):
         """
         Drop columns containing nulls
         """
@@ -1503,13 +1508,16 @@ class DataFrame(object):
             df = self
         else:
             df = self.take(subset)
-        for col in self.columns:
-            if how == "any":
-                if df[col].null_count > 0:
-                    continue
+
+        if thresh is None:
+            if how == "all":
+                thresh = 1
             else:
-                if df[col].null_count == len(df):
-                    continue
+                thresh = len(df)
+
+        for col in self.columns:
+            if (len(df[col]) - df[col].null_count) < thresh:
+                continue
             out_cols.append(col)
 
         return self[out_cols]
