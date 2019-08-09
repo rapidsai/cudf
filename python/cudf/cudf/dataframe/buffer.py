@@ -51,7 +51,7 @@ class Buffer(object):
             isinstance(mem, np.ndarray)
             or numba.cuda.driver.is_device_memory(mem)
         ):
-            # this is probably a ucp_py.BufferRegionmem
+            # this is probably a ucp_py.BufferRegion memory object
             # check the header for info -- this should be encoded from
             # serialization process.  Lastly, `typestr` and `shape` *must*
             # manually set *before* consuming the buffer as a DeviceNDArray
