@@ -99,8 +99,8 @@ void mutable_column_view::set_null_count(size_type new_null_count) noexcept {
 mutable_column_view::operator column_view() const {
   // Convert children to immutable views
   std::vector<column_view> child_views(num_children());
-  std::copy(cbegin(mutable_children), cend(mutable_children),
-            begin(child_views));
+  std::copy(std::cbegin(mutable_children), std::cend(mutable_children),
+            std::begin(child_views));
   return column_view{_type,
                      _size,
                      _data,
@@ -109,7 +109,6 @@ mutable_column_view::operator column_view() const {
                      _offset,
                      std::move(child_views)};
 }
-
 
 size_type count_descendants(column_view parent) {
   size_type count{parent.num_children()};
