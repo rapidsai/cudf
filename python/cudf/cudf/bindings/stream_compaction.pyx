@@ -98,14 +98,14 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
                                      else table_from_columns(subset))
 
-    cdef any_or_all drop_if
-    cdef gdf_size_type keep_threshold = len(cols)
+    cdef gdf_size_type keep_threshold = (len(cols) if subset is None
+                                         else len(subset))
 
     # Use threshold if specified, otherwise set it based on how
     if thresh:
         keep_threshold = thresh
     elif how == "all":
-        keep_threshold = 0
+        keep_threshold = 1
 
     with nogil:
         c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],

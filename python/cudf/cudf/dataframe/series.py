@@ -1128,9 +1128,13 @@ class Series(object):
         """
         if self.null_count == 0:
             return self
-        data = self._column.dropna()
-        index = self.index.loc[~self.isna()]
-        return self._copy_construct(data=data, index=index)
+        result = self.to_frame().dropna()
+        if self.name is None:
+            result = result[0]
+            result.name = None
+            return result
+        else:
+            return result[self.name]
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
