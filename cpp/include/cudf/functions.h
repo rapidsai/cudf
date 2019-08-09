@@ -76,8 +76,6 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 
-
-
 /* context operations */
 
 /**
@@ -451,8 +449,6 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
-
-
 
 /**
  * @brief  Computes exact quantile

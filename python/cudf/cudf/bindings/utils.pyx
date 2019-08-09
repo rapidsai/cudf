@@ -22,7 +22,7 @@ cdef dataframe_from_table(cudf_table* table, colnames):
     for i in range(table[0].num_columns()):
         c_col = table[0].get_column(i)
         data, mask = gdf_column_to_column_mem(c_col)
-        col = Column.from_mem_views(data, mask)
+        col = Column.from_mem_views(data, mask, c_col.null_count)
         df.add_column(
             name=colnames[i],
             data=col
@@ -39,7 +39,7 @@ cdef columns_from_table(cudf_table* table):
         c_col = table[0].get_column(i)
         data, mask = gdf_column_to_column_mem(c_col)
         columns.append(
-            Column.from_mem_views(data, mask)
+            Column.from_mem_views(data, mask, c_col.null_count)
         )
         free(c_col)
     return columns
