@@ -24,8 +24,8 @@
 #include <utilities/error_utils.hpp>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cuda_runtime_api.h>
 #include <algorithm>
@@ -86,7 +86,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
-  int column_byte_width = cudf::byte_width(*output_column);
+  std::size_t column_byte_width = cudf::byte_width(*output_column);
 
   // copy data
 
@@ -97,7 +97,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     }
   }else{
     for (int i = 0; i < num_columns; ++i) {
-      gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
+      std::size_t bytes = column_byte_width * columns_to_concat[i]->size;
       CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
       target += bytes;
       output_column->null_count += columns_to_concat[i]->null_count;

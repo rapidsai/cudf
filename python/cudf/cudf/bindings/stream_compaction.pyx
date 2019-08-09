@@ -99,18 +99,17 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
                                      else table_from_columns(subset))
 
     cdef any_or_all drop_if
-    if how == "any":
-        drop_if = ANY
-    else:
-        drop_if = ALL
+    cdef gdf_size_type keep_threshold = len(cols)
 
-    cdef gdf_size_type valid_threshold = 0
+    # Use threshold if specified, otherwise set it based on how
     if thresh:
-        valid_threshold = thresh
+        keep_threshold = thresh
+    elif how == "all":
+        keep_threshold = 0
 
     with nogil:
         c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
-                                 drop_if, valid_threshold)
+                                 keep_threshold)
 
     free(c_in_table)
     free(c_keys_table)

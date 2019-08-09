@@ -25,8 +25,8 @@
 #include <cudf/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-#include <utilities/wrapper_types.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
@@ -196,7 +196,7 @@ struct CastTimestampTo_Dispatcher {
             cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_us ) 
             cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
-        else
+        else if( input->dtype_info.time_unit != output->dtype_info.time_unit ) 
             CUDF_FAIL("Timestamp resolution mismatch");
     }
 

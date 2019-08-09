@@ -112,7 +112,7 @@ table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStr
  * @param size The size of the columns to allocate
  * @param allocate_mask_if_exists Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
  * @param stream Optional stream in which to perform allocations
- * @return table A table of columns with same type and allocation size as input
+ * @return table A table of columns with same type as @p t and specified @p size
  */
 table allocate_like(table const& t, gdf_size_type size, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 

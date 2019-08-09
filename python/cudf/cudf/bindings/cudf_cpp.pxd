@@ -23,9 +23,13 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
-cdef gdf_dtype get_dtype(dtype)
+cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
+cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
 
-cdef get_scalar_value(gdf_scalar scalar)
+cdef np_dtype_from_gdf_column(gdf_column* col)
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*)
+
+cdef get_scalar_value(gdf_scalar scalar, dtype)
 
 cdef gdf_column* column_view_from_column(col, col_name=*) except? NULL
 cdef gdf_column* column_view_from_NDArrays(

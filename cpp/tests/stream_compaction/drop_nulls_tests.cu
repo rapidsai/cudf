@@ -38,7 +38,7 @@ TEST_F(DropNullsErrorTest, EmptyInput)
 
   // zero size, so expect no error, just empty output column
   cudf::table output;
-  CUDF_EXPECT_NO_THROW(output = cudf::drop_nulls({&bad_input}, {&bad_input}, cudf::ALL));
+  CUDF_EXPECT_NO_THROW(output = cudf::drop_nulls({&bad_input}, {&bad_input}));
   EXPECT_EQ(output.num_columns(), 1);
   EXPECT_EQ(output.num_rows(), 0);
   EXPECT_EQ(output.get_column(0)->null_count, 0);
@@ -48,7 +48,7 @@ TEST_F(DropNullsErrorTest, EmptyInput)
   bad_input.size = 2; 
 
   // nonzero, with non-null valid mask, so non-null input expected
-  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_input}, cudf::ALL),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_input}),
                             "Null input data");
 
   gdf_column bad_keys{};
@@ -58,7 +58,7 @@ TEST_F(DropNullsErrorTest, EmptyInput)
   bad_keys.size = 1;
 
   // keys size smaller than table size
-  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_keys}, cudf::ALL),
+  CUDF_EXPECT_THROW_MESSAGE(cudf::drop_nulls({&bad_input}, {&bad_keys}),
                             "Column size mismatch");
 }
 
@@ -72,7 +72,7 @@ void DropNulls(column_wrapper<T> const& source,
 {
   cudf::table result;
   cudf::table source_table{const_cast<gdf_column*>(source.get())};
-  EXPECT_NO_THROW(result = cudf::drop_nulls(source_table, source_table, cudf::ALL));
+  EXPECT_NO_THROW(result = cudf::drop_nulls(source_table, source_table));
   gdf_column *res = result.get_column(0);
   EXPECT_EQ(res->null_count, 0);
   bool columns_equal{false};
@@ -90,7 +90,7 @@ void DropNulls(column_wrapper<T> const& source,
   result.destroy();
 }
 
-constexpr gdf_size_type column_size{100000};
+constexpr gdf_size_type column_size{100};
 
 template <typename T>
 struct DropNullsTest : GdfTest 
@@ -167,11 +167,13 @@ static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factor
 void DropNullsTable(cudf::table const &source,
                     cudf::table const &keys,
                     cudf::table const &expected,
-                    cudf::any_or_all drop_if = cudf::ANY,
-                    gdf_size_type thresh = 0)
+                    gdf_size_type keep_thresh = -1)
 {
   cudf::table result;
-  EXPECT_NO_THROW(result = cudf::drop_nulls(source, keys, drop_if, thresh));
+  if (keep_thresh >= 0)
+    EXPECT_NO_THROW(result = cudf::drop_nulls(source, keys, keep_thresh));
+  else 
+    EXPECT_NO_THROW(result = cudf::drop_nulls(source, keys));
 
   for (int c = 0; c < result.num_columns(); c++) {
     gdf_column *res = result.get_column(c);
@@ -248,7 +250,8 @@ TEST_F(DropNullsTableTest, AllNull)
   cols.push_back(bool_column.get());
   cols.push_back(string_column.get());
   cudf::table table_source(cols);
-  cudf::table table_expected(0, column_dtypes(table_source), true, false);
+  cudf::table table_expected(0, column_dtypes(table_source),
+                             column_dtype_infos(table_source), true, false);
 
   DropNullsTable(table_source, table_source, table_expected);
 }
@@ -344,11 +347,11 @@ TEST_F(DropNullsTableTest, OneColumnEvensNull)
   cols_expected.push_back(string_expected.get());
   cudf::table table_expected(cols_expected);
 
-  DropNullsTable(table_source, table_source, table_expected, cudf::ANY);
+  DropNullsTable(table_source, table_source, table_expected);
 
-  // nothing dropped if cudf::ALL is used for drop criteria since all columns
+  // nothing dropped if 0 is used for keep_threshold since all columns
   // must be NULL to drop a row.
-  DropNullsTable(table_source, table_source, table_source, cudf::ALL);
+  DropNullsTable(table_source, table_source, table_source, 0);
 }
 
 TEST_F(DropNullsTableTest, SomeNullMasks)
@@ -389,30 +392,30 @@ TEST_F(DropNullsTableTest, SomeNullMasks)
   cols_expected.push_back(string_expected.get());
   cudf::table table_expected(cols_expected);
 
-  DropNullsTable(table_source, table_source, table_expected, cudf::ANY);
+  DropNullsTable(table_source, table_source, table_expected);
 
-  // nothing dropped if cudf::ALL is used since all columns must be NULL to drop
-  DropNullsTable(table_source, table_source, table_source, cudf::ALL);
+  // nothing dropped if 0 threshold is used since all columns must be NULL to drop
+  DropNullsTable(table_source, table_source, table_source, 0);
 
-  // test threshold -- at least one valid value, so all valid
-  DropNullsTable(table_source, table_source, table_source, cudf::ANY, 1);
+  // test threshold -- at least one valid value to keep, so all valid
+  DropNullsTable(table_source, table_source, table_source, 1);
 
-  // test threshold -- at least 4 valid values, so should match expected
-  DropNullsTable(table_source, table_source, table_expected, cudf::ANY, 4);
+  // test threshold -- at least 4 valid values, so should match default
+  DropNullsTable(table_source, table_source, table_expected, 4);
 
   // Test a subset of columns
   cudf::table subset_columns{float_column, bool_column};
 
-  DropNullsTable(table_source, subset_columns, table_expected, cudf::ANY);
-  // nothing dropped if cudf::ALL is used since all columns must be NULL to drop
-  DropNullsTable(table_source, subset_columns, table_source, cudf::ALL);
+  DropNullsTable(table_source, subset_columns, table_expected);
+  // nothing dropped if 0 is used for keep_threshold since all columns must be NULL to drop
+  DropNullsTable(table_source, subset_columns, table_source, 0);
 
   // thresh of 1 valid means we keep all rows when we only consider float_column
-  DropNullsTable(table_source, subset_columns, table_source, cudf::ANY, 1);
+  DropNullsTable(table_source, subset_columns, table_source, 1);
 
   // thresh of 1 valid means we drop half the rows when we only consider float_column
   cudf::table subset_columns2{float_column}; // 50% nulls
-  DropNullsTable(table_source, subset_columns2, table_expected, cudf::ANY, 1);
+  DropNullsTable(table_source, subset_columns2, table_expected, 1);
 }
 
 TEST_F(DropNullsTableTest, NonalignedGap)
