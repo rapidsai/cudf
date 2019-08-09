@@ -32,9 +32,9 @@ enum class order : bool { ASCENDING, DESCENDING };
 /**---------------------------------------------------------------------------*
  * @brief Indicates how null values compare against all other values.
  *
- * If `HIGHEST`, then `null > x` for all `x`
+ * If `HIGHEST`, then `null < x` for all `x != NULL`
  *
- * If `LOWEST`, then `null < x` for all `x`
+ * If `LOWEST`, then `null < x` for all `x != NULL`
  *---------------------------------------------------------------------------**/
 enum class null_size : bool { HIGHEST, LOWEST };
 
