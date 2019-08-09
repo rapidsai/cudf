@@ -16,8 +16,8 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.cuh>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/legacy/wrapper_types.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

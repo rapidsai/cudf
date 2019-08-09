@@ -25,8 +25,8 @@
 #include <cudf/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf/utils/legacy/wrapper_types.hpp>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <thrust/copy.h>
 #include <thrust/execution_policy.h>
