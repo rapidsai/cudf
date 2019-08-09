@@ -22,6 +22,9 @@
 #include <cudf/table/table_view.hpp>
 #include <utilities/error_utils.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+#include <thrust/sequence.h>
+
 namespace cudf {
 namespace exp {
 
@@ -39,7 +42,32 @@ std::unique_ptr<column> sorted_order(table_view input,
   auto sorted_indices = cudf::make_numeric_column(
       data_type{INT32}, input.num_rows(), mask_state::UNALLOCATED, stream);
 
+  auto mutable_indices_view = sorted_indices->mutable_view();
+
   auto device_table = table_device_view::create(input, stream);
+
+  thrust::sequence(rmm::exec_policy(stream)->on(stream),
+                   mutable_indices_view.begin<int32_t>(),
+                   mutable_indices_view.end<int32_t>(), 0);
+
+  rmm::device_vector<order> d_column_order(column_order);
+
+  if (has_nulls(input)) {
+    auto comparator = row_lexicographic_comparator<true>(
+        *device_table, *device_table, size_of_nulls,
+        d_column_order.data().get());
+    thrust::sort(rmm::exec_policy(stream)->on(stream),
+                 mutable_indices_view.begin<int32_t>(),
+                 mutable_indices_view.end<int32_t>(), comparator);
+
+  } else {
+    auto comparator = row_lexicographic_comparator<false>(
+        *device_table, *device_table, size_of_nulls,
+        d_column_order.data().get());
+    thrust::sort(rmm::exec_policy(stream)->on(stream),
+                 mutable_indices_view.begin<int32_t>(),
+                 mutable_indices_view.end<int32_t>(), comparator);
+  }
 
   return sorted_indices;
 }
