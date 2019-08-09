@@ -143,6 +143,7 @@
 - PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
 - PR #2461 Fix groupby multiple aggregations same column
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
+- PR #2521 Fix casting datetimes from/to the same resolution
 
 
 # cuDF 0.8.0 (27 June 2019)
