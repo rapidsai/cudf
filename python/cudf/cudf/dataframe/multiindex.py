@@ -449,13 +449,9 @@ class MultiIndex(Index):
         header = {}
         header["type"] = pickle.dumps(type(self))
         header["names"] = pickle.dumps(self.names)
-        header["codes"], codes_frame = self.codes.serialize()
-        level_frames = []
-        for l in self.levels:
-            header["levels"], f = l.serialize()
-            level_frames.append(f)
 
-        frames = [codes_frame] + level_frames
+        header["source_data"], frames = self._source_data.serialize()
+
         return header, frames
 
     @classmethod
@@ -464,16 +460,13 @@ class MultiIndex(Index):
         """
         names = pickle.loads(header["names"])
 
-        code_typ = pickle.loads(header["codes"]["type"])
-        codes = code_typ.deserialize(header["codes"], frames[0])
-
-        level_typ = pickle.loads(header["levels"]["type"])
-        levels = [
-            level_typ.deserialize(header["levels"], f) for f in frames[1:]
-        ]
+        source_data_typ = pickle.loads(header["source_data"]["type"])
+        source_data = source_data_typ.deserialize(
+            header["source_data"], frames
+        )
 
         names = pickle.loads(header["names"])
-        return MultiIndex(levels=levels, codes=codes, names=names)
+        return MultiIndex(names=names, source_data=source_data)
 
     def __iter__(self):
         self.n = 0
