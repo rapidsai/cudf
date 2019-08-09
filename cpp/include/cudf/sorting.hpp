@@ -43,7 +43,9 @@ enum class null_size : bool { HIGHEST, LOWEST };
  * lexicographical sorted order.
  *
  * @param input The table to sort
- * @param column_order The desired sort order for each column
+ * @param column_order The desired sort order for each column. Size must be
+ * equal to `input.num_columns()` or empty. If empty, all columns will be sorted
+ * in ascending order.
  * @param size_of_nulls The size of a NULL value in comparison to all other
  * values
  * @return std::unique_ptr<column> A non-nullable column of INT32 elements
