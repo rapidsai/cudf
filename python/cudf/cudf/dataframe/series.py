@@ -1292,42 +1292,19 @@ class Series(object):
 
     @property
     def loc(self):
+        """
+        Select values by label.
+        
+        See DataFrame.loc
+        """
         return _SeriesLocIndexer(self)
 
     @property
     def iloc(self):
         """
-        For integer-location based selection.
+        Select values by position.
 
-        Examples
-        --------
-        >>> import cudf
-        >>> sr = cudf.Series(list(range(20)))
-
-        Get the value from 1st index
-
-        >>> sr.iloc[1]
-        1
-
-        Get the values from 0,2,9 and 18th index
-
-        >>> sr.iloc[0,2,9,18]
-         0    0
-         2    2
-         9    9
-        18   18
-
-        Get the values using slice indices
-
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
-
-        Returns
-        -------
-        Series containing the elements corresponding to the indices
+        See DataFrame.iloc
         """
         return _SeriesIlocIndexer(self)
 

@@ -294,10 +294,20 @@ class Index(object):
 
     @property
     def iloc(self):
+        """
+        Select values by position.
+
+        See DataFrame.iloc
+        """
         return _IndexIlocIndexer(self)
 
     @property
     def loc(self):
+        """
+        Select values by label.
+
+        See DataFrame.loc
+        """
         return _IndexLocIndexer(self)
 
     @property

@@ -855,6 +855,10 @@ class DataFrame(object):
         c  0  7
         d  3  8
         e  0  9
+
+        See also
+        --------
+        DataFrame.iloc
         """
         return _DataFrameLocIndexer(self)
 
@@ -919,6 +923,10 @@ class DataFrame(object):
         8  8  8  8
         9  9  9  9
         [10 more rows]
+
+        See also
+        --------
+        DataFrame.loc
         """
         return _DataFrameIlocIndexer(self)
 
