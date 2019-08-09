@@ -25,7 +25,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/types.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utils/legacy/wrapper_types.hpp>
 
 #include <random>
 #include <cudf/transform.hpp>

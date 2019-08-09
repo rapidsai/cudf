@@ -20,6 +20,7 @@
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
+#include "cudf/stream_compaction.hpp"
 #include "cudf/types.hpp"
 
 #include "jni_utils.hpp"
@@ -263,7 +264,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length) {
+    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -293,13 +294,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     }
 
     cudf::orc_read_arg read_arg{*source};
-
     read_arg.columns = n_filter_col_names.as_cpp_vector();
-
     read_arg.stripe = -1;
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.use_index = false;
+    read_arg.use_np_dtypes = static_cast<bool>(usingNumPyTypes);
 
     cudf::table result = read_orc(read_arg);
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
@@ -492,7 +492,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jintArray agg_types) {
+    jintArray aggregate_column_indices, jintArray agg_types,
+    jboolean ignore_null_keys) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
@@ -523,7 +524,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     }
 
     std::pair<cudf::table, cudf::table> result =
-        cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops);
+        cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops,
+            cudf::groupby::hash::Options(ignore_null_keys));
 
     try {
       std::vector<gdf_column *> output_columns;
@@ -541,4 +543,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
   }
   CATCH_STD(env, NULL);
 }
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfFilter(JNIEnv *env, jclass, jlong input_jtable,
+                                                                 jlong mask_jcol) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, mask_jcol, "mask column is null", 0);
+  try {
+    cudf::table *input = reinterpret_cast<cudf::table *>(input_jtable);
+    gdf_column *mask = reinterpret_cast<gdf_column *>(mask_jcol);
+    cudf::table result = cudf::apply_boolean_mask(*input, *mask);
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
+    return native_handles.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"

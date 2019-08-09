@@ -63,6 +63,7 @@ class MemoryCleaner {
    */
   public static abstract class Cleaner {
     private final List<RefCountDebugItem> refCountDebug;
+    private boolean leakExpected = false;
 
     public Cleaner() {
       if (REF_COUNT_DEBUG) {
@@ -92,11 +93,31 @@ class MemoryCleaner {
 
     /**
      * Clean up any resources not previously released.
+     * @param logErrorIfNotClean if true we should log a leak unless it is expected.
+     * @return true if resources were cleaned up else false.
+     */
+    public final boolean clean(boolean logErrorIfNotClean) {
+      return cleanImpl(logErrorIfNotClean && !leakExpected);
+    }
+
+    /**
+     * Return true if a leak is expected for this object else false.
+     */
+    public final boolean isLeakExpected() {
+      return leakExpected;
+    }
+
+    /**
+     * Clean up any resources not previously released.
      * @param logErrorIfNotClean if true and there are resources to clean up a leak has happened
      *                           so log it.
      * @return true if resources were cleaned up else false.
      */
-    public abstract boolean clean(boolean logErrorIfNotClean);
+    protected abstract boolean cleanImpl(boolean logErrorIfNotClean);
+
+    public void noWarnLeakExpected() {
+      leakExpected = true;
+    }
   }
 
   static final AtomicLong leakCount = new AtomicLong();

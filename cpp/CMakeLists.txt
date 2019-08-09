@@ -340,8 +340,11 @@ add_library(cudf SHARED
             src/transform/jit/core/launcher.cpp
             src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/stream_compaction.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
@@ -360,9 +363,8 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
+            src/io/io_functions.cpp
             src/io/convert/csr/cudf_to_csr.cu
-            src/io/utilities/parsing_utils.cu
-            src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
             src/io/avro/avro_reader_impl.cu
             src/io/avro/avro_gpu.cu
@@ -385,7 +387,8 @@ add_library(cudf SHARED
             src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
-            src/io/io_functions.cpp
+            src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
