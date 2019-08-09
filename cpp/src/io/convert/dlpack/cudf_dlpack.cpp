@@ -249,7 +249,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
   {
     // TODO switch assert to RMM_TRY once RMM supports throwing exceptions
     if (arg->dl_tensor.ctx.device_type == kDLGPU)
-      assert(RMM_SUCCESS == RMM_FREE(arg->dl_tensor.data, 0));
+      RMM_TRY(RMM_FREE(arg->dl_tensor.data, 0));
     delete [] arg->dl_tensor.shape;
     delete [] arg->dl_tensor.strides;
     delete arg;
