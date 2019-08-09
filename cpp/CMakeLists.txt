@@ -124,6 +124,17 @@ else()
 endif(ARROW_FOUND)
 
 ###################################################################################################
+# - find librdkafka -------------------------------------------------------------------------------
+
+include(ConfigureLibrdkafka)
+
+if (LIBRDKAFKA_FOUND)
+    message(STATUS "Librdkafka found in ${LIBRDKAFKA_INCLUDE_DIR}")
+else()
+    message(FATAL_ERROR "Librdkafka not found, please check your settings.")
+endif(LIBRDKAFKA_FOUND)
+
+###################################################################################################
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
@@ -286,6 +297,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${ARROW_INCLUDE_DIR}"
+                    "${LIBRDKAFKA_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
                     "${Boost_INCLUDE_DIRS}"
@@ -301,6 +313,7 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}"
+                 "${LIBRDKAFKA_LIBRARY_DIR}"
                  "${NVSTRINGS_LIBRARY}"
                  "${NVCATEGORY_LIBRARY}"
                  "${NVTEXT_LIBRARY}")
@@ -446,7 +459,7 @@ endif(HT_LEGACY_ALLOCATOR)
 
 SET(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
-target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
+target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} ${LIBRDKAFKA_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
