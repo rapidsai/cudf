@@ -531,8 +531,8 @@ public class ColumnVectorTest {
       assertEquals(-1, index.getInt());
 
       try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
-        ColumnVector filtered = cv.filter(mask)) {
-        assertEquals(0, filtered.getRowCount());
+        Table filtered = new Table(cv).filter(mask)) {
+        assertEquals(0, filtered.getColumn(0).getRowCount());
       }
 
       try (ColumnVector hash = cv.hash()) {

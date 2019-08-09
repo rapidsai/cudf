@@ -460,27 +460,6 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
   CATCH_STD(env, 0);
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_filter(JNIEnv *env, jclass, jlong input_jcol,
-                                                        jlong mask_jcol) {
-  JNI_NULL_CHECK(env, input_jcol, "input column is null", 0);
-  JNI_NULL_CHECK(env, mask_jcol, "mask column is null", 0);
-  try {
-    gdf_column *input = reinterpret_cast<gdf_column *>(input_jcol);
-    gdf_column *mask = reinterpret_cast<gdf_column *>(mask_jcol);
-    std::unique_ptr<gdf_column, decltype(free) *> result(
-        static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
-    if (result.get() == nullptr) {
-      cudf::jni::throw_java_exception(env, "java/lang/OutOfMemoryError",
-                                      "Could not allocate native memory");
-    }
-    *result.get() = cudf::apply_boolean_mask(*input, *mask);
-    // workaround for apply_boolean_mask returning an uninitialized column name
-    result->col_name = nullptr;
-    return reinterpret_cast<jlong>(result.release());
-  }
-  CATCH_STD(env, 0);
-}
-
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_replaceNulls(JNIEnv *env, jclass, jlong input_jcol,
                                                               jlong r_int_values, jfloat r_f_value,
                                                               jdouble r_d_value,

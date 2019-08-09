@@ -98,6 +98,7 @@
 - PR #2486 Java API hash functions
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
+- PR #2510 Java api: uses table based apply_boolean_mask
 
 
 ## Bug Fixes
