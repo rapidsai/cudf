@@ -1,3 +1,5 @@
+#Please use: 'bash build.sh' to run this script. This script installs all dependencies required to use cuStreamz for streaming on GPUs. 
+
 #!/bin/bash
 
 echo Please have a Pascal or later NVIDIA GPU, with CUDA 9.2 or 10.0 compatible drivers installed beforehand. 
