@@ -784,19 +784,6 @@ class StringColumn(columnops.TypedColumnBase):
             ).all()
         return self._is_monotonic_decreasing
 
-    def _as_categorical_column(self):
-        data = rmm.device_array(len(self), dtype="int32")
-        ptr = get_ctype_ptr(data)
-        self.nvcategory.values(devptr=ptr)
-        data = cudf.dataframe.buffer.Buffer(data)
-
-        mask = self.mask
-        categories = self.nvcategory.keys()
-
-        return columnops.build_column(
-            buffer=data, mask=mask, categories=categories, dtype="category"
-        )
-
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
