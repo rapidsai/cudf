@@ -35,14 +35,20 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      null_size size_of_nulls,
                                      cudaStream_t stream = 0) {
-  CUDF_EXPECTS(
-      static_cast<std::size_t>(input.num_columns()) == column_order.size(),
-      "Mismatch between number of columns and column order.");
+  if (input.num_rows() == 0 or input.num_columns() == 0) {
+    return cudf::make_numeric_column(data_type{INT32}, 0);
+  }
 
-  auto sorted_indices = cudf::make_numeric_column(
+  if (not column_order.empty()) {
+    CUDF_EXPECTS(
+        static_cast<std::size_t>(input.num_columns()) == column_order.size(),
+        "Mismatch between number of columns and column order.");
+  }
+
+  std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
       data_type{INT32}, input.num_rows(), mask_state::UNALLOCATED, stream);
 
-  auto mutable_indices_view = sorted_indices->mutable_view();
+  mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
 
   auto device_table = table_device_view::create(input, stream);
 
