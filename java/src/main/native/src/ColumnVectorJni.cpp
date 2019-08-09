@@ -238,7 +238,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *en
         valid_copy = cudf::jni::jni_rmm_alloc<gdf_valid_type>(env,
                                   gdf_valid_allocation_size(column->size));
       CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid,
-                          gdf_num_bitmask_elements(column->size),cudaMemcpyDeviceToDevice));
+                          gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToDevice));
       cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
                                            res.release(), valid_copy.release(),
                                            column->dtype_info.category);
@@ -284,7 +284,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lowerStrings(JNIEnv *en
         valid_copy = cudf::jni::jni_rmm_alloc<gdf_valid_type>(env,
                                   gdf_valid_allocation_size(column->size));
       CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid,
-                          gdf_num_bitmask_elements(column->size),cudaMemcpyDeviceToDevice));
+                          gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToDevice));
       cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
                                            res.release(), valid_copy.release(),
                                            column->dtype_info.category);

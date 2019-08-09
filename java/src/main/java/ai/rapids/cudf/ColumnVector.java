@@ -1519,6 +1519,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         column vector.
    */
   public ColumnVector upper() {
+    assert type == DType.STRING;
     return new ColumnVector(upperStrings(getNativeCudfColumnAddress()));
   }
 
@@ -1530,6 +1531,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         column vector.
    */
   public ColumnVector lower() {
+    assert type == DType.STRING;
     return new ColumnVector(lowerStrings(getNativeCudfColumnAddress()));
   }
 

@@ -550,6 +550,9 @@ public class ColumnVectorTest {
   @Test
   void testNVStringManipulationWithNulls() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // Special characters in order of usage, capital and small cyrillic koppa
+    // Latin A with macron, and cyrillic komi de
+    // \ud720 and \ud721 are UTF-8 characters without corresponding upper and lower characters
     try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
                                                    "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
                                                    "kl m", "Nop1", "\\qRs2", null,
@@ -589,5 +592,13 @@ public class ColumnVectorTest {
       assertColumnsAreEqual(lower, e_lower);
       assertColumnsAreEqual(upper, e_upper);
     }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
+           ColumnVector lower = cv.lower()) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
+           ColumnVector upper = cv.upper()) {}
+    });
   }
 }
