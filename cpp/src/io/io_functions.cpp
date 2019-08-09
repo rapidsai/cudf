@@ -17,6 +17,7 @@
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
 #include <utilities/error_utils.hpp>
+#include <librdkafka/rdkafkacpp.h>
 
 using namespace cudf::io;
 
