@@ -3167,7 +3167,6 @@ def test_clip_not_inplace(dtype, lower, upper):
     data = gen_rand(dtype, 100000)
     pser = pd.Series(data)
     ser = Series(data)
-    # run both inplace and not inplace
     result_not_inplace = ser.clip(lower=lower, upper=upper, inplace=False)
     expected = pser.clip(lower=lower, upper=upper)
     assert result_not_inplace.data.mem is not ser.data.mem  # check not inplace
