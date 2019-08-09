@@ -38,9 +38,8 @@ class gdf_column_wrapper {
   gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype,
                      gdf_dtype_extra_info dtype_info, const std::string name) {
     col = (gdf_column *)malloc(gdf_column_sizeof());
-    col->col_name = (char *)malloc(name.length() + 1);
-    std::strcpy(col->col_name, name.c_str());
-    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info);
+    gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info,
+                              name.c_str());
   }
 
   ~gdf_column_wrapper() {

@@ -15,7 +15,7 @@
  */
 
 #include <utilities/nvtx/nvtx_utils.h>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
 #include <utilities/bit_util.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <rmm/thrust_rmm_allocator.h>

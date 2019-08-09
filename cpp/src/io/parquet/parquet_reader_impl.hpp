@@ -43,7 +43,7 @@ class reader::Impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<DataSource> source,
+  explicit Impl(std::unique_ptr<datasource> source,
                 reader_options const &options);
 
   /**
@@ -114,7 +114,7 @@ class reader::Impl {
       size_t total_rows);
 
  private:
-  std::unique_ptr<DataSource> source_;
+  std::unique_ptr<datasource> source_;
   std::unique_ptr<ParquetMetadata> md_;
 
   std::string index_col_;

@@ -100,17 +100,29 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def dropna(self):
-        from cudf.bindings.stream_compaction import cpp_drop_nulls
+        from cudf.bindings.stream_compaction import apply_drop_nulls
 
-        dropped_col = cpp_drop_nulls(self)
-        return self.replace(data=dropped_col.data, mask=None, null_count=0)
+        dropped_col = apply_drop_nulls([self])
+        if not dropped_col:
+            return column_empty_like(self, newsize=0)
+        else:
+            return self.replace(
+                data=dropped_col[0].data, mask=None, null_count=0
+            )
 
     def apply_boolean_mask(self, mask):
-        from cudf.bindings.stream_compaction import cpp_apply_boolean_mask
+        from cudf.bindings.stream_compaction import apply_apply_boolean_mask
 
         mask = as_column(mask, dtype="bool")
-        data = cpp_apply_boolean_mask(self, mask)
-        return self.replace(data=data.data, mask=data.mask)
+        data = apply_apply_boolean_mask([self], mask)
+        if not data:
+            return column_empty_like(self, newsize=0)
+        else:
+            return self.replace(
+                data=data[0].data,
+                mask=data[0].mask,
+                null_count=data[0].null_count,
+            )
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
@@ -456,13 +468,13 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 ordered=arbitrary.type.ordered,
             )
         elif isinstance(arbitrary, pa.TimestampArray):
-            arbitrary = arbitrary.cast(pa.timestamp("ms"))
-            pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
+            dtype = np.dtype("M8[{}]".format(arbitrary.type.unit))
+            pamask, padata = buffers_from_pyarrow(arbitrary, dtype=dtype)
             data = datetime.DatetimeColumn(
                 data=padata,
                 mask=pamask,
                 null_count=arbitrary.null_count,
-                dtype=np.dtype("M8[ms]"),
+                dtype=dtype,
             )
         elif isinstance(arbitrary, pa.Date64Array):
             pamask, padata = buffers_from_pyarrow(arbitrary, dtype="M8[ms]")
@@ -479,8 +491,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 "be typecast to a Date64 value",
                 UserWarning,
             )
-            arbitrary = arbitrary.cast(pa.date64())
-            data = as_column(arbitrary)
+            data = as_column(arbitrary.cast(pa.int32())).astype("M8[ms]")
         elif isinstance(arbitrary, pa.BooleanArray):
             # Arrow uses 1 bit per value while we use int8
             dtype = np.dtype(np.bool)
@@ -532,7 +543,6 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             data = as_column(pa.array(arbitrary, from_pandas=nan_as_null))
 
     elif isinstance(arbitrary, pd.Timestamp):
-        arbitrary = arbitrary.ceil("ms")
         # This will always treat NaTs as nulls since it's not technically a
         # discrete value like NaN
         data = as_column(pa.array(pd.Series([arbitrary]), from_pandas=True))
@@ -540,9 +550,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, "dtype"):
             data_type = np_to_pa_dtype(arbitrary.dtype)
-            if data_type in (pa.date64(), pa.date32()):
-                # PyArrow can't construct date64 or date32 arrays from np
-                # datetime types
+            # PyArrow can't construct date64 or date32 arrays from np
+            # datetime types
+            if pa.types.is_date64(data_type) or pa.types.is_date32(data_type):
                 arbitrary = arbitrary.astype("int64")
             data = as_column(pa.array([arbitrary], type=data_type))
         else:
@@ -571,7 +581,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = np_to_pa_dtype(np_type)
+                            pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     dtype=dtype,
