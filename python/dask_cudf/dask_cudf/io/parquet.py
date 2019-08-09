@@ -8,6 +8,14 @@ class CudfEngine(ArrowEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
         meta, stats, parts = ArrowEngine.read_metadata(*args, **kwargs)
+
+        # If `strings_to_categorical==True`, convert objects to int32
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
+        if strings_to_cats:
+            for col in meta.columns:
+                if meta[col].dtype == "O":
+                    meta[col] = meta[col].astype("int32")
+
         meta = cudf.DataFrame.from_pandas(meta)
         return (meta, stats, parts)
 
@@ -18,16 +26,18 @@ class CudfEngine(ArrowEngine):
         if isinstance(index, list):
             columns += index
 
+        strings_to_cats = kwargs.pop("strings_to_categorical", False)
         df = cudf.read_parquet(
             piece.path,
             engine="cudf",
             columns=columns,
             row_group=piece.row_group,
+            strings_to_categorical=strings_to_cats,
             **kwargs.get("read", {}),
         )
 
-        if any(index) in df.columns:
-            df = df.set_index(index)
+        if index[0] in df.columns:
+            df = df.set_index(index[0])
 
         return df
 
