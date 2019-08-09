@@ -20,10 +20,9 @@ def apply_cast(incol, dtype=np.float64):
     Return a Column with values in `incol` casted to `dtype`.
     Currently supports numeric and datetime dtypes.
     """
-    dtype = np.dtype(np.float64 if dtype is None else dtype)
-
     check_gdf_compatibility(incol)
-
+    dtype = np.dtype(np.float64 if dtype is None else dtype)
+    
     if pd.api.types.is_dtype_equal(incol.dtype, dtype):
         return incol
 

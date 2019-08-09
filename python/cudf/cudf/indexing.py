@@ -4,6 +4,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
 from cudf.utils.cudautils import arange
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import is_scalar
 
 
@@ -12,7 +13,7 @@ def indices_from_labels(obj, labels):
 
     labels = columnops.as_column(labels)
 
-    if pd.api.types.is_categorical_dtype(obj.index):
+    if is_categorical_dtype(obj.index):
         labels = labels.astype("category")
         labels._data = labels.data.astype(obj.index._values.data.dtype)
     else:

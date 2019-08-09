@@ -354,7 +354,6 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
   }
 }
 
-
 } // namespace detail
 
 void gather(table const *source_table, gdf_index_type const gather_map[],

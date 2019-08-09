@@ -483,10 +483,9 @@ class Column(object):
                 arg = columnops.as_column([], dtype="int32")
             if pd.api.types.is_integer_dtype(arg.dtype):
                 return self.take(arg.data.mem)
-            elif pd.api.types.is_bool_dtype(arg.dtype):
+            if pd.api.types.is_bool_dtype(arg.dtype):
                 return self.apply_boolean_mask(arg)
-            else:
-                raise NotImplementedError(type(arg))
+            raise NotImplementedError(type(arg))
 
     def __setitem__(self, key, value):
         """
@@ -514,7 +513,7 @@ class Column(object):
             nelem = len(key)
 
         if utils.is_scalar(value):
-            if pd.api.types.is_categorical_dtype(self.dtype):
+            if is_categorical_dtype(self.dtype):
                 from cudf.dataframe.categorical import CategoricalColumn
                 from cudf.dataframe.buffer import Buffer
                 from cudf.utils.cudautils import fill_value

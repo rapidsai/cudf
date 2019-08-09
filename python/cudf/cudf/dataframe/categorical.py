@@ -64,10 +64,7 @@ class CategoricalAccessor(object):
             return Series(data=self._parent.replace(ordered=False))
 
     def add_categories(self, new_categories, **kwargs):
-        inplace = False
-        if "inplace" in kwargs:
-            if kwargs["inplace"]:
-                inplace = True
+        inplace = kwargs.get("inplace", False)
         data = None if inplace else self._parent
         new_categories = columnops.as_column(new_categories)
         new_categories = self._parent._categories.append(new_categories)
