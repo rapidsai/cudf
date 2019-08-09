@@ -1687,9 +1687,32 @@ class Series(object):
         result : Series
             The mask and index are preserved.
 
-        See also
+        Notes
         --------
-        The Notes section in `utils/cudautils.py` for function `compile_udf`
+        The supported Python features are listed in
+
+          https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
+
+        with these exceptions:
+
+        * Math functions in `cmath` are not supported since `libcudf` does not
+          have complex number support and output of `cmath` functions are most
+          likely complex numbers.
+
+        * These five functions in `math` are not supported since numba generates
+          multiple PTX functions from them
+
+          * math.sin()
+          * math.cos()
+          * math.tan()
+          * math.gamma()
+          * math.lgamma()
+
+        * There should not be more than one return clause.
+
+          This is due to the fact that CUDA and CUDA PTX have very different
+          control flow structure and no solution has yet been found to support
+          multiple return clauses.
 
         """
         if callable(udf):

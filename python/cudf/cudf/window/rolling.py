@@ -216,7 +216,7 @@ class Rolling:
 
         See also
         --------
-        The Notes section in `utils/cudautils.py` for function `compile_udf`
+        The Notes section in `Series.applymap`.
 
         """
         has_nulls = False
