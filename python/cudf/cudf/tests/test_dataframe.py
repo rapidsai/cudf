@@ -3148,11 +3148,10 @@ def test_clip_inplace(dtype, lower, upper):
     data = gen_rand(dtype, 100000)
     pser = pd.Series(data)
     ser = Series(data)
-    result_inplace = ser.clip(lower=lower, upper=upper, inplace=True)
+    ser.clip(lower=lower, upper=upper, inplace=True)
     expected = pser.clip(lower=lower, upper=upper)
-    assert result_inplace.data.mem is ser.data.mem  # check inplace identity
     np.testing.assert_array_almost_equal(
-        result_inplace.to_pandas(), expected, decimal=10
+        ser.to_pandas(), expected, decimal=10
     )
 
 
