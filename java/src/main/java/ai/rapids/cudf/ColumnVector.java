@@ -979,31 +979,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Filters a column using a column of boolean values as a mask.
-   * <p>
-   * Given an input column and a mask column, an element `i` from the input column
-   * is copied to the output if the corresponding element `i` in the mask is
-   * non-null and `true`. This operation is stable: the input order is preserved.
-   * <p>
-   * The input and mask columns must be of equal size.
-   * <p>
-   * The output column has size equal to the number of elements in boolean_mask
-   * that are both non-null and `true`.
-   * <p>
-   * If the input size is zero, there is no error, and an empty column is returned.
-   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
-   *             the input column
-   * @return column containing copy of all elements of this column passing
-   * the filter defined by the boolean mask
-   */
-  public ColumnVector filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8;
-    assert type != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
-    assert rows == 0 || rows == mask.getRowCount();
-    return new ColumnVector(Cudf.filter(this, mask));
-  }
-
-  /**
    * Slices a column (including null values) into a set of columns
    * according to a set of indices. The caller owns the ColumnVectors and is responsible
    * closing them

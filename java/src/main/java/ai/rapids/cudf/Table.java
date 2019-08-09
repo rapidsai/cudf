@@ -213,6 +213,8 @@ public final class Table implements AutoCloseable {
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
+  private static native long[] gdfFilter(long input, long mask);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
@@ -581,6 +583,33 @@ public final class Table implements AutoCloseable {
           "operation index is out of range 0 <= " + operationIndicesArray[i] + " < " + columns.length;
     }
     return operationIndicesArray;
+  }
+
+  /**
+   * Filters this table using a column of boolean values as a mask, returning a new one.
+   * <p>
+   * Given a mask column, each element `i` from the input columns
+   * is copied to the output columns if the corresponding element `i` in the mask is
+   * non-null and `true`. This operation is stable: the input order is preserved.
+   * <p>
+   * This table and mask columns must have the same number of rows.
+   * <p>
+   * The output table has size equal to the number of elements in boolean_mask
+   * that are both non-null and `true`.
+   * <p>
+   * If the original table row count is zero, there is no error, and an empty table is returned.
+   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
+   *             the input column
+   * @return table containing copy of all elements of this table passing
+   * the filter defined by the boolean mask
+   */
+  public Table filter(ColumnVector mask) {
+    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
+    for (ColumnVector col : getColumns()){
+      assert col.getType() != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
+    }
+    return new Table(gdfFilter(nativeHandle, mask.getNativeCudfColumnAddress()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
