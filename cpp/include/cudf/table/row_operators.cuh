@@ -49,9 +49,6 @@ enum class weak_ordering {
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
 struct element_relational_comparator {
-  template <typename Element, std::enable_if_t<cudf::is_relationally_comparable<
-                                  Element, Element>>* = nullptr>
-
   /**---------------------------------------------------------------------------*
    * @brief Checks how two elements in two columns compare with each other.
    *
@@ -64,6 +61,8 @@ struct element_relational_comparator {
    * @return weak_ordering Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
    *---------------------------------------------------------------------------**/
+  template <typename Element, std::enable_if_t<cudf::is_relationally_comparable<
+                                  Element, Element>()>* = nullptr>
   __device__ weak_ordering operator()(column_device_view lhs,
                                       size_type lhs_element_index,
                                       column_device_view rhs,
@@ -84,8 +83,8 @@ struct element_relational_comparator {
       }
     }
 
-    Element const lhs_element = lhs.data<Element>(lhs_element_index);
-    Element const rhs_element = rhs.data<Element>(rhs_element_index);
+    Element const lhs_element = lhs.data<Element>()[lhs_element_index];
+    Element const rhs_element = rhs.data<Element>()[rhs_element_index];
 
     if (lhs_element < rhs_element) {
       return weak_ordering::LESS;
@@ -97,11 +96,11 @@ struct element_relational_comparator {
 
   template <typename Element,
             std::enable_if_t<not cudf::is_relationally_comparable<
-                Element, Element>>* = nullptr>
-  __device__ bool operator()(column_device_view lhs,
-                             size_type lhs_element_index,
-                             column_device_view rhs,
-                             size_type rhs_element_index) {
+                Element, Element>()>* = nullptr>
+  __device__ weak_ordering operator()(column_device_view lhs,
+                                      size_type lhs_element_index,
+                                      column_device_view rhs,
+                                      size_type rhs_element_index) {
     release_assert(false &&
                    "Attempted to compare elements of uncomparable types.");
   }
