@@ -209,7 +209,7 @@ def is_list_like(obj):
 
     Returns
     -------
-    Boolean: aTrue or False depending on whether the
+    Boolean: True or False depending on whether the
     input `obj` is like-like or not.
     """
     from collections.abc import Sequence
