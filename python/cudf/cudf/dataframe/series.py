@@ -1046,26 +1046,6 @@ class Series(object):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.has_null_mask
 
-    def masked_assign(self, value, mask):
-        """Assign a scalar value to a series using a boolean mask
-        df[df < 0] = 0
-
-        Parameters
-        ----------
-        value : scalar
-            scalar value for assignment
-        mask : cudf Series
-            Boolean Series
-
-        Returns
-        -------
-        cudf Series
-            cudf series with new value set to where mask is True
-        """
-
-        data = self._column.masked_assign(value, mask)
-        return self._copy_construct(data=data)
-
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed

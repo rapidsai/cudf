@@ -365,9 +365,7 @@ class DataFrame(object):
         if isinstance(name, DataFrame):
             for col_name in self._cols:
                 mask = name[col_name]
-                self._cols[col_name] = self._cols[col_name].masked_assign(
-                    value=col, mask=mask
-                )
+                self._cols[col_name][mask] = col
 
         elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
