@@ -76,6 +76,28 @@ gdf_column* rolling_window(const gdf_column &input_col,
                            const gdf_size_type *min_periods_col,
                            const gdf_size_type *forward_window_col);
 
+/* --------------------------------------------------------------------------*
+ * @brief  Computes the rolling window function of the values in a column.
+ *
+ * This function is the same as the above rolling window interface except this is
+ * for `agg_op`s of type GDF_NUMBA_GENERIC_AGG_OPS and GDF_CUDA_GENERIC_AGG_OPS
+ * where a string of the implementation of a user_defined_aggregator acting on a
+ * range of values is passed, together with the `output_type`.
+ * 
+ * The handling of the null values is only partially implemented: it acts as if
+ * every value are valid, i.e. there is no validness checking of the individual
+ * data elements when the aggregator is applied to each of the windows. The output
+ * from a window is valid as long as there are equal or more data counts than
+ * min_periods in the window.
+ *
+ * @param[in] agg_type The rolling window aggregtion type: 
+      GDF_NUMBA_GENERIC_AGG_OPS or GDF_CUDA_GENERIC_AGG_OPS
+ * @param[in] user_defined_aggregator A CUDA or PTX string that contains the
+ *    implementation of the user defined aggregator
+ * @param[in] output_type Output type of the user defined aggregator
+ * @returns   gdf_column The output column
+ *
+ * --------------------------------------------------------------------------*/
 gdf_column rolling_window(gdf_column const& input,
                            gdf_size_type window,
                            gdf_size_type min_periods,
