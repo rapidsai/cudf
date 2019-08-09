@@ -78,6 +78,30 @@ class column_view_base {
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Return first element (accounting for offset) after underlying data
+   * is casted to the specified type.
+   *
+   * @tparam T The desired type
+   * @return T const* Pointer to the first element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  T const* begin() const noexcept {
+    return data<T>();
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return one past the last element after underlying data is casted to
+   * the specified type.
+   *
+   * @tparam T The desired type
+   * @return T const* Pointer to one past the last element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  T const* end() const noexcept {
+    return begin<T>() + size();
+  }
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
    *---------------------------------------------------------------------------**/
   size_type size() const noexcept { return _size; }
@@ -347,7 +371,7 @@ class mutable_column_view : public detail::column_view_base {
    *---------------------------------------------------------------------------**/
   template <typename T = void>
   T* head() const noexcept {
-    return const_cast<T*>(detail::column_view_base::head());
+    return const_cast<T*>(detail::column_view_base::head<T>());
   }
 
   /**---------------------------------------------------------------------------*
@@ -364,6 +388,30 @@ class mutable_column_view : public detail::column_view_base {
   template <typename T>
   T* data() const noexcept {
     return head<T>() + _offset;
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return first element (accounting for offset) when underlying data is
+   * casted to the specified type.
+   *
+   * @tparam T The desired type
+   * @return T const* Pointer to the first element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  T* begin() const noexcept {
+    return data<T>();
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Return one past the last element after underlying data is casted to
+   * the specified type.
+   *
+   * @tparam T The desired type
+   * @return T const* Pointer to one past the last element after casting
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  T* end() const noexcept {
+    return begin<T>() + size();
   }
 
   /**---------------------------------------------------------------------------*
