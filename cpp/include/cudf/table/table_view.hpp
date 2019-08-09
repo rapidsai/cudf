@@ -19,6 +19,7 @@
 #include <cudf/types.hpp>
 
 #include <vector>
+#include <algorithm>
 
 namespace cudf {
 /**---------------------------------------------------------------------------*
@@ -135,4 +136,9 @@ class mutable_table_view : public detail::table_view_base<mutable_column_view> {
    *---------------------------------------------------------------------------**/
   operator table_view();
 };
+
+inline bool has_nulls(table_view view) {
+  return std::any_of(view.begin(), view.end(),
+                     [](column_view col) { return col.has_nulls(); });
+}
 }  // namespace cudf
