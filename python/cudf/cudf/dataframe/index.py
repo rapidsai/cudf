@@ -20,7 +20,6 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
-from cudf.indexing import _IndexIlocIndexer, _IndexLocIndexer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
 
@@ -293,23 +292,6 @@ class Index(object):
         return Series(self._values)
 
     @property
-    def iloc(self):
-        """
-        Select values by position.
-
-        See DataFrame.iloc
-        """
-        return _IndexIlocIndexer(self)
-
-    @property
-    def loc(self):
-        """
-        Select values by label.
-
-        See DataFrame.loc
-        """
-        return _IndexLocIndexer(self)
-
     @property
     def is_unique(self):
         raise (NotImplementedError)
