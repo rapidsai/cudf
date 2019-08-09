@@ -461,11 +461,12 @@ std::string ptx_parser::parse() {
   final_output += " asm volatile (\"{\");";
   for (int i = 0; i < function_body_output.size(); i++) {
     if (function_body_output[i].find("ret;") != std::string::npos) {
+      final_output += "  asm volatile (\"bra RETTGT;\");\n";
       continue;
     }
     final_output += "  " + function_body_output[i] + "\n";
   }
-  final_output += " asm volatile (\"}\");";
+  final_output += " asm volatile (\"RETTGT:}\");";
 
   final_output += "}";
 
