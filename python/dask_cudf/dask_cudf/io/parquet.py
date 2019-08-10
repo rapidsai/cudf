@@ -11,22 +11,27 @@ class CudfEngine(ArrowEngine):
 
         # If `strings_to_categorical==True`, convert objects to int32
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        if strings_to_cats:
-            for col in meta.columns:
-                if meta[col].dtype == "O":
-                    meta[col] = meta[col].astype("int32")
+        dtypes = {}
+        for col in meta.columns:
+            if meta[col].dtype == "O":
+                dtypes[col] = "int32" if strings_to_cats else "object"
 
         meta = cudf.DataFrame.from_pandas(meta)
+        for col, dtype in dtypes.items():
+            meta[col] = meta[col].astype(dtype)
+
         return (meta, stats, parts)
 
     @staticmethod
     def read_partition(
         fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
+        if columns is not None:
+            columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
 
-        strings_to_cats = kwargs.pop("strings_to_categorical", False)
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
         df = cudf.read_parquet(
             piece.path,
             engine="cudf",
@@ -36,7 +41,7 @@ class CudfEngine(ArrowEngine):
             **kwargs.get("read", {}),
         )
 
-        if index[0] in df.columns:
+        if index is not None and index[0] in df.columns:
             df = df.set_index(index[0])
 
         return df
