@@ -130,7 +130,7 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
                                            else len(subset))
 
     # Use `thresh` if specified, otherwise set threshold based on `how`
-    if thresh:
+    if thresh is not None:
         c_keep_threshold = thresh
     elif how == "all":
         c_keep_threshold = 0
