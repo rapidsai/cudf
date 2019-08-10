@@ -536,38 +536,54 @@ struct NVCategoryJoinTest : public GdfTest
     size_t num_columns = gdf_raw_left_columns.size();
     size_t result_num_cols = gdf_raw_left_columns.size() + gdf_raw_right_columns.size() - left_join_idx.size();
 
+    std::pair <cudf::table, cudf::table> result;
+    gdf_column * result_col = new gdf_column{};
+    void* ldata = nullptr;
+    void* rdata = nullptr;
+    gdf_column l_join_col {};
+    gdf_column r_join_col {};
+
+    EXPECT_EQ(RMM_ALLOC(&ldata, left_join_idx.size() * sizeof(int), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(ldata, left_join_idx.data(), left_join_idx.size() * sizeof(int), cudaMemcpyHostToDevice), cudaSuccess);
+    gdf_column_view (&l_join_col, ldata, nullptr, left_join_idx.size(), cudf::gdf_dtype_of<int>());
+     
+    EXPECT_EQ(RMM_ALLOC(&rdata, right_join_idx.size() * sizeof(int), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(rdata, right_join_idx.data(), right_join_idx.size() * sizeof(int), cudaMemcpyHostToDevice), cudaSuccess);
+    gdf_column_view (&r_join_col, rdata, nullptr, right_join_idx.size(), cudf::gdf_dtype_of<int>());
+
+    // Same set of column set for both, as we are assuming that they have same name
+    std::vector <gdf_column *> join_cols = {&l_join_col, &r_join_col};
+    std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
     cudf::table left_gdf_columns (gdf_raw_left_columns);
     cudf::table right_gdf_columns (gdf_raw_right_columns);
-    std::pair <cudf::table, cudf::table> result;
-    gdf_column * result_col = new gdf_column{};;
+    cudf::table join_table (join_cols);
+    cudf::table comm_name_join_table (join_cols);
+    cudf::table result_idx_table (result_idx_cols);
 
     switch(op)
     {
       case join_op::LEFT:
         {
           result = cudf::left_join(
-                          left_gdf_columns, left_join_idx,
-                          right_gdf_columns, right_join_idx,
-                          &left_result, &right_result,
-                          left_join_idx, right_join_idx, &ctxt);
+                          left_gdf_columns, right_gdf_columns,
+                          join_table, join_table,
+                          result_idx_table, &ctxt);
           break;
         }
       case join_op::INNER:
         {
           result = cudf::inner_join(
-                          left_gdf_columns, left_join_idx,
-                          right_gdf_columns, right_join_idx,
-                          &left_result, &right_result,
-                          left_join_idx, right_join_idx, &ctxt);
+                          left_gdf_columns, right_gdf_columns,
+                          join_table, join_table,
+                          result_idx_table, &ctxt);
           break;
         }
       case join_op::FULL:
         {
           result = cudf::full_join(
-                          left_gdf_columns, left_join_idx,
-                          right_gdf_columns, right_join_idx,
-                          &left_result, &right_result,
-                          left_join_idx, right_join_idx, &ctxt);
+                          left_gdf_columns, right_gdf_columns,
+                          join_table, join_table,
+                          result_idx_table, &ctxt);
           break;
         }
       default:

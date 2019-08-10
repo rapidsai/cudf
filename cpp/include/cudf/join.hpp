@@ -43,6 +43,7 @@ std::pair<cudf::table, cudf::table> inner_join(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices,
                          gdf_context *join_context);
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
@@ -67,6 +68,7 @@ std::pair<cudf::table, cudf::table> left_join(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices,
                          gdf_context *join_context);
 
 /** 
@@ -92,5 +94,6 @@ std::pair<cudf::table, cudf::table> full_join(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices,
                          gdf_context *join_context);
 } //namespace cudf

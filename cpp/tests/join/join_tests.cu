@@ -414,39 +414,48 @@ struct JoinTest : public GdfTest
     gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
+    void* data = nullptr;
+    gdf_column join_col{};
+    std::vector<int> range;
 
+    for (int i = 0; i < num_columns; ++i) {range.push_back(i);}
+    EXPECT_EQ(RMM_ALLOC(&data, range.size() * sizeof(int), 0), RMM_SUCCESS);
+    EXPECT_EQ(cudaMemcpy(data, range.data(), range.size() * sizeof(int), cudaMemcpyHostToDevice), cudaSuccess);
+    gdf_column_view (&join_col, data, nullptr, range.size(), cudf::gdf_dtype_of<int>());
+    // Both left and right col join indexes are same
+
+    std::vector <gdf_column *> join_cols = {&join_col, &join_col};
+    std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
     cudf::table left_gdf_columns(gdf_raw_left_columns);
     cudf::table right_gdf_columns(gdf_raw_right_columns);
+    cudf::table join_table (join_cols);
+    cudf::table result_idx_table (result_idx_cols);
     std::pair <cudf::table, cudf::table> result;
-    std::vector<int> range;
-    for (int i = 0; i < num_columns; ++i) {range.push_back(i);}
+
     switch(op)
     {
       case join_op::LEFT:
         {
           result = cudf::left_join(
-                                       left_gdf_columns, range,
-                                       right_gdf_columns, range,
-                                       &left_result, &right_result,
-                                       range, range, &ctxt);
+                                       left_gdf_columns, right_gdf_columns,
+                                       join_table, join_table,
+                                       result_idx_table, &ctxt);
           break;
         }
       case join_op::INNER:
         {
           result =  cudf::inner_join(
-                                       left_gdf_columns, range,
-                                       right_gdf_columns, range,
-                                       &left_result, &right_result,
-                                       range, range, &ctxt);
+                                       left_gdf_columns, right_gdf_columns,
+                                       join_table, join_table,
+                                       result_idx_table, &ctxt);
           break;
         }
       case join_op::FULL:
         {
           result =  cudf::full_join(
-                                       left_gdf_columns, range,
-                                       right_gdf_columns, range,
-                                       &left_result, &right_result,
-                                       range, range, &ctxt);
+                                       left_gdf_columns, right_gdf_columns,
+                                       join_table, join_table,
+                                       result_idx_table, &ctxt);
           break;
         }
       default:

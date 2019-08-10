@@ -255,9 +255,9 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
     int num_cols_to_join = (join_cols.num_columns() > 0 ? join_cols.get_column(0)->size: 0);
     int num_cols_joined_result = (common_name_join_cols.num_columns() > 0 ? common_name_join_cols.get_column(0)->size: 0);
 
-    std::vector<int64_t> left_j_cols (num_cols_to_join);
-    std::vector<int64_t> l_common_name_join_ind (num_cols_joined_result);
-    std::vector<int64_t> r_common_name_join_ind (num_cols_joined_result);
+    std::vector<int> left_j_cols (num_cols_to_join);
+    std::vector<int> l_common_name_join_ind (num_cols_joined_result);
+    std::vector<int> r_common_name_join_ind (num_cols_joined_result);
 
     if (num_cols_to_join > 0)
     {
@@ -359,10 +359,10 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
       std::vector <gdf_column *> r_join;
       for (int join_ind = 0; join_ind < num_cols_joined_result; ++join_ind)
       {
-          std::vector<int64_t>::iterator itr = std::find(left_j_cols.begin(), left_j_cols.end(),
+          std::vector<int>::iterator itr = std::find(left_j_cols.begin(), left_j_cols.end(),
                l_common_name_join_ind[join_ind]);
 
-          int64_t index = std::distance(left_j_cols.begin(), itr);
+          int index = std::distance(left_j_cols.begin(), itr);
 
           l_join.push_back(const_cast<gdf_column*>(ljoincols.get_column(index)));
 
@@ -405,6 +405,7 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices, 
                          gdf_context *join_context) {
 
   int num_left_cols = left_cols.num_columns();
@@ -412,10 +413,10 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
   int num_cols_to_join = (join_cols.num_columns() > 0 ? join_cols.get_column(0)->size: 0);
   int num_cols_to_join_common_name = (common_name_join_cols.num_columns() > 0 ? common_name_join_cols.get_column(0)->size: 0);
 
-  std::vector<int64_t> left_join_cols (num_cols_to_join);
-  std::vector<int64_t> right_join_cols (num_cols_to_join);
-  std::vector<int64_t> l_common_name_join_ind (num_cols_to_join_common_name);
-  std::vector<int64_t> r_common_name_join_ind (num_cols_to_join_common_name);
+  std::vector<int> left_join_cols (num_cols_to_join);
+  std::vector<int> right_join_cols (num_cols_to_join);
+  std::vector<int> l_common_name_join_ind (num_cols_to_join_common_name);
+  std::vector<int> r_common_name_join_ind (num_cols_to_join_common_name);
   std::cout << "Size of the type "<<cudf::size_of(join_cols.get_column(0)->dtype)<<std::endl;
   std::cout << "Dtype is  "<<join_cols.get_column(0)->dtype<<std::endl;
   std::cout << "num_cols_to_join  "<<num_cols_to_join<<std::endl;
@@ -584,13 +585,24 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
       RMM_FREE(col->valid, 0);
     }
   };
+
   gdf_col_pointer l_index_temp, r_index_temp;
+  gdf_column *left_index_out = nullptr;
+  gdf_column *right_index_out = nullptr;
 
-  l_index_temp = {new gdf_column{}, gdf_col_deleter};
-  gdf_column *left_index_out = l_index_temp.get();
+  if (out_indices.num_columns () > 0)
+  {
+      left_index_out = const_cast <gdf_column*>(out_indices.get_column(0));
+      right_index_out = const_cast <gdf_column*>(out_indices.get_column(1));
+  }
+  else
+  {
+      l_index_temp = {new gdf_column{}, gdf_col_deleter};
+      left_index_out = l_index_temp.get();
 
-  r_index_temp = {new gdf_column{}, gdf_col_deleter};
-  gdf_column *right_index_out = r_index_temp.get();
+      r_index_temp = {new gdf_column{}, gdf_col_deleter};
+      right_index_out = r_index_temp.get();
+  }
   
 
     //get column pointers to join on
@@ -640,12 +652,14 @@ std::pair<cudf::table, cudf::table> left_join(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::LEFT_JOIN, output_index_type>(
                      left_cols,
                      right_cols,
                      join_cols,
                      common_name_join_cols,
+                     out_indices,
                      join_context);
 }
 
@@ -654,12 +668,14 @@ std::pair<cudf::table, cudf::table> inner_join(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::INNER_JOIN, output_index_type>(
                      left_cols,
                      right_cols,
                      join_cols,
                      common_name_join_cols,
+                     out_indices,
                      join_context);
 }
 
@@ -668,12 +684,14 @@ std::pair<cudf::table, cudf::table> full_join(
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
                          cudf::table const& common_name_join_cols,
+                         cudf::table const& out_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::FULL_JOIN, output_index_type>(
                      left_cols,
                      right_cols,
                      join_cols,
                      common_name_join_cols,
+                     out_indices,
                      join_context);
 }
 }
