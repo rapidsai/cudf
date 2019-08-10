@@ -24,6 +24,13 @@ cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
 export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
 
+# If nightly build, append current YYMMDD to tag
+#### NOTE: if statement disabled during testing to trigger on PR for validation
+#if [ ! -z "$NIGHTLY_UPLOAD_KEY" ] ; then
+  TS=`date +%y%m%d`
+  export GIT_DESCRIBE_TAG="${GIT_DESCRIBE_TAG}${TS}"
+#fi
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
