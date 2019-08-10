@@ -91,7 +91,6 @@
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
 
-
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
@@ -144,6 +143,7 @@
 - PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
 - PR #2461 Fix groupby multiple aggregations same column
 - PR #2516 Fix utilities include paths and meta.yaml header paths
+- PR #2517 Fix device memory leak in to_dlpack tensor deleter
 
 
 # cuDF 0.8.0 (27 June 2019)
