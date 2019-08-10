@@ -101,7 +101,7 @@ def apply_apply_boolean_mask(cols, mask):
 
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     """
-    Drops null rows from cols. 
+    Drops null rows from cols.
 
     Parameters
     ----------
