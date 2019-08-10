@@ -31,7 +31,6 @@
 #include <cub/cub.cuh>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
-#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 using bit_mask::bit_mask_t;
