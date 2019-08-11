@@ -101,7 +101,7 @@ def apply_apply_boolean_mask(cols, mask):
 
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     """
-    Drops null rows from cols. 
+    Drops null rows from cols.
 
     Parameters
     ----------
@@ -130,10 +130,10 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
                                            else len(subset))
 
     # Use `thresh` if specified, otherwise set threshold based on `how`
-    if thresh:
+    if thresh is not None:
         c_keep_threshold = thresh
     elif how == "all":
-        c_keep_threshold = 0
+        c_keep_threshold = 1
 
     with nogil:
         c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
