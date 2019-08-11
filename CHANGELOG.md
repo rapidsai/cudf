@@ -33,6 +33,7 @@
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
+- PR #2358 Add the function to convert column of floating points with `nan`s into `bitmask`
 - PR #2489 Add drop argument to set_index
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
@@ -91,7 +92,6 @@
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
 
-
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
@@ -144,6 +144,7 @@
 - PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
 - PR #2461 Fix groupby multiple aggregations same column
 - PR #2514 Fix cudf::drop_nulls threshold handling in Cython
+- PR #2517 Fix device memory leak in to_dlpack tensor deleter
 
 
 # cuDF 0.8.0 (27 June 2019)
