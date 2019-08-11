@@ -338,6 +338,7 @@ add_library(cudf SHARED
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/jit/core/launcher.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu
             src/stream_compaction/drop_nulls.cu
