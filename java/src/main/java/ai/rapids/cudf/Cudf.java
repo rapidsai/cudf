@@ -74,12 +74,6 @@ class Cudf {
                                            int op, int dtype);
 
 
-  static long filter(ColumnVector input, ColumnVector mask) {
-    return filter(input.getNativeCudfColumnAddress(), mask.getNativeCudfColumnAddress());
-  }
-
-  private static native long filter(long input, long mask);
-
   /**
    * Replaces nulls on the input ColumnVector with the value of Scalar.
    *

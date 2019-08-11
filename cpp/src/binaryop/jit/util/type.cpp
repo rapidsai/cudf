@@ -18,7 +18,7 @@
  */
 
 #include "type.h"
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utils/legacy/type_dispatcher.hpp>
 
 namespace cudf {
 namespace binops {

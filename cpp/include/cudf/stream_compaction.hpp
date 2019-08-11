@@ -24,55 +24,85 @@
 namespace cudf {
 
 /**
- * @brief Filters a column using a column of boolean values as a mask.
+ * @brief Filters a table using a column of boolean values as a mask.
  *
- * Given an input column and a mask column, an element `i` from the input column
- * is copied to the output if the corresponding element `i` in the mask is
- * non-null and `true`. This operation is stable: the input order is preserved.
+ * Given an input table and a mask column, an element `i` from each column of
+ * the input table is copied to the corresponding output column if the
+ * corresponding element `i` in the mask is non-null and `true`. This operation
+ * is stable: the input order is preserved.
  *
- * The input and mask columns must be of equal size.
+ * The input and mask columns must be of equal size (number of rows).
  *
- * The output column has size equal to the number of elements in boolean_mask 
- * that are both non-null and `true`. Note that the output column memory is 
- * allocated by this function but must be freed by the caller when finished.
- * 
- * @note that the @p boolean_mask may have just boolean data (no valid bitmask), 
+ * The output table has number of rows equal to the number of elements in
+ * boolean_mask that are both non-null and `true`. Note that the output table
+ * memory is allocated by this function but must be freed by the caller when
+ * finished.
+ *
+ * @note that the @p boolean_mask may have just boolean data (no valid bitmask),
  * or just a valid bitmask (no boolean data), or it may have both. The filter
  * adapts to these three situations.
+ *
+ * @note if @p input.num_rows() is zero, there is no error, and an empty table
+ * is returned.
  * 
- * @note if @p input.size is zero, there is no error, and an empty column is 
- * returned.
- * 
- * @param[in] input The input column to filter
+ * @param[in] input The input table to filter
  * @param[in] boolean_mask A column of type GDF_BOOL8 used as a mask to filter
  * the input column corresponding index passes the filter.
-  * @return gdf_column Column containing copy of all elements of @p input passing
+  * @return cudf::table Table containing copy of all rows of @p input passing
  * the filter defined by @p boolean_mask.
  */
-gdf_column apply_boolean_mask(gdf_column const &input,
-                              gdf_column const &boolean_mask);
+table apply_boolean_mask(table const &input,
+                         gdf_column const &boolean_mask);
 
 /**
- * @brief Filters a column to remove null elements.
+ * @brief Filters a table to remove null elements.
  *
- * Given an input column an element `i` from the input column is copied to the
- * output if the corresponding element `i` in the input's valid bitmask is
- * non-null.
+ * Filters the rows of the input table considering only specified columns for
+ * validity / null values.
+ * 
+ * Given an input table, row `i` from the input columns is copied to the
+ * output if the same row `i` of @p keys has at leaast @p keep_threshold
+ * non-null fields.
  *
- * The output column has size equal to the number of elements in boolean_mask 
- * that are both non-null and `true`. Note that the output column memory is 
- * allocated by this function but must be freed by the caller when finished.
+ * This operation is stable: the input order is preserved in the output.
  * 
- * If the input column is not nullable, this function just copies the input
- * to the output.
+ * Note that the memory for the columns of the output table is allocated by this
+ * function but must be freed by the caller when finished.
+ *
+ * Any non-nullable column in the input is treated as all non-null.
+ *
+ * @note if @p input.num_rows() is zero, or @p keys is empty or has no nulls,
+ * there is no error, and an empty table is returned
  * 
- * * @note if @p input.size is zero, there is no error, and an empty column is 
- * returned.
- * 
- * @param[in] input The input column to filter
- * @return gdf_column Column containing copy of all non-null elements of @p input.
+ * @throws cudf::logic_error if @p keys is non-empty and keys.num_rows() is less
+ * than input.num_rows()
+ *
+ * @param[in] input The input table to filter.
+ * @param[in] keys The table of columns to check for nulls.
+ * @param[in] keep_threshold The minimum number of non-null fields in a row
+ *                           required to keep the row.
+ * @return cudf::table Table containing all rows of the input table with at 
+ *                     least @p keep_threshold non-null fields in @p keys.
  */
-gdf_column drop_nulls(gdf_column const &input);
+table drop_nulls(table const &input,
+                 table const &keys,
+                 gdf_size_type keep_threshold);
+
+/**
+ * @brief Filters a table to remove null elements.
+ * 
+ * @overload drop_nulls
+ * 
+ * Same as drop_nulls but defaults keep_threshold to the number of columns in 
+ * @p keys.
+ * 
+ * @param[in] input The input table to filter.
+ * @param[in] keys The table of columns to check for nulls.
+ * @return cudf::table Table containing all rows of the input table without
+ *                     nulls in the columns of @p keys.
+ */
+table drop_nulls(table const &input,
+                 table const &keys);
 
 /**
  * @brief Choices for drop_duplicates API for retainment of duplicate rows

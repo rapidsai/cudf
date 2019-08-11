@@ -12,6 +12,7 @@
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
 - PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
+- PR #1744 cudf::apply_boolean_mask and cudf::drop_nulls support for cudf::table inputs (multi-column)
 - PR #2215 `type_dispatcher` benchmark
 - PR #2179 Added Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
@@ -32,7 +33,10 @@
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
-- PR #2431 Fix local build generated file ownerships
+- PR #2358 Add the function to convert column of floating points with `nan`s into `bitmask`
+- PR #2489 Add drop argument to set_index
+- PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
+- PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 
 ## Improvements
 
@@ -80,7 +84,13 @@
 - PR #2456 Small improvement to typecast utility
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
+- PR #2475 Exposed type_dispatcher.hpp, nvcategory_util.hpp and wrapper_types.hpp in the include folder
+- PR #2453 Streamline CUDA_REL environment variable
 - PR #2483 Bundle Boost filesystem dependency in the Java jar
+- PR #2486 Java API hash functions
+- PR #2481 Adds the ignore_null_keys option to the java api
+- PR #2490 Java api: support multiple aggregates for the same column
+- PR #2510 Java api: uses table based apply_boolean_mask
 
 ## Bug Fixes
 
@@ -130,6 +140,11 @@
 - PR #2450 Fix erroneous null handling in `cudf.DataFrame`'s `apply_rows`
 - PR #2470 Fix issues with empty strings and string categories (Java)
 - PR #2471 Fix String Column Validity.
+- PR #2481 Fix java validity buffer serialization
+- PR #2485 Updated bytes calculation to use size_t to avoid overflow in column concat
+- PR #2461 Fix groupby multiple aggregations same column
+- PR #2517 Fix device memory leak in to_dlpack tensor deleter
+- PR #2431 Fix local build generated file ownerships
 
 
 # cuDF 0.8.0 (27 June 2019)

@@ -291,6 +291,40 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Compute the 32 bit hash of a vector.
+   *
+   * @return the 32 bit hash.
+   */
+  public ColumnVector hash() {
+    return new ColumnVector(hash(getNativeCudfColumnAddress(), HashFunction.MURMUR3.nativeId));
+  }
+
+  /**
+   * Compute a specific hash of a vector. String are not supported, if you need a hash of a string,
+   * you can use the generic hash, which does not guarantee what kind of hash is used.
+   * @param func the has function to use.
+   * @return the 32 bit hash.
+   */
+  public ColumnVector hash(HashFunction func) {
+    assert type != DType.STRING && type != DType.STRING_CATEGORY : "Strings are not supported for specific hash functions";
+    return new ColumnVector(hash(getNativeCudfColumnAddress(), func.nativeId));
+  }
+
+  /**
+   * Compute the MURMUR3 hash of the column. Strings are not supported.
+   */
+  public ColumnVector murmur3() {
+    return hash(HashFunction.MURMUR3);
+  }
+
+  /**
+   * Compute the IDENTITY hash of the column. Strings are not supported.
+   */
+  public ColumnVector identityHash() {
+    return hash(HashFunction.IDENTITY);
+  }
+
+  /**
    * Returns the type of this vector.
    */
   @Override
@@ -303,6 +337,13 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public long getNullCount() {
     return nullCount;
+  }
+
+  /**
+   * Returns this column's current refcount
+   */
+  int getRefCount() {
+    return refCount;
   }
 
   /**
@@ -938,31 +979,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Filters a column using a column of boolean values as a mask.
-   * <p>
-   * Given an input column and a mask column, an element `i` from the input column
-   * is copied to the output if the corresponding element `i` in the mask is
-   * non-null and `true`. This operation is stable: the input order is preserved.
-   * <p>
-   * The input and mask columns must be of equal size.
-   * <p>
-   * The output column has size equal to the number of elements in boolean_mask
-   * that are both non-null and `true`.
-   * <p>
-   * If the input size is zero, there is no error, and an empty column is returned.
-   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
-   *             the input column
-   * @return column containing copy of all elements of this column passing
-   * the filter defined by the boolean mask
-   */
-  public ColumnVector filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8;
-    assert type != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
-    assert rows == 0 || rows == mask.getRowCount();
-    return new ColumnVector(Cudf.filter(this, mask));
-  }
-
-  /**
    * Slices a column (including null values) into a set of columns
    * according to a set of indices. The caller owns the ColumnVectors and is responsible
    * closing them
@@ -1484,6 +1500,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
 
   private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
+
+  private static native long hash(long cudfColumnHandle, int nativeHashId) throws CudfException;
 
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses

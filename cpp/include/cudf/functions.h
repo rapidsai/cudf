@@ -76,8 +76,6 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 
-
-
 /* context operations */
 
 /**
@@ -452,8 +450,6 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
-
-
 /**
  * @brief  Computes exact quantile
  * computes quantile as double. This function works with arithmetic colum.
@@ -589,3 +585,5 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
+
+

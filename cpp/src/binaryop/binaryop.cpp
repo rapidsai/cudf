@@ -25,14 +25,14 @@
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utils/legacy/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
-#include <string/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>
 #include "compiled/binary_ops.hpp"
 #include "jit/core/launcher.h"
 #include "jit/util/operator.h"
 #include <nvstrings/NVCategory.h>
+#include <cudf/datetime.hpp>
 
 namespace cudf {
 namespace binops {
@@ -285,9 +285,22 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
         reinterpret_cast<NVCategory*>(temp_rhs.dtype_info.category));
     return;
   }
+
+  gdf_column lhs_tmp{};
+  gdf_column rhs_tmp{};
+  // If the columns are GDF_DATE64 or timestamps with different time resolutions,
+  // cast the least-granular column to the other's resolution before the binop
+  std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::cast_to_common_resolution(*lhs, *rhs);
+
+  if (lhs_tmp.size > 0) { lhs = &lhs_tmp; }
+  else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
+
   auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
   if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
     binops::jit::binary_operation(out, lhs, rhs, ope);
+
+  gdf_column_free(&lhs_tmp);
+  gdf_column_free(&rhs_tmp);
 }
 
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,

@@ -22,7 +22,7 @@ cdef dataframe_from_table(cudf_table* table, colnames):
     for i in range(table[0].num_columns()):
         c_col = table[0].get_column(i)
         data, mask = gdf_column_to_column_mem(c_col)
-        col = Column.from_mem_views(data, mask)
+        col = Column.from_mem_views(data, mask, c_col.null_count)
         df.add_column(
             name=colnames[i],
             data=col
@@ -39,7 +39,7 @@ cdef columns_from_table(cudf_table* table):
         c_col = table[0].get_column(i)
         data, mask = gdf_column_to_column_mem(c_col)
         columns.append(
-            Column.from_mem_views(data, mask)
+            Column.from_mem_views(data, mask, c_col.null_count)
         )
         free(c_col)
     return columns
@@ -54,3 +54,25 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
         c_columns.push_back(c_col)
     c_table = new cudf_table(c_columns)
     return c_table
+
+
+def mask_from_devary(py_col):
+
+    cdef gdf_column* c_col = column_view_from_column(py_col)
+
+    cdef pair[bit_mask_t_ptr, gdf_size_type] result
+
+    with nogil:
+        result = nans_to_nulls(c_col[0])
+
+    mask = None
+    if result.first:
+        mask_ptr = int(<uintptr_t>result.first)
+        mask = rmm.device_array_from_ptr(
+            mask_ptr,
+            nelem=calc_chunk_size(len(py_col), mask_bitsize),
+            dtype=mask_dtype,
+            finalizer=rmm._make_finalizer(mask_ptr, 0)
+        )
+
+    return mask
