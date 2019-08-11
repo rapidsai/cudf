@@ -20,7 +20,6 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
 #include "type_info.hpp"
 
