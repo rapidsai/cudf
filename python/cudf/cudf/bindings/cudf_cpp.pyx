@@ -273,6 +273,88 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
 
 # gdf_column functions
 
+cdef gdf_column_to_column(gdf_column* c_col, int_col_name=False):
+    """
+    Util to create a Python cudf.Column from a libcudf gdf_column.
+
+    Parameters
+    ----------
+    c_col : gdf_column*
+        A pointer to the source gdf_column.
+    int_col_name : bool; optional
+        A flag indicating the string column name should be cast
+        to an integer after decoding (default: False).
+    """
+    from cudf.dataframe.column import Column
+    name = None
+    ncount = c_col.null_count
+    if c_col.col_name is not NULL:
+        name = c_col.col_name.decode()
+        if int_col_name:
+            name = int(name)
+    data, mask = gdf_column_to_column_mem(c_col)
+    return Column.from_mem_views(data, mask, ncount, name)
+
+
+cdef gdf_column_to_column_mem(gdf_column* input_col):
+    gdf_dtype = input_col.dtype
+    data_ptr = int(<uintptr_t>input_col.data)
+    if gdf_dtype == GDF_STRING:
+        data = nvstrings.bind_cpointer(data_ptr)
+    elif gdf_dtype == GDF_STRING_CATEGORY:
+        # Need to do this just to make sure it's freed properly
+        garbage = rmm.device_array_from_ptr(
+            data_ptr,
+            nelem=input_col.size,
+            dtype='int32',
+            finalizer=rmm._make_finalizer(data_ptr, 0)
+        )
+        if input_col.size == 0:
+            data = nvstrings.to_device([])
+        else:
+            nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
+            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+            data = nvcat_obj.to_strings()
+    else:
+        data = rmm.device_array_from_ptr(
+            data_ptr,
+            nelem=input_col.size,
+            dtype=np_dtype_from_gdf_column(input_col),
+            finalizer=rmm._make_finalizer(data_ptr, 0)
+        )
+
+    mask = None
+    if input_col.valid:
+        mask_ptr = int(<uintptr_t>input_col.valid)
+        mask = rmm.device_array_from_ptr(
+            mask_ptr,
+            nelem=calc_chunk_size(input_col.size, mask_bitsize),
+            dtype=mask_dtype,
+            finalizer=rmm._make_finalizer(mask_ptr, 0)
+        )
+
+    return data, mask
+
+
+cdef update_nvstrings_col(col, uintptr_t category_ptr):
+    nvcat_ptr = int(category_ptr)
+    nvcat_obj = None
+    if nvcat_ptr:
+        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
+        nvstr_obj = nvcat_obj.to_strings()
+    else:
+        nvstr_obj = nvstrings.to_device([])
+    col._data = nvstr_obj
+    col._nvcategory = nvcat_obj
+
+
+cpdef uintptr_t column_view_pointer(col):
+    """
+    Return pointer to a view of the underlying <gdf_column*>
+    """
+    return <uintptr_t> column_view_from_column(col, col.name)
+
+
 cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
     """
     Make a column view from a column
@@ -314,12 +396,59 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
     else:
         valid_ptr = 0
 
-    cdef char* c_col_name = py_strcpy(col_name)
+    if col_name is None:
+        col_name = col.name
+
+    cdef char* c_col_name = py_to_c_str(col_name)
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(col.dtype)
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit=c_time_unit,
+        category=<void*>category
+    )
+
+    with nogil:
+        gdf_column_view_augmented(
+            <gdf_column*>c_col,
+            <void*>data_ptr,
+            <gdf_valid_type*>valid_ptr,
+            len_col,
+            c_dtype,
+            c_null_count,
+            c_extra_dtype_info,
+            c_col_name
+        )
+
+    return c_col
+
+
+cdef gdf_column* column_view_from_string_column(
+    col,
+    col_name=None
+) except? NULL:
+    if not isinstance(col.data, nvstrings.nvstrings):
+        raise ValueError("Column should be a cudf string column")
+
+    cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
+    cdef uintptr_t data_ptr = col.data.get_cpointer()
+    cdef uintptr_t category = 0
+    cdef gdf_dtype c_dtype = GDF_STRING
+    cdef uintptr_t valid_ptr
+
+    if col._mask is not None and col.null_count > 0:
+        valid_ptr = get_column_valid_ptr(col)
+    else:
+        valid_ptr = 0
+
+    if col_name is None:
+        col_name = col.name
+
+    cdef char* c_col_name = py_to_c_str(col_name)
+    cdef gdf_size_type len_col = len(col)
+    cdef gdf_size_type c_null_count = col.null_count
+    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
+        time_unit=TIME_UNIT_NONE,
         category=<void*>category
     )
 
@@ -402,116 +531,6 @@ cdef gdf_column* column_view_from_NDArrays(
     return c_col
 
 
-cpdef uintptr_t column_view_pointer(col):
-    """
-    Return pointer to a view of the underlying <gdf_column*>
-    """
-    return <uintptr_t> column_view_from_column(col, col.name)
-
-
-cdef gdf_column_to_column(gdf_column* c_in_col):
-    from cudf.dataframe.column import Column
-    name = None
-    ncount = c_in_col.null_count
-    if c_in_col.col_name != NULL:
-        name = c_in_col.col_name.decode()
-    data, mask = gdf_column_to_column_mem(c_in_col)
-    return Column.from_mem_views(data, mask, ncount, name)
-
-
-cdef gdf_column_to_column_mem(gdf_column* input_col):
-    gdf_dtype = input_col.dtype
-    data_ptr = int(<uintptr_t>input_col.data)
-    if gdf_dtype == GDF_STRING:
-        data = nvstrings.bind_cpointer(data_ptr)
-    elif gdf_dtype == GDF_STRING_CATEGORY:
-        # Need to do this just to make sure it's freed properly
-        garbage = rmm.device_array_from_ptr(
-            data_ptr,
-            nelem=input_col.size,
-            dtype='int32',
-            finalizer=rmm._make_finalizer(data_ptr, 0)
-        )
-        if input_col.size == 0:
-            data = nvstrings.to_device([])
-        else:
-            nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
-            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-            data = nvcat_obj.to_strings()
-    else:
-        data = rmm.device_array_from_ptr(
-            data_ptr,
-            nelem=input_col.size,
-            dtype=np_dtype_from_gdf_column(input_col),
-            finalizer=rmm._make_finalizer(data_ptr, 0)
-        )
-
-    mask = None
-    if input_col.valid:
-        mask_ptr = int(<uintptr_t>input_col.valid)
-        mask = rmm.device_array_from_ptr(
-            mask_ptr,
-            nelem=calc_chunk_size(input_col.size, mask_bitsize),
-            dtype=mask_dtype,
-            finalizer=rmm._make_finalizer(mask_ptr, 0)
-        )
-
-    return data, mask
-
-
-cdef update_nvstrings_col(col, uintptr_t category_ptr):
-    nvcat_ptr = int(category_ptr)
-    nvcat_obj = None
-    if nvcat_ptr:
-        nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
-        nvstr_obj = nvcat_obj.to_strings()
-    else:
-        nvstr_obj = nvstrings.to_device([])
-    col._data = nvstr_obj
-    col._nvcategory = nvcat_obj
-
-
-cdef gdf_column* column_view_from_string_column(
-    col,
-    col_name=None
-) except? NULL:
-    if not isinstance(col.data, nvstrings.nvstrings):
-        raise ValueError("Column should be a cudf string column")
-
-    cdef gdf_column* c_col = <gdf_column*>malloc(sizeof(gdf_column))
-    cdef uintptr_t data_ptr = col.data.get_cpointer()
-    cdef uintptr_t category = 0
-    cdef gdf_dtype c_dtype = GDF_STRING
-    cdef uintptr_t valid_ptr
-
-    if col._mask is not None and col.null_count > 0:
-        valid_ptr = get_column_valid_ptr(col)
-    else:
-        valid_ptr = 0
-
-    cdef char* c_col_name = py_strcpy(col_name)
-    cdef gdf_size_type len_col = len(col)
-    cdef gdf_size_type c_null_count = col.null_count
-    cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
-        time_unit=TIME_UNIT_NONE,
-        category=<void*>category
-    )
-
-    with nogil:
-        gdf_column_view_augmented(
-            <gdf_column*>c_col,
-            <void*>data_ptr,
-            <gdf_valid_type*>valid_ptr,
-            len_col,
-            c_dtype,
-            c_null_count,
-            c_extra_dtype_info,
-            c_col_name
-        )
-
-    return c_col
-
-
 cdef gdf_column** cols_view_from_cols(cols):
     col_count=len(cols)
     cdef gdf_column **c_cols = <gdf_column**>malloc(
@@ -527,21 +546,17 @@ cdef gdf_column** cols_view_from_cols(cols):
 
 
 cdef free_table(cudf_table* c_table, gdf_column** cols=NULL):
-    cdef gdf_column *c_col
-    for c_col in c_table[0]:
-        if c_col.col_name is not NULL:
-            free(c_col.col_name)
-        free(c_col)
+    cdef i
+    for i in range(c_table[0].num_columns()):
+        free_column(c_table[0].get_column(i))
     del c_table
-    if cols is not NULL:
-        free(cols)
+    free(cols)
 
 
 cdef free_column(gdf_column* c_col):
     if c_col is NULL:
         return
-    if c_col.col_name is not NULL:
-        free(c_col.col_name)
+    free(c_col.col_name)
     free(c_col)
 
 
@@ -633,14 +648,18 @@ cpdef count_nonzero_mask(mask, size):
     return nnz
 
 
-cdef char* py_strcpy(object py_str):
+cdef char* py_to_c_str(object py_str):
+    """
+    Util to convert a Python bytes, bytearray, or unicode string to a char*,
+    in a way that breaks free from the Cython garbage collector.
+    """
     cdef char* c_str = NULL
     if py_str is not None:
         if isinstance(py_str, (str, unicode)):
             py_str = py_str.encode()
         elif not isinstance(py_str, (bytes, bytearray)):
             py_str = str(py_str).encode()
-        n = len(py_str)
-        c_str = <char*> malloc((n + 1) * sizeof(char))
+        py_str_len = len(py_str)
+        c_str = <char*> malloc((py_str_len + 1) * sizeof(char))
         strcpy(c_str, py_str)
     return c_str
