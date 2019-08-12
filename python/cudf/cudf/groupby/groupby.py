@@ -4,7 +4,6 @@ import collections
 import itertools
 
 import cudf
-import cudf.utils.cudautils as cudautils
 from cudf import MultiIndex
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
