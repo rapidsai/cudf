@@ -560,9 +560,7 @@ class MultiIndex(Index):
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
             pandas_mi = pd.MultiIndex(levels=self.levels, codes=pandas_codes)
         else:
-            pandas_mi = pd.MultiIndex(
-                levels=self.levels, labels=pandas_codes
-            )
+            pandas_mi = pd.MultiIndex(levels=self.levels, labels=pandas_codes)
         if self.names is not None:
             pandas_mi.names = self.names
         return pandas_mi
