@@ -365,6 +365,8 @@ class _DataFrameIlocIndexer(_DataFrameIndexer):
 
     def _get_column_selection(self, arg):
         cols = self._df.columns
+        if isinstance(cols, cudf.MultiIndex):
+            return cols._get_column_major(self._df, arg)
         if is_scalar(arg):
             return [cols[arg]]
         else:
