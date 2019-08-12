@@ -23,7 +23,7 @@
 #include <cudf/cudf.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <utilities/bit_util.cuh>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>

@@ -22,7 +22,7 @@
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "type_info.hpp"
 
 #include <gmock/gmock.h>
