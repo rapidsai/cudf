@@ -78,11 +78,8 @@
 - PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
-<<<<<<< HEAD
 - PR #2378 remove dask for (de-)serialization of cudf objects
-=======
 - PR #2353 Bump Arrow and Dask versions
->>>>>>> 320adf2f199f134d573f4a4383cdfdba4c034441
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2373 cudf.DataFrame enchancements & Series.values support
 - PR #2392 Remove dlpack submodule; make cuDF's Cython API externally accessible
@@ -158,7 +155,6 @@
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
-
 
 
 # cuDF 0.8.0 (27 June 2019)
