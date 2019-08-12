@@ -8,7 +8,6 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
-from libc.stdlib cimport free
 
 import numpy as np
 
@@ -32,10 +31,10 @@ def apply_cast(incol, dtype=np.float64):
         category=<void*>c_category
     )
 
-    cdef gdf_column result
+    cdef gdf_column c_out_col
 
     with nogil:
-        result = cast(
+        c_out_col = cast(
             c_incol[0],
             c_out_dtype,
             c_out_info
@@ -43,4 +42,4 @@ def apply_cast(incol, dtype=np.float64):
 
     free_column(c_incol)
 
-    return gdf_column_to_column(&result)
+    return gdf_column_to_column(&c_out_col)

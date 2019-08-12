@@ -17,7 +17,6 @@ import pyarrow as pa
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
 
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
@@ -72,6 +71,7 @@ def apply_gather(in_cols, maps, out_cols=None):
     cdef cudf_table* c_out_table
     if out_cols == in_cols:
         is_same_input = True
+        c_out_cols = c_in_cols
         c_out_table = c_in_table
     elif out_cols is not None:
         c_out_cols = cols_view_from_cols(out_cols)
@@ -151,14 +151,11 @@ def copy_column(input_col):
         Call cudf::copy
     """
     cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    cdef gdf_column* c_output_col = <gdf_column*>malloc(sizeof(gdf_column))
+    cdef gdf_column c_out_col
 
     with nogil:
-        c_output_col[0] = copy(c_input_col[0])
-
-    output_col = gdf_column_to_column(c_output_col)
+        c_out_col = copy(c_input_col[0])
 
     free_column(c_input_col)
-    free_column(c_output_col)
 
-    return output_col
+    return gdf_column_to_column(&c_out_col)

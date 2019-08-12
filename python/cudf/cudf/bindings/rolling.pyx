@@ -5,7 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from libc.stdlib cimport calloc, malloc, free
 from libc.stdint cimport uintptr_t
 
 import numba.cuda
@@ -18,8 +17,8 @@ from cudf.bindings.rolling cimport *
 
 
 def apply_rolling(inp, window, min_periods, center, op):
-    cdef gdf_column *inp_col
-    cdef gdf_column *c_output_col = <gdf_column*> malloc(sizeof(gdf_column*))
+    cdef gdf_column *c_input_col
+    cdef gdf_column* c_output_col = NULL
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0
     cdef gdf_agg_op c_op = agg_ops[op]
@@ -29,17 +28,14 @@ def apply_rolling(inp, window, min_periods, center, op):
 
     if op == "mean":
         inp = inp.astype("float64")
-        inp_col = column_view_from_column(inp, inp.name)
-    else:
-        inp_col = column_view_from_column(inp, inp.name)
+
+    c_input_col = column_view_from_column(inp, inp.name)
 
     if op == "count":
         min_periods = 0
 
     cdef gdf_index_type c_min_periods = min_periods
 
-    cdef uintptr_t c_data_ptr
-    cdef uintptr_t c_mask_ptr
     cdef uintptr_t c_window_ptr
     if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
         if center:
@@ -74,7 +70,7 @@ def apply_rolling(inp, window, min_periods, center, op):
     else:
         with nogil:
             c_output_col = rolling_window(
-                inp_col[0],
+                c_input_col[0],
                 c_window,
                 c_min_periods,
                 c_forward_window,
@@ -83,7 +79,8 @@ def apply_rolling(inp, window, min_periods, center, op):
                 c_min_periods_col,
                 c_forward_window_col
             )
-
+        # I'd expect this to work but it doesn't...
+        # result = gdf_column_to_column(c_output_col)
         data, mask = gdf_column_to_column_mem(c_output_col)
         result = Column.from_mem_views(data, mask, None, inp.name)
 
@@ -91,7 +88,7 @@ def apply_rolling(inp, window, min_periods, center, op):
         # Pandas only does this for fixed windows...?
         result = result.fillna(0)
 
-    free_column(inp_col)
-    free(c_output_col)
+    free_column(c_input_col)
+    free_column(c_output_col)
 
     return result
