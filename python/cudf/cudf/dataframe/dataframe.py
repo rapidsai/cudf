@@ -911,6 +911,16 @@ class DataFrame(object):
                 delattr(self, "multi_cols")
             self._rename_columns(columns)
 
+    @property
+    def _columns(self):
+        """
+        Return a list of Column objects backing this dataframe
+        """
+        cols = [sr._column for sr in self._cols.values()]
+        for col in cols:
+            col.name = None
+        return cols
+
     def _rename_columns(self, new_names):
         old_cols = list(self._cols.keys())
         l_old_cols = len(old_cols)
@@ -1458,20 +1468,20 @@ class DataFrame(object):
         """
         Drop rows containing nulls.
         """
-        data_cols = _columns_from_dataframe(self)
+        data_cols = self._columns
 
         index_cols = []
         if isinstance(self.index, cudf.MultiIndex):
-            index_cols.extend(_columns_from_dataframe(self.index._source_data))
+            index_cols.extend(self.index._source_data._columns)
         else:
             index_cols.append(self.index.as_column())
 
         input_cols = index_cols + data_cols
 
         if subset is not None:
-            subset = _columns_from_dataframe(self._columns_view(subset))
+            subset = self._columns_view(subset)._columns
         else:
-            subset = _columns_from_dataframe(self)
+            subset = self._columns
 
         if len(subset) == 0:
             return self
@@ -1487,13 +1497,13 @@ class DataFrame(object):
 
         if isinstance(self.index, cudf.MultiIndex):
             result_index = cudf.MultiIndex.from_frame(
-                _dataframe_from_columns(result_index_cols),
+                DataFrame._from_columns(result_index_cols),
                 names=self.index.names,
             )
         else:
             result_index = cudf.dataframe.index.as_index(result_index_cols[0])
 
-            df = _dataframe_from_columns(
+            df = DataFrame._from_columns(
                 result_data_cols, index=result_index, columns=self.columns
             )
         return df
@@ -3269,6 +3279,15 @@ class DataFrame(object):
         numba gpu ndarray
         """
 
+    def _from_columns(cols, index=None, columns=None):
+        """
+        Construct a DataFrame from a list of Columns
+        """
+        df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
+        if columns is not None:
+            df.columns = columns
+        return df
+
     def quantile(
         self,
         q=0.5,
@@ -3669,24 +3688,3 @@ def _align_indices(lhs, rhs):
                 rhs_out[col] = df[col]
 
     return lhs_out, rhs_out
-
-
-def _columns_from_dataframe(df, keep_names=False):
-    """
-    Get a list of Column objects backing the given DataFrame
-    """
-    cols = [sr._column for sr in df._cols.values()]
-    if not keep_names:
-        for col in cols:
-            col.name = None
-    return cols
-
-
-def _dataframe_from_columns(cols, index=None, columns=None):
-    """
-
-    """
-    df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
-    if columns is not None:
-        df.columns = columns
-    return df
