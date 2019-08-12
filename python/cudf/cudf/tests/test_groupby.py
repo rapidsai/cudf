@@ -656,6 +656,21 @@ def test_groupby_multi_agg_multi_groupby():
     assert_eq(pdg, gdg)
 
 
+def test_groupby_datetime_multi_agg_multi_groupby():
+    pdf = pd.DataFrame(
+        {
+            "a": np.random.randint(0, 5, 10).astype(np.datetime64),
+            "b": np.random.randint(0, 5, 10),
+            "c": np.random.randint(0, 5, 10),
+            "d": np.random.randint(0, 5, 10),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+    assert_eq(pdg, gdg)
+
+
 @pytest.mark.parametrize("agg", ["min", "max", "sum", "count", "mean"])
 def test_groupby_nulls_basic(agg):
     check_dtype = False if agg == "count" else True
