@@ -27,12 +27,12 @@
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
 - PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
-- PR #2429 Java column vector: added support for getting length of strings in a ColumnVector 
+- PR #2429 Java column vector: added support for getting length of strings in a ColumnVector
 - PR #2415 Revamp `value_counts` to use groupby count series of any type
 - PR #2446 Add __array_function__ for index
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
-- PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector 
+- PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
 - PR #2358 Add the function to convert column of floating points with `nan`s into `bitmask`
 - PR #2489 Add drop argument to set_index
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
@@ -97,7 +97,7 @@
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
 - PR #2128 Add offset param to host buffer readers in java API.
-- PR #2145 Work around binops validity checks for java 
+- PR #2145 Work around binops validity checks for java
 - PR #2146 Work around unary_math validity checks for java
 - PR #2151 Fixes bug in cudf::copy_range where null_count was invalid
 - PR #2139 matching to pandas describe behavior & fixing nan values issue
@@ -147,7 +147,7 @@
 - PR #2514 Fix cudf::drop_nulls threshold handling in Cython
 - PR #2516 Fix utilities include paths and meta.yaml header paths
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
-
+- PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 
 # cuDF 0.8.0 (27 June 2019)
 
@@ -181,8 +181,8 @@
 - PR #1995 Add Java API
 - PR #1998 Add google benchmark to cudf
 - PR #1845 Add cudf::drop_duplicates, DataFrame.drop_duplicates
-- PR #1652 Added `Series.where()` feature 
-- PR #2074 Java Aggregates, logical ops, and better RMM support 
+- PR #1652 Added `Series.where()` feature
+- PR #2074 Java Aggregates, logical ops, and better RMM support
 - PR #2140 Add a `cudf::transform` function
 
 ## Improvements
