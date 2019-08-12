@@ -9,7 +9,8 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
+from libc.stdlib cimport malloc, free
+from libc.string cimport strcpy
 
 import numpy as np
 import pandas as pd
@@ -313,6 +314,7 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
     else:
         valid_ptr = 0
 
+    cdef char* c_col_name = py_strcpy(col_name)
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(col.dtype)
@@ -320,11 +322,6 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         time_unit=c_time_unit,
         category=<void*>category
     )
-
-    if col_name is None:
-        c_col.col_name = NULL
-    else:
-        c_col.col_name = col_name
 
     with nogil:
         gdf_column_view_augmented(
@@ -335,7 +332,7 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
             c_dtype,
             c_null_count,
             c_extra_dtype_info,
-            c_col.col_name
+            c_col_name
         )
 
     return c_col
@@ -409,7 +406,17 @@ cpdef uintptr_t column_view_pointer(col):
     """
     Return pointer to a view of the underlying <gdf_column*>
     """
-    return <uintptr_t> column_view_from_column(col)
+    return <uintptr_t> column_view_from_column(col, col.name)
+
+
+cdef gdf_column_to_column(gdf_column* c_in_col):
+    from cudf.dataframe.column import Column
+    name = None
+    ncount = c_in_col.null_count
+    if c_in_col.col_name != NULL:
+        name = c_in_col.col_name.decode()
+    data, mask = gdf_column_to_column_mem(c_in_col)
+    return Column.from_mem_views(data, mask, ncount, name)
 
 
 cdef gdf_column_to_column_mem(gdf_column* input_col):
@@ -482,17 +489,13 @@ cdef gdf_column* column_view_from_string_column(
     else:
         valid_ptr = 0
 
+    cdef char* c_col_name = py_strcpy(col_name)
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit=TIME_UNIT_NONE,
         category=<void*>category
     )
-
-    if col_name is None:
-        c_col.col_name = NULL
-    else:
-        c_col.col_name = col_name
 
     with nogil:
         gdf_column_view_augmented(
@@ -503,7 +506,7 @@ cdef gdf_column* column_view_from_string_column(
             c_dtype,
             c_null_count,
             c_extra_dtype_info,
-            c_col.col_name
+            c_col_name
         )
 
     return c_col
@@ -518,20 +521,28 @@ cdef gdf_column** cols_view_from_cols(cols):
     cdef i
     for i in range(col_count):
         check_gdf_compatibility(cols[i])
-        c_cols[i] = column_view_from_column(cols[i])
+        c_cols[i] = column_view_from_column(cols[i], cols[i].name)
 
     return c_cols
 
 
-cdef free_table(cudf_table* table0, gdf_column** cols):
-    cdef i
+cdef free_table(cudf_table* c_table, gdf_column** cols=NULL):
     cdef gdf_column *c_col
-    for i in range(table0[0].num_columns()):
-        c_col = table0[0].get_column(i)
+    for c_col in c_table[0]:
+        if c_col.col_name is not NULL:
+            free(c_col.col_name)
         free(c_col)
+    del c_table
+    if cols is not NULL:
+        free(cols)
 
-    del table0
-    free(cols)
+
+cdef free_column(gdf_column* c_col):
+    if c_col is NULL:
+        return
+    if c_col.col_name is not NULL:
+        free(c_col.col_name)
+    free(c_col)
 
 
 # gdf_context functions
@@ -620,3 +631,16 @@ cpdef count_nonzero_mask(mask, size):
             )
 
     return nnz
+
+
+cdef char* py_strcpy(object py_str):
+    cdef char* c_str = NULL
+    if py_str is not None:
+        if isinstance(py_str, (str, unicode)):
+            py_str = py_str.encode()
+        elif not isinstance(py_str, (bytes, bytearray)):
+            py_str = str(py_str).encode()
+        n = len(py_str)
+        c_str = <char*> malloc((n + 1) * sizeof(char))
+        strcpy(c_str, py_str)
+    return c_str
