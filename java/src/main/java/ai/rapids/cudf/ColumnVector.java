@@ -1531,7 +1531,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         column vector.
    */
   public ColumnVector lower() {
-    assert type == DType.STRING : "A column of type string is required for .upper() operation";
+    assert type == DType.STRING : "A column of type string is required for .lower() operation";
     return new ColumnVector(lowerStrings(getNativeCudfColumnAddress()));
   }
 
