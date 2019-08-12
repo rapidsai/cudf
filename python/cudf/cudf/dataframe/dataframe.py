@@ -1046,7 +1046,7 @@ class DataFrame(object):
 
         return DataFrame(cols, idx)
 
-    def set_index(self, index):
+    def set_index(self, index, drop=True):
         """Return a new DataFrame with a new index
 
         Parameters
@@ -1055,11 +1055,14 @@ class DataFrame(object):
             Index : the new index.
             Series-convertible : values for the new index.
             str : name of column to be used as series
+        drop : boolean
+            whether to drop corresponding column for str index argument
         """
         # When index is a column name
         if isinstance(index, str):
             df = self.copy(deep=False)
-            df._drop_column(index)
+            if drop:
+                df._drop_column(index)
             return df.set_index(self[index])
         # Otherwise
         else:

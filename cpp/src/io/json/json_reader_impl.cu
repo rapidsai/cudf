@@ -41,7 +41,7 @@
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <io/comp/io_uncomp.h>
 #include <rmm/rmm.h>
@@ -97,8 +97,7 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
 
 table reader::Impl::read() {
   ingestRawInput();
-  CUDF_EXPECTS(input_data_ != nullptr, "Ingest failed: input data is null.\n");
-  CUDF_EXPECTS(input_size_ != 0, "Ingest failed: input data has zero size.\n");
+  CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
 
   decompressInput();
   CUDF_EXPECTS(uncomp_data_ != nullptr, "Ingest failed: uncompressed input data is null.\n");
@@ -135,37 +134,23 @@ table reader::Impl::read_byte_range(size_t offset, size_t size) {
 }
 
 void reader::Impl::ingestRawInput() {
-  if (args_.source_type == gdf_input_type::FILE_PATH) {
-    map_file_ = std::make_unique<MappedFile>(args_.source.c_str(), O_RDONLY);
-    CUDF_EXPECTS(map_file_->size() > 0, "Input file is empty.\n");
-    CUDF_EXPECTS(byte_range_offset_ < map_file_->size(), "byte_range offset is too big for the input size.\n");
-
-    // Have to align map offset to page size
-    const auto page_size = sysconf(_SC_PAGESIZE);
-    size_t map_offset = (byte_range_offset_ / page_size) * page_size;
-
-    // Set to rest-of-the-file size, will reduce based on the byte range size
-    size_t map_size = map_file_->size() - map_offset;
-
-    // Include the page padding in the mapped size
-    const size_t page_padding = byte_range_offset_ - map_offset;
-    const size_t padded_byte_range_size = byte_range_size_ + page_padding;
-
-    if (byte_range_size_ != 0 && padded_byte_range_size < map_size) {
-      // Need to make sure that w/ padding we don't overshoot the end of file
-      map_size = min(padded_byte_range_size + calculateMaxRowSize(args_.dtype.size()), map_size);
-    }
-
-    map_file_->map(map_size, map_offset);
-    input_data_ = static_cast<const char *>(map_file_->data()) + page_padding;
-    // Ignore page padding for parsing purposes
-    input_size_ = map_size - page_padding;
-  } else if (args_.source_type == gdf_input_type::HOST_BUFFER) {
-    input_data_ = args_.source.c_str() + byte_range_offset_;
-    input_size_ = args_.source.size() - byte_range_offset_;
-  } else {
-    CUDF_FAIL("Invalid input type");
+  size_t range_size = 0;
+  if (byte_range_size_ != 0) {
+    range_size = byte_range_size_ + calculateMaxRowSize(args_.dtype.size());
   }
+
+  source_ = [&] {
+    if (args_.source_type == FILE_PATH) {
+      return datasource::create(args_.source, byte_range_offset_, range_size);
+    } else if (args_.source_type == HOST_BUFFER) {
+      return datasource::create(args_.source.c_str(), args_.source.size());
+    } else {
+      CUDF_FAIL("Invalid input type");
+    }
+  }();
+
+  buffer_ = source_->get_buffer(byte_range_offset_,
+                                std::max(byte_range_size_, source_->size()));
 }
 
 void reader::Impl::decompressInput() {
@@ -173,11 +158,14 @@ void reader::Impl::decompressInput() {
       args_.compression, args_.source_type, args_.source,
       {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
-    // Do not use the owner vector here to avoid copying the whole file to the heap
-    uncomp_data_ = input_data_;
-    uncomp_size_ = input_size_;
+    // Do not use the owner vector here to avoid extra copy
+    uncomp_data_ = reinterpret_cast<const char *>(buffer_->data());
+    uncomp_size_ = buffer_->size();
   } else {
-    CUDF_EXPECTS(getUncompressedHostData(input_data_, input_size_, compression_type, uncomp_data_owner_) == GDF_SUCCESS,
+    CUDF_EXPECTS(getUncompressedHostData(
+                     reinterpret_cast<const char *>(buffer_->data()),
+                     buffer_->size(), compression_type,
+                     uncomp_data_owner_) == GDF_SUCCESS,
                  "Input data decompression failed.\n");
     uncomp_data_ = uncomp_data_owner_.data();
     uncomp_size_ = uncomp_data_owner_.size();

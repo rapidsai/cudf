@@ -22,8 +22,8 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/bit_util.cuh>
-#include <utilities/type_dispatcher.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
 
 #include <cudf/cudf.h>

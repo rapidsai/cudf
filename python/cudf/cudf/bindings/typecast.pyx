@@ -14,42 +14,32 @@ from libc.stdlib cimport free
 import numpy as np
 
 
-_time_unit = {
-    'none': TIME_UNIT_NONE,
-    's': TIME_UNIT_s,
-    'ms': TIME_UNIT_ms,
-    'us': TIME_UNIT_us,
-    'ns': TIME_UNIT_ns,
-}
-
-
-def apply_cast(incol, **kwargs):
+def apply_cast(incol, dtype=np.float64):
     """
-      Cast from incol.dtype to outcol.dtype
+    Return a Column with values in `incol` casted to `dtype`.
+    Currently supports numeric and datetime dtypes.
     """
 
     check_gdf_compatibility(incol)
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
-    npdtype = kwargs.get("dtype", np.float64)
-    cdef gdf_dtype dtype = dtypes[npdtype]
-    cdef uintptr_t category
+    dtype = np.dtype(np.float64 if dtype is None else dtype)
+    cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(incol, dtype)
+    cdef uintptr_t c_category
 
-    cdef gdf_dtype_extra_info info = gdf_dtype_extra_info(
-        time_unit=TIME_UNIT_NONE,
-        category=<void*>category
+    cdef gdf_dtype_extra_info c_out_info = gdf_dtype_extra_info(
+        time_unit=np_dtype_to_gdf_time_unit(dtype),
+        category=<void*>c_category
     )
-    unit = kwargs.get("time_unit", 'none')
-    info.time_unit = _time_unit[unit]
 
     cdef gdf_column result
 
     with nogil:
         result = cast(
             c_incol[0],
-            dtype,
-            info
+            c_out_dtype,
+            c_out_info
         )
 
     free(c_incol)

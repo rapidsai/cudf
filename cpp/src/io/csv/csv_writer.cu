@@ -17,7 +17,7 @@
 #include <cudf/cudf.h>
 #include <io/utilities/wrapper_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/bit_util.cuh>
 
 #include <cuda_runtime.h>
@@ -192,7 +192,7 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
     }
 
     // probably could collapse this more
-    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64);
+    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64 || column->dtype==GDF_TIMESTAMP);
     // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
