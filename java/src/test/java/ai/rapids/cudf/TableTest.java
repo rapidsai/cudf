@@ -22,11 +22,13 @@ import org.junit.jupiter.api.Test;
 
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.security.acl.Group;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -40,6 +42,8 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class TableTest {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
   private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
+  private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
+      "src/test/resources/timestamp-date-test.orc");
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
@@ -573,6 +577,25 @@ public class TableTest {
   }
 
   @Test
+  void testReadORCNumPyTypes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // by default ORC will promote date and timestamp columns to DATE64
+    try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.DATE64, table.getColumn(0).getType());
+      assertEquals(DType.DATE64, table.getColumn(1).getType());
+    }
+
+    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    ORCOptions opts = ORCOptions.builder().withNumPyTypes(false).build();
+    try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
+      assertEquals(DType.DATE32, table.getColumn(1).getType());
+    }
+  }
+
+  @Test
   void testLeftJoinWithNulls() {
     try (Table leftTable = new Table.TestBuilder()
         .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
@@ -766,6 +789,20 @@ public class TableTest {
       }
     }
   }
+  
+  @Test
+  void testValidityCopyLastByte() {
+    try (ColumnVector column =
+          ColumnVector.fromBoxedLongs(null, 2L, 3L, 4L, 5L, 6L, 7L, 8L, null, 10L, null, 12L, null, 14L, 15L)) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      DataOutputStream dos = new DataOutputStream(baos);
+      byte[] buff = new byte[1024 * 128];
+      JCudfSerialization.copyValidityData(dos, column, 4, 11, buff);
+      byte[] output = baos.toByteArray();
+      assertEquals(output[0], 0xFFFFFFAF);   // 1010 1111 => 12, null, 10, null, 8, 7, 6, 5
+      assertEquals(output[1], 0x0000000E);   // 0000 1110 => ..., 15, 14, null
+    } catch (Exception e){}
+  }
 
   @Test
   void testGroupByCount() {
@@ -773,7 +810,7 @@ public class TableTest {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(count())) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(count(0))) {
         // verify t3
         assertEquals(4, t3.getRowCount());
         ColumnVector aggOut1 = t3.getColumn(2);
@@ -795,6 +832,92 @@ public class TableTest {
             expectedAggregateResult.put(key, count - 1);
           }
         }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithNulls() {
+    try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
+                                           .column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    1, null, null,    1,    1)
+                                           .column(   1,    1,    1, null,    1,    1)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0).aggregate(count(1), count(2), count(3))
+            .orderBy(true, Table.asc(0))) {
+        // verify t3
+        assertEquals(2, t3.getRowCount());
+
+        ColumnVector groupCol = t3.getColumn(0);
+        ColumnVector countCol = t3.getColumn(1);
+        ColumnVector nullCountCol = t3.getColumn(2);
+        ColumnVector nullCountCol2 = t3.getColumn(3);
+
+        groupCol.ensureOnHost();
+        countCol.ensureOnHost();
+        nullCountCol.ensureOnHost();
+        nullCountCol2.ensureOnHost();
+
+        // compare the grouping columns
+        assertTrue(groupCol.isNull(0));
+        assertEquals(groupCol.getInt(1), 1);
+
+        // compare the agg columns
+        // count(1)
+        assertEquals(countCol.getInt(0), 2);
+        assertEquals(countCol.getInt(1), 4);
+
+        // count(2)
+        assertEquals(nullCountCol.getInt(0), 2);
+        assertEquals(nullCountCol.getInt(1), 2); // counts only the non-nulls
+
+        // count(3)
+        assertEquals(nullCountCol2.getInt(0), 2);
+        assertEquals(nullCountCol2.getInt(1), 3); // counts only the non-nulls
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithCollapsingNulls() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(null, null,    1,    1,    1,    1)
+        .column(   1,    1,    1,    1,    1,    1)
+        .column(   1,    1, null, null,    1,    1)
+        .column(   1,    1,    1, null,    1,    1)
+        .build()) {
+
+      GroupByOptions options = GroupByOptions.builder()
+          .withIgnoreNullKeys(true)
+          .build();
+
+      try (Table t3 = t1.groupBy(options, 0).aggregate(count(1), count(2), count(3))
+          .orderBy(true, Table.asc(0))) {
+        // (null, 1) => became (1) because we are ignoring nulls
+        assertEquals(1, t3.getRowCount());
+
+        ColumnVector groupCol = t3.getColumn(0);
+        ColumnVector countCol = t3.getColumn(1);
+        ColumnVector nullCountCol = t3.getColumn(2);
+        ColumnVector nullCountCol2 = t3.getColumn(3);
+
+        groupCol.ensureOnHost();
+        countCol.ensureOnHost();
+        nullCountCol.ensureOnHost();
+        nullCountCol2.ensureOnHost();
+
+        // compare the grouping columns
+        assertEquals(groupCol.getInt(0), 1);
+
+        // compare the agg columns
+        // count(1)
+        assertEquals(countCol.getInt(0), 4);
+
+        // count(2)
+        assertEquals(nullCountCol.getInt(0), 2); // counts only the non-nulls
+
+        // count(3)
+        assertEquals(nullCountCol2.getInt(0), 3); // counts only the non-nulls
       }
     }
   }
@@ -828,6 +951,38 @@ public class TableTest {
             expectedAggregateResult.put(key, count - 1);
           }
         }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByDuplicateAggregates() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 15.0, 17.0, 18.0)
+                                           .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 1, 1, 1)
+             .column(1, 3, 5, 0)
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0).build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+          .aggregate(max(2), min(2), min(2), max(2), min(2));
+          Table t4 = t3.orderBy(false, Table.asc(2))) {
+        // verify t4
+        assertEquals(4, t4.getRowCount());
+        assertTablesAreEqual(t4, expected);
+
+        assertEquals(t3.getColumn(0).getRefCount(), 1);
+        assertEquals(t3.getColumn(1).getRefCount(), 1);
+        assertEquals(t3.getColumn(2).getRefCount(), 2);
+        assertEquals(t3.getColumn(3).getRefCount(), 3);
+        assertEquals(t3.getColumn(4).getRefCount(), 3);
+        assertEquals(t3.getColumn(5).getRefCount(), 2);
+        assertEquals(t3.getColumn(6).getRefCount(), 3);
       }
     }
   }
@@ -943,7 +1098,7 @@ public class TableTest {
                                            .column(5.0, 2.3, 3.4, 2.3, 1.3, 12.2)
                                            .column(  3,   1,   7,  -1,   9,    0)
                                            .build()) {
-      try (Table t2 = t1.groupBy(0, 1).aggregate(count(), max(3), min(2), mean(2), sum(2))) {
+      try (Table t2 = t1.groupBy(0, 1).aggregate(count(0), max(3), min(2), mean(2), sum(2))) {
         assertEquals(2, t2.getRowCount());
         ColumnVector countOut = t2.getColumn(2);
         ColumnVector maxOut = t2.getColumn(3);
@@ -1006,6 +1161,119 @@ public class TableTest {
         assertEquals(7, sortedMax.get(0));
         assertEquals(9, sortedMax.get(1));
       }
+    }
+  }
+
+  @Test
+  void testMaskWithValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        if (i % 2 != 0) {
+          builder.setNullAt(i);
+        }
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        filtered.ensureOnHost();
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(3, filtered.getRowCount());
+        assertEquals(1, filtered.getInt(0));
+        assertEquals(2, filtered.getInt(1));
+        assertTrue(filtered.isNull(2));
+      }
+    }
+  }
+
+  @Test
+  void testMaskDataOnly() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      filtered.ensureOnHost();
+      assertEquals(DType.INT8, filtered.getType());
+      assertEquals(3, filtered.getRowCount());
+      assertTrue(filtered.isNull(0));
+      assertEquals(3, filtered.getByte(1));
+      assertTrue(filtered.isNull(2));
+    }
+  }
+
+  @Test
+  void testAllFilteredFromData() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, false);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      assertEquals(DType.INT32, filtered.getType());
+      assertEquals(0, filtered.getRowCount());
+    }
+  }
+
+  @Test
+  void testAllFilteredFromValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        builder.setNullAt(i);
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(0, filtered.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testMismatchedSizes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[3];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  @Test
+  void testTableBasedFilter() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(
+             ColumnVector.fromBoxedInts(1, null, 2, 3, null),
+             ColumnVector.categoryFromStrings("one", "two", "three", null, "five"));
+         Table filtered = input.filter(mask);
+         Table expected = new Table(
+             ColumnVector.fromBoxedInts(null, 3, null),
+             ColumnVector.categoryFromStrings("two", null, "five"))) {
+      assertTablesAreEqual(filtered, expected);
+    }
+  }
+
+  @Test
+  void testStringsAreNotSupported() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
     }
   }
 }

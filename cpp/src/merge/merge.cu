@@ -19,7 +19,7 @@
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include "bitmask/legacy/bit_mask.cuh"
-#include "string/nvcategory_util.hpp"
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include "rmm/thrust_rmm_allocator.h"
 #include "utilities/cuda_utils.hpp"
 
@@ -278,7 +278,10 @@ table merge(table const& left_table,
 
     // Allocate output table
     bool nullable = has_nulls(left_sync_table) || has_nulls(right_sync_table);
-    table destination_table(left_sync_table.num_rows() + right_sync_table.num_rows(), column_dtypes(left_sync_table), nullable, false, stream);
+    table destination_table(left_sync_table.num_rows() + right_sync_table.num_rows(),
+                            column_dtypes(left_sync_table),
+                            column_dtype_infos(left_sync_table),
+                            nullable, false, stream);
     for (gdf_size_type i = 0; i < destination_table.num_columns(); i++) {
         gdf_column const* left_col = left_sync_table.get_column(i);
         gdf_column * out_col = destination_table.get_column(i);

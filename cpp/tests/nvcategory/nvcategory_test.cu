@@ -42,7 +42,7 @@
 // See this header for all of the handling of valids' vectors 
 #include <tests/utilities/valid_vectors.h>
 
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 
 gdf_column * create_column_ints(int32_t* host_data, gdf_size_type num_rows){
