@@ -1458,6 +1458,11 @@ class DataFrame(object):
         thresh: int, optional
             If specified, then drops every row (or column) containing
             less than `thresh` non-null values
+
+
+        Returns
+        -------
+        Copy of the DataFrame with rows/columns containing nulls dropped.
         """
         if axis == 0:
             return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
