@@ -27,7 +27,7 @@ cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
 cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
 
 cdef np_dtype_from_gdf_column(gdf_column* col)
-cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*)
+
 
 cdef get_scalar_value(gdf_scalar scalar, dtype)
 
@@ -391,3 +391,5 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 #        const gdf_column* const* begin() const except +
 #        gdf_column const* const* end() const
 #        gdf_column const* get_column(gdf_index_type index) const except +
+
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid

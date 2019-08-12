@@ -161,7 +161,7 @@ cdef np_dtype_from_gdf_column(gdf_column* col):
     raise TypeError('cannot convert gdf_dtype `%s` to numpy dtype' % (dtype))
 
 
-cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None) except? GDF_invalid:
     """Util to convert a column's or np.scalar's dtype to gdf dtype.
 
     Parameters
@@ -171,7 +171,8 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
     dtype : numpy.dtype; optional
         The dtype to convert to a gdf_dtype.  Defaults to *col.dtype*.
     """
-    dtype = col.dtype if dtype is None else np.dtype(dtype)
+    dtype = col.dtype if dtype is None else pd.api.types.pandas_dtype(dtype)
+
     # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
     if is_categorical_dtype(dtype):
         if col is None:
@@ -307,7 +308,7 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         else:
             data_ptr = 0
 
-    if col._mask is not None and col.null_count > 0:
+    if col._mask is not None:
         valid_ptr = get_column_valid_ptr(col)
     else:
         valid_ptr = 0
