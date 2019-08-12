@@ -126,14 +126,13 @@ class Buffer(object):
         self.extend(np.asarray(element, dtype=self.dtype))
 
     def extend(self, array):
-        needed = array.size
-        self._sentry_capacity(needed)
-        import cudf.bindings.typecast as typecast
         from cudf.dataframe import columnops
 
-        array = typecast.apply_cast(
-            columnops.as_column(array), dtype=self.dtype.type
-        ).data.mem
+        needed = array.size
+        self._sentry_capacity(needed)
+
+        array = columnops.as_column(array).astype(self.dtype).data.mem
+
         self.mem[self.size : self.size + needed].copy_to_device(array)
         self.size += needed
 
@@ -163,6 +162,11 @@ class Buffer(object):
 
     def is_contiguous(self):
         return self.mem.is_c_contiguous()
+
+    def astype(self, dtype):
+        from cudf.dataframe import columnops
+
+        return columnops.as_column(self).astype(dtype).data
 
 
 class BufferSentryError(ValueError):

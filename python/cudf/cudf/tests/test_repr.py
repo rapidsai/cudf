@@ -29,9 +29,7 @@ def test_full_series(nrows, dtype):
     ps = pd.Series(np.random.randint(0, 100, size)).astype(dtype)
     sr = cudf.from_pandas(ps)
     pd.options.display.max_rows = int(nrows)
-    psrepr = ps.__repr__()
-    psrepr = psrepr.replace("[ns]", "[ms]")
-    assert psrepr == sr.__repr__()
+    assert ps.__repr__() == sr.__repr__()
 
 
 @pytest.mark.parametrize(

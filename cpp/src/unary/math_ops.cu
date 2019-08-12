@@ -18,7 +18,7 @@
 #include <cudf/unary.hpp>
 #include <cudf/copying.hpp>
 
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cmath>
 #include <algorithm>

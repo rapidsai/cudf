@@ -19,7 +19,7 @@
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 #include <thrust/execution_policy.h>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <thrust/system/cuda/execution_policy.h>
 #include <rmm/thrust_rmm_allocator.h>
 

@@ -142,20 +142,19 @@ class NumericalColumn(columnops.TypedColumnBase):
         return self.view(
             datetime.DatetimeColumn,
             dtype=dtype,
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype)).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
         return self.replace(
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
-            dtype=np.dtype(dtype),
+            data=typecast.apply_cast(self, dtype).data, dtype=np.dtype(dtype)
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
+        col_keys = cpp_copying.apply_gather(self, sort_inds.data.mem)
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
@@ -201,7 +200,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(sortedvals, segs)
         return out_col
 
     def all(self):
