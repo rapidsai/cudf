@@ -46,9 +46,11 @@ class _Groupby(object):
         return self._apply_aggregation(func)
 
     def size(self):
+        from cudf.dataframe.columnops import column_empty
+
         nrows = len(self._groupby.obj)
-        ones = cudf.Series(cudautils.ones(nrows, dtype="int8"))
-        return ones.groupby(self._groupby.key_columns).count()
+        data = cudf.Series(column_empty(nrows, "int8", masked=False))
+        return data.groupby(self._groupby.key_columns).count()
 
 
 class SeriesGroupBy(_Groupby):
