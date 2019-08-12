@@ -33,11 +33,15 @@
 - PR #2446 Add __array_function__ for index
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
+- PR #2442 Add __setitem__
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
+- PR #2492 Add groupby.size() method
 - PR #2358 Add the function to convert column of floating points with `nan`s into `bitmask`
 - PR #2489 Add drop argument to set_index
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
+- PR #2536 Add _constructor properties to Series and DataFrame
+
 
 ## Improvements
 
@@ -149,7 +153,9 @@
 - PR #2516 Fix utilities include paths and meta.yaml header paths
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
+- PR #2527 Fix index and column input handling in dask_cudf read_parquet
 - PR #2521 Fix casting datetimes from/to the same resolution
+
 
 # cuDF 0.8.0 (27 June 2019)
 

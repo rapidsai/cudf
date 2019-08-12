@@ -14,7 +14,7 @@ def test_gather_single_col():
 
     device_gather_map = rmm.to_device(gather_map)
 
-    out = cpp_copying.apply_gather_column(col, device_gather_map)
+    out = cpp_copying.apply_gather(col, device_gather_map)
 
     np.testing.assert_array_equal(out.to_array(), gather_map)
 
@@ -39,10 +39,10 @@ def test_gather_cols():
 def test_gather_string_col():
     col = columnops.as_column(["a", "b", "c", "d"])
     gather_map = columnops.as_column([0, 2, 3], dtype="int32").data.mem
-    result = cpp_copying.apply_gather([col], gather_map)
-    assert result[0].data.to_host() == ["a", "c", "d"]
+    result = cpp_copying.apply_gather(col, gather_map)
+    assert result.data.to_host() == ["a", "c", "d"]
 
     col = columnops.as_column(["a", "b", None, "d"])
     gather_map = columnops.as_column([0, 2, 3], dtype="int32").data.mem
-    result = cpp_copying.apply_gather([col], gather_map)
-    assert result[0].data.to_host() == ["a", None, "d"]
+    result = cpp_copying.apply_gather(col, gather_map)
+    assert result.data.to_host() == ["a", None, "d"]

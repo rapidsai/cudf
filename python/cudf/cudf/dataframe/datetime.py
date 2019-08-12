@@ -17,7 +17,7 @@ from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -227,7 +227,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             )
 
     def fillna(self, fill_value, inplace=False):
-        if is_single_value(fill_value):
+        if is_scalar(fill_value):
             fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
@@ -239,7 +239,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, col_inds.data.mem)
+        col_keys = cpp_copying.apply_gather(self, col_inds)
         col_inds.name = self.name
         return col_keys, col_inds
 
@@ -277,7 +277,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(sortedvals, segs)
         return out_col
 
     @property
