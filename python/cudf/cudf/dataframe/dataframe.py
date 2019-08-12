@@ -1096,7 +1096,7 @@ class DataFrame(object):
             positions = columnops.as_column(positions).astype("int32").data.mem
             cols = [s._column for s in self._cols.values()]
             result_cols = cpp_copying.apply_gather(cols, positions)
-            for i, col_name in enumerate(self._cols):
+            for i, col_name in enumerate(self._cols.keys()):
                 out[col_name] = result_cols[i]
 
             if isinstance(self.columns, cudf.MultiIndex):
