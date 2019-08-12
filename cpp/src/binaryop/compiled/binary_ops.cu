@@ -19,8 +19,8 @@
 #include "launcher.cuh"
 #include "binary_ops.hpp"
 #include <utilities/cudf_utils.h>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
-#include <cudf/utils/legacy/wrapper_types.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/binaryop.hpp>
 
 namespace cudf {
