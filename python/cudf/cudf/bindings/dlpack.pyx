@@ -59,7 +59,7 @@ cpdef from_dlpack(dlpack_capsule):
                 rmm.device_array_from_ptr(
                     ptr=data_ptr,
                     nelem=result_cols[idx].size,
-                    dtype=gdf_to_np_dtype(result_cols[idx].dtype),
+                    dtype=np_dtype_from_gdf_column(&result_cols[idx]),
                     finalizer=rmm._make_finalizer(data_ptr, 0)
                 )
             )
@@ -67,7 +67,7 @@ cpdef from_dlpack(dlpack_capsule):
             res.append(
                 rmm.device_array(
                     0,
-                    dtype=gdf_to_np_dtype(result_cols[idx].dtype)
+                    dtype=np_dtype_from_gdf_column(&result_cols[idx])
                 )
             )
 

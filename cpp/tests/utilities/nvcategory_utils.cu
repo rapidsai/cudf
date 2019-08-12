@@ -24,7 +24,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/column_utils.hpp>
 
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/nvcategory_utils.cuh>

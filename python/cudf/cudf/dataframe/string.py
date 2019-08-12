@@ -1,12 +1,10 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import warnings
-from numbers import Number
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
@@ -17,7 +15,7 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,
@@ -25,7 +23,12 @@ _str_to_numeric_typecast_functions = {
     np.dtype("float32"): nvstrings.nvstrings.stof,
     np.dtype("float64"): nvstrings.nvstrings.stod,
     np.dtype("bool"): nvstrings.nvstrings.to_booleans,
+    # TODO: support Date32 UNIX days
+    # np.dtype("datetime64[D]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[s]"): nvstrings.nvstrings.timestamp2int,
     np.dtype("datetime64[ms]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[us]"): nvstrings.nvstrings.timestamp2int,
+    np.dtype("datetime64[ns]"): nvstrings.nvstrings.timestamp2int,
 }
 
 _numeric_to_str_typecast_functions = {
@@ -34,7 +37,12 @@ _numeric_to_str_typecast_functions = {
     np.dtype("float32"): nvstrings.ftos,
     np.dtype("float64"): nvstrings.dtos,
     np.dtype("bool"): nvstrings.from_booleans,
+    # TODO: support Date32 UNIX days
+    # np.dtype("datetime64[D]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[s]"): nvstrings.int2timestamp,
     np.dtype("datetime64[ms]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[us]"): nvstrings.int2timestamp,
+    np.dtype("datetime64[ns]"): nvstrings.int2timestamp,
 }
 
 
@@ -502,60 +510,24 @@ class StringColumn(columnops.TypedColumnBase):
             self._indices = Buffer(out_dev_arr)
         return self._indices
 
-    def element_indexing(self, arg):
-        from cudf.dataframe.numerical import NumericalColumn
-
-        if isinstance(arg, Number):
-            arg = int(arg)
-            if arg < 0:
-                arg = len(self) + arg
-            if arg > (len(self) - 1):
-                raise IndexError
-            out = self._data[arg].to_host()[0]
-            return out
-        elif isinstance(arg, slice):
-            out = self._data[arg]
-        elif isinstance(arg, list):
-            out = self._data[arg]
-        elif isinstance(arg, np.ndarray):
-            gpu_arr = rmm.to_device(arg)
-            return self.element_indexing(gpu_arr)
-        elif isinstance(arg, DeviceNDArray):
-            # NVStrings gather call expects an array of int32s
-            import cudf.bindings.typecast as typecast
-
-            arg = typecast.apply_cast(columnops.as_column(arg), dtype=np.int32)
-            arg = cudautils.modulo(arg.data.mem, len(self))
-            if len(arg) > 0:
-                gpu_ptr = get_ctype_ptr(arg)
-                out = self._data.gather(gpu_ptr, len(arg))
-            else:
-                out = self._data.gather([])
-        elif isinstance(arg, NumericalColumn):
-            return self.element_indexing(arg.data.mem)
-        else:
-            raise NotImplementedError(type(arg))
-
-        return columnops.as_column(out)
-
-    def __getitem__(self, arg):
-        return self.element_indexing(arg)
-
     def as_numerical_column(self, dtype, **kwargs):
-        if dtype in (np.dtype("int8"), np.dtype("int16")):
-            out_dtype = np.dtype(dtype)
-            dtype = np.dtype("int32")
-        else:
-            out_dtype = np.dtype(dtype)
 
-        out_arr = rmm.device_array(shape=len(self), dtype=dtype)
+        mem_dtype = np.dtype(dtype)
+        str_dtype = mem_dtype
+        out_dtype = mem_dtype
+
+        if mem_dtype.type in (np.int8, np.int16):
+            mem_dtype = np.dtype(np.int32)
+            str_dtype = mem_dtype
+        elif mem_dtype.type is np.datetime64:
+            kwargs.update(units=np.datetime_data(mem_dtype)[0])
+            mem_dtype = np.dtype(np.int64)
+
+        out_arr = rmm.device_array(shape=len(self), dtype=mem_dtype)
         out_ptr = get_ctype_ptr(out_arr)
         kwargs.update({"devptr": out_ptr})
-        if dtype == np.dtype("datetime64[ms]"):
-            kwargs["units"] = "ms"
-        _str_to_numeric_typecast_functions[np.dtype(dtype)](
-            self.str(), **kwargs
-        )
+
+        _str_to_numeric_typecast_functions[str_dtype](self.str(), **kwargs)
 
         out_col = columnops.as_column(out_arr)
 
@@ -780,9 +752,6 @@ class StringColumn(columnops.TypedColumnBase):
 
     def default_na_value(self):
         return None
-
-    def take(self, indices):
-        return self.element_indexing(indices)
 
     def binary_operator(self, binop, rhs, reflect=False):
         lhs = self

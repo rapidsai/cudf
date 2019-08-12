@@ -436,4 +436,108 @@ public class ColumnVectorTest {
       }
     }
   }
+
+  @Test
+  void testStringHash() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
+         ColumnVector hash = cv.hash();
+         // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+         ColumnVector expected = ColumnVector.fromBoxedInts(-891545012, -1810825095, 766007851, null, 1762063109)) {
+      assertColumnsAreEqual(expected, hash);
+    }
+  }
+
+  @Test
+  void testStringCatHash() {
+    try (ColumnVector cv = ColumnVector.categoryFromStrings("1", "12", "123", null, "1234", "1", "12", "123", "1234");
+         ColumnVector hash = cv.hash();
+         // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+         ColumnVector expected = ColumnVector.fromBoxedInts(-891545012, -1810825095, 766007851, null, 1762063109, -891545012, -1810825095, 766007851, 1762063109)) {
+      assertColumnsAreEqual(expected, hash);
+    }
+  }
+
+  @Test
+  void testLongHash() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(1L, 12L, 123L, null, 1234L)) {
+      try (ColumnVector hash = cv.hash();
+           // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+           ColumnVector expected = ColumnVector.fromBoxedInts(-247539971, -723809619, -817019373, null, -342640100)) {
+        assertColumnsAreEqual(expected, hash, "HASH");
+      }
+
+      try (ColumnVector hash = cv.murmur3();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-247539971, -723809619, -817019373, null, -342640100)) {
+        assertColumnsAreEqual(expected, hash, "MURMUR3");
+      }
+
+      try (ColumnVector hash = cv.identityHash();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1640531526, -1640531515, -1640531404, null, -1640530293)) {
+        assertColumnsAreEqual(expected, hash, "IDENTITY");
+      }
+    }
+  }
+
+  @Test
+  void testIntHash() {
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 12, 123, null, 1234)) {
+      try (ColumnVector hash = cv.hash();
+           // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1708607005, -1142878741, -699442385, null, 166579513)) {
+        assertColumnsAreEqual(expected, hash, "HASH");
+      }
+
+      try (ColumnVector hash = cv.murmur3();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1708607005, -1142878741, -699442385, null, 166579513)) {
+        assertColumnsAreEqual(expected, hash, "MURMUR3");
+      }
+
+      try (ColumnVector hash = cv.identityHash();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1640531526, -1640531515, -1640531404, null, -1640530293)) {
+        assertColumnsAreEqual(expected, hash, "IDENTITY");
+      }
+    }
+  }
+
+  @Test
+  void testEmptyStringColumnOpts() {
+    try (ColumnVector cv = ColumnVector.fromStrings()) {
+      try (ColumnVector emptyCats = cv.asStringCategories()) {
+        assertEquals(0, emptyCats.getRowCount());
+      }
+
+      try (ColumnVector len = cv.getLengths()) {
+        assertEquals(0, len.getRowCount());
+      }
+
+      try (ColumnVector len = cv.getByteCount()) {
+        assertEquals(0, len.getRowCount());
+      }
+
+      try (ColumnVector hash = cv.hash()) {
+        assertEquals(0, hash.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testEmptyStringCatColumnOpts() {
+    try (ColumnVector cv = ColumnVector.categoryFromStrings()) {
+      try (ColumnVector empty = cv.asStrings()) {
+        assertEquals(0, empty.getRowCount());
+      }
+
+      Scalar index = cv.getCategoryIndex(Scalar.fromString("TEST"));
+      assertEquals(-1, index.getInt());
+
+      try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
+        Table filtered = new Table(cv).filter(mask)) {
+        assertEquals(0, filtered.getColumn(0).getRowCount());
+      }
+
+      try (ColumnVector hash = cv.hash()) {
+        assertEquals(0, hash.getRowCount());
+      }
+    }
+  }
 }

@@ -55,7 +55,7 @@
 #include <cudf/cudf.h>
 #include <utilities/error_utils.hpp>
 #include <utilities/trie.cuh>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/cudf_utils.h> 
 
 #include <nvstrings/NVStrings.h>

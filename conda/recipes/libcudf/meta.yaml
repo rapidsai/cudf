@@ -46,23 +46,36 @@ test:
     - test -f $PREFIX/lib/libcudf.so
     - test -f $PREFIX/include/cudf/legacy/bitmask.hpp
     - test -f $PREFIX/include/cudf/legacy/column.hpp
-    - test -f $PREFIX/include/cudf/groupby.hpp
-    - test -f $PREFIX/include/cudf/rolling.hpp
-    - test -f $PREFIX/include/cudf/convert_types.h
-    - test -f $PREFIX/include/cudf/io_functions.h
-    - test -f $PREFIX/include/cudf/stream_compaction.hpp
-    - test -f $PREFIX/include/cudf/copying.hpp
-    - test -f $PREFIX/include/cudf/io_functions.hpp
     - test -f $PREFIX/include/cudf/legacy/table.hpp
+    - test -f $PREFIX/include/cudf/utilities/legacy/nvcategory_util.hpp
+    - test -f $PREFIX/include/cudf/utilities/legacy/type_dispatcher.hpp
+    - test -f $PREFIX/include/cudf/utilities/legacy/wrapper_types.hpp
+    - test -f $PREFIX/include/cudf/binaryop.hpp
+    - test -f $PREFIX/include/cudf/convert_types.h
+    - test -f $PREFIX/include/cudf/copying.hpp
     - test -f $PREFIX/include/cudf/cudf.h
-    - test -f $PREFIX/include/cudf/io_readers.hpp
-    - test -f $PREFIX/include/cudf/types.h
+    - test -f $PREFIX/include/cudf/datetime.hpp
+    - test -f $PREFIX/include/cudf/filling.hpp
     - test -f $PREFIX/include/cudf/functions.h
-    - test -f $PREFIX/include/cudf/io_types.h
-    - test -f $PREFIX/include/cudf/types.hpp
     - test -f $PREFIX/include/cudf/gis.hpp
+    - test -f $PREFIX/include/cudf/groupby.hpp
+    - test -f $PREFIX/include/cudf/io_functions.h
+    - test -f $PREFIX/include/cudf/io_functions.hpp
+    - test -f $PREFIX/include/cudf/io_readers.hpp
+    - test -f $PREFIX/include/cudf/io_types.h
+    - test -f $PREFIX/include/cudf/io_types.hpp
+    - test -f $PREFIX/include/cudf/ipc.hpp
+    - test -f $PREFIX/include/cudf/merge.hpp
+    - test -f $PREFIX/include/cudf/predicates.hpp
     - test -f $PREFIX/include/cudf/reduction.hpp
-
+    - test -f $PREFIX/include/cudf/replace.hpp
+    - test -f $PREFIX/include/cudf/rolling.hpp
+    - test -f $PREFIX/include/cudf/search.hpp
+    - test -f $PREFIX/include/cudf/stream_compaction.hpp
+    - test -f $PREFIX/include/cudf/transform.hpp
+    - test -f $PREFIX/include/cudf/types.h
+    - test -f $PREFIX/include/cudf/types.hpp
+    - test -f $PREFIX/include/cudf/unary.hpp
 
 about:
   home: http://rapids.ai/

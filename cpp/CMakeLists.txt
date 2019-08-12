@@ -307,8 +307,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
-
-add_library(cudf SHARED
+option(BUILD_SHARED_LIBS "Build a shared library" ON)
+add_library(cudf 
             src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
@@ -338,9 +338,13 @@ add_library(cudf SHARED
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
             src/transform/jit/core/launcher.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/stream_compaction.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu

@@ -7,7 +7,6 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from pandas.api.types import is_dict_like, is_scalar
 
 from librmm_cffi import librmm as rmm
@@ -20,7 +19,6 @@ from cudf.bindings.stream_compaction import (
 )
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
-from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
@@ -38,6 +36,22 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+
+    @property
+    def _constructor(self):
+        return Series
+
+    @property
+    def _constructor_sliced(self):
+        raise NotImplementedError(
+            "_constructor_sliced not supported for Series!"
+        )
+
+    @property
+    def _constructor_expanddim(self):
+        from cudf import DataFrame
+
+        return DataFrame
 
     @classmethod
     def from_categorical(cls, categorical, codes=None):
@@ -361,66 +375,39 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(
-            arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
-        ):
-            if len(arg) == 0:
-                arg = Series(np.array([], dtype="int32"))
-            else:
-                arg = Series(arg)
-        if isinstance(arg, Series):
-            if issubclass(arg.dtype.type, np.integer):
-                maps = columnops.as_column(arg).data.mem
-                index = self.index.take(maps)
-                selvals = self._column.take(maps)
-            elif arg.dtype in [np.bool, np.bool_]:
-                selvals = self._column.apply_boolean_mask(arg)
-                index = self.index.as_column().apply_boolean_mask(arg)
-            else:
-                raise NotImplementedError(arg.dtype)
-            return self._copy_construct(data=selvals, index=index)
-        elif isinstance(arg, slice):
-            index = self.index[arg]  # slice index
-            col = self._column[arg]  # slice column
-            return self._copy_construct(data=col, index=index)
-        elif isinstance(arg, Number):
-            # The following triggers a IndexError if out-of-bound
-            return self._column.element_indexing(arg)
+        data = self._column[arg]
+        index = self.index.take(arg)
+        if utils.is_scalar(data) or data is None:
+            return data
+        return self._copy_construct(data=data, index=index)
+
+    def __setitem__(self, key, value):
+        # coerce value into a scalar or column
+        if utils.is_scalar(value):
+            value = utils.to_cudf_compatible_scalar(value)
         else:
-            raise NotImplementedError(type(arg))
+            value = columnops.as_column(value)
+
+        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
+            value.dtype
+        ):
+            # normalize types if necessary:
+            if not pd.api.types.is_integer(key):
+                to_dtype = np.result_type(value.dtype, self._column.dtype)
+                value = value.astype(to_dtype)
+                self._column = self._column.astype(to_dtype)
+
+        self._column[key] = value
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        from cudf import Series
-
-        if isinstance(indices, Series):
-            indices = indices.to_gpu_array()
-        else:
-            indices = Buffer(indices).to_gpu_array()
-        # Handle zero size
-        if indices.size == 0:
-            return self._copy_construct(
-                data=self.data[:0], index=self.index[:0]
-            )
-
-        if self.dtype == np.dtype("object"):
-            return self[indices]
-
-        col = cpp_copying.apply_gather_array(self.data.to_gpu_array(), indices)
-
-        if self._column.mask:
-            mask = self._get_mask_as_series().take(indices).as_mask()
-            mask = Buffer(mask)
-        else:
-            mask = None
+        result = self[indices]
         if ignore_index:
-            index = RangeIndex(indices.size)
+            index = RangeIndex(len(result))
+            return result._copy_construct(index=index)
         else:
-            index = self.index.take(indices)
-
-        col = self._column.replace(data=col.data, mask=mask)
-        return self._copy_construct(data=col, index=index)
+            return result
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
@@ -1075,26 +1062,6 @@ class Series(object):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.has_null_mask
 
-    def masked_assign(self, value, mask):
-        """Assign a scalar value to a series using a boolean mask
-        df[df < 0] = 0
-
-        Parameters
-        ----------
-        value : scalar
-            scalar value for assignment
-        mask : cudf Series
-            Boolean Series
-
-        Returns
-        -------
-        cudf Series
-            cudf series with new value set to where mask is True
-        """
-
-        data = self._column.masked_assign(value, mask)
-        return self._copy_construct(data=data)
-
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed
@@ -1128,9 +1095,13 @@ class Series(object):
         """
         if self.null_count == 0:
             return self
-        data = self._column.dropna()
-        index = self.index.loc[~self.isna()]
-        return self._copy_construct(data=data, index=index)
+        result = self.to_frame().dropna()
+        if self.name is None:
+            result = result[0]
+            result.name = None
+            return result
+        else:
+            return result[self.name]
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1272,6 +1243,18 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
+    def nans_to_nulls(self):
+        """
+        Convert nans (if any) to nulls
+        """
+        from cudf.bindings.utils import mask_from_devary
+
+        if self.dtype.kind == "f":
+            sr = self.fillna(np.nan)
+            newmask = mask_from_devary(sr._column)
+            return sr.set_mask(newmask)
+        return self
+
     def all(self, axis=0, skipna=True, level=None):
         """
         """
@@ -1341,42 +1324,19 @@ class Series(object):
 
     @property
     def loc(self):
+        """
+        Select values by label.
+
+        See DataFrame.loc
+        """
         return _SeriesLocIndexer(self)
 
     @property
     def iloc(self):
         """
-        For integer-location based selection.
+        Select values by position.
 
-        Examples
-        --------
-        >>> import cudf
-        >>> sr = cudf.Series(list(range(20)))
-
-        Get the value from 1st index
-
-        >>> sr.iloc[1]
-        1
-
-        Get the values from 0,2,9 and 18th index
-
-        >>> sr.iloc[0,2,9,18]
-         0    0
-         2    2
-         9    9
-        18   18
-
-        Get the values using slice indices
-
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
-
-        Returns
-        -------
-        Series containing the elements corresponding to the indices
+        See DataFrame.iloc
         """
         return _SeriesIlocIndexer(self)
 
@@ -1585,8 +1545,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = cpp_copying.apply_gather_column(self._column, rinds)
-        index = cpp_copying.apply_gather_array(self.index.gpu_values, rinds)
+        col = cpp_copying.apply_gather(self._column, rinds)
+        index = cpp_copying.apply_gather(self.index.as_column(), rinds)
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):
@@ -2269,6 +2229,7 @@ class Series(object):
         level=None,
         sort=True,
         group_keys=True,
+        as_index=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
@@ -2277,7 +2238,9 @@ class Series(object):
 
         from cudf.groupby.groupby import SeriesGroupBy
 
-        return SeriesGroupBy(self, by=by, level=level, sort=sort)
+        return SeriesGroupBy(
+            self, by=by, level=level, sort=sort, as_index=as_index
+        )
 
     @copy_docstring(Rolling)
     def rolling(self, window, min_periods=None, center=False):
