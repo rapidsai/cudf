@@ -120,6 +120,8 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
     -------
     List of Columns
     """
+    from cudf.dataframe.categorical import CategoricalColumn
+
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
 
