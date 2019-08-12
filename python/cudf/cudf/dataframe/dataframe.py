@@ -22,7 +22,6 @@ from librmm_cffi import librmm as rmm
 import cudf
 import cudf.bindings.hash as cpp_hash
 import cudf.bindings.join as cpp_join
-from cudf import formatting
 from cudf._sort import get_sorted_inds
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
@@ -36,7 +35,6 @@ from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.series import Series
 from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
-from cudf.settings import NOTSET, settings
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype
@@ -518,19 +516,16 @@ class DataFrame(object):
 
         return self.iloc[-n:]
 
-    def to_string(self, nrows=NOTSET, ncols=NOTSET):
+    def to_string(self):
         """
         Convert to string
 
-        Parameters
-        ----------
-        nrows : int
-            Maximum number of rows to show.
-            If it is None, all rows are shown.
+        cuDF uses Pandas internals for efficient string formatting.
+        Set formatting options using pandas string formatting options and
+        cuDF objects will print identically to Pandas objects.
 
-        ncols : int
-            Maximum number of columns to show.
-            If it is None, all columns are shown.
+        cuDF supports `null/None` as a value in any column type, which
+        is transparently supported during this output process.
 
         Examples
         --------
@@ -541,66 +536,73 @@ class DataFrame(object):
         >>> df.to_string()
         '   key   val\\n0    0  10.0\\n1    1  11.0\\n2    2  12.0'
         """
-        if isinstance(
-            self.index, cudf.dataframe.multiindex.MultiIndex
-        ) or isinstance(self.columns, cudf.dataframe.multiindex.MultiIndex):
-            raise TypeError(
-                "You're trying to print a DataFrame that contains "
-                "a MultiIndex. Print this dataframe with "
-                ".to_pandas()"
-            )
-        if nrows is NOTSET:
-            nrows = settings.formatting.get("nrows")
-        if ncols is NOTSET:
-            ncols = settings.formatting.get("ncols")
-
-        if nrows is None:
-            nrows = len(self)
-        else:
-            nrows = min(nrows, len(self))  # cap row count
-
-        if ncols is None:
-            ncols = len(self.columns)
-        else:
-            ncols = min(ncols, len(self.columns))  # cap col count
-
-        more_cols = len(self.columns) - ncols
-        more_rows = len(self) - nrows
-
-        # Prepare cells
-        cols = OrderedDict()
-        dtypes = OrderedDict()
-        if hasattr(self, "multi_cols"):
-            use_cols = list(range(len(self.columns)))
-        else:
-            use_cols = list(self.columns[: ncols - 1])
-            if ncols > 0:
-                use_cols.append(self.columns[-1])
-
-        for h in use_cols:
-            cols[h] = self[h].values_to_string(nrows=nrows)
-            dtypes[h] = self[h].dtype
-
-        # Format into a table
-        return formatting.format(
-            index=self._index,
-            cols=cols,
-            dtypes=dtypes,
-            show_headers=True,
-            more_cols=more_cols,
-            more_rows=more_rows,
-            min_width=2,
-        )
+        return self.__repr__()
 
     def __str__(self):
-        nrows = settings.formatting.get("nrows") or 10
-        ncols = settings.formatting.get("ncols") or 8
-        return self.to_string(nrows=nrows, ncols=ncols)
+        return self.to_string()
+
+    def get_renderable_dataframe(self):
+        nrows = np.max([pd.options.display.max_rows, 1])
+        if pd.options.display.max_rows == 0:
+            nrows = len(self)
+        ncols = (
+            pd.options.display.max_columns
+            if pd.options.display.max_columns
+            else 15
+        )
+        if len(self) <= nrows or len(self.columns) <= ncols:
+            output = self.copy(deep=False)
+        else:
+            uppercols = len(self.columns) - ncols - 1
+            upper_left = self.head(nrows).iloc[:, :ncols]
+            upper_right = self.head(nrows).iloc[:, uppercols:]
+            lower_left = self.tail(nrows).iloc[:, :ncols]
+            lower_right = self.tail(nrows).iloc[:, uppercols:]
+            output = cudf.concat(
+                [
+                    cudf.concat([upper_left, upper_right], axis=1),
+                    cudf.concat([lower_left, lower_right], axis=1),
+                ]
+            )
+        temp_mi_columns = output.columns
+        for col in output._cols:
+            if self._cols[col].null_count > 0:
+                output[col] = (
+                    output._cols[col].astype("str").str.fillna("null")
+                )
+            else:
+                output[col] = output._cols[col]
+        if isinstance(self.columns, cudf.MultiIndex):
+            output.columns = temp_mi_columns
+        return output
 
     def __repr__(self):
-        return "<cudf.DataFrame ncols={} nrows={} >".format(
-            len(self.columns), len(self)
+        output = self.get_renderable_dataframe()
+        lines = output.to_pandas().__repr__().split("\n")
+        if lines[-1].startswith("["):
+            lines = lines[:-1]
+            lines.append(
+                "[%d rows x %d columns]" % (len(self), len(self.columns))
+            )
+        return "\n".join(lines)
+
+    def _repr_html_(self):
+        lines = (
+            self.get_renderable_dataframe()
+            .to_pandas()
+            ._repr_html_()
+            .split("\n")
         )
+        if lines[-2].startswith("<p>"):
+            lines = lines[:-2]
+            lines.append(
+                "<p>%d rows × %d columns</p>" % (len(self), len(self.columns))
+            )
+            lines.append("</div>")
+        return "\n".join(lines)
+
+    def _repr_latex_(self):
+        return self.get_renderable_dataframe().to_pandas()._repr_latex_()
 
     # unary, binary, rbinary, orderedcompare, unorderedcompare
     def _apply_op(self, fn, other=None, fill_value=None):
@@ -1218,6 +1220,8 @@ class DataFrame(object):
            Make a full copy of Series columns and Index at the GPU level, or
            create a new allocation with references.
         """
+        from cudf import MultiIndex
+
         df = DataFrame()
         df._size = self._size
         if deep:
@@ -1228,6 +1232,8 @@ class DataFrame(object):
             df._index = self._index
             for k in self._cols:
                 df._cols[k] = self._cols[k]
+        if isinstance(self.columns, MultiIndex):
+            df.columns = self.columns.copy(deep)
         return df
 
     def __copy__(self):
