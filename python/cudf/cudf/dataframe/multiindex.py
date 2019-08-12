@@ -47,8 +47,6 @@ class MultiIndex(Index):
             self._source_data = kwargs["source_data"].reset_index(drop=True)
             self._codes = codes
             self._levels = levels
-            if names is None:
-                self.names = self._source_data.columns
             return
 
         # name setup
@@ -102,6 +100,8 @@ class MultiIndex(Index):
             level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
             self._source_data[name] = level[name].reset_index(drop=True)
+
+        self.names = [None] * len(self._levels) if names is None else names
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -190,10 +190,6 @@ class MultiIndex(Index):
         from cudf import DataFrame
 
         codes = DataFrame()
-        # Note: This is an O(N^2) solution using gpu masking
-        # to compute new codes for the MultiIndex. There may be
-        # a faster solution that could be executed on gpu at the same
-        # time the groupby is calculated.
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
@@ -438,6 +434,10 @@ class MultiIndex(Index):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
+        if self._codes is not None:
+            result._codes = self._codes.take(indices)
+        if self._levels is not None:
+            result._levels = self._levels
         result.names = self.names
         return result
 
@@ -454,6 +454,7 @@ class MultiIndex(Index):
             raise StopIteration
 
     def __getitem__(self, index):
+        # TODO: This should be a take of the _source_data only
         match = self.take(index)
         if isinstance(index, slice):
             return match
@@ -564,13 +565,12 @@ class MultiIndex(Index):
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            return pd.MultiIndex(
-                levels=pandas_levels, codes=pandas_codes, names=self.names
-            )
+            pandas_mi = pd.MultiIndex(levels=pandas_levels, codes=pandas_codes)
         else:
-            return pd.MultiIndex(
-                levels=pandas_levels, labels=pandas_codes, names=self.names
-            )
+            pandas_mi = pd.MultiIndex(levels=pandas_levels, labels=pandas_codes)
+        if self.names is not None:
+            pandas_mi.names = self.names
+        return pandas_mi
 
     @classmethod
     def from_pandas(cls, multiindex):
