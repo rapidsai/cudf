@@ -10,10 +10,10 @@ from libc.stdlib cimport free
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
-from cudf.dataframe.column import Column
 from cudf.bindings.stream_compaction cimport *
 
 
@@ -65,11 +65,8 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     free_table(c_in_table, c_in_cols)
 
     # convert table to columns, index
-    out_cols = [
-        Column.from_mem_views(
-            *gdf_column_to_column_mem(i)
-        ) for i in out_table
-    ]
+    out_cols = columns_from_table(&out_table)
+
     return (out_cols[:-1], out_cols[-1])
 
 
@@ -82,8 +79,8 @@ def apply_apply_boolean_mask(cols, mask):
     with nogil:
         c_out_table = apply_boolean_mask(c_in_table[0], c_mask_col[0])
 
-    free(c_in_table)
-    free(c_mask_col)
+    free_table(c_in_table)
+    free_column(c_mask_col)
 
     return columns_from_table(&c_out_table)
 
@@ -107,7 +104,7 @@ def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
         c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
                                  keep_threshold)
 
-    free(c_in_table)
-    free(c_keys_table)
+    free_table(c_in_table)
+    free_table(c_keys_table)
 
     return columns_from_table(&c_out_table)

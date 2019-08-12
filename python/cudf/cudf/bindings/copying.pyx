@@ -151,15 +151,14 @@ def copy_column(input_col):
         Call cudf::copy
     """
     cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
+    cdef gdf_column* c_output_col = <gdf_column*>malloc(sizeof(gdf_column))
 
     with nogil:
-        output[0] = copy(c_input_col[0])
+        c_output_col[0] = copy(c_input_col[0])
 
-    data, mask = gdf_column_to_column_mem(output)
-    from cudf.dataframe.column import Column
+    output_col = gdf_column_to_column(c_output_col)
 
-    free(c_input_col)
-    free(output)
+    free_column(c_input_col)
+    free_column(c_output_col)
 
-    return Column.from_mem_views(data, mask, output.null_count)
+    return output_col

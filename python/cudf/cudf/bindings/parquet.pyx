@@ -5,8 +5,10 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
+from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 from cudf.bindings.parquet cimport reader as parquet_reader
 from cudf.bindings.parquet cimport reader_options as parquet_reader_options
 from libc.stdlib cimport free
@@ -79,25 +81,11 @@ cpdef cpp_read_parquet(filepath_or_buffer, columns=None, row_group=None,
     else:
         table = reader.get().read_all()
 
-    # Extract read columns
-    outcols = []
-    new_names = []
-    cdef gdf_column* column
-    for i in range(table.num_columns()):
-        column = table.get_column(i)
-        data_mem, mask_mem = gdf_column_to_column_mem(column)
-        outcols.append(Column.from_mem_views(data_mem, mask_mem))
-        new_names.append(column.col_name.decode())
-        free(column.col_name)
-        free(column)
-
     # Construct dataframe from columns
-    df = DataFrame()
-    for k, v in zip(new_names, outcols):
-        df[k] = v
+    df = table_to_dataframe(&table)
 
     # Set column to use as row indexes if available
-    index_col = reader.get().get_index_column().decode()
+    index_col = reader.get().get_index_column().decode("UTF-8")
     if index_col is not '' and index_col in df.columns:
         df = df.set_index(index_col)
         new_index_name = pa.pandas_compat._backwards_compatible_index_name(

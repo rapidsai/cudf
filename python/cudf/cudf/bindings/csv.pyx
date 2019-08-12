@@ -5,8 +5,8 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.csv cimport reader as csv_reader
 from cudf.bindings.csv cimport reader_options as csv_reader_options
 from libc.stdlib cimport free
@@ -223,29 +223,20 @@ cpdef cpp_read_csv(
 
     # Extract parsed columns
 
-    outcols = []
-    new_names = []
-    cdef gdf_column* column
-    for i in range(table.num_columns()):
-        column = table.get_column(i)
-        data_mem, mask_mem = gdf_column_to_column_mem(column)
-        outcols.append(Column.from_mem_views(data_mem, mask_mem))
-        if names is not None and isinstance(names[0], (int)):
-            new_names.append(int(column.col_name.decode()))
-        else:
-            new_names.append(column.col_name.decode())
-        free(column.col_name)
-        free(column)
-
-    # Build dataframe
+    # Build dataframe from parsed columns
     df = DataFrame()
+    cast_col_name_to_int = names is not None and isinstance(names[0], (int))
 
-    for k, v in zip(new_names, outcols):
-        df[k] = v
+    cdef gdf_column* c_col
+    for c_col in table:
+        col = gdf_column_to_column(c_col)
+        if cast_col_name_to_int:
+            col.name = int(col.name)
+        df.add_column(data=col, name=col.name)
 
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
-        if isinstance(index_col, (int)):
+        if isinstance(index_col, int):
             df = df.set_index(df.columns[index_col])
         else:
             df = df.set_index(index_col)
@@ -274,6 +265,7 @@ cpdef cpp_write_csv(
 
     nvtx_range_push("CUDF_WRITE_CSV", "purple")
 
+    cdef gdf_column* c_col
     cdef csv_write_arg csv_writer = csv_write_arg()
 
     path = str(os.path.expanduser(str(path))).encode()
@@ -339,7 +331,7 @@ cpdef cpp_write_csv(
     check_gdf_error(result)
 
     for c_col in list_cols:
-        free(c_col)
+        free_column(c_col)
 
     nvtx_range_pop()
 

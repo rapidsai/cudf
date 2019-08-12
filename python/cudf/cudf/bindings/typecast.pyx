@@ -5,10 +5,9 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
-from cudf.dataframe.column import Column
 from libc.stdlib cimport free
 
 import numpy as np
@@ -42,6 +41,6 @@ def apply_cast(incol, dtype=np.float64):
             c_out_info
         )
 
-    free(c_incol)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    free_column(c_incol)
+
+    return gdf_column_to_column(&result)

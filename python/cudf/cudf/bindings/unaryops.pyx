@@ -4,11 +4,11 @@
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
 from cudf.bindings.GDFError import GDFError
-from cudf.dataframe.column import Column
 from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
@@ -53,16 +53,16 @@ def apply_unary_op(incol, op):
             c_op
         )
 
-    free(c_incol)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    free_column(c_incol)
+
+    return gdf_column_to_column(&result)
 
 
 def column_applymap(incol, udf_ptx, np_dtype):
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
-    cdef string cpp_str = udf_ptx.encode('UTF-8')
+    cdef string cpp_str = udf_ptx.encode("UTF-8")
     cdef gdf_column c_outcol
 
     # get the gdf_type related to the input np type
@@ -71,11 +71,11 @@ def column_applymap(incol, udf_ptx, np_dtype):
     with nogil:
         c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type, True)
 
-    data, mask = gdf_column_to_column_mem(&c_outcol)
+    out_col = gdf_column_to_column(&c_outcol)
 
-    free(c_incol)
+    free_column(c_incol)
 
-    return Column.from_mem_views(data, mask)
+    return out_col
 
 
 def apply_dt_extract_op(incol, outcol, op):
@@ -122,7 +122,7 @@ def apply_dt_extract_op(incol, outcol, op):
                 <gdf_column*>c_outcol
             )
 
-    free(c_incol)
-    free(c_outcol)
+    free_column(c_incol)
+    free_column(c_outcol)
 
     check_gdf_error(result)

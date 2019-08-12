@@ -1,3 +1,10 @@
+# Copyright (c) 2019, NVIDIA CORPORATION.
+
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
 from libc.stdlib cimport calloc, malloc, free
 from libc.stdint cimport uintptr_t
 
@@ -12,7 +19,7 @@ from cudf.bindings.rolling cimport *
 
 def apply_rolling(inp, window, min_periods, center, op):
     cdef gdf_column *inp_col
-    cdef gdf_column *output_col = <gdf_column*> malloc(sizeof(gdf_column*))
+    cdef gdf_column *c_output_col = <gdf_column*> malloc(sizeof(gdf_column*))
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0
     cdef gdf_agg_op c_op = agg_ops[op]
@@ -22,15 +29,17 @@ def apply_rolling(inp, window, min_periods, center, op):
 
     if op == "mean":
         inp = inp.astype("float64")
-        inp_col = column_view_from_column(inp)
+        inp_col = column_view_from_column(inp, inp.name)
     else:
-        inp_col = column_view_from_column(inp)
+        inp_col = column_view_from_column(inp, inp.name)
 
     if op == "count":
         min_periods = 0
 
     cdef gdf_index_type c_min_periods = min_periods
 
+    cdef uintptr_t c_data_ptr
+    cdef uintptr_t c_mask_ptr
     cdef uintptr_t c_window_ptr
     if isinstance(window, numba.cuda.devicearray.DeviceNDArray):
         if center:
@@ -48,17 +57,23 @@ def apply_rolling(inp, window, min_periods, center, op):
             c_window = window
             c_forward_window = 0
 
+    result = None
+
     if window == 0:
-        data = rmm.device_array_like(inp.data.mem)
-        if op in ["count", "sum"]:
-            cudautils.fill_value(data, 0)
-            mask = None
-        else:
-            cudautils.fill_value(data, inp.default_na_value())
-            mask = cudautils.make_empty_mask(len(inp))
+        mask = None
+        out_value = 0
+        null_count = 0
+        out_size = inp.data.mem.size
+        out_dtype = inp.data.mem.dtype
+        if op not in ["count", "sum"]:
+            null_count = len(inp)
+            out_value = inp.default_na_value()
+            mask = cudautils.make_empty_mask(null_count)
+        data = cudautils.full(out_size, out_value, out_dtype)
+        result = Column.from_mem_views(data, mask, null_count, inp.name)
     else:
         with nogil:
-            output_col = rolling_window(
+            c_output_col = rolling_window(
                 inp_col[0],
                 c_window,
                 c_min_periods,
@@ -68,16 +83,15 @@ def apply_rolling(inp, window, min_periods, center, op):
                 c_min_periods_col,
                 c_forward_window_col
             )
-        data, mask = gdf_column_to_column_mem(output_col)
 
-    result = Column.from_mem_views(data, mask)
+        data, mask = gdf_column_to_column_mem(c_output_col)
+        result = Column.from_mem_views(data, mask, None, inp.name)
 
-    if c_window_col is NULL:
+    if c_window_col is NULL and op == "count":
         # Pandas only does this for fixed windows...?
-        if op == "count":
-            result = result.fillna(0)
+        result = result.fillna(0)
 
-    free(output_col)
-    free(inp_col)
+    free_column(inp_col)
+    free(c_output_col)
 
     return result
