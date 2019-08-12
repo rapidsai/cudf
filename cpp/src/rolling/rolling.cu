@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <algorithm>
 
+#include <cudf/copying.hpp>
 #include <cudf/rolling.hpp>
 #include "rolling_detail.hpp"
 
@@ -259,7 +260,11 @@ gdf_column* rolling_window(const gdf_column &input_col,
                                 "");
 
   if (input_col.col_name != nullptr) {
-    output_col->col_name = input_col.col_name;
+    size_t len = strlen(input_col.col_name);
+    if (len > 0) {
+      output_col->col_name = (char *)malloc(len + 1);
+      std::strcpy(output_col->col_name, input_col.col_name);
+    }
   }
 
   // If there are no rows in the input, return successfully
