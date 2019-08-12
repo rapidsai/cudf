@@ -8,7 +8,6 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
@@ -438,12 +437,14 @@ class Column(object):
         ------
         ``IndexError`` if out-of-bound
         """
-        index = int(index)
+        index = np.int32(index)
         if index < 0:
             index = len(self) + index
         if index > len(self) - 1:
             raise IndexError
         val = self.data[index]  # this can raise IndexError
+        if isinstance(val, nvstrings.nvstrings):
+            val = val.to_host()[0]
         valid = (
             cudautils.mask_get.py_func(self.nullmask, index)
             if self.has_null_mask
@@ -452,6 +453,8 @@ class Column(object):
         return val if valid else None
 
     def __getitem__(self, arg):
+        from cudf.dataframe import columnops
+
         if isinstance(arg, Number):
             arg = int(arg)
             return self.element_indexing(arg)
@@ -464,8 +467,12 @@ class Column(object):
                 # slicing data
                 subdata = self.data[arg]
                 # slicing mask
+                if self.dtype == "object":
+                    data_size = self.data.size()
+                else:
+                    data_size = self.data.size
                 bytemask = cudautils.expand_mask_bits(
-                    self.data.size, self.mask.to_gpu_array()
+                    data_size, self.mask.to_gpu_array()
                 )
                 submask = Buffer(cudautils.compact_mask_bytes(bytemask[arg]))
                 col = self.replace(data=subdata, mask=submask)
@@ -473,40 +480,80 @@ class Column(object):
             else:
                 newbuffer = self.data[arg]
                 return self.replace(data=newbuffer)
-        elif isinstance(arg, (list, np.ndarray)):
-            arg = np.array(arg)
-            arg = rmm.to_device(arg)
-
-        if isinstance(arg, DeviceNDArray):
-            return self.take(arg)
         else:
+            arg = columnops.as_column(arg)
+            if len(arg) == 0:
+                arg = columnops.as_column([], dtype="int32")
+            if pd.api.types.is_integer_dtype(arg.dtype):
+                return self.take(arg.data.mem)
+            if pd.api.types.is_bool_dtype(arg.dtype):
+                return self.apply_boolean_mask(arg)
             raise NotImplementedError(type(arg))
 
-    def masked_assign(self, value, mask):
-        """Assign a scalar value to a series using a boolean mask
-        df[df < 0] = 0
-
-        Parameters
-        ----------
-        value : scalar
-            scalar value for assignment
-        mask : cudf Series
-            Boolean Series
-
-        Returns
-        -------
-        cudf Series
-            cudf series with new value set to where mask is True
+    def __setitem__(self, key, value):
         """
+        Set the value of self[key] to value.
 
-        # need to invert to properly use gpu_fill_mask
-        mask_invert = mask._column._invert()
-        out = cudautils.fill_mask(
-            data=self.data.to_gpu_array(),
-            mask=mask_invert.as_mask(),
-            value=value,
-        )
-        return self.replace(data=Buffer(out), mask=None, null_count=0)
+        If value and self are of different types,
+        value is coerced to self.dtype
+        """
+        import cudf.bindings.copying as cpp_copying
+        from cudf.dataframe import columnops
+
+        if isinstance(key, slice):
+            key_start, key_stop, key_stride = key.indices(len(self))
+            if key_stride != 1:
+                raise NotImplementedError("Stride not supported in slice")
+            nelem = abs(key_stop - key_start)
+        else:
+            key = columnops.as_column(key)
+            if pd.api.types.is_bool_dtype(key.dtype):
+                if not len(key) == len(self):
+                    raise ValueError(
+                        "Boolean mask must be of same length as column"
+                    )
+                key = columnops.as_column(cudautils.arange(len(self)))[key]
+            nelem = len(key)
+
+        if utils.is_scalar(value):
+            if is_categorical_dtype(self.dtype):
+                from cudf.dataframe.categorical import CategoricalColumn
+                from cudf.dataframe.buffer import Buffer
+                from cudf.utils.cudautils import fill_value
+
+                data = rmm.device_array(nelem, dtype="int8")
+                fill_value(data, self._encode(value))
+                value = CategoricalColumn(
+                    data=Buffer(data),
+                    categories=self._categories,
+                    ordered=False,
+                )
+            elif value is None:
+                value = columnops.column_empty(nelem, self.dtype, masked=True)
+            else:
+                to_dtype = pd.api.types.pandas_dtype(self.dtype)
+                value = utils.scalar_broadcast_to(value, nelem, to_dtype)
+
+        value = columnops.as_column(value).astype(self.dtype)
+
+        if len(value) != nelem:
+            msg = (
+                f"Size mismatch: cannot set value "
+                f"of size {len(value)} to indexing result of size "
+                f"{nelem}"
+            )
+            raise ValueError(msg)
+
+        if isinstance(key, slice):
+            out = cpp_copying.apply_copy_range(
+                self, value, key_start, key_stop, 0
+            )
+        else:
+            out = cpp_copying.apply_scatter(value, key, self)
+
+        self._data = out.data
+        self._mask = out.mask
+        self._update_null_count()
 
     def fillna(self, value):
         """Fill null values with ``value``.
@@ -613,14 +660,17 @@ class Column(object):
         """Return Column by taking values from the corresponding *indices*.
         """
         import cudf.bindings.copying as cpp_copying
+        from cudf.dataframe.columnops import column_empty_like
 
         indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
-            return self.copy()
+            return column_empty_like(self, newsize=0)
 
         # Returns a new column
-        return cpp_copying.apply_gather_column(self, indices)
+        result = cpp_copying.apply_gather(self, indices)
+        result.name = self.name
+        return result
 
     def as_mask(self):
         """Convert booleans to bitmask

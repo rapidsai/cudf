@@ -78,29 +78,24 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
       // before copying to ensure the strings referred to by the new indices
       // are included in the destination column
 
-      gdf_column * input_cols[2] = {out_column,
-                                    const_cast<gdf_column*>(&in_column)};
-
       // make temporary columns which will have synced categories
       // TODO: these copies seem excessively expensive, but 
       // sync_column_categories doesn't copy the valid mask
       gdf_column temp_out = cudf::copy(*out_column);
       gdf_column temp_in  = cudf::copy(in_column);
-      gdf_column * temp_cols[2] = {&temp_out, &temp_in};
+
+      gdf_column * input_cols[2] = {&temp_out,
+                                    const_cast<gdf_column*>(&in_column)};
+      gdf_column * temp_cols[2] = {out_column, &temp_in};
 
       // sync categories
       CUDF_EXPECTS(GDF_SUCCESS ==
         sync_column_categories(input_cols, temp_cols, 2),
         "Failed to synchronize NVCategory");
 
-      detail::copy_range(&temp_out,
+      detail::copy_range(out_column,
                          detail::column_range_factory{temp_in, in_begin},
                          out_begin, out_end);
-
-      std::swap(out_column->data, temp_out.data);
-      std::swap(out_column->valid, temp_out.valid);
-      std::swap(out_column->null_count, temp_out.null_count);
-      std::swap(out_column->dtype_info.category, temp_out.dtype_info.category);
       
       gdf_column_free(&temp_out);
       gdf_column_free(&temp_in);

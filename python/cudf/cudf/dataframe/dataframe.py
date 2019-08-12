@@ -24,7 +24,6 @@ import cudf.bindings.hash as cpp_hash
 import cudf.bindings.join as cpp_join
 from cudf import formatting
 from cudf._sort import get_sorted_inds
-from cudf.bindings import copying as cpp_copying
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
@@ -167,6 +166,20 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+
+    @property
+    def _constructor(self):
+        return DataFrame
+
+    @property
+    def _constructor_sliced(self):
+        return Series
+
+    @property
+    def _constructor_expanddim(self):
+        raise NotImplementedError(
+            "_constructor_expanddim not supported for DataFrames!"
+        )
 
     def _add_rows(self, data, index, keys):
         if keys is None:
@@ -313,7 +326,7 @@ class DataFrame(object):
             self.columns, cudf.dataframe.multiindex.MultiIndex
         ) and isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if utils.is_single_value(arg) or isinstance(arg, tuple):
+        if utils.is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -371,9 +384,7 @@ class DataFrame(object):
         if isinstance(name, DataFrame):
             for col_name in self._cols:
                 mask = name[col_name]
-                self._cols[col_name] = self._cols[col_name].masked_assign(
-                    value=col, mask=mask
-                )
+                self._cols[col_name][mask] = col
 
         elif name in self._cols:
             self._cols[name] = self._prepare_series_for_add(col)
@@ -818,67 +829,137 @@ class DataFrame(object):
     @property
     def loc(self):
         """
-        Returns a label-based indexer for row-slicing and column selection.
+        Selecting rows and columns by label or boolean mask.
 
         Examples
         --------
-        >>> df = DataFrame([('a', list(range(20))),
-        ...                 ('b', list(range(20))),
-        ...                 ('c', list(range(20)))])
 
-        Get the row by index label from 'a' and 'b' columns
+        DataFrame with string index.
 
-        >>> df.loc[0, ['a', 'b']]
-        a    0
-        b    0
-
-        Get rows from index 2 to index 5 from 'a' and 'b' columns.
-
-        >>> df.loc[2:5, ['a', 'b']]
+        >>> print(df)
            a  b
-        2  2  2
-        3  3  3
-        4  4  4
-        5  5  5
+        a  0  5
+        b  1  6
+        c  2  7
+        d  3  8
+        e  4  9
 
-        Get the every 3rd rows from index 2 to 10 from 'a' and 'b'
+        Select a single row by label.
 
-        >>> df.loc[2:10:3, ['a', 'b']]
-            a    b
-        2   2    2
-        5   5    5
-        8   8    8
+        >>> print(df.loc['a'])
+        a    0
+        b    5
+        Name: a, dtype: int64
+
+        Select multiple rows and a single column.
+
+        >>> print(df.loc[['a', 'c', 'e'], 'b'])
+        a    5
+        c    7
+        e    9
+        Name: b, dtype: int64
+
+        Selection by boolean mask.
+        >>> print(df.loc[df.a > 2])
+           a  b
+        d  3  8
+        e  4  9
+
+        Setting values using loc.
+        >>> df.loc[['a', 'c', 'e'], 'a'] = 0
+        >>> print(df)
+           a  b
+        a  0  5
+        b  1  6
+        c  0  7
+        d  3  8
+        e  0  9
+
+        See also
+        --------
+        DataFrame.iloc
         """
         return _DataFrameLocIndexer(self)
 
     @property
     def iloc(self):
         """
-        Returns a  integer-location based indexer for selection by position.
+        Selecting rows and column by position.
 
         Examples
         --------
         >>> df = DataFrame([('a', list(range(20))),
         ...                 ('b', list(range(20))),
         ...                 ('c', list(range(20)))])
-        >>> df.iloc[1]  # get the row from index 1st
+
+        Select a single row using an integer index.
+
+        >>> print(df.iloc[1])
         a    1
         b    1
         c    1
-        >>> df.iloc[[0, 2, 9, 18]]  # get the rows from indices 0,2,9 and 18.
+
+        Select multiple rows using a list of integers.
+
+        >>> print(df.iloc[[0, 2, 9, 18]])
               a    b    c
          0    0    0    0
          2    2    2    2
          9    9    9    9
         18   18   18   18
-        >>> df.iloc[3:10:2]  # get the rows using slice indices
+
+        Select rows using a slice.
+
+        >>> print(df.iloc[3:10:2])
              a    b    c
         3    3    3    3
         5    5    5    5
         7    7    7    7
         9    9    9    9
+
+        Select both rows and columns.
+
+        >>> print(df.iloc[[1, 3, 5, 7], 2])
+        1    1
+        3    3
+        5    5
+        7    7
+        Name: c, dtype: int64
+
+        Setting values in a column using iloc.
+
+        >>> df.iloc[:4] = 0
+        >>> print(df)
+           a  b  c
+        0  0  0  0
+        1  0  0  0
+        2  0  0  0
+        3  0  0  0
+        4  4  4  4
+        5  5  5  5
+        6  6  6  6
+        7  7  7  7
+        8  8  8  8
+        9  9  9  9
+        [10 more rows]
+
+        See also
+        --------
+        DataFrame.loc
         """
         return _DataFrameIlocIndexer(self)
+
+    def iat(self):
+        """
+        Alias for ``DataFrame.iloc``; provided for compatibility with Pandas.
+        """
+        return self.iloc
+
+    def at(self):
+        """
+        Alias for ``DataFrame.loc``; provided for compatibility with Pandas.
+        """
+        return self.loc
 
     @property
     def columns(self):
@@ -1106,24 +1187,13 @@ class DataFrame(object):
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
-
         if self._cols:
-            positions = columnops.as_column(positions).astype("int32").data.mem
-            cols = [s._column for s in self._cols.values()]
-            result_cols = cpp_copying.apply_gather(cols, positions)
             for i, col_name in enumerate(self._cols.keys()):
-                out[col_name] = result_cols[i]
-
-            if isinstance(self.columns, cudf.MultiIndex):
-                out.columns = self.columns
-
+                out[col_name] = self[col_name][positions]
         if ignore_index:
             out.index = RangeIndex(len(out))
-        elif len(out) == 0:
-            out = out.set_index(self.index.take(positions))
         else:
-            out.index = self.index.take(positions)
-
+            out._index = self.index.take(positions)
         return out
 
     def _take_columns(self, positions):
@@ -1416,7 +1486,7 @@ class DataFrame(object):
         ]
         in_index = self.index
         if isinstance(in_index, cudf.dataframe.multiindex.MultiIndex):
-            in_index = RangeIndex(len(in_index))
+            in_index = RangeIndex(len(in_index), name=in_index.name)
         out_cols, new_index = cpp_drop_duplicates(
             [in_index.as_column()], in_cols, subset_cols, keep
         )

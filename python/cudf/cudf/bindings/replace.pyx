@@ -10,7 +10,7 @@
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.replace cimport *
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 from libc.stdlib cimport free
 
@@ -79,7 +79,7 @@ cpdef apply_replace_nulls(inp, replacement):
     Call replace_nulls
     """
 
-    if is_single_value(replacement):
+    if is_scalar(replacement):
         return apply_replace_nulls_scalar(inp, replacement)
     else:
         return apply_replace_nulls_column(inp, replacement)
