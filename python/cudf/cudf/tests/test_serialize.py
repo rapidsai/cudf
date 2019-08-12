@@ -181,12 +181,29 @@ def test_serialize_string():
     assert_eq(recreated, df)
 
 
-def test_serialize_empty_string():
-    pd_series = pd.Series([], dtype="str")
-    gd_series = cudf.Series([], dtype="str")
+@pytest.mark.parametrize(
+    "frames",
+    [
+        (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
+        (cudf.DataFrame([]), pd.DataFrame([])),
+        (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
+        (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
+        (
+            cudf.DataFrame({"a": ["a"]}).head(0),
+            pd.DataFrame({"a": ["a"]}).head(0),
+        ),
+        (
+            cudf.DataFrame({"a": [1.0]}).head(0),
+            pd.DataFrame({"a": [1.0]}).head(0),
+        ),
+    ],
+)
+def test_serialize_empty(frames):
+    gdf, pdf = frames
 
-    recreated = cudf.Series.deserialize(*gd_series.serialize())
-    assert_eq(recreated, pd_series)
+    typ = type(gdf)
+    res = typ.deserialize(*gdf.serialize())
+    assert_eq(res, gdf)
 
 
 def test_serialize_all_null_string():

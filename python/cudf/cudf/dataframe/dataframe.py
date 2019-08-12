@@ -209,16 +209,18 @@ class DataFrame(object):
 
         # Use the column directly to avoid duplicating the index
         columns = [col._column for col in self._cols.values()]
-        header_columns = [c.serialize() for c in columns]
-
-        for h, f in header_columns:
-            h["frame_count"] = len(f)
-
         header["column_names"] = tuple(self._cols)
-        header["columns"], column_frames = zip(*header_columns)
+        header["columns"] = []
+        # handle empty dataframes
+        if len(columns) > 0:
+            header_columns = [c.serialize() for c in columns]
 
-        for f in column_frames:
-            frames.extend(f)
+            for h, f in header_columns:
+                h["frame_count"] = len(f)
+
+            header["columns"], column_frames = zip(*header_columns)
+            for f in column_frames:
+                frames.extend(f)
         return header, frames
 
     @classmethod
@@ -232,6 +234,7 @@ class DataFrame(object):
         # Reconstruct the columns
         column_frames = frames[header["index_frame_count"] :]
         columns = []
+
         for k, meta in zip(header["column_names"], header["columns"]):
             col_frame_count = meta["frame_count"]
             col_typ = pickle.loads(meta["type"])

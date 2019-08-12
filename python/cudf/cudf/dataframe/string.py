@@ -4,6 +4,7 @@ import pickle
 import warnings
 from numbers import Number
 
+import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -650,10 +651,9 @@ class StringColumn(columnops.TypedColumnBase):
         )
         for item in [nbuf, sbuf, obuf]:
             sheader = item.__cuda_array_interface__.copy()
-            sheader["is_cuda"] = 1
             sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
-            frames.append([item])
+            frames.append(item)
 
         header["nvstrings"] = len(self._data)
         header["subheaders"] = sub_headers
@@ -663,9 +663,29 @@ class StringColumn(columnops.TypedColumnBase):
     def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
         arrays = []
+
         for i, frame in enumerate(frames):
             # subheader = header["subheaders"][i]
-            arrays.append(get_ctype_ptr(frame[0]))
+            if isinstance(frame, memoryview):
+                sheader = header["subheaders"][i]
+                dtype = sheader["dtype"]
+                frame = np.frombuffer(frame, dtype=dtype)
+                frame = cudautils.to_device(frame)
+            elif not (
+                isinstance(frame, np.ndarray)
+                or numba.cuda.driver.is_device_memory(frame)
+            ):
+                # this is probably a ucp_py.BufferRegion memory object
+                # check the header for info -- this should be encoded from
+                # serialization process.  Lastly, `typestr` and `shape` *must*
+                # manually set *before* consuming the buffer as a DeviceNDArray
+                sheader = header["subheaders"][i]
+                frame.typestr = sheader.get("dtype", "B")
+                frame.shape = sheader.get("shape", len(frame))
+                frame = np.frombuffer(frame, dtype=dtype)
+                frame = cudautils.to_device(frame)
+
+            arrays.append(get_ctype_ptr(frame))
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
