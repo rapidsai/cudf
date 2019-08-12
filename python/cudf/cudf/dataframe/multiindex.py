@@ -556,19 +556,15 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
-        pandas_levels = [
-            level.to_pandas() if hasattr(level, "to_pandas") else level
-            for level in self.levels
-        ]
         # Backwards compatibility:
         # Construct a dummy MultiIndex and check for the codes attr.
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            pandas_mi = pd.MultiIndex(levels=pandas_levels, codes=pandas_codes)
+            pandas_mi = pd.MultiIndex(levels=self.levels, codes=pandas_codes)
         else:
             pandas_mi = pd.MultiIndex(
-                levels=pandas_levels, labels=pandas_codes
+                levels=self.levels, labels=pandas_codes
             )
         if self.names is not None:
             pandas_mi.names = self.names

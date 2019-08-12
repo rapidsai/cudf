@@ -498,13 +498,13 @@ class Series(object):
             category_memory = lines[-1]
             lines = lines[:-1]
         if len(lines) > 1:
-            if lines[-1].startswith("N"):
+            if lines[-1].startswith("Name: "):
                 lines = lines[:-1]
                 lines.append("Name: %s" % str(self.name))
                 if len(self) > len(preprocess):
                     lines[-1] = lines[-1] + ", Length: %d" % len(self)
                 lines[-1] = lines[-1] + ", "
-            elif lines[-1].startswith("L"):
+            elif lines[-1].startswith("Length: "):
                 lines = lines[:-1]
                 lines.append("Length: %d" % len(self))
                 lines[-1] = lines[-1] + ", "
