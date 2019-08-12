@@ -35,6 +35,7 @@
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2442 Add __setitem__
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
+- PR #2492 Add groupby.size() method
 - PR #2358 Add the function to convert column of floating points with `nan`s into `bitmask`
 - PR #2489 Add drop argument to set_index
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
