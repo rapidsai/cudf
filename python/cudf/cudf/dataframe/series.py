@@ -376,7 +376,7 @@ class Series(object):
             value.dtype
         ):
             # normalize types if necessary:
-            if not isinstance(key, int):
+            if not pd.api.types.is_integer(key):
                 to_dtype = np.result_type(value.dtype, self._column.dtype)
                 value = value.astype(to_dtype)
                 self._column = self._column.astype(to_dtype)
