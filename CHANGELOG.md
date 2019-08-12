@@ -94,6 +94,7 @@
 - PR #2458 Fix handling of thirdparty packages in `isort` config
 - PR #2459 IO Readers: Consolidate all readers to use `datasource` class
 - PR #2475 Exposed type_dispatcher.hpp, nvcategory_util.hpp and wrapper_types.hpp in the include folder
+- PR #2484 Enabled building libcudf as a static library
 - PR #2453 Streamline CUDA_REL environment variable
 - PR #2483 Bundle Boost filesystem dependency in the Java jar
 - PR #2486 Java API hash functions
