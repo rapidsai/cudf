@@ -262,6 +262,8 @@ cpdef cpp_write_csv(
 
     nvtx_range_push("CUDF_WRITE_CSV", "purple")
 
+    from cudf.dataframe.series import Series
+
     cdef gdf_column* c_col
     cdef csv_write_arg csv_writer = csv_write_arg()
 
@@ -283,9 +285,6 @@ cpdef cpp_write_csv(
     csv_writer.rows_per_chunk = rows_per_chunk if rows_per_chunk > 8 else 8
 
     cdef vector[gdf_column*] list_cols
-    # Variable for storing col name list that does not get garbage collected
-    # Allow setting colname during `column_view_from_column` without gc issues
-    col_names_encoded = []
 
     if columns is not None:
         if not isinstance(columns, list):
@@ -294,28 +293,23 @@ cpdef cpp_write_csv(
             if col_name not in cols:
                 raise NameError('column {!r} does not exist in DataFrame'
                                 .format(col_name))
-            check_gdf_compatibility(cols[col_name])
-            col_names_encoded.append(col_name.encode())
+            col = cols[col_name]._column
+            check_gdf_compatibility(col)
             # Workaround for string columns
-            if cols[col_name]._column.dtype.type == np.object_:
-                c_col = column_view_from_string_column(cols[col_name]._column,
-                                                       col_names_encoded[idx])
+            if col.dtype.type == np.object_:
+                c_col = column_view_from_string_column(col, col_name)
             else:
-                c_col = column_view_from_column(cols[col_name]._column,
-                                                col_names_encoded[idx])
+                c_col = column_view_from_column(col, col_name)
             list_cols.push_back(c_col)
     else:
         for idx, (col_name, col) in enumerate(cols.items()):
+            col = col._column
             check_gdf_compatibility(col)
-            col_names_encoded.append(col_name.encode())
             # Workaround for string columns
-            if col._column.dtype.type == np.object_:
-                c_col = column_view_from_string_column(col._column,
-                                                       col_names_encoded[idx])
+            if col.dtype.type == np.object_:
+                c_col = column_view_from_string_column(col, col_name)
             else:
-                c_col = column_view_from_column(
-                    col._column, col_names_encoded[idx]
-                )
+                c_col = column_view_from_column(col, col_name)
             list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()
