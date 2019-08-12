@@ -154,7 +154,7 @@
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
-
+- PR #2545 Fix MultiIndexes with datetime levels
 
 
 # cuDF 0.8.0 (27 June 2019)
