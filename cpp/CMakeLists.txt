@@ -307,8 +307,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
-
-add_library(cudf SHARED
+option(BUILD_SHARED_LIBS "Build a shared library" ON)
+add_library(cudf 
             src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
