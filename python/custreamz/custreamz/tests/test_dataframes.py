@@ -78,8 +78,8 @@ def test_attributes():
     df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     sdf = DataFrame(example=df)
 
-    assert 'x' in dir(sdf)
-    assert 'z' not in dir(sdf)
+    assert getattr(sdf,'x',-1) != -1
+    assert getattr(sdf,'z',-1) == -1
 
     sdf.x
     with pytest.raises(AttributeError):
@@ -435,24 +435,6 @@ def test_to_frame(stream):
     a = sdf.x.to_frame()
     assert isinstance(a, DataFrame)
     assert list(a.columns) == ['x']
-
-
-def test_instantiate_with_dict(stream):
-    df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
-    sdf = DataFrame(example=df, stream=stream)
-
-    sdf2 = DataFrame({'a': sdf.x, 'b': sdf.x * 2,
-                      'c': sdf.y % 2})
-    L = sdf2.stream.gather().sink_to_list()
-    assert len(sdf2.columns) == 3
-
-    sdf.emit(df)
-    sdf.emit(df)
-
-    assert len(L) == 2
-    for x in L:
-        assert_eq(x[['a', 'b', 'c']],
-                  cudf.DataFrame({'a': df.x, 'b': df.x * 2, 'c': df.y % 2}))
 
 
 @pytest.mark.parametrize('op', ['cumsum', 'cummax', 'cumprod', 'cummin'])
