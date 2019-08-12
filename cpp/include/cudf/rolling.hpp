@@ -79,10 +79,11 @@ gdf_column* rolling_window(const gdf_column &input_col,
 /* --------------------------------------------------------------------------*
  * @brief  Computes the rolling window function of the values in a column.
  *
- * This function is the same as the above rolling window interface except this is
- * for `agg_op`s of type GDF_NUMBA_GENERIC_AGG_OPS and GDF_CUDA_GENERIC_AGG_OPS
- * where a string of the implementation of a user_defined_aggregator acting on a
- * range of values is passed, together with the `output_type`.
+ * This function is the same as the rolling window interface at
+ * @see include/cudf/rolling.hpp:70 except this is for `agg_op`s of type
+ * GDF_NUMBA_GENERIC_AGG_OPS and GDF_CUDA_GENERIC_AGG_OPS where a string of the
+ * implementation of a user_defined_aggregator acting on a range of values is
+ * passed, together with the `output_type`.
  * 
  * The handling of the null values is only partially implemented: it acts as if
  * every value are valid, i.e. there is no validness checking of the individual
