@@ -122,7 +122,7 @@ class Column(object):
         return col
 
     @staticmethod
-    def from_mem_views(data_mem, mask_mem=None, null_count=None):
+    def from_mem_views(data_mem, mask_mem=None, null_count=None, name=None):
         """Create a Column object from a data device array (or nvstrings
            object), and an optional mask device array
         """
@@ -130,6 +130,7 @@ class Column(object):
 
         if isinstance(data_mem, nvstrings.nvstrings):
             return columnops.build_column(
+                name=name,
                 buffer=data_mem,
                 dtype=np.dtype("object"),
                 null_count=null_count,
@@ -140,6 +141,7 @@ class Column(object):
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
             return columnops.build_column(
+                name=name,
                 buffer=data_buf,
                 dtype=data_mem.dtype,
                 mask=mask,
@@ -372,6 +374,7 @@ class Column(object):
         params = {
             "data": self.data,
             "mask": self.mask,
+            "name": self.name,
             "null_count": self.null_count,
         }
         return params
