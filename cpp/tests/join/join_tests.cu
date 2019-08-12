@@ -462,7 +462,8 @@ struct JoinTest : public GdfTest
         std::cout << "Invalid join method" << std::endl;
         EXPECT_TRUE(false);
     }
-   
+  
+    EXPECT_EQ( RMM_FREE(data, 0), RMM_SUCCESS); 
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices

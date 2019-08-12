@@ -41,7 +41,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         msg = "new join api only supports left, inner or outer"
         raise ValueError(msg)
 
-    left_idx =  []
+    left_idx = []
     right_idx = []
     left_common_name_join_idx = []
     right_common_name_join_idx = []
@@ -81,14 +81,15 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
            and (left_on.index(name) == right_on.index(name))):
             result_col_names.append(name)
 
-
-  
-    j_cols = [columnops.as_column(L) for L in [left_idx, right_idx]]
-    j_col_com_name = [columnops.as_column(L) for L in [left_common_name_join_idx, right_common_name_join_idx]]
+    j_cols = [columnops.as_column(L).astype('int32')
+              for L in [left_idx, right_idx]]
+    j_col_com_name = [columnops.as_column(L).astype('int32')
+                      for L in [left_common_name_join_idx,
+                                right_common_name_join_idx]]
     cdef cudf_table *join_cols = table_from_columns(j_cols)
-    cdef cudf_table *common_name_join_cols = table_from_columns(j_col_com_name)
+    cdef cudf_table *merging_join_cols = table_from_columns(j_col_com_name)
+    cdef cudf_table out_ind
     cdef pair[cudf_table, cudf_table] result
-
 
     with nogil:
         if how == 'left':
@@ -96,7 +97,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 list_lhs[0],
                 list_rhs[0],
                 join_cols[0],
-                common_name_join_cols[0],
+                merging_join_cols[0],
+                out_ind,
                 context
             )
 
@@ -105,7 +107,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 list_lhs[0],
                 list_rhs[0],
                 join_cols[0],
-                common_name_join_cols[0],
+                merging_join_cols[0],
+                out_ind,
                 context
             )
 
@@ -114,7 +117,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 list_lhs[0],
                 list_rhs[0],
                 join_cols[0],
-                common_name_join_cols[0],
+                merging_join_cols[0],
+                out_ind,
                 context
             )
 
@@ -205,6 +209,6 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     del list_lhs
     del list_rhs
     del join_cols
-    del common_name_join_cols
+    del merging_join_cols
 
     return list(zip(res, valids, result_col_names))

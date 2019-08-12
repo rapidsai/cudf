@@ -590,7 +590,9 @@ struct NVCategoryJoinTest : public GdfTest
         std::cout << "Invalid join method" << std::endl;
         EXPECT_TRUE(false);
     }
-   
+  
+    EXPECT_EQ( RMM_FREE(ldata, 0), RMM_SUCCESS); 
+    EXPECT_EQ( RMM_FREE(rdata, 0), RMM_SUCCESS); 
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
 
     // Copy result of gdf join to local result

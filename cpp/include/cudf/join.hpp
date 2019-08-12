@@ -30,19 +30,19 @@ namespace cudf {
  * @param[in] right_cols The table of right dataframe
  * @param[in] join_cols The table containing indices of left and right join columns
  * respectively
- * @param[in] common_name_join_cols The table containing indices of left and right
- * join columns which have same name respectively
+ * @param[in] merging_join_cols The table containing indices of left and right
+ * join columns which have same name respectively and which will merge into a single column
+ * @param[out] out_indices The table containing joined indices of left and right table 
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
  * @returns If Success, pair of left and right table which are merged 
- * 
  */
 std::pair<cudf::table, cudf::table> inner_join(
                          cudf::table const& left_cols,
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices,
                          gdf_context *join_context);
 /** 
@@ -56,18 +56,19 @@ std::pair<cudf::table, cudf::table> inner_join(
  * @param[in] right_cols The table of right dataframe
  * @param[in] join_cols The table containing indices of left and right join columns
  * respectively
- * @param[in] common_name_join_cols The table containing indices of left and right
- * join columns which have same name respectively
+ * @param[in] merging_join_cols The table containing indices of left and right
+ * join columns which have same name respectively and which will merge into a single column
+ * @param[out] out_indices The table containing joined indices of left and right table 
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @returns If Success, pair of left and right table which are merged * 
+ * @returns If Success, pair of left and right table which are merged
  */
 std::pair<cudf::table, cudf::table> left_join(
                          cudf::table const& left_cols,
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices,
                          gdf_context *join_context);
 
@@ -82,18 +83,19 @@ std::pair<cudf::table, cudf::table> left_join(
  * @param[in] right_cols The table of right dataframe
  * @param[in] join_cols The table containing indices of left and right join columns
  * respectively
- * @param[in] common_name_join_cols The table containing indices of left and right
- * join columns which have same name respectively
+ * @param[in] merging_join_cols The table containing indices of left and right
+ * join columns which have same name respectively and which will merge into a single column
+ * @param[out] out_indices The table containing joined indices of left and right table 
  * @param[in] join_context The context to use to control how the join is performed,e.g.,
  * sort vs hash based implementation
  * 
- * @returns If Success, pair of left and right table which are merged * 
+ * @returns If Success, pair of left and right table which are merged 
  */
 std::pair<cudf::table, cudf::table> full_join(
                          cudf::table const& left_cols,
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices,
                          gdf_context *join_context);
 } //namespace cudf

@@ -145,7 +145,7 @@ void trivial_full_join(
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type>
-void join_call( int num_cols, cudf::table leftcols, cudf::table rightcols,
+void join_call( int num_cols, cudf::table const& leftcols, cudf::table const& rightcols,
                      gdf_column *left_result, gdf_column *right_result,
                      gdf_context *join_context)
 {
@@ -219,7 +219,8 @@ void join_call( int num_cols, cudf::table leftcols, cudf::table rightcols,
         // Sort based joins only support single column joins
         if(1 == num_cols)
         {
-          gdf_error_code =  sort_join<join_type, output_index_type>(leftcols.get_column(0), rightcols.get_column(0), left_result, right_result);
+          gdf_error_code =  sort_join<join_type, output_index_type>(const_cast <gdf_column*> (leftcols.get_column(0)), 
+                            const_cast <gdf_column*> (rightcols.get_column(0)), left_result, right_result);
           CUDF_EXPECTS(gdf_error_code == GDF_SUCCESS, "GDF Error");
         }
         else
@@ -243,7 +244,7 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
         cudf::table const& left_cols, 
         cudf::table const& right_cols,
         cudf::table const& join_cols,
-        cudf::table const& common_name_join_cols,
+        cudf::table const& merging_join_cols,
         gdf_column * left_indices,
         gdf_column * right_indices) {
 
@@ -253,23 +254,23 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
     int num_left_cols = left_cols.num_columns();
     int num_right_cols = right_cols.num_columns();
     int num_cols_to_join = (join_cols.num_columns() > 0 ? join_cols.get_column(0)->size: 0);
-    int num_cols_joined_result = (common_name_join_cols.num_columns() > 0 ? common_name_join_cols.get_column(0)->size: 0);
+    int num_merging_join_cols = (merging_join_cols.num_columns() > 0 ? merging_join_cols.get_column(0)->size: 0);
 
     std::vector<int> left_j_cols (num_cols_to_join);
-    std::vector<int> l_common_name_join_ind (num_cols_joined_result);
-    std::vector<int> r_common_name_join_ind (num_cols_joined_result);
+    std::vector<int> l_common_name_join_ind (num_merging_join_cols);
+    std::vector<int> r_common_name_join_ind (num_merging_join_cols);
 
     if (num_cols_to_join > 0)
     {
         CUDA_TRY (cudaMemcpy(left_j_cols.data(), join_cols.get_column(0)->data, 
                              cudf::size_of(join_cols.get_column(0)->dtype)*num_cols_to_join , cudaMemcpyDeviceToHost));
     }
-    if (num_cols_joined_result > 0)
+    if (num_merging_join_cols > 0)
     {
-        CUDA_TRY (cudaMemcpy(l_common_name_join_ind.data(), common_name_join_cols.get_column(0)->data,
-                               cudf::size_of(common_name_join_cols.get_column(0)->dtype)*num_cols_joined_result , cudaMemcpyDeviceToHost));
-        CUDA_TRY (cudaMemcpy(r_common_name_join_ind.data(), common_name_join_cols.get_column(1)->data,
-                               cudf::size_of(common_name_join_cols.get_column(1)->dtype)*num_cols_joined_result , cudaMemcpyDeviceToHost));
+        CUDA_TRY (cudaMemcpy(l_common_name_join_ind.data(), merging_join_cols.get_column(0)->data,
+                               cudf::size_of(merging_join_cols.get_column(0)->dtype)*num_merging_join_cols , cudaMemcpyDeviceToHost));
+        CUDA_TRY (cudaMemcpy(r_common_name_join_ind.data(), merging_join_cols.get_column(1)->data,
+                               cudf::size_of(merging_join_cols.get_column(1)->dtype)*num_merging_join_cols , cudaMemcpyDeviceToHost));
     }
     
     gdf_size_type join_size = left_indices->size;
@@ -310,13 +311,13 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
     }
         
     // Accumalate the join-col 
-    for (int i=0; i < num_cols_joined_result; ++i)
+    for (int i=0; i < num_merging_join_cols; ++i)
     {
         result_joincol.push_back(result_left.get_column(l_common_name_join_ind[i]));
     }
     
     // Accumalate the right non-join col
-    for (int rindex = 0; rindex < num_right_cols-num_cols_joined_result; ++rindex)
+    for (int rindex = 0; rindex < num_right_cols-num_merging_join_cols; ++rindex)
     {
         result_rnonjoincol.push_back(result_right.get_column(rindex));
     }
@@ -353,11 +354,11 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
     }
 
     // Construct the joined columns
-    if (0 != ljoincols.num_columns() && num_cols_joined_result > 0) {
+    if (0 != ljoincols.num_columns() && num_merging_join_cols > 0) {
 
       std::vector <gdf_column *> l_join;
       std::vector <gdf_column *> r_join;
-      for (int join_ind = 0; join_ind < num_cols_joined_result; ++join_ind)
+      for (int join_ind = 0; join_ind < num_merging_join_cols; ++join_ind)
       {
           std::vector<int>::iterator itr = std::find(left_j_cols.begin(), left_j_cols.end(),
                l_common_name_join_ind[join_ind]);
@@ -404,31 +405,19 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
                          cudf::table const& left_cols, 
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices, 
                          gdf_context *join_context) {
 
   int num_left_cols = left_cols.num_columns();
   int num_right_cols = right_cols.num_columns();
   int num_cols_to_join = (join_cols.num_columns() > 0 ? join_cols.get_column(0)->size: 0);
-  int num_cols_to_join_common_name = (common_name_join_cols.num_columns() > 0 ? common_name_join_cols.get_column(0)->size: 0);
+  int num_merging_join_cols = (merging_join_cols.num_columns() > 0 ? merging_join_cols.get_column(0)->size: 0);
 
   std::vector<int> left_join_cols (num_cols_to_join);
   std::vector<int> right_join_cols (num_cols_to_join);
-  std::vector<int> l_common_name_join_ind (num_cols_to_join_common_name);
-  std::vector<int> r_common_name_join_ind (num_cols_to_join_common_name);
-  std::cout << "Size of the type "<<cudf::size_of(join_cols.get_column(0)->dtype)<<std::endl;
-  std::cout << "Dtype is  "<<join_cols.get_column(0)->dtype<<std::endl;
-  std::cout << "num_cols_to_join  "<<num_cols_to_join<<std::endl;
-  if (join_cols.get_column(0)->data == 0)
-  {
-      std::cout<<"Data is null"<<std::endl;
-  }
-
-  //gdf_column result_col;
- 
-   
-  //RMM_TRY(RMM_ALLOC(&result_col.data, join_cols.get_column(0)->size * cudf::size_of(join_cols.get_column(0)->dtype), 0));
+  std::vector<int> l_common_name_join_ind (num_merging_join_cols);
+  std::vector<int> r_common_name_join_ind (num_merging_join_cols);
 
   if (num_cols_to_join > 0)
   {
@@ -437,18 +426,18 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
       CUDA_TRY (cudaMemcpy((void *)right_join_cols.data(), (void *)join_cols.get_column(1)->data, 
                            cudf::size_of(join_cols.get_column(1)->dtype)*num_cols_to_join, cudaMemcpyDeviceToHost));
   }
-  if (num_cols_to_join_common_name > 0)
+  if (num_merging_join_cols > 0)
   {
-      CUDA_TRY (cudaMemcpy(l_common_name_join_ind.data(), common_name_join_cols.get_column(0)->data, 
-                           cudf::size_of(common_name_join_cols.get_column(0)->dtype)*num_cols_to_join_common_name , cudaMemcpyDeviceToHost));
-      CUDA_TRY (cudaMemcpy(r_common_name_join_ind.data(), common_name_join_cols.get_column(1)->data, 
-                           cudf::size_of(common_name_join_cols.get_column(1)->dtype)*num_cols_to_join_common_name , cudaMemcpyDeviceToHost));
+      CUDA_TRY (cudaMemcpy(l_common_name_join_ind.data(), merging_join_cols.get_column(0)->data, 
+                           cudf::size_of(merging_join_cols.get_column(0)->dtype)*num_merging_join_cols , cudaMemcpyDeviceToHost));
+      CUDA_TRY (cudaMemcpy(r_common_name_join_ind.data(), merging_join_cols.get_column(1)->data, 
+                           cudf::size_of(merging_join_cols.get_column(1)->dtype)*num_merging_join_cols , cudaMemcpyDeviceToHost));
   }
 
   std::vector <gdf_column*> tmp_left_cols;
   std::vector <gdf_column*> tmp_right_cols;
 
-  for (int i=0; i < num_left_cols; i++)
+  for (int i=0; i < num_left_cols; ++i)
   {
       tmp_left_cols.push_back(const_cast<gdf_column *> (left_cols.get_column(i)));
   }
@@ -626,7 +615,7 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
         construct_join_output_df<join_type, index_type>(
             ljoin_cols, rjoin_cols,
             updated_left_cols, updated_right_cols, 
-            join_cols, common_name_join_cols, 
+            join_cols, merging_join_cols, 
             left_index_out, right_index_out);
     CHECK_STREAM(0);
     l_index_temp.reset(nullptr);
@@ -651,14 +640,14 @@ std::pair<cudf::table, cudf::table> left_join(
                          cudf::table const& left_cols,
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::LEFT_JOIN, output_index_type>(
                      left_cols,
                      right_cols,
                      join_cols,
-                     common_name_join_cols,
+                     merging_join_cols,
                      out_indices,
                      join_context);
 }
@@ -667,14 +656,14 @@ std::pair<cudf::table, cudf::table> inner_join(
                          cudf::table const& left_cols,
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::INNER_JOIN, output_index_type>(
                      left_cols,
                      right_cols,
                      join_cols,
-                     common_name_join_cols,
+                     merging_join_cols,
                      out_indices,
                      join_context);
 }
@@ -683,14 +672,14 @@ std::pair<cudf::table, cudf::table> full_join(
                          cudf::table const& left_cols,
                          cudf::table const& right_cols,
                          cudf::table const& join_cols,
-                         cudf::table const& common_name_join_cols,
+                         cudf::table const& merging_join_cols,
                          cudf::table const& out_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::FULL_JOIN, output_index_type>(
                      left_cols,
                      right_cols,
                      join_cols,
-                     common_name_join_cols,
+                     merging_join_cols,
                      out_indices,
                      join_context);
 }

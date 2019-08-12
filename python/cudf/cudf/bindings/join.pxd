@@ -16,7 +16,8 @@ cdef extern from "cudf/join.hpp" nogil:
         const cudf_table left_cols,
         const cudf_table right_cols,
         const cudf_table join_cols,
-        const cudf_table common_name_join_cols,
+        const cudf_table merging_join_cols,
+        const cudf_table out_ind,
         gdf_context * join_context
     ) except +
 
@@ -24,7 +25,8 @@ cdef extern from "cudf/join.hpp" nogil:
         const cudf_table left_cols,
         const cudf_table right_cols,
         const cudf_table join_cols,
-        const cudf_table common_name_join_cols,
+        const cudf_table merging_join_cols,
+        const cudf_table out_ind,
         gdf_context * join_context
     ) except +
 
@@ -32,6 +34,7 @@ cdef extern from "cudf/join.hpp" nogil:
         const cudf_table left_cols,
         const cudf_table right_cols,
         const cudf_table join_cols,
-        const cudf_table common_name_join_cols,
+        const cudf_table merging_join_cols,
+        const cudf_table out_ind,
         gdf_context * join_context
     ) except +
