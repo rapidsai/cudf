@@ -12,7 +12,6 @@ import nvstrings
 from librmm_cffi import librmm as rmm
 
 import cudf
-import cudf.bindings.copying as cpp_copying
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
