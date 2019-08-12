@@ -148,6 +148,8 @@ def test_dropna_subset_cols(data, subset):
     )
 
 
+# TODO: can't test with subset=[] below since Pandas
+# returns empty DF when both subset=[] and thresh are specified.
 @pytest.mark.parametrize("thresh", [0, 1, 2])
 @pytest.mark.parametrize("subset", [None, ["a"], ["b"], ["a", "b"]])
 def test_dropna_thresh(thresh, subset):
