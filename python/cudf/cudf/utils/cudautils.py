@@ -1,7 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 from functools import lru_cache
-from math import fmod, isnan
+from math import fmod
 
 import numpy as np
 from numba import cuda, int32, numpy_support
