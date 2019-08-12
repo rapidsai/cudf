@@ -15,7 +15,7 @@
  */
 
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <cudf/utils/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/cudf.h>
 
 #include <thrust/device_vector.h>
