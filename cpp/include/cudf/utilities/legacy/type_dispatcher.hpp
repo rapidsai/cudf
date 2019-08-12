@@ -16,7 +16,7 @@
 #ifndef TYPE_DISPATCHER_HPP
 #define TYPE_DISPATCHER_HPP
 
-#include <cudf/utils/legacy/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/release_assert.cuh>
 
 

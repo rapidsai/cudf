@@ -28,6 +28,7 @@ from cudf.bindings import copying as cpp_copying
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
+    apply_drop_nulls as cpp_drop_nulls,
 )
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
@@ -339,6 +340,10 @@ class DataFrame(object):
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
             else:
+                if len(arg) == 0:
+                    df._size = len(self.index)
+                    df._index = self.index
+                    return df
                 for col in arg:
                     df[col] = self[col]
             return df
@@ -906,6 +911,16 @@ class DataFrame(object):
                 delattr(self, "multi_cols")
             self._rename_columns(columns)
 
+    @property
+    def _columns(self):
+        """
+        Return a list of Column objects backing this dataframe
+        """
+        cols = [sr._column for sr in self._cols.values()]
+        for col in cols:
+            col.name = None
+        return cols
+
     def _rename_columns(self, new_names):
         old_cols = list(self._cols.keys())
         l_old_cols = len(old_cols)
@@ -1420,6 +1435,106 @@ class DataFrame(object):
             outdf = outdf.set_index(new_index)
             return outdf
 
+    def dropna(self, axis=0, how="any", subset=None, thresh=None):
+        """
+        Drops rows (or columns) containing nulls from a Column.
+
+        Parameters
+        ----------
+        axis : {0, 1}, optional
+            Whether to drop rows (axis=0, default) or columns (axis=1)
+            containing nulls.
+        how : {"any", "all"}, optional
+            Specifies how to decide whether to drop a row (or column).
+            any (default) drops rows (or columns) containing at least
+            one null value. all drops only rows (or columns) containing
+            *all* null values.
+        subset : list, optional
+            List of columns to consider when dropping rows (all columns
+            are considered by default). Alternatively, when dropping
+            columns, subset is a list of rows to consider.
+        thresh: int, optional
+            If specified, then drops every row (or column) containing
+            less than `thresh` non-null values
+
+
+        Returns
+        -------
+        Copy of the DataFrame with rows/columns containing nulls dropped.
+        """
+        if axis == 0:
+            return self._drop_na_rows(how=how, subset=subset, thresh=thresh)
+        else:
+            return self._drop_na_columns(how=how, subset=subset, thresh=thresh)
+
+    def _drop_na_rows(self, how="any", subset=None, thresh=None):
+        """
+        Drop rows containing nulls.
+        """
+        data_cols = self._columns
+
+        index_cols = []
+        if isinstance(self.index, cudf.MultiIndex):
+            index_cols.extend(self.index._source_data._columns)
+        else:
+            index_cols.append(self.index.as_column())
+
+        input_cols = index_cols + data_cols
+
+        if subset is not None:
+            subset = self._columns_view(subset)._columns
+        else:
+            subset = self._columns
+
+        if len(subset) == 0:
+            return self
+
+        result_cols = cpp_drop_nulls(
+            input_cols, how=how, subset=subset, thresh=thresh
+        )
+
+        result_index_cols, result_data_cols = (
+            result_cols[: len(index_cols)],
+            result_cols[len(index_cols) :],
+        )
+
+        if isinstance(self.index, cudf.MultiIndex):
+            result_index = cudf.MultiIndex.from_frame(
+                DataFrame._from_columns(result_index_cols),
+                names=self.index.names,
+            )
+        else:
+            result_index = cudf.dataframe.index.as_index(result_index_cols[0])
+
+            df = DataFrame._from_columns(
+                result_data_cols, index=result_index, columns=self.columns
+            )
+        return df
+
+    def _drop_na_columns(self, how="any", subset=None, thresh=None):
+        """
+        Drop columns containing nulls
+        """
+        out_cols = []
+
+        if subset is None:
+            df = self
+        else:
+            df = self.take(subset)
+
+        if thresh is None:
+            if how == "all":
+                thresh = 1
+            else:
+                thresh = len(df)
+
+        for col in self.columns:
+            if (len(df[col]) - df[col].null_count) < thresh:
+                continue
+            out_cols.append(col)
+
+        return self[out_cols]
+
     def pop(self, item):
         """Return a column and drop it from the DataFrame.
         """
@@ -1486,6 +1601,15 @@ class DataFrame(object):
             self._cols = out._cols
         else:
             return out.copy(deep=copy)
+
+    def nans_to_nulls(self):
+        """
+        Convert nans (if any) to nulls.
+        """
+        df = self.copy()
+        for col in df.columns:
+            df[col] = df[col].nans_to_nulls()
+        return df
 
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
@@ -3157,6 +3281,15 @@ class DataFrame(object):
         -------
         numba gpu ndarray
         """
+
+    def _from_columns(cols, index=None, columns=None):
+        """
+        Construct a DataFrame from a list of Columns
+        """
+        df = cudf.DataFrame(dict(zip(range(len(cols)), cols)), index=index)
+        if columns is not None:
+            df.columns = columns
+        return df
 
     def quantile(
         self,
