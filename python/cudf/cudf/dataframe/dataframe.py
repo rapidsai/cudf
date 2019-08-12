@@ -167,6 +167,20 @@ class DataFrame(object):
 
         self._add_empty_columns(columns, index)
 
+    @property
+    def _constructor(self):
+        return DataFrame
+
+    @property
+    def _constructor_sliced(self):
+        return Series
+
+    @property
+    def _constructor_expanddim(self):
+        raise NotImplementedError(
+            "_constructor_expanddim not supported for DataFrames!"
+        )
+
     def _add_rows(self, data, index, keys):
         if keys is None:
             data = {i: element for i, element in enumerate(data)}.items()

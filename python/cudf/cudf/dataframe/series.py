@@ -39,6 +39,22 @@ class Series(object):
     ``Series`` objects are used as columns of ``DataFrame``.
     """
 
+    @property
+    def _constructor(self):
+        return Series
+
+    @property
+    def _constructor_sliced(self):
+        raise NotImplementedError(
+            "_constructor_sliced not supported for Series!"
+        )
+
+    @property
+    def _constructor_expanddim(self):
+        from cudf import DataFrame
+
+        return DataFrame
+
     @classmethod
     def from_categorical(cls, categorical, codes=None):
         """Creates from a pandas.Categorical
