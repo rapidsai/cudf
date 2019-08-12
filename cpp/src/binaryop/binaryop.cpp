@@ -22,7 +22,7 @@
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <cudf/utils/legacy/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
 #include <utilities/error_utils.hpp>
 #include <nvstrings/NVCategory.h>
