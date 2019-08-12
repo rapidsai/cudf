@@ -47,6 +47,12 @@ using cudaStream_t = struct CUstream_st*;
 using AggRequestType = std::pair<gdf_column*, operators>;
 
 /**---------------------------------------------------------------------------*
+ * @brief An "aggregation counter" is the pairing of a `AggRequestType` and a
+ * counter of how many times said operation is needed.
+ *---------------------------------------------------------------------------**/
+using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
+
+/**---------------------------------------------------------------------------*
  * @brief Converts a set of "compound" aggregation requests into a set of
  *"simple" aggregation requests that can be used to satisfy the compound
  *request.
@@ -55,7 +61,7 @@ using AggRequestType = std::pair<gdf_column*, operators>;
  * @return The set of corresponding simple aggregation requests that can be used
  * to satisfy the compound requests
  *---------------------------------------------------------------------------**/
-std::vector<AggRequestType> compound_to_simple(
+std::vector<SimpleAggRequestCounter> compound_to_simple(
     std::vector<AggRequestType> const& compound_requests);
 
 /**---------------------------------------------------------------------------*
@@ -91,7 +97,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count,
  *---------------------------------------------------------------------------**/
 table compute_original_requests(
     std::vector<AggRequestType> const& original_requests,
-    std::vector<AggRequestType> const& simple_requests, table simple_outputs,
+    std::vector<SimpleAggRequestCounter> const& simple_requests, table simple_outputs,
     cudaStream_t stream);
 
 }  // namespace hash

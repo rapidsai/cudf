@@ -23,7 +23,7 @@
 #include <cudf/cudf.h>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <dlpack/dlpack.h>
 #include <rmm/rmm.h>
 
@@ -249,7 +249,7 @@ gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
   {
     // TODO switch assert to RMM_TRY once RMM supports throwing exceptions
     if (arg->dl_tensor.ctx.device_type == kDLGPU)
-      assert(RMM_SUCCESS == RMM_FREE(arg->dl_tensor.data, 0));
+      RMM_TRY(RMM_FREE(arg->dl_tensor.data, 0));
     delete [] arg->dl_tensor.shape;
     delete [] arg->dl_tensor.strides;
     delete arg;

@@ -18,10 +18,10 @@
 #include <cudf/cudf.h>
 #include <utilities/bit_util.cuh>
 #include <utilities/cudf_utils.h>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/legacy/table.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 #include <algorithm>
 
@@ -31,15 +31,15 @@
 #include <cub/cub.cuh>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
-#include <string/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
+
+#include <bitmask/valid_if.cuh>
+
 using bit_mask::bit_mask_t;
 
 namespace cudf {
 namespace detail {
-
-constexpr int warp_size = 32;
 
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
@@ -57,39 +57,6 @@ struct bounds_checker {
     return ((index >= begin) && (index < end));
   }
 };
-
-/**
- * @brief for each warp in the block do a reduction (summation) of the
- * `__popc(bit_mask)` on a certain lane (default is lane 0).
- * @param[in] bit_mask The bit_mask to be reduced.
- * @return[out] result of each block is returned in thread 0.
- */
-template <class bit_mask_type, int lane = 0>
-__device__ __inline__ gdf_size_type single_lane_reduce(bit_mask_type bit_mask) {
-  static __shared__ gdf_size_type smem[warp_size];
-
-  int lane_id = (threadIdx.x % warp_size);
-  int warp_id = (threadIdx.x / warp_size);
-
-  // Assuming one lane of each warp holds the value that we want to perform
-  // reduction
-  if (lane_id == lane) {
-    smem[warp_id] = __popc(bit_mask);
-  }
-  __syncthreads();
-
-  if (warp_id == 0) {
-    // Here I am assuming maximum block size is 1024 and 1024 / 32 = 32
-    // so one single warp is enough to do the reduction over different warps
-    bit_mask = (lane_id < (blockDim.x / warp_size)) ? smem[lane_id] : 0;
-
-    __shared__
-        typename cub::WarpReduce<gdf_size_type>::TempStorage temp_storage;
-    bit_mask = cub::WarpReduce<gdf_size_type>(temp_storage).Sum(bit_mask);
-  }
-
-  return bit_mask;
-}
 
 template <bool check_bounds>
 __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
@@ -151,7 +118,7 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
         if (0 == threadIdx.x % warp_size && thread_active) {
           destination_valid_col[valid_index] = valid_warp;
         }
-        valid_count_accumulate += single_lane_reduce(valid_warp);
+        valid_count_accumulate += single_lane_popc_block_reduce(valid_warp);
 
         destination_row_base += blockDim.x * gridDim.x;
       }

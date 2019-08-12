@@ -20,6 +20,7 @@
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
 #include "cudf/legacy/table.hpp"
+#include "cudf/stream_compaction.hpp"
 #include "cudf/types.hpp"
 
 #include "jni_utils.hpp"
@@ -542,4 +543,20 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
   }
   CATCH_STD(env, NULL);
 }
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfFilter(JNIEnv *env, jclass, jlong input_jtable,
+                                                                 jlong mask_jcol) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, mask_jcol, "mask column is null", 0);
+  try {
+    cudf::table *input = reinterpret_cast<cudf::table *>(input_jtable);
+    gdf_column *mask = reinterpret_cast<gdf_column *>(mask_jcol);
+    cudf::table result = cudf::apply_boolean_mask(*input, *mask);
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+                                                result.num_columns());
+    return native_handles.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
 } // extern "C"
