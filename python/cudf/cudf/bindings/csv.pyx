@@ -9,6 +9,8 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.csv cimport reader as csv_reader
 from cudf.bindings.csv cimport reader_options as csv_reader_options
+from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
@@ -211,28 +213,23 @@ cpdef cpp_read_csv(
     with nogil:
         reader = unique_ptr[csv_reader](new csv_reader(args))
 
-    cdef cudf_table table
+    cdef cudf_table c_out_table
     if byte_range is not None:
-        table = reader.get().read_byte_range(byte_range[0], byte_range[1])
+        c_out_table = reader.get().read_byte_range(
+            byte_range[0], byte_range[1]
+        )
     elif skipfooter != 0 or skiprows != 0 or nrows is not None:
-        table = reader.get().read_rows(
+        c_out_table = reader.get().read_rows(
             skiprows, skipfooter, nrows if nrows is not None else -1
         )
     else:
-        table = reader.get().read()
+        c_out_table = reader.get().read()
 
     # Extract parsed columns
 
     # Build dataframe from parsed columns
-    df = DataFrame()
     cast_col_name_to_int = names is not None and isinstance(names[0], (int))
-
-    cdef gdf_column* c_col
-    for c_col in table:
-        col = gdf_column_to_column(c_col)
-        if cast_col_name_to_int:
-            col.name = int(col.name)
-        df.add_column(data=col, name=col.name)
+    df = table_to_dataframe(&c_out_table, int_col_names=cast_col_name_to_int)
 
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:

@@ -65,24 +65,24 @@ cpdef cpp_read_parquet(filepath_or_buffer, columns=None, row_group=None,
         )
 
     # Read data into columns
-    cdef cudf_table table
+    cdef cudf_table c_out_table
     if skip_rows is not None:
-        table = reader.get().read_rows(
+        c_out_table = reader.get().read_rows(
             skip_rows,
             num_rows if num_rows is not None else 0
         )
     elif num_rows is not None:
-        table = reader.get().read_rows(
+        c_out_table = reader.get().read_rows(
             skip_rows if skip_rows is not None else 0,
             num_rows
         )
     elif row_group is not None:
-        table = reader.get().read_row_group(row_group)
+        c_out_table = reader.get().read_row_group(row_group)
     else:
-        table = reader.get().read_all()
+        c_out_table = reader.get().read_all()
 
     # Construct dataframe from columns
-    df = table_to_dataframe(&table)
+    df = table_to_dataframe(&c_out_table)
 
     # Set column to use as row indexes if available
     index_col = reader.get().get_index_column().decode("UTF-8")

@@ -62,18 +62,18 @@ cpdef cpp_read_avro(filepath_or_buffer, columns=None, skip_rows=None,
         )
 
     # Read data into columns
-    cdef cudf_table table
+    cdef cudf_table c_out_table
     if skip_rows is not None:
-        table = reader.get().read_rows(
+        c_out_table = reader.get().read_rows(
             skip_rows,
             num_rows if num_rows is not None else 0
         )
     elif num_rows is not None:
-        table = reader.get().read_rows(
+        c_out_table = reader.get().read_rows(
             skip_rows if skip_rows is not None else 0,
             num_rows
         )
     else:
-        table = reader.get().read_all()
+        c_out_table = reader.get().read_all()
 
-    return table_to_dataframe(&table)
+    return table_to_dataframe(&c_out_table)

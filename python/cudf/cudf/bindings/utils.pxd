@@ -7,8 +7,8 @@
 
 from cudf.bindings.cudf_cpp cimport cudf_table
 
-cdef table_to_dataframe(cudf_table* table)
+cdef table_to_dataframe(cudf_table* table, int_col_names=*)
 cdef cudf_table* table_from_dataframe(df) except? NULL
 
-cdef columns_from_table(cudf_table* table)
+cdef columns_from_table(cudf_table* table, int_col_names=*)
 cdef cudf_table* table_from_columns(columns) except? NULL

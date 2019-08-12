@@ -97,10 +97,12 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     with nogil:
         reader = unique_ptr[json_reader](new json_reader(args))
 
-    cdef cudf_table table
+    cdef cudf_table c_out_table
     if byte_range is None:
-        table = reader.get().read()
+        c_out_table = reader.get().read()
     else:
-        table = reader.get().read_byte_range(byte_range[0], byte_range[1])
+        c_out_table = reader.get().read_byte_range(
+            byte_range[0], byte_range[1]
+        )
 
-    return table_to_dataframe(&table)
+    return table_to_dataframe(&c_out_table)

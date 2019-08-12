@@ -5,8 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from libc.stdlib cimport free
-
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.utils cimport *
@@ -57,15 +55,15 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
         key_cols = cols_view_from_cols(subset)
         key_table = new cudf_table(key_cols, len(subset))
 
-    cdef cudf_table out_table
+    cdef cudf_table c_out_table
     with nogil:
-        out_table = drop_duplicates(c_in_table[0], key_table[0], keep_first)
+        c_out_table = drop_duplicates(c_in_table[0], key_table[0], keep_first)
 
     free_table(key_table, key_cols)
     free_table(c_in_table, c_in_cols)
 
     # convert table to columns, index
-    out_cols = columns_from_table(&out_table)
+    out_cols = columns_from_table(&c_out_table)
 
     return (out_cols[:-1], out_cols[-1])
 
