@@ -3894,3 +3894,33 @@ def test_isin_index(data, values):
     expected = psr.index.isin(values)
 
     assert_eq(got.data.mem.copy_to_host(), expected)
+
+
+def test_constructor_properties():
+    df = DataFrame()
+    key1 = "a"
+    key2 = "b"
+    val1 = np.array([123], dtype=np.float64)
+    val2 = np.array([321], dtype=np.float64)
+    df[key1] = val1
+    df[key2] = val2
+
+    # Correct use of _constructor (for DataFrame)
+    assert_eq(df, df._constructor({key1: val1, key2: val2}))
+
+    # Correct use of _constructor (for Series)
+    assert_eq(df[key1], df[key2]._constructor(val1, name=key1))
+
+    # Correct use of _constructor_sliced (for DataFrame)
+    assert_eq(df[key1], df._constructor_sliced(val1, name=key1))
+
+    # Correct use of _constructor_expanddim (for Series)
+    assert_eq(df, df[key2]._constructor_expanddim({key1: val1, key2: val2}))
+
+    # Inorrect use of _constructor_sliced (Raises for Series)
+    with pytest.raises(NotImplementedError):
+        df[key1]._constructor_sliced
+
+    # Inorrect use of _constructor_expanddim (Raises for DataFrame)
+    with pytest.raises(NotImplementedError):
+        df._constructor_expanddim
