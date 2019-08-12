@@ -101,12 +101,17 @@ def test_group_keys_true(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
-def test_groupby_getitem_styles():
-    pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3]})
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_getitem_getattr(as_index):
+    pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
-    assert_eq(gdf.groupby("x")["y"].sum(), pdf.groupby("x")["y"].sum())
+    assert_eq(pdf.groupby("x")["y"].sum(), gdf.groupby("x")["y"].sum())
     assert_eq(pdf.groupby("x").y.sum(), gdf.groupby("x").y.sum())
     assert_eq(pdf.groupby("x")[["y"]].sum(), gdf.groupby("x")[["y"]].sum())
+    assert_eq(
+        pdf.groupby(["x", "y"], as_index=as_index).sum(),
+        gdf.groupby(["x", "y"], as_index=as_index).sum(),
+    )
 
 
 @pytest.mark.parametrize("nelem", get_nelem())
@@ -760,6 +765,32 @@ def test_groupby_index_type():
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
     assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+
+
+def test_groupby_size():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").size(), gdf.groupby("a").size(), check_dtype=False
+    )
+
+    assert_eq(
+        pdf.groupby(["a", "b", "c"]).size(),
+        gdf.groupby(["a", "b", "c"]).size(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_eq(
+        pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False
+    )
 
 
 @pytest.mark.parametrize("nelem", get_nelem())

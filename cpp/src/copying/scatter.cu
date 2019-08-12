@@ -199,6 +199,7 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
   }
 
   detail::scatter(&source, scatter_map, &output);
+  nvcategory_gather_table(output, output);
 
   return output;
 
