@@ -1280,11 +1280,11 @@ class Series(object):
         """
         Convert nans (if any) to nulls
         """
-        from cudf.utils.cudautils import mask_from_devary
+        from cudf.bindings.utils import mask_from_devary
 
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = mask_from_devary(sr._column.data.mem)
+            newmask = mask_from_devary(sr._column)
             return sr.set_mask(newmask)
         return self
 
