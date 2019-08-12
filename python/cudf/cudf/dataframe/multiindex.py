@@ -539,10 +539,7 @@ class MultiIndex(Index):
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
-        # Use Pandas for handling Python host objects
-        pdi = pd.MultiIndex.from_frame(dataframe.to_pandas(), names=names)
-        result = cls.from_pandas(pdi)
-        return result
+        return cls(source_data=dataframe, names=names)
 
     @classmethod
     def from_product(cls, arrays, names=None):
