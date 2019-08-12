@@ -291,6 +291,40 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Compute the 32 bit hash of a vector.
+   *
+   * @return the 32 bit hash.
+   */
+  public ColumnVector hash() {
+    return new ColumnVector(hash(getNativeCudfColumnAddress(), HashFunction.MURMUR3.nativeId));
+  }
+
+  /**
+   * Compute a specific hash of a vector. String are not supported, if you need a hash of a string,
+   * you can use the generic hash, which does not guarantee what kind of hash is used.
+   * @param func the has function to use.
+   * @return the 32 bit hash.
+   */
+  public ColumnVector hash(HashFunction func) {
+    assert type != DType.STRING && type != DType.STRING_CATEGORY : "Strings are not supported for specific hash functions";
+    return new ColumnVector(hash(getNativeCudfColumnAddress(), func.nativeId));
+  }
+
+  /**
+   * Compute the MURMUR3 hash of the column. Strings are not supported.
+   */
+  public ColumnVector murmur3() {
+    return hash(HashFunction.MURMUR3);
+  }
+
+  /**
+   * Compute the IDENTITY hash of the column. Strings are not supported.
+   */
+  public ColumnVector identityHash() {
+    return hash(HashFunction.IDENTITY);
+  }
+
+  /**
    * Returns the type of this vector.
    */
   @Override
@@ -1484,6 +1518,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
 
   private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
+
+  private static native long hash(long cudfColumnHandle, int nativeHashId) throws CudfException;
 
   /**
    * Copy the string data to the host.  This is a little ugly because the addresses
