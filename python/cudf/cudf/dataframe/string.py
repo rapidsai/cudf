@@ -623,7 +623,6 @@ class StringColumn(columnops.TypedColumnBase):
         # Deserialize the mask, value, and offset frames
         arrays = []
         for i, frame in enumerate(frames):
-            # subheader = header["subheaders"][i]
             arrays.append(get_ctype_ptr(frame[0]))
 
         # Use from_offsets to get nvstring data.
