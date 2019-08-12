@@ -494,7 +494,9 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
+        return NumericalColumn(
+            data=Buffer(vals), dtype=vals.dtype, name=self.name
+        )
 
     def to_gpu_array(self):
         return self.as_column().to_gpu_array()
@@ -538,12 +540,23 @@ class GenericIndex(Index):
     name: A string
     """
 
-    def __init__(self, values, name=None):
+    def __init__(self, values, **kwargs):
+        """
+        Parameters
+        ----------
+        values : Column
+            The Column of values for this index
+        name : str optional
+            The name of the Index. If not provided, the Index adopts the value
+            Column's name. Otherwise if this name is different from the value
+            Column's, the values Column will be cloned to adopt this name.
+        """
         from cudf.dataframe.series import Series
+
+        kwargs = _setdefault_name(values, kwargs)
 
         # normalize the input
         if isinstance(values, Series):
-            name = values.name
             values = values._column
         elif isinstance(values, columnops.TypedColumnBase):
             values = values
@@ -556,10 +569,10 @@ class GenericIndex(Index):
             values = columnops.as_column(values)
             assert isinstance(values, (NumericalColumn, StringColumn))
 
-        assert isinstance(values, columnops.TypedColumnBase), type(values)
-
         self._values = values
-        self.name = name
+        self.name = kwargs.get("name")
+
+        assert isinstance(values, columnops.TypedColumnBase), type(values)
 
     def copy(self, deep=True):
         if deep:
@@ -617,6 +630,20 @@ class GenericIndex(Index):
         """Convert the index as a Series.
         """
         return self._values
+
+    @property
+    def name(self):
+        return self._values.name
+
+    @name.setter
+    def name(self, name):
+        if name != self._values.name:
+            # ensure we don't modify somebody else's Column name
+            self._values = self._values.replace(name=name)
+
+    @property
+    def names(self):
+        return [self._values.name]
 
     @property
     def dtype(self):
@@ -685,14 +712,13 @@ class GenericIndex(Index):
 class DatetimeIndex(GenericIndex):
     # TODO this constructor should take a timezone or something to be
     # consistent with pandas
-    def __init__(self, values, name=None):
+    def __init__(self, values, **kwargs):
         # we should be more strict on what we accept here but
         # we'd have to go and figure out all the semantics around
         # pandas dtindex creation first which.  For now
         # just make sure we handle np.datetime64 arrays
         # and then just dispatch upstream
-        if name is None and hasattr(values, "name"):
-            name = values.name
+        kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, np.ndarray) and values.dtype.kind == "M":
             values = DatetimeColumn.from_numpy(values)
         elif isinstance(values, pd.DatetimeIndex):
@@ -701,10 +727,8 @@ class DatetimeIndex(GenericIndex):
             values = DatetimeColumn.from_numpy(
                 np.array(values, dtype="<M8[ms]")
             )
-
-        assert values.null_count == 0
-        self._values = values
-        self.name = name
+        super(DatetimeIndex, self).__init__(values, **kwargs)
+        assert self._values.null_count == 0
 
     @property
     def year(self):
@@ -729,6 +753,10 @@ class DatetimeIndex(GenericIndex):
     @property
     def second(self):
         return self.get_dt_field("second")
+
+    def to_pandas(self):
+        nanos = self.as_column().astype("datetime64[ns]")
+        return pd.DatetimeIndex(nanos.to_pandas(), name=self.name)
 
     def get_dt_field(self, field):
         out_column = self._values.get_dt_field(field)
@@ -755,7 +783,8 @@ class CategoricalIndex(GenericIndex):
     name: A string
     """
 
-    def __init__(self, values, name=None):
+    def __init__(self, values, **kwargs):
+        kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, CategoricalColumn):
             values = values
         elif isinstance(values, pd.Series) and (
@@ -776,11 +805,8 @@ class CategoricalIndex(GenericIndex):
             values = columnops.as_column(
                 pd.Categorical(values, categories=values)
             )
-
-        assert values.null_count == 0
-        self._values = values
-        self.name = name
-        self.names = [name]
+        super(CategoricalIndex, self).__init__(values, **kwargs)
+        assert self._values.null_count == 0
 
     @property
     def codes(self):
@@ -800,23 +826,21 @@ class StringIndex(GenericIndex):
     name: A string
     """
 
-    def __init__(self, values, name=None):
+    def __init__(self, values, **kwargs):
+        kwargs = _setdefault_name(values, kwargs)
         if isinstance(values, StringColumn):
-            self._values = values.copy()
+            values = values.copy()
         elif isinstance(values, StringIndex):
-            if name is None:
-                name = values.name
-            self._values = values._values.copy()
+            values = values._values.copy()
         else:
-            self._values = columnops.build_column(
+            values = columnops.build_column(
                 nvstrings.to_device(values), dtype="object"
             )
+        super(StringIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
-        self.name = name
 
     def to_pandas(self):
-        result = pd.Index(self.values, name=self.name, dtype="object")
-        return result
+        return pd.Index(self.values, name=self.name, dtype="object")
 
     def take(self, indices):
         return self._values.element_indexing(indices)
@@ -835,7 +859,7 @@ class StringIndex(GenericIndex):
         )
 
 
-def as_index(arbitrary, name=None):
+def as_index(arbitrary, **kwargs):
     """Create an Index from an arbitrary object
 
     Currently supported inputs are:
@@ -856,26 +880,36 @@ def as_index(arbitrary, name=None):
         - DatetimeIndex for Datetime input.
         - GenericIndex for all other inputs.
     """
-    # This function should probably be moved to Index.__new__
-    if hasattr(arbitrary, "name") and name is None:
-        name = arbitrary.name
+
+    kwargs = _setdefault_name(arbitrary, kwargs)
 
     if isinstance(arbitrary, Index):
-        return arbitrary.rename(name=name)
+        return arbitrary.rename(**kwargs)
     elif isinstance(arbitrary, NumericalColumn):
-        return GenericIndex(arbitrary, name=name)
+        return GenericIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, StringColumn):
-        return StringIndex(arbitrary, name=name)
+        return StringIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, DatetimeColumn):
-        return DatetimeIndex(arbitrary, name=name)
+        return DatetimeIndex(arbitrary, **kwargs)
     elif isinstance(arbitrary, CategoricalColumn):
-        return CategoricalIndex(arbitrary, name=name)
+        return CategoricalIndex(arbitrary, **kwargs)
+    elif isinstance(arbitrary, cudf.Series):
+        return as_index(arbitrary._column, **kwargs)
     elif isinstance(arbitrary, pd.RangeIndex):
         return RangeIndex(
-            start=arbitrary._start, stop=arbitrary._stop, name=name
+            start=arbitrary._start, stop=arbitrary._stop, **kwargs
         )
     else:
-        return as_index(columnops.as_column(arbitrary), name=name)
+        return as_index(columnops.as_column(arbitrary), **kwargs)
+
+
+def _setdefault_name(values, kwargs):
+    if "name" not in kwargs:
+        if not hasattr(values, "name"):
+            kwargs.setdefault("name", None)
+        else:
+            kwargs.setdefault("name", values.name)
+    return kwargs
 
 
 register_distributed_serializer(RangeIndex)
