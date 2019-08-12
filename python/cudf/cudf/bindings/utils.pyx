@@ -57,6 +57,9 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
 
 
 def mask_from_devary(py_col):
+    from cudf.dataframe.columnops import as_column
+
+    py_col = as_column(py_col)
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
 
