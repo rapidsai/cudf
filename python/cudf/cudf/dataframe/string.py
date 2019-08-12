@@ -9,7 +9,6 @@ import pyarrow as pa
 import nvstrings
 from librmm_cffi import librmm as rmm
 
-import cudf
 import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push

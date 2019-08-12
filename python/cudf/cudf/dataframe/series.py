@@ -1294,7 +1294,7 @@ class Series(object):
     def loc(self):
         """
         Select values by label.
-        
+
         See DataFrame.loc
         """
         return _SeriesLocIndexer(self)

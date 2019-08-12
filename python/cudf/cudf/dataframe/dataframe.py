@@ -900,7 +900,7 @@ class DataFrame(object):
 
         Select both rows and columns.
 
-        >>> print(df.iloc[[1, 3, 5, 7], 2])                                                                                                                                                      
+        >>> print(df.iloc[[1, 3, 5, 7], 2])
         1    1
         3    3
         5    5
