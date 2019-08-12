@@ -81,7 +81,7 @@ gdf_column allocate_like(gdf_column const& input, gdf_size_type size,
     size_t valid_size = gdf_valid_allocation_size(size);
     RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
   }
-
+  
   return output;
 }
 
