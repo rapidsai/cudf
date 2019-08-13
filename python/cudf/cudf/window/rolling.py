@@ -121,10 +121,12 @@ class Rolling:
         if axis != 0:
             raise NotImplementedError("axis != 0 is not supported yet.")
         self.axis = axis
-        if win_type != "boxcar" or win_type is not None:
-            raise NotImplementedError(
-                "Only the default win_type 'boxcar' is currently supported"
-            )
+
+        if win_type is not None:
+            if win_type != "boxcar":
+                raise NotImplementedError(
+                    "Only the default win_type 'boxcar' is currently supported"
+                )
         self.win_type = win_type
 
     def __getattr__(self, key):
