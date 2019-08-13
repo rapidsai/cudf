@@ -2,6 +2,8 @@
 
 from __future__ import division, print_function
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -14,12 +16,12 @@ import cudf.bindings.copying as cpp_copying
 import cudf.bindings.hash as cpp_hash
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
@@ -47,22 +49,18 @@ class NumericalColumn(columnops.TypedColumnBase):
             kwargs["dtype"] = kwargs["data"].dtype
         return super(NumericalColumn, self).replace(**kwargs)
 
-    def serialize(self, serialize):
-        header, frames = super(NumericalColumn, self).serialize(serialize)
-        assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
+    def serialize(self):
+        header, frames = super(NumericalColumn, self).serialize()
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(NumericalColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(NumericalColumn, cls).deserialize(header, frames)
+        dtype = header["dtype"]
         col = cls(
-            data=data,
-            mask=mask,
-            null_count=header["null_count"],
-            dtype=deserialize(*header["dtype"]),
+            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
         )
         return col
 
@@ -141,20 +139,19 @@ class NumericalColumn(columnops.TypedColumnBase):
         return self.view(
             datetime.DatetimeColumn,
             dtype=dtype,
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype)).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
         return self.replace(
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype).type).data,
-            dtype=np.dtype(dtype),
+            data=typecast.apply_cast(self, dtype).data, dtype=np.dtype(dtype)
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
+        col_keys = cpp_copying.apply_gather(self, sort_inds.data.mem)
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
@@ -200,7 +197,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(sortedvals, segs)
         return out_col
 
     def all(self):
@@ -267,6 +264,9 @@ class NumericalColumn(columnops.TypedColumnBase):
             udf=udf, column=self, out_dtype=out_dtype
         )
         return self.replace(data=out, dtype=out_dtype)
+
+    def applymap_ptx(self, udf_ptx, np_dtype):
+        return cpp_unaryops.column_applymap(self, udf_ptx, np_dtype)
 
     def default_na_value(self):
         """Returns the default NA value for this column
@@ -362,6 +362,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         elif found == -1:
             raise ValueError("value not found")
         return found
+
+    def searchsorted(self, value, side="left"):
+        value_col = columnops.as_column(value)
+        return cpp_search.search_sorted(self, value_col, side)
 
     @property
     def is_monotonic_increasing(self):
@@ -484,6 +488,3 @@ def digitize(column, bins, right=False):
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return cpp_sort.digitize(column, bin_col, right)
-
-
-register_distributed_serializer(NumericalColumn)

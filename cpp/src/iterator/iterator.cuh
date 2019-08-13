@@ -77,7 +77,7 @@
 #include <bitmask/legacy/bit_mask.cuh>         // need for bit_mask::bit_mask_t
 #include <utilities/cudf_utils.h>       // need for CUDA_DEVICE_CALLABLE
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <thrust/iterator/iterator_adaptor.h>
 #include <thrust/iterator/counting_iterator.h>

@@ -64,15 +64,15 @@ struct table {
    * @note It is the caller's responsibility to free the array of gdf_columns
    *and their associated device memory.
    *
-   * @note Does not support `GDF_TIMESTAMP` columns as this would require
-   * passing in additional timestamp resolution information.
-   *
    * @param[in] num_rows The size of each gdf_column
    * @param[in] dtypes The type of each column
+   * @param[in] dtype_infos The gdf_extra_dtype_info for each column
    * @param[in] allocate_bitmasks If `true`, each column will be allocated an
    * appropriately sized bitmask
    *---------------------------------------------------------------------------**/
-  table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
+  table(gdf_size_type num_rows,
+        std::vector<gdf_dtype> const& dtypes,
+        std::vector<gdf_dtype_extra_info> const& dtype_infos,
         bool allocate_bitmasks = false, bool all_valid = false,
         cudaStream_t stream = 0);
 
@@ -162,6 +162,14 @@ struct table {
  * @return std::vector<gdf_dtype>
  *---------------------------------------------------------------------------**/
 std::vector<gdf_dtype> column_dtypes(cudf::table const& table);
+
+/**---------------------------------------------------------------------------*
+ * @brief Returns vector of the dtype_infos of the columns in a table
+ *
+ * @param table The table to get the column dtypes_infos from
+ * @return std::vector<gdf_dtype_extra_info>
+ *---------------------------------------------------------------------------**/
+std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table);
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates if a table contains any null values.

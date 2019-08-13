@@ -1,33 +1,29 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import operator
+import pickle
 import warnings
-from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 from pandas.api.types import is_dict_like, is_scalar
 
 from librmm_cffi import librmm as rmm
 
 import cudf.bindings.copying as cpp_copying
-from cudf import formatting
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
 )
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
-from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.settings import NOTSET, settings
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
+from cudf.utils.dtypes import is_categorical_dtype
 from cudf.window import Rolling
 
 
@@ -37,6 +33,22 @@ class Series(object):
 
     ``Series`` objects are used as columns of ``DataFrame``.
     """
+
+    @property
+    def _constructor(self):
+        return Series
+
+    @property
+    def _constructor_sliced(self):
+        raise NotImplementedError(
+            "_constructor_sliced not supported for Series!"
+        )
+
+    @property
+    def _constructor_expanddim(self):
+        from cudf import DataFrame
+
+        return DataFrame
 
     @classmethod
     def from_categorical(cls, categorical, codes=None):
@@ -123,7 +135,7 @@ class Series(object):
     def values(self):
         if self.dtype == np.dtype("object"):
             return self.data.to_host()
-        elif self.dtype.type is pd.core.dtypes.dtypes.CategoricalDtypeType:
+        elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
             return self.data.mem.copy_to_host()
@@ -132,15 +144,17 @@ class Series(object):
     def from_arrow(cls, s):
         return cls(s)
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {}
         frames = []
-        header["index"], index_frames = serialize(self._index)
+        header["index"], index_frames = self._index.serialize()
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
-        header["column"], column_frames = serialize(self._column)
+        header["column"], column_frames = self._column.serialize()
+        header["type"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
+
         return header, frames
 
     @property
@@ -176,12 +190,17 @@ class Series(object):
         self._column.name = name
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
+
         index_nframes = header["index_frame_count"]
-        index = deserialize(header["index"], frames[:index_nframes])
+        idx_typ = pickle.loads(header["index"]["type"])
+        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+
         frames = frames[index_nframes:]
+
         column_nframes = header["column_frame_count"]
-        column = deserialize(header["column"], frames[:column_nframes])
+        col_typ = pickle.loads(header["column"]["type"])
+        column = col_typ.deserialize(header["column"], frames[:column_nframes])
         return Series(column, index=index)
 
     def _copy_construct_defaults(self):
@@ -360,66 +379,39 @@ class Series(object):
         return not len(self)
 
     def __getitem__(self, arg):
-        if isinstance(
-            arg, (list, np.ndarray, pd.Series, range, Index, DeviceNDArray)
-        ):
-            if len(arg) == 0:
-                arg = Series(np.array([], dtype="int32"))
-            else:
-                arg = Series(arg)
-        if isinstance(arg, Series):
-            if issubclass(arg.dtype.type, np.integer):
-                maps = columnops.as_column(arg).data.mem
-                index = self.index.take(maps)
-                selvals = self._column.take(maps)
-            elif arg.dtype in [np.bool, np.bool_]:
-                selvals = self._column.apply_boolean_mask(arg)
-                index = self.index.as_column().apply_boolean_mask(arg)
-            else:
-                raise NotImplementedError(arg.dtype)
-            return self._copy_construct(data=selvals, index=index)
-        elif isinstance(arg, slice):
-            index = self.index[arg]  # slice index
-            col = self._column[arg]  # slice column
-            return self._copy_construct(data=col, index=index)
-        elif isinstance(arg, Number):
-            # The following triggers a IndexError if out-of-bound
-            return self._column.element_indexing(arg)
+        data = self._column[arg]
+        index = self.index.take(arg)
+        if utils.is_scalar(data) or data is None:
+            return data
+        return self._copy_construct(data=data, index=index)
+
+    def __setitem__(self, key, value):
+        # coerce value into a scalar or column
+        if utils.is_scalar(value):
+            value = utils.to_cudf_compatible_scalar(value)
         else:
-            raise NotImplementedError(type(arg))
+            value = columnops.as_column(value)
+
+        if hasattr(value, "dtype") and pd.api.types.is_numeric_dtype(
+            value.dtype
+        ):
+            # normalize types if necessary:
+            if not pd.api.types.is_integer(key):
+                to_dtype = np.result_type(value.dtype, self._column.dtype)
+                value = value.astype(to_dtype)
+                self._column = self._column.astype(to_dtype)
+
+        self._column[key] = value
 
     def take(self, indices, ignore_index=False):
         """Return Series by taking values from the corresponding *indices*.
         """
-        from cudf import Series
-
-        if isinstance(indices, Series):
-            indices = indices.to_gpu_array()
-        else:
-            indices = Buffer(indices).to_gpu_array()
-        # Handle zero size
-        if indices.size == 0:
-            return self._copy_construct(
-                data=self.data[:0], index=self.index[:0]
-            )
-
-        if self.dtype == np.dtype("object"):
-            return self[indices]
-
-        col = cpp_copying.apply_gather_array(self.data.to_gpu_array(), indices)
-
-        if self._column.mask:
-            mask = self._get_mask_as_series().take(indices).as_mask()
-            mask = Buffer(mask)
-        else:
-            mask = None
+        result = self[indices]
         if ignore_index:
-            index = RangeIndex(indices.size)
+            index = RangeIndex(len(result))
+            return result._copy_construct(index=index)
         else:
-            index = self.index.take(indices)
-
-        col = self._column.replace(data=col.data, mask=mask)
-        return self._copy_construct(data=col, index=index)
+            return result
 
     def _get_mask_as_series(self):
         mask = Series(cudautils.ones(len(self), dtype=np.bool))
@@ -463,52 +455,63 @@ class Series(object):
 
         return self.iloc[-n:]
 
-    def to_string(self, nrows=NOTSET):
+    def to_string(self):
         """Convert to string
 
-        Parameters
-        ----------
-        nrows : int
-            Maximum number of rows to show.
-            If it is None, all rows are shown.
+        Uses Pandas formatting internals to produce output identical to Pandas.
+        Use the Pandas formatting settings directly in Pandas to control cuDF
+        output.
         """
-        if nrows is NOTSET:
-            nrows = settings.formatting.get(nrows)
-
-        str_dtype = self.dtype
-
-        if len(self) == 0:
-            return "<empty Series of dtype={}>".format(str_dtype)
-
-        if nrows is None:
-            nrows = len(self)
-        else:
-            nrows = min(nrows, len(self))  # cap row count
-
-        more_rows = len(self) - nrows
-
-        # Prepare cells
-        cols = OrderedDict([("", self.values_to_string(nrows=nrows))])
-        dtypes = OrderedDict([("", self.dtype)])
-        # Format into a table
-        output = formatting.format(
-            index=self.index,
-            cols=cols,
-            dtypes=dtypes,
-            more_rows=more_rows,
-            series_spacing=True,
-        )
-        return (
-            output + "\nName: {}, dtype: {}".format(self.name, str_dtype)
-            if self.name is not None
-            else output + "\ndtype: {}".format(str_dtype)
-        )
+        return self.__repr__()
 
     def __str__(self):
-        return self.to_string(nrows=10)
+        return self.to_string()
 
     def __repr__(self):
-        return "<cudf.Series nrows={} >".format(len(self))
+        mr = pd.options.display.max_rows
+        if len(self) > mr and mr != 0:
+            top = self.head(int(mr / 2 + 1))
+            bottom = self.tail(int(mr / 2 + 1))
+            from cudf import concat
+
+            preprocess = concat([top, bottom])
+        else:
+            preprocess = self
+        if (
+            preprocess.has_null_mask
+            and not preprocess.dtype == "O"
+            and not is_categorical_dtype(preprocess.dtype)
+        ):
+            output = (
+                preprocess.astype("O").fillna("null").to_pandas().__repr__()
+            )
+        else:
+            output = preprocess.to_pandas().__repr__()
+        lines = output.split("\n")
+        if is_categorical_dtype(preprocess.dtype):
+            category_memory = lines[-1]
+            lines = lines[:-1]
+        if len(lines) > 1:
+            if lines[-1].startswith("Name: "):
+                lines = lines[:-1]
+                lines.append("Name: %s" % str(self.name))
+                if len(self) > len(preprocess):
+                    lines[-1] = lines[-1] + ", Length: %d" % len(self)
+                lines[-1] = lines[-1] + ", "
+            elif lines[-1].startswith("Length: "):
+                lines = lines[:-1]
+                lines.append("Length: %d" % len(self))
+                lines[-1] = lines[-1] + ", "
+            else:
+                lines = lines[:-1]
+                lines[-1] = lines[-1] + "\n"
+            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
+        else:
+            lines = output.split(",")
+            return lines[0] + ", dtype: %s)" % self.dtype
+        if is_categorical_dtype(preprocess.dtype):
+            lines.append(category_memory)
+        return "\n".join(lines)
 
     def _binaryop(self, other, fn, reflect=False):
         """
@@ -1064,26 +1067,6 @@ class Series(object):
         """A boolean indicating whether a null-mask is needed"""
         return self._column.has_null_mask
 
-    def masked_assign(self, value, mask):
-        """Assign a scalar value to a series using a boolean mask
-        df[df < 0] = 0
-
-        Parameters
-        ----------
-        value : scalar
-            scalar value for assignment
-        mask : cudf Series
-            Boolean Series
-
-        Returns
-        -------
-        cudf Series
-            cudf series with new value set to where mask is True
-        """
-
-        data = self._column.masked_assign(value, mask)
-        return self._copy_construct(data=data)
-
     def drop_duplicates(self, keep="first", inplace=False):
         """
         Return Series with duplicate values removed
@@ -1117,9 +1100,13 @@ class Series(object):
         """
         if self.null_count == 0:
             return self
-        data = self._column.dropna()
-        index = self.index.loc[~self.isna()]
-        return self._copy_construct(data=data, index=index)
+        result = self.to_frame().dropna()
+        if self.name is None:
+            result = result[0]
+            result.name = None
+            return result
+        else:
+            return result[self.name]
 
     def fillna(self, value, method=None, axis=None, inplace=False, limit=None):
         """Fill null values with ``value``.
@@ -1261,6 +1248,18 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
+    def nans_to_nulls(self):
+        """
+        Convert nans (if any) to nulls
+        """
+        from cudf.bindings.utils import mask_from_devary
+
+        if self.dtype.kind == "f":
+            sr = self.fillna(np.nan)
+            newmask = mask_from_devary(sr._column)
+            return sr.set_mask(newmask)
+        return self
+
     def all(self, axis=0, skipna=True, level=None):
         """
         """
@@ -1330,42 +1329,19 @@ class Series(object):
 
     @property
     def loc(self):
+        """
+        Select values by label.
+
+        See DataFrame.loc
+        """
         return _SeriesLocIndexer(self)
 
     @property
     def iloc(self):
         """
-        For integer-location based selection.
+        Select values by position.
 
-        Examples
-        --------
-        >>> import cudf
-        >>> sr = cudf.Series(list(range(20)))
-
-        Get the value from 1st index
-
-        >>> sr.iloc[1]
-        1
-
-        Get the values from 0,2,9 and 18th index
-
-        >>> sr.iloc[0,2,9,18]
-         0    0
-         2    2
-         9    9
-        18   18
-
-        Get the values using slice indices
-
-        >>> sr.iloc[3:10:2]
-        3    3
-        5    5
-        7    7
-        9    9
-
-        Returns
-        -------
-        Series containing the elements corresponding to the indices
+        See DataFrame.iloc
         """
         return _SeriesIlocIndexer(self)
 
@@ -1574,8 +1550,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = cpp_copying.apply_gather_column(self._column, rinds)
-        index = cpp_copying.apply_gather_array(self.index.gpu_values, rinds)
+        col = cpp_copying.apply_gather(self._column, rinds)
+        index = cpp_copying.apply_gather(self.index.as_column(), rinds)
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):
@@ -1805,6 +1781,54 @@ class Series(object):
             name=self.name,
             index=self.index,
         )
+
+    def isin(self, test):
+
+        from cudf import DataFrame
+
+        lhs = self
+        rhs = None
+
+        try:
+            rhs = columnops.as_column(test, dtype=self.dtype)
+            # if necessary, convert values via typecast.apply_cast
+            rhs = Series(rhs.astype(self.dtype))
+        except Exception:
+            # pandas functionally returns all False when cleansing via
+            # typecasting fails
+            return Series(cudautils.zeros(len(self), dtype="bool"))
+
+        # If categorical, combine categories first
+        if is_categorical_dtype(lhs):
+            lhs_cats = lhs.cat.categories.as_column()
+            rhs_cats = rhs.cat.categories.as_column()
+            if np.issubdtype(rhs_cats.dtype, lhs_cats.dtype):
+                # if the categories are the same dtype, we can combine them
+                cats = Series(lhs_cats.append(rhs_cats)).drop_duplicates()
+                lhs = lhs.cat.set_categories(cats, is_unique=True)
+                rhs = rhs.cat.set_categories(cats, is_unique=True)
+            else:
+                # If they're not the same dtype, short-circuit if the test
+                # list doesn't have any nulls. If it does have nulls, make
+                # the test list a Categorical with a single null
+                if rhs.null_count == 0:
+                    return Series(cudautils.zeros(len(self), dtype="bool"))
+                rhs = Series(pd.Categorical.from_codes([-1], categories=[]))
+                rhs = rhs.cat.set_categories(lhs_cats).astype(self.dtype)
+
+        # fillna so we can find nulls
+        if rhs.null_count > 0:
+            lhs = lhs.fillna(lhs._column.default_na_value())
+            rhs = rhs.fillna(lhs._column.default_na_value())
+
+        lhs = DataFrame({"x": lhs, "orig_order": cudautils.arange(len(lhs))})
+        rhs = DataFrame({"x": rhs, "bool": cudautils.ones(len(rhs), "bool")})
+        res = lhs.merge(rhs, on="x", how="left").sort_values(by="orig_order")
+        res = res.drop_duplicates(subset="orig_order").reset_index(drop=True)
+        res = res["bool"].fillna(False)
+        res.name = self.name
+
+        return res
 
     def unique_k(self, k):
         warnings.warn("Use .unique() instead", DeprecationWarning)
@@ -2210,6 +2234,7 @@ class Series(object):
         level=None,
         sort=True,
         group_keys=True,
+        as_index=None,
     ):
         if group_keys is not True:
             raise NotImplementedError(
@@ -2218,7 +2243,9 @@ class Series(object):
 
         from cudf.groupby.groupby import SeriesGroupBy
 
-        return SeriesGroupBy(self, by=by, level=level, sort=sort)
+        return SeriesGroupBy(
+            self, by=by, level=level, sort=sort, as_index=as_index
+        )
 
     @copy_docstring(Rolling)
     def rolling(
@@ -2400,6 +2427,24 @@ class Series(object):
 
         return out.copy(deep=copy)
 
+    def searchsorted(self, value, side="left"):
+        """Find indices where elements should be inserted to maintain order
+
+        Parameters
+        ----------
+        value : array_like
+            Column of values to search for
+        side : str {‘left’, ‘right’} optional
+            If ‘left’, the index of the first suitable location found is given.
+            If ‘right’, return the last such index
+
+        Returns
+        -------
+        A Column of insertion points with the same shape as value
+        """
+        outcol = self._column.searchsorted(value, side)
+        return Series(outcol)
+
     @property
     def is_unique(self):
         return self._column.is_unique
@@ -2415,9 +2460,6 @@ class Series(object):
     @property
     def is_monotonic_decreasing(self):
         return self._column.is_monotonic_decreasing
-
-
-register_distributed_serializer(Series)
 
 
 truediv_int_dtype_corrections = {

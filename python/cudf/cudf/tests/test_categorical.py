@@ -4,9 +4,17 @@ import numpy as np
 import pandas as pd
 import pytest
 
+import cudf as gd
 from cudf.dataframe import DataFrame, Series
 from cudf.dataframe.index import as_index
 from cudf.tests.utils import assert_eq
+
+
+@pytest.fixture
+def pd_str_cat():
+    categories = list("abc")
+    codes = [0, 0, 1, 0, 1, 2, 0, 1, 1, 2]
+    return pd.Categorical.from_codes(codes, categories=categories)
 
 
 def test_categorical_basic():
@@ -54,11 +62,12 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1
-2
+1 NaN
+2 NaN
 3 c
 4 a
 dtype: category
+Categories (3, object): [a, b, c]
 """
     assert string.split() == expect_str.split()
 
@@ -350,3 +359,115 @@ def test_categorical_set_categories_preserves_order():
         series.cat.set_categories([1, 2]),
         Series(series).cat.set_categories([1, 2]),
     )
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_as_ordered(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(False))
+    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(False))
+
+    assert cd_sr.cat.ordered is False
+    assert cd_sr.cat.ordered == pd_sr.cat.ordered
+
+    pd_sr_1 = pd_sr.cat.as_ordered(inplace=inplace)
+    cd_sr_1 = cd_sr.cat.as_ordered(inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert cd_sr_1.cat.ordered is True
+    assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
+    assert str(cd_sr_1) == str(pd_sr_1)
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_as_unordered(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(True))
+    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(True))
+
+    assert cd_sr.cat.ordered is True
+    assert cd_sr.cat.ordered == pd_sr.cat.ordered
+
+    pd_sr_1 = pd_sr.cat.as_unordered(inplace=inplace)
+    cd_sr_1 = cd_sr.cat.as_unordered(inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert cd_sr_1.cat.ordered is False
+    assert cd_sr_1.cat.ordered == pd_sr_1.cat.ordered
+    assert str(cd_sr_1) == str(pd_sr_1)
+
+
+@pytest.mark.parametrize("from_ordered", [True, False])
+@pytest.mark.parametrize("to_ordered", [True, False])
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_reorder_categories(
+    pd_str_cat, from_ordered, to_ordered, inplace
+):
+
+    pd_sr = pd.Series(pd_str_cat.copy().set_ordered(from_ordered))
+    cd_sr = gd.Series(pd_str_cat.copy().set_ordered(from_ordered))
+
+    assert_eq(pd_sr, cd_sr)
+
+    assert str(pd_sr) == str(cd_sr)
+
+    kwargs = dict(ordered=to_ordered, inplace=inplace)
+
+    pd_sr_1 = pd_sr.cat.reorder_categories(list("cba"), **kwargs)
+    cd_sr_1 = cd_sr.cat.reorder_categories(list("cba"), **kwargs)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert_eq(pd_sr_1, cd_sr_1)
+
+    assert str(cd_sr_1) == str(pd_sr_1)
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_add_categories(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy())
+    cd_sr = gd.Series(pd_str_cat.copy())
+
+    assert_eq(pd_sr, cd_sr)
+
+    assert str(pd_sr) == str(cd_sr)
+
+    pd_sr_1 = pd_sr.cat.add_categories(["d"], inplace=inplace)
+    cd_sr_1 = cd_sr.cat.add_categories(["d"], inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert "d" in list(pd_sr_1.cat.categories)
+    assert "d" in list(cd_sr_1.cat.categories)
+
+    assert_eq(pd_sr_1, cd_sr_1)
+
+
+@pytest.mark.parametrize("inplace", [True, False])
+def test_categorical_remove_categories(pd_str_cat, inplace):
+
+    pd_sr = pd.Series(pd_str_cat.copy())
+    cd_sr = gd.Series(pd_str_cat.copy())
+
+    assert_eq(pd_sr, cd_sr)
+
+    assert str(pd_sr) == str(cd_sr)
+
+    pd_sr_1 = pd_sr.cat.remove_categories(["a"], inplace=inplace)
+    cd_sr_1 = cd_sr.cat.remove_categories(["a"], inplace=inplace)
+    pd_sr_1 = pd_sr if pd_sr_1 is None else pd_sr_1
+    cd_sr_1 = cd_sr if cd_sr_1 is None else cd_sr_1
+
+    assert "a" not in list(pd_sr_1.cat.categories)
+    assert "a" not in list(cd_sr_1.cat.categories)
+
+    assert_eq(pd_sr_1, cd_sr_1)
+
+    # test using ordered operators
+    with pytest.raises(ValueError) as raises:
+        cd_sr_1 = cd_sr.cat.remove_categories(["a", "d"], inplace=inplace)
+
+    raises.match("removals must all be in old categories")

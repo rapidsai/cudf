@@ -9,8 +9,20 @@ import cudf
 from cudf.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
+_now = np.datetime64("now")
+_tomorrow = _now + np.timedelta64(1, "D")
+_now = np.int64(_now.astype("datetime64[ns]"))
+_tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 
-def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
+
+def make_frame(
+    dataframe_class,
+    nelem,
+    seed=0,
+    extra_levels=(),
+    extra_vals=(),
+    with_datetime=False,
+):
     np.random.seed(seed)
 
     df = dataframe_class()
@@ -23,6 +35,11 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     df["val"] = np.random.random(nelem)
     for val in extra_vals:
         df[val] = np.random.random(nelem)
+
+    if with_datetime:
+        df["datetime"] = np.random.randint(
+            _now, _tomorrow, nelem, dtype=np.int64
+        ).astype("datetime64[ns]")
 
     return df
 
@@ -84,12 +101,17 @@ def test_group_keys_true(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
-def test_groupby_getitem_styles():
-    pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3]})
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_getitem_getattr(as_index):
+    pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
-    assert_eq(gdf.groupby("x")["y"].sum(), pdf.groupby("x")["y"].sum())
+    assert_eq(pdf.groupby("x")["y"].sum(), gdf.groupby("x")["y"].sum())
     assert_eq(pdf.groupby("x").y.sum(), gdf.groupby("x").y.sum())
     assert_eq(pdf.groupby("x")[["y"]].sum(), gdf.groupby("x")[["y"]].sum())
+    assert_eq(
+        pdf.groupby(["x", "y"], as_index=as_index).sum(),
+        gdf.groupby(["x", "y"], as_index=as_index).sum(),
+    )
 
 
 @pytest.mark.parametrize("nelem", get_nelem())
@@ -743,3 +765,49 @@ def test_groupby_index_type():
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
     assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+
+
+def test_groupby_size():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").size(), gdf.groupby("a").size(), check_dtype=False
+    )
+
+    assert_eq(
+        pdf.groupby(["a", "b", "c"]).size(),
+        gdf.groupby(["a", "b", "c"]).size(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_eq(
+        pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False
+    )
+
+
+@pytest.mark.parametrize("nelem", get_nelem())
+@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize("agg", ["min", "max", "mean", "count"])
+def test_groupby_datetime(nelem, as_index, agg):
+    if agg == "mean" and as_index is True:
+        return
+    check_dtype = agg not in ("mean", "count")
+    pdf = make_frame(pd.DataFrame, nelem=nelem, with_datetime=True)
+    gdf = make_frame(cudf.DataFrame, nelem=nelem, with_datetime=True)
+    pdg = pdf.groupby("datetime", as_index=as_index)
+    gdg = gdf.groupby("datetime", as_index=as_index)
+    if as_index is False:
+        pdres = getattr(pdg, agg)()
+        gdres = getattr(gdg, agg)()
+    else:
+        pdres = pdg.agg({"datetime": agg})
+        gdres = gdg.agg({"datetime": agg})
+    assert_eq(pdres, gdres, check_dtype=check_dtype)

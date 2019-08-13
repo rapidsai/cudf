@@ -106,7 +106,8 @@ set(HASH_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_sum.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_avg.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_max.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_min.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_min.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_multi_agg.cu")
 
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
@@ -146,6 +147,15 @@ set(LEGACY_BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/legacy/bitmask_ops_test.cu")
 
 ConfigureTest(LEGACY_BITMASK_TEST "${LEGACY_BITMASK_TEST_SRC}")
+
+###################################################################################################
+# - nans_to_nulls tests ---------------------------------------------------------------------------
+
+set(NANS_TO_NULLS_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/nans_to_nulls_tests.cu")
+
+ConfigureTest(NANS_TO_NULLS_TEST "${NANS_TO_NULLS_TEST_SRC}")
+
 
 ###################################################################################################
 # - legacy bit_mask tests --------------------------------------------------------------------------------
@@ -225,21 +235,30 @@ ConfigureTest(UNARY_TEST "${UNARY_TEST_SRC}")
 set(BINARY_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/binop-verify-input-test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-operands-null-test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-integration-test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/integration/binary-operation-generic-ptx-test.cu")
 
 ConfigureTest(BINARY_TEST "${BINARY_TEST_SRC}")
+
+###################################################################################################
+# - unary transform tests -------------------------------------------------------------------------
+
+set(TRANSFORM_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/transform/integration/unary-operation-integration-test.cu")
+
+ConfigureTest(TRANSFORM_TEST "${TRANSFORM_TEST_SRC}")
 
 ###################################################################################################
 # - jit cache tests -------------------------------------------------------------------------------
 
 set(JITCACHE_TEST_SRC 
-    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-test.cu")
 
 ConfigureTest(JITCACHE_TEST "${JITCACHE_TEST_SRC}")
 
 set(JITCACHE_MULTI_TEST_SRC 
-    "${CMAKE_SOURCE_DIR}/src/binaryop/jit/core/cache.cpp"
+    "${CMAKE_SOURCE_DIR}/src/jit/cache.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/binaryop/unit/jit-cache-multiprocess-test.cpp")
 
 ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
@@ -249,6 +268,9 @@ ConfigureTest(JITCACHE_MULTIPROC_TEST "${JITCACHE_MULTI_TEST_SRC}")
 
 set(DECOMPRESSION_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/comp/decomp_test.cu")
+set(AVRO_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/avro/avro_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 set(CSV_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/csv/csv_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
@@ -257,6 +279,7 @@ set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
+ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
 
@@ -301,10 +324,19 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
 ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+
+###################################################################################################
+# - nvstring scatter tests ------------------------------------------------------------------------
+
+set(NVSTRING_SCATTER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/nvstring_scatter_tests.cu")
+
+  ConfigureTest(NVSTRING_SCATTER_TEST "${NVSTRING_SCATTER_TEST_SRC}")
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
@@ -365,7 +397,8 @@ ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
@@ -394,6 +427,14 @@ set(FILLING_TEST_SRC
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
+###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SEARCH_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
+
+ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+
 
 
 ###################################################################################################
@@ -408,14 +449,6 @@ enable_testing()
 ###################################################################################################
 
 # only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - stream compaction benchmarks-------------------------------------------------------------------
-
-set(STREAM_COMPACTION_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
-
-ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 
 ###################################################################################################
 # - iterator benchmarks-------------------------------------------------------------------

@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from cudf.io.avro import read_avro
 from cudf.io.csv import read_csv, to_csv
 from cudf.io.dlpack import from_dlpack
 from cudf.io.feather import read_feather
