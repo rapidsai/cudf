@@ -1,5 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import types
 from contextlib import ExitStack as does_not_raise
 
 import numpy as np
@@ -95,4 +96,26 @@ def test_cuda_array_interface_interop_out(dtype, module):
             got = module_data.copy_to_host()
 
     expect = np_data
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype", basic_dtypes + datetime_dtypes)
+@pytest.mark.parametrize("nulls", ["all", "some", "none"])
+def test_cuda_array_interface_as_column(dtype, nulls):
+    sr = cudf.Series(np.arange(10))
+
+    if nulls == "some":
+        sr[[1, 3, 4, 7]] = None
+    elif nulls == "all":
+        sr[:] = None
+
+    sr = sr.astype(dtype)
+
+    obj = types.SimpleNamespace(
+        __cuda_array_interface__=sr.__cuda_array_interface__
+    )
+
+    expect = sr
+    got = cudf.Series(obj)
+
     assert_eq(expect, got)

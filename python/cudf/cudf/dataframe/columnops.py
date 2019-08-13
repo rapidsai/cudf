@@ -364,6 +364,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     * numpy array
     * pyarrow array
     * pandas.Categorical
+    * Object exposing ``__cuda_array_interface__``
     Returns
     -------
     result : subclass of TypedColumnBase
@@ -415,17 +416,38 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 mask = cudf.bindings.utils.mask_from_devary(data)
                 data = data.set_mask(mask)
 
-    elif cuda.is_cuda_array(arbitrary):
-        # Use cuda array interface to do create a numba device array by
-        # reference
-        new_dev_array = cuda.as_cuda_array(arbitrary)
+    elif hasattr(arbitrary, "__cuda_array_interface__"):
+        from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+        from cudf.bindings.cudf_cpp import count_nonzero_mask
 
-        # Allocate new output array using rmm and copy the numba device array
-        # to an rmm owned device array
-        out_dev_array = rmm.device_array_like(new_dev_array)
-        out_dev_array.copy_to_device(new_dev_array)
+        desc = arbitrary.__cuda_array_interface__
+        ptr = desc["data"][0]
+        nelem = desc["shape"][0]
+        dtype = np.dtype(desc["typestr"])
 
-        data = as_column(out_dev_array)
+        data = rmm.device_array_from_ptr(
+            ptr, nelem=nelem, dtype=dtype, finalizer=None
+        )
+        data = Buffer(data)
+
+        mask = desc["mask"]
+        if mask is not None:
+            mask_ptr = mask.__cuda_array_interface__["data"][0]
+            mask = rmm.device_array_from_ptr(
+                mask_ptr,
+                nelem=calc_chunk_size(nelem, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=None,
+            )
+            nnz = count_nonzero_mask(mask, size=nelem)
+            null_count = nelem - nnz
+            mask = Buffer(mask)
+        else:
+            null_count = 0
+
+        return build_column(
+            data, dtype=dtype, mask=mask, name=name, null_count=null_count
+        )
 
     elif isinstance(arbitrary, np.ndarray):
         # CUDF assumes values are always contiguous
