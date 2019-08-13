@@ -336,6 +336,10 @@ class Index(object):
     def isin(self, values):
         return self.to_series().isin(values)
 
+    @property
+    def __cuda_array_interface__(self):
+        raise (NotImplementedError)
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.
@@ -366,6 +370,7 @@ class RangeIndex(Index):
         self._start = int(start)
         self._stop = int(stop)
         self.name = name
+        self._cached_values = None
 
     def copy(self, deep=True):
         if deep:
@@ -439,7 +444,9 @@ class RangeIndex(Index):
 
     @property
     def _values(self):
-        return self.as_column()
+        if self._cached_values is None:
+            self._cached_values = self.as_column()
+        return self._cached_values
 
     @property
     def is_contiguous(self):
@@ -504,6 +511,10 @@ class RangeIndex(Index):
     def get_slice_bound(self, label, side, kind):
         # TODO: Range-specific implementation here
         raise (NotImplementedError)
+
+    @property
+    def __cuda_array_interface__(self):
+        return self._values.__cuda_array_interface__
 
 
 def index_from_range(start, stop=None, step=None):
@@ -652,6 +663,10 @@ class GenericIndex(Index):
 
     def get_slice_bound(self, label, side, kind):
         return self._values.get_slice_bound(label, side, kind)
+
+    @property
+    def __cuda_array_interface__(self):
+        return self._values.__cuda_array_interface__
 
 
 class DatetimeIndex(GenericIndex):
