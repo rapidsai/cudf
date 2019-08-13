@@ -22,6 +22,7 @@ namespace cudf {
 /** 
  * @brief  Performs an inner join on the specified columns of two
  * dataframes (left, right)
+ *
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
  * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
  * returned.
@@ -48,6 +49,7 @@ std::pair<cudf::table, cudf::table> inner_join(
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
+ *
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
  * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
  * returned.
@@ -75,6 +77,7 @@ std::pair<cudf::table, cudf::table> left_join(
 /** 
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two dataframes (left, right)
+ *
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
  * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
  * returned.
