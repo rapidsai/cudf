@@ -12,7 +12,6 @@ import nvstrings
 from librmm_cffi import librmm as rmm
 
 import cudf
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
@@ -28,34 +27,23 @@ class Index(object):
     """The root interface for all Series indexes.
     """
 
-    def serialize(self, serialize):
+    def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
-
-        Parameters
-        ---
-        serialize:  A function provided by register_distributed_serializer
-        middleware.
         """
         header = {}
-        header["payload"], frames = serialize(pickle.dumps(self))
-        header["frame_count"] = len(frames)
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["type"] = pickle.dumps(type(self))
+        frames = [pickle.dumps(self)]
+        header["frame_count"] = 1
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         """Convert from pickle format into Index
-
-        Parameters
-        ---
-        deserialize:  A function provided by register_distributed_serializer
-        middleware.
-        header: The data header produced by the serialize function.
-        frames: The serialized data
         """
-        payload = deserialize(
-            header["payload"], frames[: header["frame_count"]]
-        )
+
+        payload = b"".join(frames[: header["frame_count"]])
         return pickle.loads(payload)
 
     def take(self, indices):
@@ -404,6 +392,8 @@ class RangeIndex(Index):
         return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
+        from numbers import Number
+
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             sln = (stop - start) // step
@@ -415,7 +405,7 @@ class RangeIndex(Index):
             else:
                 return index_from_range(start, stop, step)
 
-        elif isinstance(index, int):
+        elif isinstance(index, Number):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
@@ -561,19 +551,6 @@ class GenericIndex(Index):
         result._values = self._values.copy(deep)
         result.name = self.name
         return result
-
-    def serialize(self, serialize):
-        header = {}
-        header["payload"], frames = serialize(self._values)
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        payload = deserialize(
-            header["payload"], frames[: header["frame_count"]]
-        )
-        return cls(payload)
 
     def __sizeof__(self):
         return self._values.__sizeof__()
@@ -870,9 +847,3 @@ def as_index(arbitrary, name=None):
         )
     else:
         return as_index(columnops.as_column(arbitrary), name=name)
-
-
-register_distributed_serializer(RangeIndex)
-register_distributed_serializer(GenericIndex)
-register_distributed_serializer(DatetimeIndex)
-register_distributed_serializer(CategoricalIndex)

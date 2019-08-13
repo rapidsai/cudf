@@ -1,8 +1,8 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import operator
+import pickle
 import warnings
-from collections import OrderedDict
 from numbers import Number
 
 import numpy as np
@@ -12,18 +12,15 @@ from pandas.api.types import is_dict_like, is_scalar
 from librmm_cffi import librmm as rmm
 
 import cudf.bindings.copying as cpp_copying
-from cudf import formatting
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
 )
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
-from cudf.settings import NOTSET, settings
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import is_categorical_dtype
@@ -147,15 +144,17 @@ class Series(object):
     def from_arrow(cls, s):
         return cls(s)
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {}
         frames = []
-        header["index"], index_frames = serialize(self._index)
+        header["index"], index_frames = self._index.serialize()
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
-        header["column"], column_frames = serialize(self._column)
+        header["column"], column_frames = self._column.serialize()
+        header["type"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
+
         return header, frames
 
     @property
@@ -191,12 +190,17 @@ class Series(object):
         self._column.name = name
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
+
         index_nframes = header["index_frame_count"]
-        index = deserialize(header["index"], frames[:index_nframes])
+        idx_typ = pickle.loads(header["index"]["type"])
+        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+
         frames = frames[index_nframes:]
+
         column_nframes = header["column_frame_count"]
-        column = deserialize(header["column"], frames[:column_nframes])
+        col_typ = pickle.loads(header["column"]["type"])
+        column = col_typ.deserialize(header["column"], frames[:column_nframes])
         return Series(column, index=index)
 
     def _copy_construct_defaults(self):
@@ -451,62 +455,63 @@ class Series(object):
 
         return self.iloc[-n:]
 
-    def to_string(self, nrows=NOTSET):
+    def to_string(self):
         """Convert to string
 
-        Parameters
-        ----------
-        nrows : int
-            Maximum number of rows to show.
-            If it is None, all rows are shown.
+        Uses Pandas formatting internals to produce output identical to Pandas.
+        Use the Pandas formatting settings directly in Pandas to control cuDF
+        output.
         """
-        if nrows is NOTSET:
-            nrows = settings.formatting.get(nrows)
-
-        str_dtype = self.dtype
-
-        if len(self) == 0:
-            return "<empty Series of dtype={}>".format(str_dtype)
-
-        if nrows is None:
-            nrows = len(self)
-        else:
-            nrows = min(nrows, len(self))  # cap row count
-
-        more_rows = len(self) - nrows
-
-        # Prepare cells
-        cols = OrderedDict([("", self.values_to_string(nrows=nrows))])
-        dtypes = OrderedDict([("", self.dtype)])
-        # Format into a table
-        output = formatting.format(
-            index=self.index,
-            cols=cols,
-            dtypes=dtypes,
-            more_rows=more_rows,
-            series_spacing=True,
-        )
-        if self.name is None:
-            output += "\ndtype: {}".format(str_dtype)
-        else:
-            output += "\nName: {}, dtype: {}".format(self.name, str_dtype)
-
-        if is_categorical_dtype(self.dtype):
-            cat = self.cat
-            str_dtype = cat.categories.dtype.name
-            categories = cat.categories.to_array()
-            separator = " < " if cat.ordered else ", "
-            desc = "({}, {})".format(len(categories), str_dtype)
-            categories = "[{}]".format(separator.join(categories))
-            output += "\nCategories {}: {}".format(desc, categories)
-
-        return output
+        return self.__repr__()
 
     def __str__(self):
-        return self.to_string(nrows=10)
+        return self.to_string()
 
     def __repr__(self):
-        return "<cudf.Series nrows={} >".format(len(self))
+        mr = pd.options.display.max_rows
+        if len(self) > mr and mr != 0:
+            top = self.head(int(mr / 2 + 1))
+            bottom = self.tail(int(mr / 2 + 1))
+            from cudf import concat
+
+            preprocess = concat([top, bottom])
+        else:
+            preprocess = self
+        if (
+            preprocess.has_null_mask
+            and not preprocess.dtype == "O"
+            and not is_categorical_dtype(preprocess.dtype)
+        ):
+            output = (
+                preprocess.astype("O").fillna("null").to_pandas().__repr__()
+            )
+        else:
+            output = preprocess.to_pandas().__repr__()
+        lines = output.split("\n")
+        if is_categorical_dtype(preprocess.dtype):
+            category_memory = lines[-1]
+            lines = lines[:-1]
+        if len(lines) > 1:
+            if lines[-1].startswith("Name: "):
+                lines = lines[:-1]
+                lines.append("Name: %s" % str(self.name))
+                if len(self) > len(preprocess):
+                    lines[-1] = lines[-1] + ", Length: %d" % len(self)
+                lines[-1] = lines[-1] + ", "
+            elif lines[-1].startswith("Length: "):
+                lines = lines[:-1]
+                lines.append("Length: %d" % len(self))
+                lines[-1] = lines[-1] + ", "
+            else:
+                lines = lines[:-1]
+                lines[-1] = lines[-1] + "\n"
+            lines[-1] = lines[-1] + "dtype: %s" % self.dtype
+        else:
+            lines = output.split(",")
+            return lines[0] + ", dtype: %s)" % self.dtype
+        if is_categorical_dtype(preprocess.dtype):
+            lines.append(category_memory)
+        return "\n".join(lines)
 
     def _binaryop(self, other, fn, reflect=False):
         """
@@ -2446,9 +2451,6 @@ class Series(object):
     @property
     def is_monotonic_decreasing(self):
         return self._column.is_monotonic_decreasing
-
-
-register_distributed_serializer(Series)
 
 
 truediv_int_dtype_corrections = {

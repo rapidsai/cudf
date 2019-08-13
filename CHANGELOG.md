@@ -78,6 +78,7 @@
 - PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2378 remove dask for (de-)serialization of cudf objects
 - PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2373 cudf.DataFrame enchancements & Series.values support
@@ -97,6 +98,8 @@
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
+- PR #2432 Use pandas formatting for console, html, and latex output
+
 
 ## Bug Fixes
 
@@ -154,6 +157,7 @@
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
+- PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
 - PR #2521 Fix casting datetimes from/to the same resolution
 
 
