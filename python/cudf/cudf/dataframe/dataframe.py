@@ -2556,6 +2556,8 @@ class DataFrame(object):
 
             Names starting with `@` refer to Python variables
 
+            A row will be excluded if it provides a null value to expr
+
         local_dict : dict
             Containing the local variable to be used in query.
 
