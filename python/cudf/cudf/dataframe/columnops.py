@@ -178,7 +178,13 @@ class TypedColumnBase(Column):
 
     @property
     def __cuda_array_interface__(self):
-        mask = None
+        output = {
+            "shape": (len(self),),
+            "typestr": self.dtype.str,
+            "data": (self.data.mem.device_ctypes_pointer.value, True),
+            "version": 1,
+        }
+
         if self.has_null_mask:
             from types import SimpleNamespace
 
@@ -194,18 +200,11 @@ class TypedColumnBase(Column):
                         True,
                     ),
                     "version": 1,
-                    "strides": None,
-                    "mask": None,
                 }
             )
-        return {
-            "shape": (len(self),),
-            "typestr": self.dtype.str,
-            "data": (self.data.mem.device_ctypes_pointer.value, True),
-            "version": 1,
-            "strides": None,
-            "mask": mask,
-        }
+            output["mask"] = mask
+
+        return output
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):

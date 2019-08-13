@@ -806,7 +806,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     @property
     def __cuda_array_interface__(self):
-        return NotImplementedError(
+        raise NotImplementedError(
             "Strings are not yet supported via `__cuda_array_interface__`"
         )
 

@@ -53,7 +53,12 @@ def assert_eq(a, b, **kwargs):
     elif isinstance(a, (pd.Index, pd.MultiIndex)):
         tm.assert_index_equal(a, b, **kwargs)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
-        assert np.allclose(a, b, equal_nan=True)
+        if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
+            b.dtype, np.floating
+        ):
+            assert np.allclose(a, b, equal_nan=True)
+        else:
+            assert np.array_equal(a, b)
     else:
         if a == b:
             return True
