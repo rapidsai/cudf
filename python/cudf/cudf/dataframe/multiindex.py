@@ -556,7 +556,7 @@ class MultiIndex(Index):
         # We do two things here to mimic Pandas behavior:
         # 1. as_index() on each level, so DatetimeColumn becomes DatetimeIndex
         # 2. convert levels to numpy array so empty levels become Float64Index
-        pandas_levels = np.array(
+        levels = np.array(
             [as_index(level).to_pandas() for level in self.levels]
         )
 
@@ -565,13 +565,9 @@ class MultiIndex(Index):
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            pandas_mi = pd.MultiIndex(
-                levels=pandas_levels, codes=pandas_codes
-            )
+            pandas_mi = pd.MultiIndex(levels=levels, codes=pandas_codes)
         else:
-            pandas_mi = pd.MultiIndex(
-                levels=pandas_levels, labels=pandas_codes
-            )
+            pandas_mi = pd.MultiIndex(levels=levels, labels=pandas_codes)
         if self.names is not None:
             pandas_mi.names = self.names
         return pandas_mi
