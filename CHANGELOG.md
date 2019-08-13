@@ -174,6 +174,7 @@
 - PR #2557 fix cudautils import in string.py
 - PR #2521 Fix casting datetimes from/to the same resolution
 - PR #2560 Remove duplicate `dlpack` definition in conda recipe
+- PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
 
 
 # cuDF 0.8.0 (27 June 2019)

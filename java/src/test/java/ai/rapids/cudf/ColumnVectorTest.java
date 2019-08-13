@@ -159,12 +159,51 @@ public class ColumnVectorTest {
   }
 
   @Test
-  void testFromScalarInteger() {
+  void testFromNullScalarInteger() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT32), 6);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
       assertEquals(input.getNullCount(), expected.getNullCount());
       assertColumnsAreEqual(input, expected);
+    }
+  }
+
+  @Test
+  void testSetToNullScalarInteger() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromInt(123), 6);
+         ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
+      input.fill(Scalar.fromNull(DType.INT32));
+      assertEquals(input.getNullCount(), expected.getNullCount());
+      assertColumnsAreEqual(input, expected);
+    }
+  }
+
+  @Test
+  void testSetToNullScalarByte() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    int numNulls = 3000;
+    try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT8), numNulls)) {
+      assertEquals(input.getNullCount(), numNulls);
+      input.ensureOnHost();
+      for (int i = 0; i < numNulls; i++){
+        assertTrue(input.isNull(i));
+      }
+    }
+  }
+
+  @Test
+  void testSetToNullThenBackScalarByte() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    int numNulls = 3000;
+    try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT8), numNulls)) {
+      assertEquals(input.getNullCount(), numNulls);
+      input.fill(Scalar.fromByte((byte)5));
+      assertEquals(input.getNullCount(), 0);
+      input.ensureOnHost();
+      for (int i = 0; i < numNulls; i++){
+        assertFalse(input.isNull(i));
+      }
     }
   }
 
