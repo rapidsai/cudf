@@ -172,7 +172,9 @@ struct CastTimestampTo_Dispatcher {
         std::is_same<TypeTo, cudf::timestamp>::value,
     void>
     operator()(gdf_column const* input, gdf_column *output) {
-        if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ms ) 
+        if( input->dtype_info.time_unit == output->dtype_info.time_unit ) 
+            cudf::unary::Launcher<TypeFrom, TypeTo, DeviceCast<TypeFrom, TypeTo> >::launch(input, output);
+        else if( input->dtype_info.time_unit == TIME_UNIT_s && output->dtype_info.time_unit == TIME_UNIT_ms ) 
             cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_s ) 
             cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
@@ -196,7 +198,7 @@ struct CastTimestampTo_Dispatcher {
             cudf::unary::Launcher<TypeFrom, TypeTo, DownCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
         else if( input->dtype_info.time_unit == TIME_UNIT_ms && output->dtype_info.time_unit == TIME_UNIT_us ) 
             cudf::unary::Launcher<TypeFrom, TypeTo, UpCasting<TypeFrom, TypeTo, METRIC_FACTOR> >::launch(input, output);
-        else if( input->dtype_info.time_unit != output->dtype_info.time_unit ) 
+        else 
             CUDF_FAIL("Timestamp resolution mismatch");
     }
 
