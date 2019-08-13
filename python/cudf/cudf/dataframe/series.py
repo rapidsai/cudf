@@ -2487,6 +2487,10 @@ class Series(object):
     def is_monotonic_decreasing(self):
         return self._column.is_monotonic_decreasing
 
+    @property
+    def __cuda_array_interface__(self):
+        return self._column.__cuda_array_interface__
+
 
 truediv_int_dtype_corrections = {
     "int16": "float32",

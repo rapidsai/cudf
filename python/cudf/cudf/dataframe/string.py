@@ -804,6 +804,12 @@ class StringColumn(columnops.TypedColumnBase):
             ).all()
         return self._is_monotonic_decreasing
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Strings are not yet supported via `__cuda_array_interface__`"
+        )
+
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
