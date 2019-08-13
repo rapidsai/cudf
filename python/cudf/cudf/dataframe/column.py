@@ -72,6 +72,7 @@ class Column(object):
                     o
                     for o in not_null_cols
                     if not isinstance(o, NumericalColumn)
+                    or np.issubdtype(o.dtype, np.datetime64)
                 ]
             )
             == 0
