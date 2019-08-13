@@ -17,9 +17,10 @@ df = pd.DataFrame(
         "x": [i * 7 % 5 for i in range(nrows)],  # Not sorted
         "y": [i * 2.5 for i in range(nrows)],
     },
-    index=pd.Index(range(nrows), name="index")
+    index=pd.Index(range(nrows), name="index"),
 )  # Sorted
 ddf = dd.from_pandas(df, npartitions=npartitions)
+
 
 def test_roundtrip_from_dask(tmpdir):
     tmpdir = str(tmpdir)
