@@ -162,6 +162,7 @@
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
 - PR #2557 fix cudautils import in string.py
 - PR #2521 Fix casting datetimes from/to the same resolution
+- PR #2560 Remove duplicate `dlpack` definition in conda recipe
 - PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 
 
