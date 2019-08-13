@@ -159,8 +159,26 @@ rows in input table should be equal to number of rows in key colums table");
   gdf_size_type unique_count; 
   std::tie(unique_indices, unique_count) =
     detail::get_unique_ordered_indices(key_columns, keep, nulls_are_equal);
+
   // Allocate output columns
-  cudf::table destination_table = cudf::allocate_like(input_table, unique_count);
+  cudf::table destination_table(unique_count,
+                                cudf::column_dtypes(input_table),
+                                cudf::column_dtype_infos(input_table), true);
+  // Ensure column names are preserved. Ideally we could call cudf::allocate_like
+  // here, but the above constructor allocates and fills null bitmaps differently
+  // than allocate_like. Doing this for now because the impending table + column
+  // re-design will handle this better than another cudf::allocate_like overload
+  std::transform(
+    input_table.begin(), input_table.end(),
+    destination_table.begin(), destination_table.begin(),
+    [](const gdf_column* inp_col, gdf_column* out_col) {
+      // a rather roundabout way to do a strcpy...
+      gdf_column_view_augmented(out_col, out_col->data, out_col->valid, out_col->size,
+                                out_col->dtype, out_col->null_count, out_col->dtype_info,
+                                inp_col->col_name);
+      return out_col;
+  });
+
   // run gather operation to establish new order
   cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
   nvcategory_gather_table(input_table, destination_table);
