@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from functools import lru_cache
 from math import fmod
 
 import numpy as np
@@ -926,3 +927,41 @@ def window_sizes_from_offset(arr, offset):
             arr, window_sizes, offset
         )
     return window_sizes
+
+
+@lru_cache(maxsize=32)
+def compile_udf(udf, type_signature):
+    """Copmile ``udf`` with `numba`
+
+    Compile a python callable function ``udf`` with
+    `numba.cuda.jit(device=True)` using ``type_signature`` into CUDA PTX
+    together with the generated output type.
+
+    The output is expected to be passed to the PTX parser in `libcudf`
+    to generate a CUDA device funtion to be inlined into CUDA kernels,
+    compiled at runtime and launched.
+
+    Parameters
+    --------
+    udf:
+      a python callable function
+
+    type_signature:
+      a tuple that specifies types of each of the input parameters of ``udf``.
+      The types should be one in `numba.types` and could be converted from
+      numpy types with `numba.numpy_support.from_dtype(...)`.
+
+    Returns
+    --------
+    ptx_code:
+      The compiled CUDA PTX
+
+    output_type:
+      An numpy type
+
+    """
+    decorated_udf = cuda.jit(udf, device=True)
+    compiled = decorated_udf.compile(type_signature)
+    ptx_code = decorated_udf.inspect_ptx(type_signature).decode("utf-8")
+    output_type = numpy_support.as_dtype(compiled.signature.return_type)
+    return (ptx_code, output_type.type)
