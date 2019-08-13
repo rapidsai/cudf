@@ -164,6 +164,7 @@
 - PR #2514 Fix cudf::drop_nulls threshold handling in Cython
 - PR #2516 Fix utilities include paths and meta.yaml header paths
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
+- PR #2431 Fix local build generated file ownerships
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
 - PR #2466 Fix `dataframe.query` returning null rows erroneously
