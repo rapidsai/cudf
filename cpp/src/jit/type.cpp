@@ -18,7 +18,7 @@
  */
 
 #include <jit/type.h>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <string>
 
 namespace cudf {

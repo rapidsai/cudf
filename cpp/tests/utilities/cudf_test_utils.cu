@@ -20,7 +20,7 @@
 #include "cudf_test_utils.cuh"
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/nvcategory_utils.cuh>
 #include <cudf/functions.h>
 

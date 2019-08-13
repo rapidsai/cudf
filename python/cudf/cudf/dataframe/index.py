@@ -7,14 +7,11 @@ from copy import copy, deepcopy
 
 import numpy as np
 import pandas as pd
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
 
 import cudf
-import cudf.bindings.copying as cpp_copying
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
@@ -22,7 +19,6 @@ from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
 from cudf.dataframe.numerical import NumericalColumn
 from cudf.dataframe.string import StringColumn
-from cudf.indexing import _IndexLocIndexer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
 
@@ -31,34 +27,23 @@ class Index(object):
     """The root interface for all Series indexes.
     """
 
-    def serialize(self, serialize):
+    def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
-
-        Parameters
-        ---
-        serialize:  A function provided by register_distributed_serializer
-        middleware.
         """
         header = {}
-        header["payload"], frames = serialize(pickle.dumps(self))
-        header["frame_count"] = len(frames)
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["type"] = pickle.dumps(type(self))
+        frames = [pickle.dumps(self)]
+        header["frame_count"] = 1
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         """Convert from pickle format into Index
-
-        Parameters
-        ---
-        deserialize:  A function provided by register_distributed_serializer
-        middleware.
-        header: The data header produced by the serialize function.
-        frames: The serialized data
         """
-        payload = deserialize(
-            header["payload"], frames[: header["frame_count"]]
-        )
+
+        payload = b"".join(frames[: header["frame_count"]])
         return pickle.loads(payload)
 
     def take(self, indices):
@@ -68,18 +53,12 @@ class Index(object):
         ---
         indices: An array-like that maps to values contained in this Index.
         """
-        # Gather
-        indices = columnops.as_column(indices)
-        index = cpp_copying.apply_gather_array(
-            self.gpu_values, indices.data.mem
-        )
-        col = self.as_column().replace(data=index.data)
-        new_index = col
-        new_index.name = self.name
-        return new_index
+        return self[indices]
 
     def argsort(self, ascending=True):
-        return self.as_column().argsort(ascending=ascending)
+        indices = self.as_column().argsort(ascending=ascending)
+        indices.name = self.name
+        return indices
 
     @property
     def values(self):
@@ -301,9 +280,6 @@ class Index(object):
         return Series(self._values)
 
     @property
-    def loc(self):
-        return _IndexLocIndexer(self)
-
     @property
     def is_unique(self):
         raise (NotImplementedError)
@@ -421,6 +397,8 @@ class RangeIndex(Index):
         return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
+        from numbers import Number
+
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             sln = (stop - start) // step
@@ -432,7 +410,7 @@ class RangeIndex(Index):
             else:
                 return index_from_range(start, stop, step)
 
-        elif isinstance(index, int):
+        elif isinstance(index, Number):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
@@ -440,10 +418,12 @@ class RangeIndex(Index):
             index = np.array(index)
             index = rmm.to_device(index)
 
-        if isinstance(index, (DeviceNDArray)):
-            return self.take(index)
         else:
-            raise ValueError(index)
+            if pd.api.types.is_scalar(index):
+                index = utils.min_signed_type(index)(index)
+            index = columnops.as_column(index).data.mem
+
+        return as_index(self.as_column()[index], name=self.name)
 
     def __eq__(self, other):
         return super(type(self), self).__eq__(other)
@@ -501,7 +481,9 @@ class RangeIndex(Index):
             vals = cudautils.arange(self._start, self._stop, dtype=self.dtype)
         else:
             vals = rmm.device_array(0, dtype=self.dtype)
-        return NumericalColumn(data=Buffer(vals), dtype=vals.dtype)
+        return NumericalColumn(
+            data=Buffer(vals), dtype=vals.dtype, name=self.name
+        )
 
     def to_gpu_array(self):
         return self.as_column().to_gpu_array()
@@ -581,19 +563,6 @@ class GenericIndex(Index):
         result.name = self.name
         return result
 
-    def serialize(self, serialize):
-        header = {}
-        header["payload"], frames = serialize(self._values)
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        payload = deserialize(
-            header["payload"], frames[: header["frame_count"]]
-        )
-        return cls(payload)
-
     def __sizeof__(self):
         return self._values.__sizeof__()
 
@@ -618,16 +587,19 @@ class GenericIndex(Index):
         )
 
     def __getitem__(self, index):
-        res = self._values[index]
+        res = self.as_column()[index]
         if not isinstance(index, int):
-            return as_index(res)
+            res = as_index(res)
+            return res
         else:
             return res
 
     def as_column(self):
         """Convert the index as a Series.
         """
-        return self._values
+        col = self._values
+        col.name = self.name
+        return col
 
     @property
     def dtype(self):
@@ -826,7 +798,6 @@ class StringIndex(GenericIndex):
             self._values = columnops.build_column(
                 nvstrings.to_device(values), dtype="object"
             )
-        assert self._values.null_count == 0
         self.name = name
 
     def to_pandas(self):
@@ -834,7 +805,7 @@ class StringIndex(GenericIndex):
         return result
 
     def take(self, indices):
-        return self._values.element_indexing(indices)
+        return self._values[indices]
 
     def __repr__(self):
         return (
@@ -891,9 +862,3 @@ def as_index(arbitrary, name=None):
         )
     else:
         return as_index(columnops.as_column(arbitrary), name=name)
-
-
-register_distributed_serializer(RangeIndex)
-register_distributed_serializer(GenericIndex)
-register_distributed_serializer(DatetimeIndex)
-register_distributed_serializer(CategoricalIndex)

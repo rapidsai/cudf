@@ -19,9 +19,7 @@
 package ai.rapids.cudf;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -194,12 +192,15 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 for no buffer.
    * @param length            the length of the buffer to read from.
+   * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
+   *                          columns to DATE64 for compatibility with NumPy.
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
-                                          String filePath, long address, long length) throws CudfException;
+                                          String filePath, long address, long length,
+                                          boolean usingNumPyTypes) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
-                                                   int[] aggTypes) throws CudfException;
+                                                   int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -211,6 +212,8 @@ public final class Table implements AutoCloseable {
                                             int[] rightJoinCols) throws CudfException;
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
+
+  private static native long[] gdfFilter(long input, long mask);
 
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
@@ -415,7 +418,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes()));
   }
 
   /**
@@ -475,7 +478,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes()));
   }
 
   /**
@@ -533,8 +536,8 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true);
   }
 
-  public static Aggregate count() {
-    return Aggregate.count();
+  public static Aggregate count(int index) {
+    return Aggregate.count(index);
   }
 
   public static Aggregate max(int index) {
@@ -553,9 +556,18 @@ public final class Table implements AutoCloseable {
     return Aggregate.mean(index);
   }
 
+  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+    return groupByInternal(groupByOptions, indices);
+  }
+
   public AggregateOperation groupBy(int... indices) {
+    return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
+        indices);
+  }
+
+  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, operationIndicesArray);
+    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
   }
 
   public TableOperation onColumns(int... indices) {
@@ -571,6 +583,33 @@ public final class Table implements AutoCloseable {
           "operation index is out of range 0 <= " + operationIndicesArray[i] + " < " + columns.length;
     }
     return operationIndicesArray;
+  }
+
+  /**
+   * Filters this table using a column of boolean values as a mask, returning a new one.
+   * <p>
+   * Given a mask column, each element `i` from the input columns
+   * is copied to the output columns if the corresponding element `i` in the mask is
+   * non-null and `true`. This operation is stable: the input order is preserved.
+   * <p>
+   * This table and mask columns must have the same number of rows.
+   * <p>
+   * The output table has size equal to the number of elements in boolean_mask
+   * that are both non-null and `true`.
+   * <p>
+   * If the original table row count is zero, there is no error, and an empty table is returned.
+   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
+   *             the input column
+   * @return table containing copy of all elements of this table passing
+   * the filter defined by the boolean mask
+   */
+  public Table filter(ColumnVector mask) {
+    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
+    for (ColumnVector col : getColumns()){
+      assert col.getType() != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
+    }
+    return new Table(gdfFilter(nativeHandle, mask.getNativeCudfColumnAddress()));
   }
 
   /////////////////////////////////////////////////////////////////////////////
@@ -601,14 +640,44 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Keeps track of a gdf_column* and operator ids
+   */
+  private static final class ColumnOp {
+    private final long colNativeId;
+    private final int opNativeId;
+
+    ColumnOp(long column, int opNativeId){
+      this.colNativeId = column;
+      this.opNativeId = opNativeId;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof ColumnOp){
+        ColumnOp otherCop = (ColumnOp) other;
+        return otherCop.colNativeId == colNativeId &&
+            otherCop.opNativeId == opNativeId;
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(colNativeId, opNativeId);
+    }
+  }
+
+  /**
    * Class representing aggregate operations
    */
   public static final class AggregateOperation {
 
     private final Operation operation;
+    private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, final int... indices) {
+    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
+      this.groupByOptions = groupByOptions;
     }
 
     /**
@@ -631,16 +700,86 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      int[] aggregateColumnIndices = new int[aggregates.length];
-      int[] ops = new int[aggregates.length];
+
+      // aggregateColumnIndices: the numeric indices of the columns to aggregate
+      // as provided by the user
+      List<Integer> aggregateColumnIndices = new ArrayList<>();
+      // ops: the corresponding cudf enum values for each aggregate
+      // operation, for each column index
+      List<Integer> ops = new ArrayList<>();
+      // finalAggColumns: this holds the user's desired list of aggregates,
+      // as specified in the variadic for this method
+      List<ColumnOp> finalAggColumns = new ArrayList<>();
+      // aggToCudfColumn: a map of ColumnOp (tuple of gdf_column* and enum for operation)
+      // to the index of the column that we asked cudf to compute. 
+      // These indices can then be used after the aggregate to find ColumnVector
+      // instances, we should place (and ref count) in the order as provided by the user.
+      HashMap<ColumnOp, Integer> aggToCudfColumn = new HashMap<>();
+
+      // keep track of the unique agg indices, starting at 1 after the
+      // grouping key
+      int uniqueAggIndex = operation.indices.length;
       for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
-        aggregateColumnIndices[aggregateIndex] = aggregates[aggregateIndex].getIndex();
-        ops[aggregateIndex] = aggregates[aggregateIndex].getNativeId();
+        Aggregate agg = aggregates[aggregateIndex];
+        int origColumnIndex = agg.getIndex();
+        int origOpNativeId = agg.getNativeId();
+
+        // keep track of (gdf_column*, op) pairs, as that is what
+        // compute_original_requests does to track duplicates
+        ColumnOp cop = new ColumnOp(
+            operation.table.getColumn(origColumnIndex).getNativeCudfColumnAddress(),
+            origOpNativeId);
+
+        // if we haven't seen an aggregate for this (gdf_column *, agg id) pair
+        if (!aggToCudfColumn.containsKey(cop)) {
+          // add to the aggregates that cudf will perform
+          aggregateColumnIndices.add(agg.getIndex());
+          ops.add(agg.getNativeId());
+
+          // keep the index of the column where we can find the result later
+          aggToCudfColumn.put(cop, uniqueAggIndex++);
+        }
+        finalAggColumns.add(cop);
       }
 
-      Table aggregate = new Table(gdfGroupByAggregate(operation.table.nativeHandle,
-          operation.indices, aggregateColumnIndices, ops));
-      return aggregate;
+      // aggregate with deduplicated operations
+      Table aggregate = new Table(gdfGroupByAggregate(
+          operation.table.nativeHandle,
+          operation.indices,
+          // one way of converting List[Integer] to int[
+          aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
+          ops.stream().mapToInt(i->i).toArray(),
+          groupByOptions.getIgnoreNullKeys()));
+
+      // prepare the final table
+      ColumnVector[] finalCols = new ColumnVector[operation.indices.length + aggregates.length];
+
+      int aggIndex = 0;
+
+      // pick out the grouping columns
+      for (int groupIndex : operation.indices) {
+        finalCols[groupIndex] = aggregate.getColumn(groupIndex);
+        aggIndex++;
+      }
+
+      // pick out the aggregate columns (copying the reference for duplicate aggs)
+      for (ColumnOp cop : finalAggColumns) {
+        int originalIndex = aggToCudfColumn.get(cop);
+        finalCols[aggIndex] = aggregate.getColumn(originalIndex);
+        aggIndex++;
+      }
+
+      // Note: Table will increase ref counts accordingly, which means
+      // that duplicate columns in finalCols, will get a refCount equal
+      // to the number of times their references appear on the table (good)
+      Table tbl = new Table(finalCols);
+
+      // returning a brand new table now, so we close the original
+      // this brings the refCount down for each column, such that Table
+      // is the only holder
+      aggregate.close();
+
+      return tbl;
     }
   }
 

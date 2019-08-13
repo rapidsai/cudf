@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from math import fmod, isnan
+from math import fmod
 
 import numpy as np
 from numba import cuda, int32, numpy_support
@@ -346,25 +346,6 @@ def compact_mask_bytes(boolbytes):
     return bits
 
 
-@cuda.jit
-def gpu_mask_from_devary(ary, bits):
-    tid = cuda.grid(1)
-    base = tid * mask_bitsize
-    for i in range(base, base + mask_bitsize):
-        if i >= len(ary):
-            break
-        if not isnan(ary[i]):
-            mask_set(bits, i)
-
-
-def mask_from_devary(ary):
-    bits = make_mask(len(ary))
-    if bits.size > 0:
-        gpu_fill_value.forall(bits.size)(bits, 0)
-        gpu_mask_from_devary.forall(bits.size)(ary, bits)
-    return bits
-
-
 def make_empty_mask(size):
     bits = make_mask(size)
     if bits.size > 0:
@@ -384,15 +365,6 @@ def gpu_fill_masked(value, validity, out):
         valid = mask_get(validity, tid)
         if not valid:
             out[tid] = value
-
-
-def fillna(data, mask, value):
-    out = rmm.device_array_like(data)
-    out.copy_to_device(data)
-    if data.size > 0:
-        configured = gpu_fill_masked.forall(data.size)
-        configured(value, mask, out)
-    return out
 
 
 @cuda.jit

@@ -104,12 +104,30 @@ class Rolling:
     dtype: int64
     """
 
-    def __init__(self, obj, window, min_periods=None, center=False):
+    def __init__(
+        self,
+        obj,
+        window,
+        min_periods=None,
+        center=False,
+        axis=0,
+        win_type=None,
+    ):
         self.obj = obj
         self.window = window
         self.min_periods = min_periods
         self.center = center
         self._normalize()
+        if axis != 0:
+            raise NotImplementedError("axis != 0 is not supported yet.")
+        self.axis = axis
+
+        if win_type is not None:
+            if win_type != "boxcar":
+                raise NotImplementedError(
+                    "Only the default win_type 'boxcar' is currently supported"
+                )
+        self.win_type = win_type
 
     def __getattr__(self, key):
         if key == "obj":

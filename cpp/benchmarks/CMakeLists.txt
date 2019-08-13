@@ -33,7 +33,8 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}")
+                    "${NVSTRINGS_INCLUDE}"
+                    "${CMAKE_CURRENT_SOURCE_DIR}")
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -68,13 +69,20 @@ set(GATHER_BENCH_SRC
 
 ConfigureBench(GATHER_BENCH "${GATHER_BENCH_SRC}")
 
-###################################################################################################
 # - scatter benchmark -----------------------------------------------------------------------------
 
 set(SCATTER_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_benchmark.cu")
 
 ConfigureBench(SCATTER_BENCH "${SCATTER_BENCH_SRC}")
+
+###################################################################################################
+# - apply_boolean_mask benchmark ------------------------------------------------------------------------------
+
+set(APPLY_BOOLEAN_MASK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_benchmark.cu")
+
+ConfigureBench(APPLY_BOOLEAN_MASK_BENCH "${APPLY_BOOLEAN_MASK_BENCH_SRC}")
 
 # - join benchmark --------------------------------------------------------------------------------
 
