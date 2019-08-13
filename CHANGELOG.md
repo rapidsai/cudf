@@ -33,6 +33,7 @@
 - PR #2446 Add __array_function__ for index
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
+- PR #2425 Allow rolling window to accept array-based user-defined functions
 - PR #2442 Add __setitem__
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
 - PR #2492 Add groupby.size() method

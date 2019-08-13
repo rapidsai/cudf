@@ -31,6 +31,13 @@
 // allocate column
 #include <io/utilities/wrapper_utils.hpp>
 
+#include <jit/launcher.h>
+#include <jit/type.h>
+#include <jit/types_h_jit.h>
+#include <jit/parser.h>
+#include "jit/code/code.h"
+#include "jit/util/type.h"
+
 namespace
 {
 /**
@@ -283,6 +290,86 @@ gdf_column* rolling_window(const gdf_column &input_col,
 
   // Release the gdf pointer from the wrapper class
   return output_col.release();
+}
+
+gdf_column rolling_window(gdf_column const& input,
+                           gdf_size_type window,
+                           gdf_size_type min_periods,
+                           gdf_size_type forward_window,
+                           const std::string& user_defined_aggregator,
+                           gdf_agg_op agg_op,
+                           gdf_dtype output_type,
+                           gdf_size_type const* window_col,
+                           gdf_size_type const* min_periods_col,
+                           gdf_size_type const* forward_window_col)
+{
+  CUDF_EXPECTS((window >= 0) && (min_periods >= 0) && (forward_window >= 0), "Window size and min periods must be non-negative");
+
+  gdf_column output = allocate_column(output_type, input.size, true);
+
+  // If there are no rows in the input, return successfully
+  if (input.size == 0)
+    return output;
+
+  if (input.null_count > 0) {
+    CUDF_FAIL("Currently the UDF version of rolling window"
+        " does NOT support inputs with nulls.");
+  }
+
+  // At least one observation is required to procure a valid output
+  min_periods = std::max(min_periods, 1);
+
+  std::string hash = "prog_rolling." 
+    + std::to_string(std::hash<std::string>{}(user_defined_aggregator));
+  
+  std::string cuda_source;
+  switch(agg_op){            
+    case GDF_NUMBA_GENERIC_AGG_OPS:
+      cuda_source = 
+        cudf::jit::parse_single_function_ptx(
+          user_defined_aggregator, 
+          cudf::rolling::jit::get_function_name(agg_op), 
+          cudf::jit::getTypeName(output_type), {0, 5} // {0, 5} means the first and sixth args are pointers.
+        ) + cudf::rolling::jit::code::kernel;
+      break; 
+    case GDF_CUDA_GENERIC_AGG_OPS:
+      cuda_source = 
+        cudf::jit::parse_single_function_cuda(
+          user_defined_aggregator, 
+          cudf::rolling::jit::get_function_name(agg_op) 
+        ) + cudf::rolling::jit::code::kernel;
+      break;
+    default:
+      CUDF_FAIL("Unsupported UDF type.");
+  }
+  
+  // Launch the jitify kernel
+  cudf::jit::launcher(
+    hash, cuda_source,
+    { cudf::rolling::jit::code::operation_h , cudf_types_h },
+    { "-std=c++14" }, nullptr
+  ).set_kernel_inst(
+    "gpu_rolling", // name of the kernel we are launching
+    { cudf::jit::getTypeName(output.dtype), // list of template arguments
+      cudf::jit::getTypeName(input.dtype),
+      cudf::rolling::jit::get_operator_name(agg_op) } 
+  ).launch(
+    output.size,
+    output.data,
+    output.valid,
+    input.data,
+    input.valid,
+    window,
+    min_periods,
+    forward_window,
+    window_col,
+    min_periods_col,
+    forward_window_col
+  );
+
+  set_null_count(output);
+
+  return output;
 }
 
 }  // namespace cudf
