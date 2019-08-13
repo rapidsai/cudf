@@ -42,7 +42,6 @@
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
 
-
 ## Improvements
 
 - PR #2103 Move old `column` and `bitmask` files into `legacy/` directory
@@ -100,7 +99,6 @@
 - PR #2510 Java api: uses table based apply_boolean_mask
 - PR #2432 Use pandas formatting for console, html, and latex output
 
-
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
@@ -157,8 +155,8 @@
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
+- PR #2466 Fix `dataframe.query` returning null rows erroneously
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
-
 
 
 # cuDF 0.8.0 (27 June 2019)
