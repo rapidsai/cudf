@@ -8,18 +8,14 @@ from __future__ import division, print_function
 
 import json
 import operator
-from time import sleep
 
 import pytest
 from dask.dataframe.utils import assert_eq
 import numpy as np
 import pandas as pd
-from tornado import gen
 
 from streamz import Stream
-from streamz.utils_test import gen_test
 from streamz.dataframe import DataFrame, Series, DataFrames, Aggregation
-import streamz.dataframe as sd
 from streamz.dask import DaskStream
 
 from distributed import Client
@@ -190,8 +186,7 @@ def test_unary_operators(op, getter):
 
 @pytest.mark.parametrize('func', [
     lambda df: df.query('x > 1 and x < 4'),
-    pytest.param(lambda df: df.x.value_counts().nlargest(2),
-                 marks=pytest.mark.xfail(reason="`cudf.Series.add` is'nt implemented"))
+    lambda df: df.x.value_counts().nlargest(2)
 ])
 def test_dataframe_simple(func):
     df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
@@ -311,9 +306,9 @@ def test_groupby_aggregate(agg, grouper, indexer, stream):
     assert assert_eq(L[-1], f(df))
 
 
-@pytest.mark.xfail(reason="`cudf.Series.add` is not implemented")
+@pytest.mark.xfail(reason="AttributeError: 'StringColumn' object has no attribute 'value_counts'")
 def test_value_counts(stream):
-    s = cudf.Series([1, 2, 1])
+    s = cudf.Series(['a', 'b', 'a'])
 
     a = Series(example=s, stream=stream)
 
@@ -327,7 +322,7 @@ def test_value_counts(stream):
     assert_eq(result[-1], cudf.concat([s, s]).value_counts())
 
 
-@pytest.mark.xfail(reason="'Series' object does not support item assignment")
+@pytest.mark.xfail(reason="TypeError: 'Series' object does not support item assignment")
 def test_setitem(stream):
     df = cudf.DataFrame({'x': list(range(10)), 'y': [1] * 10})
 
@@ -377,7 +372,7 @@ def test_setitem_overwrites(stream):
     pytest.param({}, 'count'),
     pytest.param({'ddof': 0}, 'std', marks=pytest.mark.xfail(reason="Not implemented for rolling objects")),
     pytest.param({'quantile': 0.5}, 'quantile', marks=pytest.mark.xfail(reason="Not implemented for rolling objects")),
-    pytest.param({'arg': {'A': 'sum', 'B': 'min'}}, 'aggregate', marks=pytest.mark.xfail(reason="Not implemented for rolling objects"))
+    pytest.param({'arg': {'A': 'sum', 'B': 'min'}}, 'aggregate', marks=pytest.mark.xfail(reason="Not implemented"))
 ])
 @pytest.mark.parametrize('window', [
     pytest.param(2),
@@ -392,7 +387,7 @@ def test_setitem_overwrites(stream):
 @pytest.mark.parametrize('pre_get,post_get', [
     (lambda df: df, lambda df: df),
     (lambda df: df.x, lambda x: x),
-    pytest.param(lambda df: df, lambda df: df.x, marks=pytest.mark.xfail(reason="Cannot select columns for rolling over time objects"))
+    (lambda df: df, lambda df: df.x)
 ])
 def test_rolling_count_aggregations(op, window, m, pre_get, post_get, kwargs,
         stream):
@@ -424,6 +419,18 @@ def test_stream_to_dataframe(stream):
     source.emit(df)
 
     assert L == [6, 12, 18]
+
+
+def test_integration_from_stream(stream):
+    source = stream
+    sdf = source.partition(4).to_batch(example=['{"x": 0, "y": 0}']).map(json.loads).to_dataframe()
+    result = sdf.groupby(sdf.x).y.sum().mean()
+    L = result.stream.gather().sink_to_list()
+
+    for i in range(12):
+        source.emit(json.dumps({'x': i % 3, 'y': i}))
+
+    assert L == [2, 28 / 3, 22.0]
 
 
 def test_to_frame(stream):
@@ -500,10 +507,11 @@ def test_dataframes(stream):
     assert L == [6, 6]
 
 
-def test_aggregate_updating(stream):
+def test_groupby_aggregate_updating(stream):
     df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     sdf = DataFrame(example=df, stream=stream)
 
+    assert sdf.groupby('x').y.mean()._stream_type == 'updating'
     assert sdf.x.sum()._stream_type == 'updating'
     assert (sdf.x.sum() + 1)._stream_type == 'updating'
 
@@ -612,4 +620,3 @@ def test_custom_aggregation():
     sdf.emit(df)
 
     assert L == [1, -198, -397]
-
