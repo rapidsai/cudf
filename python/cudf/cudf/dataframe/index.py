@@ -392,6 +392,8 @@ class RangeIndex(Index):
         return max(0, self._stop - self._start)
 
     def __getitem__(self, index):
+        from numbers import Number
+
         if isinstance(index, slice):
             start, stop, step = index.indices(len(self))
             sln = (stop - start) // step
@@ -403,7 +405,7 @@ class RangeIndex(Index):
             else:
                 return index_from_range(start, stop, step)
 
-        elif isinstance(index, int):
+        elif isinstance(index, Number):
             index = utils.normalize_index(index, len(self))
             index += self._start
             return index
