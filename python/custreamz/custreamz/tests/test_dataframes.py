@@ -1,8 +1,11 @@
 """
 Tests for cudf DataFrames:
-All tests have been cloned from the test_dataframes module in the streamz/dataframe/tests folder.
-Some of these tests pass with cudf, and others are marked with xfail, where a pandas-like method is not yet implemented in cudf.
-But these tests should pass as and when cudf rolls out more pandas-like methods.
+All tests have been cloned from the test_dataframes module
+in the streamz/dataframe/tests folder. Some of these tests
+pass with cudf, and others are marked with xfail, where a
+pandas-like method is not yet implemented in cudf. But
+these tests should pass as and when cudf rolls out more
+pandas-like methods.
 """
 from __future__ import division, print_function
 
@@ -74,8 +77,8 @@ def test_attributes():
     df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
     sdf = DataFrame(example=df)
 
-    assert getattr(sdf,'x',-1) != -1
-    assert getattr(sdf,'z',-1) == -1
+    assert getattr(sdf, 'x', -1) != -1
+    assert getattr(sdf, 'z', -1) == -1
 
     sdf.x
     with pytest.raises(AttributeError):
@@ -95,10 +98,12 @@ def test_exceptions(stream):
 @pytest.mark.parametrize('func', [
     pytest.param(lambda x: x.sum(),
                  marks=pytest.mark.xfail(
-                     reason="'Series' object does not support item assignment")),
+                 reason="'Series' object"
+                 "does not support item assignment")),
     pytest.param(lambda x: x.mean(),
                  marks=pytest.mark.xfail(
-                     reason="'Series' object does not support item assignment")),
+                 reason="'Series' object"
+                 "does not support item assignment")),
     lambda x: x.count(),
     pytest.param(lambda x: x.size,
                  marks=pytest.mark.xfail(reason="Not implemented"))
@@ -285,10 +290,12 @@ def test_getitem(stream):
                                      lambda g: g[['y']],
                                      pytest.param(lambda g: g[['x', 'y']],
                                                   marks=pytest.mark.xfail(
-                                                        reason="Indexer column matches grouper"))
+                                                  reason="Indexer column"
+                                                  "matches grouper"))
                                      ])
 def test_groupby_aggregate(agg, grouper, indexer, stream):
-    df = cudf.DataFrame({'x': (np.arange(10) // 2).astype(float), 'y': [1.0, 2.0] * 5})
+    df = cudf.DataFrame({'x': (np.arange(10) // 2).astype(float),
+                        'y': [1.0, 2.0] * 5})
 
     a = DataFrame(example=df.iloc[:0], stream=stream)
 
@@ -306,7 +313,8 @@ def test_groupby_aggregate(agg, grouper, indexer, stream):
     assert assert_eq(L[-1], f(df))
 
 
-@pytest.mark.xfail(reason="AttributeError: 'StringColumn' object has no attribute 'value_counts'")
+@pytest.mark.xfail(reason="AttributeError: 'StringColumn' object"
+                   "has no attribute 'value_counts'")
 def test_value_counts(stream):
     s = cudf.Series(['a', 'b', 'a'])
 
@@ -322,7 +330,8 @@ def test_value_counts(stream):
     assert_eq(result[-1], cudf.concat([s, s]).value_counts())
 
 
-@pytest.mark.xfail(reason="TypeError: 'Series' object does not support item assignment")
+@pytest.mark.xfail(reason="TypeError: 'Series' object"
+                   "does not support item assignment")
 def test_setitem(stream):
     df = cudf.DataFrame({'x': list(range(10)), 'y': [1] * 10})
 
@@ -366,13 +375,23 @@ def test_setitem_overwrites(stream):
     ({}, 'sum'),
     ({}, 'mean'),
     pytest.param({}, 'min'),
-    pytest.param({}, 'median', marks=pytest.mark.xfail(reason="Not implemented for rolling objects")),
+    pytest.param({}, 'median',
+                 marks=pytest.mark.xfail(reason="Not implemented"
+                                         "for rolling objects")),
     pytest.param({}, 'max'),
-    pytest.param({}, 'var', marks=pytest.mark.xfail(reason="Not implemented for rolling objects")),
+    pytest.param({}, 'var',
+                 marks=pytest.mark.xfail(reason="Not implemented"
+                                         "for rolling objects")),
     pytest.param({}, 'count'),
-    pytest.param({'ddof': 0}, 'std', marks=pytest.mark.xfail(reason="Not implemented for rolling objects")),
-    pytest.param({'quantile': 0.5}, 'quantile', marks=pytest.mark.xfail(reason="Not implemented for rolling objects")),
-    pytest.param({'arg': {'A': 'sum', 'B': 'min'}}, 'aggregate', marks=pytest.mark.xfail(reason="Not implemented"))
+    pytest.param({'ddof': 0}, 'std',
+                 marks=pytest.mark.xfail(reason="Not implemented"
+                                         "for rolling objects")),
+    pytest.param({'quantile': 0.5}, 'quantile',
+                 marks=pytest.mark.xfail(reason="Not implemented"
+                                         "for rolling objects")),
+    pytest.param({'arg': {'A': 'sum', 'B': 'min'}}, 'aggregate',
+                 marks=pytest.mark.xfail(reason="Not implemented"
+                                         "for rolling objects"))
 ])
 @pytest.mark.parametrize('window', [
     pytest.param(2),
@@ -390,7 +409,7 @@ def test_setitem_overwrites(stream):
     (lambda df: df, lambda df: df.x)
 ])
 def test_rolling_count_aggregations(op, window, m, pre_get, post_get, kwargs,
-        stream):
+                                    stream):
     index = pd.DatetimeIndex(start='2000-01-01', end='2000-01-03', freq='1h')
     df = cudf.DataFrame({'x': np.arange(len(index))}, index=index)
 
@@ -423,7 +442,8 @@ def test_stream_to_dataframe(stream):
 
 def test_integration_from_stream(stream):
     source = stream
-    sdf = source.partition(4).to_batch(example=['{"x": 0, "y": 0}']).map(json.loads).to_dataframe()
+    sdf = source.partition(4).to_batch(example=['{"x": 0, "y": 0}']) \
+                             .map(json.loads).to_dataframe()
     result = sdf.groupby(sdf.x).y.sum().mean()
     L = result.stream.gather().sink_to_list()
 
