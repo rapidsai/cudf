@@ -2554,9 +2554,10 @@ class DataFrame(object):
         expr : str
             A boolean expression. Names in expression refer to columns.
 
-            Names starting with `@` refer to Python variables
+            Names starting with `@` refer to Python variables.
 
-            A row will be excluded if it provides a null value to expr
+            An output value will be `null` if any of the input values are
+            `null` regardless of expression.
 
         local_dict : dict
             Containing the local variable to be used in query.
