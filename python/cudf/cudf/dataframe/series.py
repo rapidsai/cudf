@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
 import operator
+import pickle
 import warnings
 from numbers import Number
 
@@ -15,7 +16,6 @@ from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
 )
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.column import Column
 from cudf.dataframe.datetime import DatetimeColumn
@@ -145,15 +145,17 @@ class Series(object):
     def from_arrow(cls, s):
         return cls(s)
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {}
         frames = []
-        header["index"], index_frames = serialize(self._index)
+        header["index"], index_frames = self._index.serialize()
         frames.extend(index_frames)
         header["index_frame_count"] = len(index_frames)
-        header["column"], column_frames = serialize(self._column)
+        header["column"], column_frames = self._column.serialize()
+        header["type"] = pickle.dumps(type(self))
         frames.extend(column_frames)
         header["column_frame_count"] = len(column_frames)
+
         return header, frames
 
     @property
@@ -189,12 +191,17 @@ class Series(object):
         self._column.name = name
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
+
         index_nframes = header["index_frame_count"]
-        index = deserialize(header["index"], frames[:index_nframes])
+        idx_typ = pickle.loads(header["index"]["type"])
+        index = idx_typ.deserialize(header["index"], frames[:index_nframes])
+
         frames = frames[index_nframes:]
+
         column_nframes = header["column_frame_count"]
-        column = deserialize(header["column"], frames[:column_nframes])
+        col_typ = pickle.loads(header["column"]["type"])
+        column = col_typ.deserialize(header["column"], frames[:column_nframes])
         return Series(column, index=index)
 
     def _copy_construct_defaults(self):
@@ -2445,9 +2452,6 @@ class Series(object):
     @property
     def is_monotonic_decreasing(self):
         return self._column.is_monotonic_decreasing
-
-
-register_distributed_serializer(Series)
 
 
 truediv_int_dtype_corrections = {

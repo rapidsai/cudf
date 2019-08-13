@@ -2,6 +2,8 @@
 
 from __future__ import division, print_function
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -20,7 +22,6 @@ import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
@@ -48,22 +49,18 @@ class NumericalColumn(columnops.TypedColumnBase):
             kwargs["dtype"] = kwargs["data"].dtype
         return super(NumericalColumn, self).replace(**kwargs)
 
-    def serialize(self, serialize):
-        header, frames = super(NumericalColumn, self).serialize(serialize)
-        assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
+    def serialize(self):
+        header, frames = super(NumericalColumn, self).serialize()
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(NumericalColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(NumericalColumn, cls).deserialize(header, frames)
+        dtype = header["dtype"]
         col = cls(
-            data=data,
-            mask=mask,
-            null_count=header["null_count"],
-            dtype=deserialize(*header["dtype"]),
+            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
         )
         return col
 
@@ -485,6 +482,3 @@ def digitize(column, bins, right=False):
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return cpp_sort.digitize(column, bin_col, right)
-
-
-register_distributed_serializer(NumericalColumn)

@@ -1,4 +1,5 @@
 import datetime as dt
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -13,7 +14,6 @@ import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils
@@ -49,22 +49,18 @@ class DatetimeColumn(columnops.TypedColumnBase):
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
-    def serialize(self, serialize):
-        header, frames = super(DatetimeColumn, self).serialize(serialize)
-        assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
+    def serialize(self):
+        header, frames = super(DatetimeColumn, self).serialize()
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(DatetimeColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(DatetimeColumn, cls).deserialize(header, frames)
+        dtype = header["dtype"]
         col = cls(
-            data=data,
-            mask=mask,
-            null_count=header["null_count"],
-            dtype=deserialize(*header["dtype"]),
+            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
         )
         return col
 
@@ -309,6 +305,3 @@ def binop(lhs, rhs, op, out_dtype):
     out = out.replace(null_count=null_count)
     nvtx_range_pop()
     return out
-
-
-register_distributed_serializer(DatetimeColumn)

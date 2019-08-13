@@ -12,7 +12,6 @@ import nvstrings
 from librmm_cffi import librmm as rmm
 
 import cudf
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
@@ -28,34 +27,23 @@ class Index(object):
     """The root interface for all Series indexes.
     """
 
-    def serialize(self, serialize):
+    def serialize(self):
         """Serialize into pickle format suitable for file storage or network
         transmission.
-
-        Parameters
-        ---
-        serialize:  A function provided by register_distributed_serializer
-        middleware.
         """
         header = {}
-        header["payload"], frames = serialize(pickle.dumps(self))
-        header["frame_count"] = len(frames)
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["type"] = pickle.dumps(type(self))
+        frames = [pickle.dumps(self)]
+        header["frame_count"] = 1
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         """Convert from pickle format into Index
-
-        Parameters
-        ---
-        deserialize:  A function provided by register_distributed_serializer
-        middleware.
-        header: The data header produced by the serialize function.
-        frames: The serialized data
         """
-        payload = deserialize(
-            header["payload"], frames[: header["frame_count"]]
-        )
+
+        payload = b"".join(frames[: header["frame_count"]])
         return pickle.loads(payload)
 
     def take(self, indices):
@@ -575,19 +563,6 @@ class GenericIndex(Index):
         result.name = self.name
         return result
 
-    def serialize(self, serialize):
-        header = {}
-        header["payload"], frames = serialize(self._values)
-        header["frame_count"] = len(frames)
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        payload = deserialize(
-            header["payload"], frames[: header["frame_count"]]
-        )
-        return cls(payload)
-
     def __sizeof__(self):
         return self._values.__sizeof__()
 
@@ -905,9 +880,3 @@ def _setdefault_name(values, kwargs):
         else:
             kwargs.setdefault("name", values.name)
     return kwargs
-
-
-register_distributed_serializer(RangeIndex)
-register_distributed_serializer(GenericIndex)
-register_distributed_serializer(DatetimeIndex)
-register_distributed_serializer(CategoricalIndex)
