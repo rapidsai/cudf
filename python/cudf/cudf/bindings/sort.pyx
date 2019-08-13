@@ -50,7 +50,8 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
         0,
         0,
         0,
-        null_sort_behavior_api
+        null_sort_behavior_api,
+        False
     )
 
     cdef gdf_error result

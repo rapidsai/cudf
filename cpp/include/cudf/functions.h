@@ -87,13 +87,16 @@ gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
  * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
  * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
+ * @param[in] flag_groupby_include_nulls false = Nulls are ignored (Pandas style)
+ *                                       true = Nulls compare as equal (SQL style)
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
  *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace,
+			   bool flag_groupby_include_nulls,
                            gdf_null_sort_behavior flag_null_sort_behavior);
 
 
