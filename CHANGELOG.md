@@ -97,6 +97,8 @@
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
+- PR #2432 Use pandas formatting for console, html, and latex output
+
 
 ## Bug Fixes
 
@@ -155,6 +157,7 @@
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
 - PR #2466 Fix `dataframe.query` returning null rows erroneously
+
 
 
 
