@@ -160,6 +160,7 @@
 - PR #2466 Fix `dataframe.query` returning null rows erroneously
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
 - PR #2521 Fix casting datetimes from/to the same resolution
+- PR #2544 Remove duplicate `dlpack` definition in conda recipe
 
 # cuDF 0.8.0 (27 June 2019)
 
