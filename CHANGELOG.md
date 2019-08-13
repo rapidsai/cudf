@@ -170,7 +170,9 @@
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
 - PR #2466 Fix `dataframe.query` returning null rows erroneously
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
+- PR #2557 fix cudautils import in string.py
 - PR #2521 Fix casting datetimes from/to the same resolution
+
 
 # cuDF 0.8.0 (27 June 2019)
 
