@@ -257,7 +257,7 @@ gdf_column* rolling_window(const gdf_column &input_col,
   gdf_column_wrapper output_col(input_col.size,
                                 input_col.dtype,
                                 input_col.dtype_info,
-                                "");
+                                input_col.col_name == nullptr ? "" : std::string(input_col.col_name);
 
   if (input_col.col_name != nullptr) {
     size_t len = strlen(input_col.col_name);
