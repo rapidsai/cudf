@@ -19,7 +19,8 @@ from cudf.dataframe.buffer import Buffer
 from cudf.bindings.stream_compaction cimport *
 
 
-def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
+def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first',
+                          nan_as_null=True):
     """
     get unique entries of subset columns from input columns
 
@@ -52,12 +53,14 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     # check subset == in_cols and subset=None cases
     cdef gdf_column** key_cols
     cdef cudf_table* key_table
-    if subset == in_cols or subset is None:
-        key_cols = cols_view_from_cols(in_cols)
-        key_table = new cudf_table(key_cols, len(in_cols))
-    else:
-        key_cols = cols_view_from_cols(subset)
-        key_table = new cudf_table(key_cols, len(subset))
+    if subset is None:
+        subset = in_cols
+    if nan_as_null:
+        subset = [data.set_mask(cudf.bindings.utils.mask_from_devary(data))
+                  if (data.dtype in [np.float16, np.float32, np.float64])
+                  else data for data in subset]
+    key_cols = cols_view_from_cols(subset)
+    key_table = new cudf_table(key_cols, len(subset))
 
     cdef cudf_table out_table
     with nogil:
