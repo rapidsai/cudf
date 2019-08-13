@@ -47,6 +47,7 @@ class Column(object):
         from cudf.dataframe.series import Series
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
+        from cudf.dataframe.numerical import NumericalColumn
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
@@ -60,6 +61,28 @@ class Column(object):
                 )
             else:
                 return Column(Buffer.null(dtype))
+
+        # If all columns are `NumericalColumn` with different dtypes,
+        # we cast them to a common dtype.
+        # Notice, we can always cast pure null columns
+        not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
+        if len(not_null_cols) > 0 and (
+            len(
+                [
+                    o
+                    for o in not_null_cols
+                    if not isinstance(o, NumericalColumn)
+                    or np.issubdtype(o.dtype, np.datetime64)
+                ]
+            )
+            == 0
+        ):
+            col_dtypes = [o.dtype for o in not_null_cols]
+            # Use NumPy to find a common dtype
+            common_dtype = np.find_common_type(col_dtypes, [])
+            # Cast all columns to the common dtype
+            for i in range(len(objs)):
+                objs[i] = objs[i].astype(common_dtype)
 
         # Find the first non-null column:
         head = objs[0]
