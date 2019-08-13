@@ -1914,7 +1914,8 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 return;
             }
             // Store decoded values to output
-            if (t < min(s->top.data.max_vals, s->top.data.nrows) && s->u.rowdec.row[t] != 0)
+            if (t < min(min(s->top.data.max_vals, s->u.rowdec.nz_count), s->top.data.nrows) && s->u.rowdec.row[t] != 0
+             && s->top.data.cur_row + s->u.rowdec.row[t] - 1 < s->top.data.end_row)
             {
                 size_t row = s->top.data.cur_row + s->u.rowdec.row[t] - 1 - first_row;
                 if (row < max_num_rows)
