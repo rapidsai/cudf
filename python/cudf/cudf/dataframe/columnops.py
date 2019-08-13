@@ -272,7 +272,7 @@ def column_select_by_position(column, positions):
     import cudf.bindings.copying as cpp_copying
 
     pos_ary = positions.data.to_gpu_array()
-    selected_values = cpp_copying.apply_gather_column(column, pos_ary)
+    selected_values = cpp_copying.apply_gather(column, pos_ary)
     selected_index = Buffer(pos_ary)
 
     return (
@@ -381,7 +381,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = cudautils.mask_from_devary(arbitrary)
+                mask = cudf.bindings.utils.mask_from_devary(data)
                 data = data.set_mask(mask)
 
     elif cuda.is_cuda_array(arbitrary):

@@ -189,6 +189,11 @@ class Buffer(object):
     def is_contiguous(self):
         return self.mem.is_c_contiguous()
 
+    def astype(self, dtype):
+        from cudf.dataframe import columnops
+
+        return columnops.as_column(self).astype(dtype).data
+
 
 class BufferSentryError(ValueError):
     pass

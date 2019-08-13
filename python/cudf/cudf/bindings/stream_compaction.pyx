@@ -6,14 +6,16 @@
 # cython: language_level = 3
 
 from libc.stdlib cimport free
+from libcpp.vector cimport vector
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.utils cimport *
-
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
 from cudf.dataframe.column import Column
+from cudf.dataframe.buffer import Buffer
+
 from cudf.bindings.stream_compaction cimport *
 
 
@@ -59,7 +61,9 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
 
     cdef cudf_table out_table
     with nogil:
-        out_table = drop_duplicates(c_in_table[0], key_table[0], keep_first)
+        out_table = drop_duplicates(
+            c_in_table[0], key_table[0], keep_first
+        )
 
     free_table(key_table, key_cols)
     free_table(c_in_table, c_in_cols)
@@ -74,7 +78,18 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
 
 
 def apply_apply_boolean_mask(cols, mask):
+    """
+    Filter the rows of a list of columns using a boolean mask
 
+    Parameters
+    ----------
+    cols : List of Columns
+    mask : Boolean mask (Column)
+
+    Returns
+    -------
+    List of Columns
+    """
     cdef cudf_table  c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
@@ -89,25 +104,58 @@ def apply_apply_boolean_mask(cols, mask):
 
 
 def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
+    """
+    Drops null rows from cols.
+
+    Parameters
+    ----------
+    cols : List of Columns
+    how  : "any" or "all". If thresh is None, drops rows of cols that have any
+           nulls or all nulls (respectively) in subset (default: "any")
+    subset : List of Columns. If set, then these columns are checked for nulls
+             rather than all of cols (optional)
+    thresh : Minimum number of non-nulls required to keep a row (optional)
+
+    Returns
+    -------
+    List of Columns
+    """
+    from cudf.dataframe.categorical import CategoricalColumn
+
     cdef cudf_table c_out_table
     cdef cudf_table* c_in_table = table_from_columns(cols)
+
+    # if subset is None, we use cols as keys
+    # if subset is empty, we pass an empty keys table, which will cause
+    # cudf::drop_nulls() to return a copy of the input table
     cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
                                      else table_from_columns(subset))
 
-    cdef any_or_all drop_if
-    cdef gdf_size_type keep_threshold = len(cols)
+    # default: "any" means threshold should be number of key columns
+    cdef gdf_size_type c_keep_threshold = (len(cols) if subset is None
+                                           else len(subset))
 
-    # Use threshold if specified, otherwise set it based on how
-    if thresh:
-        keep_threshold = thresh
+    # Use `thresh` if specified, otherwise set threshold based on `how`
+    if thresh is not None:
+        c_keep_threshold = thresh
     elif how == "all":
-        keep_threshold = 0
+        c_keep_threshold = 1
 
     with nogil:
         c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
-                                 keep_threshold)
+                                 c_keep_threshold)
 
     free(c_in_table)
     free(c_keys_table)
 
-    return columns_from_table(&c_out_table)
+    result_cols = columns_from_table(&c_out_table)
+
+    for i, inp_col in enumerate(cols):
+        if isinstance(inp_col, CategoricalColumn):
+            result_cols[i] = CategoricalColumn(
+                data=result_cols[i].data,
+                mask=result_cols[i].mask,
+                categories=inp_col.cat().categories,
+                ordered=inp_col.cat().ordered)
+
+    return result_cols

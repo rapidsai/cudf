@@ -2,13 +2,11 @@
 
 import pickle
 import warnings
-from numbers import Number
 
 import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
@@ -18,7 +16,7 @@ from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.utils import cudautils, utils
+from cudf.utils import utils
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,
@@ -513,45 +511,6 @@ class StringColumn(columnops.TypedColumnBase):
             self._indices = Buffer(out_dev_arr)
         return self._indices
 
-    def element_indexing(self, arg):
-        from cudf.dataframe.numerical import NumericalColumn
-
-        if isinstance(arg, Number):
-            arg = int(arg)
-            if arg < 0:
-                arg = len(self) + arg
-            if arg > (len(self) - 1):
-                raise IndexError
-            out = self._data[arg].to_host()[0]
-            return out
-        elif isinstance(arg, slice):
-            out = self._data[arg]
-        elif isinstance(arg, list):
-            out = self._data[arg]
-        elif isinstance(arg, np.ndarray):
-            gpu_arr = rmm.to_device(arg)
-            return self.element_indexing(gpu_arr)
-        elif isinstance(arg, DeviceNDArray):
-            # NVStrings gather call expects an array of int32s
-            import cudf.bindings.typecast as typecast
-
-            arg = typecast.apply_cast(columnops.as_column(arg), dtype=np.int32)
-            arg = cudautils.modulo(arg.data.mem, len(self))
-            if len(arg) > 0:
-                gpu_ptr = get_ctype_ptr(arg)
-                out = self._data.gather(gpu_ptr, len(arg))
-            else:
-                out = self._data.gather([])
-        elif isinstance(arg, NumericalColumn):
-            return self.element_indexing(arg.data.mem)
-        else:
-            raise NotImplementedError(type(arg))
-
-        return columnops.as_column(out)
-
-    def __getitem__(self, arg):
-        return self.element_indexing(arg)
-
     def as_numerical_column(self, dtype, **kwargs):
 
         mem_dtype = np.dtype(dtype)
@@ -665,12 +624,11 @@ class StringColumn(columnops.TypedColumnBase):
         arrays = []
 
         for i, frame in enumerate(frames):
-            # subheader = header["subheaders"][i]
             if isinstance(frame, memoryview):
                 sheader = header["subheaders"][i]
                 dtype = sheader["dtype"]
                 frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
+                frame = utils.cudautils.to_device(frame)
             elif not (
                 isinstance(frame, np.ndarray)
                 or numba.cuda.driver.is_device_memory(frame)
@@ -683,7 +641,7 @@ class StringColumn(columnops.TypedColumnBase):
                 frame.typestr = sheader.get("dtype", "B")
                 frame.shape = sheader.get("shape", len(frame))
                 frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
+                frame = utils.cudautils.to_device(frame)
 
             arrays.append(get_ctype_ptr(frame))
 
@@ -815,9 +773,6 @@ class StringColumn(columnops.TypedColumnBase):
 
     def default_na_value(self):
         return None
-
-    def take(self, indices):
-        return self.element_indexing(indices)
 
     def binary_operator(self, binop, rhs, reflect=False):
         lhs = self
