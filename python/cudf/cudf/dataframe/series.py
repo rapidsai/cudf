@@ -2248,8 +2248,17 @@ class Series(object):
         )
 
     @copy_docstring(Rolling)
-    def rolling(self, window, min_periods=None, center=False):
-        return Rolling(self, window, min_periods=min_periods, center=center)
+    def rolling(
+        self, window, min_periods=None, center=False, axis=0, win_type=None
+    ):
+        return Rolling(
+            self,
+            window,
+            min_periods=min_periods,
+            center=center,
+            axis=axis,
+            win_type=win_type,
+        )
 
     def to_json(self, path_or_buf=None, *args, **kwargs):
         """
