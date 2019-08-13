@@ -435,6 +435,22 @@ class Series(object):
             out = ["" if v is None else str(v) for v in values]
         return out
 
+    def tolist(self):
+        """
+        Return a list type from series data.
+
+        Returns
+        -------
+        list
+
+        Difference from pandas:
+          * Returns numpy.datetime64 types vs pandas datetype
+        """
+        if isinstance(self.values, list):
+            return self.values
+        else:
+            return self.values.tolist()
+
     def head(self, n=5):
         return self.iloc[:n]
 

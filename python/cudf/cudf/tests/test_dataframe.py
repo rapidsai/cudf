@@ -3291,6 +3291,7 @@ def test_isin_index(data, values):
     assert_eq(got.data.mem.copy_to_host(), expected)
 
 
+<<<<<<< HEAD
 def test_constructor_properties():
     df = DataFrame()
     key1 = "a"
@@ -3319,3 +3320,28 @@ def test_constructor_properties():
     # Inorrect use of _constructor_expanddim (Raises for DataFrame)
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
+=======
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5],
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        ["a", "b", "c", "d", "e"],
+        pytest.param(
+            np.array(
+                ["1991-11-20 05:15:00", "2004-12-04 10:00:00"],
+                dtype=np.datetime64,
+            ),
+            marks=pytest.mark.xfail,
+        ),
+    ],
+)
+def test_tolist(data):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.tolist()
+    expected = psr.tolist()
+
+    assert got == expected
+>>>>>>> add-tolist
