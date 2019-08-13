@@ -17,6 +17,11 @@ from libcpp.string cimport string
 
 import numpy as np
 
+from cudf.utils import cudautils
+import numba.cuda
+import numba.numpy_support
+
+
 _UNARY_OP = {
     'sin': SIN,
     'cos': COS,
@@ -43,33 +48,33 @@ def apply_unary_op(incol, op):
     check_gdf_compatibility(incol)
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
-    cdef unary_op c_op = _UNARY_OP[op]
 
     cdef gdf_column c_out_col
 
-    with nogil:
-        c_out_col = unary_operation(
-            c_incol[0],
-            c_op
-        )
+    cdef unary_op c_op
+    cdef string cpp_str
+    cdef gdf_dtype g_type
 
-    free_column(c_incol)
-
-    return gdf_column_to_column(&c_out_col)
-
-
-def column_applymap(incol, udf_ptx, np_dtype):
-
-    cdef gdf_column* c_incol = column_view_from_column(incol)
-
-    cdef string cpp_str = udf_ptx.encode("UTF-8")
-    # get the gdf_type related to the input np type
-    cdef gdf_dtype g_type = dtypes[np_dtype]
-
-    cdef gdf_column c_out_col
-
-    with nogil:
-        c_out_col = transform(c_incol[0], cpp_str, g_type, True)
+    if callable(op):
+        nb_type = numba.numpy_support.from_dtype(incol.dtype)
+        type_signature = (nb_type,)
+        compiled_op = cudautils.compile_udf(op, type_signature)
+        cpp_str = compiled_op[0].encode('UTF-8')
+        if compiled_op[1] not in dtypes:
+            raise TypeError(
+                "Result of window function has unsupported dtype {}"
+                .format(op[1])
+            )
+        g_type = dtypes[compiled_op[1]]
+        with nogil:
+            c_out_col = transform(c_incol[0], cpp_str, g_type, True)
+    else:
+        c_op = _UNARY_OP[op]
+        with nogil:
+            c_out_col = unary_operation(
+                c_incol[0],
+                c_op
+            )
 
     free_column(c_incol)
 

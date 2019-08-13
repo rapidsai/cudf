@@ -8,6 +8,7 @@
 from libc.stdint cimport uintptr_t
 
 import numba.cuda
+import numba.numpy_support
 
 from cudf.dataframe.column import Column
 
@@ -15,21 +16,25 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.rolling cimport *
 
+from cudf.utils import cudautils
+
 
 def apply_rolling(inp, window, min_periods, center, op):
-    cdef gdf_column *c_input_col
-    cdef gdf_column* c_output_col = NULL
+    cdef gdf_column* c_out_ptr = NULL
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0
-    cdef gdf_agg_op c_op = agg_ops[op]
+    cdef gdf_agg_op c_op
     cdef gdf_index_type *c_window_col = NULL
     cdef gdf_index_type *c_min_periods_col = NULL
     cdef gdf_index_type *c_forward_window_col = NULL
 
+    cdef string cpp_str
+    cdef gdf_dtype g_type
+
     if op == "mean":
         inp = inp.astype("float64")
 
-    c_input_col = column_view_from_column(inp, inp.name)
+    cdef gdf_column* c_in_col = column_view_from_column(inp, inp.name)
 
     if op == "count":
         min_periods = 0
@@ -53,42 +58,69 @@ def apply_rolling(inp, window, min_periods, center, op):
             c_window = window
             c_forward_window = 0
 
-    result = None
+    data = None
+    mask = None
+    out_col = None
+    null_count = None
 
     if window == 0:
-        mask = None
-        out_value = 0
+        fill_value = 0
         null_count = 0
-        out_size = inp.data.mem.size
-        out_dtype = inp.data.mem.dtype
         if op not in ["count", "sum"]:
             null_count = len(inp)
-            out_value = inp.default_na_value()
+            fill_value = inp.default_na_value()
             mask = cudautils.make_empty_mask(null_count)
-        data = cudautils.full(out_size, out_value, out_dtype)
-        result = Column.from_mem_views(data, mask, null_count, inp.name)
+        data = cudautils.full(
+            inp.data.mem.size, fill_value, inp.data.mem.dtype
+        )
     else:
-        with nogil:
-            c_output_col = rolling_window(
-                c_input_col[0],
-                c_window,
-                c_min_periods,
-                c_forward_window,
-                c_op,
-                c_window_col,
-                c_min_periods_col,
-                c_forward_window_col
-            )
-        # I'd expect this to work but it doesn't...
-        # result = gdf_column_to_column(c_output_col)
-        data, mask = gdf_column_to_column_mem(c_output_col)
-        result = Column.from_mem_views(data, mask, None, inp.name)
+        if callable(op):
+            nb_type = numba.numpy_support.from_dtype(inp.dtype)
+            type_signature = (nb_type[:],)
+            compiled_op = cudautils.compile_udf(op, type_signature)
+            cpp_str = compiled_op[0].encode('UTF-8')
+            if compiled_op[1] not in dtypes:
+                raise TypeError(
+                    "Result of window function has unsupported dtype {}"
+                    .format(op[1])
+                )
+            g_type = dtypes[compiled_op[1]]
+            with nogil:
+                c_out_col = rolling_window(
+                    c_in_col[0],
+                    c_window,
+                    c_min_periods,
+                    c_forward_window,
+                    cpp_str,
+                    GDF_NUMBA_GENERIC_AGG_OPS,
+                    g_type,
+                    c_window_col,
+                    c_min_periods_col,
+                    c_forward_window_col
+                )
+            data, mask = gdf_column_to_column_mem(&c_out_col)
+        else:
+            c_op = agg_ops[op]
+            with nogil:
+                c_out_ptr = rolling_window(
+                    c_in_col[0],
+                    c_window,
+                    c_min_periods,
+                    c_forward_window,
+                    c_op,
+                    c_window_col,
+                    c_min_periods_col,
+                    c_forward_window_col
+                )
+            data, mask = gdf_column_to_column_mem(c_out_ptr)
+
+    out_col = Column.from_mem_views(data, mask, null_count, inp.name)
 
     if c_window_col is NULL and op == "count":
         # Pandas only does this for fixed windows...?
-        result = result.fillna(0)
+        out_col = out_col.fillna(0)
 
-    free_column(c_input_col)
-    free_column(c_output_col)
+    free_column(c_in_col)
+    free_column(c_out_ptr)
 
-    return result
+    return out_col
