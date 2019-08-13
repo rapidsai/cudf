@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+
 ## Improvements
 
 ## Bug Fixes

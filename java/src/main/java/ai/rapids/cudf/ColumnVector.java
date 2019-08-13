@@ -1495,6 +1495,46 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                                    long deviceOutputDataPtr,
                                                    int numRows, int dtype, int nullCount);
 
+  /**
+   * Native method to switch all characters in a column of strings to lowercase characters.
+   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the lower method.
+   */
+  private static native long lowerStrings(long cudfColumnHandle);
+
+  /**
+   * Native method to switch all characters in a column of strings to uppercase characters.
+   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the upper method.
+   */
+  private static native long upperStrings(long cudfColumnHandle);
+
+  /**
+   * Wrap static native string capitilization methods, retrieves the column vectors cudf native
+   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does
+   * support String categories yet.
+   * @return A new ColumnVector containing the upper case versions of the strings in the original
+   *         column vector.
+   */
+  public ColumnVector upper() {
+    assert type == DType.STRING : "A column of type string is required for .upper() operation";
+    return new ColumnVector(upperStrings(getNativeCudfColumnAddress()));
+  }
+
+  /**
+   * Wrap static native string capitilization methods, retrieves the column vectors cudf native
+   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does
+   * support String categories yet.
+   * @return A new ColumnVector containing the lower case versions of the strings in the original
+   *         column vector.
+   */
+  public ColumnVector lower() {
+    assert type == DType.STRING : "A column of type string is required for .lower() operation";
+    return new ColumnVector(lowerStrings(getNativeCudfColumnAddress()));
+  }
+
   private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
 
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
