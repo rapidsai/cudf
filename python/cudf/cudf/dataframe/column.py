@@ -66,7 +66,7 @@ class Column(object):
         # we cast them to a common dtype.
         # Notice, we can always cast pure null columns
         not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
-        if (
+        if len(not_null_cols) > 0 and (
             len(
                 [
                     o
