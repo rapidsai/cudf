@@ -48,3 +48,4 @@ dependencies:
   - sphinx-markdown-tables
   - git+https://github.com/dask/dask.git
   - git+https://github.com/dask/distributed.git
+  - git+https://github.com/python-streamz/streamz.git

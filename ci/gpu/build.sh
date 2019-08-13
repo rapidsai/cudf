@@ -65,7 +65,7 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libcudf cudf dask_cudf
+$WORKSPACE/build.sh clean libcudf cudf dask_cudf 
 
 ################################################################################
 # TEST - Run GoogleTest and py.tests for libcudf and cuDF
@@ -97,4 +97,9 @@ else
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
+
+    cd $WORKSPACE/python/custreamz
+    logger "Python py.test for cuStreamz..."
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
+
 fi

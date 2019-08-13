@@ -10,7 +10,7 @@ package:
   version: {{ version }}
 
 source:
-  path: ../../..
+  path:
 
 build:
   number: {{ git_revision_count }}
@@ -19,16 +19,13 @@ build:
 requirements:
   host:
     - python
-    - cudf {{ version }}
-    - dask >=2.1.0
-    - distributed >=2.1.0
-    - streamz
   run:
     - python
     - streamz 
     - cudf {{ version }}
     - dask >=2.1.0
     - distributed >=2.1.0
+    - python-confluent-kafka
 test:
   imports:
     - cudf
