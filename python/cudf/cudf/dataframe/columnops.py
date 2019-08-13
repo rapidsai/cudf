@@ -429,7 +429,8 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         )
         data = Buffer(data)
 
-        mask = desc["mask"]
+        mask = desc.get("mask", None)
+
         if mask is not None:
             mask_ptr = mask.__cuda_array_interface__["data"][0]
             mask = rmm.device_array_from_ptr(
