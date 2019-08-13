@@ -77,6 +77,7 @@
 - PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2376 Add inoperative axis= and win_type= arguments to Rolling()
 - PR #2378 remove dask for (de-)serialization of cudf objects
 - PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
@@ -159,6 +160,7 @@
 - PR #2466 Fix `dataframe.query` returning null rows erroneously
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
 - PR #2557 fix cudautils import in string.py
+- PR #2521 Fix casting datetimes from/to the same resolution
 
 
 # cuDF 0.8.0 (27 June 2019)
@@ -196,6 +198,7 @@
 - PR #1652 Added `Series.where()` feature
 - PR #2074 Java Aggregates, logical ops, and better RMM support
 - PR #2140 Add a `cudf::transform` function
+- PR #2068 Concatenation of different typed columns
 
 ## Improvements
 
