@@ -3320,7 +3320,7 @@ def test_constructor_properties():
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
 
-        
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -3345,22 +3345,12 @@ def test_tolist(data):
 @pytest.mark.parametrize(
     "data",
     [
+        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
+        np.array(["1991-11-20", None], dtype=np.datetime64),
         np.array(
-            ["1991-11-20", "2004-12-04"],
-            dtype=np.datetime64,
+            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
         ),
-        np.array(
-            ["1991-11-20", None],
-            dtype=np.datetime64,
-        ),
-        np.array(
-            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"],
-            dtype=np.datetime64,
-        ),
-        np.array(
-            ["1991-11-20 05:15:00", None],
-            dtype=np.datetime64,
-        ),
+        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
     ],
 )
 def test_tolist_datetime(data):

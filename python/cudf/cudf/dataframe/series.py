@@ -450,9 +450,9 @@ class Series(object):
             return self.values
         elif np.issubdtype(self.values.dtype, np.datetime64):
             return list(self.values.astype(np.datetime64))
-        else: 
+        else:
             return self.values.tolist()
-            
+
     def head(self, n=5):
         return self.iloc[:n]
 
