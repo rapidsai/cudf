@@ -6,6 +6,7 @@ import inspect
 import itertools
 import logging
 import numbers
+import pickle
 import random
 import warnings
 from collections import OrderedDict
@@ -28,7 +29,6 @@ from cudf.bindings.stream_compaction import (
     apply_drop_duplicates as cpp_drop_duplicates,
     apply_drop_nulls as cpp_drop_nulls,
 )
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
@@ -211,35 +211,46 @@ class DataFrame(object):
                         forceindex=index is not None,
                     )
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {}
         frames = []
-        header["index"], index_frames = serialize(self._index)
+        header["type"] = pickle.dumps(type(self))
+        header["index"], index_frames = self._index.serialize()
         header["index_frame_count"] = len(index_frames)
         frames.extend(index_frames)
+
         # Use the column directly to avoid duplicating the index
         columns = [col._column for col in self._cols.values()]
-        serialized_columns = zip(*map(serialize, columns))
-        header["columns"], column_frames = serialized_columns
-        for h, f in zip(header["columns"], column_frames):
-            h["frame_count"] = len(f)
         header["column_names"] = tuple(self._cols)
-        for f in column_frames:
-            frames.extend(f)
+        header["columns"] = []
+        # handle empty dataframes
+        if len(columns) > 0:
+            header_columns = [c.serialize() for c in columns]
+
+            for h, f in header_columns:
+                h["frame_count"] = len(f)
+
+            header["columns"], column_frames = zip(*header_columns)
+            for f in column_frames:
+                frames.extend(f)
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         # Reconstruct the index
-        index_header = header["index"]
         index_frames = frames[: header["index_frame_count"]]
-        index = deserialize(index_header, index_frames)
+
+        idx_typ = pickle.loads(header["index"]["type"])
+        index = idx_typ.deserialize(header["index"], index_frames)
+
         # Reconstruct the columns
         column_frames = frames[header["index_frame_count"] :]
         columns = []
+
         for k, meta in zip(header["column_names"], header["columns"]):
             col_frame_count = meta["frame_count"]
-            colobj = deserialize(meta, column_frames[:col_frame_count])
+            col_typ = pickle.loads(meta["type"])
+            colobj = col_typ.deserialize(meta, column_frames[:col_frame_count])
             columns.append((k, colobj))
             # Advance frames
             column_frames = column_frames[col_frame_count:]
@@ -3732,8 +3743,6 @@ idx = merge_doc.find("right")
 merge.__doc__ = "".join(
     [merge_doc[:idx], "\n\tleft : DataFrame\n\t", merge_doc[idx:]]
 )
-
-register_distributed_serializer(DataFrame)
 
 
 def _align_indices(lhs, rhs):
