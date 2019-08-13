@@ -163,6 +163,7 @@
 - PR #2557 fix cudautils import in string.py
 - PR #2521 Fix casting datetimes from/to the same resolution
 - PR #2545 Fix MultiIndexes with datetime levels
+- PR #2560 Remove duplicate `dlpack` definition in conda recipe
 
 
 # cuDF 0.8.0 (27 June 2019)
