@@ -565,9 +565,13 @@ class MultiIndex(Index):
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            pandas_mi = pd.MultiIndex(levels=pandas_levels, codes=pandas_codes)
+            pandas_mi = pd.MultiIndex(
+                levels=pandas_levels, codes=pandas_codes
+            )
         else:
-            pandas_mi = pd.MultiIndex(levels=pandas_levels, labels=pandas_codes)
+            pandas_mi = pd.MultiIndex(
+                levels=pandas_levels, labels=pandas_codes
+            )
         if self.names is not None:
             pandas_mi.names = self.names
         return pandas_mi
