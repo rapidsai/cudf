@@ -89,6 +89,7 @@ def test_cuda_array_interface_interop_out(dtype, module):
     with expectation:
         np_data = np.arange(10).astype(dtype)
         cudf_data = cudf.Series(np_data)
+        assert isinstance(cudf_data.__cuda_array_interface__, dict)
 
         module_data = module_constructor(cudf_data)
         got = to_host_function(module_data)
@@ -96,3 +97,36 @@ def test_cuda_array_interface_interop_out(dtype, module):
         expect = np_data
 
         assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("dtype", basic_dtypes + datetime_dtypes)
+@pytest.mark.parametrize("module", ["cupy", "numba"])
+def test_cuda_array_interface_interop_out_masked(dtype, module):
+    expectation = does_not_raise()
+    if module == "cupy":
+        pytest.skip(
+            "cupy doesn't support version 1 of "
+            "`__cuda_array_interface__` yet"
+        )
+        if not _have_cupy:
+            pytest.skip("no cupy")
+        module_constructor = cupy.asarray
+
+        def to_host_function(x):
+            return cupy.asnumpy(x)
+
+    elif module == "numba":
+        expectation = pytest.raises(NotImplementedError)
+        module_constructor = cuda.as_cuda_array
+
+        def to_host_function(x):
+            return x.copy_to_host()
+
+    np_data = np.arange(10).astype("float64")
+    np_data[[0, 2, 4, 6, 8]] = np.nan
+
+    with expectation:
+        cudf_data = cudf.Series(np_data).astype(dtype)
+        assert isinstance(cudf_data.__cuda_array_interface__, dict)
+
+        module_data = module_constructor(cudf_data)  # noqa: F841
