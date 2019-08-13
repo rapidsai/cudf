@@ -16,10 +16,10 @@ df = pd.DataFrame(
     {
         "x": [i * 7 % 5 for i in range(nrows)],  # Not sorted
         "y": [i * 2.5 for i in range(nrows)],
-    }
+    },
+    index=pd.Index(range(nrows), name="index")
 )  # Sorted
 ddf = dd.from_pandas(df, npartitions=npartitions)
-
 
 def test_roundtrip_from_dask(tmpdir):
     tmpdir = str(tmpdir)
@@ -61,19 +61,19 @@ def test_roundtrip_from_dask(tmpdir):
 
 def test_roundtrip_from_pandas(tmpdir):
     fn = str(tmpdir.join("test.parquet"))
-    dfp = df.copy()
 
     # First without specifying an index
-    dfp.to_parquet(fn, engine="pyarrow")
+    dfp = df.copy()
+    dfp.to_parquet(fn, engine="pyarrow", index=False)
+    dfp = dfp.reset_index(drop=True)
     ddf2 = dask_cudf.read_parquet(fn)
-    assert_eq(dfp, ddf2, check_index=False)
+    assert_eq(dfp, ddf2, check_index=True)
 
     # Now, specifying an index
-    dfp.index.name = "index"
-    dfp.to_parquet(fn, engine="pyarrow")
-    ddf2 = dask_cudf.read_parquet(fn, index="index")
-    # Note: Still losing the index name here
-    assert_eq(dfp, ddf2, check_index=False)
+    dfp = df.copy()
+    dfp.to_parquet(fn, engine="pyarrow", index=True)
+    ddf2 = dask_cudf.read_parquet(fn, index=["index"])
+    assert_eq(dfp, ddf2, check_index=True)
 
 
 def test_strings(tmpdir):

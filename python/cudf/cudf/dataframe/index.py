@@ -612,10 +612,6 @@ class GenericIndex(Index):
             self._values = self._values.replace(name=name)
 
     @property
-    def names(self):
-        return [self._values.name]
-
-    @property
     def dtype(self):
         return self._values.dtype
 
@@ -777,6 +773,10 @@ class CategoricalIndex(GenericIndex):
             )
         super(CategoricalIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
+
+    @property
+    def names(self):
+        return [self._values.name]
 
     @property
     def codes(self):

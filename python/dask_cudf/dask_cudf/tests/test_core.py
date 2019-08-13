@@ -175,6 +175,9 @@ def test_set_index_2(nelem):
         assert_frame_equal_by_index_group(expect, got)
 
 
+@pytest.mark.xfail(
+    reason="dask's index name '__dask_cudf.index' is correct"
+)
 def test_set_index_w_series():
     with dask.config.set(scheduler="single-threaded"):
         nelem = 20
@@ -188,10 +191,9 @@ def test_set_index_w_series():
         expect = df.set_index(df.x).sort_index()
 
         dgf = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=4)
-        res = dgf.set_index(dgf.x)  # sort by default
+        res = dgf.set_index(dgf.x) # sort by default
         got = res.compute().to_pandas()
 
-        expect.index.name = None
         dd.assert_eq(expect, got)
 
 
