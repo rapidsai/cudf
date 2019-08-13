@@ -323,21 +323,23 @@ add_library(cudf
             src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
+            src/rolling/jit/util/type.cpp
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/core/launcher.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
             src/jit/type.cpp
             src/jit/types_h_jit.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
+            src/jit/launcher.cpp
             src/transform/transform.cpp
             src/transform/jit/code/kernel.cpp
-            src/transform/jit/core/launcher.cpp
             src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
             src/stream_compaction/apply_boolean_mask.cu

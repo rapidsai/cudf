@@ -1639,19 +1639,45 @@ class Series(object):
 
         Parameters
         ----------
-        udf : function
-            Wrapped by ``numba.cuda.jit`` for call on the GPU as a device
-            function.
+        udf : Either a callable python function or a python function already
+        decorated by ``numba.cuda.jit`` for call on the GPU as a device
+
         out_dtype  : numpy.dtype; optional
             The dtype for use in the output.
+            Only used for ``numba.cuda.jit`` decorated udf.
             By default, the result will have the same dtype as the source.
 
         Returns
         -------
         result : Series
             The mask and index are preserved.
+
+        Notes
+        --------
+        The supported Python features are listed in
+
+          https://numba.pydata.org/numba-doc/dev/cuda/cudapysupported.html
+
+        with these exceptions:
+
+        * Math functions in `cmath` are not supported since `libcudf` does not
+          have complex number support and output of `cmath` functions are most
+          likely complex numbers.
+
+        * These five functions in `math` are not supported since numba
+          generatesmultiple PTX functions from them
+
+          * math.sin()
+          * math.cos()
+          * math.tan()
+          * math.gamma()
+          * math.lgamma()
+
         """
-        res_col = self._column.applymap(udf, out_dtype=out_dtype)
+        if callable(udf):
+            res_col = self._unaryop(udf)
+        else:
+            res_col = self._column.applymap(udf, out_dtype=out_dtype)
         return self._copy_construct(data=res_col)
 
     # Find / Search
