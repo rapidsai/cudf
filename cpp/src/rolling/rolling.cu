@@ -259,14 +259,6 @@ gdf_column* rolling_window(const gdf_column &input_col,
                                 input_col.dtype_info,
                                 input_col.col_name == nullptr ? "" : std::string(input_col.col_name));
 
-  if (input_col.col_name != nullptr) {
-    size_t len = strlen(input_col.col_name);
-    if (len > 0) {
-      output_col->col_name = (char *)malloc(len + 1);
-      std::strcpy(output_col->col_name, input_col.col_name);
-    }
-  }
-
   // If there are no rows in the input, return successfully
   if (input_col.size == 0)
     return output_col.release();
