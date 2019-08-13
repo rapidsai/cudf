@@ -173,8 +173,11 @@ rows in input table should be equal to number of rows in key colums table");
     destination_table.begin(), destination_table.begin(),
     [](const gdf_column* inp_col, gdf_column* out_col) {
       // a rather roundabout way to do a strcpy...
-      gdf_column_view_augmented(out_col, out_col->data, out_col->valid, out_col->size,
-                                out_col->dtype, out_col->null_count, out_col->dtype_info,
+      gdf_column_view_augmented(out_col,
+                                out_col->data, out_col->valid,
+                                out_col->size, out_col->dtype,
+                                out_col->null_count,
+                                out_col->dtype_info,
                                 inp_col->col_name);
       return out_col;
   });
