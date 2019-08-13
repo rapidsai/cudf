@@ -725,6 +725,31 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             assert expected_value == got_value
 
 
+@pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
+@pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
+def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
+    df1 = pd.DataFrame(dict(x=np.arange(5).astype(dtype1)))
+    df2 = pd.DataFrame(dict(x=np.arange(5).astype(dtype2)))
+    if dtype1 != dtype2 and "datetime" in dtype1 or "datetime" in dtype2:
+        with pytest.raises(ValueError):
+            gd.concat([df1, df2])
+    else:
+        pres = pd.concat([df1, df2])
+        gres = gd.concat([gd.from_pandas(df1), gd.from_pandas(df2)])
+        assert_eq(gd.from_pandas(pres), gres)
+
+
+def test_dataframe_concat_different_column_types():
+    df1 = gd.Series([42], dtype=np.float)
+    df2 = gd.Series(["a"], dtype="category")
+    with pytest.raises(ValueError):
+        gd.concat([df1, df2])
+
+    df2 = gd.Series(["a string"])
+    with pytest.raises(ValueError):
+        gd.concat([df1, df2])
+
+
 def test_dataframe_empty_concat():
     gdf1 = DataFrame()
     gdf1["a"] = []

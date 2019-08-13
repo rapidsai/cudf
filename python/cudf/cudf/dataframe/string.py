@@ -16,7 +16,7 @@ from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
-from cudf.utils import utils
+from cudf.utils import cudautils, utils
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,
@@ -628,7 +628,7 @@ class StringColumn(columnops.TypedColumnBase):
                 sheader = header["subheaders"][i]
                 dtype = sheader["dtype"]
                 frame = np.frombuffer(frame, dtype=dtype)
-                frame = utils.cudautils.to_device(frame)
+                frame = cudautils.to_device(frame)
             elif not (
                 isinstance(frame, np.ndarray)
                 or numba.cuda.driver.is_device_memory(frame)
@@ -641,7 +641,7 @@ class StringColumn(columnops.TypedColumnBase):
                 frame.typestr = sheader.get("dtype", "B")
                 frame.shape = sheader.get("shape", len(frame))
                 frame = np.frombuffer(frame, dtype=dtype)
-                frame = utils.cudautils.to_device(frame)
+                frame = cudautils.to_device(frame)
 
             arrays.append(get_ctype_ptr(frame))
 
@@ -806,7 +806,7 @@ class StringColumn(columnops.TypedColumnBase):
 
     @property
     def __cuda_array_interface__(self):
-        return NotImplementedError(
+        raise NotImplementedError(
             "Strings are not yet supported via `__cuda_array_interface__`"
         )
 

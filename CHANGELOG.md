@@ -34,6 +34,7 @@
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2464 Native implement `__cuda_array_interface__` for Series/Index/Column objects
+- PR #2425 Allow rolling window to accept array-based user-defined functions
 - PR #2442 Add __setitem__
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
 - PR #2492 Add groupby.size() method
@@ -160,6 +161,7 @@
 - PR #2527 Fix index and column input handling in dask_cudf read_parquet
 - PR #2466 Fix `dataframe.query` returning null rows erroneously
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
+- PR #2557 fix cudautils import in string.py
 - PR #2521 Fix casting datetimes from/to the same resolution
 
 
@@ -198,6 +200,7 @@
 - PR #1652 Added `Series.where()` feature
 - PR #2074 Java Aggregates, logical ops, and better RMM support
 - PR #2140 Add a `cudf::transform` function
+- PR #2068 Concatenation of different typed columns
 
 ## Improvements
 
