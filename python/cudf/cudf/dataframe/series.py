@@ -449,7 +449,7 @@ class Series(object):
         if isinstance(self.values, list):
             return self.values
         elif np.issubdtype(self.values.dtype, np.datetime64):
-            return list(self.values.astype(np.datetime64))
+            return list(self.values.astype(self.values.dtype))
         else:
             return self.values.tolist()
 
