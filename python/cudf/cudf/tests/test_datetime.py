@@ -289,6 +289,25 @@ def test_typecast_to_from_datetime(data, from_dtype, to_dtype):
 
 
 @pytest.mark.parametrize("data", [numerical_data()])
+@pytest.mark.parametrize(
+    "from_dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+@pytest.mark.parametrize(
+    "to_dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_typecast_from_datetime_to_datetime(data, from_dtype, to_dtype):
+    np_data = data.astype(from_dtype)
+    gdf_col = Series(np_data)._column
+
+    np_casted = np_data.astype(to_dtype)
+    gdf_casted = gdf_col.astype(to_dtype)
+
+    np.testing.assert_equal(np_casted, gdf_casted.to_array())
+
+
+@pytest.mark.parametrize("data", [numerical_data()])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 def test_to_from_pandas_nulls(data, nulls):
     pd_data = pd.Series(data.copy())
