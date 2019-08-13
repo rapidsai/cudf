@@ -134,8 +134,9 @@ def test_cuda_array_interface_interop_out_masked(dtype, module):
 
 
 @pytest.mark.parametrize("dtype", basic_dtypes + datetime_dtypes)
-@pytest.mark.parametrize("nulls", ["all", "some", "none"])
-def test_cuda_array_interface_as_column(dtype, nulls):
+@pytest.mark.parametrize("nulls", ["all", "some", "bools", "none"])
+@pytest.mark.parametrize("mask_type", ["bits", "bools"])
+def test_cuda_array_interface_as_column(dtype, nulls, mask_type):
     sr = cudf.Series(np.arange(10))
 
     if nulls == "some":
@@ -148,6 +149,25 @@ def test_cuda_array_interface_as_column(dtype, nulls):
     obj = types.SimpleNamespace(
         __cuda_array_interface__=sr.__cuda_array_interface__
     )
+
+    if mask_type == "bools":
+        if nulls == "some":
+            obj.__cuda_array_interface__["mask"] = cuda.to_device(
+                [
+                    True,
+                    False,
+                    True,
+                    False,
+                    False,
+                    True,
+                    True,
+                    False,
+                    True,
+                    True,
+                ]
+            )
+        elif nulls == "all":
+            obj.__cuda_array_interface__["mask"] = cuda.to_device([False] * 10)
 
     expect = sr
     got = cudf.Series(obj)

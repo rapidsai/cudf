@@ -416,37 +416,21 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 data = data.set_mask(mask)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
-        from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
         from cudf.bindings.cudf_cpp import count_nonzero_mask
 
         desc = arbitrary.__cuda_array_interface__
-        ptr = desc["data"][0]
-        nelem = desc["shape"][0]
-        dtype = np.dtype(desc["typestr"])
-
-        data = rmm.device_array_from_ptr(
-            ptr, nelem=nelem, dtype=dtype, finalizer=None
-        )
-        data = Buffer(data)
-
-        mask = desc.get("mask", None)
+        data = _data_from_cuda_array_interface_desc(desc)
+        mask = _mask_from_cuda_array_interface_desc(desc)
 
         if mask is not None:
-            mask_ptr = mask.__cuda_array_interface__["data"][0]
-            mask = rmm.device_array_from_ptr(
-                mask_ptr,
-                nelem=calc_chunk_size(nelem, mask_bitsize),
-                dtype=mask_dtype,
-                finalizer=None,
-            )
-            nnz = count_nonzero_mask(mask, size=nelem)
+            nelem = len(data.mem)
+            nnz = count_nonzero_mask(mask.mem, size=nelem)
             null_count = nelem - nnz
-            mask = Buffer(mask)
         else:
             null_count = 0
 
         return build_column(
-            data, dtype=dtype, mask=mask, name=name, null_count=null_count
+            data, dtype=data.dtype, mask=mask, name=name, null_count=null_count
         )
 
     elif isinstance(arbitrary, np.ndarray):
@@ -702,3 +686,50 @@ def column_applymap(udf, column, out_dtype):
         kernel_non_masked.forall(len(column))(values, results)
     # Output
     return Buffer(results)
+
+
+def _data_from_cuda_array_interface_desc(desc):
+    ptr = desc["data"][0]
+    nelem = desc["shape"][0]
+    dtype = np.dtype(desc["typestr"])
+
+    data = rmm.device_array_from_ptr(
+        ptr, nelem=nelem, dtype=dtype, finalizer=None
+    )
+    data = Buffer(data)
+    return data
+
+
+def _mask_from_cuda_array_interface_desc(desc):
+    from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+    from cudf.utils.cudautils import compact_mask_bytes
+
+    mask = desc.get("mask", None)
+
+    if mask is not None:
+        desc = mask.__cuda_array_interface__
+        ptr = desc["data"][0]
+        nelem = desc["shape"][0]
+        typestr = desc["typestr"]
+        typecode = typestr[1]
+        if typecode == "t":
+            mask = rmm.device_array_from_ptr(
+                ptr,
+                nelem=calc_chunk_size(nelem, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=None,
+            )
+            mask = Buffer(mask)
+        elif typecode == "b":
+            dtype = np.dtype(typestr)
+            mask = compact_mask_bytes(
+                rmm.device_array_from_ptr(
+                    ptr, nelem=nelem, dtype=dtype, finalizer=None
+                )
+            )
+            mask = Buffer(mask)
+        else:
+            raise NotImplementedError(
+                f"Cannot infer mask from typestr {typestr}"
+            )
+    return mask
