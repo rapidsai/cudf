@@ -6,6 +6,13 @@ from cudf.bindings.utils import *
 from cudf.bindings.utils cimport *
 
 def apply_groupby_without_aggregations(cols, key_cols):
+    """
+    Parameters
+    ----------
+    cols : list
+    key_cols : list
+    """
+    from cudf.dataframe.categorical import CategoricalColumn
     from cudf.dataframe.column import Column
     
     cdef cudf_table* c_in_table = table_from_columns(cols)
@@ -25,7 +32,7 @@ def apply_groupby_without_aggregations(cols, key_cols):
         0,
         0,
         'null_as_largest',
-        False
+        True
     )
 
     with nogil:
@@ -39,11 +46,15 @@ def apply_groupby_without_aggregations(cols, key_cols):
     data, mask = gdf_column_to_column_mem(&c_result.second)
     indices_column = Column.from_mem_views(data, mask)
     sorted_cols = columns_from_table(&c_result.first)
+
+    for i, inp_col in enumerate(cols):
+        if isinstance(inp_col, CategoricalColumn):
+            sorted_cols[i] = CategoricalColumn(
+                data=sorted_cols[i].data,
+                mask=sorted_cols[i].mask,
+                categories=inp_col.cat().categories,
+                ordered=inp_col.cat().ordered)
+
     del c_in_table
 
     return sorted_cols, indices_column
-    
-    
-    
-
-    
