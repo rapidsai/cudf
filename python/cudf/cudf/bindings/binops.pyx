@@ -9,7 +9,6 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.binops cimport *
 from cudf.bindings.GDFError import GDFError
-from cudf.dataframe.column import Column
 from libcpp.vector cimport vector
 from libc.stdlib cimport free
 
@@ -137,10 +136,10 @@ def apply_op(lhs, rhs, out, op):
             op
         )
 
-    free(c_lhs)
-    free(c_rhs)
     free(c_scalar)
-    free(c_out)
+    free_column(c_lhs)
+    free_column(c_rhs)
+    free_column(c_out)
 
     return nullct
 
@@ -157,24 +156,22 @@ def apply_op_udf(lhs, rhs, udf_ptx, np_dtype):
     cdef gdf_column* c_lhs = column_view_from_column(lhs)
     cdef gdf_column* c_rhs = column_view_from_column(rhs)
 
-    cdef gdf_column c_outcol
-
     # get the gdf_type related to the input np type
     cdef gdf_dtype g_type = dtypes[np_dtype]
 
-    cdef string cpp_str = udf_ptx.encode('UTF-8')
+    cdef string cpp_str = udf_ptx.encode("UTF-8")
+
+    cdef gdf_column c_out_col
 
     with nogil:
-        c_outcol = binary_operation(
+        c_out_col = binary_operation(
             <gdf_column>c_lhs[0],
             <gdf_column>c_rhs[0],
             cpp_str,
             g_type
         )
 
-    data, mask = gdf_column_to_column_mem(&c_outcol)
+    free_column(c_lhs)
+    free_column(c_rhs)
 
-    free(c_lhs)
-    free(c_rhs)
-
-    return Column.from_mem_views(data, mask)
+    return gdf_column_to_column(&c_out_col)

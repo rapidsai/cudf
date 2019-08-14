@@ -798,7 +798,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                         {
                             uint64_t baseval, mask;
                             bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-                            mask = 2;
+                            mask = 1;
                             mask <<= (bw*8) - 1;
                             mask -= 1;
                             rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;

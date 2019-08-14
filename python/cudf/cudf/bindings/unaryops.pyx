@@ -4,13 +4,12 @@
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
 from cudf.bindings.GDFError import GDFError
-from cudf.dataframe.column import Column
 from libcpp.vector cimport vector
-from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 
@@ -50,7 +49,7 @@ def apply_unary_op(incol, op):
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
-    cdef gdf_column result
+    cdef gdf_column c_out_col
 
     cdef unary_op c_op
     cdef string cpp_str
@@ -68,18 +67,18 @@ def apply_unary_op(incol, op):
             )
         g_type = dtypes[compiled_op[1]]
         with nogil:
-            result = transform(c_incol[0], cpp_str, g_type, True)
+            c_out_col = transform(c_incol[0], cpp_str, g_type, True)
     else:
         c_op = _UNARY_OP[op]
         with nogil:
-            result = unary_operation(
+            c_out_col = unary_operation(
                 c_incol[0],
                 c_op
             )
 
-    free(c_incol)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    free_column(c_incol)
+
+    return gdf_column_to_column(&c_out_col)
 
 
 def apply_dt_extract_op(incol, outcol, op):
@@ -126,7 +125,7 @@ def apply_dt_extract_op(incol, outcol, op):
                 <gdf_column*>c_outcol
             )
 
-    free(c_incol)
-    free(c_outcol)
+    free_column(c_incol)
+    free_column(c_outcol)
 
     check_gdf_error(result)

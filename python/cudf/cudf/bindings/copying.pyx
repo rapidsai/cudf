@@ -22,7 +22,6 @@ import pyarrow as pa
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
 
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
@@ -98,6 +97,7 @@ def apply_gather(source, maps, dest=None):
     cdef cudf_table* c_out_table
     if out_cols == in_cols:
         is_same_input = True
+        c_out_cols = c_in_cols
         c_out_table = c_in_table
     elif out_cols is not None:
         c_out_cols = cols_view_from_cols(out_cols)
@@ -194,18 +194,14 @@ def copy_column(input_col):
         Call cudf::copy
     """
     cdef gdf_column* c_input_col = column_view_from_column(input_col)
-    cdef gdf_column* output = <gdf_column*>malloc(sizeof(gdf_column))
+    cdef gdf_column c_out_col
 
     with nogil:
-        output[0] = copy(c_input_col[0])
+        c_out_col = copy(c_input_col[0])
 
-    data, mask = gdf_column_to_column_mem(output)
-    from cudf.dataframe.column import Column
+    free_column(c_input_col)
 
-    free(c_input_col)
-    free(output)
-
-    return Column.from_mem_views(data, mask, output.null_count)
+    return gdf_column_to_column(&c_out_col)
 
 
 def apply_copy_range(out_col, in_col, int out_begin, int out_end,
@@ -252,7 +248,7 @@ def apply_copy_range(out_col, in_col, int out_begin, int out_end,
             out_col,
             <uintptr_t>c_out_col.dtype_info.category)
 
-    free(c_in_col)
-    free(c_out_col)
+    free_column(c_in_col)
+    free_column(c_out_col)
 
     return out_col

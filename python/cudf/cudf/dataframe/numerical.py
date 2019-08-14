@@ -233,14 +233,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         return cpp_reduce.apply_reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
-        mask = None
-        if self.has_null_mask:
-            mask = self.nullmask
-
-        rounded = cudautils.apply_round(self.data.mem, decimals)
-        return NumericalColumn(
-            data=Buffer(rounded), mask=mask, dtype=self.dtype
-        )
+        data = Buffer(cudautils.apply_round(self.data.mem, decimals))
+        return self.replace(data=data)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.

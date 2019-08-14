@@ -230,10 +230,10 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     free(context)
     for c_col in list_lhs:
-        free(c_col)
+        free_column(c_col)
     for c_col in list_rhs:
-        free(c_col)
+        free_column(c_col)
     for c_col in result_cols:
-        free(c_col)
+        free_column(c_col)
 
     return list(zip(res, valids, result_col_names))

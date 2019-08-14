@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 from cudf.dataframe import columnops
-from cudf.dataframe.index import Index, StringIndex, as_index
+from cudf.dataframe.index import Index, as_index
 from cudf.utils import cudautils
 
 
@@ -91,9 +91,7 @@ class MultiIndex(Index):
                 "codes and is inconsistent!"
             )
 
-        # converting levels to numpy array will produce a Float64Index
-        # (on empty levels)for levels mimicking the behavior of Pandas
-        self._levels = np.array([Series(level) for level in levels])
+        self._levels = [Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
         self._source_data = DataFrame()
@@ -128,7 +126,7 @@ class MultiIndex(Index):
     def copy(self, deep=True):
         mi = MultiIndex(source_data=self._source_data.copy(deep))
         if self._levels is not None:
-            mi._levels = np.array([level.copy(deep) for level in self._levels])
+            mi._levels = [s.copy(deep) for s in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if self.names is not None:
@@ -195,7 +193,8 @@ class MultiIndex(Index):
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
-            levels.append(cats.reset_index(drop=True))
+            cats = cats.reset_index(drop=True)._copy_construct(name=None)
+            levels.append(cats)
 
         self._levels = levels
         self._codes = codes
@@ -367,7 +366,7 @@ class MultiIndex(Index):
             for code in result.columns.codes[result.columns.codes.columns[0]]:
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
-            result.columns = StringIndex(columns, name=name)
+            result.columns = as_index(columns, name=name)
         return result
 
     def _split_tuples(self, tuples):
@@ -579,14 +578,22 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
+
+        # We do two things here to mimic Pandas behavior:
+        # 1. as_index() on each level, so DatetimeColumn becomes DatetimeIndex
+        # 2. convert levels to numpy array so empty levels become Float64Index
+        levels = np.array(
+            [as_index(level).to_pandas() for level in self.levels]
+        )
+
         # Backwards compatibility:
         # Construct a dummy MultiIndex and check for the codes attr.
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            pandas_mi = pd.MultiIndex(levels=self.levels, codes=pandas_codes)
+            pandas_mi = pd.MultiIndex(levels=levels, codes=pandas_codes)
         else:
-            pandas_mi = pd.MultiIndex(levels=self.levels, labels=pandas_codes)
+            pandas_mi = pd.MultiIndex(levels=levels, labels=pandas_codes)
         if self.names is not None:
             pandas_mi.names = self.names
         return pandas_mi

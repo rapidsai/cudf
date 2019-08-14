@@ -174,8 +174,10 @@
 - PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
 - PR #2557 fix cudautils import in string.py
 - PR #2521 Fix casting datetimes from/to the same resolution
+- PR #2545 Fix MultiIndexes with datetime levels
 - PR #2560 Remove duplicate `dlpack` definition in conda recipe
 - PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
+- PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 
 
 # cuDF 0.8.0 (27 June 2019)
