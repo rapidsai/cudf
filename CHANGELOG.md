@@ -8,6 +8,8 @@
 
 ## Bug Fixes
 
+- PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+
 
 # cuDF 0.9.0 (Date TBD)
 
