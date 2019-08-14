@@ -6,6 +6,7 @@
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2097 Add GPU-accelerated AVRO reader
+- PR #2098 Support binary ops on DFs and Series with mismatched indices
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 - PR #2156 Add `upper_bound()` and `lower_bound()` for libcudf tables and `searchsorted()` for cuDF Series
@@ -104,7 +105,6 @@
 ## Bug Fixes
 
 - PR #2086 Fixed quantile api behavior mismatch in series & dataframe
-- PR #2098 Align DataFrame and Series indices before executing binary ops
 - PR #2128 Add offset param to host buffer readers in java API.
 - PR #2145 Work around binops validity checks for java
 - PR #2146 Work around unary_math validity checks for java
