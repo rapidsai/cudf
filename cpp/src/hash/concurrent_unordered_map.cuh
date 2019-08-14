@@ -385,6 +385,56 @@ public:
 
     size_type m_capacity;
     value_type* m_hashtbl_values;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct new concurrent unordered map with of a specified
+   *m_capacity.
+   *
+   * @note The implementation of this unordered_map uses sentinel values to
+   * indicate an entry in the hash table that is empty, i.e., if a hash
+   *bucket is empty, the pair residing there will be equal to (unused_key,
+   *unused_element). As a result, attempting to insert a key equal to
+   *`unused_key` results in undefined behavior.
+   *
+   * @param _capacity The desired m_capacity of the hash table
+   * @param unused_element The sentinel value to use for an empty value
+   * @param unused_key The sentinel value to use for an empty key
+   * @param hf The hash function to use for hashing keys
+   * @param eql The equality comparison function for comparing if two keys
+   *are equal
+   * @param allocator The allocator to use for allocation the hash table's
+   * storage
+   *---------------------------------------------------------------------------**/
+  concurrent_unordered_map(size_type capacity, const mapped_type unused_element,
+                           const key_type unused_key, const Hasher& hf,
+                           const Equality& eql, const allocator_type& allocator)
+      : m_hf(hf),
+        m_equal(eql),
+        m_allocator(allocator),
+        m_capacity(capacity),
+        m_unused_element(unused_element),
+        m_unused_key(unused_key) {
+    m_hashtbl_values = m_allocator.allocate(m_capacity);
+    constexpr int block_size = 128;
+    {
+      cudaPointerAttributes hashtbl_values_ptr_attributes;
+      cudaError_t status = cudaPointerGetAttributes(
+          &hashtbl_values_ptr_attributes, m_hashtbl_values);
+
+      if (cudaSuccess == status &&
+          isPtrManaged(hashtbl_values_ptr_attributes)) {
+        int dev_id = 0;
+        CUDA_RT_CALL(cudaGetDevice(&dev_id));
+        CUDA_RT_CALL(cudaMemPrefetchAsync(
+            m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, 0));
+      }
+    }
+
+    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size>>>(
+        m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
+    CUDA_RT_CALL(cudaGetLastError());
+    CUDA_RT_CALL(cudaStreamSynchronize(0));
+  }
 };
 
 #endif //CONCURRENT_UNORDERED_MAP_CUH
