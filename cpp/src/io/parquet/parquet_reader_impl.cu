@@ -52,11 +52,10 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     case parquet::DATE:
       return std::make_pair(GDF_DATE32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::TIMESTAMP_MICROS:
-    #if !PARQUET_GPU_USEC_TO_MSEC
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_us});
-    #endif
+      static_assert(PARQUET_GPU_USEC_TO_MSEC == 0, "Timestamp usec->msec");
+      return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_us});
     case parquet::TIMESTAMP_MILLIS:
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_ms});
     default:
       break;
   }
@@ -80,8 +79,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(strings_to_categorical ? GDF_CATEGORY : GDF_STRING,
                             gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT96:
-      // Convert Spark INT96 timestamp to GDF_DATE64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_ns});
     default:
       break;
   }

@@ -25,9 +25,11 @@ namespace io {
 namespace parquet {
 namespace gpu {
 
-#define PARQUET_GPU_USEC_TO_MSEC    1
+// Convert TIMESTAMP_MICROS to millisecond resolution
+#define PARQUET_GPU_USEC_TO_MSEC    0
 
-constexpr int kINT96ClkRate = 1000;  // Clock frequency for INT96 timestamp conversion (1000=ms, 1000000000=ns)
+// Clock frequency for INT96 timestamp conversion (1000=ms, 1000000000=ns)
+constexpr int kINT96ClkRate = 1000000000;
 
 /**
  * @brief Enums for the flags in the page header

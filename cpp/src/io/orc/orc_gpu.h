@@ -24,10 +24,11 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-#define DECIMALS_AS_FLOAT64     1     // 0: store decimals as INT64, 1: store decimals as FLOAT64
+// Decimal output type (0: INT64, 1: FLOAT64)
+#define DECIMALS_AS_FLOAT64 1
 
-#define ORC_TS_CLKRATE          1000  // Rate of the output timestamp clock (1000=milliseconds, 1000000000=nanoseconds)
-
+// Rate of the output timestamp clock (1000=ms, 1000000000=ns)
+constexpr int kTsClkRate = 1000000000;
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;

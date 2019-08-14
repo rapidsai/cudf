@@ -71,9 +71,7 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       // Variable-length types can all be mapped to GDF_STRING
       return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::TIMESTAMP:
-      // There isn't a GDF_TIMESTAMP -> np.dtype mapping so use np.datetime64
-      return (use_np_dtypes) ? std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms})
-                             : std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_ns});
     case orc::DATE:
       // There isn't a GDF_DATE32 -> np.dtype mapping so use np.datetime64
       return (use_np_dtypes) ? std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms})
