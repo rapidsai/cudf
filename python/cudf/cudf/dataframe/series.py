@@ -122,7 +122,8 @@ class Series(object):
         assert isinstance(data, columnops.TypedColumnBase)
         if name is None:
             name = data.name
-        data.name = name
+        if data.name != name:
+            data = data.replace(name=name)
         self._column = data
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name

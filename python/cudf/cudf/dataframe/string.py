@@ -677,12 +677,9 @@ class StringColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def _replace_defaults(self):
-        params = {
-            "data": self.data,
-            "mask": self.mask,
-            "null_count": self.null_count,
-        }
-        return params
+        import cudf.dataframe.column as c
+
+        return c.Column._replace_defaults(self)
 
     def copy(self, deep=True):
         params = self._replace_defaults()

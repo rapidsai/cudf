@@ -47,7 +47,8 @@ class CategoricalAccessor(object):
             return Series(data, name=self._parent.name)
 
     def as_ordered(self, **kwargs):
-        data = None if kwargs["inplace"] else self._parent
+        inplace = kwargs.get("inplace", False)
+        data = None if inplace else self._parent
         if not self.ordered:
             kwargs["ordered"] = True
             data = self._set_categories(self.categories, **kwargs)
@@ -189,8 +190,7 @@ class CategoricalAccessor(object):
 
         ordered = kwargs.get("ordered", self.ordered)
         kwargs = df["new_codes"]._column._replace_defaults()
-        kwargs.update(categories=new_cats, ordered=ordered)
-        new_cats._name = None
+        kwargs.update(categories=new_cats, ordered=ordered, name=None)
 
         if kwargs.get("inplace", False):
             self._parent._categories = new_cats
@@ -273,7 +273,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def _replace_defaults(self):
         params = super(CategoricalColumn, self)._replace_defaults()
-        params.update(dict(categories=self._categories, ordered=self._ordered))
+        params.update(categories=self._categories, ordered=self._ordered)
         return params
 
     @property

@@ -621,6 +621,17 @@ def test_groupby_single_var_two_aggs():
     assert_eq(pdg, gdg)
 
 
+def test_groupby_double_var_two_aggs():
+    gdf = cudf.DataFrame()
+    gdf["a"] = [0, 1, 0, 1, 2]
+    gdf["b"] = [11, 2, 15, 12, 2]
+    gdf["c"] = [11, 2, 15, 12, 2]
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
+    pdg = pdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
+    assert_eq(pdg, gdg)
+
+
 def test_groupby_apply_basic_agg_single_column():
     gdf = DataFrame()
     gdf["key"] = [0, 0, 1, 1, 2, 2, 0]
@@ -650,6 +661,21 @@ def test_groupby_multi_agg_multi_groupby():
     pdf = pd.DataFrame(
         {
             "a": np.random.randint(0, 5, 10),
+            "b": np.random.randint(0, 5, 10),
+            "c": np.random.randint(0, 5, 10),
+            "d": np.random.randint(0, 5, 10),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_datetime_multi_agg_multi_groupby():
+    pdf = pd.DataFrame(
+        {
+            "a": np.random.randint(0, 5, 10).astype(np.datetime64),
             "b": np.random.randint(0, 5, 10),
             "c": np.random.randint(0, 5, 10),
             "d": np.random.randint(0, 5, 10),

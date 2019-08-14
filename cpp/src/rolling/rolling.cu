@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <algorithm>
 
+#include <cudf/copying.hpp>
 #include <cudf/rolling.hpp>
 #include "rolling_detail.hpp"
 
@@ -262,8 +263,8 @@ gdf_column* rolling_window(const gdf_column &input_col,
   // Use the column wrapper class from io/utilities to quickly create a column
   gdf_column_wrapper output_col(input_col.size,
                                 input_col.dtype,
-                                gdf_dtype_extra_info{TIME_UNIT_NONE},
-                                "");
+                                input_col.dtype_info,
+                                input_col.col_name == nullptr ? "" : std::string(input_col.col_name));
 
   // If there are no rows in the input, return successfully
   if (input_col.size == 0)

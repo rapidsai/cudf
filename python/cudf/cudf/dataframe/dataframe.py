@@ -1201,7 +1201,7 @@ class DataFrame(object):
     def take(self, positions, ignore_index=False):
         out = DataFrame()
         if self._cols:
-            for i, col_name in enumerate(self._cols):
+            for i, col_name in enumerate(self._cols.keys()):
                 out[col_name] = self[col_name][positions]
         if ignore_index:
             out.index = RangeIndex(len(out))
@@ -1404,11 +1404,9 @@ class DataFrame(object):
 
         if isinstance(data, GeneratorType):
             data = Series(data)
-        series = self._prepare_series_for_add(
+        self._cols[name] = self._prepare_series_for_add(
             data, forceindex=forceindex, name=name
         )
-        series.name = name
-        self._cols[name] = series
 
     def drop(self, labels, axis=None, errors="raise"):
         """Drop column(s)
