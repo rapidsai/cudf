@@ -6,7 +6,7 @@
 
 ## Improvements
 
-- PR #2678 Update legacy_groupby to use libcudf group_by_without_aggregation
+- PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
 
 ## Bug Fixes
 
