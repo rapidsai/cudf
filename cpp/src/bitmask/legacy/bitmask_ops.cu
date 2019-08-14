@@ -163,9 +163,21 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
 
 gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
                           gdf_size_type output_column_length,
-                          gdf_valid_type* masks_to_concat[],
-                          gdf_size_type* column_lengths,
+                          gdf_column *columns_to_concat[],
                           gdf_size_type num_columns) {
+  std::vector<gdf_valid_type*> h_masks(num_columns);
+  std::vector<gdf_size_type> h_column_lengths(num_columns);
+  std::generate(h_masks.begin(), h_masks.end(),
+                [&, n = 0] () mutable { return columns_to_concat[n++]->valid; });
+  std::generate(h_column_lengths.begin(), h_column_lengths.end(), 
+                [&, n = 0] () mutable { return columns_to_concat[n++]->size; });
+
+  rmm::device_vector<gdf_valid_type*> d_masks(h_masks);
+  rmm::device_vector<gdf_size_type> d_column_lengths(h_column_lengths);
+
+  gdf_valid_type** masks_to_concat = thrust::raw_pointer_cast(d_masks.data());
+  gdf_size_type* column_lengths = thrust::raw_pointer_cast(d_column_lengths.data());
+
   // This lambda is executed in a thrust algorithm. Each thread computes and
   // returns one gdf_valid_type element for the concatenated output mask
   auto mask_concatenator = [=] __device__(gdf_size_type mask_index) {
