@@ -768,7 +768,7 @@ TYPED_TEST(JoinValidTest, ReportValidMaskError)
                      100,100,
                      false, 1);
 
-  CUDF_EXPECT_THROW_MESSAGE (this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED), "GDF Error");
+  CUDF_EXPECT_THROW_MESSAGE (this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED), "GDF Validity is unsupported by sort_join");
 }
 
 

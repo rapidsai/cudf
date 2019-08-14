@@ -35,7 +35,7 @@
 - PR #2489 Add drop argument to set_index
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
-- PR #2496 Solves issue of improper merge of two dataframes when names differ
+- PR #2496 Fix improper merge of two dataframes when names differ
 
 
 ## Improvements

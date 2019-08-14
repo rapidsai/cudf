@@ -24,54 +24,72 @@ namespace cudf {
  * dataframes (left, right)
  *
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
- * returned.
+ * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
  * 
- * @param[in] left_cols The table of left dataframe
- * @param[in] right_cols The table of right dataframe
- * @param[in] join_cols The table containing indices of left and right join columns
- * respectively
- * @param[in] merging_join_cols The table containing indices of left and right
- * join columns which have same name respectively and which will merge into a single column
- * @param[out] out_indices The table containing joined indices of left and right table 
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- * sort vs hash based implementation
+ * @example TableA a:{0,1,2}
+ *          TableB b:{1,2,3}, c:{4,5,6} And TableB joins TableA 
+ *          on column 'a' with column 'b'.
+ * The result would be Table-res a:{1, 2}, b:{1, 2}, c:{4, 5}
+ * Result is intersection of column 'a' and column 'b'
+ *
+ * @param[in] left_table The left dataframe
+ * @param[in] right_table The right dataframe
+ * @param[in] join_ind_table The table containing two columns,
+ * first column - indices of left table provided for join
+ * second column - indices of right table provided for join
+ * @param[in] merging_join_ind_table Similar to join_ind_table,
+ * contains two columns, but these column have the indices
+ * which have same name in dataframes and will eventually merge
+ * into a single column.
+ * @param[out] out_index_table The table containing 
+ * joined indices of left and right table 
+ * @param[in] join_context The context to use to control how 
+ * the join is performed,e.g., sort vs hash based implementation
  * 
  * @returns If Success, pair of left and right table which are merged 
  */
 std::pair<cudf::table, cudf::table> inner_join(
-                         cudf::table const& left_cols,
-                         cudf::table const& right_cols,
-                         cudf::table const& join_cols,
-                         cudf::table const& merging_join_cols,
-                         cudf::table const& out_indices,
+                         cudf::table const& left_table,
+                         cudf::table const& right_table,
+                         cudf::table const& join_ind_table,
+                         cudf::table const& merging_join_ind_table,
+                         cudf::table const& out_index_table,
                          gdf_context *join_context);
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
  *
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
- * returned.
+ * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
+ * 
+ * @example TableA a:{0,1,2}
+ *          TableB b:{1,2,3}, c:{4,5,6} And TableB joins TableA 
+ *          on column 'a' with column 'b'.
+ * The result would be Table-res a:{0, 1, 2}, b:{nan, 1, 2}, c:{nan, 4, 5}
+ * Result is left of column 'a' only
  *
- * @param[in] left_cols The table of left dataframe
- * @param[in] right_cols The table of right dataframe
- * @param[in] join_cols The table containing indices of left and right join columns
- * respectively
- * @param[in] merging_join_cols The table containing indices of left and right
- * join columns which have same name respectively and which will merge into a single column
- * @param[out] out_indices The table containing joined indices of left and right table 
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- * sort vs hash based implementation
+ * @param[in] left_table The left dataframe
+ * @param[in] right_table The right dataframe
+ * @param[in] join_ind_table The table containing two columns,
+ * first column - indices of left table provided for join
+ * second column - indices of right table provided for join
+ * @param[in] merging_join_ind_table Similar to join_ind_table,
+ * contains two columns, but these column have the indices
+ * which have same name in dataframes and will eventually merge
+ * into a single column.
+ * @param[out] out_index_table The table containing 
+ * joined indices of left and right table 
+ * @param[in] join_context The context to use to control how 
+ * the join is performed,e.g., sort vs hash based implementation
  * 
  * @returns If Success, pair of left and right table which are merged
  */
 std::pair<cudf::table, cudf::table> left_join(
-                         cudf::table const& left_cols,
-                         cudf::table const& right_cols,
-                         cudf::table const& join_cols,
-                         cudf::table const& merging_join_cols,
-                         cudf::table const& out_indices,
+                         cudf::table const& left_table,
+                         cudf::table const& right_table,
+                         cudf::table const& join_ind_table,
+                         cudf::table const& merging_join_ind_table,
+                         cudf::table const& out_index_table,
                          gdf_context *join_context);
 
 /** 
@@ -79,26 +97,35 @@ std::pair<cudf::table, cudf::table> left_join(
  * specified columns of two dataframes (left, right)
  *
  * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
- * returned.
+ * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
+ * 
+ * @example TableA a:{0,1,2}
+ *          TableB b:{1,2,3}, c:{4,5,6} And TableB joins TableA 
+ *          on column 'a' with column 'b'.
+ * The result would be Table-res a:{0, 1, 2, nan}, b:{nan, 1, 2, 3}, c:{nan, 4, 5, 6}
+ * Result is union of column 'a' and column 'b'
  *
- * @param[in] left_cols The table of left dataframe
- * @param[in] right_cols The table of right dataframe
- * @param[in] join_cols The table containing indices of left and right join columns
- * respectively
- * @param[in] merging_join_cols The table containing indices of left and right
- * join columns which have same name respectively and which will merge into a single column
- * @param[out] out_indices The table containing joined indices of left and right table 
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- * sort vs hash based implementation
+ * @param[in] left_table The left dataframe
+ * @param[in] right_table The right dataframe
+ * @param[in] join_ind_table The table containing two columns,
+ * first column - indices of left table provided for join
+ * second column - indices of right table provided for join
+ * @param[in] merging_join_ind_table Similar to join_ind_table,
+ * contains two columns, but these column have the indices
+ * which have same name in dataframes and will eventually merge
+ * into a single column.
+ * @param[out] out_index_table The table containing 
+ * joined indices of left and right table 
+ * @param[in] join_context The context to use to control how 
+ * the join is performed,e.g., sort vs hash based implementation
  * 
  * @returns If Success, pair of left and right table which are merged 
  */
 std::pair<cudf::table, cudf::table> full_join(
-                         cudf::table const& left_cols,
-                         cudf::table const& right_cols,
-                         cudf::table const& join_cols,
-                         cudf::table const& merging_join_cols,
-                         cudf::table const& out_indices,
+                         cudf::table const& left_table,
+                         cudf::table const& right_table,
+                         cudf::table const& join_ind_table,
+                         cudf::table const& merging_join_ind_table,
+                         cudf::table const& out_index_table,
                          gdf_context *join_context);
 } //namespace cudf
