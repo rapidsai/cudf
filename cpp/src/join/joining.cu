@@ -32,6 +32,8 @@
 #include <limits>
 #include <set>
 #include <vector>
+#include <numeric>
+#include <algorithm>
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
