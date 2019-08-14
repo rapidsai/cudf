@@ -218,6 +218,12 @@ struct rowindex_state_s
     uint32_t compressed_offset[128][2];
 };
 
+enum {
+    PB_TYPE_VARINT = 0,
+    PB_TYPE_FIXED64 = 1,
+    PB_TYPE_FIXEDLEN = 2,
+    PB_TYPE_FIXED32 = 5
+};
 
 #define PB_ROWINDEXENTRY_ID     ((1*8) + PB_TYPE_FIXEDLEN)
 
