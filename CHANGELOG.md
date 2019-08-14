@@ -1,3 +1,14 @@
+# cuDF 0.10.0 (Date TBD)
+
+## New Features
+
+- PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+
+## Improvements
+
+## Bug Fixes
+
+
 # cuDF 0.9.0 (Date TBD)
 
 ## New Features
@@ -33,6 +44,8 @@
 - PR #2446 Add __array_function__ for index
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
+- PR #2464 Native implement `__cuda_array_interface__` for Series/Index/Column objects
+- PR #2425 Allow rolling window to accept array-based user-defined functions
 - PR #2442 Add __setitem__
 - PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
 - PR #2492 Add groupby.size() method
@@ -41,7 +54,6 @@
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
-
 
 ## Improvements
 
@@ -78,6 +90,8 @@
 - PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
 - PR #2344 Add docs on how code formatting works for contributors
+- PR #2376 Add inoperative axis= and win_type= arguments to Rolling()
+- PR #2378 remove dask for (de-)serialization of cudf objects
 - PR #2353 Bump Arrow and Dask versions
 - PR #2377 Replace `standard_python_slice` with just `slice.indices()`
 - PR #2373 cudf.DataFrame enchancements & Series.values support
@@ -97,6 +111,7 @@
 - PR #2481 Adds the ignore_null_keys option to the java api
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
+- PR #2432 Use pandas formatting for console, html, and latex output
 
 ## Bug Fixes
 
@@ -152,7 +167,17 @@
 - PR #2514 Fix cudf::drop_nulls threshold handling in Cython
 - PR #2516 Fix utilities include paths and meta.yaml header paths
 - PR #2517 Fix device memory leak in to_dlpack tensor deleter
+- PR #2431 Fix local build generated file ownerships
 - PR #2511 Added import of orc, refactored exception handlers to not squash fatal exceptions
+- PR #2527 Fix index and column input handling in dask_cudf read_parquet
+- PR #2466 Fix `dataframe.query` returning null rows erroneously
+- PR #2548 Orc reader: fix non-deterministic data decoding at chunk boundaries
+- PR #2557 fix cudautils import in string.py
+- PR #2521 Fix casting datetimes from/to the same resolution
+- PR #2545 Fix MultiIndexes with datetime levels
+- PR #2560 Remove duplicate `dlpack` definition in conda recipe
+- PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
+- PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 
 
 # cuDF 0.8.0 (27 June 2019)
@@ -190,6 +215,7 @@
 - PR #1652 Added `Series.where()` feature
 - PR #2074 Java Aggregates, logical ops, and better RMM support
 - PR #2140 Add a `cudf::transform` function
+- PR #2068 Concatenation of different typed columns
 
 ## Improvements
 

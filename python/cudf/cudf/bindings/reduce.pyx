@@ -91,7 +91,7 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
             c_ddof
         )
 
-    free(c_col)
+    free_column(c_col)
     result = get_scalar_value(c_result, col_dtype)
 
     return result
@@ -118,7 +118,7 @@ def apply_scan(col_inp, col_out, scan_op, inclusive):
             b_inclusive
         )
 
-    free(c_col_inp)
-    free(c_col_out)
+    free_column(c_col_inp)
+    free_column(c_col_out)
 
     return

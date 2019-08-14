@@ -8,26 +8,41 @@ class CudfEngine(ArrowEngine):
     @staticmethod
     def read_metadata(*args, **kwargs):
         meta, stats, parts = ArrowEngine.read_metadata(*args, **kwargs)
+
+        # If `strings_to_categorical==True`, convert objects to int32
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
+        dtypes = {}
+        for col in meta.columns:
+            if meta[col].dtype == "O":
+                dtypes[col] = "int32" if strings_to_cats else "object"
+
         meta = cudf.DataFrame.from_pandas(meta)
+        for col, dtype in dtypes.items():
+            meta[col] = meta[col].astype(dtype)
+
         return (meta, stats, parts)
 
     @staticmethod
     def read_partition(
         fs, piece, columns, index, categories=(), partitions=(), **kwargs
     ):
+        if columns is not None:
+            columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
 
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
         df = cudf.read_parquet(
             piece.path,
             engine="cudf",
             columns=columns,
             row_group=piece.row_group,
+            strings_to_categorical=strings_to_cats,
             **kwargs.get("read", {}),
         )
 
-        if any(index) in df.columns:
-            df = df.set_index(index)
+        if index is not None and index[0] in df.columns:
+            df = df.set_index(index[0])
 
         return df
 

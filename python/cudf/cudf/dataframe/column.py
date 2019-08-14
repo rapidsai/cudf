@@ -4,6 +4,7 @@
 A column is data + validity-mask.
 LibGDF operates on column.
 """
+import pickle
 from numbers import Number
 
 import numpy as np
@@ -15,7 +16,6 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.quantile as cpp_quantile
 from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
@@ -47,6 +47,7 @@ class Column(object):
         from cudf.dataframe.series import Series
         from cudf.dataframe.string import StringColumn
         from cudf.dataframe.categorical import CategoricalColumn
+        from cudf.dataframe.numerical import NumericalColumn
 
         if len(objs) == 0:
             dtype = pd.api.types.pandas_dtype(dtype)
@@ -60,6 +61,28 @@ class Column(object):
                 )
             else:
                 return Column(Buffer.null(dtype))
+
+        # If all columns are `NumericalColumn` with different dtypes,
+        # we cast them to a common dtype.
+        # Notice, we can always cast pure null columns
+        not_null_cols = list(filter(lambda o: len(o) != o.null_count, objs))
+        if len(not_null_cols) > 0 and (
+            len(
+                [
+                    o
+                    for o in not_null_cols
+                    if not isinstance(o, NumericalColumn)
+                    or np.issubdtype(o.dtype, np.datetime64)
+                ]
+            )
+            == 0
+        ):
+            col_dtypes = [o.dtype for o in not_null_cols]
+            # Use NumPy to find a common dtype
+            common_dtype = np.find_common_type(col_dtypes, [])
+            # Cast all columns to the common dtype
+            for i in range(len(objs)):
+                objs[i] = objs[i].astype(common_dtype)
 
         # Find the first non-null column:
         head = objs[0]
@@ -121,7 +144,7 @@ class Column(object):
         return col
 
     @staticmethod
-    def from_mem_views(data_mem, mask_mem=None, null_count=None):
+    def from_mem_views(data_mem, mask_mem=None, null_count=None, name=None):
         """Create a Column object from a data device array (or nvstrings
            object), and an optional mask device array
         """
@@ -129,6 +152,7 @@ class Column(object):
 
         if isinstance(data_mem, nvstrings.nvstrings):
             return columnops.build_column(
+                name=name,
                 buffer=data_mem,
                 dtype=np.dtype("object"),
                 null_count=null_count,
@@ -139,6 +163,7 @@ class Column(object):
             if mask_mem is not None:
                 mask = Buffer(mask_mem)
             return columnops.build_column(
+                name=name,
                 buffer=data_buf,
                 dtype=data_mem.dtype,
                 mask=mask,
@@ -212,28 +237,47 @@ class Column(object):
     def name(self, name):
         self._name = name
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {"null_count": self._null_count}
         frames = []
 
-        header["data_buffer"], data_frames = serialize(self._data)
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
+        header["data_buffer"], data_frames = self._data.serialize()
+
         header["data_frame_count"] = len(data_frames)
         frames.extend(data_frames)
-        header["mask_buffer"], mask_frames = serialize(self._mask)
-        header["mask_frame_count"] = len(mask_frames)
+
+        if self._mask:
+            header["mask_buffer"], mask_frames = self._mask.serialize()
+            header["mask_frame_count"] = len(mask_frames)
+        else:
+            header["mask_buffer"] = []
+            header["mask_frame_count"] = 0
+            mask_frames = {}
+
         frames.extend(mask_frames)
         header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         data_nframe = header["data_frame_count"]
         mask_nframe = header["mask_frame_count"]
-        data = deserialize(header["data_buffer"], frames[:data_nframe])
-        mask = deserialize(
-            header["mask_buffer"],
-            frames[data_nframe : data_nframe + mask_nframe],
+
+        data_typ = pickle.loads(header["data_buffer"]["type"])
+        data = data_typ.deserialize(
+            header["data_buffer"], frames[:data_nframe]
         )
+
+        if header["mask_buffer"]:
+            mask_typ = pickle.loads(header["mask_buffer"]["type"])
+            mask = mask_typ.deserialize(
+                header["mask_buffer"],
+                frames[data_nframe : data_nframe + mask_nframe],
+            )
+        else:
+            mask = None
         return data, mask
 
     def _get_mask_as_column(self):
@@ -371,6 +415,7 @@ class Column(object):
         params = {
             "data": self.data,
             "mask": self.mask,
+            "name": self.name,
             "null_count": self.null_count,
         }
         return params
@@ -755,6 +800,3 @@ class Column(object):
         if dropna is False and self.null_count > 0:
             return len(segs) + 1
         return len(segs)
-
-
-register_distributed_serializer(Column)

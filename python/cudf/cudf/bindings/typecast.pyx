@@ -5,11 +5,9 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
-from cudf.dataframe.column import Column
-from libc.stdlib cimport free
 
 import numpy as np
 import pandas as pd
@@ -33,15 +31,16 @@ def apply_cast(incol, dtype=np.float64):
         time_unit=np_dtype_to_gdf_time_unit(dtype),
         category=<void*>c_category
     )
-    cdef gdf_column result
+
+    cdef gdf_column c_out_col
 
     with nogil:
-        result = cast(
+        c_out_col = cast(
             c_incol[0],
             c_out_dtype,
             c_out_info
         )
 
-    free(c_incol)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    free_column(c_incol)
+
+    return gdf_column_to_column(&c_out_col)
