@@ -8,14 +8,11 @@ from numba import cuda
 
 from librmm_cffi import librmm as rmm
 
-from cudf.bindings.sort import apply_segsort
+from cudf.bindings.groupby.sort import apply_groupby_without_aggregations
 from cudf.comm.serialize import register_distributed_serializer
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.column import Column
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.multi import concat
-from cudf.utils import cudautils
 
 
 def _auto_generate_grouper_agg(members):
@@ -291,129 +288,13 @@ class Groupby(object):
             * segs : Series.
                  Group starting index.
         """
-        if len(df) == 0:
-            # Groupby on empty dataframe
-            return _dfsegs_pack(df=df, segs=Buffer(np.asarray([])))
-        # Prepare dataframe
-        orig_df = df.copy()
-        df = df.loc[:, levels].reset_index(drop=True)
-        df = df.to_frame() if isinstance(df, Series) else df
-        rowid_column = "__cudf.groupby.rowid"
-        df[rowid_column] = df.index.as_column()
-
-        col_order = list(levels)
-
-        # Perform grouping
-        df, segs, markers = self._group_first_level(
-            col_order[0], rowid_column, df
+        sorted_cols, indices = apply_groupby_without_aggregations(
+            df._columns, df[levels]._columns
         )
-        rowidcol = df[rowid_column]
-        sorted_keys = [Series(df.index.as_column())]
-        del df
-
-        more_keys, reordering_indices, segs = self._group_inner_levels(
-            col_order[1:], rowidcol, segs, markers=markers
-        )
-        sorted_keys.extend(more_keys)
-        valcols = [k for k in orig_df.columns if k not in levels]
-        # Prepare output
-        # All key columns are already sorted
-        out_df = DataFrame()
-        for k, sr in zip(levels, sorted_keys):
-            out_df[k] = sr
-        # Shuffle the value columns
-        self._group_shuffle(
-            orig_df.loc[:, valcols], reordering_indices, out_df
-        )
-        return _dfsegs_pack(df=out_df, segs=segs)
-
-    def _group_first_level(self, col, rowid_column, df):
-        """Group first level *col* of *df*
-
-        Parameters
-        ----------
-        col : str
-            Name of the first group key column.
-        df : DataFrame
-            The dataframe being grouped.
-
-        Returns
-        -------
-        (df, segs)
-            - df : DataFrame
-                Sorted by *col- * index
-            - segs : Series
-                Group begin offsets
-        """
-        df = df.loc[:, [col, rowid_column]]
-        df = df.set_index(col).sort_index()
-        segs, markers = df.index._find_segments()
-        return df, Series(segs), markers
-
-    def _group_inner_levels(self, columns, rowidcol, segs, markers):
-        """Group the second and onwards level.
-
-        Parameters
-        ----------
-        columns : sequence[str]
-            Group keys.  The order is important.
-        rowid_column : str
-            The name of the special column with the original rowid.
-            It's internally used to determine the shuffling order.
-        df : DataFrame
-            The dataframe being grouped.
-        segs : Series
-            First level group begin offsets.
-
-        Returns
-        -------
-        (sorted_keys, reordering_indices, segments)
-            - sorted_keys : list[Series]
-                List of sorted key columns.
-                Column order is same as arg *columns*.
-            - reordering_indices : device array
-                The indices to gather on to shuffle the dataframe
-                into the grouped seqence.
-            - segments : Series
-                Group begin offsets.
-        """
-        dsegs = segs.astype(dtype=np.int32).data.mem
-        sorted_keys = []
-        plan_cache = {}
-        for col in columns:
-            # Shuffle the key column according to the previous groups
-            srkeys = self._df[col].take(
-                rowidcol.to_gpu_array(), ignore_index=True
-            )
-            # Segmented sort on the key
-            shuf = Column(Buffer(cudautils.arange(len(srkeys))))
-
-            cache_key = (len(srkeys), srkeys.dtype, shuf.dtype)
-            plan = plan_cache.get(cache_key)
-            plan = apply_segsort(srkeys._column, shuf, dsegs, plan=plan)
-            plan_cache[cache_key] = plan
-
-            sorted_keys.append(srkeys)  # keep sorted key cols
-            # Determine segments
-            dsegs, markers = cudautils.find_segments(
-                srkeys.to_gpu_array(), dsegs, markers=markers
-            )
-            # Shuffle
-            rowidcol = rowidcol.take(shuf.to_gpu_array(), ignore_index=True)
-
-        reordering_indices = rowidcol.to_gpu_array()
-        return sorted_keys, reordering_indices, Series(dsegs)
-
-    def _group_shuffle(self, src_df, reordering_indices, out_df):
-        """Shuffle columns in *src_df* with *reordering_indices*
-        and store the new columns into *out_df*
-        """
-        src_df = src_df.to_frame() if isinstance(src_df, Series) else src_df
-        for k in src_df.columns:
-            col = src_df[k].reset_index(drop=True)
-            newcol = col.take(reordering_indices, ignore_index=True)
-            out_df[k] = newcol
-        return out_df
+        outdf = DataFrame._from_columns(sorted_cols)
+        segs = Series(indices)
+        outdf.columns = df.columns
+        return _dfsegs_pack(df=outdf, segs=segs)
 
     def agg(self, args):
         """Invoke aggregation functions on the groups.
