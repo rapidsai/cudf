@@ -288,11 +288,11 @@ class Groupby(object):
             * segs : Series.
                  Group starting index.
         """
-        sorted_cols, indices = apply_groupby_without_aggregations(
+        sorted_cols, offsets = apply_groupby_without_aggregations(
             df._columns, df[levels]._columns
         )
         outdf = DataFrame._from_columns(sorted_cols)
-        segs = Series(indices)
+        segs = Series(offsets)
         outdf.columns = df.columns
         return _dfsegs_pack(df=outdf, segs=segs)
 
