@@ -114,6 +114,7 @@
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
 - PR #2432 Use pandas formatting for console, html, and latex output
+- PR #2573 Bump numba version to 0.45.1
 
 ## Bug Fixes
 
