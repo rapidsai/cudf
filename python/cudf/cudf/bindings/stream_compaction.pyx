@@ -7,11 +7,12 @@
 
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
+from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 
 from cudf.bindings.copying cimport cols_view_from_cols, free_table
 from cudf.bindings.copying import clone_columns_with_size
-from cudf.dataframe.column import Column
-from cudf.bindings.stream_compaction import *
+from cudf.bindings.stream_compaction cimport *
 
 
 def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
@@ -54,40 +55,98 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
         key_cols = cols_view_from_cols(subset)
         key_table = new cudf_table(key_cols, len(subset))
 
-    cdef cudf_table out_table
+    cdef cudf_table c_out_table
     with nogil:
-        out_table = drop_duplicates(c_in_table[0], key_table[0], keep_first)
+        c_out_table = drop_duplicates(c_in_table[0], key_table[0], keep_first)
 
     free_table(key_table, key_cols)
     free_table(c_in_table, c_in_cols)
 
     # convert table to columns, index
-    out_cols = [
-        Column.from_mem_views(
-            *gdf_column_to_column_mem(i)
-        ) for i in out_table
-    ]
+    out_cols = columns_from_table(&c_out_table)
+
     return (out_cols[:-1], out_cols[-1])
 
 
-def cpp_apply_boolean_mask(inp, mask):
-    from cudf.dataframe.columnops import column_empty_like
+def apply_apply_boolean_mask(cols, mask):
+    """
+    Filter the rows of a list of columns using a boolean mask
 
-    cdef gdf_column *inp_col = column_view_from_column(inp)
-    cdef gdf_column *mask_col = column_view_from_column(mask)
-    cdef gdf_column result
+    Parameters
+    ----------
+    cols : List of Columns
+    mask : Boolean mask (Column)
+
+    Returns
+    -------
+    List of Columns
+    """
+    cdef cudf_table  c_out_table
+    cdef cudf_table* c_in_table = table_from_columns(cols)
+    cdef gdf_column* c_mask_col = column_view_from_column(mask)
+
     with nogil:
-        result = apply_boolean_mask(inp_col[0], mask_col[0])
-    if result.data is NULL:
-        return column_empty_like(inp, newsize=0)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+        c_out_table = apply_boolean_mask(c_in_table[0], c_mask_col[0])
+
+    free_table(c_in_table)
+    free_column(c_mask_col)
+
+    return columns_from_table(&c_out_table)
 
 
-def cpp_drop_nulls(inp):
-    cdef gdf_column *inp_col = column_view_from_column(inp)
-    cdef gdf_column result
+def apply_drop_nulls(cols, how="any", subset=None, thresh=None):
+    """
+    Drops null rows from cols.
+
+    Parameters
+    ----------
+    cols : List of Columns
+    how  : "any" or "all". If thresh is None, drops rows of cols that have any
+           nulls or all nulls (respectively) in subset (default: "any")
+    subset : List of Columns. If set, then these columns are checked for nulls
+             rather than all of cols (optional)
+    thresh : Minimum number of non-nulls required to keep a row (optional)
+
+    Returns
+    -------
+    List of Columns
+    """
+    from cudf.dataframe.categorical import CategoricalColumn
+
+    cdef cudf_table c_out_table
+    cdef cudf_table* c_in_table = table_from_columns(cols)
+
+    # if subset is None, we use cols as keys
+    # if subset is empty, we pass an empty keys table, which will cause
+    # cudf::drop_nulls() to return a copy of the input table
+    cdef cudf_table* c_keys_table = (table_from_columns(cols) if subset is None
+                                     else table_from_columns(subset))
+
+    # default: "any" means threshold should be number of key columns
+    cdef gdf_size_type c_keep_threshold = (len(cols) if subset is None
+                                           else len(subset))
+
+    # Use `thresh` if specified, otherwise set threshold based on `how`
+    if thresh is not None:
+        c_keep_threshold = thresh
+    elif how == "all":
+        c_keep_threshold = 1
+
     with nogil:
-        result = drop_nulls(inp_col[0])
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+        c_out_table = drop_nulls(c_in_table[0], c_keys_table[0],
+                                 c_keep_threshold)
+
+    free_table(c_in_table)
+    free_table(c_keys_table)
+
+    result_cols = columns_from_table(&c_out_table)
+
+    for i, inp_col in enumerate(cols):
+        if isinstance(inp_col, CategoricalColumn):
+            result_cols[i] = CategoricalColumn(
+                data=result_cols[i].data,
+                mask=result_cols[i].mask,
+                categories=inp_col.cat().categories,
+                ordered=inp_col.cat().ordered)
+
+    return result_cols

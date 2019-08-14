@@ -20,6 +20,8 @@ from cudf.dataframe.column import Column
 from cudf.utils import ioutils
 from cudf.bindings.nvtx import nvtx_range_push, nvtx_range_pop
 from librmm_cffi import librmm as rmm
+from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 
 import nvstrings
 import numpy as np
@@ -95,25 +97,12 @@ cpdef cpp_read_json(path_or_buf, dtype, lines, compression, byte_range):
     with nogil:
         reader = unique_ptr[json_reader](new json_reader(args))
 
-    cdef cudf_table table
+    cdef cudf_table c_out_table
     if byte_range is None:
-        table = reader.get().read()
+        c_out_table = reader.get().read()
     else:
-        table = reader.get().read_byte_range(byte_range[0], byte_range[1])
+        c_out_table = reader.get().read_byte_range(
+            byte_range[0], byte_range[1]
+        )
 
-    # Extract parsed columns
-    outcols = []
-    new_names = []
-    for i in range(table.num_columns()):
-        data_mem, mask_mem = gdf_column_to_column_mem(table.get_column(i))
-        outcols.append(Column.from_mem_views(data_mem, mask_mem))
-        new_names.append(table.get_column(i).col_name.decode())
-        free(table.get_column(i).col_name)
-        free(table.get_column(i))
-
-    # Construct dataframe from columns
-    df = DataFrame()
-    for k, v in zip(new_names, outcols):
-        df[k] = v
-
-    return df
+    return table_to_dataframe(&c_out_table)

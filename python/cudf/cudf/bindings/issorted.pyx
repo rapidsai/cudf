@@ -11,6 +11,7 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.issorted cimport *
 from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 
 cpdef issorted(columns, descending=[], nulls_are_smallest=False):
     """

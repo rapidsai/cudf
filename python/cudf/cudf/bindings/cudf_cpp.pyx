@@ -9,7 +9,8 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
-from libc.stdlib cimport calloc, malloc, free
+from libc.stdlib cimport malloc, free
+from libc.string cimport strcpy
 
 import numpy as np
 import pandas as pd
@@ -22,7 +23,6 @@ import cudf.dataframe.columnops
 from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory
-
 
 dtypes = {
     np.float64: GDF_FLOAT64,
@@ -162,7 +162,7 @@ cdef np_dtype_from_gdf_column(gdf_column* col):
     raise TypeError('cannot convert gdf_dtype `%s` to numpy dtype' % (dtype))
 
 
-cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None) except? GDF_invalid:
     """Util to convert a column's or np.scalar's dtype to gdf dtype.
 
     Parameters
@@ -172,7 +172,8 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None):
     dtype : numpy.dtype; optional
         The dtype to convert to a gdf_dtype.  Defaults to *col.dtype*.
     """
-    dtype = col.dtype if dtype is None else np.dtype(dtype)
+    dtype = col.dtype if dtype is None else pd.api.types.pandas_dtype(dtype)
+
     # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
     if is_categorical_dtype(dtype):
         if col is None:
@@ -308,11 +309,15 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         else:
             data_ptr = 0
 
-    if col._mask is not None and col.null_count > 0:
+    if col._mask is not None:
         valid_ptr = get_column_valid_ptr(col)
     else:
         valid_ptr = 0
 
+    if col_name is None:
+        col_name = col.name
+
+    cdef char* c_col_name = py_to_c_str(col_name)
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_time_unit c_time_unit = np_dtype_to_gdf_time_unit(col.dtype)
@@ -320,11 +325,6 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
         time_unit=c_time_unit,
         category=<void*>category
     )
-
-    if col_name is None:
-        c_col.col_name = NULL
-    else:
-        c_col.col_name = col_name
 
     with nogil:
         gdf_column_view_augmented(
@@ -334,7 +334,8 @@ cdef gdf_column* column_view_from_column(col, col_name=None) except? NULL:
             len_col,
             c_dtype,
             c_null_count,
-            c_extra_dtype_info
+            c_extra_dtype_info,
+            c_col_name
         )
 
     return c_col
@@ -397,7 +398,8 @@ cdef gdf_column* column_view_from_NDArrays(
             c_size,
             c_dtype,
             c_null_count,
-            c_extra_dtype_info
+            c_extra_dtype_info,
+            NULL
         )
 
     return c_col
@@ -407,7 +409,30 @@ cpdef uintptr_t column_view_pointer(col):
     """
     Return pointer to a view of the underlying <gdf_column*>
     """
-    return <uintptr_t> column_view_from_column(col)
+    return <uintptr_t> column_view_from_column(col, col.name)
+
+
+cdef gdf_column_to_column(gdf_column* c_col, int_col_name=False):
+    """
+    Util to create a Python cudf.Column from a libcudf gdf_column.
+
+    Parameters
+    ----------
+    c_col : gdf_column*
+        A pointer to the source gdf_column.
+    int_col_name : bool; optional
+        A flag indicating the string column name should be cast
+        to an integer after decoding (default: False).
+    """
+    from cudf.dataframe.column import Column
+    name = None
+    ncount = c_col.null_count
+    if c_col.col_name is not NULL:
+        name = c_col.col_name.decode()
+        if int_col_name:
+            name = int(name)
+    data, mask = gdf_column_to_column_mem(c_col)
+    return Column.from_mem_views(data, mask, ncount, name)
 
 
 cdef gdf_column_to_column_mem(gdf_column* input_col):
@@ -480,17 +505,16 @@ cdef gdf_column* column_view_from_string_column(
     else:
         valid_ptr = 0
 
+    if col_name is None:
+        col_name = col.name
+
+    cdef char* c_col_name = py_to_c_str(col_name)
     cdef gdf_size_type len_col = len(col)
     cdef gdf_size_type c_null_count = col.null_count
     cdef gdf_dtype_extra_info c_extra_dtype_info = gdf_dtype_extra_info(
         time_unit=TIME_UNIT_NONE,
         category=<void*>category
     )
-
-    if col_name is None:
-        c_col.col_name = NULL
-    else:
-        c_col.col_name = col_name
 
     with nogil:
         gdf_column_view_augmented(
@@ -500,7 +524,8 @@ cdef gdf_column* column_view_from_string_column(
             len_col,
             c_dtype,
             c_null_count,
-            c_extra_dtype_info
+            c_extra_dtype_info,
+            c_col_name
         )
 
     return c_col
@@ -515,20 +540,24 @@ cdef gdf_column** cols_view_from_cols(cols):
     cdef i
     for i in range(col_count):
         check_gdf_compatibility(cols[i])
-        c_cols[i] = column_view_from_column(cols[i])
+        c_cols[i] = column_view_from_column(cols[i], cols[i].name)
 
     return c_cols
 
 
-cdef free_table(cudf_table* table0, gdf_column** cols):
+cdef free_table(cudf_table* c_table, gdf_column** cols=NULL):
     cdef i
-    cdef gdf_column *c_col
-    for i in range(table0[0].num_columns()):
-        c_col = table0[0].get_column(i)
-        free(c_col)
-
-    del table0
+    for i in range(c_table[0].num_columns()):
+        free_column(c_table[0].get_column(i))
+    del c_table
     free(cols)
+
+
+cdef free_column(gdf_column* c_col):
+    if c_col is NULL:
+        return
+    free(c_col.col_name)
+    free(c_col)
 
 
 # gdf_context functions
@@ -617,3 +646,20 @@ cpdef count_nonzero_mask(mask, size):
             )
 
     return nnz
+
+
+cdef char* py_to_c_str(object py_str):
+    """
+    Util to convert a Python bytes, bytearray, or unicode string to a char*,
+    in a way that breaks free from the Cython garbage collector.
+    """
+    cdef char* c_str = NULL
+    if py_str is not None:
+        if isinstance(py_str, (str, unicode)):
+            py_str = py_str.encode()
+        elif not isinstance(py_str, (bytes, bytearray)):
+            py_str = str(py_str).encode()
+        py_str_len = len(py_str)
+        c_str = <char*> malloc((py_str_len + 1) * sizeof(char))
+        strcpy(c_str, py_str)
+    return c_str

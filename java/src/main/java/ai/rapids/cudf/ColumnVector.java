@@ -979,31 +979,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Filters a column using a column of boolean values as a mask.
-   * <p>
-   * Given an input column and a mask column, an element `i` from the input column
-   * is copied to the output if the corresponding element `i` in the mask is
-   * non-null and `true`. This operation is stable: the input order is preserved.
-   * <p>
-   * The input and mask columns must be of equal size.
-   * <p>
-   * The output column has size equal to the number of elements in boolean_mask
-   * that are both non-null and `true`.
-   * <p>
-   * If the input size is zero, there is no error, and an empty column is returned.
-   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
-   *             the input column
-   * @return column containing copy of all elements of this column passing
-   * the filter defined by the boolean mask
-   */
-  public ColumnVector filter(ColumnVector mask) {
-    assert mask.getType() == DType.BOOL8;
-    assert type != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
-    assert rows == 0 || rows == mask.getRowCount();
-    return new ColumnVector(Cudf.filter(this, mask));
-  }
-
-  /**
    * Slices a column (including null values) into a set of columns
    * according to a set of indices. The caller owns the ColumnVectors and is responsible
    * closing them
@@ -1081,7 +1056,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @param scalar - Scalar value to replace row with
    * @throws IllegalArgumentException
    */
-  private void fill(Scalar scalar) throws IllegalArgumentException {
+  // package private for testing
+  void fill(Scalar scalar) throws IllegalArgumentException {
     assert scalar.getType() == this.getType();
 
     if (this.getType() == DType.STRING || this.getType() == DType.STRING_CATEGORY){
@@ -1092,45 +1068,73 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       return; // no rows to fill
     }
 
+    checkHasDeviceData();
+
     BufferEncapsulator<DeviceMemoryBuffer> newDeviceData = null;
     boolean needsCleanup = true;
 
     try {
-      if (!scalar.isValid() && this.offHeap.getDeviceData().valid == null) {
-        // scalar is null, we allow filling with nulls
-        // create validity mask, since we didn't have one before
-        long validitySizeInBytes = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-        newDeviceData = new BufferEncapsulator<DeviceMemoryBuffer>(
-            this.offHeap.getDeviceData().data,
-            DeviceMemoryBuffer.allocate(validitySizeInBytes),
-            null);
-        Cuda.memset(newDeviceData.valid.getAddress(), (byte) 0x00, validitySizeInBytes);
-      } else if (this.offHeap.getDeviceData() != null) {
+      if (!scalar.isValid()) {
+        if (getNullCount() == getRowCount()) {
+          //current vector has all nulls, and we are trying to set it to null.
+          return;
+        }
+        this.nullCount = rows;
+
+        if (offHeap.getDeviceData().valid == null) {
+          long validitySizeInBytes = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
+          // scalar is null and vector doesn't have a validity mask. Create a validity mask.
+          newDeviceData = new BufferEncapsulator<DeviceMemoryBuffer>(
+              this.offHeap.getDeviceData().data,
+              DeviceMemoryBuffer.allocate(validitySizeInBytes),
+              null);
+          this.offHeap.setDeviceData(newDeviceData);
+        } else {
+          newDeviceData = this.offHeap.getDeviceData();
+        }
+
+        // the buffer encapsulator is the owner of newDeviceData, no need to clear
+        needsCleanup = false;
+
+        Cuda.memset(newDeviceData.valid.getAddress(), (byte) 0x00,
+            BitVectorHelper.getValidityLengthInBytes(rows));
+
+        // set the validity pointer
+        cudfColumnViewAugmented(
+            this.getNativeCudfColumnAddress(),
+            newDeviceData.data.address,
+            newDeviceData.valid.address,
+            (int) this.getRowCount(),
+            this.getType().nativeId,
+            (int) this.nullCount,
+            this.getTimeUnit().getNativeId());
+
+      } else {
+        this.nullCount = 0;
         newDeviceData = this.offHeap.getDeviceData();
         needsCleanup = false; // the data came from upstream
+
+        // if we are now setting the vector to a non-null, we need to
+        // close out the validity vector
+        if (newDeviceData.valid != null){
+          newDeviceData.valid.close();
+          newDeviceData = new BufferEncapsulator<DeviceMemoryBuffer>(
+              newDeviceData.data, null, null);
+          this.offHeap.setDeviceData(newDeviceData);
+        }
+
+        // set the validity pointer
+        cudfColumnViewAugmented(
+            this.getNativeCudfColumnAddress(),
+            newDeviceData.data.address,
+            0,
+            (int) this.getRowCount(),
+            this.getType().nativeId,
+            (int) nullCount,
+            this.getTimeUnit().getNativeId());
+
+        Cudf.fill(this, scalar);
       }
-
-      // set the validity pointer
-      cudfColumnViewAugmented(
-          this.getNativeCudfColumnAddress(),
-          newDeviceData.data.address,
-          newDeviceData.valid != null ?
-              newDeviceData.valid.address : 0,
-          (int) this.getRowCount(),
-          this.getType().nativeId,
-          (int) this.getNullCount(),
-          this.getTimeUnit().getNativeId());
-
-      this.offHeap.setDeviceData(newDeviceData);
-
-      // the column vector has the reference the BufferEncapsulator
-      // and can close later in case of failure
-      needsCleanup = false;
-
-      Cudf.fill(this, scalar);
-
-      // the null_count could have changed, set it java-side
-      this.nullCount = getNullCount(getNativeCudfColumnAddress());
 
       // at this stage, host offHeap is no longer meaningful
       // if we had hostData, reset it with a fresh copy from device
@@ -1519,6 +1523,46 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                                    boolean resetOffsetsToZero, long deviceValidPtr,
                                                    long deviceOutputDataPtr,
                                                    int numRows, int dtype, int nullCount);
+
+  /**
+   * Native method to switch all characters in a column of strings to lowercase characters.
+   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the lower method.
+   */
+  private static native long lowerStrings(long cudfColumnHandle);
+
+  /**
+   * Native method to switch all characters in a column of strings to uppercase characters.
+   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @return native handle of the resulting cudf column, used to construct the Java column
+   *         by the upper method.
+   */
+  private static native long upperStrings(long cudfColumnHandle);
+
+  /**
+   * Wrap static native string capitilization methods, retrieves the column vectors cudf native
+   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does
+   * support String categories yet.
+   * @return A new ColumnVector containing the upper case versions of the strings in the original
+   *         column vector.
+   */
+  public ColumnVector upper() {
+    assert type == DType.STRING : "A column of type string is required for .upper() operation";
+    return new ColumnVector(upperStrings(getNativeCudfColumnAddress()));
+  }
+
+  /**
+   * Wrap static native string capitilization methods, retrieves the column vectors cudf native
+   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does
+   * support String categories yet.
+   * @return A new ColumnVector containing the lower case versions of the strings in the original
+   *         column vector.
+   */
+  public ColumnVector lower() {
+    assert type == DType.STRING : "A column of type string is required for .lower() operation";
+    return new ColumnVector(lowerStrings(getNativeCudfColumnAddress()));
+  }
 
   private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
 
@@ -2015,21 +2059,11 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       throw new IllegalArgumentException("STRING and STRING_CATEGORY are not supported scalars");
     }
     DeviceMemoryBuffer dataBuffer = null;
-    DeviceMemoryBuffer validityBuffer = null;
     ColumnVector cv = null;
     boolean needsCleanup = true;
 
     try {
       dataBuffer = DeviceMemoryBuffer.allocate(scalar.type.sizeInBytes * rows);
-
-      long validitySizeInBytes = BitVectorHelper.getValidityAllocationSizeInBytes(rows);
-
-      if (!scalar.isValid()) {
-        validityBuffer = DeviceMemoryBuffer.allocate(validitySizeInBytes);
-        // ensure this is all valid before calling cudf::fill, as before that
-        // the column is all valid
-        Cuda.memset(validityBuffer.getAddress(), (byte)0xFF, validitySizeInBytes);
-      }
 
       cv = new ColumnVector(
           scalar.getType(),
@@ -2037,18 +2071,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
           rows,
           0,
           dataBuffer,
-          validityBuffer,
+          null,
           null, false);
+
+      // null this out as cv is the owner, and will be closed
+      // when cv closes in case of failure
+      dataBuffer = null;
 
       cudfColumnViewAugmented(
           cv.getNativeCudfColumnAddress(),
           cv.offHeap.getDeviceData().data.address,
-          cv.offHeap.getDeviceData().valid != null  ?
-              cv.offHeap.getDeviceData().valid.address :
-              0,
+          0,
           (int) cv.getRowCount(),
           cv.getType().nativeId,
-          (int) cv.getNullCount(),
+          0,
           cv.getTimeUnit().getNativeId());
 
       cv.fill(scalar);
@@ -2059,9 +2095,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       if (needsCleanup) {
         if (dataBuffer != null) {
           dataBuffer.close();
-        }
-        if (validityBuffer != null) {
-          validityBuffer.close();
         }
         if (cv != null) {
           cv.close();

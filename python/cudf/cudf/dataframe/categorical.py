@@ -1,5 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -7,7 +9,6 @@ from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf.bindings.replace as cpp_replace
 import cudf.bindings.search as cpp_search
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
@@ -46,7 +47,8 @@ class CategoricalAccessor(object):
             return Series(data, name=self._parent.name)
 
     def as_ordered(self, **kwargs):
-        data = None if kwargs["inplace"] else self._parent
+        inplace = kwargs.get("inplace", False)
+        data = None if inplace else self._parent
         if not self.ordered:
             kwargs["ordered"] = True
             data = self._set_categories(self.categories, **kwargs)
@@ -64,7 +66,8 @@ class CategoricalAccessor(object):
             return Series(data=self._parent.replace(ordered=False))
 
     def add_categories(self, new_categories, **kwargs):
-        data = None if kwargs["inplace"] else self._parent
+        inplace = kwargs.get("inplace", False)
+        data = None if inplace else self._parent
         new_categories = columnops.as_column(new_categories)
         new_categories = self._parent._categories.append(new_categories)
         if not self._categories_equal(new_categories, **kwargs):
@@ -187,8 +190,7 @@ class CategoricalAccessor(object):
 
         ordered = kwargs.get("ordered", self.ordered)
         kwargs = df["new_codes"]._column._replace_defaults()
-        kwargs.update(categories=new_cats, ordered=ordered)
-        new_cats._name = None
+        kwargs.update(categories=new_cats, ordered=ordered, name=None)
 
         if kwargs.get("inplace", False):
             self._parent._categories = new_cats
@@ -237,27 +239,30 @@ class CategoricalColumn(columnops.TypedColumnBase):
         self._categories = categories
         self._ordered = ordered
 
-    def serialize(self, serialize):
-        header, frames = super(CategoricalColumn, self).serialize(serialize)
+    def serialize(self):
+        header, frames = super(CategoricalColumn, self).serialize()
         header["ordered"] = self._ordered
-        header["categories"], category_frames = serialize(self._categories)
+        header["categories"], category_frames = self._categories.serialize()
         header["category_frame_count"] = len(category_frames)
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         frames.extend(category_frames)
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(CategoricalColumn, cls).deserialize(
-            deserialize, header, frames
+    def deserialize(cls, header, frames):
+        data, mask = super(CategoricalColumn, cls).deserialize(header, frames)
+
+        # Handle categories that were serialized as a cudf.Column
+        category_frames = frames[
+            len(frames) - header["category_frame_count"] :
+        ]
+        cat_typ = pickle.loads(header["categories"]["type"])
+        _categories = cat_typ.deserialize(
+            header["categories"], category_frames
         )
-        if "category_frame_count" not in header:
-            # Handle data from before categories was a cudf.Column
-            categories = header["categories"]
-        else:
-            # Handle categories that were serialized as a cudf.Column
-            categories = frames[len(frames) - header["category_frame_count"] :]
-            categories = deserialize(header["categories"], categories)
-            categories = columnops.as_column(categories)
+
+        categories = columnops.as_column(_categories)
 
         return cls(
             data=data,
@@ -268,7 +273,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
 
     def _replace_defaults(self):
         params = super(CategoricalColumn, self)._replace_defaults()
-        params.update(dict(categories=self._categories, ordered=self._ordered))
+        params.update(categories=self._categories, ordered=self._ordered)
         return params
 
     @property
@@ -533,6 +538,3 @@ def pandas_categorical_as_column(categorical, codes=None):
         params.update(dict(mask=Buffer(mask), null_count=null_count))
 
     return CategoricalColumn(**params)
-
-
-register_distributed_serializer(CategoricalColumn)

@@ -9,6 +9,8 @@ from numba import cuda
 
 from librmm_cffi import librmm as rmm
 
+from cudf.utils import applyutils, cudautils
+
 ENVREF_PREFIX = "__CUDF_ENVREF__"
 
 
@@ -212,12 +214,16 @@ def query_execute(df, expr, callenv):
             raise NameError(msg.format(name))
         else:
             envargs.append(val)
+    columns = compiled["colnames"]
     # prepare col args
-    colarrays = [df[col].data.mem for col in compiled["colnames"]]
+    colarrays = [df[col].data.mem for col in columns]
     # allocate output buffer
     nrows = len(df)
     out = rmm.device_array(nrows, dtype=np.bool_)
     # run kernel
     args = [out] + colarrays + envargs
     kernel.forall(nrows)(*args)
+    out_mask = applyutils.make_aggregate_nullmask(df, columns=columns)
+    if out_mask is not None:
+        out = cudautils.fill_mask(out, out_mask.data.mem, False)
     return out

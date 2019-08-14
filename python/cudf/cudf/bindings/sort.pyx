@@ -211,5 +211,5 @@ class SegmentedRadixSortPlan(object):
                 )
 
         self.plan = int(c_plan)
-        free(c_col_keys)
-        free(c_col_vals)
+        free_column(c_col_keys)
+        free_column(c_col_vals)

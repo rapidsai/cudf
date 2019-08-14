@@ -22,9 +22,9 @@
 #include <cudf/copying.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/gather.hpp>
 #include "joining.h"
@@ -123,8 +123,19 @@ void trivial_full_join(
         allocSequenceBuffer(&l_ptr, left_size);
         result_size = left_size;
     }
-    gdf_column_view( left_result, l_ptr, nullptr, result_size, dtype);
-    gdf_column_view(right_result, r_ptr, nullptr, result_size, dtype);
+
+    gdf_column_view_augmented(left_result,
+                              l_ptr, nullptr,
+                              result_size, dtype, 0,
+                              left_result->dtype_info,
+                              left_result->col_name);
+
+    gdf_column_view_augmented(right_result,
+                              r_ptr, nullptr,
+                              result_size, dtype, 0,
+                              right_result->dtype_info,
+                              right_result->col_name);
+
     CUDA_CHECK_LAST();
 }
 
@@ -322,7 +333,7 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
         rdtypes.push_back(right_table.get_column(*it)->dtype);
         rdtype_infos.push_back(right_table.get_column(*it)->dtype_info);
     }
-
+  
     cudf::table result_left(join_size, cudf::column_dtypes(left_table), cudf::column_dtype_infos(left_table), true);
     cudf::table result_right(join_size, rdtypes, rdtype_infos, true);
     

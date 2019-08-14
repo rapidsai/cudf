@@ -100,17 +100,29 @@ class TypedColumnBase(Column):
         raise NotImplementedError
 
     def dropna(self):
-        from cudf.bindings.stream_compaction import cpp_drop_nulls
+        from cudf.bindings.stream_compaction import apply_drop_nulls
 
-        dropped_col = cpp_drop_nulls(self)
-        return self.replace(data=dropped_col.data, mask=None, null_count=0)
+        dropped_col = apply_drop_nulls([self])
+        if not dropped_col:
+            return column_empty_like(self, newsize=0)
+        else:
+            return self.replace(
+                data=dropped_col[0].data, mask=None, null_count=0
+            )
 
     def apply_boolean_mask(self, mask):
-        from cudf.bindings.stream_compaction import cpp_apply_boolean_mask
+        from cudf.bindings.stream_compaction import apply_apply_boolean_mask
 
         mask = as_column(mask, dtype="bool")
-        data = cpp_apply_boolean_mask(self, mask)
-        return self.replace(data=data.data, mask=data.mask)
+        data = apply_apply_boolean_mask([self], mask)
+        if not data:
+            return column_empty_like(self, newsize=0)
+        else:
+            return self.replace(
+                data=data[0].data,
+                mask=data[0].mask,
+                null_count=data[0].null_count,
+            )
 
     def fillna(self, fill_value, inplace):
         raise NotImplementedError
@@ -163,6 +175,36 @@ class TypedColumnBase(Column):
 
     def as_string_column(self, dtype, **kwargs):
         raise NotImplementedError
+
+    @property
+    def __cuda_array_interface__(self):
+        output = {
+            "shape": (len(self),),
+            "typestr": self.dtype.str,
+            "data": (self.data.mem.device_ctypes_pointer.value, True),
+            "version": 1,
+        }
+
+        if self.has_null_mask:
+            from types import SimpleNamespace
+
+            # Create a simple Python object that exposes the
+            # `__cuda_array_interface__` attribute here since we need to modify
+            # some of the attributes from the numba device array
+            mask = SimpleNamespace(
+                __cuda_array_interface__={
+                    "shape": (len(self),),
+                    "typestr": "<t1",
+                    "data": (
+                        self.nullmask.mem.device_ctypes_pointer.value,
+                        True,
+                    ),
+                    "version": 1,
+                }
+            )
+            output["mask"] = mask
+
+        return output
 
 
 def column_empty_like(column, dtype=None, masked=False, newsize=None):
@@ -260,7 +302,7 @@ def column_select_by_position(column, positions):
     import cudf.bindings.copying as cpp_copying
 
     pos_ary = positions.data.to_gpu_array()
-    selected_values = cpp_copying.apply_gather_column(column, pos_ary)
+    selected_values = cpp_copying.apply_gather(column, pos_ary)
     selected_index = Buffer(pos_ary)
 
     return (
@@ -321,6 +363,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
     * numpy array
     * pyarrow array
     * pandas.Categorical
+    * Object exposing ``__cuda_array_interface__``
     Returns
     -------
     result : subclass of TypedColumnBase
@@ -369,20 +412,26 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = cudautils.mask_from_devary(arbitrary)
+                mask = cudf.bindings.utils.mask_from_devary(data)
                 data = data.set_mask(mask)
 
-    elif cuda.is_cuda_array(arbitrary):
-        # Use cuda array interface to do create a numba device array by
-        # reference
-        new_dev_array = cuda.as_cuda_array(arbitrary)
+    elif hasattr(arbitrary, "__cuda_array_interface__"):
+        from cudf.bindings.cudf_cpp import count_nonzero_mask
 
-        # Allocate new output array using rmm and copy the numba device array
-        # to an rmm owned device array
-        out_dev_array = rmm.device_array_like(new_dev_array)
-        out_dev_array.copy_to_device(new_dev_array)
+        desc = arbitrary.__cuda_array_interface__
+        data = _data_from_cuda_array_interface_desc(desc)
+        mask = _mask_from_cuda_array_interface_desc(desc)
 
-        data = as_column(out_dev_array)
+        if mask is not None:
+            nelem = len(data.mem)
+            nnz = count_nonzero_mask(mask.mem, size=nelem)
+            null_count = nelem - nnz
+        else:
+            null_count = 0
+
+        return build_column(
+            data, dtype=data.dtype, mask=mask, name=name, null_count=null_count
+        )
 
     elif isinstance(arbitrary, np.ndarray):
         # CUDF assumes values are always contiguous
@@ -637,3 +686,50 @@ def column_applymap(udf, column, out_dtype):
         kernel_non_masked.forall(len(column))(values, results)
     # Output
     return Buffer(results)
+
+
+def _data_from_cuda_array_interface_desc(desc):
+    ptr = desc["data"][0]
+    nelem = desc["shape"][0]
+    dtype = np.dtype(desc["typestr"])
+
+    data = rmm.device_array_from_ptr(
+        ptr, nelem=nelem, dtype=dtype, finalizer=None
+    )
+    data = Buffer(data)
+    return data
+
+
+def _mask_from_cuda_array_interface_desc(desc):
+    from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
+    from cudf.utils.cudautils import compact_mask_bytes
+
+    mask = desc.get("mask", None)
+
+    if mask is not None:
+        desc = mask.__cuda_array_interface__
+        ptr = desc["data"][0]
+        nelem = desc["shape"][0]
+        typestr = desc["typestr"]
+        typecode = typestr[1]
+        if typecode == "t":
+            mask = rmm.device_array_from_ptr(
+                ptr,
+                nelem=calc_chunk_size(nelem, mask_bitsize),
+                dtype=mask_dtype,
+                finalizer=None,
+            )
+            mask = Buffer(mask)
+        elif typecode == "b":
+            dtype = np.dtype(typestr)
+            mask = compact_mask_bytes(
+                rmm.device_array_from_ptr(
+                    ptr, nelem=nelem, dtype=dtype, finalizer=None
+                )
+            )
+            mask = Buffer(mask)
+        else:
+            raise NotImplementedError(
+                f"Cannot infer mask from typestr {typestr}"
+            )
+    return mask
