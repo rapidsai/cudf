@@ -5,6 +5,7 @@ from cudf.bindings.groupby.sort cimport *
 from cudf.bindings.utils import *
 from cudf.bindings.utils cimport *
 
+
 def apply_groupby_without_aggregations(cols, key_cols):
     """
     Sorts the Columns ``cols`` based on the subset ``key_cols``.
@@ -24,7 +25,7 @@ def apply_groupby_without_aggregations(cols, key_cols):
     """
     from cudf.dataframe.categorical import CategoricalColumn
     from cudf.dataframe.column import Column
-    
+
     cdef cudf_table* c_in_table = table_from_columns(cols)
     cdef vector[gdf_index_type] c_key_col_indices
     cdef pair[cudf_table, gdf_column] c_result
@@ -51,8 +52,8 @@ def apply_groupby_without_aggregations(cols, key_cols):
             c_num_key_cols,
             c_key_col_indices.data(),
             c_ctx
-            )
-        
+        )
+
     data, mask = gdf_column_to_column_mem(&c_result.second)
     offsets = Column.from_mem_views(data, mask)
     sorted_cols = columns_from_table(&c_result.first)
