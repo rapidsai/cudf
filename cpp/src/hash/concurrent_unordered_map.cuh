@@ -17,18 +17,18 @@
 #ifndef CONCURRENT_UNORDERED_MAP_CUH
 #define CONCURRENT_UNORDERED_MAP_CUH
 
-#include "managed_allocator.cuh"
-#include "managed.cuh"
+#include <utilities/device_atomics.cuh>
 #include "hash_functions.cuh"
 #include "helper_functions.cuh"
-#include <utilities/device_atomics.cuh>
+#include "managed.cuh"
+#include "managed_allocator.cuh"
 
-#include <iterator>
-#include <type_traits>
+#include <thrust/pair.h>
 #include <cassert>
 #include <iostream>
-#include <thrust/pair.h>
+#include <iterator>
 #include <limits>
+#include <type_traits>
 
 namespace {
     template <std::size_t N> struct packed { using type = void; };
@@ -80,7 +80,7 @@ namespace {
 
       __device__ pair_packer(packed_type _packed) : packed{_packed} {}
     };
-}
+}  // namespace
 
 /**
  * Supports concurrent insert, but not concurrent insert and find.
@@ -89,14 +89,10 @@ namespace {
  *  - add constructor that takes pointer to hash_table to avoid allocations
  *  - extend interface to accept streams
  */
-template <typename Key,
-          typename Element,
-          typename Hasher = default_hash<Key>,
+template <typename Key, typename Element, typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
-          typename Allocator = legacy_allocator<thrust::pair<Key, Element> >>
-class concurrent_unordered_map : public managed
-{
-
+          typename Allocator = legacy_allocator<thrust::pair<Key, Element>>>
+class concurrent_unordered_map : public managed {
 public:
     using size_type = size_t;
     using hasher = Hasher;
@@ -108,16 +104,16 @@ public:
     using iterator = cycle_iterator_adapter<value_type*>;
     using const_iterator = const cycle_iterator_adapter<value_type*>;
 
-
 public:
  /**---------------------------------------------------------------------------*
-  * @brief Construct new concurrent unordered map with of a specified m_capacity.
+   * @brief Construct new concurrent unordered map with of a specified
+   *m_capacity.
   *
   * @note The implementation of this unordered_map uses sentinel values to
-  * indicate an entry in the hash table that is empty, i.e., if a hash bucket is
-  * empty, the pair residing there will be equal to (unused_key, unused_element).
-  * As a result, attempting to insert a key equal to `unused_key` results in
-  * undefined behavior.
+   * indicate an entry in the hash table that is empty, i.e., if a hash bucket
+   *is empty, the pair residing there will be equal to (unused_key,
+   *unused_element). As a result, attempting to insert a key equal to
+   *`unused_key` results in undefined behavior.
   *
   * @param _capacity The desired m_capacity of the hash table
   * @param unused_element The sentinel value to use for an empty value
@@ -128,44 +124,22 @@ public:
   * @param allocator The allocator to use for allocation the hash table's
   * storage
   *---------------------------------------------------------------------------**/
- explicit concurrent_unordered_map(
-     size_type _capacity,
+  static auto create(
+      size_type capacity,
      const mapped_type unused_element = std::numeric_limits<key_type>::max(),
      const key_type unused_key = std::numeric_limits<key_type>::max(),
      const Hasher& hf = hasher(), const Equality& eql = key_equal(),
-     const allocator_type& allocator = allocator_type())
-     : m_hf(hf),
-       m_equal(eql),
-       m_allocator(allocator),
-       m_capacity(_capacity),
-       m_unused_element(unused_element),
-       m_unused_key(unused_key) {
-   m_hashtbl_values = m_allocator.allocate(m_capacity);
-   constexpr int block_size = 128;
-   {
-     cudaPointerAttributes hashtbl_values_ptr_attributes;
-     cudaError_t status = cudaPointerGetAttributes(
-         &hashtbl_values_ptr_attributes, m_hashtbl_values);
+      const allocator_type& allocator = allocator_type()) {
+    using Self =
+        concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
 
-     if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-       int dev_id = 0;
-       CUDA_RT_CALL(cudaGetDevice(&dev_id));
-       CUDA_RT_CALL(cudaMemPrefetchAsync(
-           m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, 0));
-     }
-   }
+    auto deleter = [](Self* p) { p->destroy(); };
 
-   init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size>>>(
-       m_hashtbl_values, m_capacity, m_unused_key, m_unused_element);
-   CUDA_RT_CALL(cudaGetLastError());
-   CUDA_RT_CALL(cudaStreamSynchronize(0));
+    return std::unique_ptr<Self, decltype(deleter)>{
+        new Self(capacity, unused_element, unused_key, hf, eql, allocator),
+        deleter};
     }
     
-    ~concurrent_unordered_map()
-    {
-        m_allocator.deallocate( m_hashtbl_values, m_capacity );
-    }
-
     __device__ iterator begin() {
       return iterator(m_hashtbl_values, m_hashtbl_values + m_capacity,
                       m_hashtbl_values);
@@ -194,11 +168,12 @@ public:
 
    private:
     /**---------------------------------------------------------------------------*
-     * @brief Enumeration of the possible results of attempting to insert into a 
-     * hash bucket
+   * @brief Enumeration of the possible results of attempting to insert into
+   *a hash bucket
      *---------------------------------------------------------------------------**/
     enum class insert_result {
-      CONTINUE,  ///< Insert did not succeed, continue trying to insert (collision)
+    CONTINUE,  ///< Insert did not succeed, continue trying to insert
+               ///< (collision)
       SUCCESS,   ///< New pair inserted successfully
       DUPLICATE  ///< Insert did not succeed, key is already present
     };
@@ -206,9 +181,9 @@ public:
     /**---------------------------------------------------------------------------*
      * @brief Specialization for value types that can be packed.
      *
-     * When the size of the key,value pair being inserted is equal in size to a 
-     * type where atomicCAS is natively supported, this optimization path will
-     * insert the pair in a single atomicCAS operation.
+   * When the size of the key,value pair being inserted is equal in size to
+   *a type where atomicCAS is natively supported, this optimization path
+   *will insert the pair in a single atomicCAS operation.
      *---------------------------------------------------------------------------**/
     template <typename pair_type = value_type>
     __device__ std::enable_if_t<is_packable<pair_type>(), insert_result>
@@ -242,8 +217,8 @@ public:
     __device__ std::enable_if_t<not is_packable<pair_type>(), insert_result>
     attempt_insert(value_type* const __restrict__ insert_location,
                    value_type const& insert_pair) {
-      key_type const old_key{atomicCAS(&(insert_location->first), m_unused_key,
-                                       insert_pair.first)};
+    key_type const old_key{
+        atomicCAS(&(insert_location->first), m_unused_key, insert_pair.first)};
 
       // Hash bucket empty
       if (m_equal(m_unused_key, old_key)) {
@@ -269,14 +244,14 @@ public:
      * the location of the existing key and the boolean is `false` indicating
      * that the insert did not succeed.
      *
-     * If the new key was not present, the iterator points to the location where
-     * the insert occured and the boolean is `true` indicating that the insert
-     * succeeded.
+   * If the new key was not present, the iterator points to the location
+   *where the insert occured and the boolean is `true` indicating that the
+   *insert succeeded.
      *
      * @param insert_pair The key and value pair to insert
-     * @return Iterator, Boolean pair. Iterator is to the location of the newly
-     * inserted pair, or the existing pair that prevented the insert. Boolean
-     * indicates insert success.
+   * @return Iterator, Boolean pair. Iterator is to the location of the
+   *newly inserted pair, or the existing pair that prevented the insert.
+   *Boolean indicates insert success.
      *---------------------------------------------------------------------------**/
     __device__ thrust::pair<iterator, bool> insert(
         value_type const& insert_pair) {
@@ -332,47 +307,58 @@ public:
       }
     }
 
-    gdf_error assign_async( const concurrent_unordered_map& other, cudaStream_t stream = 0 )
-    {
-        if ( other.m_capacity <= m_capacity ) {
+  gdf_error assign_async(const concurrent_unordered_map& other,
+                         cudaStream_t stream = 0) {
+    if (other.m_capacity <= m_capacity) {
             m_capacity = other.m_capacity;
         } else {
-            m_allocator.deallocate( m_hashtbl_values, m_capacity );
+      m_allocator.deallocate(m_hashtbl_values, m_capacity);
             m_capacity = other.m_capacity;
             m_capacity = other.m_capacity;
             
-            m_hashtbl_values = m_allocator.allocate( m_capacity );
+      m_hashtbl_values = m_allocator.allocate(m_capacity);
         }
-        CUDA_TRY( cudaMemcpyAsync( m_hashtbl_values, other.m_hashtbl_values, m_capacity*sizeof(value_type), cudaMemcpyDefault, stream ) );
+    CUDA_TRY(cudaMemcpyAsync(m_hashtbl_values, other.m_hashtbl_values,
+                             m_capacity * sizeof(value_type), cudaMemcpyDefault,
+                             stream));
         return GDF_SUCCESS;
     }
     
-    void clear_async( cudaStream_t stream = 0 ) 
-    {
+  void clear_async(cudaStream_t stream = 0) {
         constexpr int block_size = 128;
-        init_hashtbl<<<((m_capacity-1)/block_size)+1,block_size,0,stream>>>( m_hashtbl_values, m_capacity, m_unused_key, m_unused_element );
+    init_hashtbl<<<((m_capacity - 1) / block_size) + 1, block_size, 0,
+                   stream>>>(m_hashtbl_values, m_capacity, m_unused_key,
+                             m_unused_element);
     }
     
-    void print()
-    {
-        for (size_type i = 0; i < m_capacity; ++i) 
-        {
-            std::cout<<i<<": "<<m_hashtbl_values[i].first<<","<<m_hashtbl_values[i].second<<std::endl;
+  void print() {
+    for (size_type i = 0; i < m_capacity; ++i) {
+      std::cout << i << ": " << m_hashtbl_values[i].first << ","
+                << m_hashtbl_values[i].second << std::endl;
         }
     }
     
-    gdf_error prefetch( const int dev_id, cudaStream_t stream = 0 )
-    {
+  gdf_error prefetch(const int dev_id, cudaStream_t stream = 0) {
         cudaPointerAttributes hashtbl_values_ptr_attributes;
-        cudaError_t status = cudaPointerGetAttributes( &hashtbl_values_ptr_attributes, m_hashtbl_values );
+    cudaError_t status = cudaPointerGetAttributes(
+        &hashtbl_values_ptr_attributes, m_hashtbl_values);
         
-        if ( cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
-            CUDA_TRY( cudaMemPrefetchAsync(m_hashtbl_values, m_capacity*sizeof(value_type), dev_id, stream) );
+    if (cudaSuccess == status && isPtrManaged(hashtbl_values_ptr_attributes)) {
+      CUDA_TRY(cudaMemPrefetchAsync(
+          m_hashtbl_values, m_capacity * sizeof(value_type), dev_id, stream));
         }
-        CUDA_TRY( cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream) );
+    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream));
 
         return GDF_SUCCESS;
     }
+
+  void destroy() {
+    m_allocator.deallocate(m_hashtbl_values, m_capacity);
+    delete this;
+  }
+
+  concurrent_unordered_map() = delete;
+  ~concurrent_unordered_map() = default;
 
    private:
     hasher const m_hf;
@@ -437,4 +423,4 @@ public:
   }
 };
 
-#endif //CONCURRENT_UNORDERED_MAP_CUH
+#endif  // CONCURRENT_UNORDERED_MAP_CUH
