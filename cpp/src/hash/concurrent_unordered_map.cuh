@@ -114,8 +114,12 @@ class concurrent_unordered_map {
 
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Construct new concurrent unordered map with of a specified
-   *m_capacity.
+   * @brief Factory to construct a new concurrent unordered map.
+   *
+   * Returns a `std::unique_ptr` to a new concurrent unordered map object. The
+   * map is non-owning and trivially copyable and should be passed by value into
+   * kernels. The `unique_ptr` contains a custom deleter that will free the
+   * map's contents.
    *
    * @note The implementation of this unordered_map uses sentinel values to
    * indicate an entry in the hash table that is empty, i.e., if a hash bucket
@@ -123,11 +127,11 @@ class concurrent_unordered_map {
    *unused_element). As a result, attempting to insert a key equal to
    *`unused_key` results in undefined behavior.
    *
-   * @param _capacity The desired m_capacity of the hash table
+   * @param capacity The maximum number of pairs the map may hold
    * @param unused_element The sentinel value to use for an empty value
    * @param unused_key The sentinel value to use for an empty key
-   * @param hf The hash function to use for hashing keys
-   * @param eql The equality comparison function for comparing if two keys are
+   * @param hash_function The hash function to use for hashing keys
+   * @param equal The equality comparison function for comparing if two keys are
    * equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
@@ -136,7 +140,8 @@ class concurrent_unordered_map {
       size_type capacity,
       const mapped_type unused_element = std::numeric_limits<key_type>::max(),
       const key_type unused_key = std::numeric_limits<key_type>::max(),
-      const Hasher& hf = hasher(), const Equality& eql = key_equal(),
+      const Hasher& hash_function = hasher(),
+      const Equality& equal = key_equal(),
       const allocator_type& allocator = allocator_type()) {
     using Self =
         concurrent_unordered_map<Key, Element, Hasher, Equality, Allocator>;
@@ -144,7 +149,8 @@ class concurrent_unordered_map {
     auto deleter = [](Self* p) { p->destroy(); };
 
     return std::unique_ptr<Self, std::function<void(Self*)>>{
-        new Self(capacity, unused_element, unused_key, hf, eql, allocator),
+        new Self(capacity, unused_element, unused_key, hash_function, equal,
+                 allocator),
         deleter};
   }
 
@@ -383,29 +389,23 @@ class concurrent_unordered_map {
   value_type* m_hashtbl_values;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct new concurrent unordered map with of a specified
-   *m_capacity.
+   * @brief Private constructor used by `create` factory function.
    *
-   * @note The implementation of this unordered_map uses sentinel values to
-   * indicate an entry in the hash table that is empty, i.e., if a hash
-   *bucket is empty, the pair residing there will be equal to (unused_key,
-   *unused_element). As a result, attempting to insert a key equal to
-   *`unused_key` results in undefined behavior.
-   *
-   * @param _capacity The desired m_capacity of the hash table
+   * @param capacity The desired m_capacity of the hash table
    * @param unused_element The sentinel value to use for an empty value
    * @param unused_key The sentinel value to use for an empty key
-   * @param hf The hash function to use for hashing keys
-   * @param eql The equality comparison function for comparing if two keys
+   * @param hash_function The hash function to use for hashing keys
+   * @param equal The equality comparison function for comparing if two keys
    *are equal
    * @param allocator The allocator to use for allocation the hash table's
    * storage
    *---------------------------------------------------------------------------**/
   concurrent_unordered_map(size_type capacity, const mapped_type unused_element,
-                           const key_type unused_key, const Hasher& hf,
-                           const Equality& eql, const allocator_type& allocator)
-      : m_hf(hf),
-        m_equal(eql),
+                           const key_type unused_key,
+                           const Hasher& hash_function, const Equality& equal,
+                           const allocator_type& allocator)
+      : m_hf(hash_function),
+        m_equal(equal),
         m_allocator(allocator),
         m_capacity(capacity),
         m_unused_element(unused_element),
