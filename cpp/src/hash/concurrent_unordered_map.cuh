@@ -367,7 +367,7 @@ class concurrent_unordered_map {
     delete this;
   }
 
-  concurrent_unordered_map() = default;
+  concurrent_unordered_map() = delete;
   concurrent_unordered_map(concurrent_unordered_map const&) = default;
   concurrent_unordered_map(concurrent_unordered_map&&) = default;
   concurrent_unordered_map& operator=(concurrent_unordered_map const&) =
