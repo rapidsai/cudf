@@ -356,6 +356,12 @@ class concurrent_unordered_map {
     return GDF_SUCCESS;
   }
 
+  /**---------------------------------------------------------------------------*
+   * @brief Frees the contents of the map and destroys the map object.
+   *
+   * This function is invoked as the deleter of the `std::unique_ptr` returned
+   * from the `create()` factory function.
+   *---------------------------------------------------------------------------**/
   void destroy() {
     m_allocator.deallocate(m_hashtbl_values, m_capacity);
     delete this;
