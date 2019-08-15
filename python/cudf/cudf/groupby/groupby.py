@@ -2,12 +2,13 @@
 
 import collections
 import itertools
+import pickle
 
 import cudf
 from cudf import MultiIndex
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 
 def columns_from_dataframe(df):
@@ -44,13 +45,39 @@ class _Groupby(object):
     def agg(self, func):
         return self._apply_aggregation(func)
 
+    def size(self):
+        from cudf.dataframe.columnops import column_empty
+
+        nrows = len(self._groupby.obj)
+        data = cudf.Series(column_empty(nrows, "int8", masked=False))
+        return data.groupby(self._groupby.key_columns).count()
+
 
 class SeriesGroupBy(_Groupby):
-    def __init__(self, sr, by=None, level=None, method="hash", sort=True):
+    def __init__(
+        self, sr, by=None, level=None, method="hash", sort=True, as_index=None
+    ):
         self._sr = sr
+        if as_index not in (True, None):
+            raise TypeError("as_index must be True for SeriesGroupBy")
         self._groupby = _GroupbyHelper(
             obj=self._sr, by=by, level=level, sort=sort
         )
+
+    def serialize(self):
+        header = {}
+        header["groupby"] = pickle.dumps(self)
+        header["type"] = pickle.dumps(type(self))
+        header["sr"], frames = self._sr.serialize()
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        groupby = pickle.loads(header["groupby"])
+        sr_typ = pickle.loads(header["sr"]["type"])
+        sr = sr_typ.deserialize(header["sr"], frames)
+        groupby._sr = sr
+        return groupby
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
@@ -74,7 +101,7 @@ class DataFrameGroupBy(_Groupby):
         return result
 
     def __getitem__(self, arg):
-        if is_single_value(arg):
+        if is_scalar(arg):
             return self.__getattr__(arg)
         else:
             arg = list(arg)
@@ -83,7 +110,11 @@ class DataFrameGroupBy(_Groupby):
                 self._groupby.key_names, self._groupby.key_columns
             ):
                 by_list.append(cudf.Series(by, name=by_name))
-            return self._df[arg].groupby(by_list, sort=self._groupby.sort)
+            return self._df[arg].groupby(
+                by_list,
+                as_index=self._groupby.as_index,
+                sort=self._groupby.sort,
+            )
 
     def __getattr__(self, key):
         if key == "_df":
@@ -95,10 +126,29 @@ class DataFrameGroupBy(_Groupby):
                 self._groupby.key_names, self._groupby.key_columns
             ):
                 by_list.append(cudf.Series(by, name=by_name))
-            return self._df[key].groupby(by_list, sort=self._groupby.sort)
+            return self._df[key].groupby(
+                by_list,
+                as_index=self._groupby.as_index,
+                sort=self._groupby.sort,
+            )
         raise AttributeError(
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
         )
+
+    def serialize(self):
+        header = {}
+        header["groupby"] = pickle.dumps(self)
+        header["type"] = pickle.dumps(type(self))
+        header["df"], frames = self._df.serialize()
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        groupby = pickle.loads(header["groupby"])
+        df_typ = pickle.loads(header["df"]["type"])
+        df = df_typ.deserialize(header["df"], frames)
+        groupby._df = df
+        return groupby
 
 
 class _GroupbyHelper(object):
@@ -159,7 +209,7 @@ class _GroupbyHelper(object):
         """
         Get (key_name, key_column) pair from a single *by* argument
         """
-        if is_single_value(by):
+        if is_scalar(by):
             key_name = by
             key_column = self.obj[by]._column
         else:
@@ -314,7 +364,8 @@ class _GroupbyHelper(object):
             return MultiIndex(
                 source_data=dataframe_from_columns(
                     key_columns, columns=key_names
-                )
+                ),
+                names=key_names,
             )
 
     def compute_result_column_index(self):

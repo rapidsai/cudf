@@ -798,7 +798,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                         {
                             uint64_t baseval, mask;
                             bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-                            mask = 2;
+                            mask = 1;
                             mask <<= (bw*8) - 1;
                             mask -= 1;
                             rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
@@ -1914,7 +1914,8 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                 return;
             }
             // Store decoded values to output
-            if (t < min(s->top.data.max_vals, s->top.data.nrows) && s->u.rowdec.row[t] != 0)
+            if (t < min(min(s->top.data.max_vals, s->u.rowdec.nz_count), s->top.data.nrows) && s->u.rowdec.row[t] != 0
+             && s->top.data.cur_row + s->u.rowdec.row[t] - 1 < s->top.data.end_row)
             {
                 size_t row = s->top.data.cur_row + s->u.rowdec.row[t] - 1 - first_row;
                 if (row < max_num_rows)

@@ -44,9 +44,9 @@ def hash_columns(columns, result, initial_hash_values=None):
 
     check_gdf_error(err)
 
-    free(c_col_out)
+    free_column(c_col_out)
     for c_col in c_col_input:
-        free(c_col)
+        free_column(c_col)
 
     return result
 
@@ -97,9 +97,9 @@ def hash_partition(input_columns, key_indices, nparts, output_columns):
     check_gdf_error(err)
 
     for c_col in c_col_input:
-        free(c_col)
+        free_column(c_col)
     for c_col in c_col_output:
-        free(c_col)
+        free_column(c_col)
 
     offsets = list(offsets)
     return offsets

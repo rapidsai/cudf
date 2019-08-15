@@ -10,7 +10,7 @@ dependencies:
 - rmm=0.9.*
 - cmake>=3.12
 - python>=3.6,<3.8
-- numba>=0.41,<0.45
+- numba>=0.45.1
 - pandas>=0.24.2,<0.25
 - pyarrow=0.14.1
 - fastavro>=0.22.0
@@ -44,6 +44,7 @@ dependencies:
 - double-conversion
 - rapidjson
 - flatbuffers
+- hypothesis
 - pip:
   - sphinx-markdown-tables
   - git+https://github.com/dask/dask.git

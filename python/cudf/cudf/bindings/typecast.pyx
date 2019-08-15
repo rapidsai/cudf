@@ -5,53 +5,42 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
-from cudf.dataframe.column import Column
-from libc.stdlib cimport free
 
 import numpy as np
 import pandas as pd
 
-_time_unit = {
-    None: TIME_UNIT_NONE,
-    's': TIME_UNIT_s,
-    'ms': TIME_UNIT_ms,
-    'us': TIME_UNIT_us,
-    'ns': TIME_UNIT_ns,
-}
 
-
-def apply_cast(incol, dtype="float64", time_unit=None):
+def apply_cast(incol, dtype=np.float64):
     """
     Return a Column with values in `incol` casted to `dtype`.
     Currently supports numeric and datetime dtypes.
     """
-
     check_gdf_compatibility(incol)
-    dtype = pd.api.types.pandas_dtype(dtype).type
+    dtype = np.dtype(np.float64 if dtype is None else dtype)
+
+    if pd.api.types.is_dtype_equal(incol.dtype, dtype):
+        return incol
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
-
-    cdef gdf_dtype c_dtype = dtypes[dtype]
+    cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(incol, dtype)
     cdef uintptr_t c_category
-
-    cdef gdf_dtype_extra_info info = gdf_dtype_extra_info(
-        time_unit=TIME_UNIT_NONE,
+    cdef gdf_dtype_extra_info c_out_info = gdf_dtype_extra_info(
+        time_unit=np_dtype_to_gdf_time_unit(dtype),
         category=<void*>c_category
     )
-    info.time_unit = _time_unit[time_unit]
 
-    cdef gdf_column result
+    cdef gdf_column c_out_col
 
     with nogil:
-        result = cast(
+        c_out_col = cast(
             c_incol[0],
-            c_dtype,
-            info
+            c_out_dtype,
+            c_out_info
         )
 
-    free(c_incol)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    free_column(c_incol)
+
+    return gdf_column_to_column(&c_out_col)

@@ -68,7 +68,7 @@ gdf_dtype to_dtype(const avro::schema_entry *col) {
  **/
 class avro_metadata : public avro::file_metadata {
  public:
-  explicit avro_metadata(DataSource *const src) : source(src) {}
+  explicit avro_metadata(datasource *const src) : source(src) {}
 
   /**
    * @brief Initializes the parser and filters down to a subset of rows
@@ -150,10 +150,10 @@ class avro_metadata : public avro::file_metadata {
   }
 
  private:
-  DataSource *const source;
+  datasource *const source;
 };
 
-reader::Impl::Impl(std::unique_ptr<DataSource> source,
+reader::Impl::Impl(std::unique_ptr<datasource> source,
                    reader_options const &options)
     : source_(std::move(source)), columns_(options.columns) {
 
@@ -507,17 +507,15 @@ void reader::Impl::decode_data(
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(filepath.c_str()), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-    : impl_(std::make_unique<Impl>(std::make_unique<DataSource>(buffer, length),
+    : impl_(std::make_unique<Impl>(datasource::create(buffer, length),
                                    options)) {}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options)
-    : impl_(std::make_unique<Impl>(std::make_unique<DataSource>(file),
-                                   options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
 
 table reader::read_all() { return impl_->read(0, -1); }
 

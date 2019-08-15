@@ -227,6 +227,20 @@
     <build>
         <resources>
             <resource>
+              <directory>${basedir}/..</directory>
+              <targetPath>META-INF</targetPath>
+              <includes>
+                <include>LICENSE</include>
+              </includes>
+            </resource>
+            <resource>
+              <directory>${basedir}</directory>
+              <targetPath>META-INF</targetPath>
+              <includes>
+                <include>LICENSE-bundled</include>
+              </includes>
+            </resource>
+            <resource>
                 <directory>${basedir}/target/native-deps/</directory>
             </resource>
         </resources>
@@ -247,7 +261,8 @@
                 </plugin>
                 <plugin>
                     <artifactId>maven-resources-plugin</artifactId>
-                    <version>3.0.2</version>
+                    <!-- downgrade version so symlinks are followed -->
+                    <version>2.6</version>
                 </plugin>
                 <plugin>
                     <artifactId>maven-compiler-plugin</artifactId>
@@ -447,6 +462,7 @@
                                     <!--Set by groovy script-->
                                     <directory>${native.deps.path}</directory>
                                     <includes>
+                                        <include>libboost_filesystem.so</include>
                                         <include>librmm.so</include>
                                         <include>libNVCategory.so</include>
                                         <include>libNVStrings.so</include>

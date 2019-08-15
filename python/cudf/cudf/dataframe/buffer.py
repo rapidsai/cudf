@@ -1,8 +1,10 @@
+import pickle
+
+import numba.cuda
 import numpy as np
 
 from librmm_cffi import librmm as rmm
 
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.utils import cudautils, utils
 
 
@@ -25,7 +27,9 @@ class Buffer(object):
         mem = rmm.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(self, mem, size=None, capacity=None, categorical=False):
+    def __init__(
+        self, mem, size=None, capacity=None, categorical=False, header=None
+    ):
         if size is None:
             if categorical:
                 size = len(mem)
@@ -38,13 +42,29 @@ class Buffer(object):
                 size = mem.size
         if capacity is None:
             capacity = size
+        # memoryviews can come from UCX when the length of the DataFrame
+        # is 0 -- for example: joins resulting in empty frames or metadata
+        if isinstance(mem, memoryview):
+            mem = np.frombuffer(mem, dtype=header["dtype"])
+            size = mem.size
+        if not (
+            isinstance(mem, np.ndarray)
+            or numba.cuda.driver.is_device_memory(mem)
+        ):
+            # this is probably a ucp_py.BufferRegion memory object
+            # check the header for info -- this should be encoded from
+            # serialization process.  Lastly, `typestr` and `shape` *must*
+            # manually set *before* consuming the buffer as a DeviceNDArray
+            mem.typestr = header.get("dtype", "B")
+            mem.shape = header.get("shape", len(mem))
+            size = mem.shape[0]
         self.mem = cudautils.to_device(mem)
         _BufferSentry(self.mem).ndim(1)
         self.size = size
         self.capacity = capacity
         self.dtype = self.mem.dtype
 
-    def serialize(self, serialize, context=None):
+    def serialize(self):
         """Called when dask.distributed is performing a serialization on this
         object.
 
@@ -62,10 +82,16 @@ class Buffer(object):
         (header, frames)
             See custom serialization documentation in dask.distributed.
         """
-        return {}, [self.mem]
+        header = {}
+        header["type"] = pickle.dumps(type(self))
+        header["shape"] = self.mem.shape
+        header["strides"] = self.mem.strides
+        header["dtype"] = self.mem.dtype.str
+
+        return header, [self.mem]
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         """Called when dask.distributed is performing a deserialization for
         data of this class.
 
@@ -84,7 +110,7 @@ class Buffer(object):
         obj : Buffer
             Returns an instance of Buffer.
         """
-        return Buffer(frames[0])
+        return Buffer(frames[0], header=header)
 
     def __reduce__(self):
         cpumem = self.to_array()
@@ -163,6 +189,11 @@ class Buffer(object):
     def is_contiguous(self):
         return self.mem.is_c_contiguous()
 
+    def astype(self, dtype):
+        from cudf.dataframe import columnops
+
+        return columnops.as_column(self).astype(dtype).data
+
 
 class BufferSentryError(ValueError):
     pass
@@ -185,6 +216,3 @@ class _BufferSentry(object):
     def contig(self):
         if not self._buf.is_c_contiguous():
             raise BufferSentryError("non contiguous")
-
-
-register_distributed_serializer(Buffer)

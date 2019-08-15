@@ -14,112 +14,25 @@
  * limitations under the License.
  */
 
+
+/*#include <cudf/cudf.h>
+#include <cudf/types.hpp>
+#include <cudf/copying.hpp>
+#include <cudf/stream_compaction.hpp>
+#include <cudf/table.hpp>
+#include "table/device_table.cuh"
+#include <table/device_table_row_operators.cuh>*/
+
 #include "copy_if.cuh"
 #include <cudf/legacy/table.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
+
 #include <rmm/thrust_rmm_allocator.h>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
  
-namespace {
-
-// Returns true if the mask is true and valid (non-null) for index i
-// This is the filter functor for apply_boolean_mask
-// Note we use a functor here so we can cast to a bitmask_t __restrict__
-// pointer on the host side, which we can't do with a lambda.
-template <bool has_data, bool has_nulls>
-struct boolean_mask_filter
-{
-  boolean_mask_filter(gdf_column const & boolean_mask) :
-    size{boolean_mask.size},
-    data{reinterpret_cast<cudf::bool8 *>(boolean_mask.data)},
-    bitmask{reinterpret_cast<bit_mask_t *>(boolean_mask.valid)}
-    {}
-
-  __device__ inline 
-  bool operator()(gdf_index_type i)
-  {
-    if (i < size) {
-      bool valid = !has_nulls || bit_mask::is_valid(bitmask, i);
-      bool is_true = !has_data || (cudf::true_v == data[i]);
-      return is_true && valid;
-    }
-    return false;
-  }
-
-  gdf_size_type size;
-  cudf::bool8 const * __restrict__ data;
-  bit_mask_t const  * __restrict__ bitmask;
-};
-
-// Returns true if the valid mask is true for index i
-// Note we use a functor here so we can cast to a bitmask_t __restrict__
-// pointer on the host side, which we can't do with a lambda.
-struct valid_filter
-{
-  valid_filter(gdf_column const & column) :
-    size{column.size},
-    bitmask{reinterpret_cast<bit_mask_t *>(column.valid)}
-    { CUDF_EXPECTS(nullptr != column.valid, "Null valid bitmask");}
-
-  __device__ inline 
-  bool operator()(gdf_index_type i)
-  {
-    if (i < size) {
-      bool valid = bit_mask::is_valid(bitmask, i);
-      return valid;
-    }
-    return false;
-  }
-
-  gdf_size_type size;
-  bit_mask_t const  * __restrict__ bitmask;
-};
-
-}  // namespace
-
 namespace cudf {
-
-/*
- * Filters a column using a column of boolean values as a mask.
- *
- * calls apply_filter() with the `boolean_mask_filter` functor.
- */
-gdf_column apply_boolean_mask(gdf_column const &input,
-                              gdf_column const &boolean_mask) {
-  if (boolean_mask.size == 0 || input.size == 0)
-      return cudf::empty_like(input);
-
-  // for non-zero-length masks we expect one of the pointers to be non-null    
-  CUDF_EXPECTS(boolean_mask.data != nullptr ||
-               boolean_mask.valid != nullptr, "Null boolean_mask");
-  CUDF_EXPECTS(boolean_mask.dtype == GDF_BOOL8, "Mask must be Boolean type");
-  
-  // zero-size inputs are OK, but otherwise input size must match mask size
-  CUDF_EXPECTS(input.size == 0 || input.size == boolean_mask.size, 
-               "Column size mismatch");
-
-  if (boolean_mask.data == nullptr)
-    return detail::copy_if(input, boolean_mask_filter<false, true>{boolean_mask});
-  else if (boolean_mask.valid == nullptr || boolean_mask.null_count == 0)
-    return detail::copy_if(input, boolean_mask_filter<true, false>{boolean_mask});
-  else
-    return detail::copy_if(input, boolean_mask_filter<true, true>{boolean_mask});
-}
-
-/*
- * Filters a column to remove null elements.
- */
-gdf_column drop_nulls(gdf_column const &input) {
-  if (input.valid != nullptr && input.null_count != 0)
-    return detail::copy_if(input, valid_filter{input});
-  else { // no null bitmask, so just copy
-    return cudf::copy(input);
-  }
-}
-
-
 namespace detail {
 
 /*
@@ -246,8 +159,29 @@ rows in input table should be equal to number of rows in key colums table");
   gdf_size_type unique_count; 
   std::tie(unique_indices, unique_count) =
     detail::get_unique_ordered_indices(key_columns, keep, nulls_are_equal);
+
   // Allocate output columns
-  cudf::table destination_table(unique_count, cudf::column_dtypes(input_table), true);
+  cudf::table destination_table(unique_count,
+                                cudf::column_dtypes(input_table),
+                                cudf::column_dtype_infos(input_table), true);
+  // Ensure column names are preserved. Ideally we could call cudf::allocate_like
+  // here, but the above constructor allocates and fills null bitmaps differently
+  // than allocate_like. Doing this for now because the impending table + column
+  // re-design will handle this better than another cudf::allocate_like overload
+  std::transform(
+    input_table.begin(), input_table.end(),
+    destination_table.begin(), destination_table.begin(),
+    [](const gdf_column* inp_col, gdf_column* out_col) {
+      // a rather roundabout way to do a strcpy...
+      gdf_column_view_augmented(out_col,
+                                out_col->data, out_col->valid,
+                                out_col->size, out_col->dtype,
+                                out_col->null_count,
+                                out_col->dtype_info,
+                                inp_col->col_name);
+      return out_col;
+  });
+
   // run gather operation to establish new order
   cudf::gather(&input_table, unique_indices.data().get(), &destination_table);
   nvcategory_gather_table(input_table, destination_table);
