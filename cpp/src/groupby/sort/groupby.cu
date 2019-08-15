@@ -151,13 +151,14 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
       (gdf_index_type *)group_indices_col.data, group_indices_col.size,
       d_ops.data().get(), row_bitmask.data().get());
 
+  cudf::table destination_table(group_indices_col.size,
+                                cudf::column_dtypes(sorted_keys_table),
+                                cudf::column_dtype_infos(sorted_keys_table),
+                                cudf::has_nulls(sorted_keys_table));
   cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
-               &sorted_keys_table); 
+               &destination_table); 
 
-  for (gdf_size_type i = 0; i < sorted_keys_table.num_columns(); i++) {
-    sorted_keys_table.get_column(i)->size = group_indices_col.size;
-  }
-  return std::make_pair(sorted_keys_table, output_values);
+  return std::make_pair(destination_table, output_values);
 }
 
 /**---------------------------------------------------------------------------*
