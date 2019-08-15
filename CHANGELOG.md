@@ -6,6 +6,8 @@
 
 ## Improvements
 
+- PR #2571 Remove unnecessary managed memory from gdf_column_concat
+
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
