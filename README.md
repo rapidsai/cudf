@@ -35,7 +35,7 @@ size
 Name: tip_percentage, dtype: float64
 ```
 
-For additional examples, browse our complete [API documentation](https://rapidsai.github.io/projects/cudf/en/latest/index.html), or check out our more detailed [notebooks](https://github.com/rapidsai/notebooks-extended).
+For additional examples, browse our complete [API documentation](https://rapidsai.github.io/projects/cudf/en/latest/index.html), or check out our more detailed [notebooks](https://github.com/rapidsai/notebooks-contrib).
 
 ## Quick Start
 
