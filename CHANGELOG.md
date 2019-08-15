@@ -6,6 +6,8 @@
 
 ## Improvements
 
+- PR #2581 Removed `managed` allocator from hash map classes.
+
 ## Bug Fixes
 
 
