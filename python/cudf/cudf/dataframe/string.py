@@ -810,6 +810,7 @@ class StringColumn(columnops.TypedColumnBase):
     def clip(self):
         raise NotImplementedError()
 
+
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
     # Allocate output
