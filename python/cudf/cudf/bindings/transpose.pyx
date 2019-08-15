@@ -14,6 +14,7 @@ from cudf.dataframe.columnops import column_empty
 from cudf.dataframe.dataframe import DataFrame
 from cudf.dataframe.series import Series
 from cudf.dataframe.buffer import Buffer
+from cudf.utils.dtypes import is_categorical_dtype
 
 
 def transpose(df):
@@ -28,10 +29,11 @@ def transpose(df):
         return df
 
     dtype = df.dtypes.iloc[0]
-    if pd.api.types.is_categorical_dtype(dtype):
+    d_type = pd.api.types.pandas_dtype(dtype)
+    if is_categorical_dtype(d_type):
         raise NotImplementedError('Categorical columns are not yet '
                                   'supported for function')
-    elif np.dtype(dtype).kind in 'OU':
+    elif d_type.kind in 'OU':
         raise NotImplementedError('String columns are not yet '
                                   'supported for function')
 
@@ -78,4 +80,3 @@ def transpose(df):
     for i in range(0, new_ncol):
         out_df[str(i)] = new_col_series[i]
     return out_df
-

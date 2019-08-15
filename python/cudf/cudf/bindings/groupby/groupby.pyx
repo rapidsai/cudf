@@ -28,6 +28,7 @@ from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
 from cudf.bindings.nvtx import nvtx_range_pop
 from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 cimport cudf.bindings.groupby.hash as hash_groupby
 
 
@@ -107,14 +108,5 @@ def apply_groupby(keys, values, ops, method='hash', sort_results=True):
                 categories=inp_key_col.cat().categories,
                 ordered=inp_key_col.cat().ordered
             )
-
-    for i, inp_value_col in enumerate(values):
-         if isinstance(inp_value_col, CategoricalColumn):
-             result_value_cols[i] = CategoricalColumn(
-                 data=result_value_cols[i].data,
-                 mask=result_value_cols[i].mask,
-                 categories=inp_value_col.cat().categories,
-                 ordered=inp_value_col.cat().ordered
-             )
 
     return (result_key_cols, result_value_cols)

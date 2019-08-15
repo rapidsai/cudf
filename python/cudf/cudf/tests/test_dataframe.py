@@ -2,7 +2,6 @@
 
 import array as arr
 import operator
-from itertools import combinations
 
 import numpy as np
 import pandas as pd
@@ -14,7 +13,6 @@ from librmm_cffi import librmm as rmm
 import cudf as gd
 from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.dataframe import DataFrame, Series
-from cudf.settings import set_options
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
 
@@ -134,90 +132,6 @@ def test_series_append():
     np.testing.assert_equal(series.to_array(), np.hstack([a6, a5]))
 
 
-index_dtypes = [
-    np.int64,
-    np.int32,
-    np.int16,
-    np.int8,
-    np.uint64,
-    np.uint32,
-    np.uint16,
-    np.uint8,
-]
-
-
-@pytest.mark.parametrize(
-    "i1, i2, i3",
-    (
-        [
-            (slice(None, 12), slice(3, None), slice(None, None, 2)),
-            (range(12), range(3, 12), range(0, 9, 2)),
-            (np.arange(12), np.arange(3, 12), np.arange(0, 9, 2)),
-            (list(range(12)), list(range(3, 12)), list(range(0, 9, 2))),
-            (
-                pd.Series(range(12)),
-                pd.Series(range(3, 12)),
-                pd.Series(range(0, 9, 2)),
-            ),
-            (Series(range(12)), Series(range(3, 12)), Series(range(0, 9, 2))),
-            (
-                [i in range(12) for i in range(20)],
-                [i in range(3, 12) for i in range(12)],
-                [i in range(0, 9, 2) for i in range(9)],
-            ),
-            (
-                np.array([i in range(12) for i in range(20)], dtype=bool),
-                np.array([i in range(3, 12) for i in range(12)], dtype=bool),
-                np.array([i in range(0, 9, 2) for i in range(9)], dtype=bool),
-            ),
-        ]
-        + [
-            (
-                np.arange(12, dtype=t),
-                np.arange(3, 12, dtype=t),
-                np.arange(0, 9, 2, dtype=t),
-            )
-            for t in index_dtypes
-        ]
-    ),
-    ids=(
-        [
-            "slice",
-            "range",
-            "numpy.array",
-            "list",
-            "pandas.Series",
-            "Series",
-            "list[bool]",
-            "numpy.array[bool]",
-        ]
-        + ["numpy.array[%s]" % t.__name__ for t in index_dtypes]
-    ),
-)
-def test_series_indexing(i1, i2, i3):
-    a1 = np.arange(20)
-    series = Series(a1)
-    # Indexing
-    sr1 = series[i1]
-    assert sr1.null_count == 0
-    np.testing.assert_equal(sr1.to_array(), a1[:12])
-    sr2 = sr1[i2]
-    assert sr2.null_count == 0
-    np.testing.assert_equal(sr2.to_array(), a1[3:12])
-    # Index with stride
-    sr3 = sr2[i3]
-    assert sr3.null_count == 0
-    np.testing.assert_equal(sr3.to_array(), a1[3:12:2])
-
-    # Integer indexing
-    if isinstance(i1, range):
-        for i in i1:  # Python int-s
-            assert series[i] == a1[i]
-    if isinstance(i1, np.ndarray) and i1.dtype in index_dtypes:
-        for i in i1:  # numpy integers
-            assert series[i] == a1[i]
-
-
 def test_series_init_none():
 
     # test for creating empty series
@@ -225,7 +139,7 @@ def test_series_init_none():
     sr1 = Series()
     got = sr1.to_string()
     print(got)
-    expect = "<empty Series of dtype=float64>"
+    expect = "Series([], dtype: float64)"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -233,7 +147,7 @@ def test_series_init_none():
     sr2 = Series(None)
     got = sr2.to_string()
     print(got)
-    expect = "<empty Series of dtype=float64>"
+    expect = "Series([], dtype: float64)"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -283,44 +197,6 @@ def test_dataframe_basic():
     data = np.arange(10)
     df_tup[(1, "foobar")] = data
     np.testing.assert_equal(data, df_tup[(1, "foobar")].to_array())
-
-
-def test_dataframe_column_name_indexing():
-    df = DataFrame()
-    data = np.asarray(range(10), dtype=np.int32)
-    df["a"] = data
-    df[1] = data
-    np.testing.assert_equal(
-        df["a"].to_array(), np.asarray(range(10), dtype=np.int32)
-    )
-    np.testing.assert_equal(
-        df[1].to_array(), np.asarray(range(10), dtype=np.int32)
-    )
-
-    pdf = pd.DataFrame()
-    nelem = 10
-    pdf["key1"] = np.random.randint(0, 5, nelem)
-    pdf["key2"] = np.random.randint(0, 3, nelem)
-    pdf[1] = np.arange(1, 1 + nelem)
-    pdf[2] = np.random.random(nelem)
-    df = DataFrame.from_pandas(pdf)
-
-    assert_eq(df[df.columns], df)
-    assert_eq(df[df.columns[:1]], df[["key1"]])
-
-    for i in range(1, len(pdf.columns) + 1):
-        for idx in combinations(pdf.columns, i):
-            assert pdf[list(idx)].equals(df[list(idx)].to_pandas())
-
-    # test for only numeric columns
-    df = pd.DataFrame()
-    for i in range(0, 10):
-        df[i] = range(nelem)
-    gdf = DataFrame.from_pandas(df)
-    assert_eq(gdf, df)
-
-    assert_eq(gdf[gdf.columns], gdf)
-    assert_eq(gdf[gdf.columns[:3]], gdf[[0, 1, 2]])
 
 
 def test_dataframe_drop_method():
@@ -391,7 +267,7 @@ def test_dataframe_pop():
 
     # check empty dataframe edge case
     empty_pdf = pd.DataFrame(columns=["a", "b"])
-    empty_gdf = DataFrame.from_pandas(empty_pdf)
+    empty_gdf = DataFrame(columns=["a", "b"])
     pb = empty_pdf.pop("b")
     gb = empty_gdf.pop("b")
     assert len(pb) == len(gb)
@@ -426,403 +302,70 @@ def test_index_astype(nelem):
     np.testing.assert_equal(df.index.to_array(), df["a"].to_array())
 
 
-def test_dataframe_slicing():
-    df = DataFrame()
-    size = 123
-    df["a"] = ha = np.random.randint(low=0, high=100, size=size).astype(
-        np.int32
-    )
-    df["b"] = hb = np.random.random(size).astype(np.float32)
-    df["c"] = hc = np.random.randint(low=0, high=100, size=size).astype(
-        np.int64
-    )
-    df["d"] = hd = np.random.random(size).astype(np.float64)
-
-    # Row slice first 10
-    first_10 = df[:10]
-    assert len(first_10) == 10
-    assert tuple(first_10.columns) == ("a", "b", "c", "d")
-    np.testing.assert_equal(first_10["a"].to_array(), ha[:10])
-    np.testing.assert_equal(first_10["b"].to_array(), hb[:10])
-    np.testing.assert_equal(first_10["c"].to_array(), hc[:10])
-    np.testing.assert_equal(first_10["d"].to_array(), hd[:10])
-    del first_10
-
-    # Row slice last 10
-    last_10 = df[-10:]
-    assert len(last_10) == 10
-    assert tuple(last_10.columns) == ("a", "b", "c", "d")
-    np.testing.assert_equal(last_10["a"].to_array(), ha[-10:])
-    np.testing.assert_equal(last_10["b"].to_array(), hb[-10:])
-    np.testing.assert_equal(last_10["c"].to_array(), hc[-10:])
-    np.testing.assert_equal(last_10["d"].to_array(), hd[-10:])
-    del last_10
-
-    # Row slice [begin:end]
-    begin = 7
-    end = 121
-    subrange = df[begin:end]
-    assert len(subrange) == end - begin
-    assert tuple(subrange.columns) == ("a", "b", "c", "d")
-    np.testing.assert_equal(subrange["a"].to_array(), ha[begin:end])
-    np.testing.assert_equal(subrange["b"].to_array(), hb[begin:end])
-    np.testing.assert_equal(subrange["c"].to_array(), hc[begin:end])
-    np.testing.assert_equal(subrange["d"].to_array(), hd[begin:end])
-    del subrange
-
-
-@pytest.mark.parametrize("step", [1, 2, 5])
-@pytest.mark.parametrize("scalar", [0, 20, 100])
-def test_dataframe_loc(scalar, step):
-    size = 123
-    pdf = pd.DataFrame(
-        {
-            "a": np.random.randint(low=0, high=100, size=size),
-            "b": np.random.random(size).astype(np.float32),
-            "c": np.random.random(size).astype(np.float64),
-            "d": np.random.random(size).astype(np.float64),
-        }
-    )
-
-    df = DataFrame.from_pandas(pdf)
-
-    # Scalar label
-    assert_eq(df.loc[scalar], pdf.loc[scalar])
-
-    # Full slice
-    assert_eq(df.loc[:, "c"], pdf.loc[:, "c"])
-
-    begin = 110
-    end = 122
-
-    assert_eq(
-        df.loc[begin:end:step, ["c", "d", "a"]],
-        pdf.loc[begin:end:step, ["c", "d", "a"]],
-    )
-
-    assert_eq(df.loc[begin:end, ["c", "d"]], pdf.loc[begin:end, ["c", "d"]])
-
-    # Slicing on columns:
-    assert_eq(
-        df.loc[begin:end:step, "a":"c"], pdf.loc[begin:end:step, "a":"c"]
-    )
-
-    # Slicing of size 1:
-    assert_eq(df.loc[begin:begin, "a"], pdf.loc[begin:begin, "a"])
-
-    # TODO: Pandas changes the dtype here when it shouldn't
-    assert_eq(
-        df.loc[begin, "a":"a"], pdf.loc[begin, "a":"a"], check_dtype=False
-    )
-
-    # Make int64 index
-    offset = 50
-    df2 = df[offset:]
-    pdf2 = pdf[offset:]
-    begin = 117
-    end = 122
-    assert_eq(
-        df2.loc[begin:end, ["c", "d", "a"]],
-        pdf2.loc[begin:end, ["c", "d", "a"]],
-    )
-
-
-@pytest.mark.xfail(raises=IndexError, reason="label scalar is out of bound")
-def test_dataframe_loc_outbound():
-    df = DataFrame()
-    size = 10
-    df["a"] = ha = np.random.randint(low=0, high=100, size=size).astype(
-        np.int32
-    )
-    df["b"] = hb = np.random.random(size).astype(np.float32)
-
-    pdf = pd.DataFrame()
-    pdf["a"] = ha
-    pdf["b"] = hb
-
-    np.testing.assert_equal(df.loc[11].to_array(), pdf.loc[11])
-
-
-def test_series_loc_numerical():
-    ps = pd.Series([1, 2, 3, 4, 5], index=[5, 6, 7, 8, 9])
-    gs = Series.from_pandas(ps)
-
-    assert_eq(ps.loc[5], gs.loc[5])
-    assert_eq(ps.loc[6], gs.loc[6])
-    assert_eq(ps.loc[6:8], gs.loc[6:8])
-    assert_eq(ps.loc[:8], gs.loc[:8])
-    assert_eq(ps.loc[6:], gs.loc[6:])
-    assert_eq(ps.loc[::2], gs.loc[::2])
-    assert_eq(ps.loc[[5, 8, 9]], gs.loc[[5, 8, 9]])
-    assert_eq(
-        ps.loc[[True, False, True, False, True]],
-        gs.loc[[True, False, True, False, True]],
-    )
-
-
-def test_series_loc_string():
-    ps = pd.Series(
-        [1, 2, 3, 4, 5], index=["one", "two", "three", "four", "five"]
-    )
-    gs = Series.from_pandas(ps)
-
-    assert_eq(ps.loc["one"], gs.loc["one"])
-    assert_eq(ps.loc["five"], gs.loc["five"])
-    assert_eq(ps.loc["two":"four"], gs.loc["two":"four"])
-    assert_eq(ps.loc[:"four"], gs.loc[:"four"])
-    assert_eq(ps.loc["two":], gs.loc["two":])
-    assert_eq(ps.loc[::2], gs.loc[::2])
-    assert_eq(ps.loc[["one", "four", "five"]], gs.loc[["one", "four", "five"]])
-    assert_eq(
-        ps.loc[[True, False, True, False, True]],
-        gs.loc[[True, False, True, False, True]],
-    )
-
-
-def test_series_loc_datetime():
-    ps = pd.Series(
-        [1, 2, 3, 4, 5], index=pd.date_range("20010101", "20010105")
-    )
-    gs = Series.from_pandas(ps)
-
-    # a few different ways of specifying a datetime label:
-    assert_eq(ps.loc["20010101"], gs.loc["20010101"])
-    assert_eq(ps.loc["2001-01-01"], gs.loc["2001-01-01"])
-    assert_eq(
-        ps.loc[pd.to_datetime("2001-01-01")],
-        gs.loc[pd.to_datetime("2001-01-01")],
-    )
-    assert_eq(
-        ps.loc[np.datetime64("2001-01-01")],
-        gs.loc[np.datetime64("2001-01-01")],
-    )
-
-    assert_eq(
-        ps.loc["2001-01-02":"2001-01-05"], gs.loc["2001-01-02":"2001-01-05"]
-    )
-    assert_eq(ps.loc["2001-01-02":], gs.loc["2001-01-02":])
-    assert_eq(ps.loc[:"2001-01-04"], gs.loc[:"2001-01-04"])
-    assert_eq(ps.loc[::2], gs.loc[::2])
-    #
-    # assert_eq(ps.loc[['2001-01-01', '2001-01-04', '2001-01-05']],
-    #           gs.loc[['2001-01-01', '2001-01-04', '2001-01-05']])
-    # looks like a bug in Pandas doesn't let us check for the above,
-    # so instead:
-    assert_eq(
-        ps.loc[
-            [
-                pd.to_datetime("2001-01-01"),
-                pd.to_datetime("2001-01-04"),
-                pd.to_datetime("2001-01-05"),
-            ]
-        ],
-        gs.loc[
-            [
-                pd.to_datetime("2001-01-01"),
-                pd.to_datetime("2001-01-04"),
-                pd.to_datetime("2001-01-05"),
-            ]
-        ],
-    )
-    assert_eq(
-        ps.loc[[True, False, True, False, True]],
-        gs.loc[[True, False, True, False, True]],
-    )
-
-
-def test_series_loc_categorical():
-    ps = pd.Series(
-        [1, 2, 3, 4, 5], index=pd.Categorical(["a", "b", "c", "d", "e"])
-    )
-    gs = Series.from_pandas(ps)
-
-    assert_eq(ps.loc["a"], gs.loc["a"])
-    assert_eq(ps.loc["e"], gs.loc["e"])
-    assert_eq(ps.loc["b":"d"], gs.loc["b":"d"])
-    assert_eq(ps.loc[:"d"], gs.loc[:"d"])
-    assert_eq(ps.loc["b":], gs.loc["b":])
-    assert_eq(ps.loc[::2], gs.loc[::2])
-
-    # order of categories changes, so we can only
-    # compare values:
-    assert_eq(
-        ps.loc[["a", "d", "e"]].values, gs.loc[["a", "d", "e"]].to_array()
-    )
-
-    assert_eq(
-        ps.loc[[True, False, True, False, True]],
-        gs.loc[[True, False, True, False, True]],
-    )
-
-
-@pytest.mark.parametrize("nelem", [2, 5, 20, 100])
-def test_series_iloc(nelem):
-
-    # create random series
-    np.random.seed(12)
-    ps = pd.Series(np.random.sample(nelem))
-
-    # gpu series
-    gs = Series(ps)
-
-    # positive tests for indexing
-    np.testing.assert_allclose(gs.iloc[-1 * nelem], ps.iloc[-1 * nelem])
-    np.testing.assert_allclose(gs.iloc[-1], ps.iloc[-1])
-    np.testing.assert_allclose(gs.iloc[0], ps.iloc[0])
-    np.testing.assert_allclose(gs.iloc[1], ps.iloc[1])
-    np.testing.assert_allclose(gs.iloc[nelem - 1], ps.iloc[nelem - 1])
-
-    # positive tests for slice
-    np.testing.assert_allclose(gs.iloc[-1:1], ps.iloc[-1:1])
-    np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : -1], ps.iloc[nelem - 1 : -1]
-    )
-    np.testing.assert_allclose(gs.iloc[0 : nelem - 1], ps.iloc[0 : nelem - 1])
-    np.testing.assert_allclose(gs.iloc[0:nelem], ps.iloc[0:nelem])
-    np.testing.assert_allclose(gs.iloc[1:1], ps.iloc[1:1])
-    np.testing.assert_allclose(gs.iloc[1:2], ps.iloc[1:2])
-    np.testing.assert_allclose(
-        gs.iloc[nelem - 1 : nelem + 1], ps.iloc[nelem - 1 : nelem + 1]
-    )
-    np.testing.assert_allclose(
-        gs.iloc[nelem : nelem * 2], ps.iloc[nelem : nelem * 2]
-    )
-
-
-@pytest.mark.parametrize("nelem", [2, 5, 20, 100])
-def test_dataframe_iloc(nelem):
-    gdf = DataFrame()
-
-    gdf["a"] = ha = np.random.randint(low=0, high=100, size=nelem).astype(
-        np.int32
-    )
-    gdf["b"] = hb = np.random.random(nelem).astype(np.float32)
-
-    pdf = pd.DataFrame()
-    pdf["a"] = ha
-    pdf["b"] = hb
-
-    assert_eq(gdf.iloc[-1:1], pdf.iloc[-1:1])
-    assert_eq(gdf.iloc[nelem - 1 : -1], pdf.iloc[nelem - 1 : -1])
-    assert_eq(gdf.iloc[0 : nelem - 1], pdf.iloc[0 : nelem - 1])
-    assert_eq(gdf.iloc[0:nelem], pdf.iloc[0:nelem])
-    assert_eq(gdf.iloc[1:1], pdf.iloc[1:1])
-    assert_eq(gdf.iloc[1:2], pdf.iloc[1:2])
-    assert_eq(gdf.iloc[nelem - 1 : nelem + 1], pdf.iloc[nelem - 1 : nelem + 1])
-    assert_eq(gdf.iloc[nelem : nelem * 2], pdf.iloc[nelem : nelem * 2])
-
-    assert_eq(gdf.iloc[-1 * nelem], pdf.iloc[-1 * nelem])
-    assert_eq(gdf.iloc[-1], pdf.iloc[-1])
-    assert_eq(gdf.iloc[0], pdf.iloc[0])
-    assert_eq(gdf.iloc[1], pdf.iloc[1])
-    assert_eq(gdf.iloc[nelem - 1], pdf.iloc[nelem - 1])
-
-
-@pytest.mark.xfail(raises=AssertionError, reason="Series.index are different")
-def test_dataframe_iloc_tuple():
-    gdf = DataFrame()
-    nelem = 123
-    gdf["a"] = ha = np.random.randint(low=0, high=100, size=nelem).astype(
-        np.int32
-    )
-    gdf["b"] = hb = np.random.random(nelem).astype(np.float32)
-
-    pdf = pd.DataFrame()
-    pdf["a"] = ha
-    pdf["b"] = hb
-
-    # We don't support passing the column names into the index quite yet
-    got = gdf.iloc[1, [1]]
-    expect = pdf.iloc[1, [1]]
-
-    assert_eq(got, expect)
-
-
-@pytest.mark.xfail(
-    raises=IndexError, reason="positional indexers are out-of-bounds"
-)
-def test_dataframe_iloc_index_error():
-    gdf = DataFrame()
-    nelem = 123
-    gdf["a"] = ha = np.random.randint(low=0, high=100, size=nelem).astype(
-        np.int32
-    )
-    gdf["b"] = hb = np.random.random(nelem).astype(np.float32)
-
-    pdf = pd.DataFrame()
-    pdf["a"] = ha
-    pdf["b"] = hb
-
-    def assert_col(g, p):
-        np.testing.assert_equal(g["a"].to_array(), p["a"])
-        np.testing.assert_equal(g["b"].to_array(), p["b"])
-
-    assert_col(gdf.iloc[nelem * 2], pdf.iloc[nelem * 2])
-
-
 def test_dataframe_to_string():
-    with set_options(formatting={"nrows": 5, "ncols": 8}):
-        # Test basic
-        df = DataFrame(
-            [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
-        )
-        string = str(df)
-        print(string)
-        assert string.splitlines()[-1] == "[1 more rows]"
+    pd.options.display.max_rows = 5
+    pd.options.display.max_columns = 8
+    # Test basic
+    df = DataFrame(
+        [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
+    )
+    string = str(df)
+    print(string)
+    assert string.splitlines()[-1] == "[6 rows x 2 columns]"
 
-        # Test skipped columns
-        df = DataFrame(
-            [
-                ("a", [1, 2, 3, 4, 5, 6]),
-                ("b", [11, 12, 13, 14, 15, 16]),
-                ("c", [11, 12, 13, 14, 15, 16]),
-                ("d", [11, 12, 13, 14, 15, 16]),
-            ]
-        )
-        string = df.to_string(ncols=3)
-        print(string)
-        assert string.splitlines()[-2] == "[1 more rows]"
-        assert string.splitlines()[-1] == "[1 more columns]"
+    # Test skipped columns
+    df = DataFrame(
+        [
+            ("a", [1, 2, 3, 4, 5, 6]),
+            ("b", [11, 12, 13, 14, 15, 16]),
+            ("c", [11, 12, 13, 14, 15, 16]),
+            ("d", [11, 12, 13, 14, 15, 16]),
+        ]
+    )
+    string = df.to_string()
+    print(string)
+    assert string.splitlines()[-1] == "[6 rows x 4 columns]"
 
-        # Test masked
-        df = DataFrame(
-            [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
-        )
+    # Test masked
+    df = DataFrame(
+        [("a", [1, 2, 3, 4, 5, 6]), ("b", [11, 12, 13, 14, 15, 16])]
+    )
 
-        data = np.arange(6)
-        mask = np.zeros(1, dtype=np.uint8)
-        mask[0] = 0b00101101
+    data = np.arange(6)
+    mask = np.zeros(1, dtype=np.uint8)
+    mask[0] = 0b00101101
 
-        masked = Series.from_masked_array(data, mask)
-        assert masked.null_count == 2
-        df["c"] = masked
+    masked = Series.from_masked_array(data, mask)
+    assert masked.null_count == 2
+    df["c"] = masked
 
-        # check data
-        values = list(masked)
-        validids = [0, 2, 3, 5]
-        densearray = masked.to_array()
-        np.testing.assert_equal(data[validids], densearray)
-        # valid position is corret
-        for i in validids:
-            assert data[i] == values[i]
-        # null position is correct
-        for i in range(len(values)):
-            if i not in validids:
-                assert values[i] is None
+    # check data
+    values = list(masked)
+    validids = [0, 2, 3, 5]
+    densearray = masked.to_array()
+    np.testing.assert_equal(data[validids], densearray)
+    # valid position is corret
+    for i in validids:
+        assert data[i] == values[i]
+    # null position is correct
+    for i in range(len(values)):
+        if i not in validids:
+            assert values[i] is None
 
-        got = df.to_string(nrows=None)
-        print(got)
-        expect = """
-  a b  c
+    pd.options.display.max_rows = 10
+    got = df.to_string()
+    print(got)
+    expect = """
+a b  c
 0 1 11 0
-1 2 12
+1 2 12 null
 2 3 13 2
 3 4 14 3
-4 5 15
+4 5 15 null
 5 6 16 5
 """
-        # values should match despite whitespace difference
-        assert got.split() == expect.split()
+    # values should match despite whitespace difference
+    assert got.split() == expect.split()
 
 
 def test_dataframe_to_string_wide():
@@ -830,14 +373,15 @@ def test_dataframe_to_string_wide():
     df = DataFrame()
     for i in range(100):
         df["a{}".format(i)] = list(range(3))
-    got = df.to_string(ncols=8)
+    pd.options.display.max_columns = 0
+    got = df.to_string()
     print(got)
     expect = """
-    a0   a1   a2   a3   a4   a5   a6 ...  a99
-0    0    0    0    0    0    0    0 ...    0
-1    1    1    1    1    1    1    1 ...    1
-2    2    2    2    2    2    2    2 ...    2
-[92 more columns]
+    a0  a1  a2  a3  a4  a5  a6  a7 ...  a92 a93 a94 a95 a96 a97 a98 a99
+0    0   0   0   0   0   0   0   0 ...    0   0   0   0   0   0   0   0
+1    1   1   1   1   1   1   1   1 ...    1   1   1   1   1   1   1   1
+2    2   2   2   2   2   2   2   2 ...    2   2   2   2   2   2   2   2
+[3 rows x 100 columns]
 """
     # values should match despite whitespace difference
     assert got.split() == expect.split()
@@ -860,7 +404,7 @@ def test_dataframe_emptycolumns_to_string():
     df["b"] = []
     got = df.to_string()
     print(got)
-    expect = "Empty DataFrame\nColumns: ['a', 'b']\nIndex: []\n"
+    expect = "Empty DataFrame\nColumns: [a, b]\nIndex: []\n"
     # values should match despite whitespace difference
     assert got.split() == expect.split()
 
@@ -1001,33 +545,6 @@ def test_dataframe_as_gpu_matrix_null_values():
     mat = df.as_gpu_matrix().copy_to_host()
     for i, k in enumerate(df.columns):
         np.testing.assert_array_equal(refvalues[k], mat[:, i])
-
-
-@pytest.mark.parametrize("ntake", [0, 1, 10, 123, 122, 200])
-def test_dataframe_take(ntake):
-    np.random.seed(0)
-    df = DataFrame()
-
-    nelem = 123
-    df["ii"] = ii = np.random.randint(0, 20, nelem)
-    df["ff"] = ff = np.random.random(nelem)
-
-    take_indices = np.random.randint(0, len(df), ntake)
-
-    def check(**kwargs):
-        out = df.take(take_indices, **kwargs)
-        assert len(out) == ntake
-        assert out.ii.null_count == 0
-        assert out.ff.null_count == 0
-        np.testing.assert_array_equal(out.ii.to_array(), ii[take_indices])
-        np.testing.assert_array_equal(out.ff.to_array(), ff[take_indices])
-        if kwargs.get("ignore_index"):
-            np.testing.assert_array_equal(out.index, np.arange(ntake))
-        else:
-            np.testing.assert_array_equal(out.index, take_indices)
-
-    check()
-    check(ignore_index=True)
 
 
 def test_dataframe_append_empty():
@@ -1208,6 +725,31 @@ def test_dataframe_hash_partition_masked_keys(nrows):
             assert expected_value == got_value
 
 
+@pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
+@pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
+def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
+    df1 = pd.DataFrame(dict(x=np.arange(5).astype(dtype1)))
+    df2 = pd.DataFrame(dict(x=np.arange(5).astype(dtype2)))
+    if dtype1 != dtype2 and "datetime" in dtype1 or "datetime" in dtype2:
+        with pytest.raises(ValueError):
+            gd.concat([df1, df2])
+    else:
+        pres = pd.concat([df1, df2])
+        gres = gd.concat([gd.from_pandas(df1), gd.from_pandas(df2)])
+        assert_eq(gd.from_pandas(pres), gres)
+
+
+def test_dataframe_concat_different_column_types():
+    df1 = gd.Series([42], dtype=np.float)
+    df2 = gd.Series(["a"], dtype="category")
+    with pytest.raises(ValueError):
+        gd.concat([df1, df2])
+
+    df2 = gd.Series(["a string"])
+    with pytest.raises(ValueError):
+        gd.concat([df1, df2])
+
+
 def test_dataframe_empty_concat():
     gdf1 = DataFrame()
     gdf1["a"] = []
@@ -1311,25 +853,6 @@ def test_nonmatching_index_setitem(nrows):
     )
 
 
-@pytest.mark.parametrize("nelem", [0, 1, 5, 20, 100])
-@pytest.mark.parametrize("slice_start", [None, 0, 1, 3, 10, -10])
-@pytest.mark.parametrize("slice_end", [None, 0, 1, 30, 50, -1])
-def test_dataframe_masked_slicing(nelem, slice_start, slice_end):
-    gdf = DataFrame()
-    gdf["a"] = list(range(nelem))
-    gdf["b"] = list(range(nelem, 2 * nelem))
-    gdf["a"] = gdf["a"].set_mask(utils.random_bitmask(nelem))
-    gdf["b"] = gdf["b"].set_mask(utils.random_bitmask(nelem))
-
-    def do_slice(x):
-        return x[slice_start:slice_end]
-
-    expect = do_slice(gdf.to_pandas())
-    got = do_slice(gdf).to_pandas()
-
-    pd.testing.assert_frame_equal(expect, got)
-
-
 def test_from_pandas():
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4.0, 5.0, 6.0])
     gdf = gd.DataFrame.from_pandas(df)
@@ -1406,7 +929,10 @@ def test_index_in_dataframe_constructor():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_from_arrow(nelem, data_type):
@@ -1444,7 +970,10 @@ def test_from_arrow(nelem, data_type):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_to_arrow(nelem, data_type):
@@ -1459,35 +988,13 @@ def test_to_arrow(nelem, data_type):
     pa_df = pa.Table.from_pandas(
         df, preserve_index=False
     ).replace_schema_metadata(None)
-    # Pandas uses ns so need to cast columns to ms
-    if data_type == "datetime64[ms]":
-        pa_df = (
-            pa_df.add_column(
-                0,
-                pa_df.column(1)
-                .cast(pa.timestamp("ms"))
-                .cast(pa.int64())
-                .cast(pa.date64()),
-            )
-            .add_column(
-                0,
-                pa_df.column(0)
-                .cast(pa.timestamp("ms"))
-                .cast(pa.int64())
-                .cast(pa.date64()),
-            )
-            .remove_column(2)
-            .remove_column(2)
-        )
+
     pa_gdf = gdf.to_arrow(preserve_index=False).replace_schema_metadata(None)
 
     assert isinstance(pa_gdf, pa.Table)
     assert pa.Table.equals(pa_df, pa_gdf)
 
     pa_s = pa.Array.from_pandas(df.a)
-    # Pandas uses ns so need to cast columns to ms
-    if data_type == "datetime64[ms]":
-        pa_s = pa_s.cast(pa.timestamp("ms")).cast(pa.int64()).cast(pa.date64())
     pa_gs = gdf["a"].to_arrow()
 
     assert isinstance(pa_gs, pa.Array)
@@ -1510,15 +1017,20 @@ def test_to_arrow(nelem, data_type):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_to_from_arrow_nulls(data_type):
-    if data_type == "datetime64[ms]":
-        data_type = pa.date64()
     if data_type == "bool":
         s1 = pa.array([True, None, False, None, True], type=data_type)
     else:
+        dtype = np.dtype(data_type)
+        if dtype.type == np.datetime64:
+            time_unit, _ = np.datetime_data(dtype)
+            data_type = pa.timestamp(unit=time_unit)
         s1 = pa.array([1, None, 3, None, 5], type=data_type)
     gs1 = gd.Series.from_arrow(s1)
     assert isinstance(gs1, gd.Series)
@@ -1591,6 +1103,11 @@ def test_to_arrow_missing_categorical():
         "float32",
         "float64",
         "datetime64[ms]",
+        "datetime64",
+        "datetime64[ns]",
+        "datetime64[D]",
+        "datetime64[s]",
+        "datetime64[M]",
     ],
 )
 def test_from_scalar_typing(data_type):
@@ -1600,6 +1117,11 @@ def test_from_scalar_typing(data_type):
             .type(np.random.randint(0, 5))
             .astype("datetime64[ms]")
         )
+    elif data_type.startswith("datetime64"):
+        from datetime import date
+
+        scalar = np.datetime64(date.today())
+        data_type = "datetime64[ms]"
     else:
         scalar = np.dtype(data_type).type(np.random.randint(0, 5))
 
@@ -1662,7 +1184,10 @@ def test_dataframe_shape_empty():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
@@ -1858,121 +1383,6 @@ def test_is_monotonic(gdf):
     assert not gdf.index.is_monotonic_decreasing
 
 
-def test_dataframe_boolean_mask_with_None():
-    pdf = pd.DataFrame({"a": [0, 1, 2, 3], "b": [0.1, 0.2, None, 0.3]})
-    gdf = DataFrame.from_pandas(pdf)
-    pdf_masked = pdf[[True, False, True, False]]
-    gdf_masked = gdf[[True, False, True, False]]
-    assert_eq(pdf_masked, gdf_masked)
-
-
-@pytest.mark.parametrize("dtype", [int, float, str])
-def test_empty_boolean_mask(dtype):
-    gdf = gd.datasets.randomdata(nrows=0, dtypes={"a": dtype})
-    pdf = gdf.to_pandas()
-
-    expected = pdf[pdf.a == 1]
-    got = gdf[gdf.a == 1]
-    assert_eq(expected, got)
-
-    expected = pdf.a[pdf.a == 1]
-    got = gdf.a[gdf.a == 1]
-    assert_eq(expected, got)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        [1, 2, 3, 4],
-        [1.0, 2.0, 3.0, 4.0],
-        ["one", "two", "three", "four"],
-        pd.Series(["a", "b", "c", "d"], dtype="category"),
-        pd.Series(pd.date_range("2010-01-01", "2010-01-04")),
-    ],
-)
-@pytest.mark.parametrize(
-    "mask",
-    [
-        [True, True, True, True],
-        [False, False, False, False],
-        [True, False, True, False],
-        [True, False, False, True],
-        np.array([True, False, True, False]),
-        pd.Series([True, False, True, False]),
-        gd.Series([True, False, True, False]),
-    ],
-)
-@pytest.mark.parametrize("nulls", ["one", "some", "all", "none"])
-def test_series_apply_boolean_mask(data, mask, nulls):
-    psr = pd.Series(data)
-
-    if len(data) > 0:
-        if nulls == "one":
-            p = np.random.randint(0, 4)
-            psr[p] = None
-        elif nulls == "some":
-            p1, p2 = np.random.randint(0, 4, (2,))
-            psr[p1] = None
-            psr[p2] = None
-        elif nulls == "all":
-            psr[:] = None
-
-    gsr = gd.from_pandas(psr)
-
-    # TODO: from_pandas(psr) has dtype "float64"
-    # when psr has dtype "object" and is all None
-    if psr.dtype == "object" and nulls == "all":
-        gsr = gd.Series([None, None, None, None], dtype="object")
-
-    if isinstance(mask, gd.Series):
-        expect = psr[mask.to_pandas()]
-    else:
-        expect = psr[mask]
-    got = gsr[mask]
-
-    assert_eq(expect, got)
-
-
-def test_dataframe_apply_boolean_mask():
-    pdf = pd.DataFrame(
-        {
-            "a": [0, 1, 2, 3],
-            "b": [0.1, 0.2, None, 0.3],
-            "c": ["a", None, "b", "c"],
-        }
-    )
-    gdf = DataFrame.from_pandas(pdf)
-    assert_eq(pdf[[True, False, True, False]], gdf[[True, False, True, False]])
-
-
-"""
-This test compares cudf and Pandas dataframe boolean indexing.
-"""
-
-
-@pytest.mark.parametrize(
-    "mask_fn", [lambda x: x, lambda x: np.array(x), lambda x: pd.Series(x)]
-)
-def test_dataframe_boolean_mask(pdf, gdf, mask_fn):
-    mask_base = [
-        True,
-        False,
-        True,
-        False,
-        True,
-        False,
-        True,
-        False,
-        True,
-        False,
-    ]
-    mask = mask_fn(mask_base)
-    assert len(mask) == gdf.shape[0]
-    pdf_masked = pdf[mask]
-    gdf_masked = gdf[mask]
-    assert pdf_masked.to_string().split() == gdf_masked.to_string().split()
-
-
 def test_iter(pdf, gdf):
     assert list(pdf) == list(gdf)
 
@@ -1984,20 +1394,20 @@ def test_iteritems(gdf):
         assert_eq(v, gdf[k])
 
 
-@pytest.mark.xfail(reason="our quantile result is a DataFrame, not a Series")
-def test_quantile(pdf, gdf):
-    assert_eq(pdf["x"].quantile(), gdf["x"].quantile())
-    assert_eq(pdf.quantile(), gdf.quantile())
+@pytest.mark.parametrize("q", [0.5, 1, 0.001, [0.5], [], [0.005, 0.5, 1]])
+def test_quantile(pdf, gdf, q):
+    assert_eq(pdf["x"].quantile(q), gdf["x"].quantile(q))
+    assert_eq(pdf.quantile(q), gdf.quantile(q))
 
 
 def test_empty_quantile():
     pdf = pd.DataFrame({"x": []})
     df = gd.DataFrame({"x": []})
 
-    actual = df.quantile().to_pandas()["x"]
+    actual = df.quantile()
     expected = pdf.quantile()
 
-    assert_eq(actual.values, expected.values)
+    assert_eq(actual, expected)
 
 
 def test_from_pandas_function(pdf):
@@ -2085,7 +1495,10 @@ def test_cuda_array_interface(dtype):
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_from_arrow_chunked_arrays(nelem, nchunks, data_type):
@@ -2185,8 +1598,9 @@ def test_dataframe_boolmask(mask_shape):
 
     assert np.array_equal(gdf.columns, pdf.columns)
     for col in gdf.columns:
-        assert np.array_equal(gdf[col].fillna(-1).to_pandas().values,
-                              pdf[col].fillna(-1).values)
+        assert np.array_equal(
+            gdf[col].fillna(-1).to_pandas().values, pdf[col].fillna(-1).values
+        )
 
 
 def test_dataframe_assignment():
@@ -2319,7 +1733,10 @@ def test_series_rename():
         "int64",
         "float32",
         "float64",
+        "datetime64[s]",
         "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 @pytest.mark.parametrize("nelem", [0, 100])
@@ -2367,6 +1784,12 @@ def test_head_tail(nelem, data_type):
 def test_reset_index(pdf, gdf, drop):
     assert_eq(pdf.reset_index(drop=drop), gdf.reset_index(drop=drop))
     assert_eq(pdf.x.reset_index(drop=drop), gdf.x.reset_index(drop=drop))
+
+
+@pytest.mark.parametrize("drop", [True, False])
+def test_set_index(pdf, gdf, drop):
+    for col in pdf.columns:
+        assert_eq(pdf.set_index(col, drop=drop), gdf.set_index(col, drop=drop))
 
 
 @pytest.mark.parametrize("copy", [True, False])
@@ -2622,8 +2045,11 @@ def test_dataframe_empty_sort_index():
         "int64",
         "float32",
         "float64",
-        "datetime64[ms]",
         "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
     ],
 )
 def test_dataframe_0_row_dtype(dtype):
@@ -2651,9 +2077,13 @@ def test_series_list_nanasnull(nan_as_null):
     data = [1.0, 2.0, 3.0, np.nan, None]
 
     expect = pa.array(data, from_pandas=nan_as_null)
-    got = Series(data, nan_as_null=nan_as_null)
+    got = Series(data, nan_as_null=nan_as_null).to_arrow()
 
-    assert pa.Array.equals(expect, got.to_arrow())
+    # Bug in Arrow 0.14.1 where NaNs aren't handled
+    expect = expect.cast("int64", safe=False)
+    got = got.cast("int64", safe=False)
+
+    assert pa.Array.equals(expect, got)
 
 
 def test_column_assignment():
@@ -2673,71 +2103,105 @@ def test_select_dtype():
 
     assert_eq(pdf.select_dtypes("float64"), gdf.select_dtypes("float64"))
     assert_eq(pdf.select_dtypes(np.float64), gdf.select_dtypes(np.float64))
-    assert_eq(pdf.select_dtypes(include=["float64"]),
-              gdf.select_dtypes(include=["float64"]))
-    assert_eq(pdf.select_dtypes(include=['object', 'int', 'category']),
-              gdf.select_dtypes(include=['object', 'int', 'category']))
-
-    assert_eq(pdf.select_dtypes(include=["int64", "float64"]),
-              gdf.select_dtypes(include=["int64", "float64"]))
-    assert_eq(pdf.select_dtypes(include=np.number),
-              gdf.select_dtypes(include=np.number))
     assert_eq(
-        pdf.select_dtypes(include=[np.int64, np.float64]),
-        gdf.select_dtypes(include=[np.int64, np.float64])
+        pdf.select_dtypes(include=["float64"]),
+        gdf.select_dtypes(include=["float64"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["object", "int", "category"]),
+        gdf.select_dtypes(include=["object", "int", "category"]),
     )
 
-    assert_eq(pdf.select_dtypes(include=["category"]),
-              gdf.select_dtypes(include=["category"]))
-    assert_eq(pdf.select_dtypes(exclude=np.number),
-              gdf.select_dtypes(exclude=np.number))
+    assert_eq(
+        pdf.select_dtypes(include=["int64", "float64"]),
+        gdf.select_dtypes(include=["int64", "float64"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=np.number),
+        gdf.select_dtypes(include=np.number),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=[np.int64, np.float64]),
+        gdf.select_dtypes(include=[np.int64, np.float64]),
+    )
+
+    assert_eq(
+        pdf.select_dtypes(include=["category"]),
+        gdf.select_dtypes(include=["category"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=np.number),
+        gdf.select_dtypes(exclude=np.number),
+    )
 
     with pytest.raises(TypeError):
-        assert_eq(pdf.select_dtypes(include=["Foo"]),
-                  gdf.select_dtypes(include=["Foo"]))
+        assert_eq(
+            pdf.select_dtypes(include=["Foo"]),
+            gdf.select_dtypes(include=["Foo"]),
+        )
 
     with pytest.raises(ValueError):
         gdf.select_dtypes(exclude=np.number, include=np.number)
     with pytest.raises(ValueError):
         pdf.select_dtypes(exclude=np.number, include=np.number)
 
-    gdf = DataFrame({'A': [3, 4, 5],
-                     'C': [1, 2, 3],
-                     'D': ['a', 'b', 'c']})
+    gdf = DataFrame({"A": [3, 4, 5], "C": [1, 2, 3], "D": ["a", "b", "c"]})
     pdf = gdf.to_pandas()
-    assert_eq(pdf.select_dtypes(include=['object', 'int', 'category']),
-              gdf.select_dtypes(include=['object', 'int', 'category']))
-    assert_eq(pdf.select_dtypes(include=['object'], exclude=['category']),
-              gdf.select_dtypes(include=['object'], exclude=['category']))
+    assert_eq(
+        pdf.select_dtypes(include=["object", "int", "category"]),
+        gdf.select_dtypes(include=["object", "int", "category"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["object"], exclude=["category"]),
+        gdf.select_dtypes(include=["object"], exclude=["category"]),
+    )
 
-    gdf = gd.DataFrame({'a': range(10), 'b': range(10, 20)})
+    gdf = gd.DataFrame({"a": range(10), "b": range(10, 20)})
     pdf = gdf.to_pandas()
-    assert_eq(pdf.select_dtypes(include=['category']),
-              gdf.select_dtypes(include=['category']))
-    assert_eq(pdf.select_dtypes(include=['float']),
-              gdf.select_dtypes(include=['float']))
-    assert_eq(pdf.select_dtypes(include=['object']),
-              gdf.select_dtypes(include=['object']))
-    assert_eq(pdf.select_dtypes(include=['int']),
-              gdf.select_dtypes(include=['int']))
-    assert_eq(pdf.select_dtypes(exclude=['float']),
-              gdf.select_dtypes(exclude=['float']))
-    assert_eq(pdf.select_dtypes(exclude=['object']),
-              gdf.select_dtypes(exclude=['object']))
-    assert_eq(pdf.select_dtypes(include=['int'], exclude=['object']),
-              gdf.select_dtypes(include=['int'], exclude=['object']))
+    assert_eq(
+        pdf.select_dtypes(include=["category"]),
+        gdf.select_dtypes(include=["category"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["float"]),
+        gdf.select_dtypes(include=["float"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["object"]),
+        gdf.select_dtypes(include=["object"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["int"]), gdf.select_dtypes(include=["int"])
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=["float"]),
+        gdf.select_dtypes(exclude=["float"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(exclude=["object"]),
+        gdf.select_dtypes(exclude=["object"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["int"], exclude=["object"]),
+        gdf.select_dtypes(include=["int"], exclude=["object"]),
+    )
     with pytest.raises(ValueError):
         pdf.select_dtypes()
     with pytest.raises(ValueError):
         gdf.select_dtypes()
 
-    gdf = gd.DataFrame({'a': gd.Series([], dtype='int'),
-                        'b': gd.Series([], dtype='str')})
+    gdf = gd.DataFrame(
+        {"a": gd.Series([], dtype="int"), "b": gd.Series([], dtype="str")}
+    )
     pdf = gdf.to_pandas()
-    assert_eq(pdf.select_dtypes(exclude=['object']),
-              gdf.select_dtypes(exclude=['object']))
-    assert_eq(pdf.select_dtypes(include=['int'], exclude=['object']),
-              gdf.select_dtypes(include=['int'], exclude=['object']))
+    assert_eq(
+        pdf.select_dtypes(exclude=["object"]),
+        gdf.select_dtypes(exclude=["object"]),
+    )
+    assert_eq(
+        pdf.select_dtypes(include=["int"], exclude=["object"]),
+        gdf.select_dtypes(include=["int"], exclude=["object"]),
+    )
 
 
 def test_select_dtype_datetime():
@@ -2938,9 +2402,13 @@ def test_diff(dtype, period):
 
 def test_isnull_isna():
     # float & strings some missing
-    ps = pd.DataFrame({"a": [0, 1, 2, np.nan, 4, None, 6],
-                       "b": [np.nan, None, 'u', 'h', 'd', 'a', 'm']})
-    ps.index = ['q', 'w', 'e', 'r', 't', 'y', 'u']
+    ps = pd.DataFrame(
+        {
+            "a": [0, 1, 2, np.nan, 4, None, 6],
+            "b": [np.nan, None, "u", "h", "d", "a", "m"],
+        }
+    )
+    ps.index = ["q", "w", "e", "r", "t", "y", "u"]
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())
@@ -2948,7 +2416,7 @@ def test_isnull_isna():
     assert_eq(ps.isna(), gs.isna())
 
     # integer & string none missing
-    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ['a', 'b', 'u', 'h', 'd']})
+    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())
@@ -2956,8 +2424,9 @@ def test_isnull_isna():
     assert_eq(ps.isna(), gs.isna())
 
     # all missing
-    ps = pd.DataFrame({"a": [None, None, np.nan, None],
-                       "b": [np.nan, None, np.nan, None]})
+    ps = pd.DataFrame(
+        {"a": [None, None, np.nan, None], "b": [np.nan, None, np.nan, None]}
+    )
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.a.isnull(), gs.a.isnull())
     assert_eq(ps.isnull(), gs.isnull())
@@ -3005,21 +2474,26 @@ def test_isnull_isna():
 
 def test_notna():
     # float & strings some missing
-    ps = pd.DataFrame({"a": [0, 1, 2, np.nan, 4, None, 6],
-                       "b": [np.nan, None, 'u', 'h', 'd', 'a', 'm']})
+    ps = pd.DataFrame(
+        {
+            "a": [0, 1, 2, np.nan, 4, None, 6],
+            "b": [np.nan, None, "u", "h", "d", "a", "m"],
+        }
+    )
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
 
     # integer & string none missing
-    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ['a', 'b', 'u', 'h', 'd']})
+    ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
 
     # all missing
-    ps = pd.DataFrame({"a": [None, None, np.nan, None],
-                       "b": [np.nan, None, np.nan, None]})
+    ps = pd.DataFrame(
+        {"a": [None, None, np.nan, None], "b": [np.nan, None, np.nan, None]}
+    )
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
@@ -3233,6 +2707,34 @@ def test_empty_dataframe_describe():
 def test_as_column_types():
     from cudf.dataframe import columnops
 
+    col = columnops.as_column(Series([]))
+    assert_eq(col.dtype, np.dtype("float64"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([]))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="float32")
+    assert_eq(col.dtype, np.dtype("float32"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="float32"))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="str")
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="str"))
+
+    assert_eq(pds, gds)
+
+    col = columnops.as_column(Series([]), dtype="object")
+    assert_eq(col.dtype, np.dtype("object"))
+    gds = Series(col)
+    pds = pd.Series(pd.Series([], dtype="object"))
+
+    assert_eq(pds, gds)
+
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
     gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype="float32"))
 
@@ -3240,6 +2742,32 @@ def test_as_column_types():
 
     pds = pd.Series([1, 2, 3], dtype="float32")
     gds = Series([1, 2, 3], dtype="float32")
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([])
+    gds = Series(columnops.as_column(pds))
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1, 2, 4], dtype="int64")
+    gds = Series(columnops.as_column(Series([1, 2, 4]), dtype="int64"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
+    gds = Series(
+        columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="float32")
+    )
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
+    gds = Series(columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
+
+    assert_eq(pds, gds)
+
+    pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
+    gds = Series(gd.dataframe.index.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -3252,3 +2780,567 @@ def test_one_row_head():
     head_pdf = pdf.head()
 
     assert_eq(head_pdf, head_gdf)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_series_astype_numeric_to_numeric(dtype, as_dtype):
+    psr = pd.Series([1, 2, 4, 3], dtype=dtype)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_series_astype_numeric_to_numeric_nulls(dtype, as_dtype):
+    data = [1, 2, None, 3]
+    sr = gd.Series(data, dtype=dtype)
+    got = sr.astype(as_dtype)
+    expect = gd.Series([1, 2, None, 3], dtype=as_dtype)
+    assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_series_astype_numeric_to_other(dtype, as_dtype):
+    psr = pd.Series([1, 2, 3], dtype=dtype)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype))
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_series_astype_string_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05"]
+        kwargs = {"format": "%Y-%m-%d"}
+    else:
+        data = ["1", "2", "3"]
+        kwargs = {}
+    psr = pd.Series(data)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
+def test_series_astype_datetime_to_other(as_dtype):
+    data = ["2001-01-01", "2002-02-02", "2001-01-05"]
+    psr = pd.Series(data)
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, format="%Y-%m-%d"))
+
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
+def test_series_astype_categorical_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
+        kwargs = {"format": "%Y-%m-%d"}
+    else:
+        data = [1, 2, 3, 1]
+        kwargs = {}
+    psr = pd.Series(data, dtype="category")
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_series_astype_to_categorical_ordered(ordered):
+    psr = pd.Series([1, 2, 3, 1], dtype="category")
+    gsr = gd.from_pandas(psr)
+    assert_eq(
+        psr.astype("int32", ordered=ordered),
+        gsr.astype("int32", ordered=ordered),
+    )
+
+
+def test_series_astype_null_cases():
+    data = [1, 2, None, 3]
+
+    # numerical to other
+    assert_eq(
+        gd.Series(data, dtype="str"),
+        gd.Series(data).astype("str").fillna("None"),
+    )
+
+    assert_eq(
+        gd.Series(data, dtype="category"), gd.Series(data).astype("category")
+    )
+
+    assert_eq(
+        gd.Series(data, dtype="float32"),
+        gd.Series(data, dtype="int32").astype("float32"),
+    )
+
+    assert_eq(
+        gd.Series(data, dtype="datetime64[ms]"),
+        gd.Series(data).astype("datetime64[ms]", format="%Y-%m-%d"),
+    )
+
+    # categorical to other
+    assert_eq(
+        gd.Series(data, dtype="str"),
+        gd.Series(data, dtype="category").astype("str").fillna("None"),
+    )
+
+    assert_eq(
+        gd.Series(data, dtype="float32"),
+        gd.Series(data, dtype="category").astype("float32"),
+    )
+
+    assert_eq(
+        gd.Series(data, dtype="datetime64[ms]"),
+        gd.Series(data, dtype="category").astype(
+            "datetime64[ms]", format="%Y-%m-%d"
+        ),
+    )
+
+    # string to other
+    assert_eq(
+        gd.Series([1, 2, None, 3], dtype="int32"),
+        gd.Series(["1", "2", None, "3"]).astype("int32"),
+    )
+
+    assert_eq(
+        gd.Series(
+            ["2001-01-01", "2001-02-01", None, "2001-03-01"],
+            dtype="datetime64[ms]",
+        ),
+        gd.Series(["2001-01-01", "2001-02-01", None, "2001-03-01"]).astype(
+            "datetime64[ms]", format="%Y-%m-%d"
+        ),
+    )
+
+    assert_eq(
+        gd.Series(["a", "b", "c", None], dtype="category").to_pandas(),
+        gd.Series(["a", "b", "c", None]).astype("category").to_pandas(),
+    )
+
+    # datetime to other
+    data = ["2001-01-01", "2001-02-01", None, "2001-03-01"]
+
+    assert_eq(
+        gd.from_pandas(pd.Series(data)),
+        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
+            "str", format="%Y-%m-%d"
+        ),
+    )
+
+    assert_eq(
+        pd.Series(data, dtype="datetime64[ns]").astype("category"),
+        gd.from_pandas(pd.Series(data, dtype="datetime64[ns]")).astype(
+            "category"
+        ),
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        (
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ),
+        [
+            pd.Series([3, 3.0]),
+            pd.Series([2.3, 3.9]),
+            pd.Series([1.5, 3.9]),
+            pd.Series([1.0, 2]),
+        ],
+    ],
+)
+def test_create_dataframe_from_list_like(data):
+    pdf = pd.DataFrame(data, index=["count", "mean", "std", "min"])
+    gdf = DataFrame(data, index=["count", "mean", "std", "min"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(data)
+    gdf = DataFrame(data)
+
+    assert_eq(pdf, gdf)
+
+
+def test_create_dataframe_column():
+    pdf = pd.DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+    gdf = DataFrame(columns=["a", "b", "c"], index=["A", "Z", "X"])
+
+    assert_eq(pdf, gdf)
+
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+    gdf = DataFrame(
+        {"a": [1, 2, 3], "b": [2, 3, 5]},
+        columns=["a", "b", "c"],
+        index=["A", "Z", "X"],
+    )
+
+    assert_eq(pdf, gdf)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pd.Categorical(["a", "b", "c"]),
+        ["m", "a", "d", "v"],
+    ],
+)
+def test_series_values_property(data):
+    pds = pd.Series(data)
+    gds = Series(data)
+
+    np.testing.assert_array_equal(pds.values, gds.values)
+
+
+def test_value_counts():
+    pdf = pd.DataFrame(
+        {
+            "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
+            "alpha": ["u", "h", "d", "a", "m", "u", "h", "d", "a"] * 10,
+        }
+    )
+
+    gdf = DataFrame(
+        {
+            "numeric": [1, 2, 3, 4, 5, 6, 1, 2, 4] * 10,
+            "alpha": ["u", "h", "d", "a", "m", "u", "h", "d", "a"] * 10,
+        }
+    )
+
+    assert_eq(
+        pdf.numeric.value_counts().sort_index(),
+        gdf.numeric.value_counts().sort_index(),
+        check_dtype=False,
+    )
+    assert_eq(
+        pdf.alpha.value_counts().sort_index(),
+        gdf.alpha.value_counts().sort_index(),
+        check_dtype=False,
+    )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(pd.date_range("2010-01-01", "2010-02-01")),
+        pd.Series([None, None], dtype="datetime64[ns]"),
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some"])
+def test_datetime_value_counts(data, nulls):
+    psr = pd.Series(data)
+
+    if len(data) > 0:
+        if nulls == "one":
+            p = np.random.randint(0, len(data))
+            psr[p] = None
+        elif nulls == "some":
+            p = np.random.randint(0, len(data), 2)
+            psr[p] = None
+
+    gsr = Series.from_pandas(psr)
+    expected = psr.value_counts()
+    got = gsr.value_counts()
+
+    pandas_dict = expected.to_dict()
+    gdf_dict = got.to_pandas().to_dict()
+
+    assert pandas_dict == gdf_dict
+
+
+@pytest.mark.parametrize("num_elements", [10, 100, 1000])
+def test_categorical_value_counts(num_elements):
+    from string import ascii_letters, digits
+
+    # create categorical series
+    np.random.seed(12)
+    pd_cat = pd.Categorical(
+        pd.Series(
+            np.random.choice(list(ascii_letters + digits), num_elements),
+            dtype="category",
+        )
+    )
+
+    # gdf
+    gdf = DataFrame()
+    gdf["a"] = Series.from_categorical(pd_cat)
+    gdf_value_counts = gdf["a"].value_counts()
+
+    # pandas
+    pdf = pd.DataFrame()
+    pdf["a"] = pd_cat
+    pdf_value_counts = pdf["a"].value_counts()
+
+    # verify
+    pandas_dict = pdf_value_counts.to_dict()
+    gdf_dict = gdf_value_counts.to_pandas().to_dict()
+
+    assert pandas_dict == gdf_dict
+
+
+def test_series_value_counts():
+    for size in [10 ** x for x in range(5)]:
+        arr = np.random.randint(low=-1, high=10, size=size)
+        mask = arr != -1
+        sr = Series.from_masked_array(arr, Series(mask).as_mask())
+        sr.name = "col"
+        df = pd.DataFrame(data=arr[mask], columns=["col"])
+        expect = df.col.value_counts().sort_index()
+        got = sr.value_counts().sort_index()
+
+        assert_eq(expect, got, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        [0, 12, 14],
+        np.random.randint(-100, 100, 200),
+        pd.Series([0.0, 1.0, None, 10.0]),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        np.random.randint(-100, 100, 10),
+        [],
+        pytest.param([1.0, 12.0, None, None, 120], marks=pytest.mark.xfail),
+        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        ["0", "12", "14"],
+        pytest.param(
+            ["0", "12", "14", "a"],
+            marks=[
+                pytest.mark.xfail(
+                    reason="We don't gracefully handle typecasting errors."
+                )
+            ],
+        ),
+    ],
+)
+def test_isin_numeric(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(
+            ["2018-01-01", "2019-04-03", None, "2019-12-30"],
+            dtype="datetime64[ns]",
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        pytest.param(
+            [1514764800000000000, 1577664000000000000],
+            marks=[
+                pytest.mark.xfail(reason="We don't yet support nanoseconds.")
+            ],
+        ),
+        ["2019-04-03", "2019-12-30", "2012-01-01"],
+    ],
+)
+def test_isin_datetime(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(["this", "is", None, "a", "test"]),
+        pd.Series(["0", "12", "14"]),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["this", "is"],
+        pytest.param([None, None, None], marks=pytest.mark.xfail),
+        pytest.param(
+            [12, 14, 19],
+            marks=[
+                pytest.mark.xfail(
+                    reason="pandas's failure here seems like a bug "
+                    "given the reverse succeeds"
+                )
+            ],
+        ),
+    ],
+)
+def test_isin_string(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(["a", "b", "c", "c", "c", "d", "e"], dtype="category"),
+        pd.Series(["a", "b", None, "c", "d", "e"], dtype="category"),
+        pd.Series([0, 3, 10, 12], dtype="category"),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["a", "b", None, "f", "words"],
+        ["0", "12", None, "14"],
+        [0, 10, 12, None, 39, 40, 1000],
+    ],
+)
+def test_isin_categorical(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.isin(values)
+    expected = psr.isin(values)
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [],
+        pd.Series(
+            ["this", "is", None, "a", "test"], index=["a", "b", "c", "d", "e"]
+        ),
+        pd.Series([0, 15, 10], index=[0, None, 9]),
+        pd.Series(
+            range(25),
+            index=pd.date_range(
+                start="2019-01-01", end="2019-01-02", freq="H"
+            ),
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "values",
+    [
+        [],
+        ["this", "is"],
+        [0, 19, 13],
+        ["2019-01-01 04:00:00", "2019-01-01 06:00:00", "2018-03-02"],
+    ],
+)
+def test_isin_index(data, values):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.index.isin(values)
+    expected = psr.index.isin(values)
+
+    assert_eq(got.data.mem.copy_to_host(), expected)
+
+
+def test_constructor_properties():
+    df = DataFrame()
+    key1 = "a"
+    key2 = "b"
+    val1 = np.array([123], dtype=np.float64)
+    val2 = np.array([321], dtype=np.float64)
+    df[key1] = val1
+    df[key2] = val2
+
+    # Correct use of _constructor (for DataFrame)
+    assert_eq(df, df._constructor({key1: val1, key2: val2}))
+
+    # Correct use of _constructor (for Series)
+    assert_eq(df[key1], df[key2]._constructor(val1, name=key1))
+
+    # Correct use of _constructor_sliced (for DataFrame)
+    assert_eq(df[key1], df._constructor_sliced(val1, name=key1))
+
+    # Correct use of _constructor_expanddim (for Series)
+    assert_eq(df, df[key2]._constructor_expanddim({key1: val1, key2: val2}))
+
+    # Inorrect use of _constructor_sliced (Raises for Series)
+    with pytest.raises(NotImplementedError):
+        df[key1]._constructor_sliced
+
+    # Inorrect use of _constructor_expanddim (Raises for DataFrame)
+    with pytest.raises(NotImplementedError):
+        df._constructor_expanddim

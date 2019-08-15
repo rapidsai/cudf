@@ -1293,7 +1293,6 @@ def test_csv_writer_datetime_data(tmpdir):
     gdf_df_fname = tmpdir.join("gdf_df_2.csv")
 
     df = make_datetime_dataframe()
-    df = df.astype("datetime64[ms]")
     gdf = cudf.from_pandas(df)
     df.to_csv(pdf_df_fname, index=False, line_terminator="\n")
     gdf.to_csv(path=gdf_df_fname, index=False)
@@ -1301,8 +1300,8 @@ def test_csv_writer_datetime_data(tmpdir):
     assert os.path.exists(pdf_df_fname)
     assert os.path.exists(gdf_df_fname)
 
-    expect = pd.read_csv(pdf_df_fname).astype("datetime64[ms]")
-    got = pd.read_csv(gdf_df_fname).astype("datetime64[ms]")
+    expect = pd.read_csv(pdf_df_fname)
+    got = pd.read_csv(gdf_df_fname)
     assert_eq(expect, got)
 
 

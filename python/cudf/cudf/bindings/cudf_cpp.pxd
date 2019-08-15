@@ -5,10 +5,16 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf.bindings.dlpack cimport DLManagedTensor
-
 from libcpp cimport bool
-from libc.stdint cimport uint8_t, uint32_t, int64_t, int32_t, int16_t, int8_t, uintptr_t
+from libc.stdint cimport (  # noqa: E211
+    uint8_t,
+    uint32_t,
+    int64_t,
+    int32_t,
+    int16_t,
+    int8_t,
+    uintptr_t
+)
 from libcpp.vector cimport vector
 
 # Utility functions to build gdf_columns, gdf_context and error handling
@@ -17,22 +23,39 @@ cpdef get_ctype_ptr(obj)
 cpdef get_column_data_ptr(obj)
 cpdef get_column_valid_ptr(obj)
 
-cdef gdf_dtype get_dtype(dtype)
+cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
+cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
 
-cdef get_scalar_value(gdf_scalar scalar)
+cdef np_dtype_from_gdf_column(gdf_column* col)
+
+
+cdef get_scalar_value(gdf_scalar scalar, dtype)
 
 cdef gdf_column* column_view_from_column(col, col_name=*) except? NULL
-cdef gdf_column* column_view_from_NDArrays(size, data, mask, dtype, null_count) except? NULL
+cdef gdf_column* column_view_from_NDArrays(
+    size,
+    data,
+    mask,
+    dtype,
+    null_count
+) except? NULL
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*) except? NULL
+cdef gdf_column_to_column(gdf_column* c_col, int_col_name=*)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
 cdef gdf_column* column_view_from_string_column(col, col_name=*) except? NULL
 cdef gdf_column** cols_view_from_cols(cols)
-cdef free_table(cudf_table* table0, gdf_column** cols)
+cdef free_table(cudf_table* table0, gdf_column** cols=*)
+cdef free_column(gdf_column* c_col)
 
-cdef gdf_context* create_context_view(flag_sorted, method, flag_distinct,
-                                      flag_sort_result, flag_sort_inplace,
-                                      null_sort_behavior)
+cdef gdf_context* create_context_view(
+    flag_sorted,
+    method,
+    flag_distinct,
+    flag_sort_result,
+    flag_sort_inplace,
+    null_sort_behavior
+)
 
 cpdef uintptr_t column_view_pointer(col)
 
@@ -42,7 +65,7 @@ cpdef check_gdf_error(errcode)
 # First version of bindings has no changes to the cudf.h header, so this file
 # mirrors the structure in cpp/include
 
-cdef extern from "cudf.h" nogil:
+cdef extern from "cudf/cudf.h" nogil:
 
     ctypedef int           gdf_size_type
     ctypedef gdf_size_type gdf_index_type
@@ -119,49 +142,51 @@ cdef extern from "cudf.h" nogil:
         char *col_name
 
     ctypedef enum gdf_null_sort_behavior:
-      GDF_NULL_AS_LARGEST = 0,
-      GDF_NULL_AS_SMALLEST,
-   
+        GDF_NULL_AS_LARGEST = 0,
+        GDF_NULL_AS_SMALLEST,
+
     ctypedef enum gdf_method:
-      GDF_SORT = 0,
-      GDF_HASH,
-      N_GDF_METHODS,
+        GDF_SORT = 0,
+        GDF_HASH,
+        N_GDF_METHODS,
 
     ctypedef enum gdf_quantile_method:
-      GDF_QUANT_LINEAR =0,
-      GDF_QUANT_LOWER,
-      GDF_QUANT_HIGHER,
-      GDF_QUANT_MIDPOINT,
-      GDF_QUANT_NEAREST,
-      N_GDF_QUANT_METHODS,
+        GDF_QUANT_LINEAR =0,
+        GDF_QUANT_LOWER,
+        GDF_QUANT_HIGHER,
+        GDF_QUANT_MIDPOINT,
+        GDF_QUANT_NEAREST,
+        N_GDF_QUANT_METHODS,
 
     ctypedef enum gdf_agg_op:
-      GDF_SUM = 0,
-      GDF_MIN,
-      GDF_MAX,
-      GDF_AVG,
-      GDF_COUNT,
-      GDF_COUNT_DISTINCT,
-      N_GDF_AGG_OPS,
+        GDF_SUM = 0,
+        GDF_MIN,
+        GDF_MAX,
+        GDF_AVG,
+        GDF_COUNT,
+        GDF_COUNT_DISTINCT,
+        GDF_NUMBA_GENERIC_AGG_OPS,
+        GDF_CUDA_GENERIC_AGG_OPS,
+        N_GDF_AGG_OPS,
 
     ctypedef enum gdf_color:
-      GDF_GREEN = 0,
-      GDF_BLUE,
-      GDF_YELLOW,
-      GDF_PURPLE,
-      GDF_CYAN,
-      GDF_RED,
-      GDF_WHITE,
-      GDF_DARK_GREEN,
-      GDF_ORANGE,
-      GDF_NUM_COLORS,
+        GDF_GREEN = 0,
+        GDF_BLUE,
+        GDF_YELLOW,
+        GDF_PURPLE,
+        GDF_CYAN,
+        GDF_RED,
+        GDF_WHITE,
+        GDF_DARK_GREEN,
+        GDF_ORANGE,
+        GDF_NUM_COLORS,
 
     ctypedef struct gdf_context:
-      int flag_sorted
-      gdf_method flag_method
-      int flag_distinct
-      int flag_sort_result
-      int flag_sort_inplace
+        int flag_sorted
+        gdf_method flag_method
+        int flag_distinct
+        int flag_sort_result
+        int flag_sort_inplace
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -195,26 +220,47 @@ cdef extern from "cudf.h" nogil:
 
     cdef gdf_size_type gdf_column_sizeof() except +
 
-    cdef gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
-                                   gdf_size_type size, gdf_dtype dtype) except +
+    cdef gdf_error gdf_column_view(
+        gdf_column *column,
+        void *data,
+        gdf_valid_type *valid,
+        gdf_size_type size,
+        gdf_dtype dtype
+    ) except +
 
-    cdef gdf_error gdf_column_view_augmented(gdf_column *column,
-                                             void *data,
-                                             gdf_valid_type *valid,
-                                             gdf_size_type size,
-                                             gdf_dtype dtype,
-                                             gdf_size_type null_count,
-                                             gdf_dtype_extra_info extra_info) except +
+    # version with name parameter
+    cdef gdf_error gdf_column_view_augmented(
+        gdf_column *column,
+        void *data,
+        gdf_valid_type *valid,
+        gdf_size_type size,
+        gdf_dtype dtype,
+        gdf_size_type null_count,
+        gdf_dtype_extra_info extra_info,
+        const char* name) except +
+
+    # version without name parameter
+    cdef gdf_error gdf_column_view_augmented(
+        gdf_column *column,
+        void *data,
+        gdf_valid_type *valid,
+        gdf_size_type size,
+        gdf_dtype dtype,
+        gdf_size_type null_count,
+        gdf_dtype_extra_info extra_info
+    ) except +
 
     cdef gdf_error gdf_column_free(gdf_column *column) except +
 
-    cdef gdf_error gdf_context_view(gdf_context *context,
-                                    int flag_sorted,
-                                    gdf_method flag_method,
-                                    int flag_distinct,
-                                    int flag_sort_result,
-                                    int flag_sort_inplace,
-                                    gdf_null_sort_behavior flag_null_sort_behavior) except +
+    cdef gdf_error gdf_context_view(
+        gdf_context *context,
+        int flag_sorted,
+        gdf_method flag_method,
+        int flag_distinct,
+        int flag_sort_result,
+        int flag_sort_inplace,
+        gdf_null_sort_behavior flag_null_sort_behavior
+    ) except +
 
     cdef const char * gdf_error_get_name(gdf_error errcode) except +
 
@@ -222,101 +268,114 @@ cdef extern from "cudf.h" nogil:
     cdef const char * gdf_cuda_error_string(int cuda_error) except +
     cdef const char * gdf_cuda_error_name(int cuda_error) except +
 
-    cdef gdf_error gdf_cast(gdf_column *input, gdf_column *output) except +
+    cdef gdf_error gdf_validity_and(
+        gdf_column *lhs,
+        gdf_column *rhs,
+        gdf_column *output
+    ) except +
 
-    cdef gdf_error gdf_validity_and(gdf_column *lhs, gdf_column *rhs, gdf_column *output) except +
+    cdef gdf_error gdf_group_by_sum(
+        int ncols,
+        gdf_column** cols,
+        gdf_column* col_agg,
+        gdf_column* out_col_indices,
+        gdf_column** out_col_values,
+        gdf_column* out_col_agg,
+        gdf_context* ctxt
+    ) except +
 
-    cdef gdf_error gdf_group_by_sum(int ncols,
-                               gdf_column** cols,
-                               gdf_column* col_agg,
-                               gdf_column* out_col_indices,
-                               gdf_column** out_col_values,
+    cdef gdf_error gdf_group_by_min(
+        int ncols,
+        gdf_column** cols,
+        gdf_column* col_agg,
+        gdf_column* out_col_indices,
+        gdf_column** out_col_values,
+        gdf_column* out_col_agg,
+        gdf_context* ctxt
+    ) except +
 
-                               gdf_column* out_col_agg,
-                               gdf_context* ctxt) except +
+    cdef gdf_error gdf_group_by_max(
+        int ncols,
+        gdf_column** cols,
+        gdf_column* col_agg,
+        gdf_column* out_col_indices,
+        gdf_column** out_col_values,
+        gdf_column* out_col_agg,
+        gdf_context* ctxt
+    ) except +
 
-    cdef gdf_error gdf_group_by_min(int ncols,
-                               gdf_column** cols,
-                               gdf_column* col_agg,
-                               gdf_column* out_col_indices,
-                               gdf_column** out_col_values,
+    cdef gdf_error gdf_group_by_avg(
+        int ncols,
+        gdf_column** cols,
+        gdf_column* col_agg,
+        gdf_column* out_col_indices,
+        gdf_column** out_col_values,
+        gdf_column* out_col_agg,
+        gdf_context* ctxt
+    ) except +
 
-                               gdf_column* out_col_agg,
-                               gdf_context* ctxt) except +
+    cdef gdf_error gdf_group_by_count(
+        int ncols,
+        gdf_column** cols,
+        gdf_column* col_agg,
+        gdf_column* out_col_indices,
+        gdf_column** out_col_values,
+        gdf_column* out_col_agg,
+        gdf_context* ctxt
+    ) except +
 
+    cdef gdf_error gdf_quantile_exact(
+        gdf_column* col_in,
+        gdf_quantile_method prec,
+        double q,
+        gdf_scalar* result,
+        gdf_context* ctxt
+    ) except +
 
-    cdef gdf_error gdf_group_by_max(int ncols,
-                               gdf_column** cols,
-                               gdf_column* col_agg,
-                               gdf_column* out_col_indices,
-                               gdf_column** out_col_values,
+    cdef gdf_error gdf_quantile_approx(
+        gdf_column* col_in,
+        double q,
+        gdf_scalar* result,
+        gdf_context* ctxt
+    ) except +
 
-                               gdf_column* out_col_agg,
-                               gdf_context* ctxt) except +
+    cdef gdf_error gdf_digitize(
+        gdf_column* col,
+        gdf_column* bins,
+        bool right,
+        gdf_index_type* out_indices
+    ) except +
 
+    cdef gdf_error gdf_nvtx_range_push(
+        const char* const name,
+        gdf_color color
+    ) except +
 
-    cdef gdf_error gdf_group_by_avg(int ncols,
-                               gdf_column** cols,
-                               gdf_column* col_agg,
-                               gdf_column* out_col_indices,
-                               gdf_column** out_col_values,
-
-                               gdf_column* out_col_agg,
-                               gdf_context* ctxt) except +
-
-    cdef gdf_error gdf_group_by_count(int ncols,
-                                 gdf_column** cols,
-                                 gdf_column* col_agg,
-                                 gdf_column* out_col_indices,
-                                 gdf_column** out_col_values,
-
-                                 gdf_column* out_col_agg,
-                                 gdf_context* ctxt) except +
-
-
-    cdef gdf_error gdf_quantile_exact(gdf_column*       col_in,
-                                    gdf_quantile_method prec,
-                                    double              q,
-                                    gdf_scalar*         result,
-                                    gdf_context*        ctxt) except +
-
-
-    cdef gdf_error gdf_quantile_approx(  gdf_column*  col_in,
-                                    double       q,
-                                    gdf_scalar*  result,
-                                    gdf_context* ctxt) except +
-
-
-    cdef gdf_error gdf_digitize(gdf_column* col,
-                                gdf_column* bins,
-                                bool right,
-                                gdf_index_type* out_indices) except +
-
-    cdef gdf_error gdf_from_dlpack(gdf_column** columns,
-                                   gdf_size_type *num_columns,
-                                   const DLManagedTensor * tensor) except +
-
-    cdef gdf_error gdf_to_dlpack(DLManagedTensor *tensor,
-                                 const gdf_column ** columns,
-                                 gdf_size_type num_columns) except +
-
-    cdef gdf_error gdf_nvtx_range_push(const char * const name, gdf_color color ) except +
-
-    cdef gdf_error gdf_nvtx_range_push_hex(const char * const name, unsigned int color ) except +
+    cdef gdf_error gdf_nvtx_range_push_hex(
+        const char* const name,
+        unsigned int color
+    ) except +
 
     cdef gdf_error gdf_nvtx_range_pop() except +
 
 
-cdef extern from "legacy/bitmask.hpp" nogil:
+cdef extern from "cudf/legacy/bitmask.hpp" nogil:
 
-    cdef gdf_error gdf_count_nonzero_mask(gdf_valid_type * masks, int num_rows, int * count) except +
+    cdef gdf_error gdf_count_nonzero_mask(
+        gdf_valid_type* masks,
+        int num_rows,
+        int* count
+    ) except +
 
 
-cdef extern from "table.hpp" namespace "cudf" nogil:
+cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
     cdef cppclass cudf_table "cudf::table":
 
-        cudf_table(gdf_column* cols[], gdf_size_type num_cols) except +
+        cudf_table(
+            gdf_column* cols[],
+            gdf_size_type num_cols
+        ) except +
 
         cudf_table(const vector[gdf_column*] cols) except +
 
@@ -327,12 +386,14 @@ cdef extern from "table.hpp" namespace "cudf" nogil:
         gdf_column** end() except +
 
         gdf_column* get_column(gdf_index_type index) except +
- 
+
         gdf_size_type num_columns() except +
 
         gdf_size_type num_rows() except +
 
-# Todo? add const overloads 
+# Todo? add const overloads
 #        const gdf_column* const* begin() const except +
 #        gdf_column const* const* end() const
 #        gdf_column const* get_column(gdf_index_type index) const except +
+
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid

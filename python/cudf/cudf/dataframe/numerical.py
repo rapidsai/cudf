@@ -2,6 +2,8 @@
 
 from __future__ import division, print_function
 
+import pickle
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -14,12 +16,12 @@ import cudf.bindings.copying as cpp_copying
 import cudf.bindings.hash as cpp_hash
 import cudf.bindings.reduce as cpp_reduce
 import cudf.bindings.replace as cpp_replace
+import cudf.bindings.search as cpp_search
 import cudf.bindings.sort as cpp_sort
 import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
@@ -47,22 +49,18 @@ class NumericalColumn(columnops.TypedColumnBase):
             kwargs["dtype"] = kwargs["data"].dtype
         return super(NumericalColumn, self).replace(**kwargs)
 
-    def serialize(self, serialize):
-        header, frames = super(NumericalColumn, self).serialize(serialize)
-        assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
+    def serialize(self):
+        header, frames = super(NumericalColumn, self).serialize()
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(NumericalColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(NumericalColumn, cls).deserialize(header, frames)
+        dtype = header["dtype"]
         col = cls(
-            data=data,
-            mask=mask,
-            null_count=header["null_count"],
-            dtype=deserialize(*header["dtype"]),
+            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
         )
         return col
 
@@ -81,10 +79,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise TypeError(msg.format(binop, type(self), type(rhs)))
 
     def unary_operator(self, unaryop):
-        return numeric_column_unaryop(self, op=unaryop, out_dtype=self.dtype)
-
-    def unary_logic_op(self, unaryop):
-        return numeric_column_unaryop(self, op=unaryop, out_dtype=np.bool_)
+        return numeric_column_unaryop(self, op=unaryop)
 
     def unordered_compare(self, cmpop, rhs):
         return numeric_column_compare(self, rhs, op=cmpop)
@@ -101,6 +96,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         other_dtype = np.min_scalar_type(other)
         if other_dtype.kind in "biuf":
             other_dtype = np.promote_types(self.dtype, other_dtype)
+            if other_dtype == np.dtype("float16"):
+                other = np.dtype("float32").type(other)
+                other_dtype = other.dtype
             if other_dtype.kind in "u":
                 other_dtype = utils.min_signed_type(other)
             if np.isscalar(other):
@@ -114,54 +112,46 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             raise TypeError("cannot broadcast {}".format(type(other)))
 
-    def astype(self, dtype):
-        from cudf.dataframe import datetime, string
+    def as_string_column(self, dtype, **kwargs):
+        from cudf.dataframe import string
 
-        if self.dtype == dtype:
-            return self
-
-        elif dtype == np.dtype("object") or np.issubdtype(
-            dtype, np.dtype("U").type
-        ):
-            if len(self) > 0:
-                if self.dtype in (np.dtype("int8"), np.dtype("int16")):
-                    dev_array = self.astype("int32").data.mem
-                else:
-                    dev_array = self.data.mem
-                dev_ptr = get_ctype_ptr(dev_array)
-                null_ptr = None
-                if self.mask is not None:
-                    null_ptr = get_ctype_ptr(self.mask.mem)
-                kwargs = {
-                    "count": len(self),
-                    "nulls": null_ptr,
-                    "bdevmem": True,
-                }
-                data = string._numeric_to_str_typecast_functions[
-                    np.dtype(dev_array.dtype)
-                ](dev_ptr, **kwargs)
-
+        if len(self) > 0:
+            if self.dtype in (np.dtype("int8"), np.dtype("int16")):
+                dev_array = self.astype("int32", **kwargs).data.mem
             else:
-                data = []
-
-            return string.StringColumn(data=data)
-
-        elif np.issubdtype(dtype, np.datetime64):
-            return self.astype("int64").view(
-                datetime.DatetimeColumn,
-                dtype=dtype,
-                data=self.data.astype(dtype),
-            )
-
+                dev_array = self.data.mem
+            dev_ptr = get_ctype_ptr(dev_array)
+            null_ptr = None
+            if self.mask is not None:
+                null_ptr = get_ctype_ptr(self.mask.mem)
+            kwargs = {"count": len(self), "nulls": null_ptr, "bdevmem": True}
+            data = string._numeric_to_str_typecast_functions[
+                np.dtype(dev_array.dtype)
+            ](dev_ptr, **kwargs)
         else:
-            col = self.replace(
-                data=self.data.astype(dtype), dtype=np.dtype(dtype)
-            )
-            return col
+            data = []
+        return string.StringColumn(data=data)
+
+    def as_datetime_column(self, dtype, **kwargs):
+        from cudf.dataframe import datetime
+        import cudf.bindings.typecast as typecast
+
+        return self.view(
+            datetime.DatetimeColumn,
+            dtype=dtype,
+            data=typecast.apply_cast(self, dtype=np.dtype(dtype)).data,
+        )
+
+    def as_numerical_column(self, dtype, **kwargs):
+        import cudf.bindings.typecast as typecast
+
+        return self.replace(
+            data=typecast.apply_cast(self, dtype).data, dtype=np.dtype(dtype)
+        )
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, sort_inds.data.mem)
+        col_keys = cpp_copying.apply_gather(self, sort_inds.data.mem)
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
@@ -199,17 +189,6 @@ class NumericalColumn(columnops.TypedColumnBase):
         else:
             return out
 
-    def _unique_segments(self):
-        """ Common code for unique, unique_count and value_counts"""
-        # make dense column
-        densecol = self.replace(data=self.to_dense_buffer(), mask=None)
-        # sort the column
-        sortcol, _ = densecol.sort_by_values(ascending=True)
-        # find segments
-        sortedvals = sortcol.to_gpu_array()
-        segs, begins = cudautils.find_segments(sortedvals)
-        return segs, sortedvals
-
     def unique(self, method="sort"):
         # method variable will indicate what algorithm to use to
         # calculate unique, not used right now
@@ -218,28 +197,8 @@ class NumericalColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(sortedvals, segs)
         return out_col
-
-    def unique_count(self, method="sort", dropna=True):
-        if method != "sort":
-            msg = "non sort based unique_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
-
-    def value_counts(self, method="sort"):
-        if method != "sort":
-            msg = "non sort based value_count() not implemented yet"
-            raise NotImplementedError(msg)
-        segs, sortedvals = self._unique_segments()
-        # Return both values and their counts
-        out_vals = cpp_copying.apply_gather_array(sortedvals, segs)
-        out2 = cudautils.value_count(segs, len(sortedvals))
-        out_counts = NumericalColumn(data=Buffer(out2), dtype=np.intp)
-        return out_vals, out_counts
 
     def all(self):
         return bool(self.min(dtype=np.bool_))
@@ -262,26 +221,20 @@ class NumericalColumn(columnops.TypedColumnBase):
         return cpp_reduce.apply_reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return cpp_reduce.apply_reduce('mean', self, dtype=dtype)
+        return cpp_reduce.apply_reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return cpp_reduce.apply_reduce('var', self, dtype=dtype, ddof=ddof)
+        return cpp_reduce.apply_reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return cpp_reduce.apply_reduce('std', self, dtype=dtype, ddof=ddof)
+        return cpp_reduce.apply_reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
         return cpp_reduce.apply_reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
-        mask = None
-        if self.has_null_mask:
-            mask = self.nullmask
-
-        rounded = cudautils.apply_round(self.data.mem, decimals)
-        return NumericalColumn(
-            data=Buffer(rounded), mask=mask, dtype=self.dtype
-        )
+        data = Buffer(cudautils.apply_round(self.data.mem, decimals))
+        return self.replace(data=data)
 
     def applymap(self, udf, out_dtype=None):
         """Apply a elemenwise function to transform the values in the Column.
@@ -394,28 +347,30 @@ class NumericalColumn(columnops.TypedColumnBase):
             elif value > self.max():
                 found = len(self) - 1
             else:
-                found = cudautils.find_last(
-                    self.data.mem, value, compare="lt"
-                )
+                found = cudautils.find_last(self.data.mem, value, compare="lt")
                 if found == -1:
                     raise ValueError("value not found")
         elif found == -1:
             raise ValueError("value not found")
         return found
 
+    def searchsorted(self, value, side="left"):
+        value_col = columnops.as_column(value)
+        return cpp_search.search_sorted(self, value_col, side)
+
     @property
     def is_monotonic_increasing(self):
-        if not hasattr(self, '_is_monotonic_increasing'):
+        if not hasattr(self, "_is_monotonic_increasing"):
             self._is_monotonic_increasing = numeric_column_binop(
-                self[1:], self[:-1], 'ge', 'bool'
+                self[1:], self[:-1], "ge", "bool"
             ).all()
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
-        if not hasattr(self, '_is_monotonic_decreasing'):
+        if not hasattr(self, "_is_monotonic_decreasing"):
             self._is_monotonic_decreasing = numeric_column_binop(
-                self[1:], self[:-1], 'le', 'bool'
+                self[1:], self[:-1], "le", "bool"
             ).all()
         return self._is_monotonic_decreasing
 
@@ -439,20 +394,25 @@ def numeric_column_binop(lhs, rhs, op, out_dtype, reflect=False):
         masked = lhs.has_null_mask or rhs.has_null_mask
         row_count = len(lhs)
 
+    is_op_comparison = op in ["lt", "gt", "le", "ge", "eq", "ne"]
+
     out = columnops.column_empty(row_count, dtype=out_dtype, masked=masked)
     # Call and fix null_count
     null_count = cpp_binops.apply_op(lhs, rhs, out, op)
 
-    out = out.replace(null_count=null_count)
+    if is_op_comparison:
+        out.fillna(op == "ne", inplace=True)
+    else:
+        out = out.replace(null_count=null_count)
+
     result = out.view(NumericalColumn, dtype=out_dtype, name=name)
     nvtx_range_pop()
     return result
 
 
-def numeric_column_unaryop(operand, op, out_dtype):
-    out = columnops.column_empty_like_same_mask(operand, dtype=out_dtype)
-    cpp_unaryops.apply_math_op(operand, out, op)
-    return out.view(NumericalColumn, dtype=out_dtype)
+def numeric_column_unaryop(operand, op):
+    out = cpp_unaryops.apply_unary_op(operand, op)
+    return out.view(NumericalColumn, dtype=out.dtype)
 
 
 def numeric_column_compare(lhs, rhs, op):
@@ -519,6 +479,3 @@ def digitize(column, bins, right=False):
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return cpp_sort.digitize(column, bin_col, right)
-
-
-register_distributed_serializer(NumericalColumn)

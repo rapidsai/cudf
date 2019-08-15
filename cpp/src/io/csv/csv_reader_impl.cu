@@ -55,7 +55,7 @@
 #include <cudf/cudf.h>
 #include <utilities/error_utils.hpp>
 #include <utilities/trie.cuh>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/cudf_utils.h> 
 
 #include <nvstrings/NVStrings.h>
@@ -65,6 +65,7 @@
 #include <io/comp/io_uncomp.h>
 
 #include <io/cuio_common.hpp>
+#include <io/utilities/datasource.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 using std::vector;
@@ -403,98 +404,56 @@ table reader::Impl::read()
 		opts.naValuesTrie = d_naTrie.data().get();
 	}
 
-	//-----------------------------------------------------------------------------
-	// memory map in the data
-	const void * map_data = nullptr;
-	size_t	map_size = 0;
-	size_t	map_offset = 0;
-	int fd = 0;
-	if (args_.input_data_form == gdf_input_type::FILE_PATH)
-	{
-		fd = open(args_.filepath_or_buffer.c_str(), O_RDONLY );
-		if (fd < 0) { close(fd); CUDF_FAIL("Error opening file"); }
+  size_t range_size = 0;
+  if (byte_range_size != 0) {
+    const auto num_columns = std::max(args_.names.size(), args_.dtype.size());
+    range_size = byte_range_size + calculateMaxRowSize(num_columns);
+  }
 
-		struct stat st{};
-		if (fstat(fd, &st)) { close(fd); CUDF_FAIL("cannot stat file"); }
-	
-		const auto file_size = st.st_size;
-		if (byte_range_offset > (size_t)file_size) {
-			close(fd);
-			CUDF_FAIL("The byte_range offset is larger than the file size");
-		}
+  auto source = [&] {
+    if (args_.input_data_form == FILE_PATH) {
+      return datasource::create(args_.filepath_or_buffer, byte_range_offset,
+                                range_size);
+    } else if (args_.input_data_form == HOST_BUFFER) {
+      return datasource::create(args_.filepath_or_buffer.c_str(),
+                                args_.filepath_or_buffer.size());
+    } else {
+      CUDF_FAIL("Invalid input type");
+    }
+  }();
 
-		// Can't map an empty file, will return an empty dataframe further down
-		if (file_size != 0) {
-			// Have to align map offset to page size
-			const auto page_size = sysconf(_SC_PAGESIZE);
-			map_offset = (byte_range_offset/page_size)*page_size;
+  // Return an empty dataframe if no data and no column metadata to process
+  if (source->empty() && (args_.names.empty() || args_.dtype.empty())) {
+    return table();
+  }
 
-			// Set to rest-of-the-file size, will reduce based on the byte range size
-			num_bytes = map_size = file_size - map_offset;
+  // Transfer source data to GPU
+  if (not source->empty()) {
+    const char *h_uncomp_data = nullptr;
+    size_t h_uncomp_size = 0;
 
-			// Include the page padding in the mapped size
-			const size_t page_padding = byte_range_offset - map_offset;
-			const size_t padded_byte_range_size = byte_range_size + page_padding;
+    num_bytes = (range_size != 0) ? range_size : source->size();
+    const auto buffer = source->get_buffer(byte_range_offset, num_bytes);
 
-			if (byte_range_size != 0 && padded_byte_range_size < map_size) {
-				// Need to make sure that w/ padding we don't overshoot the end of file
-				map_size = min(padded_byte_range_size + calculateMaxRowSize(std::max(args_.names.size(), args_.dtype.size())), map_size);
-			}
+    std::vector<char> h_uncomp_data_owner;
+    if (compression_type == "none") {
+      // Do not use the owner vector here to avoid extra copy
+      h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
+      h_uncomp_size = buffer->size();
+    } else {
+      CUDF_EXPECTS(
+          getUncompressedHostData(
+              reinterpret_cast<const char *>(buffer->data()), buffer->size(),
+              compression_type, h_uncomp_data_owner) == GDF_SUCCESS,
+          "Cannot decompress data");
+      h_uncomp_data = h_uncomp_data_owner.data();
+      h_uncomp_size = h_uncomp_data_owner.size();
+    }
 
-			// Ignore page padding for parsing purposes
-			num_bytes = map_size - page_padding;
-
-			map_data = mmap(0, map_size, PROT_READ, MAP_PRIVATE, fd, map_offset);
-			if (map_data == MAP_FAILED || map_size==0) { close(fd); CUDF_FAIL("Error mapping file"); }
-		}
-	}
-	else if (args_.input_data_form == gdf_input_type::HOST_BUFFER)
-	{
-		map_data = args_.filepath_or_buffer.c_str();
-		num_bytes = map_size = args_.filepath_or_buffer.size();
-	}
-	else { CUDF_FAIL("invalid input type"); }
-
-	// Return an empty dataframe if the input is empty and user did not specify the column names and types
-	if (num_bytes == 0 && (args_.names.empty() || args_.dtype.empty())){
-		return table();
-	}
-
-	const char* h_uncomp_data = nullptr;
-	size_t h_uncomp_size = 0;
-	// Used when the input data is compressed, to ensure the allocated uncompressed data is freed
-	vector<char> h_uncomp_data_owner;
-	// Skip if the input is empty and proceed to set the column names and types based on user's input
-	if(num_bytes != 0) {
-		if (compression_type == "none") {
-			// Do not use the owner vector here to avoid copying the whole file to the heap
-			h_uncomp_data = (const char*)map_data + (byte_range_offset - map_offset);
-			h_uncomp_size = num_bytes;
-		}
-		else {
-			CUDF_EXPECTS(getUncompressedHostData((const char *)map_data, map_size, compression_type,
-																					 h_uncomp_data_owner) == GDF_SUCCESS,
-									 "Input data decompression failed.\n");
-			h_uncomp_data = h_uncomp_data_owner.data();
-			h_uncomp_size = h_uncomp_data_owner.size();
-		}
-	
-		countRecordsAndQuotes(h_uncomp_data, h_uncomp_size);
-
-		setRecordStarts(h_uncomp_data, h_uncomp_size);
-
-		uploadDataToDevice(h_uncomp_data, h_uncomp_size);
-	}
-
-	//-----------------------------------------------------------------------------
-	//---  done with host data
-	if (args_.input_data_form == gdf_input_type::FILE_PATH)
-	{
-		close(fd);
-		if (map_data != nullptr) {
-			munmap((void*)map_data, map_size);
-		}
-	}
+    countRecordsAndQuotes(h_uncomp_data, h_uncomp_size);
+    setRecordStarts(h_uncomp_data, h_uncomp_size);
+    uploadDataToDevice(h_uncomp_data, h_uncomp_size);
+  }
 
 	//-----------------------------------------------------------------------------
 	//-- Populate the header

@@ -16,7 +16,7 @@
 
 
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -24,9 +24,9 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 
 #include <random>
 #include <utilities/cuda_utils.hpp>

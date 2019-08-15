@@ -48,7 +48,7 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
  * @brief Function that translates ORC datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
-    const orc::SchemaType &schema) {
+    const orc::SchemaType &schema, bool use_np_dtypes = true) {
   switch (schema.kind) {
     case orc::BOOLEAN:
       return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
@@ -72,10 +72,12 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::TIMESTAMP:
       // There isn't a GDF_TIMESTAMP -> np.dtype mapping so use np.datetime64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (use_np_dtypes) ? std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms})
+                             : std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_ms});
     case orc::DATE:
       // There isn't a GDF_DATE32 -> np.dtype mapping so use np.datetime64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (use_np_dtypes) ? std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms})
+                             : std::make_pair(GDF_DATE32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::DECIMAL:
       // There isn't an arbitrary-precision type in cuDF, so map as float
       static_assert(DECIMALS_AS_FLOAT64 == 1, "Missing decimal->float");
@@ -121,7 +123,7 @@ class OrcMetadata {
       std::pair<const orc::StripeInformation *, const orc::StripeFooter *>;
 
  public:
-  explicit OrcMetadata(DataSource *const src) : source(src) {
+  explicit OrcMetadata(datasource *const src) : source(src) {
     const auto len = source->size();
     const auto max_ps_size = std::min(len, static_cast<size_t>(256));
 
@@ -142,7 +144,7 @@ class OrcMetadata {
 
     // Read compressed filefooter section
     buffer = source->get_buffer(len - ps_length - 1 - ps.footerLength,
-                               ps.footerLength);
+                                ps.footerLength);
     size_t ff_length = 0;
     auto ff_data = decompressor->Decompress(buffer->data(), ps.footerLength, &ff_length);
     pb.init(ff_data, ff_length);
@@ -330,7 +332,7 @@ class OrcMetadata {
   std::unique_ptr<orc::OrcDecompressor> decompressor;
 
  private:
-  DataSource *const source;
+  datasource *const source;
 };
 
 /**
@@ -589,7 +591,7 @@ void reader::Impl::decode_stream_data(
   }
 }
 
-reader::Impl::Impl(std::unique_ptr<DataSource> source,
+reader::Impl::Impl(std::unique_ptr<datasource> source,
                    reader_options const &options)
     : source_(std::move(source)) {
 
@@ -601,6 +603,9 @@ reader::Impl::Impl(std::unique_ptr<DataSource> source,
 
   // Enable or disable attempt to use row index for parsing
   use_index_ = options.use_index;
+
+  // Enable or disable the conversion to numpy-compatible dtypes
+  use_np_dtypes_ = options.use_np_dtypes;
 }
 
 table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
@@ -617,7 +622,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
   std::vector<gdf_column_wrapper> columns;
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols_) {
-    auto dtype_info = to_dtype(md_->ff.types[col]);
+    auto dtype_info = to_dtype(md_->ff.types[col], use_np_dtypes_);
 
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
@@ -788,17 +793,15 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(filepath.c_str()), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(buffer, length), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(buffer, length),
+                                   options)) {}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(file), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
 
 table reader::read_all() { return impl_->read(0, -1, -1); }
 
