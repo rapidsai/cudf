@@ -144,7 +144,7 @@ class concurrent_unordered_map : public managed {
 
     auto deleter = [](Self* p) { p->destroy(); };
 
-    return std::unique_ptr<Self, decltype(deleter)>{
+    return std::unique_ptr<Self, std::function<void(Self*)>>{
         new Self(capacity, unused_element, unused_key, hf, eql, allocator),
         deleter};
   }
@@ -367,12 +367,9 @@ class concurrent_unordered_map : public managed {
   }
 
   concurrent_unordered_map() = default;
-
   concurrent_unordered_map(concurrent_unordered_map const&) = default;
-  concurrent_unordered_map& operator=(concurrent_unordered_map const&) =
-      default;
-
   concurrent_unordered_map(concurrent_unordered_map&&) = default;
+  concurrent_unordered_map& operator=(concurrent_unordered_map const&) = default;
   concurrent_unordered_map& operator=(concurrent_unordered_map&&) = default;
   ~concurrent_unordered_map() = default;
 
