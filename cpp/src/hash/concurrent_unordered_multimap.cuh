@@ -45,7 +45,7 @@ template <typename Key, typename Element, typename size_type, Key unused_key,
           typename Equality = equal_to<Key>,
           typename Allocator = managed_allocator<thrust::pair<Key, Element>>,
           bool count_collisions = false>
-class concurrent_unordered_multimap : public managed {
+class concurrent_unordered_multimap {
  public:
   using hasher = Hasher;
   using key_equal = Equality;
@@ -442,7 +442,6 @@ class concurrent_unordered_multimap : public managed {
                                     m_hashtbl_size * sizeof(value_type), dev_id,
                                     stream));
     }
-    CUDA_TRY(cudaMemPrefetchAsync(this, sizeof(*this), dev_id, stream));
     return GDF_SUCCESS;
   }
 
