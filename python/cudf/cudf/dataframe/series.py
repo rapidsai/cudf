@@ -133,7 +133,7 @@ class Series(object):
         return cls(s, nan_as_null=nan_as_null)
 
     @property
-    def values(self):
+    def values_host(self):
         if self.dtype == np.dtype("object"):
             return self.data.to_host()
         elif is_categorical_dtype(self.dtype):

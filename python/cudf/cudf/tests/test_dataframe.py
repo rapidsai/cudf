@@ -3045,11 +3045,11 @@ def test_create_dataframe_column():
         ["m", "a", "d", "v"],
     ],
 )
-def test_series_values_property(data):
+def test_series_values_host_property(data):
     pds = pd.Series(data)
     gds = Series(data)
 
-    np.testing.assert_array_equal(pds.values, gds.values)
+    np.testing.assert_array_equal(pds.values, gds.values_host)
 
 
 def test_value_counts():
