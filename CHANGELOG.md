@@ -11,6 +11,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 
 
 # cuDF 0.9.0 (Date TBD)
