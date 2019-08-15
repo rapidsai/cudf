@@ -21,7 +21,7 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/bit_util.cuh>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 
 #include <cudf/cudf.h>

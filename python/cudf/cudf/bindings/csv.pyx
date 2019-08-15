@@ -5,10 +5,12 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from .cudf_cpp cimport *
-from .cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+from cudf.bindings.cudf_cpp import *
 from cudf.bindings.csv cimport reader as csv_reader
 from cudf.bindings.csv cimport reader_options as csv_reader_options
+from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
@@ -211,41 +213,27 @@ cpdef cpp_read_csv(
     with nogil:
         reader = unique_ptr[csv_reader](new csv_reader(args))
 
-    cdef cudf_table table
+    cdef cudf_table c_out_table
     if byte_range is not None:
-        table = reader.get().read_byte_range(byte_range[0], byte_range[1])
+        c_out_table = reader.get().read_byte_range(
+            byte_range[0], byte_range[1]
+        )
     elif skipfooter != 0 or skiprows != 0 or nrows is not None:
-        table = reader.get().read_rows(
+        c_out_table = reader.get().read_rows(
             skiprows, skipfooter, nrows if nrows is not None else -1
         )
     else:
-        table = reader.get().read()
+        c_out_table = reader.get().read()
 
     # Extract parsed columns
 
-    outcols = []
-    new_names = []
-    cdef gdf_column* column
-    for i in range(table.num_columns()):
-        column = table.get_column(i)
-        data_mem, mask_mem = gdf_column_to_column_mem(column)
-        outcols.append(Column.from_mem_views(data_mem, mask_mem))
-        if names is not None and isinstance(names[0], (int)):
-            new_names.append(int(column.col_name.decode()))
-        else:
-            new_names.append(column.col_name.decode())
-        free(column.col_name)
-        free(column)
-
-    # Build dataframe
-    df = DataFrame()
-
-    for k, v in zip(new_names, outcols):
-        df[k] = v
+    # Build dataframe from parsed columns
+    cast_col_name_to_int = names is not None and isinstance(names[0], (int))
+    df = table_to_dataframe(&c_out_table, int_col_names=cast_col_name_to_int)
 
     # Set index if the index_col parameter is passed
     if index_col is not None and index_col is not False:
-        if isinstance(index_col, (int)):
+        if isinstance(index_col, int):
             df = df.set_index(df.columns[index_col])
         else:
             df = df.set_index(index_col)
@@ -274,6 +262,9 @@ cpdef cpp_write_csv(
 
     nvtx_range_push("CUDF_WRITE_CSV", "purple")
 
+    from cudf.dataframe.series import Series
+
+    cdef gdf_column* c_col
     cdef csv_write_arg csv_writer = csv_write_arg()
 
     path = str(os.path.expanduser(str(path))).encode()
@@ -294,9 +285,6 @@ cpdef cpp_write_csv(
     csv_writer.rows_per_chunk = rows_per_chunk if rows_per_chunk > 8 else 8
 
     cdef vector[gdf_column*] list_cols
-    # Variable for storing col name list that does not get garbage collected
-    # Allow setting colname during `column_view_from_column` without gc issues
-    col_names_encoded = []
 
     if columns is not None:
         if not isinstance(columns, list):
@@ -305,28 +293,23 @@ cpdef cpp_write_csv(
             if col_name not in cols:
                 raise NameError('column {!r} does not exist in DataFrame'
                                 .format(col_name))
-            check_gdf_compatibility(cols[col_name])
-            col_names_encoded.append(col_name.encode())
+            col = cols[col_name]._column
+            check_gdf_compatibility(col)
             # Workaround for string columns
-            if cols[col_name]._column.dtype.type == np.object_:
-                c_col = column_view_from_string_column(cols[col_name]._column,
-                                                       col_names_encoded[idx])
+            if col.dtype.type == np.object_:
+                c_col = column_view_from_string_column(col, col_name)
             else:
-                c_col = column_view_from_column(cols[col_name]._column,
-                                                col_names_encoded[idx])
+                c_col = column_view_from_column(col, col_name)
             list_cols.push_back(c_col)
     else:
         for idx, (col_name, col) in enumerate(cols.items()):
+            col = col._column
             check_gdf_compatibility(col)
-            col_names_encoded.append(col_name.encode())
             # Workaround for string columns
-            if col._column.dtype.type == np.object_:
-                c_col = column_view_from_string_column(col._column,
-                                                       col_names_encoded[idx])
+            if col.dtype.type == np.object_:
+                c_col = column_view_from_string_column(col, col_name)
             else:
-                c_col = column_view_from_column(
-                    col._column, col_names_encoded[idx]
-                )
+                c_col = column_view_from_column(col, col_name)
             list_cols.push_back(c_col)
 
     csv_writer.columns = list_cols.data()
@@ -339,7 +322,7 @@ cpdef cpp_write_csv(
     check_gdf_error(result)
 
     for c_col in list_cols:
-        free(c_col)
+        free_column(c_col)
 
     nvtx_range_pop()
 

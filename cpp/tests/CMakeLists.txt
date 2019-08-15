@@ -106,7 +106,8 @@ set(HASH_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_sum.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_avg.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_max.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_min.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_min.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/hash/single_column_multi_agg.cu")
 
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
@@ -146,6 +147,15 @@ set(LEGACY_BITMASK_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/legacy/bitmask_ops_test.cu")
 
 ConfigureTest(LEGACY_BITMASK_TEST "${LEGACY_BITMASK_TEST_SRC}")
+
+###################################################################################################
+# - nans_to_nulls tests ---------------------------------------------------------------------------
+
+set(NANS_TO_NULLS_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/nans_to_nulls_tests.cu")
+
+ConfigureTest(NANS_TO_NULLS_TEST "${NANS_TO_NULLS_TEST_SRC}")
+
 
 ###################################################################################################
 # - legacy bit_mask tests --------------------------------------------------------------------------------
@@ -387,7 +397,8 @@ ConfigureTest(MERGE_TEST "${MERGE_TEST_SRC}")
 # - stream compaction tests -----------------------------------------------------------------------
 
 set(STREAM_COMPACTION_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/apply_boolean_mask_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_nulls_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/drop_duplicates_tests.cu")
 
 ConfigureTest(STREAM_COMPACTION_TEST "${STREAM_COMPACTION_TEST_SRC}")
@@ -438,14 +449,6 @@ enable_testing()
 ###################################################################################################
 
 # only built if CMAKE_ENABLE_BENCHMARKS is set to ON
-
-###################################################################################################
-# - stream compaction benchmarks-------------------------------------------------------------------
-
-set(STREAM_COMPACTION_BENCH_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/stream_compaction/stream_compaction_bench.cu")
-
-ConfigureBench(STREAM_COMPACTION_BENCH "${STREAM_COMPACTION_BENCH_SRC}")
 
 ###################################################################################################
 # - iterator benchmarks-------------------------------------------------------------------

@@ -1,15 +1,15 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numbers
+import pickle
 import warnings
 from collections.abc import Sequence
 
 import numpy as np
 import pandas as pd
 
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
-from cudf.dataframe.index import Index, StringIndex, as_index
+from cudf.dataframe.index import Index, as_index
 from cudf.utils import cudautils
 
 
@@ -47,8 +47,6 @@ class MultiIndex(Index):
             self._source_data = kwargs["source_data"].reset_index(drop=True)
             self._codes = codes
             self._levels = levels
-            if names is None:
-                self.names = self._source_data.columns
             return
 
         # name setup
@@ -93,9 +91,7 @@ class MultiIndex(Index):
                 "codes and is inconsistent!"
             )
 
-        # converting levels to numpy array will produce a Float64Index
-        # (on empty levels)for levels mimicking the behavior of Pandas
-        self._levels = np.array([Series(level) for level in levels])
+        self._levels = [Series(level) for level in levels]
         self._validate_levels_and_codes(self._levels, self._codes)
 
         self._source_data = DataFrame()
@@ -104,6 +100,8 @@ class MultiIndex(Index):
             level = DataFrame({name: self._levels[i]})
             level = DataFrame(index=codes).join(level)
             self._source_data[name] = level[name].reset_index(drop=True)
+
+        self.names = [None] * len(self._levels) if names is None else names
 
     def _validate_levels_and_codes(self, levels, codes):
         if len(levels) != len(codes.columns):
@@ -128,7 +126,7 @@ class MultiIndex(Index):
     def copy(self, deep=True):
         mi = MultiIndex(source_data=self._source_data.copy(deep))
         if self._levels is not None:
-            mi._levels = np.array([s.copy(deep) for s in self._levels])
+            mi._levels = [s.copy(deep) for s in self._levels]
         if self._codes is not None:
             mi._codes = self._codes.copy(deep)
         if self.names is not None:
@@ -192,14 +190,11 @@ class MultiIndex(Index):
         from cudf import DataFrame
 
         codes = DataFrame()
-        # Note: This is an O(N^2) solution using gpu masking
-        # to compute new codes for the MultiIndex. There may be
-        # a faster solution that could be executed on gpu at the same
-        # time the groupby is calculated.
         for name in self._source_data.columns:
             code, cats = self._source_data[name].factorize()
             codes[name] = code.reset_index(drop=True).astype(np.int64)
-            levels.append(cats.reset_index(drop=True))
+            cats = cats.reset_index(drop=True)._copy_construct(name=None)
+            levels.append(cats)
 
         self._levels = levels
         self._codes = codes
@@ -371,7 +366,7 @@ class MultiIndex(Index):
             for code in result.columns.codes[result.columns.codes.columns[0]]:
                 columns.append(result.columns.levels[0][code])
             name = result.columns.names[0]
-            result.columns = StringIndex(columns, name=name)
+            result.columns = as_index(columns, name=name)
         return result
 
     def _split_tuples(self, tuples):
@@ -439,8 +434,38 @@ class MultiIndex(Index):
             start, stop, step = indices.indices(len(self))
             indices = cudautils.arange(start, stop, step)
         result = MultiIndex(source_data=self._source_data.take(indices))
+        if self._codes is not None:
+            result._codes = self._codes.take(indices)
+        if self._levels is not None:
+            result._levels = self._levels
         result.names = self.names
         return result
+
+    def serialize(self):
+        """Serialize into pickle format suitable for file storage or network
+        transmission.
+        """
+        header = {}
+        header["type"] = pickle.dumps(type(self))
+        header["names"] = pickle.dumps(self.names)
+
+        header["source_data"], frames = self._source_data.serialize()
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        """Convert from pickle format into Index
+        """
+        names = pickle.loads(header["names"])
+
+        source_data_typ = pickle.loads(header["source_data"]["type"])
+        source_data = source_data_typ.deserialize(
+            header["source_data"], frames
+        )
+
+        names = pickle.loads(header["names"])
+        return MultiIndex(names=names, source_data=source_data)
 
     def __iter__(self):
         self.n = 0
@@ -455,6 +480,7 @@ class MultiIndex(Index):
             raise StopIteration
 
     def __getitem__(self, index):
+        # TODO: This should be a take of the _source_data only
         match = self.take(index)
         if isinstance(index, slice):
             return match
@@ -539,10 +565,7 @@ class MultiIndex(Index):
 
     @classmethod
     def from_frame(cls, dataframe, names=None):
-        # Use Pandas for handling Python host objects
-        pdi = pd.MultiIndex.from_frame(dataframe.to_pandas(), names=names)
-        result = cls.from_pandas(pdi)
-        return result
+        return cls(source_data=dataframe, names=names)
 
     @classmethod
     def from_product(cls, arrays, names=None):
@@ -555,18 +578,25 @@ class MultiIndex(Index):
         pandas_codes = []
         for code in self.codes.columns:
             pandas_codes.append(self.codes[code].to_array())
+
+        # We do two things here to mimic Pandas behavior:
+        # 1. as_index() on each level, so DatetimeColumn becomes DatetimeIndex
+        # 2. convert levels to numpy array so empty levels become Float64Index
+        levels = np.array(
+            [as_index(level).to_pandas() for level in self.levels]
+        )
+
         # Backwards compatibility:
         # Construct a dummy MultiIndex and check for the codes attr.
         # This indicates that it is pandas >= 0.24
         # If no codes attr is present it is pandas <= 0.23
         if hasattr(pd.MultiIndex([[]], [[]]), "codes"):
-            return pd.MultiIndex(
-                levels=self.levels, codes=pandas_codes, names=self.names
-            )
+            pandas_mi = pd.MultiIndex(levels=levels, codes=pandas_codes)
         else:
-            return pd.MultiIndex(
-                levels=self.levels, labels=pandas_codes, names=self.names
-            )
+            pandas_mi = pd.MultiIndex(levels=levels, labels=pandas_codes)
+        if self.names is not None:
+            pandas_mi.names = self.names
+        return pandas_mi
 
     @classmethod
     def from_pandas(cls, multiindex):
@@ -627,6 +657,3 @@ class MultiIndex(Index):
                 ascending=True
             ).is_monotonic_decreasing
         return self._is_monotonic_decreasing
-
-
-register_distributed_serializer(MultiIndex)

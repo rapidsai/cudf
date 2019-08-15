@@ -21,15 +21,14 @@ requirements:
     - python
     - cython >=0.29,<0.30
     - setuptools
-    - numba >=0.41,<0.45
+    - numba >=0.45.1
     - dlpack
     - pyarrow 0.14.1.*
     - libcudf {{ version }}
-    - dlpack
   run:
     - python
     - pandas>=0.24.2,<0.25
-    - numba >=0.41,<0.45
+    - numba >=0.45.1
     - pyarrow 0.14.1.*
     - fastavro >=0.22.0
     - rmm {{ minor_version }}.*

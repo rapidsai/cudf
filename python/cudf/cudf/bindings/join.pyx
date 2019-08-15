@@ -160,7 +160,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     cdef uintptr_t valid_ptr
 
     for idx in range(result_cols.size()):
-        col_dtype = gdf_to_np_dtype(result_cols[idx].dtype)
+        col_dtype = np_dtype_from_gdf_column(result_cols[idx])
         if col_dtype == np.object_:
             nvcat_ptr = <uintptr_t> result_cols[idx].dtype_info.category
             if nvcat_ptr:
@@ -230,10 +230,10 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     free(context)
     for c_col in list_lhs:
-        free(c_col)
+        free_column(c_col)
     for c_col in list_rhs:
-        free(c_col)
+        free_column(c_col)
     for c_col in result_cols:
-        free(c_col)
+        free_column(c_col)
 
     return list(zip(res, valids, result_col_names))

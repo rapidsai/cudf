@@ -44,7 +44,9 @@ def timeseries(
     2000-01-01 00:00:04   998   Ursula  0.684902 -0.463278
     """
 
-    index = pd.DatetimeIndex(start=start, end=end, freq=freq, name="timestamp")
+    index = pd.DatetimeIndex(
+        pd.date_range(start, end, freq=freq, name="timestamp")
+    )
     state = np.random.RandomState(seed)
     columns = dict(
         (k, make[dt](len(index), state)) for k, dt in dtypes.items()

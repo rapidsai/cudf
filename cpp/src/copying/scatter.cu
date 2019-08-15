@@ -25,8 +25,8 @@
 #include <cudf/types.h>
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 
@@ -199,6 +199,7 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
   }
 
   detail::scatter(&source, scatter_map, &output);
+  nvcategory_gather_table(output, output);
 
   return output;
 

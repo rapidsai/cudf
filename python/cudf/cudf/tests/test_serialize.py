@@ -1,7 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-import functools
-
 import msgpack
 import numpy as np
 import pandas as pd
@@ -10,13 +8,6 @@ import pytest
 import cudf
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq
-
-deserialize = pytest.importorskip("distributed.protocol").deserialize
-serialize = pytest.importorskip("distributed.protocol").serialize
-
-
-cuda_serialize = functools.partial(serialize, serializers=["cuda"])
-cuda_deserialize = functools.partial(deserialize, deserializers=["cuda"])
 
 
 @pytest.mark.parametrize(
@@ -52,7 +43,7 @@ def test_serialize(df):
     a = df()
     if "cudf" not in type(a).__module__:
         a = cudf.from_pandas(a)
-    header, frames = cuda_serialize(a)
+    header, frames = a.serialize()
     msgpack.dumps(header)  # ensure that header is msgpack serializable
     ndevice = 0
     for frame in frames:
@@ -65,7 +56,8 @@ def test_serialize(df):
     else:
         assert ndevice > 0
 
-    b = cuda_deserialize(header, frames)
+    typ = type(a)
+    b = typ.deserialize(header, frames)
     assert_eq(a, b)
 
 
@@ -76,7 +68,7 @@ def test_serialize_dataframe():
     df["c"] = pd.Categorical(
         ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
     )
-    outdf = cuda_deserialize(*cuda_serialize(df))
+    outdf = cudf.DataFrame.deserialize(*df.serialize())
     assert_eq(df, outdf)
 
 
@@ -88,26 +80,45 @@ def test_serialize_dataframe_with_index():
         ["a", "b", "c", "_", "_"] * 20, categories=["a", "b", "c"]
     )
     df = df.sort_values("b")
-    outdf = cuda_deserialize(*cuda_serialize(df))
+    outdf = cudf.DataFrame.deserialize(*df.serialize())
     assert_eq(df, outdf)
 
 
 def test_serialize_series():
     sr = cudf.Series(np.arange(100))
-    outsr = cuda_deserialize(*cuda_serialize(sr))
+    outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
 
 def test_serialize_range_index():
     index = cudf.dataframe.index.RangeIndex(10, 20)
-    outindex = cuda_deserialize(*cuda_serialize(index))
+    outindex = cudf.dataframe.index.Index.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
 def test_serialize_generic_index():
     index = cudf.dataframe.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cuda_deserialize(*cuda_serialize(index))
+    outindex = cudf.dataframe.index.GenericIndex.deserialize(
+        *index.serialize()
+    )
     assert_eq(index, outindex)
+
+
+def test_serialize_multi_index():
+    pdf = pd.DataFrame(
+        {
+            "a": [4, 17, 4, 9, 5],
+            "b": [1, 4, 4, 3, 2],
+            "x": np.random.normal(size=5),
+        }
+    )
+    gdf = cudf.DataFrame.from_pandas(pdf)
+    gdg = gdf.groupby(["a", "b"]).sum()
+    multiindex = gdg.index
+    outindex = cudf.dataframe.multiindex.MultiIndex.deserialize(
+        *multiindex.serialize()
+    )
+    assert_eq(multiindex, outindex)
 
 
 def test_serialize_masked_series():
@@ -118,16 +129,25 @@ def test_serialize_masked_series():
     null_count = utils.count_zero(bitmask)
     assert null_count >= 0
     sr = cudf.Series.from_masked_array(data, mask, null_count=null_count)
-    outsr = cuda_deserialize(*cuda_serialize(sr))
+    outsr = cudf.Series.deserialize(*sr.serialize())
     assert_eq(sr, outsr)
 
 
-def test_serialize_groupby():
+def test_serialize_groupby_df():
     df = cudf.DataFrame()
     df["key"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
     gb = df.groupby("key")
-    outgb = deserialize(*serialize(gb))
+    outgb = gb.deserialize(*gb.serialize())
+    got = gb.mean()
+    expect = outgb.mean()
+    assert_eq(got, expect)
+
+
+def test_serialize_groupby_sr():
+    sr = cudf.Series(np.random.randint(0, 20, 100))
+    gb = sr.groupby(sr // 2)
+    outgb = gb.deserialize(*gb.serialize())
     got = gb.mean()
     expect = outgb.mean()
     assert_eq(got, expect)
@@ -142,7 +162,7 @@ def test_serialize_datetime():
     df["timestamp"] = ts
     gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
-    recreated = cuda_deserialize(*cuda_serialize(gdf))
+    recreated = cudf.DataFrame.deserialize(*gdf.serialize())
     # Check
     assert_eq(recreated, df)
 
@@ -156,17 +176,34 @@ def test_serialize_string():
     df["timestamp"] = str_data
     gdf = cudf.DataFrame.from_pandas(df)
     # (De)serialize roundtrip
-    recreated = cuda_deserialize(*cuda_serialize(gdf))
+    recreated = cudf.DataFrame.deserialize(*gdf.serialize())
     # Check
     assert_eq(recreated, df)
 
 
-def test_serialize_empty_string():
-    pd_series = pd.Series([], dtype="str")
-    gd_series = cudf.Series([], dtype="str")
+@pytest.mark.parametrize(
+    "frames",
+    [
+        (cudf.Series([], dtype="str"), pd.Series([], dtype="str")),
+        (cudf.DataFrame([]), pd.DataFrame([])),
+        (cudf.DataFrame([1]).head(0), pd.DataFrame([1]).head(0)),
+        (cudf.DataFrame({"a": []}), pd.DataFrame({"a": []})),
+        (
+            cudf.DataFrame({"a": ["a"]}).head(0),
+            pd.DataFrame({"a": ["a"]}).head(0),
+        ),
+        (
+            cudf.DataFrame({"a": [1.0]}).head(0),
+            pd.DataFrame({"a": [1.0]}).head(0),
+        ),
+    ],
+)
+def test_serialize_empty(frames):
+    gdf, pdf = frames
 
-    recreated = cuda_deserialize(*cuda_serialize(gd_series))
-    assert_eq(recreated, pd_series)
+    typ = type(gdf)
+    res = typ.deserialize(*gdf.serialize())
+    assert_eq(res, gdf)
 
 
 def test_serialize_all_null_string():
@@ -174,5 +211,5 @@ def test_serialize_all_null_string():
     pd_series = pd.Series(data, dtype="str")
     gd_series = cudf.Series(data, dtype="str")
 
-    recreated = cuda_deserialize(*cuda_serialize(gd_series))
+    recreated = cudf.Series.deserialize(*gd_series.serialize())
     assert_eq(recreated, pd_series)
