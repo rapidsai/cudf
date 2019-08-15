@@ -3051,6 +3051,32 @@ def test_series_values_host_property(data):
 
     np.testing.assert_array_equal(pds.values, gds.values_host)
 
+    
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pd.Categorical(["a", "b", "c"]),
+        ["m", "a", "d", "v"],
+    ],
+)
+def test_series_values_property(data):
+    try:
+        import cupy
+        _have_cupy = True
+    except ImportError:
+        _have_cupy = False
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed")
+
+    pds = pd.Series(data)
+    gds = Series(data)
+
+    gds_vals = gds.values
+    assert(isinstance(gds_vals, cupy.ndarray))
+    np.testing.assert_array_equal(gds_vals.get(), pds.values)
 
 def test_value_counts():
     pdf = pd.DataFrame(
