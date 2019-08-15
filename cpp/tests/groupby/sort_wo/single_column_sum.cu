@@ -1,3 +1,4 @@
+
 /*
  * Copyright (c) 2019, NVIDIA CORPORATION.
  *
@@ -19,7 +20,7 @@
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <utilities/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
 #include "type_info.hpp"
 
@@ -28,8 +29,8 @@
 
 #include <random>
 
-static constexpr cudf::groupby::operators op{
-    cudf::groupby::operators::SUM};
+static constexpr cudf::groupby::sort::operators op{
+    cudf::groupby::sort::operators::SUM};
 
 template <typename KV>
 struct SingleColumnSum : public GdfTest {
@@ -49,11 +50,24 @@ struct KV {
 using TestingTypes =
     ::testing::Types<KV<int8_t, int8_t>, KV<int32_t, int32_t>,
                      KV<int64_t, int64_t>, KV<int32_t, float>,
-                     KV<int32_t, double>>;
-
-// TODO: tests for cudf::bool8
+                     KV<int32_t, double>, KV<cudf::category, int32_t>,
+                     KV<cudf::date32, int8_t>, KV<cudf::date64, double>>;;
 
 TYPED_TEST_CASE(SingleColumnSum, TestingTypes);
+
+
+TYPED_TEST(SingleColumnSum, OneGroupZeroKeys) {
+  constexpr int size{0};
+  using Key = typename SingleColumnSum<TypeParam>::KeyType;
+  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  Key key{0};
+  ResultValue sum{((size - 1) * size) / 2};
+  cudf::test::single_column_groupby_test<op>(
+      column_wrapper<Key>(size, [key](auto index) { return key; }),
+      column_wrapper<Value>(size, [](auto index) { return Value(index); }),
+      column_wrapper<Key>({key}), column_wrapper<ResultValue>({sum}));
+}
 
 TYPED_TEST(SingleColumnSum, OneGroupNoNulls) {
   constexpr int size{10};
@@ -347,4 +361,7 @@ TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenValuesNull) {
       column_wrapper<ResultValue>(
           {R(-1), R(2), R(-1), R(6), R(-1), R(10), R(-1), R(14)},
           [](auto index) { return index % 2; }));
+
+
+  cudaDeviceReset();
 }
