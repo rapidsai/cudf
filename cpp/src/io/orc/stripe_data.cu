@@ -1901,7 +1901,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             {
                 if (s->chunk.type_kind == TIMESTAMP)
                 {
-                    s->top.data.buffered_count = s->top.data.max_vals - (numvals + vals_skipped);
+                    s->top.data.buffered_count = s->top.data.max_vals - numvals;
                 }
                 s->top.data.max_vals = numvals;
             }
@@ -2013,7 +2013,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             // Buffer secondary stream values
             if (s->chunk.type_kind == TIMESTAMP)
             {
-                int buffer_pos = s->top.data.max_vals + vals_skipped;
+                int buffer_pos = s->top.data.max_vals;
                 if (t >= buffer_pos && t < buffer_pos + s->top.data.buffered_count)
                 {
                     s->vals.u32[t - buffer_pos] = secondary_val;
