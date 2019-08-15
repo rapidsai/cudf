@@ -20,7 +20,6 @@
 #include <utilities/device_atomics.cuh>
 #include "hash_functions.cuh"
 #include "helper_functions.cuh"
-#include "managed.cuh"
 #include "managed_allocator.cuh"
 
 #include <thrust/pair.h>
@@ -101,7 +100,7 @@ union pair_packer<pair_type, std::enable_if_t<is_packable<pair_type>()>> {
 template <typename Key, typename Element, typename Hasher = default_hash<Key>,
           typename Equality = equal_to<Key>,
           typename Allocator = legacy_allocator<thrust::pair<Key, Element>>>
-class concurrent_unordered_map : public managed {
+class concurrent_unordered_map {
  public:
   using size_type = size_t;
   using hasher = Hasher;
@@ -369,7 +368,8 @@ class concurrent_unordered_map : public managed {
   concurrent_unordered_map() = default;
   concurrent_unordered_map(concurrent_unordered_map const&) = default;
   concurrent_unordered_map(concurrent_unordered_map&&) = default;
-  concurrent_unordered_map& operator=(concurrent_unordered_map const&) = default;
+  concurrent_unordered_map& operator=(concurrent_unordered_map const&) =
+      default;
   concurrent_unordered_map& operator=(concurrent_unordered_map&&) = default;
   ~concurrent_unordered_map() = default;
 
