@@ -167,10 +167,10 @@ gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
                           gdf_size_type num_columns) {
   std::vector<gdf_valid_type*> h_masks(num_columns);
   std::vector<gdf_size_type> h_column_lengths(num_columns);
-  std::generate(h_masks.begin(), h_masks.end(),
-                [&, n = 0] () mutable { return columns_to_concat[n++]->valid; });
-  std::generate(h_column_lengths.begin(), h_column_lengths.end(), 
-                [&, n = 0] () mutable { return columns_to_concat[n++]->size; });
+  std::transform(columns_to_concat, columns_to_concat + num_columns,
+                 h_masks.begin(), [](auto col) { return col->valid; });
+  std::transform(columns_to_concat, columns_to_concat + num_columns,
+                h_column_lengths.begin(), [](auto col) { return col->size; });
 
   rmm::device_vector<gdf_valid_type*> d_masks(h_masks);
   rmm::device_vector<gdf_size_type> d_column_lengths(h_column_lengths);
