@@ -30,20 +30,10 @@
 #include <type_traits>
 
 namespace {
-template <std::size_t N>
-struct packed {
-  using type = void;
-};
-template <>
-struct packed<sizeof(uint64_t)> {
-  using type = uint64_t;
-};
-template <>
-struct packed<sizeof(uint32_t)> {
-  using type = uint32_t;
-};
-template <typename pair_type>
-using packed_t = typename packed<sizeof(pair_type)>::type;
+template <std::size_t N> struct packed { using type = void; };
+template <> struct packed<sizeof(uint64_t)> { using type = uint64_t; };
+template <> struct packed<sizeof(uint32_t)> { using type = uint32_t; };
+template <typename pair_type> using packed_t = typename packed<sizeof(pair_type)>::type; 
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates if a pair type can be packed.
