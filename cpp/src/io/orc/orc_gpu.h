@@ -127,6 +127,7 @@ struct EncChunk
     const void *column_data_base;               // base ptr of input column data
     uint32_t start_row;                         // start row of this chunk
     uint32_t num_rows;                          // number of rows in this chunk
+    uint32_t valid_rows;                        // max number of valid rows
     uint8_t encoding_kind;                      // column encoding kind (orc::ColumnEncodingKind)
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length
