@@ -30,7 +30,7 @@ struct DeviceMax;
 struct DeviceSum;
 
 namespace groupby {
-namespace hash {
+namespace common { 
 /**---------------------------------------------------------------------------*
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
@@ -98,21 +98,20 @@ struct target_type_mapper {
   gdf_dtype operator()(operators op) const noexcept {
     switch (op) {
       case MIN:
-        return gdf_dtype_of<target_type_t<SourceType, MIN>>();
+        return gdf_dtype_of<target_type_t<SourceType, operators::MIN>>();
       case MAX:
-        return gdf_dtype_of<target_type_t<SourceType, MAX>>();
+        return gdf_dtype_of<target_type_t<SourceType, operators::MAX>>();
       case SUM:
-        return gdf_dtype_of<target_type_t<SourceType, SUM>>();
+        return gdf_dtype_of<target_type_t<SourceType, operators::SUM>>();
       case COUNT:
-        return gdf_dtype_of<target_type_t<SourceType, COUNT>>();
+        return gdf_dtype_of<target_type_t<SourceType, operators::COUNT>>();
       default:
         return GDF_invalid;
     }
   }
 };
 
-
-}  // namespace hash
+}  // namespace common
 }  // namespace groupby
 }  // namespace cudf
 

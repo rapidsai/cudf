@@ -23,7 +23,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "type_info.hpp"
+#include "../common/type_info.hpp"
 
 #include <rmm/rmm.h>
 #include <algorithm>
@@ -34,7 +34,7 @@
 
 namespace cudf {
 namespace groupby {
-namespace hash {
+namespace common {
 
 std::vector<SimpleAggRequestCounter> compound_to_simple(
     std::vector<AggRequestType> const& compound_requests) {
@@ -191,6 +191,6 @@ table compute_original_requests(
 
   return cudf::table{final_value_columns};
 }
-}  // namespace hash
+}  // namespace common
 }  // namespace groupby
 }  // namespace cudf

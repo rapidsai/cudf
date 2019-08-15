@@ -320,8 +320,9 @@ add_library(cudf
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
+            src/groupby/sort/groupby.cu
             src/groupby/groupby_without_aggregation.cu
-            src/groupby/hash/aggregation_requests.cpp
+            src/groupby/common/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu

@@ -28,8 +28,8 @@
 
 #include <random>
 
-static constexpr cudf::groupby::hash::operators op{
-    cudf::groupby::hash::operators::COUNT};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::COUNT};
 
 template <typename T>
 struct SingleColumnCount : public GdfTest {

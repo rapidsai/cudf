@@ -43,8 +43,8 @@ auto constexpr last_even_index(gdf_size_type size) {
 }
 }  // namespace
 
-static constexpr cudf::groupby::hash::operators op{
-    cudf::groupby::hash::operators::MAX};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::MAX};
 
 template <typename K, typename V>
 struct KV {

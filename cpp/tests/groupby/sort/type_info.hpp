@@ -26,7 +26,6 @@ struct DeviceMax;
 struct DeviceSum;
 
 namespace test {
-using namespace cudf::groupby::hash;
 using namespace cudf::groupby;
 
 /**---------------------------------------------------------------------------*

@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#ifndef _SINGLE_COLUMN_GROUPBY_TEST_CUH
-#define _SINGLE_COLUMN_GROUPBY_TEST_CUH
+#ifndef _SORT_SINGLE_COLUMN_GROUPBY_TEST_CUH
+#define _SORT_SINGLE_COLUMN_GROUPBY_TEST_CUH
 
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
@@ -53,6 +53,7 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys,
   gdf_column_view(&gdf_sorted_indices, sorted_indices.data().get(), nullptr,
                   sorted_indices.size(), GDF_INT32);
   gdf_context context;
+  context.flag_groupby_include_nulls = true; // for sql
   context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
   gdf_order_by(keys.begin(), nullptr, keys.num_columns(), &gdf_sorted_indices,
                &context);
@@ -75,6 +76,12 @@ struct column_equality {
     std::unique_ptr<column_wrapper<T>> rhs_col;
     lhs_col.reset(new column_wrapper<T>(lhs));
     rhs_col.reset(new column_wrapper<T>(rhs));
+    printf("lhs: %p,%d\n", lhs.valid, lhs.null_count);
+    print_gdf_column(&lhs);
+    printf("rhs: %p,%d\n", rhs.valid, rhs.null_count);
+    print_gdf_column(&rhs);
+    printf("\n");
+    
     expect_columns_are_equal(*lhs_col, *rhs_col);
     return true;
   }
@@ -113,9 +120,15 @@ void single_column_groupby_test(column_wrapper<Key> keys,
                                 column_wrapper<Key> expected_keys,
                                 column_wrapper<ResultValue> expected_values) {
   using namespace cudf::test;
-  using namespace cudf::groupby::hash;
-  using namespace cudf::groupby;
+  using namespace cudf::groupby::sort;
 
+  std::cout << "keys: \n";
+  keys.print();
+
+
+  std::cout << "values: \n";
+  values.print();
+  
   static_assert(std::is_same<ResultValue, expected_result_t<Value, op>>::value,
                 "Incorrect type for expected_values.");
   ASSERT_EQ(keys.size(), values.size())
@@ -126,10 +139,21 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   cudf::table input_keys{keys.get()};
   cudf::table input_values{values.get()};
 
+  std::cout << "input_keys: \n";
+  print_gdf_column(input_keys.get_column(0));
+
+  std::cout << "input_values: \n";
+  print_gdf_column(input_values.get_column(0));
+  if (input_values.get_column(0)->valid)
+    print_valid_data(input_values.get_column(0)->valid, input_values.get_column(0)->size);
+
   cudf::table actual_keys_table;
   cudf::table actual_values_table;
+
+  std::cout << "groupby -->\n";
   std::tie(actual_keys_table, actual_values_table) =
-      cudf::groupby::hash::groupby(input_keys, input_values, {op});
+      cudf::groupby::sort::groupby(input_keys, input_values, {op});
+  std::cout << "<-- groupby \n";
 
   EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
@@ -143,43 +167,23 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   std::tie(sorted_expected_keys, sorted_expected_values) =
       detail::sort_by_key({expected_keys.get()}, {expected_values.get()});
 
+  // sorted_actual_keys
+  std::cout << "gdf output: \n";
+
+  print_gdf_column(actual_keys_table.get_column(0));
+  print_gdf_column(actual_values_table.get_column(0));
+
+  std::cout << "expected output: \n";
+ 
+  print_gdf_column(sorted_expected_keys.get_column(0));
+  print_gdf_column(sorted_expected_values.get_column(0));
+
+  // sorted_actual_values
+
+  printf("output keys\n");  
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
                                                        sorted_expected_keys));
-  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_values,
-                                                       sorted_expected_values));
-
-  detail::destroy_table(&sorted_actual_keys);
-  detail::destroy_table(&sorted_actual_values);
-  detail::destroy_table(&sorted_expected_keys);
-  detail::destroy_table(&sorted_expected_values);
-}
-
-inline void multi_column_groupby_test(
-    cudf::table const& keys, cudf::table const& values,
-    std::vector<cudf::groupby::operators> const& ops,
-    cudf::table const& expected_keys, cudf::table const& expected_values) {
-  using namespace cudf::test;
-  using namespace cudf::groupby::hash;
-
-  cudf::table actual_keys_table;
-  cudf::table actual_values_table;
-  std::tie(actual_keys_table, actual_values_table) =
-      cudf::groupby::hash::groupby(keys, values, ops);
-
-  EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
-
-  cudf::table sorted_actual_keys;
-  cudf::table sorted_actual_values;
-  std::tie(sorted_actual_keys, sorted_actual_values) =
-      detail::sort_by_key(actual_keys_table, actual_values_table);
-
-  cudf::table sorted_expected_keys;
-  cudf::table sorted_expected_values;
-  std::tie(sorted_expected_keys, sorted_expected_values) =
-      detail::sort_by_key(expected_keys, expected_values);
-
-  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
-                                                       sorted_expected_keys));
+  printf("output values\n");                                                       
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_values,
                                                        sorted_expected_values));
 

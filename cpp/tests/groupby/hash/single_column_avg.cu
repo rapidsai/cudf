@@ -28,8 +28,8 @@
 
 #include <random>
 
-static constexpr cudf::groupby::hash::operators op{
-    cudf::groupby::hash::operators::MEAN};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::MEAN};
 
 template <typename KV>
 struct SingleColumnAvg : public GdfTest {

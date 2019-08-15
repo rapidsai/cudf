@@ -29,6 +29,7 @@
 #include <random>
 
 using namespace cudf::groupby::hash;
+using namespace cudf::groupby;
 
 template <typename KV>
 struct SingleColumnMultiAgg : public GdfTest {

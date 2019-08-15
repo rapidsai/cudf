@@ -25,7 +25,7 @@
 
 namespace cudf {
 namespace groupby {
-namespace hash {
+namespace common {
 
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
@@ -100,7 +100,7 @@ table compute_original_requests(
     std::vector<SimpleAggRequestCounter> const& simple_requests, table simple_outputs,
     cudaStream_t stream);
 
-}  // namespace hash
+}  // namespace common
 }  // namespace groupby
 }  // namespace cudf
 

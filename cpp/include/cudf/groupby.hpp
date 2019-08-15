@@ -74,6 +74,12 @@ struct Options {
   bool const ignore_null_keys{true};
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Supported aggregation operations
+ *
+ *---------------------------------------------------------------------------**/
+enum operators { SUM, MIN, MAX, COUNT, MEAN };
+
 namespace hash {
 
 /**---------------------------------------------------------------------------*
@@ -82,12 +88,7 @@ namespace hash {
 struct Options : groupby::Options {
   Options(bool _ignore_null_keys = true)
       : groupby::Options(_ignore_null_keys) {}
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Supported aggregation operations
- *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN };
+}; 
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a hash-based implementation
@@ -122,13 +123,10 @@ namespace sort {
  * @brief  Options unique to the sort-based groupby
  *
  *---------------------------------------------------------------------------**/
-struct Options : groupby::Options {};
-
-/**---------------------------------------------------------------------------*
- * @brief Supported aggregation operations
- *
- *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT };
+struct Options : groupby::Options {
+  Options(bool _ignore_null_keys = true)
+      : groupby::Options(_ignore_null_keys) {}
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a sort-based implementation
@@ -153,7 +151,7 @@ enum operators { SUM, MIN, MAX, COUNT };
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
-                                            Options options);
+                                            Options options = Options{});
 }  // namespace sort
 }  // namespace groupby
 }  // namespace cudf

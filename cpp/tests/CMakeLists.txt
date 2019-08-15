@@ -111,6 +111,13 @@ set(HASH_GROUPBY_TEST_SRC
 
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
+set(SORT_GROUPBY_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/single_column_count.cu"
+)
+
+ConfigureTest(SORT_GROUPBY_TEST "${SORT_GROUPBY_TEST_SRC}")
+
 set(GROUPBY_WO_AGG_TEST_SRC 
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
 
