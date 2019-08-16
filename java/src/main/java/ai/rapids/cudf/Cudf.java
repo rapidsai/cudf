@@ -74,17 +74,48 @@ class Cudf {
                                            int op, int dtype);
 
 
-  static long filter(ColumnVector input, ColumnVector mask) {
-    return filter(input.getNativeCudfColumnAddress(), mask.getNativeCudfColumnAddress());
+  /**
+   * Replaces nulls on the input ColumnVector with the value of Scalar.
+   *
+   * The types of the input ColumnVector and Scalar must match, else an error is
+   * thrown.
+   *
+   * If the Scalar is null, this function will throw an error, as replacements
+   * must be valid in cudf::replace_nulls.
+   *
+   * @param input - ColumnVector input
+   * @param replacement - Scalar to replace nulls with
+   * @return - Native address of cudf.ColumnVector result
+   */
+  static long replaceNulls(ColumnVector input, Scalar replacement) {
+    return replaceNulls(input.getNativeCudfColumnAddress(),
+        replacement.intTypeStorage,
+        replacement.floatTypeStorage,
+        replacement.doubleTypeStorage,
+        replacement.isValid,
+        replacement.type.nativeId);
   }
 
-  private static native long filter(long input, long mask);
+  private static native long replaceNulls(long input, long rIntValues, float rFValue,
+                                          double rDValue, boolean rIsValid, int rDtype);
 
-  static Scalar reduction(ColumnVector v, ReductionOp op, DType outType) {
-    return reduction(v.getNativeCudfColumnAddress(), op.nativeId, outType.nativeId);
+  static void fill(ColumnVector input, Scalar value) {
+    fill(input.getNativeCudfColumnAddress(),
+        value.intTypeStorage,
+        value.floatTypeStorage,
+        value.doubleTypeStorage,
+        value.isValid,
+        value.type.nativeId);
   }
 
-  private static native Scalar reduction(long v, int op, int dtype);
+  private static native void fill(long input, long sIntValues, float sFValue,
+                                  double sDValue, boolean sIsValid, int sDtype);
+
+  static Scalar reduce(ColumnVector v, ReductionOp op, DType outType) {
+    return reduce(v.getNativeCudfColumnAddress(), op.nativeId, outType.nativeId);
+  }
+
+  private static native Scalar reduce(long v, int op, int dtype);
 
   /* datetime extract*/
 

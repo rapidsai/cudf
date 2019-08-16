@@ -20,22 +20,24 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.nio.file.Files;
+import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
 
-import static ai.rapids.cudf.Table.count;
+import static ai.rapids.cudf.Aggregate.max;
+import static ai.rapids.cudf.Table.*;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class TableTest {
   private static final File TEST_PARQUET_FILE = new File("src/test/resources/acq.parquet");
+  private static final File TEST_ORC_FILE = new File("src/test/resources/TestOrcFile.orc");
+  private static final File TEST_ORC_TIMESTAMP_DATE_FILE = new File(
+      "src/test/resources/timestamp-date-test.orc");
   private static final Schema CSV_DATA_BUFFER_SCHEMA = Schema.builder()
       .column(DType.INT32, "A")
       .column(DType.FLOAT64, "B")
@@ -57,50 +59,56 @@ public class TableTest {
     assertColumnsAreEqual(expect, cv, "unnamed");
   }
 
-  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
-    assertEquals(expected.getType(), cv.getType(), "Column " + colName);
-    assertEquals(expected.getRowCount(), cv.getRowCount(), "Column " + colName);
-    assertEquals(expected.getNullCount(), cv.getNullCount(), "Column " + colName);
+  public static void assertPartialColumnsAreEqual(ColumnVector expected, long rowOffset, long length, ColumnVector cv, String colName) {
+    assertEquals(expected.getType(), cv.getType(), "Type For Column " + colName);
+    assertEquals(length, cv.getRowCount(), "Row Count For Column " + colName);
+    if (rowOffset == 0 && length == expected.getRowCount()) {
+      assertEquals(expected.getNullCount(), cv.getNullCount(), "Null Count For Column " + colName);
+    } else {
+      // TODO add in a proper check when null counts are supported by serializing a partitioned column
+    }
+    assertEquals(expected.getTimeUnit(), cv.getTimeUnit(), "TimeUnit for Column " + colName);
     expected.ensureOnHost();
     cv.ensureOnHost();
     DType type = expected.getType();
-    for (long row = 0; row < expected.getRowCount(); row++) {
-      assertEquals(expected.isNull(row), cv.isNull(row), "NULL EQUALS Column " + colName + " Row "
-          + row);
-      if (!expected.isNull(row)) {
+    for (long expectedRow = rowOffset; expectedRow < (rowOffset + length); expectedRow++) {
+      long tableRow = expectedRow - rowOffset;
+      assertEquals(expected.isNull(expectedRow), cv.isNull(tableRow),
+          "NULL for Column " + colName + " Row " + tableRow);
+      if (!expected.isNull(expectedRow)) {
         switch (type) {
           case BOOL8: // fall through
           case INT8:
-            assertEquals(expected.getByte(row), cv.getByte(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getByte(expectedRow), cv.getByte(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT16:
-            assertEquals(expected.getShort(row), cv.getShort(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getShort(expectedRow), cv.getShort(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT32: // fall through
           case DATE32:
-            assertEquals(expected.getInt(row), cv.getInt(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getInt(expectedRow), cv.getInt(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case INT64: // fall through
           case DATE64: // fall through
           case TIMESTAMP:
-            assertEquals(expected.getLong(row), cv.getLong(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getLong(expectedRow), cv.getLong(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT32:
-            assertEquals(expected.getFloat(row), cv.getFloat(row), 0.0001,
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getFloat(expectedRow), cv.getFloat(tableRow), 0.0001,
+                "Column " + colName + " Row " + tableRow);
             break;
           case FLOAT64:
-            assertEquals(expected.getDouble(row), cv.getDouble(row), 0.0001,
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getDouble(expectedRow), cv.getDouble(tableRow), 0.0001,
+                "Column " + colName + " Row " + tableRow);
             break;
           case STRING: // fall through
           case STRING_CATEGORY:
-            assertEquals(expected.getJavaString(row), cv.getJavaString(row),
-                "Column " + colName + " Row " + row);
+            assertEquals(expected.getJavaString(expectedRow), cv.getJavaString(tableRow),
+                "Column " + colName + " Row " + tableRow);
             break;
           default:
             throw new IllegalArgumentException(type + " is not supported yet");
@@ -109,14 +117,26 @@ public class TableTest {
     }
   }
 
-  public static void assertTablesAreEqual(Table expected, Table table) {
+  public static void assertColumnsAreEqual(ColumnVector expected, ColumnVector cv, String colName) {
+    assertPartialColumnsAreEqual(expected, 0, expected.getRowCount(), cv, colName);
+  }
+
+  public static void assertPartialTablesAreEqual(Table expected, long rowOffset, long length, Table table) {
     assertEquals(expected.getNumberOfColumns(), table.getNumberOfColumns());
-    assertEquals(expected.getRowCount(), table.getRowCount());
+    assertEquals(length, table.getRowCount());
     for (int col = 0; col < expected.getNumberOfColumns(); col++) {
       ColumnVector expect = expected.getColumn(col);
       ColumnVector cv = table.getColumn(col);
-      assertColumnsAreEqual(expect, cv, String.valueOf(col));
+      String name = String.valueOf(col);
+      if (rowOffset != 0 || length != expected.getRowCount()) {
+        name = name + " PART " + rowOffset + "-" + (rowOffset + length - 1);
+      }
+      assertPartialColumnsAreEqual(expect, rowOffset, length, cv, name);
     }
+  }
+
+  public static void assertTablesAreEqual(Table expected, Table table) {
+    assertPartialTablesAreEqual(expected, 0, expected.getRowCount(), table);
   }
 
   void assertTablesHaveSameValues(HashMap<Object, Integer>[] expectedTable, Table table) {
@@ -368,7 +388,7 @@ public class TableTest {
         "6,true,126,\"six\"\n" +
         "7,NULL,127,NULL\n" +
         "8,false,128,\"eight\"\n" +
-        "9,false,129,\"nine\"").getBytes(StandardCharsets.UTF_8);
+        "9,false,129,\"nine\uD80C\uDC3F\"").getBytes(StandardCharsets.UTF_8);
 
     final Schema CSV_DATA_WITH_TYPES_SCHEMA = Schema.builder()
         .column(DType.INT32, "A")
@@ -389,7 +409,7 @@ public class TableTest {
     try (Table expected = new Table.TestBuilder()
         .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
         .column(true, true, false, false, true, true, true, null, false, false)
-        .column("zero", "one", "two", "three", "four", "five", "six", null, "eight", "nine")
+        .column("zero", "one", "two", "three", "four", "five", "six", null, "eight", "nine\uD80C\uDC3F")
         .build();
          Table table = Table.readCSV(CSV_DATA_WITH_TYPES_SCHEMA, opts, CSV_DATA_WITH_TYPES)) {
       assertTablesAreEqual(expected, table);
@@ -403,11 +423,13 @@ public class TableTest {
         .column(DType.INT32, "A")
         .column(DType.FLOAT64, "B")
         .column(DType.INT64, "C")
+        .column(DType.STRING, "D")
         .build();
     try (Table expected = new Table.TestBuilder()
         .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
         .column(110.0, 111.0, 112.0, 113.0, 114.0, 115.0, 116.0, 117.0, 118.2, 119.8)
         .column(120L, 121L, 122L, 123L, 124L, 125L, 126L, 127L, 128L, 129L)
+        .column("one", "two", "three", "four", "five", "six", "seven\ud801\uddb8", "eight\uBF68", "nine\u03E8", "ten")
         .build();
          Table table = Table.readCSV(schema, new File("./src/test/resources/simple.csv"))) {
       assertTablesAreEqual(expected, table);
@@ -443,7 +465,7 @@ public class TableTest {
     try (FileInputStream in = new FileInputStream(TEST_PARQUET_FILE)) {
       bufferLen = in.read(buffer);
     }
-    try (Table table = Table.readParquet(opts, buffer, bufferLen)) {
+    try (Table table = Table.readParquet(opts, buffer, 0, bufferLen)) {
       long rows = table.getRowCount();
       assertEquals(1000, rows);
       assertTableTypes(new DType[]{DType.INT64, DType.FLOAT64, DType.FLOAT64}, table);
@@ -487,6 +509,83 @@ public class TableTest {
       };
 
       assertTableTypes(expectedTypes, table);
+    }
+  }
+
+  @Test
+  void testReadORC() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    ORCOptions opts = ORCOptions.builder()
+        .includeColumn("string1")
+        .includeColumn("float1")
+        .includeColumn("int1")
+        .build();
+    try (Table expected = new Table.TestBuilder()
+        .column("hi","bye")
+        .column(1.0f,2.0f)
+        .column(65536,65536)
+        .build();
+         Table table = Table.readORC(opts, TEST_ORC_FILE)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadORCBuffer() throws IOException {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    ORCOptions opts = ORCOptions.builder()
+        .includeColumn("string1")
+        .includeColumn("float1")
+        .includeColumn("int1")
+        .build();
+
+    int bufferLen = 0;
+    byte[] buffer = Files.readAllBytes(TEST_ORC_FILE.toPath());
+    bufferLen = buffer.length;
+    try (Table expected = new Table.TestBuilder()
+        .column("hi","bye")
+        .column(1.0f,2.0f)
+        .column(65536,65536)
+        .build();
+         Table table = Table.readORC(opts, buffer, 0, bufferLen)) {
+      assertTablesAreEqual(expected, table);
+    }
+  }
+
+  @Test
+  void testReadORCFull() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (Table expected = new Table.TestBuilder()
+        .column(false, true)
+        .column((byte)1, (byte)100)
+        .column((short)1024, (short)2048)
+        .column(65536, 65536)
+        .column(9223372036854775807L,9223372036854775807L)
+        .column(1.0f, 2.0f)
+        .column(-15.0, -5.0)
+        .column("hi", "bye")
+        .build();
+         Table table = Table.readORC(TEST_ORC_FILE)) {
+      assertTablesAreEqual(expected,  table);
+    }
+  }
+
+  @Test
+  void testReadORCNumPyTypes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // by default ORC will promote date and timestamp columns to DATE64
+    try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.DATE64, table.getColumn(0).getType());
+      assertEquals(DType.DATE64, table.getColumn(1).getType());
+    }
+
+    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    ORCOptions opts = ORCOptions.builder().withNumPyTypes(false).build();
+    try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
+      assertEquals(DType.DATE32, table.getColumn(1).getType());
     }
   }
 
@@ -655,70 +754,48 @@ public class TableTest {
   }
 
   @Test
-  void testGroupByCountMulti() {
-    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
-                                           .column(   1,    3,    3,    5,    5,    0)
-                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
-                                           .build()) {
-      try (Table t2 = t1.groupBy(0, 1, 2).aggregate(count(), count())) {
-        // verify t2
-        assertEquals(5, t2.getRowCount());
-
-        HashMap<Object, Integer>[] expectedResults = new HashMap[3];
-        expectedResults[0] = new HashMap<Object, Integer>() {{
-          put(1, 5);
-        }};
-        expectedResults[1] = new HashMap<Object, Integer>() {{
-          put(1, 1);
-          put(3, 2);
-          put(5, 1);
-          put(0, 1);
-        }};
-        expectedResults[2] = new HashMap<Object, Integer>() {{
-          put(12.0, 1);
-          put(14.0, 1);
-          put(13.0, 1);
-          put(17.0, 2);
-        }};
-
-        //verify grouped columns
-        ColumnVector[] cv = new ColumnVector[3];
-
-        IntStream.range(0, 3).forEach(i -> {
-          cv[i] = t2.getColumn(i);
-          cv[i].ensureOnHost();
-        });
-
-        try (Table t4 = new Table(cv)) {
-          assertTablesHaveSameValues(expectedResults, t4);
-        }
-
-        ColumnVector[] aggOut = new ColumnVector[2];
-        aggOut[0] = t2.getColumn(3);
-        aggOut[1] = t2.getColumn(4);
-        aggOut[0].ensureOnHost();
-        aggOut[1].ensureOnHost();
-
-        Map<Integer, Integer> expectedAggregateResult = new HashMap() {
-          {
-            // value, count
-            put(1, 4);
-            put(2, 1);
+  void testSerializationRoundTripSliced() throws IOException {
+    try (Table t = new Table.TestBuilder()
+        .column(     100,      202,     3003,    40004,        5,      -60,    1, null,    3,  null,     5, null,    7, null,   9,   null,    11, null,   13, null,  15)
+        .column(    true,     true,    false,    false,     true,     null, true, true, null, false, false, null, true, true, null, false, false, null, true, true, null)
+        .column( (byte)1,  (byte)2,     null,  (byte)4,  (byte)5,  (byte)6, (byte)1, (byte)2, (byte)3, null, (byte)5, (byte)6, (byte)7, null, (byte)9, (byte)10, (byte)11, null, (byte)13, (byte)14, (byte)15)
+        .column((short)6, (short)5, (short)4,     null, (short)2, (short)1, (short)1, (short)2, (short)3, null, (short)5, (short)6, (short)7, null, (short)9, (short)10, null, (short)12, (short)13, (short)14, null)
+        .column(      1L,     null,    1001L,      50L,   -2000L,     null, 1L, 2L, 3L, 4L, null, 6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, null)
+        .column(   10.1f,      20f,Float.NaN,  3.1415f,     -60f,     null, 1f, 2f, 3f, 4f, 5f, null, 7f, 8f, 9f, 10f, 11f, null, 13f, 14f, 15f)
+        .column(    10.1,     20.0,     33.1,   3.1415,    -60.5,     null, 1., 2., 3., 4., 5., 6., null, 8., 9., 10., 11., 12., null, 14., 15.)
+        .date32Column(99,      100,      101,      102,      103,      104, 1, 2, 3, 4, 5, 6, 7, null, 9, 10, 11, 12, 13, null, 15)
+        .date64Column(9L,    1006L,     101L,    5092L,     null,      88L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, null, 10L, 11L, 12L, 13L, 14L, 15L)
+        .timestampColumn(TimeUnit.SECONDS, 1L, null, 3L, 4L, 5L, 6L, 1L, 2L, 3L, 4L, 5L ,6L, 7L, 8L, 9L, null, 11L, 12L, 13L, 14L, 15L)
+        .column(     "A",      "B",      "C",      "D",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .categoryColumn(     "A",      "A",      "C",      "C",     null,   "TESTING", "1", "2", "3", "4", "5", "6", "7", null, "9", "10", "11", "12", "13", null, "15")
+        .build()) {
+      for (int sliceAmount = 1; sliceAmount < t.getRowCount(); sliceAmount ++) {
+        for (int i = 0; i < t.getRowCount(); i += sliceAmount) {
+          ByteArrayOutputStream bout = new ByteArrayOutputStream();
+          int len = (int) Math.min(t.getRowCount() - i, sliceAmount);
+          JCudfSerialization.writeToStream(t, bout, i, len);
+          ByteArrayInputStream bin = new ByteArrayInputStream(bout.toByteArray());
+          try (Table found = JCudfSerialization.readTableFrom(bin)) {
+            assertPartialTablesAreEqual(t, i, len, found);
           }
-        };
-        for (int i = 0; i < 4; ++i) {
-          int key = aggOut[0].getInt(i);
-          assertEquals(key, aggOut[1].getInt(i));
-          assertTrue(expectedAggregateResult.containsKey(key));
-          Integer count = expectedAggregateResult.get(key);
-          if (count == 1) {
-            expectedAggregateResult.remove(key);
-          } else {
-            expectedAggregateResult.put(key, count - 1);
-          }
+          assertNull(JCudfSerialization.readTableFrom(bin));
         }
       }
     }
+  }
+  
+  @Test
+  void testValidityCopyLastByte() {
+    try (ColumnVector column =
+          ColumnVector.fromBoxedLongs(null, 2L, 3L, 4L, 5L, 6L, 7L, 8L, null, 10L, null, 12L, null, 14L, 15L)) {
+      ByteArrayOutputStream baos = new ByteArrayOutputStream();
+      DataOutputStream dos = new DataOutputStream(baos);
+      byte[] buff = new byte[1024 * 128];
+      JCudfSerialization.copyValidityData(dos, column, 4, 11, buff);
+      byte[] output = baos.toByteArray();
+      assertEquals(output[0], 0xFFFFFFAF);   // 1010 1111 => 12, null, 10, null, 8, 7, 6, 5
+      assertEquals(output[1], 0x0000000E);   // 0000 1110 => ..., 15, 14, null
+    } catch (Exception e){}
   }
 
   @Test
@@ -727,7 +804,7 @@ public class TableTest {
                                            .column(   1,    3,    3,    5,    5,    0)
                                            .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
                                            .build()) {
-      try (Table t3 = t1.groupBy(0, 1).aggregate(count())) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(count(0))) {
         // verify t3
         assertEquals(4, t3.getRowCount());
         ColumnVector aggOut1 = t3.getColumn(2);
@@ -750,6 +827,561 @@ public class TableTest {
           }
         }
       }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithNulls() {
+    try (Table t1 = new Table.TestBuilder().column(null, null,    1,    1,    1,    1)
+                                           .column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    1, null, null,    1,    1)
+                                           .column(   1,    1,    1, null,    1,    1)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0).aggregate(count(1), count(2), count(3))
+            .orderBy(true, Table.asc(0))) {
+        // verify t3
+        assertEquals(2, t3.getRowCount());
+
+        ColumnVector groupCol = t3.getColumn(0);
+        ColumnVector countCol = t3.getColumn(1);
+        ColumnVector nullCountCol = t3.getColumn(2);
+        ColumnVector nullCountCol2 = t3.getColumn(3);
+
+        groupCol.ensureOnHost();
+        countCol.ensureOnHost();
+        nullCountCol.ensureOnHost();
+        nullCountCol2.ensureOnHost();
+
+        // compare the grouping columns
+        assertTrue(groupCol.isNull(0));
+        assertEquals(groupCol.getInt(1), 1);
+
+        // compare the agg columns
+        // count(1)
+        assertEquals(countCol.getInt(0), 2);
+        assertEquals(countCol.getInt(1), 4);
+
+        // count(2)
+        assertEquals(nullCountCol.getInt(0), 2);
+        assertEquals(nullCountCol.getInt(1), 2); // counts only the non-nulls
+
+        // count(3)
+        assertEquals(nullCountCol2.getInt(0), 2);
+        assertEquals(nullCountCol2.getInt(1), 3); // counts only the non-nulls
+      }
+    }
+  }
+
+  @Test
+  void testGroupByCountWithCollapsingNulls() {
+    try (Table t1 = new Table.TestBuilder()
+        .column(null, null,    1,    1,    1,    1)
+        .column(   1,    1,    1,    1,    1,    1)
+        .column(   1,    1, null, null,    1,    1)
+        .column(   1,    1,    1, null,    1,    1)
+        .build()) {
+
+      GroupByOptions options = GroupByOptions.builder()
+          .withIgnoreNullKeys(true)
+          .build();
+
+      try (Table t3 = t1.groupBy(options, 0).aggregate(count(1), count(2), count(3))
+          .orderBy(true, Table.asc(0))) {
+        // (null, 1) => became (1) because we are ignoring nulls
+        assertEquals(1, t3.getRowCount());
+
+        ColumnVector groupCol = t3.getColumn(0);
+        ColumnVector countCol = t3.getColumn(1);
+        ColumnVector nullCountCol = t3.getColumn(2);
+        ColumnVector nullCountCol2 = t3.getColumn(3);
+
+        groupCol.ensureOnHost();
+        countCol.ensureOnHost();
+        nullCountCol.ensureOnHost();
+        nullCountCol2.ensureOnHost();
+
+        // compare the grouping columns
+        assertEquals(groupCol.getInt(0), 1);
+
+        // compare the agg columns
+        // count(1)
+        assertEquals(countCol.getInt(0), 4);
+
+        // count(2)
+        assertEquals(nullCountCol.getInt(0), 2); // counts only the non-nulls
+
+        // count(3)
+        assertEquals(nullCountCol2.getInt(0), 3); // counts only the non-nulls
+      }
+    }
+  }
+
+  @Test
+  void testGroupByMax() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(max(2))) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+        ColumnVector aggOut1 = t3.getColumn(2);
+        aggOut1.ensureOnHost();
+        Map<Double, Integer> expectedAggregateResult = new HashMap() {
+          {
+            // value, count
+            put(12.0, 1);
+            put(14.0, 1);
+            put(17.0, 2);
+          }
+        };
+        for (int i = 0; i < 4; ++i) {
+          Double key = aggOut1.getDouble(i);
+          assertTrue(expectedAggregateResult.containsKey(key));
+          Integer count = expectedAggregateResult.get(key);
+          if (count == 1) {
+            expectedAggregateResult.remove(key);
+          } else {
+            expectedAggregateResult.put(key, count - 1);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByDuplicateAggregates() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 15.0, 17.0, 18.0)
+                                           .build();
+         Table expected = new Table.TestBuilder()
+             .column(1, 1, 1, 1)
+             .column(1, 3, 5, 0)
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0)
+             .column(12.0, 14.0, 17.0, 18.0)
+             .column(12.0, 13.0, 15.0, 18.0).build()) {
+      try (Table t3 = t1.groupBy(0, 1)
+          .aggregate(max(2), min(2), min(2), max(2), min(2));
+          Table t4 = t3.orderBy(false, Table.asc(2))) {
+        // verify t4
+        assertEquals(4, t4.getRowCount());
+        assertTablesAreEqual(t4, expected);
+
+        assertEquals(t3.getColumn(0).getRefCount(), 1);
+        assertEquals(t3.getColumn(1).getRefCount(), 1);
+        assertEquals(t3.getColumn(2).getRefCount(), 2);
+        assertEquals(t3.getColumn(3).getRefCount(), 3);
+        assertEquals(t3.getColumn(4).getRefCount(), 3);
+        assertEquals(t3.getColumn(5).getRefCount(), 2);
+        assertEquals(t3.getColumn(6).getRefCount(), 3);
+      }
+    }
+  }
+
+  @Test
+  void testGroupByMin() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(  12,   14,   13,   17,   17,   17)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(min(2))) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+        ColumnVector aggOut0 = t3.getColumn(2);
+        aggOut0.ensureOnHost();
+        Map<Integer, Integer> expectedAggregateResult = new HashMap() {
+          {
+            // value, count
+            put(12, 1);
+            put(13, 1);
+            put(17, 2);
+          }
+        };
+        // check to see the aggregate column type depends on the source column
+        // in this case the source column is Integer, therefore the result should be Integer type
+        assertEquals(DType.INT32, aggOut0.getType());
+        for (int i = 0; i < 4; ++i) {
+          int key = aggOut0.getInt(i);
+          assertTrue(expectedAggregateResult.containsKey(key));
+          Integer count = expectedAggregateResult.get(key);
+          if (count == 1) {
+            expectedAggregateResult.remove(key);
+          } else {
+            expectedAggregateResult.put(key, count - 1);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGroupBySum() {
+    try (Table t1 = new Table.TestBuilder().column(   1,    1,    1,    1,    1,    1)
+                                           .column(   1,    3,    3,    5,    5,    0)
+                                           .column(12.0, 14.0, 13.0, 17.0, 17.0, 17.0)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(sum(2))) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+        ColumnVector aggOut1 = t3.getColumn(2);
+        aggOut1.ensureOnHost();
+        Map<Double, Integer> expectedAggregateResult = new HashMap() {
+          {
+            // value, count
+            put(12.0, 1);
+            put(27.0, 1);
+            put(34.0, 1);
+            put(17.0, 1);
+          }
+        };
+        for (int i = 0; i < 4; ++i) {
+          Double key = aggOut1.getDouble(i);
+          assertTrue(expectedAggregateResult.containsKey(key));
+          Integer count = expectedAggregateResult.get(key);
+          if (count == 1) {
+            expectedAggregateResult.remove(key);
+          } else {
+            expectedAggregateResult.put(key, count - 1);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGroupByAvg() {
+    try (Table t1 = new Table.TestBuilder().column( 1,  1,  1,  1,  1,  1)
+                                           .column( 1,  3,  3,  5,  5,  0)
+                                           .column(12, 14, 13,  1, 17, 17)
+                                           .build()) {
+      try (Table t3 = t1.groupBy(0, 1).aggregate(mean(2))) {
+        // verify t3
+        assertEquals(4, t3.getRowCount());
+        ColumnVector aggOut1 = t3.getColumn(2);
+        aggOut1.ensureOnHost();
+        Map<Double, Integer> expectedAggregateResult = new HashMap() {
+          {
+            // value, count
+            put(12.0, 1);
+            put(13.5, 1);
+            put(17.0, 1);
+            put(9.0, 1);
+          }
+        };
+        for (int i = 0; i < 4; ++i) {
+          Double key = aggOut1.getDouble(i);
+          assertTrue(expectedAggregateResult.containsKey(key));
+          Integer count = expectedAggregateResult.get(key);
+          if (count == 1) {
+            expectedAggregateResult.remove(key);
+          } else {
+            expectedAggregateResult.put(key, count - 1);
+          }
+        }
+      }
+    }
+  }
+
+  @Test
+  void testMultiAgg() {
+    try (Table t1 = new Table.TestBuilder().column(  1,   1,   1,   1,   1,    1)
+                                           .column(  2,   2,   2,   3,   3,    3)
+                                           .column(5.0, 2.3, 3.4, 2.3, 1.3, 12.2)
+                                           .column(  3,   1,   7,  -1,   9,    0)
+                                           .build()) {
+      try (Table t2 = t1.groupBy(0, 1).aggregate(count(0), max(3), min(2), mean(2), sum(2))) {
+        assertEquals(2, t2.getRowCount());
+        ColumnVector countOut = t2.getColumn(2);
+        ColumnVector maxOut = t2.getColumn(3);
+        ColumnVector minOut = t2.getColumn(4);
+        ColumnVector avgOut = t2.getColumn(5);
+        ColumnVector sumOut = t2.getColumn(6);
+
+        // bring output to host
+        countOut.ensureOnHost();
+        maxOut.ensureOnHost();
+        minOut.ensureOnHost();
+        avgOut.ensureOnHost();
+        sumOut.ensureOnHost();
+
+        // verify count
+        assertEquals(3, countOut.getInt(0));
+        assertEquals(3, countOut.getInt(1));
+
+        // verify mean
+        List<Double> sortedMean = new ArrayList<>();
+        sortedMean.add(avgOut.getDouble(0));
+        sortedMean.add(avgOut.getDouble(1));
+        sortedMean = sortedMean.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(3.5666f, sortedMean.get(0), 0.0001);
+        assertEquals(5.2666f, sortedMean.get(1), 0.0001);
+
+        // verify sum
+        List<Double> sortedSum = new ArrayList<>();
+        sortedSum.add(sumOut.getDouble(0));
+        sortedSum.add(sumOut.getDouble(1));
+        sortedSum = sortedSum.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(10.7f, sortedSum.get(0), 0.0001);
+        assertEquals(15.8f, sortedSum.get(1), 0.0001);
+
+        // verify min
+        List<Double> sortedMin = new ArrayList<>();
+        sortedMin.add(minOut.getDouble(0));
+        sortedMin.add(minOut.getDouble(1));
+        sortedMin = sortedMin.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(1.3f, sortedMin.get(0), 0.0001);
+        assertEquals(2.3f, sortedMin.get(1), 0.0001);
+
+        // verify max
+        List<Integer> sortedMax = new ArrayList<>();
+        sortedMax.add(maxOut.getInt(0));
+        sortedMax.add(maxOut.getInt(1));
+        sortedMax = sortedMax.stream()
+            .sorted(Comparator.naturalOrder())
+            .collect(Collectors.toList());
+
+        assertEquals(7, sortedMax.get(0));
+        assertEquals(9, sortedMax.get(1));
+      }
+    }
+  }
+
+  @Test
+  void testMaskWithValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        if (i % 2 != 0) {
+          builder.setNullAt(i);
+        }
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        filtered.ensureOnHost();
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(3, filtered.getRowCount());
+        assertEquals(1, filtered.getInt(0));
+        assertEquals(2, filtered.getInt(1));
+        assertTrue(filtered.isNull(2));
+      }
+    }
+  }
+
+  @Test
+  void testMaskDataOnly() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      filtered.ensureOnHost();
+      assertEquals(DType.INT8, filtered.getType());
+      assertEquals(3, filtered.getRowCount());
+      assertTrue(filtered.isNull(0));
+      assertEquals(3, filtered.getByte(1));
+      assertTrue(filtered.isNull(2));
+    }
+  }
+
+  @Test
+  void testAllFilteredFromData() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, false);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      assertEquals(DType.INT32, filtered.getType());
+      assertEquals(0, filtered.getRowCount());
+    }
+  }
+
+  @Test
+  void testAllFilteredFromValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        builder.setNullAt(i);
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(0, filtered.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testMismatchedSizes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[3];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  @Test
+  void testTableBasedFilter() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(
+             ColumnVector.fromBoxedInts(1, null, 2, 3, null),
+             ColumnVector.categoryFromStrings("one", "two", "three", null, "five"));
+         Table filtered = input.filter(mask);
+         Table expected = new Table(
+             ColumnVector.fromBoxedInts(null, 3, null),
+             ColumnVector.categoryFromStrings("two", null, "five"))) {
+      assertTablesAreEqual(filtered, expected);
+    }
+  }
+
+  @Test
+  void testStringsAreNotSupported() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  final byte[] jsonData = ("[1, 1.1, \"a\"]\n" +
+      "[3, 4.2, \"hello\"]\n" +
+      "[7, 1.3, \"seven\u24E1\u25B6\"]").getBytes(StandardCharsets.UTF_8);
+
+  private File createTempFile(byte[] jsonData) throws IOException {
+    File tempFile = File.createTempFile("test", ".json");
+    try (OutputStream out = new FileOutputStream(tempFile)) {
+      out.write(jsonData);
+    }
+    tempFile.deleteOnExit();
+    return tempFile;
+  }
+
+  @Test
+  void testJSONReadWithFilePath() throws IOException {
+    File tempFile = createTempFile(jsonData);
+
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    Table expectedTable = new Table.TestBuilder()
+        .column( 1l,      3l,                 7l)
+        .column(1.1,     4.2,                1.3)
+        .column("a", "hello", "seven\u24E1\u25B6")
+        .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadWithFilePathAndDataTypes() throws IOException {
+    File tempFile = createTempFile(jsonData);
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBuffer() {
+    try (Table t = Table.readJSON(jsonData);
+         Table expectedTable = new Table.TestBuilder()
+             .column( 1l,      3l,                 7l)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithDataTypes() {
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(jsonData, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1f,     4.2f,                1.3f)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithRange() {
+    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+         Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterColumnsWithNames() {
+    // the schema can't skip any column
+    final byte[] jsonDataWithNames = ("{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n" +
+        "{\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n" +
+        "{\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}")
+        .getBytes(StandardCharsets.UTF_8);
+
+    Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
+        .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
+    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1l,       3l,                  7l)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterWithoutNames() {
+    // the schema can't skip any column and since we are using json without explicit names provided
+    // in the json file we will have to set the data types using the column names that will be used
+    // by the libcudf API i.e. 0, 1, 2 ... 
+    Schema schema = Schema.builder().column(DType.FLOAT32, "1")
+        .column(DType.INT32, "0").column(DType.STRING, "2").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
+    try (Table t = Table.readJSON(jsonData, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
     }
   }
 }

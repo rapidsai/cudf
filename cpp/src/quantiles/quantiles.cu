@@ -20,8 +20,8 @@
 #include <quantiles/quantiles.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/device_vector.h>
@@ -235,6 +235,12 @@ gdf_error gdf_quantile_exact( gdf_column*         col_in,       // input column
                               gdf_context*        ctxt)         // context info
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+
+  if (col_in->size == 0) {
+     result->is_valid = false;
+     return GDF_SUCCESS;
+  }
+
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
@@ -257,6 +263,12 @@ gdf_error gdf_quantile_approx(	gdf_column*  col_in,       // input column
                                 gdf_context* ctxt)         // context info
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
+  
+  if (col_in->size == 0) {
+     result->is_valid = false;
+     return GDF_SUCCESS;
+  }
+
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);

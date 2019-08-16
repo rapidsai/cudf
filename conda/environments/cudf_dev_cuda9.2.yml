@@ -1,20 +1,20 @@
 name: cudf_dev
 channels:
-- rapidsai/label/cuda9.2
-- nvidia/label/cuda9.2
-- rapidsai-nightly/label/cuda9.2
+- rapidsai
+- nvidia
+- rapidsai-nightly
 - conda-forge
+- defaults
 dependencies:
-- nvstrings=0.8.*
-- rmm=0.8.*
+- nvstrings=0.9.*
+- rmm=0.9.*
 - cmake>=3.12
 - python>=3.6,<3.8
-- numba>=0.41
-- pandas>=0.23.4
-- pyarrow=0.12.1
+- numba>=0.45.1
+- pandas>=0.24.2,<0.25
+- pyarrow=0.14.1
+- fastavro>=0.22.0
 - notebook>=0.5.0
-- boost
-- distributed>=1.23.0
 - cython>=0.29,<0.30
 - pytest
 - sphinx
@@ -27,5 +27,25 @@ dependencies:
 - pandoc=<2.0.0
 - cudatoolkit=9.2
 - pip
+- s3fs
+- partd
+- moto
+- boto3
+- httpretty
+- flake8
+- black
+- isort
+- pre_commit
+- dask>=2.1.0
+- distributed>=2.1.0
+- dlpack
+- arrow-cpp=0.14.1
+- boost-cpp
+- double-conversion
+- rapidjson
+- flatbuffers
+- hypothesis
 - pip:
   - sphinx-markdown-tables
+  - git+https://github.com/dask/dask.git
+  - git+https://github.com/dask/distributed.git

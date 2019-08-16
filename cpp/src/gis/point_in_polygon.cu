@@ -18,9 +18,9 @@
 #include <cudf/gis.hpp>
 #include "point_in_polygon.hpp"
 
-#include <bitmask/BitMask.cuh>
-#include <bitmask/bitmask_ops.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <bitmask/legacy/BitMask.cuh>
+#include <bitmask/legacy/bitmask_ops.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/cuda_utils.hpp>
 
 #include <type_traits>

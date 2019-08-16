@@ -21,13 +21,79 @@
 #include <memory>
 
 #include "cudf.h"
-#include "table.hpp"
+#include <cudf/legacy/table.hpp>
 
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }
 
 namespace cudf {
 namespace io {
+namespace avro {
+/**---------------------------------------------------------------------------*
+ * @brief Options for the Avro reader
+ *---------------------------------------------------------------------------**/
+struct reader_options {
+  std::vector<std::string> columns;
+
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] columns List of columns to read. If empty, all columns are read
+   *---------------------------------------------------------------------------**/
+  reader_options(std::vector<std::string> cols) : columns(std::move(cols)) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to read Apache Avro data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class reader {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::string filepath, reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+ /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_all();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a range of rows.
+   *
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] num_rows Number of rows to read; use `0` for all remaining data
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_rows(size_t skip_rows, size_t num_rows);
+
+  ~reader();
+};
+
+} // namespace avro
+
 namespace json {
 /**---------------------------------------------------------------------------*
  * @brief Arguments to the read_json interface.
@@ -135,11 +201,15 @@ struct reader_options {
   std::vector<int> use_cols_indexes;        ///< Indexes of columns to be processed and returned; Empty by default - process all columns.
   std::vector<std::string> use_cols_names;  ///< Names of columns to be processed and returned; Empty by default - process all columns.
 
+  std::vector<int> infer_date_indexes;      ///< Column indexes to attempt to infer as date
+  std::vector<std::string> infer_date_names;///< Column names to attempt to infer as date
+
   std::vector<std::string> true_values;     ///< List of values to recognize as boolean True; Empty by default.
   std::vector<std::string> false_values;    ///< List of values to recognize as boolean False; Empty by default.
   std::vector<std::string> na_values;       /**< Array of strings that should be considered as NA. By default the following values are interpreted as NA: 
                                             '', '#N/A', '#N/A N/A', '#NA', '-1.#IND', '-1.#QNAN', '-NaN', '-nan', '1.#IND', '1.#QNAN', 'N/A', 'NA', 'NULL',
                                             'NaN', 'n/a', 'nan', 'null'. */
+
   bool          keep_default_na = true;     ///< Keep the default NA values; true by default.
   bool          na_filter = true;           ///< Detect missing values (empty strings and the values in na_values); true by default. Passing false can improve performance.
 
@@ -215,6 +285,7 @@ namespace orc {
 struct reader_options {
   std::vector<std::string> columns;
   bool use_index = true;
+  bool use_np_dtypes = true;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -224,9 +295,10 @@ struct reader_options {
    *
    * @param[in] columns List of columns to read. If empty, all columns are read
    * @param[in] use_index_lookup Whether to use row index for faster scanning
+   * @param[in] np_compat Whether to use numpy-compatible dtypes
    *---------------------------------------------------------------------------**/
-  reader_options(std::vector<std::string> cols, bool use_index_lookup)
-      : columns(std::move(cols)), use_index(use_index_lookup) {}
+  reader_options(std::vector<std::string> cols, bool use_index_lookup, bool np_compat)
+      : columns(std::move(cols)), use_index(use_index_lookup), use_np_dtypes(np_compat) {}
 };
 
 /**---------------------------------------------------------------------------*

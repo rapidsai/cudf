@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 #include <cub/cub.cuh>
 
@@ -132,8 +132,10 @@ struct copy_range_dispatch {
 
     if (cudf::is_nullable(*column)) {
       RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
-      CUDA_TRY(cudaMemsetAsync(null_count, column->null_count, 
-                               sizeof(gdf_size_type), stream));
+      CUDA_TRY(cudaMemcpyAsync(null_count, &column->null_count, 
+                               sizeof(gdf_size_type), 
+                               cudaMemcpyHostToDevice,
+                               stream));
       kernel = copy_range_kernel<T, decltype(input), true>;
     }
 

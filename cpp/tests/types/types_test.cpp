@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
 
 #include <gtest/gtest.h>

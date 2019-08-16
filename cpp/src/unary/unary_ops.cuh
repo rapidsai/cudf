@@ -19,7 +19,8 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
-#include <bitmask/legacy_bitmask.hpp>
+#include <utilities/column_utils.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 
 namespace cudf {
@@ -44,7 +45,7 @@ void gpu_op_kernel(const T *data, gdf_size_type size,
 template<typename T, typename Tout, typename F>
 struct Launcher {
     static
-    gdf_error launch(gdf_column *input, gdf_column *output) {
+    gdf_error launch(gdf_column const* input, gdf_column *output) {
 
         // Return immediately for empty inputs
         if((0==input->size))
@@ -82,41 +83,30 @@ struct Launcher {
     }
 };
 
-inline void handleChecksAndValidity(gdf_column *input, gdf_column *output) {
-    // Check for null pointers in input
-    CUDF_EXPECTS((input != nullptr), "Pointer to input column is null");
-    CUDF_EXPECTS((output != nullptr), "Pointer to output column is null");
-
+inline void handleChecksAndValidity(gdf_column const& input, gdf_column& output) {
     // Check for null data pointer
-    CUDF_EXPECTS((input->data != nullptr),
-        "Pointer to data in input column is null");
-    CUDF_EXPECTS((output->data != nullptr),
-        "Pointer to data in output column is null");
+    validate(input);
 
-    // Check if input has valid mask if null_count > 0
-    CUDF_EXPECTS((input->null_count == 0 || input->valid != nullptr),
-        "Pointer to input column's valid mask is null but null count > 0");
-
-    if (input->valid == nullptr) {
-        if (output->valid == nullptr) {
+    if ( not is_nullable(input) ) {
+        if ( not is_nullable(output) ) {
             // if input column has no mask, then output column is allowed to have no mask
-            output->null_count = 0;
+            output.null_count = 0;
         }
-        else { // output->valid != nullptr
-            CUDA_TRY( cudaMemset(output->valid, 0xff,
-                                gdf_num_bitmask_elements( input->size )) );
-            output->null_count = 0;
+        else { // output.valid != nullptr
+            CUDA_TRY( cudaMemset(output.valid, 0xff,
+                                gdf_num_bitmask_elements( input.size )) );
+            output.null_count = 0;
         }
     }
-    else { // input->valid != nullptr
-        CUDF_EXPECTS((output->valid != nullptr),
+    else { // input.valid != nullptr
+        CUDF_EXPECTS( is_nullable(output),
             "Input column has valid mask but output column does not");
 
         // Validity mask transfer
-        CUDA_TRY( cudaMemcpy(output->valid, input->valid,
-                             gdf_num_bitmask_elements( input->size ),
+        CUDA_TRY( cudaMemcpy(output.valid, input.valid,
+                             gdf_num_bitmask_elements( input.size ),
                              cudaMemcpyDeviceToDevice) );
-        output->null_count = input->null_count;
+        output.null_count = input.null_count;
     }
 }
 
