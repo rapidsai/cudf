@@ -154,10 +154,12 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
   cudf::table destination_table(group_indices_col.size,
                                 cudf::column_dtypes(sorted_keys_table),
                                 cudf::column_dtype_infos(sorted_keys_table),
-                                cudf::has_nulls(sorted_keys_table));
+                                keys_have_nulls);
+  
   cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
                &destination_table); 
 
+  // TODO: destroy temporal tables, and temporal gdf_columns! 
   return std::make_pair(destination_table, output_values);
 }
 
