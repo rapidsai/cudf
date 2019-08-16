@@ -32,19 +32,38 @@ class Index(object):
         transmission.
         """
         header = {}
+        header["index_column"] = {}
+        # store metadata values of index separately
+        # Indexes: Numerical/DateTime/String are often GPU backed
+        if isinstance(self, RangeIndex):
+            header["index_column"]["start"] = self._start
+            header["index_column"]["stop"] = self._stop
+            # We don't need to store the GPU buffer for RangeIndexes
+            frames = []
+        else:
+            header["index_column"], frames = self._values.serialize()
+
+        header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
         header["type"] = pickle.dumps(type(self))
-        frames = [pickle.dumps(self)]
-        header["frame_count"] = 1
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into Index
         """
-
-        payload = b"".join(frames[: header["frame_count"]])
-        return pickle.loads(payload)
+        """
+        h = header["index_column"]
+        idx_typ = pickle.loads(header["type"])
+        name = pickle.loads(header["name"])
+        if idx_typ == RangeIndex:
+            start = h["start"]
+            stop = h["stop"]
+            return RangeIndex(start=start, stop=stop, name=name)
+        else:
+            col_typ = pickle.loads(h["type"])
+            index = col_typ.deserialize(h, frames[: header["frame_count"]])
+            return idx_typ(index)
 
     def take(self, indices):
         """Gather only the specific subset of indices
