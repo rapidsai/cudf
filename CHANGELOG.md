@@ -13,7 +13,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
-
+- PR #2614 Update Java version to match
 
 # cuDF 0.9.0 (Date TBD)
 
