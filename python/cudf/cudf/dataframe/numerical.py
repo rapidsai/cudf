@@ -65,8 +65,23 @@ class NumericalColumn(columnops.TypedColumnBase):
         return col
 
     def binary_operator(self, binop, rhs, reflect=False):
+        int_dtypes = [
+            np.dtype("int8"),
+            np.dtype("int16"),
+            np.dtype("int32"),
+            np.dtype("int64"),
+        ]
+        tmp = rhs
+        if reflect:
+            tmp = self
         if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
+            if binop in ["mod", "floordiv"]:
+                if (
+                    (isinstance(tmp, NumericalColumn) and (0 in tmp))
+                    or (np.isscalar(tmp) and (0 == tmp))
+                ) and (tmp.dtype in int_dtypes):
+                    out_dtype = np.dtype("float_")
             return numeric_column_binop(
                 lhs=self,
                 rhs=rhs,
