@@ -27,8 +27,8 @@
 #include <copying/scatter.hpp>
 #include <cudf/types.hpp>
 
-constexpr int BLOCK_SIZE = 256;
-constexpr int ROWS_PER_THREAD = 1;
+constexpr int BLOCK_SIZE = 512;
+constexpr int ROWS_PER_THREAD = 8;
 
 namespace {
 
@@ -265,6 +265,8 @@ struct bitwise_partitioner
  * @param[in] num_partitions The number of partitions to divide the rows into
  * @param[in] the_partitioner The functor that maps a rows hash value to a partition number
  * @param[out] row_partition_numbers Array that holds which partition each row belongs to
+ * @param[out] row_partition_offset Array that holds the offset of each row in its partition of
+ * the thread block
  * @param[out] block_partition_sizes Array that holds the size of each partition for each block,
  * i.e., { {block0 partition0 size, block1 partition0 size, ...}, 
          {block0 partition1 size, block1 partition1 size, ...},
@@ -281,6 +283,7 @@ void compute_row_partition_numbers(device_table the_table,
                                    const gdf_size_type num_partitions,
                                    const partitioner_type the_partitioner,
                                    gdf_size_type * row_partition_numbers,
+                                   gdf_size_type * row_partition_offset,
                                    gdf_size_type * block_partition_sizes,
                                    gdf_size_type * global_partition_sizes)
 {
@@ -311,7 +314,9 @@ void compute_row_partition_numbers(device_table the_table,
 
     row_partition_numbers[row_number] = partition_number;
 
-    atomicAdd(&(shared_partition_sizes[partition_number]), gdf_size_type(1));
+    row_partition_offset[row_number] = atomicAdd(
+      &(shared_partition_sizes[partition_number]), gdf_size_type(1)
+    );
 
     row_number += blockDim.x * gridDim.x;
   }
@@ -334,62 +339,117 @@ void compute_row_partition_numbers(device_table the_table,
   }
 }
 
+
 /* --------------------------------------------------------------------------*/
 /** 
- * @brief  Given an array of partition numbers, computes the final output location
-   for each element in the output such that all rows with the same partition are 
-   contiguous in memory.
+ * @brief Move one column from the input table to the hashed table.
  * 
- * @param row_partition_numbers The array that records the partition number for each row
- * @param num_rows The number of rows
- * @param num_partitions THe number of partitions
- * @param[out] block_partition_offsets Array that holds the offset of each partition for each thread block,
- * i.e., { {block0 partition0 offset, block1 partition0 offset, ...}, 
-         {block0 partition1 offset, block1 partition1 offset, ...},
-         ...
-         {block0 partition(num_partitions-1) offset, block1 partition(num_partitions -1) offset, ...} }
+ * @param[in] input_buf Data buffer of the column in the input table
+ * @param[out] output_buf Preallocated data buffer of the column in the output table
+ * @param[in] num_rows The number of rows in each column
+ * @param[in] num_partitions The number of partitions to divide the rows into
+ * @param[in] row_partition_numbers Array that holds which partition each row belongs to
+ * @param[in] row_partition_offset Array that holds the offset of each row in its partition of
+ * the thread block.
+ * @param[in] block_partition_sizes Array that holds the size of each partition for each block
+ * @param[in] scanned_block_partition_sizes The scan of block_partition_sizes
  */
 /* ----------------------------------------------------------------------------*/
-__global__ 
-void compute_row_output_locations(gdf_size_type * row_partition_numbers, 
-                                  const gdf_size_type num_rows,
-                                  const gdf_size_type num_partitions,
-                                  gdf_size_type * block_partition_offsets)
+template <typename DataType>
+__global__
+void move_to_output_buffer(DataType *input_buf,
+                           DataType *output_buf,
+                           const gdf_size_type num_rows,
+                           const gdf_size_type num_partitions,
+                           gdf_size_type * row_partition_numbers,
+                           gdf_size_type * row_partition_offset,
+                           gdf_size_type * block_partition_sizes,
+                           gdf_size_type * scanned_block_partition_sizes)
 {
-  // Shared array that holds the offset of this blocks partitions in 
-  // global memory
-  extern __shared__ gdf_size_type shared_partition_offsets[];
+  extern __shared__ char shared_memory[];
+  DataType *block_output = (DataType *)shared_memory;
+  gdf_size_type *partition_offset_shared = (gdf_size_type *)(block_output + BLOCK_SIZE * ROWS_PER_THREAD);
+  gdf_size_type *partition_offset_global = (gdf_size_type *)(partition_offset_shared + num_partitions + 1);
 
-  // Initialize array of this blocks offsets from global array
-  gdf_size_type partition_number= threadIdx.x;
-  while(partition_number < num_partitions)
-  {
-    shared_partition_offsets[partition_number] = block_partition_offsets[partition_number * gridDim.x + blockIdx.x];
-    partition_number += blockDim.x;
+  gdf_size_type ipartition;
+
+  // Calculate the offset in shared memory of each partition in this thread block
+  if (threadIdx.x == 0) {
+    // TODO: could use a block scan instead of serialization
+    partition_offset_shared[0] = 0;
+
+    for (ipartition = 0; ipartition < num_partitions; ipartition ++) {
+      partition_offset_shared[ipartition + 1] = partition_offset_shared[ipartition]
+        + block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
+    }
   }
+
+  // Fetch the offset in the output buffer of each partition in this thread block
+  ipartition = threadIdx.x;
+  while (ipartition < num_partitions) {
+    partition_offset_global[ipartition] = scanned_block_partition_sizes[ipartition * gridDim.x + blockIdx.x];
+    ipartition += blockDim.x;
+  }
+
   __syncthreads();
 
   gdf_size_type row_number = threadIdx.x + blockIdx.x * blockDim.x;
 
-  // Get each row's partition number, and get it's output location by 
-  // incrementing block's offset counter for that partition number
-  // and store the row's output location in-place
-  while( row_number < num_rows )
-  {
-    // Get partition number of this row
-    const gdf_size_type partition_number = row_partition_numbers[row_number];
+  // Fetch the input data to shared memory
+  while ( row_number < num_rows ) {
+    ipartition = row_partition_numbers[row_number];
 
-    // Get output location based on partition number by incrementing the corresponding
-    // partition offset for this block
-    const gdf_size_type row_output_location = atomicAdd(&(shared_partition_offsets[partition_number]), gdf_size_type(1));
-
-    // Store the row's output location in-place
-    row_partition_numbers[row_number] = row_output_location;
+    block_output[
+      partition_offset_shared[ipartition] + row_partition_offset[row_number]
+    ] = input_buf[row_number];
 
     row_number += blockDim.x * gridDim.x;
   }
+
+  __syncthreads();
+
+  // Copy data from shared memory to output buffer
+
+  constexpr int nthreads_partition = 16; // Use 16 threads to copy each partition, assume BLOCK_SIZE
+                                         // is divisible by 16
+  
+  for (ipartition = threadIdx.x / nthreads_partition;
+       ipartition < num_partitions;
+       ipartition += BLOCK_SIZE / nthreads_partition) {
+    
+    gdf_size_type row_offset = threadIdx.x % nthreads_partition;
+    gdf_size_type nelements_partition = partition_offset_shared[ipartition + 1] - partition_offset_shared[ipartition];
+
+    while (row_offset < nelements_partition) {
+      output_buf[partition_offset_global[ipartition] + row_offset]
+        = block_output[partition_offset_shared[ipartition] + row_offset];
+      
+      row_offset += nthreads_partition;
+    }
+  }
 }
 
+
+struct move_to_output_buffer_dispatcher{
+  template <typename DataType>
+  void operator()(void *input_buf,
+                  void *output_buf,
+                  const gdf_size_type num_rows,
+                  const gdf_size_type num_partitions,
+                  gdf_size_type * row_partition_numbers,
+                  gdf_size_type * row_partition_offset,
+                  gdf_size_type * block_partition_sizes,
+                  gdf_size_type * scanned_block_partition_sizes,
+                  gdf_size_type grid_size)
+  {
+    move_to_output_buffer<DataType>
+    <<<grid_size, BLOCK_SIZE, BLOCK_SIZE * ROWS_PER_THREAD * sizeof(DataType) + (num_partitions + 1) * sizeof(gdf_size_type) * 2>>>(
+      (DataType *) input_buf, (DataType *) output_buf, num_rows, num_partitions,
+      row_partition_numbers, row_partition_offset,
+      block_partition_sizes, scanned_block_partition_sizes
+    );
+  }
+};
 
 
 /* --------------------------------------------------------------------------*/
@@ -435,10 +495,18 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   gdf_size_type * block_partition_sizes{nullptr};
   RMM_TRY(RMM_ALLOC((void**)&block_partition_sizes, (grid_size * num_partitions) * sizeof(gdf_size_type), 0) );
 
+  gdf_size_type * scanned_block_partition_sizes{nullptr};
+  RMM_TRY( RMM_ALLOC((void **)&scanned_block_partition_sizes, (grid_size * num_partitions) * sizeof(gdf_size_type), 0) );
+
   // Holds the total number of rows in each partition
   gdf_size_type * global_partition_sizes{nullptr};
   RMM_TRY( RMM_ALLOC((void**)&global_partition_sizes, num_partitions * sizeof(gdf_size_type), 0) );
   CUDA_TRY( cudaMemsetAsync(global_partition_sizes, 0, num_partitions * sizeof(gdf_size_type)) );
+
+  // Holds the offsets of each row in its partition of the thread block
+  gdf_size_type * row_partition_offset{nullptr};
+  RMM_TRY( RMM_ALLOC((void **)&row_partition_offset, num_rows * sizeof(gdf_size_type), 0) );
+
 
   auto d_table_to_hash = device_table::create(table_to_hash);
 
@@ -456,7 +524,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
         <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(
             *d_table_to_hash, num_rows, num_partitions,
             partitioner_type(num_partitions), row_partition_numbers,
-            block_partition_sizes, global_partition_sizes);
+            row_partition_offset, block_partition_sizes, global_partition_sizes);
 
   }
   else
@@ -471,7 +539,7 @@ gdf_error hash_partition_table(cudf::table const &input_table,
         <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(
             *d_table_to_hash, num_rows, num_partitions,
             partitioner_type(num_partitions), row_partition_numbers,
-            block_partition_sizes, global_partition_sizes);
+            row_partition_offset, block_partition_sizes, global_partition_sizes);
   }
 
 
@@ -480,7 +548,6 @@ gdf_error hash_partition_table(cudf::table const &input_table,
   
   // Compute exclusive scan of all blocks' partition sizes in-place to determine 
   // the starting point for each blocks portion of each partition in the output
-  gdf_size_type * scanned_block_partition_sizes{block_partition_sizes};
   thrust::exclusive_scan(rmm::exec_policy()->on(0),
                          block_partition_sizes, 
                          block_partition_sizes + (grid_size * num_partitions), 
@@ -507,27 +574,29 @@ gdf_error hash_partition_table(cudf::table const &input_table,
                            cudaMemcpyDeviceToHost,
                            s1));
 
-  // Compute the output location for each row in-place based on it's 
-  // partition number such that each partition will be contiguous in memory
-  gdf_size_type * row_output_locations{row_partition_numbers};
-  compute_row_output_locations
-  <<<grid_size, BLOCK_SIZE, num_partitions * sizeof(gdf_size_type)>>>(row_output_locations,
-                                                                  num_rows,
-                                                                  num_partitions,
-                                                                  scanned_block_partition_sizes);
-
-  CUDA_CHECK_LAST();
-
-  // Creates the partitioned output table by scattering the rows of
-  // the input table to rows of the output table based on each rows
-  // output location
-  cudf::detail::scatter(&input_table, row_output_locations,
-                        &partitioned_output);
+  // Move data from input table to hashed table
+  for (int icol = 0; icol < input_table.num_columns(); icol++) {
+    cudf::type_dispatcher(
+      input_table.get_column(icol)->dtype,
+      move_to_output_buffer_dispatcher{},
+      input_table.get_column(icol)->data,
+      partitioned_output.get_column(icol)->data,
+      input_table.num_rows(),
+      num_partitions,
+      row_partition_numbers,
+      row_partition_offset,
+      block_partition_sizes,
+      scanned_block_partition_sizes,
+      grid_size
+    );
+  }
 
   CUDA_CHECK_LAST();
 
   RMM_TRY(RMM_FREE(row_partition_numbers, 0));
   RMM_TRY(RMM_FREE(block_partition_sizes, 0));
+  RMM_TRY(RMM_FREE(scanned_block_partition_sizes, 0));
+  RMM_TRY(RMM_FREE(row_partition_offset, 0));
 
   cudaStreamSynchronize(s1);
   cudaStreamDestroy(s1);
