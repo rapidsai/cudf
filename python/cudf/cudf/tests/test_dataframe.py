@@ -1463,7 +1463,6 @@ def test_series_hash_encode(nrows):
 def test_cuda_array_interface(dtype):
     try:
         import cupy
-
         _have_cupy = True
     except ImportError:
         _have_cupy = False
@@ -3045,11 +3044,11 @@ def test_create_dataframe_column():
         ["m", "a", "d", "v"],
     ],
 )
-def test_series_values_host_property(data):
+def test_series_values_property(data):
     pds = pd.Series(data)
     gds = Series(data)
 
-    np.testing.assert_array_equal(pds.values, gds.values_host)
+    np.testing.assert_array_equal(pds.values, gds.values)
 
     
 @pytest.mark.parametrize(
@@ -3062,7 +3061,7 @@ def test_series_values_host_property(data):
         pytest.param(["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError)),
     ],
 )
-def test_series_values_property(data):
+def test_series_values_device_property(data):
     try:
         import cupy
         _have_cupy = True
@@ -3073,8 +3072,7 @@ def test_series_values_property(data):
 
     pds = pd.Series(data)
     gds = Series(data)
-
-    gds_vals = gds.values
+    gds_vals = gds.values_device
     assert(isinstance(gds_vals, cupy.ndarray))
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
 
