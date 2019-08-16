@@ -3,6 +3,7 @@ Provides base classes and utils for implementing type-specific logical
 view of Columns.
 """
 
+import pickle
 import warnings
 
 import numpy as np
@@ -733,3 +734,50 @@ def _mask_from_cuda_array_interface_desc(desc):
                 f"Cannot infer mask from typestr {typestr}"
             )
     return mask
+
+
+def serialize_columns(columns):
+    """
+    Return the headers and frames resulting
+    from serializing a list of Column
+
+    Parameters
+    ----------
+    columns : list
+        list of Columns to serialize
+
+    Returns
+    -------
+    headers : list
+        list of header metadata for each Column
+    frames : list
+        list of frames
+    """
+    headers = []
+    frames = []
+
+    if len(columns) > 0:
+        header_columns = [c.serialize() for c in columns]
+        headers, column_frames = zip(*header_columns)
+        for f in column_frames:
+            frames.extend(f)
+
+    return headers, frames
+
+
+def deserialize_columns(headers, frames):
+    """
+    Construct a list of Columns from a list of headers
+    and frames.
+    """
+    columns = []
+
+    for meta in headers:
+        col_frame_count = meta["frame_count"]
+        col_typ = pickle.loads(meta["type"])
+        colobj = col_typ.deserialize(meta, frames[:col_frame_count])
+        columns.append(colobj)
+        # Advance frames
+        frames = frames[col_frame_count:]
+
+    return columns
