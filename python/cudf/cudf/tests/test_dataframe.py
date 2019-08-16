@@ -3058,8 +3058,8 @@ def test_series_values_host_property(data):
         [1, 2, 4],
         [],
         [5.0, 7.0, 8.0],
-        pd.Categorical(["a", "b", "c"]),
-        ["m", "a", "d", "v"],
+        pytest.param(pd.Categorical(["a", "b", "c"]), marks=pytest.mark.xfail),
+        pytest.param(["m", "a", "d", "v"], marks=pytest.mark.xfail),
     ],
 )
 def test_series_values_property(data):
