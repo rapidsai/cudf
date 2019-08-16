@@ -451,7 +451,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
                                            input->valid);
     } else {
       std::unique_ptr<gdf_column, decltype(free) *> ret(
-              static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
+          static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
       info.time_unit = c_time_unit;
       *ret.get() = cudf::cast(*input, c_dtype, info);
       return reinterpret_cast<jlong>(ret.release());
@@ -498,8 +498,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_fill(JNIEnv *env, jclass, jlong 
   CATCH_STD(env, );
 }
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cudf_reduce(JNIEnv *env, jclass, jlong jcol,
-                                                          jint jop, jint jdtype) {
+JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cudf_reduce(JNIEnv *env, jclass, jlong jcol, jint jop,
+                                                          jint jdtype) {
   JNI_NULL_CHECK(env, jcol, "input column is null", 0);
   try {
     gdf_column *col = reinterpret_cast<gdf_column *>(jcol);

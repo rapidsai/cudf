@@ -3,15 +3,18 @@
 ## New Features
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2607 Add Java bindings for parsing JSON
 
 ## Improvements
 
+- PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
 
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
+- PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
 - PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 
 
@@ -119,6 +122,8 @@
 - PR #2510 Java api: uses table based apply_boolean_mask
 - PR #2432 Use pandas formatting for console, html, and latex output
 - PR #2573 Bump numba version to 0.45.1
+- PR #2606 Fix references to notebooks-contrib
+
 
 ## Bug Fixes
 
@@ -186,6 +191,7 @@
 - PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
 - PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 - PR #2577 Fix search benchmark compilation error by adding necessary header
+- PR #2604 Fix a bug in copying.pyx:_normalize_types that upcasted int32 to int64
 
 
 # cuDF 0.8.0 (27 June 2019)
