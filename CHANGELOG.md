@@ -169,6 +169,7 @@
 - PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
 - PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 - PR #2577 Fix search benchmark compilation error by adding necessary header
+- PR #2604 Fix a bug in copying.pyx:_normalize_types that upcasted int32 to int64
 
 
 # cuDF 0.8.0 (27 June 2019)
