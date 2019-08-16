@@ -739,7 +739,7 @@ def _mask_from_cuda_array_interface_desc(desc):
 def serialize_columns(columns):
     """
     Return the headers and frames resulting
-    from serializing a list of Column
+    from serializing a list of Columns.
 
     Parameters
     ----------
