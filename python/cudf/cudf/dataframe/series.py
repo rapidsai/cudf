@@ -133,6 +133,21 @@ class Series(object):
         return cls(s, nan_as_null=nan_as_null)
 
     @property
+    def values(self):
+        try:
+            import cupy
+            _have_cupy = True
+        except ImportError:
+            _have_cupy = False
+        if not _have_cupy:
+            raise ModuleNotFoundError("cuPY was not found.")
+        
+        if (is_categorical_dtype(self.dtype) or np.issubdtype(self.dtype, np.dtype("object"))):
+            raise TypeError("Data must be numeric")
+
+        return cupy.asarray(self._column.to_gpu_array())
+
+    @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
             return self.data.to_host()
