@@ -29,10 +29,10 @@
 #include <random>
 
 static constexpr cudf::groupby::operators op{
-    cudf::groupby::operators::SUM};
+    cudf::groupby::operators::MEAN};
 
 template <typename KV>
-struct SingleColumnSum : public GdfTest {
+struct SingleColumnAvg : public GdfTest {
   using KeyType = typename KV::Key;
   using ValueType = typename KV::Value;
 };
@@ -54,25 +54,26 @@ using TestingTypes =
 
 // TODO: tests for cudf::bool8
 
-TYPED_TEST_CASE(SingleColumnSum, TestingTypes);
+TYPED_TEST_CASE(SingleColumnAvg, TestingTypes);
 
-TYPED_TEST(SingleColumnSum, OneGroupNoNulls) {
+TYPED_TEST(SingleColumnAvg, OneGroupNoNulls) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
   ResultValue sum{((size - 1) * size) / 2};
+  ResultValue avg{sum/size};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
-      column_wrapper<Key>({key}), column_wrapper<ResultValue>({sum}));
+      column_wrapper<Key>({key}), column_wrapper<ResultValue>({avg}));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupAllNullKeys) {
+TYPED_TEST(SingleColumnAvg, OneGroupAllNullKeys) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
 
@@ -84,10 +85,10 @@ TYPED_TEST(SingleColumnSum, OneGroupAllNullKeys) {
       column_wrapper<Key>{}, column_wrapper<ResultValue>{});
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupAllNullValues) {
+TYPED_TEST(SingleColumnAvg, OneGroupAllNullValues) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
   // If all values are null, then there should be a single NULL output value
@@ -98,79 +99,87 @@ TYPED_TEST(SingleColumnSum, OneGroupAllNullValues) {
       column_wrapper<Key>({key}), column_wrapper<ResultValue>(1, true));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupEvenNullKeys) {
+TYPED_TEST(SingleColumnAvg, OneGroupEvenNullKeys) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size/2) * (size/2);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({sum}));
+      column_wrapper<ResultValue>({avg}));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupOddNullKeys) {
+TYPED_TEST(SingleColumnAvg, OneGroupOddNullKeys) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
   // The number of even values in the range [0,n) is (n-1)/2
   int num_even_numbers = (size-1)/2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return true; }),
-      column_wrapper<ResultValue>({sum}));
+      column_wrapper<ResultValue>({avg}));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupEvenNullValues) {
+TYPED_TEST(SingleColumnAvg, OneGroupEvenNullValues) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
   // The sum of n odd numbers is n^2
   ResultValue sum = (size/2) * (size/2);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return index % 2; }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({sum},
+      column_wrapper<ResultValue>({avg},
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, OneGroupOddNullValues) {
+TYPED_TEST(SingleColumnAvg, OneGroupOddNullValues) {
   constexpr int size{10};
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   Key key{42};
   // The number of even values in the range [0,n) is (n-1)/2
   int num_even_numbers = (size-1)/2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
+  gdf_size_type count = size/2 + size%2;
+  ResultValue avg{sum/count};
   cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return not(index % 2); }),
       column_wrapper<Key>({key}),
-      column_wrapper<ResultValue>({sum},
+      column_wrapper<ResultValue>({avg},
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsNoNulls) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -181,12 +190,12 @@ TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
       column_wrapper<Key>{T(1), T(2), T(3), T(4)},
-      column_wrapper<ResultValue>{R(1), R(5), R(9), R(13)});
+      column_wrapper<ResultValue>{R(1)/2, R(5)/2, R(9)/2, R(13)/2});
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsEvenNullKeys) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -199,9 +208,10 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullKeys) {
                           [](auto index) { return true; }),
       column_wrapper<ResultValue>{R(1), R(3), R(5), R(7)});
 }
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+
+TYPED_TEST(SingleColumnAvg, FourGroupsOddNullKeys) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -215,9 +225,9 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
       column_wrapper<ResultValue>{R(0), R(2), R(4), R(6)});
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValues) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsEvenNullValues) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -231,9 +241,9 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValues) {
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullValues) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsOddNullValues) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -247,9 +257,9 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullValues) {
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValuesEvenNullKeys) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsEvenNullValuesEvenNullKeys) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -265,9 +275,9 @@ TYPED_TEST(SingleColumnSum, FourGroupsEvenNullValuesEvenNullKeys) {
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesOddNullKeys) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsOddNullValuesOddNullKeys) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -283,9 +293,9 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesOddNullKeys) {
                                   [](auto index) { return true; }));
 }
 
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesEvenNullKeys) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, FourGroupsOddNullValuesEvenNullKeys) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -302,9 +312,9 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullValuesEvenNullKeys) {
       column_wrapper<ResultValue>(4, true));
 }
 
-TYPED_TEST(SingleColumnSum, EightKeysAllUnique) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, EightKeysAllUnique) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -316,9 +326,9 @@ TYPED_TEST(SingleColumnSum, EightKeysAllUnique) {
       column_wrapper<ResultValue>(8, [](auto index) { return R(index); }));
 }
 
-TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenKeysNull) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, EightKeysAllUniqueEvenKeysNull) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -332,9 +342,9 @@ TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenKeysNull) {
       column_wrapper<ResultValue>({R(2), R(6), R(10), R(14)}));
 }
 
-TYPED_TEST(SingleColumnSum, EightKeysAllUniqueEvenValuesNull) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnAvg, EightKeysAllUniqueEvenValuesNull) {
+  using Key = typename SingleColumnAvg<TypeParam>::KeyType;
+  using Value = typename SingleColumnAvg<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;

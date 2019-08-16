@@ -52,7 +52,7 @@ std::vector<SimpleAggRequestCounter> compound_to_simple(
         if (op == MEAN) {
           columns_to_ops[col].insert(COUNT);
           columns_to_ops[col].insert(SUM);
-        } else {
+        } else if (op != MEDIAN) { // Skip Median
           columns_to_ops[col].insert(op);
         }
       });

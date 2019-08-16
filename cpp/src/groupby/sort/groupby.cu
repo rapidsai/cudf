@@ -34,6 +34,7 @@
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
  
+ #include "../common/aggregation_requests.hpp"
 #include "../common/util.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"  
@@ -116,7 +117,7 @@ std::pair<cudf::table, gdf_column> compute_sort_groupby_wo_agg(cudf::table const
 
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& input_values,
-                          std::vector<operators> const& ops, Options options,
+                          std::vector<operators> const& input_ops, Options options,
                           cudaStream_t stream) {
   cudf::table sorted_keys_table;
   gdf_column group_indices_col;
@@ -128,18 +129,39 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
   if (sorted_keys_table.num_rows() == 0) {
     return std::make_pair(
         cudf::empty_like(input_keys),
-        cudf::table(0, target_dtypes(column_dtypes(input_values), ops), column_dtype_infos(input_values)));
+        cudf::table(0, target_dtypes(column_dtypes(input_values), input_ops), column_dtype_infos(input_values)));
   }
-  cudf::table output_values{
-      group_indices_col.size, target_dtypes(column_dtypes(input_values), ops),
-      column_dtype_infos(input_values), values_have_nulls, false, stream};
 
-  initialize_with_identity(output_values, ops, stream);
+  std::vector<AggRequestType> original_requests(input_values.num_columns());
+  std::transform(input_values.begin(), input_values.end(), input_ops.begin(),
+                 original_requests.begin(),
+                 [](gdf_column const* col, operators op) {
+                   return std::make_pair(const_cast<gdf_column*>(col), op);
+                 });
+
+  std::vector<SimpleAggRequestCounter> simple_requests =
+      compound_to_simple(original_requests);
+
+  std::vector<gdf_column*> simple_values_columns;
+  std::vector<operators> simple_operators;
+  for (auto const& p : simple_requests) {
+    const AggRequestType& agg_req_type = p.first;
+    simple_values_columns.push_back(
+        const_cast<gdf_column*>(agg_req_type.first));
+    simple_operators.push_back(agg_req_type.second);
+  }
+  cudf::table simple_values_table{simple_values_columns};
+
+  cudf::table simple_output_values{
+      group_indices_col.size, target_dtypes(column_dtypes(simple_values_table), simple_operators),
+      column_dtype_infos(simple_values_table), values_have_nulls, false, stream};
+
+  initialize_with_identity(simple_output_values, simple_operators, stream);
 
   auto d_input_keys = device_table::create(sorted_keys_table);
-  auto d_input_values = device_table::create(input_values);
-  auto d_output_values = device_table::create(output_values, stream);
-  rmm::device_vector<operators> d_ops(ops);
+  auto d_input_values = device_table::create(simple_values_table);
+  auto d_output_values = device_table::create(simple_output_values, stream);
+  rmm::device_vector<operators> d_ops(simple_operators);
  
   auto row_bitmask = cudf::row_bitmask(sorted_keys_table, stream);
 
@@ -159,8 +181,11 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
   cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
                &destination_table); 
 
-  // TODO: destroy temporal tables, and temporal gdf_columns! 
-  return std::make_pair(destination_table, output_values);
+  cudf::table final_output_values = compute_original_requests(
+      original_requests, simple_requests, simple_output_values, stream);
+
+  // FIX: destroy temporal tables, and temporal gdf_columns! 
+  return std::make_pair(destination_table, final_output_values);
 }
 
 /**---------------------------------------------------------------------------*

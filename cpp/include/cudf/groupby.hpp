@@ -78,7 +78,7 @@ struct Options {
  * @brief Supported aggregation operations
  *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN };
+enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN };
 
 namespace hash {
 

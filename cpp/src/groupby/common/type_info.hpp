@@ -105,7 +105,9 @@ struct target_type_mapper {
         return gdf_dtype_of<target_type_t<SourceType, operators::SUM>>();
       case COUNT:
         return gdf_dtype_of<target_type_t<SourceType, operators::COUNT>>();
-      default:
+      case MEAN:
+        return gdf_dtype_of<target_type_t<SourceType, operators::MEAN>>();
+      default :
         return GDF_invalid;
     }
   }
