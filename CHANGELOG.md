@@ -12,6 +12,7 @@
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
+- PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 
 
 # cuDF 0.9.0 (Date TBD)
