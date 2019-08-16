@@ -13,7 +13,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
-
+- PR #2615 fix string category partitioning in java API
 
 # cuDF 0.9.0 (Date TBD)
 
