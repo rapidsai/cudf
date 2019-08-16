@@ -92,7 +92,7 @@ def test_serialize_series():
 
 def test_serialize_range_index():
     index = cudf.dataframe.index.RangeIndex(10, 20)
-    outindex = cudf.dataframe.index.Index.deserialize(*index.serialize())
+    outindex = cudf.dataframe.index.RangeIndex.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
