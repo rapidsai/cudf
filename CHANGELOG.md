@@ -3,7 +3,7 @@
 ## New Features
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
-- PR #2607 Add Java bindings for parsing JSON 
+- PR #2607 Add Java bindings for parsing JSON
 
 ## Improvements
 
@@ -13,6 +13,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
 
 
 # cuDF 0.9.0 (Date TBD)
@@ -187,7 +188,6 @@
 - PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 - PR #2577 Fix search benchmark compilation error by adding necessary header
 - PR #2604 Fix a bug in copying.pyx:_normalize_types that upcasted int32 to int64
-- PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
 
 
 # cuDF 0.8.0 (27 June 2019)
