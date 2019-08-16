@@ -37,6 +37,14 @@ namespace gpu {
 
 #define OUTBUFSZ        (512*10+16)
 
+struct byterle_enc_state_s
+{
+    uint32_t literal_run;
+    uint32_t repeat_run;
+    volatile uint32_t rpt_map[(512 / 32) + 1];
+};
+
+
 struct orcenc_state_s
 {
     uint32_t cur_row;       // Current row in group
@@ -50,18 +58,159 @@ struct orcenc_state_s
     uint32_t strm_pos[CI_NUM_STREAMS];
     uint8_t valid_buf[512]; // valid map bits
     union {
+        byterle_enc_state_s byterle;
+    } u;
+    union {
         uint8_t u8[OUTBUFSZ];       // output scratch buffer
         uint32_t u32[OUTBUFSZ/4];
     } buf;
     union {
-        uint8_t u8[1024];
+        uint8_t u8[2048];
         uint32_t u32[1024];
         int32_t i32[1024];
         uint64_t u64[1024];
         int64_t i64[1024];
     } vals;
-    uint32_t lengths[1024];
+    union {
+        uint8_t u8[2048];
+        uint32_t u32[1024];
+    } lengths;
 };
+
+
+/**
+ * @brief ByteRLE encoder
+ *
+ * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
+ * @param[in] s encoder state
+ * @param[in] inbuf base input buffer
+ * @param[in] inpos position in input buffer
+ * @param[in] inmask input buffer position mask for circular buffers
+ * @param[in] numvals max number of values to encode
+ * @param[in] flush encode all remaining values if nonzero
+ * @param[in] t thread id
+ *
+ * @return number of input values encoded
+ *
+ **/
+template<StreamIndexType cid>
+static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t inmask, uint32_t numvals, uint32_t flush, int t)
+{
+    uint8_t *dst = s->chunk.streams[cid] + s->strm_pos[cid];
+    uint32_t out_cnt = 0;
+    while (numvals > 0)
+    {
+        uint8_t v0 = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
+        uint8_t v1 = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 1;
+        uint32_t rpt_map = BALLOT(v0 == v1), literal_run, repeat_run, maxvals = min(numvals, 512);
+        if (!(t & 0x1f))
+            s->u.byterle.rpt_map[t >> 5] = rpt_map;
+        __syncthreads();
+        if (t == 0)
+        {
+            // Find the start of an identical 3-byte sequence
+            // TBD: The two loops below could be eliminated using more ballot+ffs using warp0
+            literal_run = 0;
+            repeat_run = 0;
+            while (literal_run < maxvals)
+            {
+                uint32_t next = s->u.byterle.rpt_map[(literal_run >> 5) + 1];
+                uint32_t mask = rpt_map & __funnelshift_r(rpt_map, next, 1);
+                if (mask)
+                {
+                    uint32_t literal_run_ofs = __ffs(mask) - 1;
+                    literal_run += literal_run_ofs;
+                    mask >>= literal_run_ofs;
+                    while (mask == ~0)
+                    {
+                        uint32_t next_idx = ((literal_run + repeat_run) >> 5) + 2;
+                        rpt_map = next;
+                        next = (next_idx < 512/32) ? s->u.byterle.rpt_map[next_idx] : 0;
+                        mask = rpt_map & __funnelshift_r(rpt_map, next, 1);
+                        repeat_run += 32;
+                    }
+                    repeat_run = min(repeat_run + __ffs(~mask) + 1, 130);
+                    break;
+                }
+                rpt_map = next;
+                literal_run += 32;
+            }
+            if (repeat_run >= 130)
+            {
+                // Limit large runs to multiples of 130
+                repeat_run = (repeat_run >= 3*130) ? 3*130 : (repeat_run >= 2*130) ? 2*130 : 130;
+            }
+            else if (literal_run && literal_run + repeat_run == maxvals)
+            {
+                repeat_run = 0; // Try again at next iteration
+            }
+            s->u.byterle.repeat_run = repeat_run;
+            s->u.byterle.literal_run = min(literal_run, maxvals);
+        }
+        __syncthreads();
+        literal_run = s->u.byterle.literal_run;
+        if (!flush && literal_run == numvals)
+        {
+            literal_run &= ~0x7f;
+            if (!literal_run)
+                break;
+        }
+        if (literal_run > 0)
+        {
+            uint32_t num_runs = (literal_run + 0x7f) >> 7;
+            if (t < literal_run)
+            {
+                uint32_t run_id = t >> 7;
+                uint32_t run = (run_id == num_runs - 1) ? literal_run & 0x7f : 0x80;
+                if (!(t & 0x7f))
+                    dst[run_id + t] = 0x100 - run;
+                dst[run_id + t + 1] = (cid == CI_PRESENT) ? __brev(v0) >> 24 : v0;
+            }
+            dst += num_runs + literal_run;
+            out_cnt += literal_run;
+            numvals -= literal_run;
+        }
+        repeat_run = s->u.byterle.repeat_run;
+        if (repeat_run > 0)
+        {
+            while (repeat_run >= 130)
+            {
+                if (t == literal_run) // repeat_run follows literal_run
+                {
+                    dst[0] = 0x7f;
+                    dst[1] = (cid == CI_PRESENT) ? __brev(v0) >> 24 : v0;
+                }
+                dst += 2;
+                out_cnt += 130;
+                numvals -= 130;
+                repeat_run -= 130;
+            }
+            if (!flush)
+            {
+                // Wait for more data in case we can continue the run later 
+                if (repeat_run == numvals && !flush)
+                    break;
+            }
+            if (repeat_run >= 3)
+            {
+                if (t == literal_run) // repeat_run follows literal_run
+                {
+                    dst[0] = repeat_run - 3;
+                    dst[1] = (cid == CI_PRESENT) ? __brev(v0) >> 24 : v0;
+                }
+                dst += 2;
+                out_cnt += repeat_run;
+                numvals -= repeat_run;
+            }
+        }
+    }
+    if (!t)
+    {
+        s->strm_pos[cid] = static_cast<uint32_t>(dst - s->chunk.streams[cid]);
+    }
+    __syncthreads();
+    return out_cnt;
+}
 
 
 /**
@@ -153,17 +302,19 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
             }
             // RLE encode the present stream
             nrows_out = present_rows - s->present_out; // Should always be a multiple of 8 except at the end of the last row group
-            if (nrows_out > ((present_rows <= s->chunk.num_rows) ? 131 * 8 : 0))
+            if (nrows_out > ((present_rows < s->chunk.num_rows) ? 130 * 8 : 0))
             {
                 uint32_t present_out = s->present_out;
                 if (s->chunk.strm_id[CI_PRESENT] >= 0)
                 {
-
+                    uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
+                    nrows_out = (nrows_out + flush) >> 3;
+                    nrows_out = ByteRLE<CI_PRESENT>(s, s->valid_buf, present_out, 0x1ff, nrows_out, flush, t) * 8;
                 }
                 __syncthreads();
                 if (!t)
                 {
-                    s->present_out = present_out + nrows_out;
+                    s->present_out = min(present_out + nrows_out, present_rows);
                 }
             }
             __syncthreads();
