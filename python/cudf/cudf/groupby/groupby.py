@@ -171,8 +171,6 @@ class _GroupbyHelper(object):
         header["as_index"] = self.as_index
         header["sort"] = self.sort
 
-        from cudf.dataframe import columnops
-
         key_columns_header, key_columns_frames = serialize_columns(
             self.key_columns
         )
