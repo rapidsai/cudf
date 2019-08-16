@@ -13,6 +13,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2619 Fix groupby serialization/deserialization
 
 
 # cuDF 0.9.0 (Date TBD)
