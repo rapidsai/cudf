@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2607 Add Java bindings for parsing JSON 
 
 ## Improvements
 
