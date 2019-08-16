@@ -145,6 +145,9 @@ class Series(object):
         if (is_categorical_dtype(self.dtype) or np.issubdtype(self.dtype, np.dtype("object"))):
             raise TypeError("Data must be numeric")
 
+        if self.data.mem.size == 0:
+            return cupy.asarray([])
+
         return cupy.asarray(self._column.to_gpu_array())
 
     @property
