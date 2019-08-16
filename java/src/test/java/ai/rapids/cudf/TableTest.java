@@ -20,15 +20,9 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.security.acl.Group;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -1274,6 +1268,120 @@ public class TableTest {
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
          Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
       assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  final byte[] jsonData = ("[1, 1.1, \"a\"]\n" +
+      "[3, 4.2, \"hello\"]\n" +
+      "[7, 1.3, \"seven\u24E1\u25B6\"]").getBytes(StandardCharsets.UTF_8);
+
+  private File createTempFile(byte[] jsonData) throws IOException {
+    File tempFile = File.createTempFile("test", ".json");
+    try (OutputStream out = new FileOutputStream(tempFile)) {
+      out.write(jsonData);
+    }
+    tempFile.deleteOnExit();
+    return tempFile;
+  }
+
+  @Test
+  void testJSONReadWithFilePath() throws IOException {
+    File tempFile = createTempFile(jsonData);
+
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    Table expectedTable = new Table.TestBuilder()
+        .column( 1l,      3l,                 7l)
+        .column(1.1,     4.2,                1.3)
+        .column("a", "hello", "seven\u24E1\u25B6")
+        .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadWithFilePathAndDataTypes() throws IOException {
+    File tempFile = createTempFile(jsonData);
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBuffer() {
+    try (Table t = Table.readJSON(jsonData);
+         Table expectedTable = new Table.TestBuilder()
+             .column( 1l,      3l,                 7l)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithDataTypes() {
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(jsonData, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1f,     4.2f,                1.3f)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithRange() {
+    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+         Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterColumnsWithNames() {
+    // the schema can't skip any column
+    final byte[] jsonDataWithNames = ("{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n" +
+        "{\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n" +
+        "{\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}")
+        .getBytes(StandardCharsets.UTF_8);
+
+    Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
+        .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
+    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1l,       3l,                  7l)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterWithoutNames() {
+    // the schema can't skip any column and since we are using json without explicit names provided
+    // in the json file we will have to set the data types using the column names that will be used
+    // by the libcudf API i.e. 0, 1, 2 ... 
+    Schema schema = Schema.builder().column(DType.FLOAT32, "1")
+        .column(DType.INT32, "0").column(DType.STRING, "2").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
+    try (Table t = Table.readJSON(jsonData, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
     }
   }
 }

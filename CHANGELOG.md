@@ -1,3 +1,20 @@
+# cuDF 0.10.0 (Date TBD)
+
+## New Features
+
+- PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2607 Add Java bindings for parsing JSON 
+
+## Improvements
+
+- PR #2581 Removed `managed` allocator from hash map classes.
+- PR #2571 Remove unnecessary managed memory from gdf_column_concat
+
+## Bug Fixes
+
+- PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+
+
 # cuDF 0.9.0 (Date TBD)
 
 ## New Features
