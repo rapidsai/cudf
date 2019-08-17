@@ -3,7 +3,7 @@
 ## New Features
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
-- PR #2607 Add Java bindings for parsing JSON 
+- PR #2607 Add Java bindings for parsing JSON
 
 ## Improvements
 
@@ -14,6 +14,9 @@
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
 - PR #2619 Fix groupby serialization/deserialization
+- PR #2601 Fixes nlargest(1) issue in Series and Dataframe
+- PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
+- PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 
 
 # cuDF 0.9.0 (Date TBD)
@@ -120,6 +123,8 @@
 - PR #2510 Java api: uses table based apply_boolean_mask
 - PR #2432 Use pandas formatting for console, html, and latex output
 - PR #2573 Bump numba version to 0.45.1
+- PR #2606 Fix references to notebooks-contrib
+
 
 ## Bug Fixes
 
