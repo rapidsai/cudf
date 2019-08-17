@@ -13,7 +13,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
-
+- PR #2611 Types Test: fix static casting from negative int to string
 
 # cuDF 0.9.0 (Date TBD)
 
