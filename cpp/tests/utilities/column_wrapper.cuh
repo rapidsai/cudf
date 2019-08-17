@@ -146,13 +146,18 @@ struct column_wrapper {
    * @brief Copy constructor copies from another column_wrapper of the same
    * type.
    *
-   * @param other The column_wraper to copy
+   * @param other The column_wrapper to copy
    *---------------------------------------------------------------------------**/
   column_wrapper(column_wrapper<ColumnType> const& other)
       : data{other.data}, bitmask{other.bitmask}, the_column{other.the_column} {
     the_column.data = data.data().get();
     the_column.valid = bitmask.data().get();
     the_column.dtype_info = copy_extra_info(other);
+    if (nullptr != other.the_column.col_name) {
+      the_column.col_name =
+          (char*)malloc(std::strlen(other.the_column.col_name) + 1);
+      std::strcpy(the_column.col_name, other.the_column.col_name);
+    }
   }
 
   column_wrapper& operator=(column_wrapper<ColumnType> other) = delete;
@@ -165,6 +170,9 @@ struct column_wrapper {
             reinterpret_cast<NVCategory*>(the_column.dtype_info.category));
         the_column.dtype_info.category = 0;
       }
+    }
+    if (nullptr != the_column.col_name) {
+      free(the_column.col_name);
     }
   }
 

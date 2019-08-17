@@ -52,16 +52,7 @@ class writer::Impl {
   void write(const cudf::table& table);
 
  private:
-  size_t write_stripes();
-
-  size_t write_filefooter(const cudf::table& table);
-
-  size_t write_postscript(size_t ff_length);
-
- private:
   std::ofstream outfile_;
-  std::vector<uint8_t> filetail_buffer_;
-  std::unique_ptr<ProtobufWriter> pbw_;
 };
 
 }  // namespace orc
