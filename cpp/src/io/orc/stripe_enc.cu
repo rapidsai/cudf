@@ -98,11 +98,12 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
 {
     uint8_t *dst = s->chunk.streams[cid] + s->strm_pos[cid];
     uint32_t out_cnt = 0;
+
     while (numvals > 0)
     {
         uint8_t v0 = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
-        uint8_t v1 = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 1;
-        uint32_t rpt_map = BALLOT(v0 == v1), literal_run, repeat_run, maxvals = min(numvals, 512);
+        uint8_t v1 = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
+        uint32_t rpt_map = BALLOT(t + 1 < numvals && v0 == v1), literal_run, repeat_run, maxvals = min(numvals, 512);
         if (!(t & 0x1f))
             s->u.byterle.rpt_map[t >> 5] = rpt_map;
         __syncthreads();
@@ -129,7 +130,7 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
                         mask = rpt_map & __funnelshift_r(rpt_map, next, 1);
                         repeat_run += 32;
                     }
-                    repeat_run = min(repeat_run + __ffs(~mask) + 1, 130);
+                    repeat_run += __ffs(~mask) + 1;
                     break;
                 }
                 rpt_map = next;
@@ -360,11 +361,31 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                     s->vals.u32[nz_idx] = reinterpret_cast<const uint16_t *>(base)[row];
                     break;
                 case BOOLEAN:
+                case BYTE:
                     s->vals.u8[nz_idx] = reinterpret_cast<const uint8_t *>(base)[row];
                     break;
                 }
             }
             __syncthreads();
+            if (s->chunk.type_kind == BOOLEAN)
+            {
+                // bool8 -> 8x bool1
+                uint32_t nz = s->buf.u32[511];
+                uint8_t n = ((s->nnz + nz) - (s->nnz & ~7) + 7) >> 3;
+                if (t < n)
+                {
+                    uint32_t idx8 = (s->nnz & ~7) + (t << 3);
+                    s->lengths.u8[((s->nnz >> 3) + t) & 0x1ff] = ((s->vals.u8[(idx8 + 0) & 0x7ff] & 1) << 7)
+                                                               | ((s->vals.u8[(idx8 + 1) & 0x7ff] & 1) << 6)
+                                                               | ((s->vals.u8[(idx8 + 2) & 0x7ff] & 1) << 5)
+                                                               | ((s->vals.u8[(idx8 + 3) & 0x7ff] & 1) << 4)
+                                                               | ((s->vals.u8[(idx8 + 4) & 0x7ff] & 1) << 3)
+                                                               | ((s->vals.u8[(idx8 + 5) & 0x7ff] & 1) << 2)
+                                                               | ((s->vals.u8[(idx8 + 6) & 0x7ff] & 1) << 1)
+                                                               | ((s->vals.u8[(idx8 + 6) & 0x7ff] & 1) << 0);
+                }
+                __syncthreads();
+            }
             if (!t)
             {
                 uint32_t nz = s->buf.u32[511];
@@ -374,11 +395,35 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
             }
             __syncthreads();
             // Encode values
-            if (!t)
+            if (s->numvals > 0)
+            {
+                uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 7 : 0, n;
+                switch (s->chunk.type_kind)
+                {
+                case BYTE:
+                    n = ByteRLE<CI_DATA>(s, s->vals.u8, s->nnz - s->numvals, 0x3ff, s->numvals, flush, t);
+                    break;
+                case BOOLEAN:
+                    n = ByteRLE<CI_DATA>(s, s->lengths.u8, (s->nnz - s->numvals + flush) >> 3, 0x1ff, (s->numvals + flush) >> 3, flush, t) * 8;
+                    break;
+                default:
+                    n = s->numvals;
+                    break;
+                }
+                __syncthreads();
+                if (!t)
+                {
+                    s->numvals -= min(n, s->numvals);
+                }
+            }
+            if (s->numlengths > 0)
             {
                 // TODO
-                s->numvals = 0;
-                s->numlengths = 0;
+                __syncthreads();
+                if (!t)
+                {
+                    s->numlengths = 0;
+                }
             }
         }
         __syncthreads();
