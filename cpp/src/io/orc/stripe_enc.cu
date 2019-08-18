@@ -121,16 +121,24 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
                 {
                     uint32_t literal_run_ofs = __ffs(mask) - 1;
                     literal_run += literal_run_ofs;
-                    mask >>= literal_run_ofs;
-                    while (mask == ~0)
+                    repeat_run = __ffs(~(rpt_map >> literal_run_ofs));
+                    if (repeat_run == 0 || repeat_run + literal_run_ofs == 32)
                     {
-                        uint32_t next_idx = ((literal_run + repeat_run) >> 5) + 2;
-                        rpt_map = next;
-                        next = (next_idx < 512/32) ? s->u.byterle.rpt_map[next_idx] : 0;
-                        mask = rpt_map & __funnelshift_r(rpt_map, next, 1);
-                        repeat_run += 32;
+                        repeat_run = 32 - literal_run_ofs;
+                        while (next == ~0)
+                        {
+                            uint32_t next_idx = ((literal_run + repeat_run) >> 5) + 1;
+                            next = (next_idx < 512 / 32) ? s->u.byterle.rpt_map[next_idx] : 0;
+                            repeat_run += 32;
+                        }
+                        repeat_run += __ffs(~next) - 1;
                     }
-                    repeat_run += __ffs(~mask) + 1;
+                    repeat_run = min(repeat_run + 1, maxvals - min(literal_run, maxvals));
+                    if (repeat_run < 3)
+                    {
+                        literal_run += (flush && literal_run + repeat_run >= numvals) ? repeat_run : 0;
+                        repeat_run = 0;
+                    }
                     break;
                 }
                 rpt_map = next;
