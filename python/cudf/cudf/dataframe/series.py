@@ -230,6 +230,15 @@ class Series(object):
     def append(self, other, ignore_index=False):
         """Append values from another ``Series`` or array-like object.
         If ``ignore_index=True``, the index is reset.
+
+        Parameters
+        ----------
+        other : ``Series`` or array-like object 
+        ignore_index : boolean, default False. If true, the index is reset. 
+
+        Returns
+        -------
+        A new Series equivalent to self concatenated with other
         """
         this = self
         other = Series(other)
