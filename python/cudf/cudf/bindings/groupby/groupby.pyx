@@ -52,7 +52,14 @@ def dataframe_from_columns(cols, index=None, columns=None):
     return df
 
 
-def apply_groupby(keys, values, ops, method='hash', sort_results=True, dropna=True):
+def apply_groupby(
+    keys,
+    values,
+    ops,
+    method='hash',
+    sort_results=True,
+    dropna=True
+):
     """
     Apply aggregations *ops* on *values*, grouping by *keys*.
 
