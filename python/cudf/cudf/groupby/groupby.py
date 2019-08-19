@@ -133,6 +133,7 @@ class DataFrameGroupBy(_Groupby):
                 by_list,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
+                dropna=self._groupby.dropna,
             )
 
     def __getattr__(self, key):
@@ -149,6 +150,7 @@ class DataFrameGroupBy(_Groupby):
                 by_list,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
+                dropna=self._groupby.dropna,
             )
         raise AttributeError(
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
