@@ -233,8 +233,8 @@ class Series(object):
 
         Parameters
         ----------
-        other : ``Series`` or array-like object 
-        ignore_index : boolean, default False. If true, the index is reset. 
+        other : ``Series`` or array-like object
+        ignore_index : boolean, default False. If true, the index is reset.
 
         Returns
         -------
