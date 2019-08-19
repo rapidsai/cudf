@@ -165,20 +165,6 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, engine="cudf", use_index=use_index)
 
-    print("\n")
-    print(gdf["time"].dtype)
-    print(pdf["time"].dtype)
-    for i in range(len(pdf["time"])):
-        if pdf["time"][i] != gdf["time"][i]:
-            print(
-                "mismatch at: ",
-                i,
-                "\n",
-                pdf["time"][i - 2 : i + 2],
-                "\n",
-                gdf["time"][i - 2 : i + 2],
-            )
-            break
 
     assert_eq(pdf, gdf, check_categorical=False)
 

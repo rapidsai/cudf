@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <utility>
 
 #include "cudf.h"
 
@@ -194,6 +195,7 @@ struct orc_read_arg {
 
   bool use_index = false;                   ///< Whether to use row index to speed-up reading
   bool use_np_dtypes = true;                ///< Whether to use numpy-compatible dtypes
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps; none for default
 
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };
@@ -215,4 +217,4 @@ struct parquet_read_arg {
   explicit parquet_read_arg(const source_info& src) : source(src) {}
 };
 
-} // namespace cudf
+}  // namespace cudf

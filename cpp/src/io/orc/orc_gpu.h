@@ -27,9 +27,6 @@ namespace gpu {
 // Decimal output type (0: INT64, 1: FLOAT64)
 #define DECIMALS_AS_FLOAT64 1
 
-// Rate of the output timestamp clock (1000=ms, 1000000000=ns)
-constexpr int kTsClkRate = 1000000000;
-
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
   explicit constexpr CompressedStreamInfo(uint8_t *compressed_data_,
@@ -102,6 +99,7 @@ struct ColumnDesc
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
     uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type
+    uint32_t tsclkrate;                         // rate of the output timestamp clock (1000=ms, 1000000000=ns)
 };
 
 
