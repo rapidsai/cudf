@@ -857,3 +857,16 @@ def test_groupby_dropna():
     got = df.groupby(["a", "b"], dropna=False).sum()
 
     assert_eq(expect, got)
+
+
+def test_groupby_dropna_getattr():
+    df = cudf.DataFrame()
+    df["id"] = [0, 1, 1, None, None, 3, 3]
+    df["val"] = [0, 1, 1, 2, 2, 3, 3]
+    got = df.groupby("id", dropna=False).val.sum()
+
+    expect = cudf.Series(
+        [0, 2, 6, 4], name="val", index=cudf.Series([0, 1, 3, None], name="id")
+    )
+
+    assert_eq(expect, got)
