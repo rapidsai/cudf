@@ -837,3 +837,23 @@ def test_groupby_datetime(nelem, as_index, agg):
         pdres = pdg.agg({"datetime": agg})
         gdres = gdg.agg({"datetime": agg})
     assert_eq(pdres, gdres, check_dtype=check_dtype)
+
+
+def test_groupby_dropna():
+    df = cudf.DataFrame({"a": [1, 1, None], "b": [1, 2, 3]})
+    expect = cudf.DataFrame(
+        {"b": [3, 3]}, index=cudf.Series([1, None], name="a")
+    )
+    got = df.groupby("a", dropna=False).sum()
+    assert_eq(expect, got)
+
+    df = cudf.DataFrame(
+        {"a": [1, 1, 1, None], "b": [1, None, 1, None], "c": [1, 2, 3, 4]}
+    )
+    idx = cudf.MultiIndex.from_frame(
+        df[["a", "b"]].drop_duplicates(), names=["a", "b"]
+    )
+    expect = cudf.DataFrame({"c": [4, 2, 4]}, index=idx)
+    got = df.groupby(["a", "b"], dropna=False).sum()
+
+    assert_eq(expect, got)
