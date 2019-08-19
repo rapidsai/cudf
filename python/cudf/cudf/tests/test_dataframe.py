@@ -3330,22 +3330,7 @@ def test_constructor_properties():
         [1.0, 2.0, None, 4.0, 5.0],
         ["a", "b", "c", "d", "e"],
         ["a", "b", None, "d", "e"],
-        [None, None, None, None, None]
-    ],
-)
-def test_tolist(data):
-    psr = pd.Series(data)
-    gsr = Series.from_pandas(psr)
-
-    got = gsr.tolist()
-    expected = psr.tolist()
-
-    np.testing.assert_array_equal(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
+        [None, None, None, None, None],
         np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
         np.array(["1991-11-20", None], dtype=np.datetime64),
         np.array(
@@ -3354,11 +3339,11 @@ def test_tolist(data):
         np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
     ],
 )
-def test_tolist_datetime(data):
+def test_tolist(data):
     psr = pd.Series(data)
     gsr = Series.from_pandas(psr)
 
     got = gsr.tolist()
-    expected = [d.to_datetime64() for d in psr.tolist()]
+    expected = psr.tolist()
 
     np.testing.assert_array_equal(got, expected)
