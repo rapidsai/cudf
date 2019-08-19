@@ -3330,6 +3330,7 @@ def test_constructor_properties():
         [1.0, 2.0, None, 4.0, 5.0],
         ["a", "b", "c", "d", "e"],
         ["a", "b", None, "d", "e"],
+        [None, None, None, None, None]
     ],
 )
 def test_tolist(data):
