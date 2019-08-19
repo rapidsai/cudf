@@ -113,7 +113,7 @@ ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
 set(SORT_GROUPBY_TEST_SRC 
     # "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/single_column_sum.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/single_column_avg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/single_column_median.cu"
 )
 
 ConfigureTest(SORT_GROUPBY_TEST "${SORT_GROUPBY_TEST_SRC}")
