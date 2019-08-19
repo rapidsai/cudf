@@ -2003,7 +2003,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         {
                             seconds -= 1;
                         }
-                        reinterpret_cast<int64_t *>(data_out)[row] = seconds * s->chunk.tsclkrate + (nanos + (499999999 / s->chunk.tsclkrate)) / (1000000000 / s->chunk.tsclkrate); // Output to desired clock rate
+                        if (s->chunk.ts_clock_rate)
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * s->chunk.ts_clock_rate + (nanos + (499999999 / s->chunk.ts_clock_rate)) / (1000000000 / s->chunk.ts_clock_rate); // Output to desired clock rate
+                        else
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
                         break;
                     }
                     }

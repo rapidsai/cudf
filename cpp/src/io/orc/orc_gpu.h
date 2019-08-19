@@ -99,7 +99,7 @@ struct ColumnDesc
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
     uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type
-    uint32_t tsclkrate;                         // rate of the output timestamp clock (1000=ms, 1000000000=ns)
+    int32_t ts_clock_rate;                      // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
 

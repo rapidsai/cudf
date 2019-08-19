@@ -45,9 +45,9 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
 #endif
 
 /**
- * @brief Function that translates timestamp unit to ORC conversion clock rate
+ * @brief Function that translates cuDF time unit to ORC clock frequency
  **/
-constexpr uint32_t to_clockrate(gdf_time_unit time_unit) {
+constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
   switch (time_unit) {
     case TIME_UNIT_s:
       return 1;
@@ -56,8 +56,9 @@ constexpr uint32_t to_clockrate(gdf_time_unit time_unit) {
     case TIME_UNIT_us:
       return 1000000;
     case TIME_UNIT_ns:
-    default:
       return 1000000000;
+    default:
+      return 0;
   }
 }
 
@@ -88,7 +89,10 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       // Variable-length types can all be mapped to GDF_STRING
       return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::TIMESTAMP:
-      return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit});
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_ns});
     case orc::DATE:
       // There isn't a (GDF_DATE32 -> np.dtype) mapping
       return (use_np_dtypes)
@@ -376,7 +380,8 @@ size_t reader::Impl::gather_stream_info(
     const size_t stripe_index, const orc::StripeInformation *stripeinfo,
     const orc::StripeFooter *stripefooter, const std::vector<int> &orc2gdf,
     const std::vector<int> &gdf2orc, const std::vector<orc::SchemaType> types,
-    bool use_index, size_t *num_dictionary_entries,
+    bool use_index,
+    size_t *num_dictionary_entries,
     hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
     std::vector<OrcStreamInfo> &stream_info) {
   const auto num_columns = gdf2orc.size();
@@ -616,10 +621,7 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
 
   // Override output timestamp resolution if requested
   if (options.timestamp_unit != TIME_UNIT_NONE) {
-    timestamp_unit_ = std::make_pair(options.timestamp_unit,
-                                     to_clockrate(options.timestamp_unit));
-  } else {
-    timestamp_unit_ = std::make_pair(TIME_UNIT_ns, to_clockrate(TIME_UNIT_ns));
+    timestamp_unit_ = options.timestamp_unit;
   }
 
   // Enable or disable attempt to use row index for parsing
@@ -643,7 +645,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols_) {
     auto dtype_info =
-        to_dtype(md_->ff.types[col], use_np_dtypes_, timestamp_unit_.first);
+        to_dtype(md_->ff.types[col], use_np_dtypes_, timestamp_unit_);
 
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
@@ -723,7 +725,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
         chunk.decimal_scale = md_->ff.types[selected_cols_[j]].scale;
         chunk.rowgroup_id = num_rowgroups;
         if (chunk.type_kind == orc::TIMESTAMP) {
-          chunk.tsclkrate = timestamp_unit_.second;
+          chunk.ts_clock_rate = to_clockrate(timestamp_unit_);
         }
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
@@ -761,10 +763,9 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
       if (not row_groups.empty()) {
         CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
                                  chunks.memory_size(), cudaMemcpyHostToDevice));
-        CUDA_TRY(ParseRowGroupIndex(row_groups.data().get(), nullptr,
-                                    chunks.device_ptr(), num_columns,
-                                    selected_stripes.size(), num_rowgroups,
-                                    md_->get_row_index_stride()));
+        CUDA_TRY(ParseRowGroupIndex(
+            row_groups.data().get(), nullptr, chunks.device_ptr(), num_columns,
+            selected_stripes.size(), num_rowgroups, md_->get_row_index_stride()));
       }
     }
 

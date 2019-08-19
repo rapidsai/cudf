@@ -25,12 +25,6 @@ namespace io {
 namespace parquet {
 namespace gpu {
 
-// Convert TIMESTAMP_MICROS to millisecond resolution
-#define PARQUET_GPU_USEC_TO_MSEC    0
-
-// Clock frequency for INT96 timestamp conversion (1000=ms, 1000000000=ns)
-constexpr int kINT96ClkRate = 1000000000;
-
 /**
  * @brief Enums for the flags in the page header
  **/
@@ -74,7 +68,8 @@ struct ColumnChunkDesc {
       uint16_t datatype_, uint16_t datatype_length_, uint32_t start_row_,
       uint32_t num_rows_, int16_t max_definition_level_,
       int16_t max_repetition_level_, uint8_t def_level_bits_,
-      uint8_t rep_level_bits_, int8_t codec_, int8_t converted_type_)
+      uint8_t rep_level_bits_, int8_t codec_, int8_t converted_type_,
+      int32_t ts_clock_rate_)
       : compressed_data(compressed_data_),
         compressed_size(compressed_size_),
         num_values(num_values_),
@@ -93,7 +88,8 @@ struct ColumnChunkDesc {
         valid_map_base(nullptr),
         column_data_base(nullptr),
         codec(codec_),
-        converted_type(converted_type_) {}
+        converted_type(converted_type_),
+        ts_clock_rate(ts_clock_rate_) {}
 
   uint8_t *compressed_data;     // pointer to compressed column chunk data
   size_t compressed_size;       // total compressed data size for this chunk
@@ -116,6 +112,7 @@ struct ColumnChunkDesc {
   void *column_data_base;       // base pointer of column data
   int8_t codec;                 // compressed codec enum
   int8_t converted_type;        // converted type enum
+  int32_t ts_clock_rate;        // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
 /**

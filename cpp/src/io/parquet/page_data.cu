@@ -71,7 +71,7 @@ struct page_state_s {
     int32_t nz_count;               // number of valid entries in nz_idx (write position in circular buffer)
     int32_t dict_pos;               // write position of dictionary indices
     int32_t out_pos;                // read position of final output
-    int int64_us2ms;                // if 1, convert microseconds to milliseconds for int64 types
+    int32_t int64_nanoscale;        // if non-zero, convert timestamp to nano
     uint32_t nz_idx[NZ_BFRSZ];      // circular buffer of non-null row positions
     uint32_t dict_idx[NZ_BFRSZ];    // Dictionary index, boolean, or string offset values
     uint32_t str_len[NZ_BFRSZ];     // String length for plain encoding of strings
@@ -815,7 +815,10 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
         day = v.z;
         // Convert from Julian day at noon to UTC seconds
         day = (day - 2440588) * (24 * 60 * 60); // TBD: Should be noon instead of midnight, but this matches pyarrow
-        ts = (day * kINT96ClkRate) + (nanos + (499999999 / kINT96ClkRate)) / (1000000000 / kINT96ClkRate);
+        if (s->col.ts_clock_rate)
+            ts = (day * s->col.ts_clock_rate) + (nanos + (499999999 / s->col.ts_clock_rate)) / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
+        else
+            ts = (day * 1000000000) + nanos;
     }
     else
     {
@@ -825,19 +828,18 @@ inline __device__ void gpuOutputInt96Timestamp(volatile page_state_s *s, int src
 }
 
 
-#if PARQUET_GPU_USEC_TO_MSEC
 /**
- * @brief Convert a microsecond 64-bit timestamp to milliseconds
+ * @brief Output a 64-bit timestamp
  *
  * @param[in,out] s Page state input/output
  * @param[in] src_pos Source position
  * @param[in] dst Pointer to row output data
  **/
-inline __device__ void gpuOutputInt64Timestamp_us2ms(volatile page_state_s *s, int src_pos, int64_t *dst)
+inline __device__ void gpuOutputInt64Timestamp(volatile page_state_s *s, int src_pos, int64_t *dst)
 {
     const uint8_t *src8;
     uint32_t dict_pos, dict_size = s->dict_size, ofs;
-    int64_t millis;
+    int64_t ts;
 
     if (s->dict_base)
     {
@@ -858,7 +860,7 @@ inline __device__ void gpuOutputInt64Timestamp_us2ms(volatile page_state_s *s, i
     if (dict_pos + 4 < dict_size)
     {
         uint2 v;
-        int64_t micros;
+        int64_t val;
         v.x = *(const uint32_t *)(src8 + dict_pos + 0);
         v.y = *(const uint32_t *)(src8 + dict_pos + 4);
         if (ofs)
@@ -867,18 +869,17 @@ inline __device__ void gpuOutputInt64Timestamp_us2ms(volatile page_state_s *s, i
             v.x = __funnelshift_r(v.x, v.y, ofs);
             v.y = __funnelshift_r(v.y, next, ofs);
         }
-        micros = v.y;
-        micros <<= 32;
-        micros |= v.x;
-        millis = micros / 1000;
+        val = v.y;
+        val <<= 32;
+        val |= v.x;
+        ts = ((val * s->int64_nanoscale) + (499999999 / s->col.ts_clock_rate)) / (1000000000 / s->col.ts_clock_rate); // Output to desired clock rate
     }
     else
     {
-        millis = 0;
+        ts = 0;
     }
-    *dst = millis;
+    *dst = ts;
 }
-#endif // PARQUET_GPU_USEC_TO_MSEC
 
 
 /**
@@ -1033,7 +1034,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             uint8_t *end = cur + s->page.uncompressed_page_size;
             size_t page_start_row = s->col.start_row + s->page.chunk_row;
             uint32_t dtype_len_out = s->col.data_type >> 3;
-            s->int64_us2ms = 0;
+            s->int64_nanoscale = 0;
             // Validate data type
             switch(s->col.data_type & 7)
             {
@@ -1045,11 +1046,14 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                 s->dtype_len = 4;
                 break;
             case INT64:
-            #if PARQUET_GPU_USEC_TO_MSEC
-                if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
-                    s->int64_us2ms = 1;
+                if (s->col.ts_clock_rate)
+                {
+                    if (s->col.converted_type == TIME_MICROS || s->col.converted_type == TIMESTAMP_MICROS)
+                        s->int64_nanoscale = 1000;
+                    else if (s->col.converted_type == TIME_MILLIS || s->col.converted_type == TIMESTAMP_MILLIS)
+                        s->int64_nanoscale = 1000000;
+                }
                 // Fall through to DOUBLE
-            #endif
             case DOUBLE:
                 s->dtype_len = 8;
                 break;
@@ -1244,11 +1248,9 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     gpuOutputInt96Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                 else if (dtype_len == 8)
                 {
-                #if PARQUET_GPU_USEC_TO_MSEC
-                    if (s->int64_us2ms)
-                        gpuOutputInt64Timestamp_us2ms(s, out_pos, reinterpret_cast<int64_t *>(dst));
+                    if (s->int64_nanoscale)
+                        gpuOutputInt64Timestamp(s, out_pos, reinterpret_cast<int64_t *>(dst));
                     else
-                #endif
                         gpuOutputFast(s, out_pos, reinterpret_cast<uint2 *>(dst));
                 }
                 else if (dtype_len == 4)

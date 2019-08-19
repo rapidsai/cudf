@@ -195,7 +195,7 @@ struct orc_read_arg {
 
   bool use_index = false;                   ///< Whether to use row index to speed-up reading
   bool use_np_dtypes = true;                ///< Whether to use numpy-compatible dtypes
-  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps; none for default
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };
@@ -213,6 +213,7 @@ struct parquet_read_arg {
   int num_rows = -1;                        ///< Rows to read; -1 is all
 
   bool strings_to_categorical = false;      ///< Whether to store string data as GDF_CATEGORY
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit parquet_read_arg(const source_info& src) : source(src) {}
 };
