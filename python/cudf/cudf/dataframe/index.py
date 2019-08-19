@@ -32,19 +32,28 @@ class Index(object):
         transmission.
         """
         header = {}
+        header["index_column"] = {}
+        # store metadata values of index separately
+        # Indexes: Numerical/DateTime/String are often GPU backed
+        header["index_column"], frames = self._values.serialize()
+
+        header["name"] = pickle.dumps(self.name)
         header["dtype"] = pickle.dumps(self.dtype)
         header["type"] = pickle.dumps(type(self))
-        frames = [pickle.dumps(self)]
-        header["frame_count"] = 1
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
     def deserialize(cls, header, frames):
-        """Convert from pickle format into Index
         """
+        """
+        h = header["index_column"]
+        idx_typ = pickle.loads(header["type"])
+        name = pickle.loads(header["name"])
 
-        payload = b"".join(frames[: header["frame_count"]])
-        return pickle.loads(payload)
+        col_typ = pickle.loads(h["type"])
+        index = col_typ.deserialize(h, frames[: header["frame_count"]])
+        return idx_typ(index, name=name)
 
     def take(self, indices):
         """Gather only the specific subset of indices
@@ -437,6 +446,36 @@ class RangeIndex(Index):
             return self._start == other._start and self._stop == other._stop
         else:
             return (self == other)._values.all()
+
+    def serialize(self):
+        """Serialize Index file storage or network transmission.
+        """
+        header = {}
+        header["index_column"] = {}
+
+        # store metadata values of index separately
+        # We don't need to store the GPU buffer for RangeIndexes
+        # cuDF only needs to store start/stop and rehydrate
+        # during de-serialization
+        header["index_column"]["start"] = self._start
+        header["index_column"]["stop"] = self._stop
+        frames = []
+
+        header["name"] = pickle.dumps(self.name)
+        header["dtype"] = pickle.dumps(self.dtype)
+        header["type"] = pickle.dumps(type(self))
+        header["frame_count"] = 0
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        """
+        """
+        h = header["index_column"]
+        name = pickle.loads(header["name"])
+        start = h["start"]
+        stop = h["stop"]
+        return RangeIndex(start=start, stop=stop, name=name)
 
     @property
     def dtype(self):

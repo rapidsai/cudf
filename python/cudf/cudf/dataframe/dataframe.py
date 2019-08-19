@@ -1964,7 +1964,7 @@ class DataFrame(object):
             [column] = columns
         else:
             column = columns
-        if not (0 <= n < len(self)):
+        if not (0 <= n <= len(self)):
             raise ValueError("n out-of-bound")
         col = self[column].reset_index(drop=True)
         # Operate
