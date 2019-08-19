@@ -79,6 +79,41 @@ struct orcenc_state_s
 
 
 /**
+ * @brief Raw data output
+ *
+ * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
+ * @param[in] inmask input buffer position mask for circular buffers
+ * @param[in] s encoder state
+ * @param[in] inbuf base input buffer
+ * @param[in] inpos position in input buffer
+ * @param[in] count number of bytes to encode
+ * @param[in] t thread id
+ *
+ **/
+template<StreamIndexType cid, uint32_t inmask>
+static __device__ void StoreBytes(orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t count, int t)
+{
+    uint8_t *dst = s->chunk.streams[cid] + s->strm_pos[cid];
+    while (count > 0)
+    {
+        uint32_t n = min(count, 512);
+        if (t < n)
+        {
+            dst[t] = inbuf[(inpos + t) & inmask];
+        }
+        dst += n;
+        inpos += n;
+        count -= n;
+    }
+    __syncthreads();
+    if (!t)
+    {
+        s->strm_pos[cid] = static_cast<uint32_t>(dst - s->chunk.streams[cid]);
+    }
+}
+
+
+/**
  * @brief ByteRLE encoder
  *
  * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
@@ -93,8 +128,8 @@ struct orcenc_state_s
  * @return number of input values encoded
  *
  **/
-template<StreamIndexType cid>
-static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t inmask, uint32_t numvals, uint32_t flush, int t)
+template<StreamIndexType cid, uint32_t inmask>
+static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
     uint8_t *dst = s->chunk.streams[cid] + s->strm_pos[cid];
     uint32_t out_cnt = 0;
@@ -222,6 +257,27 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
 
 
 /**
+ * @brief Integer RLEv2 encoder
+ *
+ * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
+ * @param[in] s encoder state
+ * @param[in] inbuf base input buffer
+ * @param[in] inpos position in input buffer
+ * @param[in] inmask input buffer position mask for circular buffers
+ * @param[in] numvals max number of values to encode
+ * @param[in] flush encode all remaining values if nonzero
+ * @param[in] t thread id
+ *
+ * @return number of input values encoded
+ *
+ **/
+template<StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
+static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
+{
+    return numvals;
+}
+
+/**
  * @brief In-place conversion from lengths to positions
  *
  * @param[in] vals input values
@@ -317,7 +373,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 {
                     uint32_t flush = (present_rows < s->chunk.num_rows) ? 0 : 7;
                     nrows_out = (nrows_out + flush) >> 3;
-                    nrows_out = ByteRLE<CI_PRESENT>(s, s->valid_buf, present_out, 0x1ff, nrows_out, flush, t) * 8;
+                    nrows_out = ByteRLE<CI_PRESENT, 0x1ff>(s, s->valid_buf, present_out, nrows_out, flush, t) * 8;
                 }
                 __syncthreads();
                 if (!t)
@@ -408,10 +464,18 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 switch (s->chunk.type_kind)
                 {
                 case BYTE:
-                    n = ByteRLE<CI_DATA>(s, s->vals.u8, s->nnz - s->numvals, 0x3ff, s->numvals, flush, t);
+                    n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
                     break;
                 case BOOLEAN:
-                    n = ByteRLE<CI_DATA>(s, s->lengths.u8, (s->nnz - s->numvals + flush) >> 3, 0x1ff, (s->numvals + flush) >> 3, flush, t) * 8;
+                    n = ByteRLE<CI_DATA, 0x1ff>(s, s->lengths.u8, (s->nnz - s->numvals + flush) >> 3, (s->numvals + flush) >> 3, flush, t) * 8;
+                    break;
+                case FLOAT:
+                    StoreBytes<CI_DATA, 0xfff>(s, s->vals.u8, (s->nnz - s->numvals) * 4, s->numvals * 4, t);
+                    n = s->numvals;
+                    break;
+                case DOUBLE:
+                    StoreBytes<CI_DATA, 0x1fff>(s, s->vals.u8, (s->nnz - s->numvals) * 8, s->numvals * 8, t);
+                    n = s->numvals;
                     break;
                 default:
                     n = s->numvals;
