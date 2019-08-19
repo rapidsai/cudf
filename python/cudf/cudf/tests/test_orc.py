@@ -165,7 +165,6 @@ def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     pdf = orcfile.read().to_pandas(date_as_object=False)
     gdf = cudf.read_orc(path, engine="cudf", use_index=use_index)
 
-
     assert_eq(pdf, gdf, check_categorical=False)
 
 
