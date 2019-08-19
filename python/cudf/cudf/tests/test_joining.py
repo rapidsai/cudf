@@ -716,13 +716,15 @@ def test_join_with_different_names():
 
 
 def test_join_same_name_different_order():
-    left = pd.DataFrame({"a": [0, 0], "b":[1, 2]})
+    left = pd.DataFrame({"a": [0, 0], "b": [1, 2]})
     right = pd.DataFrame({"a": [1, 2], "b": [0, 0]})
     gleft = DataFrame.from_pandas(left)
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, left_on=["a", "b"], right_on=["b", "a"])
     gd_merge = gleft.merge(gright, left_on=["a", "b"], right_on=["b", "a"])
-    assert_eq(pd_merge, gd_merge.sort_values(by=["a_x"]).reset_index(drop=True))
+    assert_eq(
+        pd_merge, gd_merge.sort_values(by=["a_x"]).reset_index(drop=True)
+    )
 
 
 def test_join_empty_table_dtype():
@@ -732,6 +734,4 @@ def test_join_empty_table_dtype():
     gright = DataFrame.from_pandas(right)
     pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
     gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
-    assert_eq(pd_merge['a'].dtype, gd_merge['a'].dtype)
-
-
+    assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)

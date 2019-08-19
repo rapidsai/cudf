@@ -63,7 +63,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         if (name in right_on and
            (left_on.index(name) == right_on.index(name))):
             joining_cols.push_back(pair[int, int](
-                list(col_lhs.keys()).index(name), 
+                list(col_lhs.keys()).index(name),
                 list(col_rhs.keys()).index(name)))
 
     for name in right_on:

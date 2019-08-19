@@ -87,6 +87,9 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
 /** 
  * @brief  Trivially computes full join of two tables if one of the tables
  * are empty
+ *
+ * @throws cudf::logic_error
+ * "Dataset is empty" if both left_dataframe and right_dataframe is empty
  * 
  * @param[in] left_size The size of the left table
  * @param[in] right_size The size of the right table
@@ -144,6 +147,8 @@ void trivial_full_join(
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the join operation between two sets of columns
+ *
+ * @throws cudf::logic_error
  * 
  * @param[in] left  Table of left columns to join
  * @param[in] right Table of right  columns to join
@@ -244,6 +249,8 @@ void join_call(cudf::table const& left, cudf::table const& right,
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the resulting joined table
+ *
+ * @throws cudf::logic_error
  * 
  * @param[in] ljoin  Table of left join columns 
  * @param[in] rjoin  Table of right join columns
@@ -252,10 +259,10 @@ void join_call(cudf::table const& left, cudf::table const& right,
  * @param[in] left_on The table containing two columns,
  * first column - indices of left table provided for join
  * second column - indices of right table provided for join
- * @param[in] joining_ind Similar to left_on,
- * contains two columns, but these column have the indices
- * which have same name in dataframes and will eventually merge
- * into a single column.
+ * @param[in] joining_ind is a vector of pairs of left and right
+ * join indcies derived from left_on and right_on. This contains
+ * the indices with the same name which evetually result into a 
+ * single column.
  * @param[in] left_indices 
  * @param[in] right_indicess  Table contatining right join columns
  * @tparam join_type The type of join to be performed
@@ -297,8 +304,8 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
         r_joining_ind[i] = joining_ind[i].second;
     }
     
-  std::vector <int> tmp_l_join_ind = l_joining_ind;
-  std::vector <int> tmp_r_join_ind = r_joining_ind;
+    std::vector <int> tmp_l_join_ind = l_joining_ind;
+    std::vector <int> tmp_r_join_ind = r_joining_ind;
   
     std::iota(std::begin(l_col_ind), std::end(l_col_ind), 0);
     std::iota(std::begin(r_col_ind), std::end(r_col_ind), 0);

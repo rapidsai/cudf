@@ -23,27 +23,28 @@ namespace cudf {
  * @brief  Performs an inner join on the specified columns of two
  * dataframes (left, right)
  *
- * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
- * 
  * @example TableA a:{0,1,2}
  *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
  *          on column 'a' with column 'a'.
  * The result would be Table-res a:{1, 2}, b:{1, 2}
  * Result is intersection of column 'a' from A and column 'a' from B
  *
+ * @throws cudf::logic_error 
+ * "GDF Validity is unsupported" by sort_join, if join_context->flag_method = GDF_SORT
+ * and null_count is not set to 0.
+ *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
  * @param[in] left_on The column indices from left dataframe 
  * @param[in] right_on The column indices from right dataframe 
- * @param[in] joining_ind contains two columns, left and right
- * indices, which are derived from left_on and right_on.
+ * @param[in] joining_ind is a vector of pairs of left and right
+ * join indcies derived from left_on and right_on. This contains
+ * the indices with the same name which evetually result into a 
+ * single column.
  *
  * @example Considering the example provided above, column name 'a'
  * is same in both tables and being joined, this will result into
- * single column in the joined result. This table contains the
- * indices of such columns. For above example, this table would be
- * Table left:{0}, right:{1}.
+ * single column in the joined result. This vector will have {(0,1)}.
  *
  * @param[out] out_index_table The table containing 
  * joined indices of left and right table 
@@ -64,24 +65,28 @@ std::pair<cudf::table, cudf::table> inner_join(
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two dataframes (left, right)
  *
- * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
- * 
  * @example TableA a:{0,1,2}
  *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
  *          on column 'a' with column 'b'.
- * The result would be Table-res a:{1, 2, 0}, b:{1, 2, NULL}
+ * The result would be Table-res a:{0, 1, 2}, b:{NULL, 1, 2}
  * Result is left of column 'a' only
+ * @throws cudf::logic_error 
+ * "GDF Validity is unsupported" by sort_join, if join_context->flag_method = GDF_SORT
+ * and null_count is not set to 0.
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
  * @param[in] left_on The column indices from left dataframe 
  * @param[in] right_on The column indices from right dataframe 
- * @param[in] joining_ind contains two columns, 
- * but these column have the indices which have same name 
- * in dataframes and will eventually merge into a single column.
- * @param[out] out_index_table The table containing 
- * joined indices of left and right table 
+ * @param[in] joining_ind is a vector of pairs of left and right
+ * join indcies derived from left_on and right_on. This contains
+ * the indices with the same name which evetually result into a 
+ * single column.
+ *
+ * @example Considering the example provided above, column name 'a'
+ * is same in both tables and being joined, this will result into
+ * single column in the joined result. This vector will have {(0,1)}.
+ *
  * @param[in] join_context The context to use to control how 
  * the join is performed,e.g., sort vs hash based implementation
  * 
@@ -99,25 +104,30 @@ std::pair<cudf::table, cudf::table> left_join(
 /** 
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two dataframes (left, right)
- *
- * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
  * 
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, c:{4,5,6} And TableB joins TableA 
- *          on column 'a' with column 'b'.
- * The result would be Table-res a:{0, 1, 2, NULL}, b:{NULL, 1, 2, 3}, c:{NULL, 4, 5, 6}
+ *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
+ *          on column 'a' with column 'a'.
+ * The result would be Table-res a:{0, 1, 2, 5}, b:{NULL, 1, 2, 3}
  * Result is union of column 'a' and column 'b'
+ *
+ * @throws cudf::logic_error 
+ * "GDF Validity is unsupported" by sort_join, if join_context->flag_method = GDF_SORT
+ * and null_count is not set to 0.
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
  * @param[in] left_on The column indices from left dataframe 
  * @param[in] right_on The column indices from right dataframe 
- * @param[in] joining_ind contains two columns, 
- * but these column have the indices which have same name 
- * in dataframes and will eventually merge into a single column.
- * @param[out] out_index_table The table containing 
- * joined indices of left and right table 
+ * @param[in] joining_ind is a vector of pairs of left and right
+ * join indcies derived from left_on and right_on. This contains
+ * the indices with the same name which evetually result into a 
+ * single column.
+ *
+ * @example Considering the example provided above, column name 'a'
+ * is same in both tables and being joined, this will result into
+ * single column in the joined result. This vector will have {(0,1)}.
+ *
  * @param[in] join_context The context to use to control how 
  * the join is performed,e.g., sort vs hash based implementation
  * 
