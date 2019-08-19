@@ -148,6 +148,8 @@ public final class Table implements AutoCloseable {
 
   private static native void freeCudfTable(long handle) throws CudfException;
 
+  private static native long[] gdfReadJSON(String filePath, long bufferAddress, long bufferLength, long startRange, long rangeLength, String[] filterColumnNames, String[] columnNames, String[] typesAsStrings) throws CudfException;
+
   /**
    * Ugly long function to read CSV.  This is a long function to avoid the overhead of reaching
    * into a java
@@ -218,6 +220,239 @@ public final class Table implements AutoCloseable {
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param jsonFilePath local path to the json file
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(String jsonFilePath) {
+    return readJSON(jsonFilePath, JSONOptions.DEFAULT);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param jsonFilePath local path to the json file
+   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(String jsonFilePath, JSONOptions options) {
+    return readJSON(jsonFilePath, options, Schema.INFERRED);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param jsonFilePath local path to the json file
+   * @param schema Schema containing the data types to use for the returned table
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(String jsonFilePath, Schema schema) {
+    return readJSON(jsonFilePath, JSONOptions.DEFAULT, schema);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param jsonFilePath local path to the json file
+   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param schema Schema containing the data types to use for the returned table
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(String jsonFilePath, JSONOptions options, Schema schema) {
+    return new Table(gdfReadJSON(jsonFilePath, 0, 0, 0, 0, options.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(byte[] buffer) {
+    return readJSON(buffer, JSONOptions.DEFAULT);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @param schema Schema containing the data types to use for the returned table
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(byte[] buffer, Schema schema) {
+    return readJSON(buffer, JSONOptions.DEFAULT, schema);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(byte[] buffer, JSONOptions options) {
+    return readJSON(buffer, options, Schema.INFERRED);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param schema Schema containing the data types to use for the returned table
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(byte[] buffer, JSONOptions options, Schema schema) {
+    return readJSON(buffer, 0, 0, options, schema);
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @param rangeOffset start offset to start in buffer
+   * @param rangeSize size of the buffer to read after offset
+   * @param options JSONOptions to use to parse the file, currently only offset and size is supported
+   * @param schema Schema containing the data types to use for the returned table
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(byte[] buffer, long rangeOffset, long rangeSize, JSONOptions options, Schema schema) {
+    long len = rangeSize;
+    if (len == 0) {
+      len = buffer.length;
+    }
+    assert len > 0 : "Invalid buffer range size";
+    assert len <= buffer.length - rangeOffset : "Buffer range size greater than buffer";
+    assert rangeOffset >= 0 && rangeOffset < len : "Buffer offset out of range";
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, rangeOffset, len);
+      // using default ranges but keeping the included column names
+      return readJSON(newBuf, 0, 0, options, schema);
+    }
+  }
+
+  /**
+   * Read a JSON file
+   * This method interprets each line as a complete json object and accepts json in two formats
+   * If the following format is passed, the column names will be inferred as 0, 1, 2,...
+   *  "[1, 1.2, \"hello\"]\n
+   *   [3, 2.3, \"string\"]\n
+   *   [2, 23.2, \"str\"]\n"
+   *
+   * If the following format is passed, the column names will be assigned as col1, col2, col3,...
+   *  "{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n
+   *   {\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n
+   *   {\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}"
+   *
+   * @param buffer json data
+   * @param rangeOffset start offset to start in buffer
+   * @param rangeSize size of the buffer to read after offset
+   * @param schema Schema containing the data types to use for the returned table
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readJSON(HostMemoryBuffer buffer, long rangeOffset, long rangeSize, JSONOptions options, Schema schema) {
+    long len = rangeSize;
+    if (len == 0) {
+      len = buffer.length;
+    }
+    assert len > 0 : "Invalid buffer range size";
+    assert len <= buffer.length - rangeOffset : "Buffer range size greater than buffer";
+    assert rangeOffset >= 0 && rangeOffset < buffer.length : "Buffer offset out of range";
+    return new Table(gdfReadJSON(null, buffer.getAddress() + rangeOffset, buffer.getLength(), rangeOffset, len, options.getIncludeColumnNames(), schema.getColumnNames(), schema.getTypesAsStrings()));
+  }
 
   /**
    * Read a CSV file using the default CSVOptions.
