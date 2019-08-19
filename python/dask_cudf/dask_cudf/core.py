@@ -374,62 +374,47 @@ class DataFrame(_Frame, dd.core.DataFrame):
         divisions = compute(*divs)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
-    def set_index(self, index, drop=True, sorted=False):
+    def set_index(
+        self,
+        other,
+        drop=True,
+        sorted=False,
+        npartitions=None,
+        divisions=None,
+        inplace=False,
+        **kwargs,
+    ):
         """Set new index.
 
-        Parameters
-        ----------
-        index : str or Series
-            If a ``str`` is provided, it is used as the name of the
-            column to be made into the index.
-            If a ``Series`` is provided, it is used as the new index
-        drop : bool
-            Whether the first original index column is dropped.
-        sorted : bool
-            Whether the new index column is already sorted.
+        See: dd.core.DataFrame.set_index
         """
-        if not drop:
-            raise NotImplementedError("drop=False not supported yet")
 
-        if isinstance(index, str):
-            tmpdf = self.sort_values(index)
-            return tmpdf._set_column_as_sorted_index(index, drop=drop)
-        elif isinstance(index, Series):
-            indexname = "__dask_cudf.index"
-            df = self.assign(**{indexname: index})
-            return df.set_index(indexname, drop=drop, sorted=sorted)
+        if inplace:
+            raise NotImplementedError("The inplace= keyword is not supported")
+        pre_sorted = sorted
+        del sorted
+
+        if divisions is not None:
+            dd.core.check_divisions(divisions)
+
+        if pre_sorted:
+            from dask.dataframe.shuffle import set_sorted_index
+
+            return set_sorted_index(
+                self, other, drop=drop, divisions=divisions, **kwargs
+            )
         else:
-            raise TypeError("cannot set_index from {}".format(type(index)))
+            from dask.dataframe.shuffle import set_index
 
-    def _set_column_as_sorted_index(self, colname, drop):
-        def select_index(df, col):
-            return df.set_index(col)
-
-        return self.map_partitions(
-            select_index, col=colname, meta=self._meta.set_index(colname)
-        )
-
-    def _argsort(self, col, sorted=False):
-        """
-        Returns
-        -------
-        shufidx : Series
-            Positional indices to be used with .take() to
-            put the dataframe in order w.r.t ``col``.
-        """
-        # Get subset with just the index and positional value
-        subset = self[col].to_dask_dataframe()
-        subset = subset.reset_index(drop=False)
-        ordered = subset.set_index(0, sorted=sorted)
-        shufidx = from_dask_dataframe(ordered)["index"]
-        return shufidx
-
-    def _set_index_raw(self, indexname, drop, sorted):
-        shufidx = self._argsort(indexname, sorted=sorted)
-        # Shuffle the GPU data
-        shuffled = self.take(shufidx, npartitions=self.npartitions)
-        out = shuffled.map_partitions(lambda df: df.set_index(indexname))
-        return out
+            return set_index(
+                self,
+                other,
+                drop=drop,
+                npartitions=npartitions,
+                divisions=divisions,
+                shuffle="tasks",
+                **kwargs,
+            )
 
     def reset_index(self, force=False, drop=False):
         """Reset index to range based
@@ -521,16 +506,6 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
         results = [p for i, p in enumerate(parts) if uniques[i]]
         return from_delayed(results, meta=self._meta).reset_index()
-
-    def _shuffle_sort_values(self, by):
-        """Slow shuffle based sort by the given column
-
-        Parameter
-        ---------
-        by : str
-        """
-        shufidx = self._argsort(by)
-        return self.take(shufidx)
 
     @derived_from(pd.DataFrame)
     def var(
