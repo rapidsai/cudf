@@ -17,7 +17,7 @@ cdef extern from "cudf/join.hpp" nogil:
         const cudf_table right_cols,
         const cudf_table left_on_ind,
         const cudf_table right_on_ind,
-        const cudf_table joining_cols,
+        const vector[pair[int, int]] joining_cols,
         const cudf_table * out_ind,
         gdf_context * join_context
     ) except +
@@ -27,7 +27,7 @@ cdef extern from "cudf/join.hpp" nogil:
         const cudf_table right_cols,
         const cudf_table left_on_ind,
         const cudf_table right_on_ind,
-        const cudf_table joining_cols,
+        const vector[pair[int, int]] joining_cols,
         const cudf_table * out_ind,
         gdf_context * join_context
     ) except +
@@ -37,7 +37,7 @@ cdef extern from "cudf/join.hpp" nogil:
         const cudf_table right_cols,
         const cudf_table left_on_ind,
         const cudf_table right_on_ind,
-        const cudf_table joining_cols,
+        const vector[pair[int, int]] joining_cols,
         const cudf_table * out_ind,
         gdf_context * join_context
     ) except +

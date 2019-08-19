@@ -540,8 +540,17 @@ struct NVCategoryJoinTest : public GdfTest
     gdf_column * result_col = new gdf_column{};
     void* ldata = nullptr;
     void* rdata = nullptr;
+    // Number of join cols should be same in both left and right
+    size_t num_join_cols = left_join_idx.size();
     gdf_column l_join_col {};
     gdf_column r_join_col {};
+    std::vector <std::pair <int, int>> join_ind (num_join_cols);
+    for (unsigned int i = 0; i < num_join_cols; ++i)
+    {
+        join_ind[i].first = left_join_idx[i];
+        join_ind[i].second= right_join_idx[i]; 
+    }
+    
 
     EXPECT_EQ(RMM_ALLOC(&ldata, left_join_idx.size() * sizeof(int), 0), RMM_SUCCESS);
     EXPECT_EQ(cudaMemcpy(ldata, left_join_idx.data(), left_join_idx.size() * sizeof(int), cudaMemcpyHostToDevice), cudaSuccess);
@@ -560,8 +569,7 @@ struct NVCategoryJoinTest : public GdfTest
     cudf::table right_gdf_columns (gdf_raw_right_columns);
     cudf::table left_on (left_join_ind);
     cudf::table right_on (right_join_ind);
-    cudf::table join_table (join_cols);
-    cudf::table comm_name_join_table (join_cols);
+    cudf::table comm_name_join_ind (join_cols);
     cudf::table result_idx_table (result_idx_cols);
 
     switch(op)
@@ -570,7 +578,7 @@ struct NVCategoryJoinTest : public GdfTest
         {
           result = cudf::left_join(
                           left_gdf_columns, right_gdf_columns,
-                          left_on, right_on, join_table,
+                          left_on, right_on, join_ind,
                           &result_idx_table, &ctxt);
           break;
         }
@@ -578,7 +586,7 @@ struct NVCategoryJoinTest : public GdfTest
         {
           result = cudf::inner_join(
                           left_gdf_columns, right_gdf_columns,
-                          left_on, right_on, join_table,
+                          left_on, right_on, join_ind,
                           &result_idx_table, &ctxt);
           break;
         }
@@ -586,7 +594,7 @@ struct NVCategoryJoinTest : public GdfTest
         {
           result = cudf::full_join(
                           left_gdf_columns, right_gdf_columns,
-                          left_on, right_on, join_table,
+                          left_on, right_on, join_ind,
                           &result_idx_table, &ctxt);
           break;
         }

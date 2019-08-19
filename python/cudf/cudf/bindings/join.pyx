@@ -43,13 +43,12 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     left_idx = []
     right_idx = []
-    left_common_name_join_idx = []
-    right_common_name_join_idx = []
 
     assert(len(left_on) == len(right_on))
 
     cdef cudf_table *list_lhs = table_from_dataframe(col_lhs)
     cdef cudf_table *list_rhs = table_from_dataframe(col_rhs)
+    cdef vector[pair[int, int]] joining_cols
 
     result_col_names = []  # Preserve the order of the column names
 
@@ -63,17 +62,14 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
         left_idx.append(list(col_lhs.keys()).index(name))
         if (name in right_on and
            (left_on.index(name) == right_on.index(name))):
-            left_common_name_join_idx.append(
-                list(col_lhs.keys()).index(name))
+            joining_cols.push_back(pair[int, int](
+                list(col_lhs.keys()).index(name), 
+                list(col_rhs.keys()).index(name)))
 
     for name in right_on:
         # This will ensure that the column name is valid
         col_rhs[name]
         right_idx.append(list(col_rhs.keys()).index(name))
-        if (name in left_on and (left_on.index(name)
-           == right_on.index(name))):
-            right_common_name_join_idx.append(
-                list(col_rhs.keys()).index(name))
 
     for name, col in col_rhs.items():
         check_gdf_compatibility(col)
@@ -83,13 +79,8 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
 
     l_on_cols = [columnops.as_column(left_idx).astype('int32')]
     r_on_cols = [columnops.as_column(right_idx).astype('int32')]
-    j_col_com_name = [columnops.as_column(L).astype('int32')
-                      for L in [left_common_name_join_idx,
-                                right_common_name_join_idx]]
     cdef cudf_table *left_on_ind = table_from_columns(l_on_cols)
     cdef cudf_table *right_on_ind = table_from_columns(r_on_cols)
-    cdef cudf_table *joining_cols = table_from_columns(j_col_com_name)
-    cdef cudf_table out_ind
     cdef pair[cudf_table, cudf_table] result
 
     with nogil:
@@ -99,7 +90,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 list_rhs[0],
                 left_on_ind[0],
                 right_on_ind[0],
-                joining_cols[0],
+                joining_cols,
                 <cudf_table*> NULL,
                 context
             )
@@ -110,7 +101,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 list_rhs[0],
                 left_on_ind[0],
                 right_on_ind[0],
-                joining_cols[0],
+                joining_cols,
                 <cudf_table*> NULL,
                 context
             )
@@ -121,7 +112,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 list_rhs[0],
                 left_on_ind[0],
                 right_on_ind[0],
-                joining_cols[0],
+                joining_cols,
                 <cudf_table*> NULL,
                 context
             )
@@ -214,6 +205,5 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     del list_rhs
     del left_on_ind
     del right_on_ind
-    del joining_cols
 
     return list(zip(res, valids, result_col_names))

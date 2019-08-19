@@ -27,18 +27,24 @@ namespace cudf {
  * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
  * 
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, c:{4,5,6} And TableB joins TableA 
- *          on column 'a' with column 'b'.
- * The result would be Table-res a:{1, 2}, b:{1, 2}, c:{4, 5}
- * Result is intersection of column 'a' and column 'b'
+ *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
+ *          on column 'a' with column 'a'.
+ * The result would be Table-res a:{1, 2}, b:{1, 2}
+ * Result is intersection of column 'a' from A and column 'a' from B
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
  * @param[in] left_on The column indices from left dataframe 
  * @param[in] right_on The column indices from right dataframe 
- * @param[in] joining_ind contains two columns, 
- * but these column have the indices which have same name 
- * in dataframes and will eventually merge into a single column.
+ * @param[in] joining_ind contains two columns, left and right
+ * indices, which are derived from left_on and right_on.
+ *
+ * @example Considering the example provided above, column name 'a'
+ * is same in both tables and being joined, this will result into
+ * single column in the joined result. This table contains the
+ * indices of such columns. For above example, this table would be
+ * Table left:{0}, right:{1}.
+ *
  * @param[out] out_index_table The table containing 
  * joined indices of left and right table 
  * @param[in] join_context The context to use to control how 
@@ -51,7 +57,7 @@ std::pair<cudf::table, cudf::table> inner_join(
                          cudf::table const& right,
                          cudf::table const& left_on,
                          cudf::table const& right_on,
-                         cudf::table const& joining_ind,
+                         std::vector<std::pair<int, int>> const& joining_ind,
                          cudf::table *out_index_table,
                          gdf_context *join_context);
 /** 
@@ -62,9 +68,9 @@ std::pair<cudf::table, cudf::table> inner_join(
  * columns must be set to 0 otherwise @throws GDF Validity is unsupported by sort_join.
  * 
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, c:{4,5,6} And TableB joins TableA 
+ *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
  *          on column 'a' with column 'b'.
- * The result would be Table-res a:{0, 1, 2}, b:{NULL, 1, 2}, c:{NULL, 4, 5}
+ * The result would be Table-res a:{1, 2, 0}, b:{1, 2, NULL}
  * Result is left of column 'a' only
  *
  * @param[in] left The left dataframe
@@ -86,7 +92,7 @@ std::pair<cudf::table, cudf::table> left_join(
                          cudf::table const& right,
                          cudf::table const& left_on,
                          cudf::table const& right_on,
-                         cudf::table const& joining_ind,
+                         std::vector<std::pair<int, int>> const& joining_ind,
                          cudf::table *out_index_table,
                          gdf_context *join_context);
 
@@ -122,7 +128,7 @@ std::pair<cudf::table, cudf::table> full_join(
                          cudf::table const& right,
                          cudf::table const& left_on,
                          cudf::table const& right_on,
-                         cudf::table const& joining_ind,
+                         std::vector<std::pair<int, int>> const& joining_ind,
                          cudf::table *out_index_table,
                          gdf_context *join_context);
 } //namespace cudf
