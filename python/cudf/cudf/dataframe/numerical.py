@@ -78,7 +78,10 @@ class NumericalColumn(columnops.TypedColumnBase):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 if (
-                    (isinstance(tmp, NumericalColumn) and (0 in tmp))
+                    (
+                        isinstance(tmp, NumericalColumn)
+                        and (tmp.sort_by_values()[0].searchsorted(0))
+                    )
                     or (np.isscalar(tmp) and (0 == tmp))
                 ) and (tmp.dtype in int_dtypes):
                     out_dtype = np.dtype("float_")
