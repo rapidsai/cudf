@@ -15,26 +15,29 @@ cdef extern from "cudf/join.hpp" nogil:
     cdef pair[cudf_table, cudf_table] inner_join(
         const cudf_table left_cols,
         const cudf_table right_cols,
-        const cudf_table join_cols,
-        const cudf_table merging_join_cols,
-        const cudf_table out_ind,
+        const cudf_table left_on_ind,
+        const cudf_table right_on_ind,
+        const cudf_table joining_cols,
+        const cudf_table * out_ind,
         gdf_context * join_context
     ) except +
 
     cdef pair[cudf_table, cudf_table] left_join(
         const cudf_table left_cols,
         const cudf_table right_cols,
-        const cudf_table join_cols,
-        const cudf_table merging_join_cols,
-        const cudf_table out_ind,
+        const cudf_table left_on_ind,
+        const cudf_table right_on_ind,
+        const cudf_table joining_cols,
+        const cudf_table * out_ind,
         gdf_context * join_context
     ) except +
 
     cdef pair[cudf_table, cudf_table] full_join(
         const cudf_table left_cols,
         const cudf_table right_cols,
-        const cudf_table join_cols,
-        const cudf_table merging_join_cols,
-        const cudf_table out_ind,
+        const cudf_table left_on_ind,
+        const cudf_table right_on_ind,
+        const cudf_table joining_cols,
+        const cudf_table * out_ind,
         gdf_context * join_context
     ) except +

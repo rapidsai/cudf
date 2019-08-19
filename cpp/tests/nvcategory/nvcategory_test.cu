@@ -552,10 +552,14 @@ struct NVCategoryJoinTest : public GdfTest
     gdf_column_view (&r_join_col, rdata, nullptr, right_join_idx.size(), cudf::gdf_dtype_of<int>());
 
     // Same set of column set for both, as we are assuming that they have same name
+    std::vector <gdf_column *> left_join_ind = {&l_join_col};
+    std::vector <gdf_column *> right_join_ind = {&r_join_col};
     std::vector <gdf_column *> join_cols = {&l_join_col, &r_join_col};
     std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
     cudf::table left_gdf_columns (gdf_raw_left_columns);
     cudf::table right_gdf_columns (gdf_raw_right_columns);
+    cudf::table left_on (left_join_ind);
+    cudf::table right_on (right_join_ind);
     cudf::table join_table (join_cols);
     cudf::table comm_name_join_table (join_cols);
     cudf::table result_idx_table (result_idx_cols);
@@ -566,24 +570,24 @@ struct NVCategoryJoinTest : public GdfTest
         {
           result = cudf::left_join(
                           left_gdf_columns, right_gdf_columns,
-                          join_table, join_table,
-                          result_idx_table, &ctxt);
+                          left_on, right_on, join_table,
+                          &result_idx_table, &ctxt);
           break;
         }
       case join_op::INNER:
         {
           result = cudf::inner_join(
                           left_gdf_columns, right_gdf_columns,
-                          join_table, join_table,
-                          result_idx_table, &ctxt);
+                          left_on, right_on, join_table,
+                          &result_idx_table, &ctxt);
           break;
         }
       case join_op::FULL:
         {
           result = cudf::full_join(
                           left_gdf_columns, right_gdf_columns,
-                          join_table, join_table,
-                          result_idx_table, &ctxt);
+                          left_on, right_on, join_table,
+                          &result_idx_table, &ctxt);
           break;
         }
       default:

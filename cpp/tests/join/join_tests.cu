@@ -425,9 +425,13 @@ struct JoinTest : public GdfTest
     // Both left and right col join indexes are same
 
     std::vector <gdf_column *> join_cols = {&join_col, &join_col};
+    std::vector <gdf_column *> l_join_col = {&join_col};
+    std::vector <gdf_column *> r_join_col = {&join_col};
     std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
     cudf::table left_gdf_columns(gdf_raw_left_columns);
     cudf::table right_gdf_columns(gdf_raw_right_columns);
+    cudf::table left_on (l_join_col);
+    cudf::table right_on (r_join_col);
     cudf::table join_table (join_cols);
     cudf::table result_idx_table (result_idx_cols);
     std::pair <cudf::table, cudf::table> result;
@@ -438,24 +442,24 @@ struct JoinTest : public GdfTest
         {
           result = cudf::left_join(
                                        left_gdf_columns, right_gdf_columns,
-                                       join_table, join_table,
-                                       result_idx_table, &ctxt);
+                                       left_on, right_on, join_table,
+                                       &result_idx_table, &ctxt);
           break;
         }
       case join_op::INNER:
         {
           result =  cudf::inner_join(
                                        left_gdf_columns, right_gdf_columns,
-                                       join_table, join_table,
-                                       result_idx_table, &ctxt);
+                                       left_on, right_on, join_table,
+                                       &result_idx_table, &ctxt);
           break;
         }
       case join_op::FULL:
         {
           result =  cudf::full_join(
                                        left_gdf_columns, right_gdf_columns,
-                                       join_table, join_table,
-                                       result_idx_table, &ctxt);
+                                       left_on, right_on, join_table,
+                                       &result_idx_table, &ctxt);
           break;
         }
       default:
