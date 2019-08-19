@@ -254,7 +254,7 @@ class Column(object):
         else:
             header["mask_buffer"] = []
             header["mask_frame_count"] = 0
-            mask_frames = {}
+            mask_frames = []
 
         frames.extend(mask_frames)
         header["frame_count"] = len(frames)

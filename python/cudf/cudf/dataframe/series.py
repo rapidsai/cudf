@@ -1436,7 +1436,7 @@ class Series(object):
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
-        if not (0 <= n < len(self)):
+        if not (0 <= n <= len(self)):
             raise ValueError("n out-of-bound")
         direction = largest
         if keep == "first":
