@@ -3076,6 +3076,31 @@ def test_series_values_device_property(data):
     assert(isinstance(gds_vals, cupy.ndarray))
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"A": [1,2,3], "B": [4,5,6]}, 
+        {"A": [1.0,2.0,3.0], "B": [4.0,5.0,6.0]}, 
+        {"A": [1,2,3], "B": [1.0,2.0,3.0]},
+        {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))}
+    ],
+)
+def test_df_values_device_property(data):
+    try:
+        import cupy
+        _have_cupy = True
+    except ImportError:
+        _have_cupy = False
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed") 
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = DataFrame.from_pandas(pdf)
+
+    pmtr = pdf.values
+    gmtr = gdf.values.get()
+    
+    np.testing.assert_array_equal(pmtr, gmtr)
+
 def test_value_counts():
     pdf = pd.DataFrame(
         {
