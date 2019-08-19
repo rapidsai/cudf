@@ -32,6 +32,7 @@
 #include <thrust/for_each.h>
 #include <thrust/adjacent_difference.h>
 #include <thrust/scan.h>
+#include <thrust/binary_search.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
 
@@ -67,10 +68,6 @@ struct quantiles_functor {
       thrust::make_counting_iterator(0),
       num_grps,
       [=] __device__ (gdf_size_type i) {
-        // gdf_size_type upper_limit = (i < num_grps-1)
-        //                           ? grp_id[i + 1]
-        //                           : num_vals;
-        // gdf_size_type segment_size = (upper_limit - grp_id[i]);
         gdf_size_type segment_size = grp_size[i];
 
         for (gdf_size_type j = 0; j < num_qnts; j++) {
@@ -116,25 +113,13 @@ group_values_and_indices(cudf::table const& key_table,
 
   std::tie(sorted_table, group_indices) =
     gdf_group_by_without_aggregations(combined_table,
-                                      combined_table.num_columns(),
+                                      key_table.num_columns(),
                                       key_col_indices.data(),
                                       const_cast<gdf_context*>(&context));
-
-  // Separate key and value cols
-  auto sorted_cols = sorted_table.get_columns();
-  // TODO (dm): maybe we can do this by just using table.begin(), table.end()
-  auto sorted_key_cols =
-    std::vector<gdf_column*>(sorted_cols.begin(),
-                             sorted_cols.begin() + key_table.num_columns());
-  auto sorted_key_table = cudf::table(sorted_key_cols);
-  auto device_sorted_key_table = device_table::create(sorted_key_table);
 
   // Get group labels for future use in segmented sorting
   gdf_size_type nrows = sorted_table.num_rows();
   rmm::device_vector<gdf_size_type> group_labels(nrows);
-  bool nullable = device_sorted_key_table.get()->has_nulls();
-  // TODO (kn): replace this with simple scatter. 
-  // (Fut) Scatter a value of all 1s using group indices to a vector of size num_rows
   thrust::fill(group_labels.begin(), group_labels.end(), 0);
   auto group_labels_ptr = group_labels.data().get();
   auto group_indices_ptr = reinterpret_cast<gdf_size_type*>(group_indices.data);
@@ -150,8 +135,8 @@ group_values_and_indices(cudf::table const& key_table,
 
   // Sort individual value columns group wise
   auto seg_val_cols =
-    std::vector<gdf_column*>(sorted_cols.begin() + key_table.num_columns(),
-                             sorted_cols.end());
+    std::vector<gdf_column*>(sorted_table.begin() + key_table.num_columns(),
+                             sorted_table.end());
 
   auto idx_col = allocate_column(gdf_dtype_of<gdf_index_type>(),
                                  sorted_table.num_rows(),
@@ -161,35 +146,17 @@ group_values_and_indices(cudf::table const& key_table,
     group_labels.size(), gdf_dtype_of<gdf_size_type>());
   for (auto seg_val_col : seg_val_cols) {
     auto seg_table = cudf::table{&group_labels_col, seg_val_col};
-    // gdf_column *seg_val_pair[2] = {}
     gdf_order_by(seg_table.begin(),
                  nullptr,
                  seg_table.num_columns(), // always 2
                  &idx_col,
                  const_cast<gdf_context*>(&context));
 
-        auto idx = reinterpret_cast<gdf_index_type*>(idx_col.data);
-        thrust::host_vector<gdf_size_type> h_idx = thrust::device_vector<gdf_index_type>(idx, idx+idx_col.size) ;
-          printf(" idx \t");
-        for (auto &&idx : h_idx)
-        {
-          printf("%d ", idx);
-        }
-          printf("\n");
-
     cudf::table seg_val_col_table{seg_val_col};
     cudf::gather(&seg_val_col_table,
                  reinterpret_cast<gdf_size_type*>(idx_col.data),
                  &seg_val_col_table);
   }
-  auto seg_col_data = reinterpret_cast<double*>(seg_val_cols[0]->data);
-  thrust::host_vector<gdf_size_type> h_sort_col = thrust::device_vector<double>(seg_col_data, seg_col_data+seg_val_cols[0]->size) ;
-    printf("sort col \t");
-  for (auto &&i : h_sort_col)
-  {
-    printf("%d ", i);
-  }
-    printf("\n");
 
   // Get number of valid values in each group
   std::vector<rmm::device_vector<gdf_size_type> > vals_group_sizes;
@@ -204,41 +171,29 @@ group_values_and_indices(cudf::table const& key_table,
         thrust::make_counting_iterator(seg_val_col->size), d_bools.begin(),
         [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
 
-    thrust::host_vector<gdf_size_type> h_bools = d_bools;
-    printf("group bools \t");
-    for (auto &&bools : h_bools)  printf("%d ", bools);
-    printf("\n");
-
-    thrust::host_vector<gdf_size_type> h_group_labels = group_labels;
-    printf("group labels \t");
-    for (auto &&labels : h_group_labels)  printf("%d ", labels);
-    printf("\n");
-
     thrust::reduce_by_key(
                           group_labels.begin(),
                           group_labels.end(),
                           d_bools.begin(),
                           thrust::make_discard_iterator(),
                           val_group_sizes.begin());
-  thrust::host_vector<gdf_size_type> h_vals_group_sizes = val_group_sizes;
-    printf("group size \t");
-  for (auto &&size : h_vals_group_sizes)
-  {
-    printf("%d ", size);
-  }
-    printf("\n");
     vals_group_sizes.push_back(val_group_sizes);
   }
 
+  // Get output_keys using group_indices and sorted_key_table
+  // Separate key and value cols
+  auto sorted_key_cols =
+    std::vector<gdf_column*>(sorted_table.begin(),
+                             sorted_table.begin() + key_table.num_columns());
+  auto sorted_key_table = cudf::table(sorted_key_cols);
 
-  // Get output_keys using group_indices and input table
   gdf_size_type num_grps = group_indices.size;
   auto out_key_table = cudf::allocate_like_of_size(key_table, num_grps);
   cudf::gather(&sorted_key_table,
                reinterpret_cast<gdf_index_type*>(group_indices.data),
                &out_key_table);
 
-  // Temporary guest. Not needed because we'll sort again including value cols
+  // No longer need sorted key columns
   sorted_key_table.destroy();
 
   return std::make_tuple(out_key_table, group_indices, seg_val_cols,
