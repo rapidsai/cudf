@@ -4,6 +4,7 @@
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
+- PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 
 ## Improvements
 
