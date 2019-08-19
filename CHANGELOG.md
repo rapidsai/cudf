@@ -13,6 +13,7 @@
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2614 Update Java version to match
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
 - PR #2611 Types Test: fix static casting from negative int to string
