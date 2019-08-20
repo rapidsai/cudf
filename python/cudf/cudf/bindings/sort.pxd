@@ -10,11 +10,6 @@ from cudf.bindings.cudf_cpp cimport *
 
 cdef extern from "cudf/cudf.h" nogil:
 
-    ctypedef struct _OpaqueSegmentedRadixsortPlan:
-        pass
-    ctypedef struct  gdf_segmented_radixsort_plan_type:
-        pass
-
     ctypedef enum order_by_type:
         GDF_ORDER_ASC,
         GDF_ORDER_DESC
@@ -25,30 +20,4 @@ cdef extern from "cudf/cudf.h" nogil:
         size_t num_inputs,
         gdf_column* output_indices,
         gdf_context* ctxt
-    ) except +
-
-    cdef gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(
-        size_t num_items,
-        int descending,
-        unsigned begin_bit,
-        unsigned end_bit
-    ) except +
-
-    cdef gdf_error gdf_segmented_radixsort_plan_setup(
-        gdf_segmented_radixsort_plan_type *hdl,
-        size_t sizeof_key,
-        size_t sizeof_val
-    ) except +
-
-    cdef gdf_error gdf_segmented_radixsort_plan_free(
-        gdf_segmented_radixsort_plan_type *hdl
-    ) except +
-
-    cdef gdf_error gdf_segmented_radixsort(
-        gdf_segmented_radixsort_plan_type *hdl,
-        gdf_column *keycol,
-        gdf_column *valcol,
-        unsigned num_segments,
-        unsigned *d_begin_offsets,
-        unsigned *d_end_offsets
     ) except +
