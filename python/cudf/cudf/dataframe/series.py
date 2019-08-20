@@ -23,7 +23,7 @@ from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_datetime_dtype
 from cudf.window import Rolling
 
 
@@ -482,6 +482,7 @@ class Series(object):
             preprocess.has_null_mask
             and not preprocess.dtype == "O"
             and not is_categorical_dtype(preprocess.dtype)
+            and not is_datetime_dtype(preprocess.dtype)
         ):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
@@ -489,6 +490,15 @@ class Series(object):
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
+        print(lines)
+        if is_categorical_dtype(preprocess.dtype):
+            for idx, value in enumerate(preprocess):
+                if value == None:
+                    lines[idx] = lines[idx].replace(' NaN', 'null')
+        if is_datetime_dtype(preprocess.dtype):
+            for idx, value in enumerate(preprocess):
+                if value == None:
+                    lines[idx] = lines[idx].replace(' NaT', 'null')
         if is_categorical_dtype(preprocess.dtype):
             category_memory = lines[-1]
             lines = lines[:-1]
