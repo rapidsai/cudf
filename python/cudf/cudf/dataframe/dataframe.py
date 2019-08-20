@@ -464,7 +464,9 @@ class DataFrame(object):
     def values(self):
         if not utils._have_cupy:
             raise ModuleNotFoundError("cuPY was not found.")
-        return cupy.asarray(self.as_gpu_matrix())     
+        import cupy
+
+        return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
