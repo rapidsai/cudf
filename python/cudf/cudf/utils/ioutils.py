@@ -4,6 +4,8 @@ import os
 import urllib
 from io import BytesIO, TextIOWrapper
 
+import fsspec
+
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_read_avro = """
@@ -809,7 +811,16 @@ def is_file_like(obj):
         return True
 
 
-def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
+def _is_local_filesystem(fs):
+    if isinstance(fs, fsspec.implementations.local.LocalFileSystem):
+        return True
+    else:
+        return False
+
+
+def get_filepath_or_buffer(
+    path_or_data, compression, iotypes=(BytesIO), **kwargs
+):
     """Return either a filepath string to data, or a memory buffer of data.
     If filepath, then the source filepath is expanded to user's environment.
     If buffer, then data is returned in-memory as bytes or a ByteIO object.
@@ -830,16 +841,24 @@ def get_filepath_or_buffer(path_or_data, compression, iotypes=(BytesIO)):
     compression : str
         Type of compression algorithm for the content
     """
-    if is_url(path_or_data):
-        with urllib.request.urlopen(path_or_data) as url:
-            compression = url.headers.get("Content-Encoding", None)
-            buffer = BytesIO(url.read())
-        return buffer, compression
-    elif isinstance(path_or_data, str):
-        return os.path.expanduser(path_or_data), compression
+    if isinstance(path_or_data, str):
+        storage_options = kwargs.get("storage_options")
+        # fsspec does not expanduser so handle here
+        path_or_data = os.path.expanduser(path_or_data)
+        fs, _, paths = fsspec.get_fs_token_paths(
+            path_or_data, mode="rb", storage_options=storage_options
+        )
+        if _is_local_filesystem(fs):
+            # Doing this as `read_json` accepts a json string
+            # path_or_data need not be a filepath like string
+            if os.path.exists(paths[0]):
+                path_or_data = paths[0]
+        else:
+            with fs.open(paths[0]) as f:
+                path_or_data = BytesIO(f.read())
+
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
-            path_or_data = path_or_data.buffer
-        return BytesIO(path_or_data.read()), compression
-    else:
-        return path_or_data, compression
+            path_or_data = BytesIO(path_or_data.buffer.read())
+
+    return path_or_data, compression
