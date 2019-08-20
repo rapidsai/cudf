@@ -33,7 +33,7 @@ namespace detail {
 // Create permuted row indices that would materialize sorted order
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
-                                     null_size size_of_nulls,
+                                     null_order null_precedence,
                                      cudaStream_t stream = 0) {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return cudf::make_numeric_column(data_type{INT32}, 0);
@@ -60,7 +60,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   if (has_nulls(input)) {
     auto comparator = row_lexicographic_comparator<true>(
-        *device_table, *device_table, size_of_nulls,
+        *device_table, *device_table, null_precedence,
         d_column_order.data().get());
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                  mutable_indices_view.begin<int32_t>(),
@@ -68,7 +68,7 @@ std::unique_ptr<column> sorted_order(table_view input,
 
   } else {
     auto comparator = row_lexicographic_comparator<false>(
-        *device_table, *device_table, size_of_nulls,
+        *device_table, *device_table, null_precedence,
         d_column_order.data().get());
     thrust::sort(rmm::exec_policy(stream)->on(stream),
                  mutable_indices_view.begin<int32_t>(),
@@ -81,8 +81,8 @@ std::unique_ptr<column> sorted_order(table_view input,
 
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
-                                     null_size size_of_nulls) {
-  return detail::sorted_order(input, column_order, size_of_nulls);
+                                     null_order null_precedence) {
+  return detail::sorted_order(input, column_order, null_precedence);
 }
 }  // namespace exp
 }  // namespace cudf

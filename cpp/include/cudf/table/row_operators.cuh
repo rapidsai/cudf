@@ -56,7 +56,7 @@ struct element_relational_comparator {
    * @param lhs_element_index The index of the first element
    * @param rhs The column containing the second element (may be equal to `lhs`)
    * @param rhs_element_index The index of the second element
-   * @param size_of_nulls Indicates how null values compare with all other
+   * @param null_precedence Indicates how null values are ordered with other
    * values
    * @return weak_ordering Indicates the relationship between the elements in
    * the `lhs` and `rhs` columns.
@@ -67,7 +67,7 @@ struct element_relational_comparator {
                                       size_type lhs_element_index,
                                       column_device_view rhs,
                                       size_type rhs_element_index,
-                                      null_size size_of_nulls) {
+                                      null_order null_precedence) {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -75,11 +75,12 @@ struct element_relational_comparator {
       if (lhs_is_null and rhs_is_null) {  // null <? null
         return weak_ordering::EQUIVALENT;
       } else if (lhs_is_null) {  // null <? x
-        return (size_of_nulls == null_size::LOWEST) ? weak_ordering::LESS
-                                                    : weak_ordering::GREATER;
+        return (null_precedence == null_order::BEFORE) 
+                   ? weak_ordering::LESS
+                   : weak_ordering::GREATER;
       } else if (rhs_is_null) {  // x <? null
-        return (size_of_nulls == null_size::HIGHEST) ? weak_ordering::LESS
-                                                     : weak_ordering::GREATER;
+        return (null_precedence == null_order::AFTER) ? weak_ordering::LESS
+                                                       : weak_ordering::GREATER;
       }
     }
 
@@ -132,17 +133,19 @@ class row_lexicographic_comparator {
    *
    * @param lhs The first table
    * @param rhs The second table (may be the same table as `lhs`)
-   * @param size_of_nulls Indicates how null values compare to all other values.
+   * @param null_precedence Indicates how null values compare to all other
+   *values.
    * @param column_order Optional, device array the same length as a row that
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
    *---------------------------------------------------------------------------**/
-  row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
-                               null_size size_of_nulls = null_size::LOWEST,
-                               order* column_order = nullptr)
+  row_lexicographic_comparator(
+      table_device_view lhs, table_device_view rhs,
+      null_order null_precedence = null_order::BEFORE,
+      order* column_order = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
-        _size_of_nulls{size_of_nulls},
+        _null_precedence{null_precedence},
         _column_order{column_order} {
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
                  "Mismatched number of columns.");
@@ -169,12 +172,12 @@ class row_lexicographic_comparator {
         state = cudf::exp::type_dispatcher(
             _lhs.column(i).type(), element_relational_comparator<has_nulls>{},
             _lhs.column(i), lhs_index, _rhs.column(i), rhs_index,
-            _size_of_nulls);
+            _null_precedence);
       } else {
         state = cudf::exp::type_dispatcher(
             _lhs.column(i).type(), element_relational_comparator<has_nulls>{},
             _rhs.column(i), rhs_index, _lhs.column(i), lhs_index,
-            _size_of_nulls);
+            _null_precedence);
       }
 
       if (state == weak_ordering::EQUIVALENT) {
@@ -189,9 +192,9 @@ class row_lexicographic_comparator {
  private:
   table_device_view _lhs;
   table_device_view _rhs;
-  null_size _size_of_nulls{null_size::LOWEST};
+  null_order _null_precedence{null_order::BEFORE};
   order const* _column_order{};
-};
+};  // namespace exp
 
 }  // namespace exp
 }  // namespace cudf
