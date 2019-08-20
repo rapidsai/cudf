@@ -4,20 +4,24 @@
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
+- PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 
 ## Improvements
 
+- PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
 - PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
 
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2614 Update Java version to match
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
+- PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
-
+- PR #2615 fix string category partitioning in java API
 
 # cuDF 0.9.0 (Date TBD)
 
