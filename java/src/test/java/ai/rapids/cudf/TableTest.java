@@ -216,14 +216,36 @@ public class TableTest {
     try (Table table = new Table.TestBuilder()
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
+	.categoryColumn("4", "3", "2", "1", "0")
         .column(1, 3, 5, 7, 9)
         .build();
          Table expected = new Table.TestBuilder()
              .column(1, 1, 3, 5, null)
              .column(null, null, 4, 5, 3)
+	     .categoryColumn("1", "0", "2", "4", "3")
              .column(7, 9, 5, 1, 3)
              .build();
          Table sortedTable = table.orderBy(false, Table.asc(0), Table.desc(1))) {
+      assertTablesAreEqual(expected, sortedTable);
+    }
+  }
+
+  @Test
+  void testOrderByWithNullsAndStrings() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (Table table = new Table.TestBuilder()
+	.categoryColumn("4", "3", "2", "1", "0")
+        .column(5, null, 3, 1, 1)
+        .column(5, 3, 4, null, null)
+        .column(1, 3, 5, 7, 9)
+        .build();
+         Table expected = new Table.TestBuilder()
+	     .categoryColumn("0", "1", "2", "3", "4")
+             .column(1, 1, 3, null, 5)
+             .column(null, null, 4, 3, 5)
+             .column(9, 7, 5, 3, 1)
+             .build();
+         Table sortedTable = table.orderBy(false, Table.asc(0))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }

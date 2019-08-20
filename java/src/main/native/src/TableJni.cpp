@@ -97,7 +97,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfOrderBy(
     auto is_descending = cudf::jni::copy_to_device(env, n_is_descending);
 
     cudf::table *input_table = reinterpret_cast<cudf::table *>(j_input_table);
-    cudf::jni::output_table output(env, input_table);
+    cudf::jni::output_table output(env, input_table, true);
 
     bool are_nulls_smallest = static_cast<bool>(j_are_nulls_smallest);
 
@@ -129,6 +129,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfOrderBy(
 
     cudf::table *cudf_table = output.get_cudf_table();
 
+    // gather handles string categories
     gather(input_table, col_data.get(), cudf_table);
 
     return output.get_native_handles_and_release();
@@ -440,7 +441,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     std::vector<gdf_column *> concat_input_ptrs(tables.size());
     for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
       outcols.emplace_back(total_size, tables[0]->get_column(col_idx)->dtype,
-                           need_validity[col_idx]);
+                           need_validity[col_idx], true);
       outcol_ptrs[col_idx] = outcols[col_idx].get();
       for (int table_idx = 0; table_idx < tables.size(); ++table_idx) {
         concat_input_ptrs[table_idx] = tables[table_idx]->get_column(col_idx);
