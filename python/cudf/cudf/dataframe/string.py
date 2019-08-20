@@ -616,6 +616,7 @@ class StringColumn(columnops.TypedColumnBase):
 
         header["nvstrings"] = len(self._data)
         header["subheaders"] = sub_headers
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod

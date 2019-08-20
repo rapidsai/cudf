@@ -220,19 +220,13 @@ class DataFrame(object):
         frames.extend(index_frames)
 
         # Use the column directly to avoid duplicating the index
-        columns = [col._column for col in self._cols.values()]
-        header["column_names"] = tuple(self._cols)
-        header["columns"] = []
-        # handle empty dataframes
-        if len(columns) > 0:
-            header_columns = [c.serialize() for c in columns]
+        header["column_names"] = tuple(self._cols.keys())
+        column_header, column_frames = columnops.serialize_columns(
+            self._columns
+        )
+        header["columns"] = column_header
+        frames.extend(column_frames)
 
-            for h, f in header_columns:
-                h["frame_count"] = len(f)
-
-            header["columns"], column_frames = zip(*header_columns)
-            for f in column_frames:
-                frames.extend(f)
         return header, frames
 
     @classmethod
@@ -245,16 +239,13 @@ class DataFrame(object):
 
         # Reconstruct the columns
         column_frames = frames[header["index_frame_count"] :]
-        columns = []
 
-        for k, meta in zip(header["column_names"], header["columns"]):
-            col_frame_count = meta["frame_count"]
-            col_typ = pickle.loads(meta["type"])
-            colobj = col_typ.deserialize(meta, column_frames[:col_frame_count])
-            columns.append((k, colobj))
-            # Advance frames
-            column_frames = column_frames[col_frame_count:]
-        return cls(columns, index=index)
+        column_names = header["column_names"]
+        columns = columnops.deserialize_columns(
+            header["columns"], column_frames
+        )
+
+        return cls(dict(zip(column_names, columns)), index=index)
 
     @property
     def dtypes(self):
