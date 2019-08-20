@@ -15,7 +15,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
-
+from cudf.utils.utils import _have_cupy
 
 def test_buffer_basic():
     n = 10
@@ -1461,11 +1461,6 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    try:
-        import cupy
-        _have_cupy = True
-    except ImportError:
-        _have_cupy = False
     if not _have_cupy:
         pytest.skip("CuPy is not installed")
 
