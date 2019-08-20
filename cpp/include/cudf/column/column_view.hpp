@@ -134,7 +134,7 @@ class column_view_base {
    * @return true One or more elements are null
    * @return false All elements are valid
    *---------------------------------------------------------------------------**/
-  bool has_nulls() const noexcept { return _null_count > 0; }
+  bool has_nulls() const noexcept { return null_count() > 0; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
