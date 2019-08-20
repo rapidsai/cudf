@@ -21,7 +21,7 @@
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
-- PR #2641 fix string category concat in the java API
+- PR #2641 fix string category and timeunit concat in the java API
 
 # cuDF 0.9.0 (Date TBD)
 
