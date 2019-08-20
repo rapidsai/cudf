@@ -859,6 +859,7 @@ def get_filepath_or_buffer(
 
     elif not isinstance(path_or_data, iotypes) and is_file_like(path_or_data):
         if isinstance(path_or_data, TextIOWrapper):
-            path_or_data = BytesIO(path_or_data.buffer.read())
+            path_or_data = path_or_data.buffer
+        path_or_data = BytesIO(path_or_data.read())
 
     return path_or_data, compression
