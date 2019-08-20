@@ -77,15 +77,9 @@ class NumericalColumn(columnops.TypedColumnBase):
         if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
-                found_zero_in_column = False
-                if isinstance(tmp, NumericalColumn):
-                    try:
-                        if tmp.find_first_value(0.0):
-                            found_zero_in_column = True
-                    except ValueError:
-                        """This means value not found"""
                 if (
-                    (found_zero_in_column) or (np.isscalar(tmp) and (0 == tmp))
+                    (np.isscalar(tmp) and (0 == tmp))
+                    or (is_zero_in_column(tmp))
                 ) and (tmp.dtype in int_dtypes):
                     out_dtype = np.dtype("float_")
             return numeric_column_binop(
@@ -500,3 +494,28 @@ def digitize(column, bins, right=False):
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return cpp_sort.digitize(column, bin_col, right)
+
+
+def is_zero_in_column(col=None):
+    """ Returns True if column contains 0 else False.
+
+    Paramters
+    ---------
+    col : NumericalColumn
+        Input column.
+
+    Returns
+    -------
+    True/False
+    """
+    found_zero_in_column = False
+    if isinstance(col, NumericalColumn):
+        try:
+            if col.find_first_value(0.0):
+                found_zero_in_column = True
+        except ValueError:
+            """This means value not found"""
+    else:
+        found_zero_in_column = False
+
+    return found_zero_in_column
