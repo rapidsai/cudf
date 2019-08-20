@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]

@@ -4,7 +4,6 @@
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
-- PR #2629 Add dropna= parameter to groupby
 
 ## Improvements
 
@@ -16,7 +15,6 @@
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
-- PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 
 

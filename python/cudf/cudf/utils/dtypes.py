@@ -4,14 +4,20 @@ from pandas.api.types import pandas_dtype
 from pandas.core.dtypes.dtypes import CategoricalDtype, CategoricalDtypeType
 
 
+def numeric_normalize_types(*args):
+    """Cast all args to a common type using numpy promotion logic
+    """
+    dtype = np.result_type(*[a.dtype for a in args])
+    return [a.astype(dtype) for a in args]
+
+
 def is_categorical_dtype(obj):
     """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
     is a pandas CategoricalDtype.
     """
-    from cudf.dataframe import Series, Index
-    from cudf.dataframe.column import Column
-    from cudf.dataframe.index import CategoricalIndex
-    from cudf.dataframe.categorical import CategoricalColumn
+    from cudf.core import Series, Index
+    from cudf.core.column import Column, CategoricalColumn
+    from cudf.core.index import CategoricalIndex
 
     if obj is None:
         return False

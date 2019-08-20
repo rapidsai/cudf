@@ -82,7 +82,7 @@ def scalar_broadcast_to(scalar, shape, dtype):
 
     if np.dtype(dtype) == np.dtype("object"):
         import nvstrings
-        from cudf.dataframe.string import StringColumn
+        from cudf.core.column import StringColumn
         from cudf.utils.cudautils import zeros
 
         gather_map = zeros(shape[0], dtype="int32")
@@ -109,7 +109,7 @@ list_types_tuple = (list, np.array)
 
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.buffer import Buffer
     from cudf.utils.cudautils import copy_array
 
     buffers = pa_arr.buffers()
