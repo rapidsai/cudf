@@ -3344,6 +3344,6 @@ def test_tolist(data):
     gsr = Series.from_pandas(psr)
 
     got = gsr.tolist()
-    expected = psr.tolist()
+    expected = [x if not pd.isnull(x) else None for x in psr.tolist()]
 
     np.testing.assert_array_equal(got, expected)
