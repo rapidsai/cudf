@@ -123,16 +123,22 @@ struct median_result_type {
   }
 };
 
+__device__ inline int get_num_elements_in_group(gdf_index_type * group_indices, int index) {
+  if (index == 0)
+    return group_indices[index+1] - group_indices[index];
+  return group_indices[index] - group_indices[index - 1];
+}
+
 template <typename T>
 struct compute_mediam_operator {
-    gdf_size_type* map;
-    gdf_size_type* map_group;
+    gdf_size_type* map; // keys_sorted_indices
+    gdf_size_type* map_group; // value_col_sorted_indices
     T* values;
-    
+    gdf_index_type* group_indices;
+
   __device__ inline T operator()(gdf_index_type i) {
-    // gdf_size_type num_elements = get_num_elements_in_group(group_indices, i);
-    gdf_size_type num_elements = 3; // FIX this 
-    gdf_size_type index = num_elements * i; // FIX this index = index_container[i];
+    gdf_size_type num_elements = get_num_elements_in_group(group_indices, i); // FIX this 
+    gdf_size_type index = group_indices[i];
     gdf_size_type index_medium = index + num_elements / 2;
     return values[ map[ map_group[index_medium] ] ];
   }
@@ -140,12 +146,14 @@ struct compute_mediam_operator {
 
 struct dispath_mediam_forwarder {
   template <typename T>
-  bool operator()(const gdf_column *input_column, gdf_column *output_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, cudaStream_t stream) const {
-    compute_mediam_operator<T> op{sorted_indices.data().get(), map_indices_group.data().get(), (T*)input_column->data};
-    thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(map_indices_group.size())), (T *)output_column->data, op);
+  bool operator()(const gdf_column *input_column, gdf_column *output_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, const gdf_column& group_indices_col, cudaStream_t stream) const {
+    compute_mediam_operator<T> op{sorted_indices.data().get(), map_indices_group.data().get(), (T*)input_column->data, (gdf_index_type *)group_indices_col.data};
+    thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(group_indices_col.size)), (T *)output_column->data, op);
     return true;
   }
 };
+// 0,3,6
+// value_col_indices_group
 
 gdf_column* compute_median(const gdf_column& group_indices_col,  const gdf_column &input_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, cudaStream_t stream) {
   auto ngroups = group_indices_col.size;
@@ -161,7 +169,7 @@ gdf_column* compute_median(const gdf_column& group_indices_col,  const gdf_colum
         &median->valid,
         sizeof(gdf_size_type) * gdf_valid_allocation_size(ngroups), stream));
   }
-  cudf::type_dispatcher(input_column.dtype, dispath_mediam_forwarder{}, &input_column, median, map_indices_group, sorted_indices, stream);
+  cudf::type_dispatcher(input_column.dtype, dispath_mediam_forwarder{}, &input_column, median, map_indices_group, sorted_indices, group_indices_col, stream);
   return median;
 }
 
@@ -177,7 +185,9 @@ struct row_group_inequality_comparator
   {
     gdf_index_type group_id_x = get_group_index(group_indices, group_indices_size, x);
     gdf_index_type group_id_y = get_group_index(group_indices, group_indices_size, y);
-    if (group_id_x == group_id_y) {
+    if(group_id_x < group_id_y) {
+      return true;
+    }else if (group_id_x == group_id_y) {
       return cmp(index_map[x], index_map[y]);
     }
     return false;
@@ -186,11 +196,11 @@ struct row_group_inequality_comparator
 
 gdf_error gdf_order_by_groups(const gdf_column& group_indices_col,
                        table input_keys,  
-                       gdf_column const* const* cols,
+                       gdf_column const* const* cols, // value column
                        int8_t* asc_desc,
                        size_t num_inputs,
                        gdf_column* output_indices,
-                       rmm::device_vector<gdf_size_type> &d_index_map,
+                       rmm::device_vector<gdf_size_type> &d_index_map, // keys_sorted_indices
                        gdf_context * context)                       
 {
   GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
@@ -211,7 +221,7 @@ gdf_error gdf_order_by_groups(const gdf_column& group_indices_col,
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
   auto table = device_table::create(num_inputs, cols, stream);
   bool nullable = table.get()->has_nulls();
- 
+  //TODO: 
   // if (nullable){
   //   auto ineq_op = row_inequality_comparator<true>(*table, nulls_are_smallest, asc_desc); 
   //   thrust::sort(rmm::exec_policy(stream)->on(stream),
@@ -248,18 +258,18 @@ table compute_median_requests(
     assert(op == MEDIAN);
 
     auto nrows = input_keys.num_rows(); 
-    rmm::device_vector<gdf_size_type> map_indices_group(thrust::make_counting_iterator(int(0)),
+    rmm::device_vector<gdf_size_type> value_col_sorted_indices_vector(thrust::make_counting_iterator(int(0)),
                                       thrust::make_counting_iterator(int(nrows)));
 
-    gdf_column sorted_indices_col{};
-    CUDF_TRY(gdf_column_view(&sorted_indices_col,
-                            (void*)(map_indices_group.data().get()), nullptr, nrows,
+    gdf_column value_col_sorted_indices{};
+    CUDF_TRY(gdf_column_view(&value_col_sorted_indices,
+                            (void*)(value_col_sorted_indices_vector.data().get()), nullptr, nrows,
                             GDF_INT32));
     gdf_context ctxt{};
-    gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &sorted_indices_col, d_sorted_indices, &ctxt);
+    gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &value_col_sorted_indices, d_sorted_indices, &ctxt);
     // auto ngroups = group_indices_col.size; 
 
-    final_value_columns[i] = compute_median(group_indices_col, *value_col, map_indices_group, d_sorted_indices, stream);
+    final_value_columns[i] = compute_median(group_indices_col, *value_col, value_col_sorted_indices_vector, d_sorted_indices, stream);
   }
   return cudf::table{final_value_columns};
 }
@@ -397,7 +407,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
         cudf::table(0, target_dtypes(column_dtypes(values), ops), column_dtype_infos(values)));
   }
 
- auto compute_groupby = groupby_null_specialization(keys, values);
+  auto compute_groupby = groupby_null_specialization(keys, values);
 
   cudf::table output_keys;
   cudf::table output_values;
