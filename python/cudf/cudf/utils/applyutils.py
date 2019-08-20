@@ -7,9 +7,9 @@ from numba.utils import exec_, pysignature
 
 from librmm_cffi import librmm as rmm
 
-import cudf.bindings.binops as cpp_binops
-from cudf.dataframe import columnops
-from cudf.dataframe.series import Series
+import cudf._lib as libcudf
+from cudf.core.column import column
+from cudf.core.series import Series
 from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
 
@@ -89,13 +89,13 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
 
         nullmask = df[k].nullmask
         if out_mask is None:
-            out_mask = columnops.as_column(
+            out_mask = column.as_column(
                 nullmask.copy(), dtype=utils.mask_dtype
             )
             continue
 
-        cpp_binops.apply_op(
-            columnops.as_column(nullmask), out_mask, out_mask, op
+        libcudf.binops.apply_op(
+            column.as_column(nullmask), out_mask, out_mask, op
         )
 
     return out_mask

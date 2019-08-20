@@ -278,10 +278,10 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
+    import cudf._lib as libcudf
 
-    import cudf.bindings.reduce as cpp_reduce
-    from cudf.dataframe.numerical import NumericalColumn
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.column import NumericalColumn
+    from cudf.core.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
@@ -295,7 +295,7 @@ def prefixsum(vals):
     out_col = NumericalColumn(
         data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
     )
-    cpp_reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
+    libcudf.reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 
@@ -779,7 +779,7 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     min_index = found_col.min()
@@ -812,7 +812,7 @@ def find_last(arr, val, compare="eq"):
                 gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
             else:
                 gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     max_index = found_col.max()

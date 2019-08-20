@@ -250,7 +250,7 @@ TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
     EXPECT_TRUE(w2 >= w3);
     EXPECT_TRUE(w2 <= w3);
 
-    cudf::bool8 w4{static_cast<char>(-42)};
+    cudf::bool8 w4{-42};
     cudf::bool8 w5{43};
 
     EXPECT_TRUE(w4 == w4);
@@ -283,7 +283,7 @@ TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
 TEST_F(WrappersTestBool8, CastArithmeticTest)
 {
     cudf::bool8 w1{42};
-    cudf::bool8 w2{static_cast<char>(-42)};
+    cudf::bool8 w2{-42};
 
     bool t1{42};
     bool t2{-42};
