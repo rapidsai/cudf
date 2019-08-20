@@ -444,9 +444,6 @@ class Series(object):
         list
         """
         return self.to_arrow().to_pylist()
-        
-        
-
 
     def head(self, n=5):
         return self.iloc[:n]
