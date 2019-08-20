@@ -442,17 +442,11 @@ class Series(object):
         Returns
         -------
         list
-
-        Difference from pandas:
-          * Returns numpy.datetime64 instead of pandas internal type
         """
-        vals = self.values
-        if isinstance(vals, list):
-            return vals
-        elif np.issubdtype(vals.dtype, np.datetime64):
-            return list(vals.astype(vals.dtype))
-        else:
-            return vals.tolist()
+        return self.to_arrow().to_pylist()
+        
+        
+
 
     def head(self, n=5):
         return self.iloc[:n]
