@@ -7,6 +7,7 @@
 ## Improvements
 
 ## Bug Fixes
+
 - PR #2496 Fix improper merge of two dataframes when names differ
 
 
