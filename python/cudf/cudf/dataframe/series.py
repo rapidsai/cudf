@@ -494,11 +494,11 @@ class Series(object):
         if is_categorical_dtype(preprocess.dtype):
             for idx, value in enumerate(preprocess):
                 if value is None:
-                    lines[idx] = lines[idx].replace(' NaN', 'null')
+                    lines[idx] = lines[idx].replace(" NaN", "null")
         if is_datetime_dtype(preprocess.dtype):
             for idx, value in enumerate(preprocess):
                 if value is None:
-                    lines[idx] = lines[idx].replace(' NaT', 'null')
+                    lines[idx] = lines[idx].replace(" NaT", "null")
         if is_categorical_dtype(preprocess.dtype):
             category_memory = lines[-1]
             lines = lines[:-1]
