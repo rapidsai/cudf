@@ -55,9 +55,13 @@ column_view_base::column_view_base(data_type type, size_type size,
 
 // If null count is known, returns it. Else, computes it and returns
 size_type column_view_base::null_count() const noexcept {
-  if (_null_count != cudf::UNKNOWN_NULL_COUNT) {
+  if (_null_count > cudf::UNKNOWN_NULL_COUNT) {
     return _null_count;
   } else {
+    if (_null_mask == nullptr) {
+      _null_count = 0;
+      return null_count();
+    }
     CUDF_FAIL("On-demand null count computation not yet implemented.");
   }
 }
