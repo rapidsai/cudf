@@ -9,6 +9,7 @@
 
 - PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2632 Replace dask-cudf set_index code with upstream
 
 ## Bug Fixes
 

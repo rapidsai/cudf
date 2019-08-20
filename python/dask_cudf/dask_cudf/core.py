@@ -374,47 +374,9 @@ class DataFrame(_Frame, dd.core.DataFrame):
         divisions = compute(*divs)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
-    def set_index(
-        self,
-        other,
-        drop=True,
-        sorted=False,
-        npartitions=None,
-        divisions=None,
-        inplace=False,
-        **kwargs,
-    ):
-        """Set new index.
-
-        See: dd.core.DataFrame.set_index
-        """
-
-        if inplace:
-            raise NotImplementedError("The inplace= keyword is not supported")
-        pre_sorted = sorted
-        del sorted
-
-        if divisions is not None:
-            dd.core.check_divisions(divisions)
-
-        if pre_sorted:
-            from dask.dataframe.shuffle import set_sorted_index
-
-            return set_sorted_index(
-                self, other, drop=drop, divisions=divisions, **kwargs
-            )
-        else:
-            from dask.dataframe.shuffle import set_index
-
-            return set_index(
-                self,
-                other,
-                drop=drop,
-                npartitions=npartitions,
-                divisions=divisions,
-                shuffle="tasks",
-                **kwargs,
-            )
+    def set_index(self, other, **kwargs):
+        kwargs.pop("shuffle", None)
+        return super().set_index(other, shuffle="tasks", **kwargs)
 
     def reset_index(self, force=False, drop=False):
         """Reset index to range based
