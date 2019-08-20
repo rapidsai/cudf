@@ -138,6 +138,17 @@ cudf::table drop_duplicates(const cudf::table& input_table,
                             const cudf::table& key_columns,
                             const duplicate_keep_option keep,
                             const bool nulls_are_equal = true);
+
+/**
+ * @brief Count the unique elements in the column
+ *
+ * Given an input column, number of unique elements in this column is returned
+ * 
+ * @param input_column input column
+ *
+ * @return number of unique elements
+ */
+gdf_size_type unique_count(gdf_column& input_column);
 }  // namespace cudf
 
 #endif

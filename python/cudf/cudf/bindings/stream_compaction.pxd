@@ -38,3 +38,5 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         const cudf_table& key_columns,
         const duplicate_keep_option keep
     ) except +
+
+    cdef gdf_size_type unique_count(gdf_column& input_column) except +

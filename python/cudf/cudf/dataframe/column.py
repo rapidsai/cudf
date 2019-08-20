@@ -16,6 +16,7 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.quantile as cpp_quantile
 from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
+from cudf.bindings.stream_compaction import nunique as cpp_unique_count
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
@@ -796,7 +797,7 @@ class Column(object):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
+        count = cpp_unique_count(self)
+        if dropna is True and self.null_count > 0:
+            return count - 1
+        return count

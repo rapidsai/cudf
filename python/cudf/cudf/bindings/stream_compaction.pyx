@@ -68,6 +68,29 @@ def apply_drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     return (out_cols[:-1], out_cols[-1])
 
 
+def nunique(in_col):
+    """
+    get number of unique elements in the input column
+
+    in_col: input column to check for unique element count
+
+    out_count: number of unique elements in the input column
+    """
+    in_col_null = in_col
+    # convert nans_to_nulls
+    if (in_col.dtype in [np.float16, np.float32, np.float64]):
+        in_col_null = in_col.set_mask(mask_from_devary(in_col))
+    check_gdf_compatibility(in_col_null)
+    cdef gdf_column* c_in_col = column_view_from_column(in_col_null)
+    cdef int count = 0
+    with nogil:
+        count = unique_count(c_in_col[0])
+    # if null and nan both are present, increment count by 1
+    if in_col.null_count>0 and in_col_null.null_count > in_col.null_count:
+        count = count + 1
+    return count
+
+
 def apply_apply_boolean_mask(cols, mask):
     """
     Filter the rows of a list of columns using a boolean mask

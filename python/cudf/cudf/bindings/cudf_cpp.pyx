@@ -19,7 +19,6 @@ import pyarrow as pa
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
-import cudf.dataframe.columnops
 from librmm_cffi import librmm as rmm
 import nvstrings
 import nvcategory

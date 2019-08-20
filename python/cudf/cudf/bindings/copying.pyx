@@ -5,7 +5,7 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf.dataframe import columnops
+import cudf.dataframe.columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
@@ -33,17 +33,15 @@ pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 def clone_columns_with_size(in_cols, row_size):
     out_cols = []
     for col in in_cols:
-        o_col = columnops.column_empty_like(col,
-                                            dtype=col.dtype,
-                                            masked=col.has_null_mask,
-                                            newsize=row_size)
+        o_col = cudf.dataframe.columnops.column_empty_like(
+            col, dtype=col.dtype, masked=col.has_null_mask, newsize=row_size)
         out_cols.append(o_col)
 
     return out_cols
 
 
 def _normalize_maps(maps, size):
-    maps = columnops.as_column(maps).astype("int32")
+    maps = cudf.dataframe.columnops.as_column(maps).astype("int32")
     maps = maps.binary_operator("mod", np.int32(size))
     maps = maps.data.mem
     return maps
@@ -74,9 +72,9 @@ def apply_gather(source, maps, dest=None):
         out_cols = None if dest is None else [dest]
 
     for i, in_col in enumerate(in_cols):
-        in_cols[i] = columnops.as_column(in_cols[i])
+        in_cols[i] = cudf.dataframe.columnops.as_column(in_cols[i])
         if dest is not None:
-            out_cols[i] = columnops.as_column(out_cols[i])
+            out_cols[i] = cudf.dataframe.columnops.as_column(out_cols[i])
 
     if in_cols[0].dtype == np.dtype("object"):
         in_size = in_cols[0].data.size()
@@ -160,8 +158,8 @@ def apply_scatter(source, maps, target):
         source_cols = [source_cols] * len(target_cols)
 
     for i in range(len(target_cols)):
-        target_cols[i] = columnops.as_column(target_cols[i])
-        source_cols[i] = columnops.as_column(source_cols[i])
+        target_cols[i] = cuda.dataframe.columnops.as_column(target_cols[i])
+        source_cols[i] = cudf.dataframe.columnops.as_column(source_cols[i])
         assert source_cols[i].dtype == target_cols[i].dtype
 
     c_source_table = table_from_columns(source_cols)

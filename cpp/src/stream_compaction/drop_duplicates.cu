@@ -187,4 +187,18 @@ rows in input table should be equal to number of rows in key colums table");
   nvcategory_gather_table(input_table, destination_table);
   return destination_table;
 }
+
+gdf_size_type unique_count(gdf_column& input_column)
+{
+  if (0 == input_column.size) {
+    return 0;
+  }
+  gdf_column* cols[]{&input_column};
+  const cudf::table key_columns(cols, 1);
+  gdf_size_type unique_count; 
+  std::tie(std::ignore, unique_count) =
+    detail::get_unique_ordered_indices(key_columns, duplicate_keep_option::KEEP_FIRST, true);
+  return unique_count;
+}
+
 }  // namespace cudf
