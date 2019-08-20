@@ -78,13 +78,14 @@ class NumericalColumn(columnops.TypedColumnBase):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
                 found_zero_in_column = False
-                if (isinstance(tmp, NumericalColumn)):
+                if isinstance(tmp, NumericalColumn):
                     try:
-                        if (tmp.find_first_value(0.0)):
+                        if tmp.find_first_value(0.0):
                             found_zero_in_column = True
                     except ValueError:
                         """This means value not found"""
-                if ((found_zero_in_column) or (np.isscalar(tmp) and (0 == tmp))
+                if (
+                    (found_zero_in_column) or (np.isscalar(tmp) and (0 == tmp))
                 ) and (tmp.dtype in int_dtypes):
                     out_dtype = np.dtype("float_")
             return numeric_column_binop(
