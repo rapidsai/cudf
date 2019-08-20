@@ -26,7 +26,7 @@
 #include <hash/managed.cuh>
 #include <cudf/legacy/table.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/logical.h>

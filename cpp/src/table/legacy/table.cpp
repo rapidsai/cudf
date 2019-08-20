@@ -43,7 +43,9 @@ table::table(std::initializer_list<gdf_column*> list)
 table::table(gdf_column* cols[], gdf_size_type num_cols)
     : table{std::vector<gdf_column*>(cols, cols + num_cols)} {}
 
-table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
+table::table(gdf_size_type num_rows,
+             std::vector<gdf_dtype> const& dtypes,
+             std::vector<gdf_dtype_extra_info> const& dtype_infos,
              bool allocate_bitmasks, bool all_valid, cudaStream_t stream)
     : _columns(dtypes.size()) {
   std::transform(
@@ -51,17 +53,14 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
       [num_rows, allocate_bitmasks, all_valid, stream](gdf_column*& col,
                                                        gdf_dtype dtype) {
         CUDF_EXPECTS(dtype != GDF_invalid, "Invalid gdf_dtype.");
-        CUDF_EXPECTS(dtype != GDF_TIMESTAMP, "Timestamp unsupported.");
         col = new gdf_column{};
-        col->size = num_rows;
-        col->dtype = dtype;
-        col->null_count = 0;
-        col->valid = nullptr;
 
-        // Timestamp currently unsupported as it would require passing in
-        // additional resolution information
         gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
-        col->dtype_info = extra_info;
+        extra_info.category = nullptr;
+        CUDF_EXPECTS(GDF_SUCCESS ==
+                      gdf_column_view_augmented(col, nullptr, nullptr, num_rows,
+                                                dtype, 0, extra_info),
+                     "Invalid column parameters");
 
         RMM_ALLOC(&col->data, cudf::size_of(dtype) * num_rows, stream);
         if (allocate_bitmasks) {
@@ -79,6 +78,13 @@ table::table(gdf_size_type num_rows, std::vector<gdf_dtype> const& dtypes,
         }
         return col;
       });
+
+    std::transform(
+        _columns.begin(), _columns.end(), dtype_infos.begin(), _columns.begin(),
+        [](gdf_column*& col, gdf_dtype_extra_info dtype_info) {
+          col->dtype_info.time_unit = dtype_info.time_unit;
+          return col;
+      });
 }
 
 void table::destroy(void) {
@@ -94,6 +100,14 @@ std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
   std::transform(table.begin(), table.end(), dtypes.begin(),
                  [](gdf_column const* col) { return col->dtype; });
   return dtypes;
+}
+
+std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table) {
+  std::vector<gdf_dtype_extra_info> dtype_infos(table.num_columns());
+
+  std::transform(table.begin(), table.end(), dtype_infos.begin(),
+                 [](gdf_column const* col) { return col->dtype_info; });
+  return dtype_infos;
 }
 
 bool has_nulls(cudf::table const& table) {

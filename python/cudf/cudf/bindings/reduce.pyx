@@ -79,9 +79,7 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
 
     cdef gdf_column* c_col = column_view_from_column(col)
     cdef operators c_op = _REDUCTION_OP[reduction_op]
-    cdef gdf_dtype c_out_dtype = get_dtype(
-        col_dtype.type if dtype is None else col_dtype
-    )
+    cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(col, col_dtype)
     cdef gdf_scalar c_result
     cdef gdf_size_type c_ddof = ddof
 
@@ -93,8 +91,8 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
             c_ddof
         )
 
-    free(c_col)
-    result = get_scalar_value(c_result)
+    free_column(c_col)
+    result = get_scalar_value(c_result, col_dtype)
 
     return result
 
@@ -120,7 +118,7 @@ def apply_scan(col_inp, col_out, scan_op, inclusive):
             b_inclusive
         )
 
-    free(c_col_inp)
-    free(c_col_out)
+    free_column(c_col_inp)
+    free_column(c_col_out)
 
     return

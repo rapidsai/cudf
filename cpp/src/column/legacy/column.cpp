@@ -24,8 +24,8 @@
 #include <utilities/error_utils.hpp>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cuda_runtime_api.h>
 #include <algorithm>
@@ -86,7 +86,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
-  int column_byte_width = cudf::byte_width(*output_column);
+  std::size_t column_byte_width = cudf::byte_width(*output_column);
 
   // copy data
 
@@ -97,7 +97,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     }
   }else{
     for (int i = 0; i < num_columns; ++i) {
-      gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
+      std::size_t bytes = column_byte_width * columns_to_concat[i]->size;
       CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
       target += bytes;
       output_column->null_count += columns_to_concat[i]->null_count;
@@ -155,6 +155,9 @@ gdf_error gdf_column_view(gdf_column *column,
   column->size = size;
   column->dtype = dtype;
   column->null_count = 0;
+  column->col_name = nullptr;
+  column->dtype_info.category = nullptr;
+  column->dtype_info.time_unit = TIME_UNIT_NONE;
   return GDF_SUCCESS;
 }
 
@@ -167,14 +170,19 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
                                     gdf_size_type size,
                                     gdf_dtype dtype,
                                     gdf_size_type null_count,
-                                    gdf_dtype_extra_info extra_info)
+                                    gdf_dtype_extra_info extra_info,
+                                    const char* name)
 {
-  column->data = data;
-  column->valid = valid;
-  column->size = size;
-  column->dtype = dtype;
+  gdf_column_view(column, data, valid, size, dtype);
   column->null_count = null_count;
   column->dtype_info = extra_info;
+  if (name != nullptr) {
+    size_t len = strlen(name);
+    if (len > 0) {
+      column->col_name = (char *)malloc(strlen(name) + 1);
+      std::strcpy(column->col_name, name);
+    }
+  }
   return GDF_SUCCESS;
 }
 

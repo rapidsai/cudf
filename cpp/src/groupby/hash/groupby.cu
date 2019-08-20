@@ -16,17 +16,17 @@
 
 #include <cudf/cudf.h>
 #include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/legacy/bitmask.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
+#include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
 #include <hash/concurrent_unordered_map.cuh>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "aggregation_requests.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
@@ -200,7 +200,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
 
   cudf::table sparse_output_values{
       output_size_estimate, target_dtypes(column_dtypes(input_values), ops),
-      values_have_nulls, false, stream};
+      column_dtype_infos(input_values), values_have_nulls, false, stream};
 
   initialize_with_identity(sparse_output_values, ops, stream);
 
@@ -356,14 +356,16 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // translate these compound requests into simple requests, and compute the
   // groupby operation for these simple requests. Later, we translate the simple
   // requests back to compound request results.
-  std::vector<AggRequestType> simple_requests =
+  std::vector<SimpleAggRequestCounter> simple_requests =
       compound_to_simple(original_requests);
 
   std::vector<gdf_column*> simple_values_columns;
   std::vector<operators> simple_operators;
   for (auto const& p : simple_requests) {
-    simple_values_columns.push_back(const_cast<gdf_column*>(p.first));
-    simple_operators.push_back(p.second);
+    const AggRequestType& agg_req_type = p.first;
+    simple_values_columns.push_back(
+        const_cast<gdf_column*>(agg_req_type.first));
+    simple_operators.push_back(agg_req_type.second);
   }
 
   cudf::table simple_values_table{simple_values_columns};
@@ -438,7 +440,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
   if (keys.num_rows() == 0) {
     return std::make_pair(
         cudf::empty_like(keys),
-        cudf::table(0, target_dtypes(column_dtypes(values), ops)));
+        cudf::table(0, target_dtypes(column_dtypes(values), ops), column_dtype_infos(values)));
   }
 
   auto compute_groupby = groupby_null_specialization(keys, values);

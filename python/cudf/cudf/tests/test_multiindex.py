@@ -146,15 +146,21 @@ def pdfIndex():
             ["house", "store", "forest"],
             ["clouds", "clear", "storm"],
             ["fire", "smoke", "clear"],
+            [
+                np.datetime64("2001-01-01", "ns"),
+                np.datetime64("2002-01-01", "ns"),
+                np.datetime64("2003-01-01", "ns"),
+            ],
         ],
         [
             [0, 0, 0, 0, 1, 1, 2],
             [1, 1, 1, 1, 0, 0, 2],
             [0, 0, 2, 2, 2, 0, 1],
             [0, 0, 0, 1, 2, 0, 1],
+            [1, 0, 1, 2, 0, 0, 1],
         ],
     )
-    pdfIndex.names = ["alpha", "location", "weather", "sign"]
+    pdfIndex.names = ["alpha", "location", "weather", "sign", "timestamp"]
     return pdfIndex
 
 
@@ -625,8 +631,9 @@ def test_multicolumn_iloc(pdf, gdf, pdfIndex, iloc_rows, iloc_columns):
     presult = pdf.iloc[iloc_rows, iloc_columns]
     gresult = gdf.iloc[iloc_rows, iloc_columns]
     if hasattr(gresult, "name") and isinstance(gresult.name, tuple):
-        if "cudf" in gresult.name[len(gresult.name) - 1]:
-            gresult.name = gresult.name[0 : len(gresult.name) - 1]
+        name = gresult.name[len(gresult.name) - 1]
+        if isinstance(name, str) and "cudf" in name:
+            gresult.name = name
     if isinstance(presult, cudf.DataFrame):
         assert_eq(
             presult, gresult, check_index_type=False, check_column_type=False

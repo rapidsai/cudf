@@ -191,10 +191,12 @@ public class JCudfSerialization {
     }
   }
 
-  private static long copyValidityData(DataOutputStream out, ColumnVector column, long rowOffset,
-                                       long numRows, byte[] arrayBuffer) throws IOException {
+  // package-private for testing
+  static long copyValidityData(DataOutputStream out, ColumnVector column, long rowOffset,
+                               long numRows, byte[] arrayBuffer) throws IOException {
     assert arrayBuffer.length > 1;
     long validityLen = BitVectorHelper.getValidityLengthInBytes(numRows);
+    long maxValidityLen = BitVectorHelper.getValidityLengthInBytes(column.getRowCount());
     long byteOffset = (rowOffset / 8);
     long bytesLeft = validityLen;
 
@@ -212,7 +214,18 @@ public class JCudfSerialization {
       while (bytesLeft > 0) {
         int amountToCopy = (int) Math.min(bytesLeft, arrayBuffer.length - 1);
         // Need to read at least 1 more byte to be sure we get any spill over.
-        column.copyHostBufferBytes(arrayBuffer, 0, ColumnVector.BufferType.VALIDITY, byteOffset, amountToCopy + 1);
+        int amountToCopyWithSpill = amountToCopy + 1;
+        // if we are at the last byte of the validity vector, we need to stop at the end
+        if (amountToCopyWithSpill + byteOffset > maxValidityLen) {
+          // don't try to copy outside of the column's validity buffer
+          amountToCopyWithSpill = amountToCopy;
+
+          // set the byte after the last one we will copy to 0x00
+          // s.t. we don't copy garbage bits to the output stream
+          arrayBuffer[amountToCopy] = 0x00;
+        }
+        column.copyHostBufferBytes(arrayBuffer, 0, ColumnVector.BufferType.VALIDITY, byteOffset, amountToCopyWithSpill);
+
         byte currentByte = arrayBuffer[0];
         for (int byteIndex = 0; byteIndex < amountToCopy; byteIndex++) {
           byte nextByte = arrayBuffer[byteIndex + 1];
