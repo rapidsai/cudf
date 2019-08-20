@@ -3,20 +3,11 @@
 import hypothesis.strategies as st
 import numpy as np
 import pandas as pd
-import pyarrow as pa
 import pytest
 from hypothesis import given, settings
 
 import cudf
 from cudf.tests import utils
-
-
-def test_null_nat_datetime():
-    x = pa.array([None, pd.NaT, 0])
-    sr = cudf.Series(x).astype('datetime64[ns]')
-    print(sr)
-    assert sr.__repr__().split() == ['0',
-                                     'null', '1', 'NaT', '2', '0000-00-00']
 
 
 @pytest.mark.parametrize(

@@ -129,7 +129,7 @@ class ApplyKernelCompilerBase(object):
         # Prepare pessimistic nullmask
         out_mask = make_aggregate_nullmask(df)
         # Prepare output frame
-        outdf = df.copy(deep=False)
+        outdf = df.copy()
         for k in sorted(self.outcols):
             outdf[k] = outputs[k]
             if out_mask is not None:

@@ -62,8 +62,8 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1 NaN
-2 NaN
+1 null
+2 null
 3 c
 4 a
 dtype: category
