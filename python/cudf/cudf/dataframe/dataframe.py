@@ -30,7 +30,6 @@ from cudf.bindings.stream_compaction import (
     apply_drop_nulls as cpp_drop_nulls,
 )
 from cudf.dataframe import columnops
-from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.categorical import CategoricalColumn
 from cudf.dataframe.index import Index, RangeIndex, as_index
 from cudf.dataframe.series import Series
@@ -2259,51 +2258,49 @@ class DataFrame(object):
             for name in lhs._cols.keys():
                 if name not in left_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][2] == name:
+                        if gdf_result[i][1] == name:
                             left_of_on.append(gdf_result.pop(i))
                             break
             in_on = []
             for name in itertools.chain(lhs._cols.keys(), rhs._cols.keys()):
                 if name in left_on or name in right_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][2] == name:
+                        if gdf_result[i][1] == name:
                             in_on.append(gdf_result.pop(i))
                             break
             right_of_on = []
             for name in rhs._cols.keys():
                 if name not in right_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][2] == name:
+                        if gdf_result[i][1] == name:
                             right_of_on.append(gdf_result.pop(i))
                             break
             result = (
-                sorted(left_of_on, key=lambda x: str(x[2]))
-                + sorted(in_on, key=lambda x: str(x[2]))
-                + sorted(right_of_on, key=lambda x: str(x[2]))
+                sorted(left_of_on, key=lambda x: str(x[1]))
+                + sorted(in_on, key=lambda x: str(x[1]))
+                + sorted(right_of_on, key=lambda x: str(x[1]))
             )
         else:
             for org_name in org_names:
                 for i in range(len(gdf_result)):
-                    if gdf_result[i][2] == org_name:
+                    if gdf_result[i][1] == org_name:
                         result.append(gdf_result.pop(i))
                         break
             assert len(gdf_result) == 0
 
         # Build a new data frame based on the merged columns from GDF
         df = DataFrame()
-        for col, valid, name in result:
+        for col, name in result:
             if isinstance(col, nvstrings.nvstrings):
                 df[name] = col
             else:
-                mask = None
-                if valid is not None:
-                    mask = Buffer(valid)
                 df[name] = columnops.build_column(
-                    Buffer(col),
+                    col.data,
                     dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=mask,
+                    mask=col.mask,
                     categories=col_with_categories.get(name, None),
                 )
+
 
         # Let's make the "index as column" back into an index
         if left_index and right_index:
