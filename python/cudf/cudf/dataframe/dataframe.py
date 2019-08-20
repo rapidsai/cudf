@@ -2301,7 +2301,6 @@ class DataFrame(object):
                     categories=col_with_categories.get(name, None),
                 )
 
-
         # Let's make the "index as column" back into an index
         if left_index and right_index:
             df.index = df[merge_index_name]
