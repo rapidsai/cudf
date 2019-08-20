@@ -122,32 +122,47 @@ struct median_result_type {
     return cudf::gdf_dtype_of<target_type_t<SourceType, MIN>>(); // todo: MEDIAN: FIX THIS AFTER
   }
 };
-
-__device__ inline int get_num_elements_in_group(gdf_index_type * group_indices, int index) {
-  if (index == 0)
-    return group_indices[index+1] - group_indices[index];
-  return group_indices[index] - group_indices[index - 1];
-}
-
+ 
 template <typename T>
 struct compute_mediam_operator {
     gdf_size_type* map; // keys_sorted_indices
     gdf_size_type* map_group; // value_col_sorted_indices
     T* values;
     gdf_index_type* group_indices;
+    gdf_index_type* group_sizes;
 
   __device__ inline T operator()(gdf_index_type i) {
-    gdf_size_type num_elements = get_num_elements_in_group(group_indices, i); // FIX this 
+    gdf_size_type num_elements = group_sizes[i];  
     gdf_size_type index = group_indices[i];
     gdf_size_type index_medium = index + num_elements / 2;
     return values[ map[ map_group[index_medium] ] ];
   }
 };
 
+struct transform_operator {
+  gdf_index_type * group_indices;
+  gdf_index_type group_indices_size;
+  gdf_index_type values_size;
+
+  __device__ inline gdf_size_type operator () (gdf_size_type index){
+    gdf_size_type num_elements;
+    if (index + 1 == group_indices_size)
+      num_elements =  values_size - group_indices[index];
+    else
+      num_elements =  group_indices[index+1] - group_indices[index];
+    return num_elements;
+  }
+};
+
 struct dispath_mediam_forwarder {
   template <typename T>
   bool operator()(const gdf_column *input_column, gdf_column *output_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, const gdf_column& group_indices_col, cudaStream_t stream) const {
-    compute_mediam_operator<T> op{sorted_indices.data().get(), map_indices_group.data().get(), (T*)input_column->data, (gdf_index_type *)group_indices_col.data};
+ 
+    rmm::device_vector<gdf_size_type> group_sizes(group_indices_col.size);
+    transform_operator transform_op {(gdf_index_type *)group_indices_col.data,group_indices_col.size, input_column->size};
+    thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(group_indices_col.size)), group_sizes.data().get(), transform_op);
+
+    compute_mediam_operator<T> op{sorted_indices.data().get(), map_indices_group.data().get(), (T*)input_column->data, (gdf_index_type *)group_indices_col.data, group_sizes.data().get()};
     thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(group_indices_col.size)), (T *)output_column->data, op);
     return true;
   }
@@ -221,16 +236,7 @@ gdf_error gdf_order_by_groups(const gdf_column& group_indices_col,
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
   auto table = device_table::create(num_inputs, cols, stream);
   bool nullable = table.get()->has_nulls();
-  //TODO: 
-  // if (nullable){
-  //   auto ineq_op = row_inequality_comparator<true>(*table, nulls_are_smallest, asc_desc); 
-  //   thrust::sort(rmm::exec_policy(stream)->on(stream),
-  //                 d_indx, d_indx+nrows,
-  //                 ineq_op);				        
-  // } else {
-    // auto d_key_table = device_table::create(input_keys.num_columns(), input_keys.begin(), stream);
-  // }
-
+ 
   auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
   row_group_inequality_comparator<false> cmp {ineq_op, d_index_map.data().get(), (gdf_size_type*)group_indices_col.data, group_indices_col.size};
   thrust::sort(rmm::exec_policy(stream)->on(stream),

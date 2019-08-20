@@ -53,23 +53,7 @@ using TestingTypes =
 
 TYPED_TEST_CASE(SingleColumnSum, TestingTypes);
  
-// TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
-//   using Key = typename SingleColumnSum<TypeParam>::KeyType;
-//   using Value = typename SingleColumnSum<TypeParam>::ValueType;
-//   using ResultValue = cudf::test::expected_result_t<Value, op>;
-//   using T = Key;
-//   using R = ResultValue;
-
-//   // Each value needs to be casted to avoid a narrowing conversion warning for
-//   // the wrapper types
-//   cudf::test::single_column_groupby_test<op>(
-//       column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
-//       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
-//       column_wrapper<Key>{T(1), T(2)},
-//       column_wrapper<ResultValue>{R(1), R(5)});
-// } 
-
-TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
+TYPED_TEST(SingleColumnSum, TestMedium0) {
   using Key = typename SingleColumnSum<TypeParam>::KeyType;
   using Value = typename SingleColumnSum<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
@@ -77,9 +61,40 @@ TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
   using R = ResultValue;
 
   cudf::test::single_column_groupby_test<op>(
+      column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
+      column_wrapper<Value>(8, [](auto index) { return Value(index); }),
+      column_wrapper<Key>{T(1), T(2)},
+      column_wrapper<ResultValue>{R(1), R(5)});
+} 
+
+TYPED_TEST(SingleColumnSum, TestMedium1) {
+  using Key = typename SingleColumnSum<TypeParam>::KeyType;
+  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using V = Value;
+  using R = ResultValue;
+
+  cudf::test::single_column_groupby_test<op>(
       column_wrapper<Key>({T(3), T(2), T(1), T(1), T(2), T(3), T(3), T(2), T(1)}),
-      column_wrapper<Value>({T(1), T(2), T(3), T(4), T(4), T(3), T(2), T(1), T(0)}),
+      column_wrapper<Value>({V(1), V(2), V(3), V(4), V(4), V(3), V(2), V(1), V(0)}),
       column_wrapper<Key>({T(1), T(2), T(3)}),
       column_wrapper<ResultValue>{R(3), R(2), R(2)});
+}
+ 
+
+TYPED_TEST(SingleColumnSum, TestMedium2) {
+  using Key = typename SingleColumnSum<TypeParam>::KeyType;
+  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using V = Value;
+  using R = ResultValue;
+
+  cudf::test::single_column_groupby_test<op>(
+      column_wrapper<Key>({T(1),T(2),T(3),T(3),T(2),T(1),T(0),T(3),T(0),T(1),T(0),T(2),T(3),T(0),T(3),T(3),T(2),T(1),T(0)}),
+      column_wrapper<Value>({V(0),V(1),V(2),V(3),V(4),V(5),V(6),V(7),V(8),V(9),V(8),V(7),V(6),V(5),V(4),V(3),V(2),V(1),V(0)}),
+      column_wrapper<Key>({T(0), T(1), T(2), T(3)}),
+      column_wrapper<ResultValue>{R(6), R(5), R(4), R(4)});
 }
  
