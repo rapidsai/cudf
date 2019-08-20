@@ -123,23 +123,45 @@ struct median_result_type {
   }
 };
 
-gdf_column* compute_median(gdf_column input_column, gdf_column count, cudaStream_t stream) {
-  CUDF_EXPECTS(input_column.size == count.size,
-               "Size mismatch between input_column and count columns.");
-  gdf_column* median = new gdf_column{};
+template <typename T>
+struct compute_mediam_operator {
+    gdf_size_type* map;
+    gdf_size_type* map_group;
+    T* values;
+    
+  __device__ inline T operator()(gdf_index_type i) {
+    // gdf_size_type num_elements = get_num_elements_in_group(group_indices, i);
+    gdf_size_type num_elements = 3; // FIX this 
+    gdf_size_type index = num_elements * i; // FIX this index = index_container[i];
+    gdf_size_type index_medium = index + num_elements / 2;
+    return values[ map[ map_group[index_medium] ] ];
+  }
+};
 
+struct dispath_mediam_forwarder {
+  template <typename T>
+  bool operator()(const gdf_column *input_column, gdf_column *output_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, cudaStream_t stream) const {
+    compute_mediam_operator<T> op{sorted_indices.data().get(), map_indices_group.data().get(), (T*)input_column->data};
+    thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(map_indices_group.size())), (T *)output_column->data, op);
+    return true;
+  }
+};
+
+gdf_column* compute_median(const gdf_column& group_indices_col,  const gdf_column &input_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, cudaStream_t stream) {
+  auto ngroups = group_indices_col.size;
+  gdf_column* median = new gdf_column{};
   median->dtype = cudf::type_dispatcher(input_column.dtype, median_result_type{});
- 
-  median->size = input_column.size;
-  RMM_TRY(RMM_ALLOC(&median->data, sizeof(double) * input_column.size, stream));
-  if (cudf::is_nullable(input_column) or cudf::is_nullable(count)) {
+  const auto byte_width = (input_column.dtype == GDF_STRING)
+                          ? sizeof(std::pair<const char *, size_t>)
+                          : cudf::size_of(input_column.dtype);
+  median->size = ngroups;
+  RMM_TRY(RMM_ALLOC(&median->data, byte_width * ngroups, stream));
+  if (cudf::is_nullable(input_column)) {
     RMM_TRY(RMM_ALLOC(
         &median->valid,
-        sizeof(gdf_size_type) * gdf_valid_allocation_size(input_column.size), stream));
+        sizeof(gdf_size_type) * gdf_valid_allocation_size(ngroups), stream));
   }
-  // thrust::transform(thrust::make_counting_iterator(int(0)), 
-  // thrust::make_counting_iterator(int(ngroups)), 
-  // );
+  cudf::type_dispatcher(input_column.dtype, dispath_mediam_forwarder{}, &input_column, median, map_indices_group, sorted_indices, stream);
   return median;
 }
 
@@ -147,24 +169,28 @@ template <bool nullable = true>
 struct row_group_inequality_comparator 
 {
   row_inequality_comparator<nullable> cmp;
-  // device_table keys;
-  gdf_size_type *d_map;
+  gdf_size_type *index_map;
+  gdf_size_type* group_indices; 
+  gdf_size_type group_indices_size; 
+
     __device__ inline bool operator()(gdf_index_type x, gdf_index_type y) const
   {
-    // gdf_column const* key = get_column.get_column(0);
-    // if (key[map[x]] == keys[map[y]]) {
-      return cmp(d_map[x], d_map[y]);
-    // }
-    // return false;
+    gdf_index_type group_id_x = get_group_index(group_indices, group_indices_size, x);
+    gdf_index_type group_id_y = get_group_index(group_indices, group_indices_size, y);
+    if (group_id_x == group_id_y) {
+      return cmp(index_map[x], index_map[y]);
+    }
+    return false;
   }
 };
 
-gdf_error gdf_order_by_groups(table input_keys,  
+gdf_error gdf_order_by_groups(const gdf_column& group_indices_col,
+                       table input_keys,  
                        gdf_column const* const* cols,
                        int8_t* asc_desc,
                        size_t num_inputs,
                        gdf_column* output_indices,
-                       rmm::device_vector<gdf_size_type> &d_map,
+                       rmm::device_vector<gdf_size_type> &d_index_map,
                        gdf_context * context)                       
 {
   GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
@@ -193,13 +219,14 @@ gdf_error gdf_order_by_groups(table input_keys,
   //                 ineq_op);				        
   // } else {
     // auto d_key_table = device_table::create(input_keys.num_columns(), input_keys.begin(), stream);
-
-    auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
-    row_group_inequality_comparator<false> cmp {ineq_op, d_map.data().get()};
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  cmp);				        
   // }
+
+  auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc); 
+  row_group_inequality_comparator<false> cmp {ineq_op, d_index_map.data().get(), (gdf_size_type*)group_indices_col.data, group_indices_col.size};
+  thrust::sort(rmm::exec_policy(stream)->on(stream),
+                d_indx, d_indx+nrows,
+                cmp);				        
+  
   return GDF_SUCCESS;
 }
 
@@ -221,7 +248,7 @@ table compute_median_requests(
     assert(op == MEDIAN);
 
     auto nrows = input_keys.num_rows(); 
-    rmm::device_vector<gdf_index_type> map_indices_group(thrust::make_counting_iterator(int(0)),
+    rmm::device_vector<gdf_size_type> map_indices_group(thrust::make_counting_iterator(int(0)),
                                       thrust::make_counting_iterator(int(nrows)));
 
     gdf_column sorted_indices_col{};
@@ -229,10 +256,10 @@ table compute_median_requests(
                             (void*)(map_indices_group.data().get()), nullptr, nrows,
                             GDF_INT32));
     gdf_context ctxt{};
-    gdf_order_by_groups(input_keys, &value_col, nullptr, 1, &sorted_indices_col, d_sorted_indices, &ctxt);
-    auto ngroups = group_indices_col.size; 
+    gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &sorted_indices_col, d_sorted_indices, &ctxt);
+    // auto ngroups = group_indices_col.size; 
 
-    // final_value_columns[i] = compute_median(col, )
+    final_value_columns[i] = compute_median(group_indices_col, *value_col, map_indices_group, d_sorted_indices, stream);
   }
   return cudf::table{final_value_columns};
 }
@@ -316,6 +343,9 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                                   cudf::column_dtypes(sorted_keys_table),
                                   cudf::column_dtype_infos(sorted_keys_table),
                                   keys_have_nulls);
+
+  cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
+                &destination_table); 
 
   cudf::table final_output_values = compute_median_requests(
         original_requests,  input_keys, group_indices_col, d_sorted_indices, stream);

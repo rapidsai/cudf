@@ -47,29 +47,27 @@ struct KV {
 };
 
 using TestingTypes =
-    ::testing::Types<KV<int8_t, int8_t>, KV<int32_t, int32_t>,
-                     KV<int64_t, int64_t>, KV<int32_t, float>,
-                     KV<int32_t, double>>;
+    ::testing::Types< KV<int32_t, int32_t> >;
 
 // TODO: tests for cudf::bool8
 
 TYPED_TEST_CASE(SingleColumnSum, TestingTypes);
  
-TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
-  using ResultValue = cudf::test::expected_result_t<Value, op>;
-  using T = Key;
-  using R = ResultValue;
+// TYPED_TEST(SingleColumnSum, FourGroupsNoNulls) {
+//   using Key = typename SingleColumnSum<TypeParam>::KeyType;
+//   using Value = typename SingleColumnSum<TypeParam>::ValueType;
+//   using ResultValue = cudf::test::expected_result_t<Value, op>;
+//   using T = Key;
+//   using R = ResultValue;
 
-  // Each value needs to be casted to avoid a narrowing conversion warning for
-  // the wrapper types
-  cudf::test::single_column_groupby_test<op>(
-      column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
-      column_wrapper<Value>(8, [](auto index) { return Value(index); }),
-      column_wrapper<Key>{T(1), T(2)},
-      column_wrapper<ResultValue>{R(1), R(5)});
-} 
+//   // Each value needs to be casted to avoid a narrowing conversion warning for
+//   // the wrapper types
+//   cudf::test::single_column_groupby_test<op>(
+//       column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
+//       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
+//       column_wrapper<Key>{T(1), T(2)},
+//       column_wrapper<ResultValue>{R(1), R(5)});
+// } 
 
 TYPED_TEST(SingleColumnSum, FourGroupsOddNullKeys) {
   using Key = typename SingleColumnSum<TypeParam>::KeyType;

@@ -96,7 +96,7 @@ struct expected_result_type<
 template <typename SourceType>
 struct expected_result_type<
     SourceType, MEDIAN> {
-  using type = double;
+  using type = SourceType;
 };
 template <typename SourceType, operators op>
 using expected_result_t = typename expected_result_type<SourceType, op>::type;
