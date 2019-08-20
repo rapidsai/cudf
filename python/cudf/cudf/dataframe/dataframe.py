@@ -2484,6 +2484,7 @@ class DataFrame(object):
         method="hash",
         level=None,
         group_keys=True,
+        dropna=True,
     ):
         """Groupby
 
@@ -2501,6 +2502,9 @@ class DataFrame(object):
             Valid values are "hash" or "cudf".
             "cudf" method may be deprecated in the future, but is currently
             the only method supporting group UDFs via the `apply` function.
+        dropna : bool, optional
+            If True (default), drop null keys.
+            If False, perform grouping by keys containing null(s).
 
         Returns
         -------
@@ -2544,6 +2548,7 @@ class DataFrame(object):
                 as_index=as_index,
                 sort=sort,
                 level=level,
+                dropna=dropna,
             )
             return result
 
