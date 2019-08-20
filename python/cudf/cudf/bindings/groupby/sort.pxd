@@ -1,0 +1,19 @@
+# Copyright (c) 2019, NVIDIA CORPORATION.
+
+# cython: profile=False
+# distutils: language = c++
+# cython: embedsignature = True
+# cython: language_level = 3
+
+from libcpp.utility cimport pair
+
+from cudf.bindings.cudf_cpp import *
+from cudf.bindings.cudf_cpp cimport *
+
+cdef extern from "cudf/groupby.hpp" nogil:
+    cdef pair[cudf_table, gdf_column] gdf_group_by_without_aggregations(
+        const cudf_table  cols,
+        gdf_size_type num_key_cols,
+        const gdf_index_type* key_col_indices,
+        gdf_context* context
+    ) except +

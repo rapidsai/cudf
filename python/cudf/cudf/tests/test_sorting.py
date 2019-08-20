@@ -108,7 +108,7 @@ def test_series_nsmallest():
     assert raises.match('keep must be either "first", "last"')
 
 
-@pytest.mark.parametrize("nelem,n", [(10, 5), (100, 10)])
+@pytest.mark.parametrize("nelem,n", [(1, 1), (100, 100), (10, 5), (100, 10)])
 def test_dataframe_nlargest(nelem, n):
     np.random.seed(0)
     df = DataFrame()
@@ -249,3 +249,13 @@ def test_dataframe_multi_column_nulls(
     assert_eq(
         got[by].reset_index(drop=True), expect[by].reset_index(drop=True)
     )
+
+
+@pytest.mark.parametrize("nelem", [1, 100])
+def test_series_nlargest_nelem(nelem):
+    np.random.seed(0)
+    elems = np.random.random(nelem)
+    gds = Series(elems).nlargest(nelem)
+    pds = pd.Series(elems).nlargest(nelem)
+
+    assert (pds == gds.to_pandas()).all().all()

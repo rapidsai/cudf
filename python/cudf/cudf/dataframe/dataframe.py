@@ -1964,7 +1964,7 @@ class DataFrame(object):
             [column] = columns
         else:
             column = columns
-        if not (0 <= n < len(self)):
+        if not (0 <= n <= len(self)):
             raise ValueError("n out-of-bound")
         col = self[column].reset_index(drop=True)
         # Operate
@@ -2484,6 +2484,7 @@ class DataFrame(object):
         method="hash",
         level=None,
         group_keys=True,
+        dropna=True,
     ):
         """Groupby
 
@@ -2501,6 +2502,9 @@ class DataFrame(object):
             Valid values are "hash" or "cudf".
             "cudf" method may be deprecated in the future, but is currently
             the only method supporting group UDFs via the `apply` function.
+        dropna : bool, optional
+            If True (default), drop null keys.
+            If False, perform grouping by keys containing null(s).
 
         Returns
         -------
@@ -2544,6 +2548,7 @@ class DataFrame(object):
                 as_index=as_index,
                 sort=sort,
                 level=level,
+                dropna=dropna,
             )
             return result
 

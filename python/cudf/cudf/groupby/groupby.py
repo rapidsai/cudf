@@ -58,13 +58,20 @@ class _Groupby(object):
 
 class SeriesGroupBy(_Groupby):
     def __init__(
-        self, sr, by=None, level=None, method="hash", sort=True, as_index=None
+        self,
+        sr,
+        by=None,
+        level=None,
+        method="hash",
+        sort=True,
+        as_index=None,
+        dropna=True,
     ):
         self._sr = sr
         if as_index not in (True, None):
             raise TypeError("as_index must be True for SeriesGroupBy")
         self._groupby = _GroupbyHelper(
-            obj=self._sr, by=by, level=level, sort=sort
+            obj=self._sr, by=by, level=level, sort=sort, dropna=dropna
         )
 
     def serialize(self):
@@ -91,11 +98,23 @@ class SeriesGroupBy(_Groupby):
 
 class DataFrameGroupBy(_Groupby):
     def __init__(
-        self, df, by=None, as_index=True, level=None, sort=True, method="hash"
+        self,
+        df,
+        by=None,
+        as_index=True,
+        level=None,
+        sort=True,
+        method="hash",
+        dropna=True,
     ):
         self._df = df
         self._groupby = _GroupbyHelper(
-            obj=self._df, by=by, as_index=as_index, level=level, sort=sort
+            obj=self._df,
+            by=by,
+            as_index=as_index,
+            level=level,
+            sort=sort,
+            dropna=dropna,
         )
 
     def _apply_aggregation(self, agg):
@@ -120,6 +139,7 @@ class DataFrameGroupBy(_Groupby):
                 by_list,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
+                dropna=self._groupby.dropna,
             )
 
     def __getattr__(self, key):
@@ -136,6 +156,7 @@ class DataFrameGroupBy(_Groupby):
                 by_list,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
+                dropna=self._groupby.dropna,
             )
         raise AttributeError(
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
@@ -178,7 +199,9 @@ class _GroupbyHelper(object):
 
     NAMED_AGGS = ("sum", "mean", "min", "max", "count", "quantile")
 
-    def __init__(self, obj, by=None, level=None, as_index=True, sort=None):
+    def __init__(
+        self, obj, by=None, level=None, as_index=True, sort=None, dropna=True
+    ):
         """
         Helper class for both SeriesGroupBy and DataFrameGroupBy classes.
         """
@@ -192,6 +215,7 @@ class _GroupbyHelper(object):
         self.by = by
         self.as_index = as_index
         self.sort = sort
+        self.dropna = dropna
         self.normalize_keys()
 
     def get_by_from_level(self, level):
@@ -255,7 +279,11 @@ class _GroupbyHelper(object):
         aggs_as_list = self.get_aggs_as_list()
 
         out_key_columns, out_value_columns = _groupby_engine(
-            self.key_columns, self.value_columns, aggs_as_list, self.sort
+            self.key_columns,
+            self.value_columns,
+            aggs_as_list,
+            self.sort,
+            self.dropna,
         )
 
         return self.construct_result(out_key_columns, out_value_columns)
@@ -420,7 +448,7 @@ class _GroupbyHelper(object):
         return aggs_as_list
 
 
-def _groupby_engine(key_columns, value_columns, aggs, sort):
+def _groupby_engine(key_columns, value_columns, aggs, sort, dropna):
     """
     Parameters
     ----------
@@ -428,6 +456,7 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
     value_columns : list of Columns
     aggs : list of str
     sort : bool
+    dropna : bool
 
     Returns
     -------
@@ -435,7 +464,7 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
     out_value_columns : list of Columns
     """
     out_key_columns, out_value_columns = cpp_apply_groupby(
-        key_columns, value_columns, aggs
+        key_columns, value_columns, aggs, dropna=dropna
     )
 
     if sort:

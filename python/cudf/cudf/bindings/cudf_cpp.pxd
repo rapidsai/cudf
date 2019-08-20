@@ -54,8 +54,10 @@ cdef gdf_context* create_context_view(
     flag_distinct,
     flag_sort_result,
     flag_sort_inplace,
-    null_sort_behavior
+    flag_null_sort_behavior,
+    flag_groupby_include_nulls
 )
+
 
 cpdef uintptr_t column_view_pointer(col)
 
@@ -141,10 +143,6 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_dtype_extra_info dtype_info
         char *col_name
 
-    ctypedef enum gdf_null_sort_behavior:
-        GDF_NULL_AS_LARGEST = 0,
-        GDF_NULL_AS_SMALLEST,
-
     ctypedef enum gdf_method:
         GDF_SORT = 0,
         GDF_HASH,
@@ -180,6 +178,10 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_DARK_GREEN,
         GDF_ORANGE,
         GDF_NUM_COLORS,
+
+    ctypedef enum gdf_null_sort_behavior:
+        GDF_NULL_AS_LARGEST = 0,
+        GDF_NULL_AS_SMALLEST,
 
     ctypedef struct gdf_context:
         int flag_sorted
@@ -261,6 +263,7 @@ cdef extern from "cudf/cudf.h" nogil:
         int flag_distinct,
         int flag_sort_result,
         int flag_sort_inplace,
+        bool flag_groupby_include_nulls,
         gdf_null_sort_behavior flag_null_sort_behavior
     ) except +
 
