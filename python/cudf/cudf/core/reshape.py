@@ -5,7 +5,7 @@ import numpy as np
 from cudf.core import Buffer, DataFrame, Index, Series
 from cudf.core.column import CategoricalColumn
 from cudf.utils import cudautils, utils
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 
 def concat(objs, axis=0, ignore_index=False, sort=None):
@@ -288,7 +288,7 @@ def get_dummies(
             "length of the columns being encoded ({len_required})."
         )
 
-        if utils.is_list_like(obj):
+        if is_list_like(obj):
             if len(obj) != len(columns):
                 err_msg = err_msg.format(
                     name=name, len_obj=len(obj), len_required=len(columns)

@@ -7,7 +7,7 @@ import pickle
 import cudf
 import cudf._lib as libcudf
 from cudf import MultiIndex
-from cudf.utils.utils import is_scalar
+from cudf.utils.dtypes import is_scalar
 
 
 def columns_from_dataframe(df):
@@ -243,7 +243,7 @@ class _GroupbyHelper(object):
 
         For a Series, the dictionary has a single key ``None``
         """
-        if isinstance(agg, collections.Mapping):
+        if isinstance(agg, collections.abc.Mapping):
             for col_name, agg_name in agg.items():
                 if not isinstance(agg_name, list):
                     agg[col_name] = [agg_name]

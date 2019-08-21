@@ -53,19 +53,6 @@ gdf_dtypes = {
     N_GDF_TYPES: np.int32
 }
 
-np_pa_dtypes = {
-    np.float64: pa.float64(),
-    np.float32: pa.float32(),
-    np.int64: pa.int64(),
-    np.int32: pa.int32(),
-    np.int16: pa.int16(),
-    np.int8: pa.int8(),
-    np.bool_: pa.int8(),
-    np.datetime64: pa.date64(),
-    np.object_: pa.string(),
-    np.str_: pa.string(),
-}
-
 agg_ops = {
     'sum': GDF_SUM,
     'max': GDF_MAX,
@@ -89,21 +76,6 @@ gdf_to_np_time_unit = {
     TIME_UNIT_us: 'us',
     TIME_UNIT_ns: 'ns',
 }
-
-
-def np_to_pa_dtype(dtype):
-    """Util to convert numpy dtype to PyArrow dtype.
-    """
-    # special case when dtype is np.datetime64
-    if dtype.kind == 'M':
-        time_unit, _ = np.datetime_data(dtype)
-        if time_unit in np_to_gdf_time_unit:
-            # return a pa.Timestamp of the appropriate unit
-            return pa.timestamp(time_unit)
-        # default is int64_t UNIX ms
-        return pa.date64()
-    return np_pa_dtypes[np.dtype(dtype).type]
-
 
 cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit):
     """Util to convert gdf_time_unit to numpy datetime64 dtype.
@@ -594,7 +566,6 @@ cdef gdf_context* create_context_view(
         _null_sort_behavior_api[flag_null_sort_behavior]
     cdef bool c_flag_groupby_include_nulls = flag_groupby_include_nulls
 
-    print(flag_null_sort_behavior)
     with nogil:
         gdf_context_view(
             context,

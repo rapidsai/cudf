@@ -4,8 +4,7 @@ from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import cudf
 from cudf.utils.cudautils import arange
-from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import is_scalar
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar
 
 
 def indices_from_labels(obj, labels):

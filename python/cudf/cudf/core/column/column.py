@@ -16,8 +16,13 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_scalar,
+    min_scalar_type,
+    np_to_pa_dtype,
+)
+from cudf.utils.utils import buffers_from_pyarrow
 
 
 class Column(object):
@@ -557,7 +562,7 @@ class Column(object):
                 key = column.as_column(cudautils.arange(len(self)))[key]
             nelem = len(key)
 
-        if utils.is_scalar(value):
+        if is_scalar(value):
             if is_categorical_dtype(self.dtype):
                 from cudf.core.column import CategoricalColumn
                 from cudf.core.buffer import Buffer
@@ -1255,9 +1260,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 arbitrary = arbitrary.dictionary_encode()
             else:
                 if nan_as_null:
-                    arbitrary = arbitrary.cast(
-                        libcudf.cudf.np_to_pa_dtype(new_dtype)
-                    )
+                    arbitrary = arbitrary.cast(np_to_pa_dtype(new_dtype))
                 else:
                     # casting a null array doesn't make nans valid
                     # so we create one with valid nans from scratch:
@@ -1361,7 +1364,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
 
     elif np.isscalar(arbitrary) and not isinstance(arbitrary, memoryview):
         if hasattr(arbitrary, "dtype"):
-            data_type = libcudf.cudf.np_to_pa_dtype(arbitrary.dtype)
+            data_type = np_to_pa_dtype(arbitrary.dtype)
             # PyArrow can't construct date64 or date32 arrays from np
             # datetime types
             if pa.types.is_date64(data_type) or pa.types.is_date32(data_type):
@@ -1393,9 +1396,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                         if np_type == np.bool_:
                             pa_type = pa.bool_()
                         else:
-                            pa_type = libcudf.cudf.np_to_pa_dtype(
-                                np.dtype(dtype)
-                            )
+                            pa_type = np_to_pa_dtype(np.dtype(dtype))
                 data = as_column(
                     pa.array(arbitrary, type=pa_type, from_pandas=nan_as_null),
                     dtype=dtype,

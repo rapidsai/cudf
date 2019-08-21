@@ -7,7 +7,7 @@ from numbers import Number
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dict_like, is_scalar
+from pandas.api.types import is_dict_like
 
 from librmm_cffi import librmm as rmm
 
@@ -18,7 +18,13 @@ from cudf.core.indexing import _SeriesIlocIndexer, _SeriesLocIndexer
 from cudf.core.window import Rolling
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import (
+    is_categorical_dtype,
+    is_list_like,
+    is_scalar,
+    min_scalar_type,
+    to_cudf_compatible_scalar,
+)
 
 
 class Series(object):
@@ -377,14 +383,14 @@ class Series(object):
     def __getitem__(self, arg):
         data = self._column[arg]
         index = self.index.take(arg)
-        if utils.is_scalar(data) or data is None:
+        if is_scalar(data) or data is None:
             return data
         return self._copy_construct(data=data, index=index)
 
     def __setitem__(self, key, value):
         # coerce value into a scalar or column
-        if utils.is_scalar(value):
-            value = utils.to_cudf_compatible_scalar(value)
+        if is_scalar(value):
+            value = to_cudf_compatible_scalar(value)
         else:
             value = column.as_column(value)
 
@@ -1589,7 +1595,7 @@ class Series(object):
         from cudf import DataFrame
 
         if dtype is None:
-            dtype = utils.min_scalar_type(len(cats), 32)
+            dtype = min_scalar_type(len(cats), 32)
 
         cats = Series(cats).astype(self.dtype)
         order = Series(cudautils.arange(len(self)))
@@ -2039,7 +2045,7 @@ class Series(object):
 
         """
 
-        if isinstance(q, Number) or utils.is_list_like(q):
+        if isinstance(q, Number) or is_list_like(q):
             np_array_q = np.asarray(q)
             if np.logical_or(np_array_q < 0, np_array_q > 1).any():
                 raise ValueError(

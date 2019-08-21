@@ -10,7 +10,7 @@ from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import utils
-from cudf.utils.utils import is_scalar
+from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -194,7 +194,7 @@ class DatetimeColumn(column.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.as_numerical.data.mem.copy_to_host())
-        pa_dtype = libcudf.cudf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         return pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),

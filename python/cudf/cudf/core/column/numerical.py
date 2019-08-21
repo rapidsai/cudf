@@ -16,7 +16,11 @@ from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import cudautils, utils
-from cudf.utils.dtypes import numeric_normalize_types
+from cudf.utils.dtypes import (
+    min_signed_type,
+    np_to_pa_dtype,
+    numeric_normalize_types,
+)
 
 
 class NumericalColumn(column.TypedColumnBase):
@@ -92,7 +96,7 @@ class NumericalColumn(column.TypedColumnBase):
                 other = np.dtype("float32").type(other)
                 other_dtype = other.dtype
             if other_dtype.kind in "u":
-                other_dtype = utils.min_signed_type(other)
+                other_dtype = min_signed_type(other)
             if np.isscalar(other):
                 other = np.dtype(other_dtype).type(other)
                 return other
@@ -166,7 +170,7 @@ class NumericalColumn(column.TypedColumnBase):
         if self.has_null_mask:
             mask = pa.py_buffer(self.nullmask.mem.copy_to_host())
         data = pa.py_buffer(self.data.mem.copy_to_host())
-        pa_dtype = libcudf.cudf.np_to_pa_dtype(self.dtype)
+        pa_dtype = np_to_pa_dtype(self.dtype)
         out = pa.Array.from_buffers(
             type=pa_dtype,
             length=len(self),

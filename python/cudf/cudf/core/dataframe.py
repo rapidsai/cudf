@@ -32,7 +32,12 @@ from cudf.core.series import Series
 from cudf.core.window import Rolling
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import (
+    cudf_dtype_from_pydata_dtype,
+    is_categorical_dtype,
+    is_list_like,
+    is_scalar,
+)
 
 
 def _unique_name(existing_names, suffix="_unique_name"):
@@ -148,7 +153,7 @@ class DataFrame(object):
         if data is not None:
             if isinstance(data, dict):
                 data = data.items()
-            elif utils.is_list_like(data) and len(data) > 0:
+            elif is_list_like(data) and len(data) > 0:
                 if not isinstance(data[0], (list, tuple)):
                     # a nested list is something pandas supports and
                     # we don't support list-like values in a record yet
@@ -329,7 +334,7 @@ class DataFrame(object):
             self.columns, cudf.core.multiindex.MultiIndex
         ) and isinstance(arg, tuple):
             return self.columns._get_column_major(self, arg)
-        if utils.is_scalar(arg) or isinstance(arg, tuple):
+        if is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
             s.index = self.index
@@ -1260,7 +1265,7 @@ class DataFrame(object):
            col values
         """
 
-        if (utils.is_list_like(series)) or (isinstance(series, Series)):
+        if (is_list_like(series)) or (isinstance(series, Series)):
             """
             This case should handle following three scenarios:
 
@@ -1302,7 +1307,7 @@ class DataFrame(object):
                 series = series.astype("datetime64[ms]")
             col = series
 
-        if (utils.is_list_like(series)) or (isinstance(series, Series)):
+        if (is_list_like(series)) or (isinstance(series, Series)):
             """
             This case should handle following three scenarios:
 
@@ -3589,7 +3594,7 @@ class DataFrame(object):
             )
 
         include, exclude = map(
-            lambda x: frozenset(map(utils.cudf_dtype_from_pydata_dtype, x)),
+            lambda x: frozenset(map(cudf_dtype_from_pydata_dtype, x)),
             selection,
         )
 
@@ -3622,7 +3627,7 @@ class DataFrame(object):
                     exclude_subtypes.add(dtype.type)
 
         include_all = set(
-            [utils.cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
+            [cudf_dtype_from_pydata_dtype(d) for d in self.dtypes]
         )
 
         if include:
@@ -3635,7 +3640,7 @@ class DataFrame(object):
         inclusion = inclusion - exclude_subtypes
 
         for x in self._cols.values():
-            infered_type = utils.cudf_dtype_from_pydata_dtype(x.dtype)
+            infered_type = cudf_dtype_from_pydata_dtype(x.dtype)
             if infered_type in inclusion:
                 df.add_column(x.name, x)
 

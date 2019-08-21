@@ -22,7 +22,7 @@ from cudf.core.column import (
     column,
 )
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, min_signed_type
 
 
 class Index(object):
@@ -430,8 +430,8 @@ class RangeIndex(Index):
             index = rmm.to_device(index)
 
         else:
-            if pd.api.types.is_scalar(index):
-                index = utils.min_signed_type(index)(index)
+            if is_scalar(index):
+                index = min_signed_type(index)(index)
             index = column.as_column(index).data.mem
 
         return as_index(self.as_column()[index], name=self.name)

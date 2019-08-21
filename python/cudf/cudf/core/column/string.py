@@ -16,6 +16,7 @@ from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import cudautils, utils
+from cudf.utils.dtypes import is_list_like
 
 _str_to_numeric_typecast_functions = {
     np.dtype("int32"): nvstrings.nvstrings.stoi,
@@ -148,7 +149,7 @@ class StringMethods(object):
             """
             assert others.dtype == np.dtype("object")
             others = others.data
-        elif utils.is_list_like(others) and others:
+        elif is_list_like(others) and others:
             """
             If others is a list-like object (in our case lists & tuples)
             just another Series/Index, great go ahead with concatenation.
@@ -164,7 +165,7 @@ class StringMethods(object):
             """
             first = others[0]
 
-            if utils.is_list_like(first) or isinstance(
+            if is_list_like(first) or isinstance(
                 first, (Series, Index, pd.Series, pd.Index)
             ):
                 """
@@ -193,7 +194,7 @@ class StringMethods(object):
                         first = first.cat(frame, sep=sep, na_rep=na_rep)
 
                 others = first
-            elif not utils.is_list_like(first):
+            elif not is_list_like(first):
                 """
                 Picking first element and checking if it really adheres to
                 non-list like conditions.
