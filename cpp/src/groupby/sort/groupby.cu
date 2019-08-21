@@ -247,38 +247,40 @@ gdf_error gdf_order_by_groups(const gdf_column& group_indices_col,
 }
 
 
-table compute_median_requests(
+cudf::table compute_remain_stats_requests(
+    cudf::table current_output_values,
     std::vector<AggRequestType> const& original_requests,
     table input_keys,  
     const gdf_column& group_indices_col,
     rmm::device_vector<gdf_size_type> d_sorted_indices,
     cudaStream_t stream) { 
+
   std::vector<gdf_column*> final_value_columns(original_requests.size());
+  for (gdf_size_type i = 0; i < current_output_values.num_columns(); i++) {
+    final_value_columns[i] = current_output_values.get_column(i);
+  }
+  
+  for (size_t i = 0; i < original_requests.size(); ++i) {
+    auto const& element = original_requests[i];
+    if (element.second == MEDIAN) {
+      gdf_column * value_col = element.first;
 
-  // compute median operation 
-  for (gdf_size_type i = 0; i < (gdf_size_type)original_requests.size(); i++)
-  {
-    const std::pair<gdf_column*, operators> element = original_requests[i];
-    gdf_column * value_col = element.first;
-    operators op = element.second;
-    assert(op == MEDIAN);
+      auto nrows = input_keys.num_rows(); 
+      rmm::device_vector<gdf_size_type> value_col_sorted_indices_vector(thrust::make_counting_iterator(int(0)),
+                                        thrust::make_counting_iterator(int(nrows)));
 
-    auto nrows = input_keys.num_rows(); 
-    rmm::device_vector<gdf_size_type> value_col_sorted_indices_vector(thrust::make_counting_iterator(int(0)),
-                                      thrust::make_counting_iterator(int(nrows)));
-
-    gdf_column value_col_sorted_indices{};
-    CUDF_TRY(gdf_column_view(&value_col_sorted_indices,
-                            (void*)(value_col_sorted_indices_vector.data().get()), nullptr, nrows,
-                            GDF_INT32));
-    gdf_context ctxt{};
-    gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &value_col_sorted_indices, d_sorted_indices, &ctxt);
-    // auto ngroups = group_indices_col.size; 
-
-    final_value_columns[i] = compute_median(group_indices_col, *value_col, value_col_sorted_indices_vector, d_sorted_indices, stream);
+      gdf_column value_col_sorted_indices{};
+      CUDF_TRY(gdf_column_view(&value_col_sorted_indices,
+                              (void*)(value_col_sorted_indices_vector.data().get()), nullptr, nrows,
+                              GDF_INT32));
+      gdf_context ctxt{};
+      gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &value_col_sorted_indices, d_sorted_indices, &ctxt);
+      final_value_columns[i] = compute_median(group_indices_col, *value_col, value_col_sorted_indices_vector, d_sorted_indices, stream);
+    }
   }
   return cudf::table{final_value_columns};
 }
+
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& input_values,
                           std::vector<operators> const& input_ops, Options options,
@@ -314,6 +316,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
         const_cast<gdf_column*>(agg_req_type.first));
     simple_operators.push_back(agg_req_type.second);
   }
+  cudf::table current_output_values;
   // process simple columns
   if (simple_values_columns.size() > 0) {
     cudf::table simple_values_table{simple_values_columns};
@@ -328,7 +331,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
     auto d_input_values = device_table::create(simple_values_table);
     auto d_output_values = device_table::create(simple_output_values, stream);
     rmm::device_vector<operators> d_ops(simple_operators);
-  
+
     auto row_bitmask = cudf::row_bitmask(sorted_keys_table, stream);
 
     cudf::util::cuda::grid_config_1d grid_params{sorted_keys_table.num_rows(), 256};
@@ -339,33 +342,20 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
         (gdf_index_type *)group_indices_col.data, group_indices_col.size,
         d_ops.data().get(), row_bitmask.data().get());
 
-    cudf::table destination_table(group_indices_col.size,
-                                  cudf::column_dtypes(sorted_keys_table),
-                                  cudf::column_dtype_infos(sorted_keys_table),
-                                  keys_have_nulls);
-    
-    cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
-                &destination_table); 
-
-    cudf::table final_output_values = compute_original_requests(
+    current_output_values = compute_original_requests(
         original_requests, simple_requests, simple_output_values, stream);
+  }
+  cudf::table final_output_values = compute_remain_stats_requests(current_output_values, original_requests,  input_keys, group_indices_col, d_sorted_indices, stream);
 
-    // FIX: destroy temporal tables, and temporal gdf_columns! 
-    return std::make_pair(destination_table, final_output_values);
-  } 
-
-  // process  median like  aggregation
   cudf::table destination_table(group_indices_col.size,
-                                  cudf::column_dtypes(sorted_keys_table),
-                                  cudf::column_dtype_infos(sorted_keys_table),
-                                  keys_have_nulls);
-
+                                cudf::column_dtypes(sorted_keys_table),
+                                cudf::column_dtype_infos(sorted_keys_table),
+                                keys_have_nulls);
+  
   cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
-                &destination_table); 
+              &destination_table); 
 
-  cudf::table final_output_values = compute_median_requests(
-        original_requests,  input_keys, group_indices_col, d_sorted_indices, stream);
-
+  // FIX: destroy temporal tables, and temporal gdf_columns! 
   return std::make_pair(destination_table, final_output_values);
 }
 

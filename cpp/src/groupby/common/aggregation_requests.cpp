@@ -155,7 +155,7 @@ table compute_original_requests(
   // Process simple requests
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& req = original_requests[i];
-    if (req.second != MEAN) {
+    if (req.second != MEAN && req.second != MEDIAN) {
       // For non-compound requests, append the result to the final output
       // and remove it from the map
       auto found = simple_requests_to_outputs.find(req);

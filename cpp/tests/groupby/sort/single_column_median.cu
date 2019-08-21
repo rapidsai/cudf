@@ -32,7 +32,7 @@ static constexpr cudf::groupby::operators op{
     cudf::groupby::operators::MEDIAN};
 
 template <typename KV>
-struct SingleColumnSum : public GdfTest {
+struct SingleColumnMedian : public GdfTest {
   using KeyType = typename KV::Key;
   using ValueType = typename KV::Value;
 };
@@ -51,11 +51,11 @@ using TestingTypes =
 
 // TODO: tests for cudf::bool8
 
-TYPED_TEST_CASE(SingleColumnSum, TestingTypes);
+TYPED_TEST_CASE(SingleColumnMedian, TestingTypes);
  
-TYPED_TEST(SingleColumnSum, TestMedium0) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnMedian, TestMedium0) {
+  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using R = ResultValue;
@@ -67,9 +67,9 @@ TYPED_TEST(SingleColumnSum, TestMedium0) {
       column_wrapper<ResultValue>{R(1), R(5)});
 } 
 
-TYPED_TEST(SingleColumnSum, TestMedium1) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnMedian, TestMedium1) {
+  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using V = Value;
@@ -83,9 +83,9 @@ TYPED_TEST(SingleColumnSum, TestMedium1) {
 }
  
 
-TYPED_TEST(SingleColumnSum, TestMedium2) {
-  using Key = typename SingleColumnSum<TypeParam>::KeyType;
-  using Value = typename SingleColumnSum<TypeParam>::ValueType;
+TYPED_TEST(SingleColumnMedian, TestMedium2) {
+  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   using T = Key;
   using V = Value;
