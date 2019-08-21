@@ -34,9 +34,9 @@ namespace cudf {
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on left_on The column's from left to join on.
- * Column i from left_on will be compared against column i of right_on. 
- * @param[in] right_on The column's from right to join on. 
+ * @param[in] left_on left_on The columns from left to join on.
+ * Column i from left_on will be compared against column i of right_on.
+ * @param[in] right_on The columns from right to join on.
  * Column i from right_on will be compared with column i of left_on. 
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
@@ -76,9 +76,9 @@ cudf::table inner_join(
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on left_on The column's from left to join on.
- * Column i from left_on will be compared against column i of right_on. 
- * @param[in] right_on The column's from right to join on. 
+ * @param[in] left_on left_on The columns from left to join on.
+ * Column i from left_on will be compared against column i of right_on.
+ * @param[in] right_on The columns from right to join on.
  * Column i from right_on will be compared with column i of left_on. 
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
@@ -120,9 +120,9 @@ cudf::table left_join(
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on left_on The column's from left to join on.
- * Column i from left_on will be compared against column i of right_on. 
- * @param[in] right_on The column's from right to join on. 
+ * @param[in] left_on left_on The columns from left to join on.
+ * Column i from left_on will be compared against column i of right_on.
+ * @param[in] right_on The columns from right to join on.
  * Column i from right_on will be compared with column i of left_on. 
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
