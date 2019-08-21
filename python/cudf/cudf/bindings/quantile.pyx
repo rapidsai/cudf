@@ -50,7 +50,8 @@ def apply_quantile(column, quant, method, exact):
         0,
         0,
         0,
-        'null_as_largest'
+        'null_as_largest',
+        False
     )
 
     res = []
