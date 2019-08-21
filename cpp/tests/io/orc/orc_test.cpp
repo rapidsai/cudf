@@ -31,14 +31,7 @@ TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
 /**
  * @brief Base test fixture for ORC writer
  **/
-struct orc_writer_test : GdfTest {
-  std::random_device rd;
-  std::default_random_engine generator{rd()};
-  std::uniform_int_distribution<int> distribution{0, 100};
-  int random(int min = 0, int max = 100) {
-    return min + (distribution(generator) % (max - min + 1));
-  }
-};
+struct orc_writer_test : GdfTest {};
 
 /**
  * @brief Typed test fixture for type-parameterized ORC writer tests
@@ -105,7 +98,7 @@ TYPED_TEST(orc_writer_typed_test, SingleColumn) {
   constexpr auto num_rows = 100;
   cudf::test::column_wrapper<TypeParam> col{random_values<TypeParam>(num_rows),
                                             [](size_t row) { return true; }};
-  column_set_name(col.get(), "col_" + std::to_string(this->random()));
+  column_set_name(col.get(), "col_" + std::string(typeid(TypeParam).name()));
 
   auto gdf_col = col.get();
   auto expected = cudf::table{&gdf_col, 1};
@@ -127,13 +120,13 @@ TYPED_TEST(orc_writer_typed_test, SingleColumn) {
 
 TYPED_TEST(orc_writer_typed_test, SingleColumnWithNulls) {
   constexpr auto num_rows = 100;
-  auto nulls_threshold = this->random(10);
+  auto nulls_threshold = 20;
   auto valids_func = [=](size_t row) {
     return (row < nulls_threshold || row > (num_rows - nulls_threshold));
   };
   cudf::test::column_wrapper<TypeParam> col{random_values<TypeParam>(num_rows),
                                             valids_func};
-  column_set_name(col.get(), "col_" + std::to_string(this->random()));
+  column_set_name(col.get(), "col_" + std::string(typeid(TypeParam).name()));
 
   auto gdf_col = col.get();
   auto expected = cudf::table{&gdf_col, 1};
@@ -176,6 +169,41 @@ TEST_F(orc_writer_test, MultiColumn) {
   EXPECT_EQ(cols.size(), expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcWriterMultiColumn.orc");
+
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
+  out_args.table = expected;
+  cudf::write_orc(out_args);
+
+  cudf::orc_read_arg in_args{cudf::source_info{filepath}};
+  in_args.use_index = false;
+  auto result = cudf::read_orc(in_args);
+
+  tables_are_equal(expected, result);
+}
+
+TEST_F(orc_writer_test, MultiColumnWithNulls) {
+  constexpr auto num_rows = 100;
+  cudf::test::column_wrapper<int8_t> col0{
+      random_values<int8_t>(num_rows), [=](size_t row) { return (row < 10); }};
+  cudf::test::column_wrapper<float> col2{
+      random_values<float>(num_rows),
+      [=](size_t row) { return (row >= 40 || row <= 60); }};
+  cudf::test::column_wrapper<double> col3{
+      random_values<double>(num_rows), [=](size_t row) { return (row > 80); }};
+  column_set_name(col0.get(), "int8s");
+  column_set_name(col2.get(), "floats");
+  column_set_name(col3.get(), "doubles");
+
+  std::vector<gdf_column *> cols;
+  cols.push_back(col0.get());
+  // cols.push_back(col1.get());
+  cols.push_back(col2.get());
+  cols.push_back(col3.get());
+  auto expected = cudf::table{cols.data(), 3};
+  EXPECT_EQ(cols.size(), expected.num_columns());
+
+  auto filepath =
+      temp_env->get_temp_filepath("OrcWriterMultiColumnWithNulls.orc");
 
   cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
   out_args.table = expected;
