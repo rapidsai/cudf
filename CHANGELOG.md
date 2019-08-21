@@ -19,6 +19,7 @@
 - PR #2614 Update Java version to match
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
+- PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
 
