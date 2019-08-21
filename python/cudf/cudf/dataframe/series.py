@@ -229,7 +229,16 @@ class Series(object):
 
     def append(self, other, ignore_index=False):
         """Append values from another ``Series`` or array-like object.
-        If ``ignore_index=True`` (default), the index is reset.
+        If ``ignore_index=True``, the index is reset.
+
+        Parameters
+        ----------
+        other : ``Series`` or array-like object
+        ignore_index : boolean, default False. If true, the index is reset.
+
+        Returns
+        -------
+        A new Series equivalent to self concatenated with other
         """
         this = self
         other = Series(other)
@@ -1436,7 +1445,7 @@ class Series(object):
         return vals.set_index(index)
 
     def _n_largest_or_smallest(self, largest, n, keep):
-        if not (0 <= n < len(self)):
+        if not (0 <= n <= len(self)):
             raise ValueError("n out-of-bound")
         direction = largest
         if keep == "first":
@@ -2262,6 +2271,7 @@ class Series(object):
         sort=True,
         group_keys=True,
         as_index=None,
+        dropna=True,
     ):
         if group_keys is not True:
             raise NotImplementedError(
@@ -2271,7 +2281,12 @@ class Series(object):
         from cudf.groupby.groupby import SeriesGroupBy
 
         return SeriesGroupBy(
-            self, by=by, level=level, sort=sort, as_index=as_index
+            self,
+            by=by,
+            level=level,
+            sort=sort,
+            as_index=as_index,
+            dropna=dropna,
         )
 
     @copy_docstring(Rolling)
