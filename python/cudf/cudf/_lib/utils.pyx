@@ -5,7 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-
 from libcpp.vector cimport vector
 
 from cudf._lib.cudf cimport *

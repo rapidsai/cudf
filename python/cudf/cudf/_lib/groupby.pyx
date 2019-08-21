@@ -20,7 +20,6 @@ from libc.stdlib cimport malloc, free
 import cudf
 import cudf.core.index as index
 from cudf.core.buffer import Buffer
-from cudf.core.column import CategoricalColumn
 from cudf.utils.cudautils import zeros
 
 from cudf._lib.cudf cimport *
@@ -57,6 +56,8 @@ def groupby(keys, values, ops, method='hash', sort_results=True):
     result : tuple of list of Columns
         keys and values of the result
     """
+    from cudf.core.column import CategoricalColumn
+    
     if len(values) == 0:
         return (keys, [])
 

@@ -11,7 +11,6 @@ from libcpp.string cimport string
 import numba.cuda
 import numba.numpy_support
 
-from cudf.core.column import Column
 from cudf.utils import cudautils
 
 from cudf._lib.cudf cimport *
@@ -20,6 +19,8 @@ cimport cudf._lib.includes.rolling as cpp_rolling
 
 
 def rolling(inp, window, min_periods, center, op):
+    from cudf.core.column import Column
+    
     cdef gdf_column* c_out_ptr = NULL
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0

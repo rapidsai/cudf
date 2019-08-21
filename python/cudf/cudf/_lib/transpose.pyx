@@ -10,7 +10,6 @@ from cudf._lib.cudf import *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
-from cudf.core.column import column_empty
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 
@@ -24,6 +23,7 @@ def transpose(df):
     --------
     cudf.core.DataFrame.transpose
     """
+    from cudf.core.column import column_empty
 
     if len(df.columns) == 0:
         return df
