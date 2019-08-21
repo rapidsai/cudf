@@ -21,7 +21,7 @@ from dask.optimization import cull, fuse
 from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 
 import cudf
-import cudf.bindings.reduce as cpp_reduce
+import cudf._lib as libcudf
 
 from dask_cudf import batcher_sortnet, join_impl
 from dask_cudf.accessor import (
@@ -444,7 +444,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
             def fix_index(df, startpos):
                 stoppos = startpos + len(df)
                 return df.set_index(
-                    cudf.dataframe.RangeIndex(start=startpos, stop=stoppos)
+                    cudf.core.index.RangeIndex(start=startpos, stop=stoppos)
                 )
 
             outdfs = [
@@ -572,7 +572,7 @@ class DataFrame(_Frame, dd.core.DataFrame):
 
 def sum_of_squares(x):
     x = x.astype("f8")._column
-    outcol = cpp_reduce.apply_reduce("sum_of_squares", x)
+    outcol = libcudf.reduce.reduce("sum_of_squares", x)
     return cudf.Series(outcol)
 
 
@@ -673,7 +673,7 @@ class Series(_Frame, dd.core.Series):
 
 
 class Index(Series, dd.core.Index):
-    _partition_type = cudf.dataframe.index.Index
+    _partition_type = cudf.Index
 
 
 def splits_divisions_sorted_cudf(df, chunksize):
