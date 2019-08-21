@@ -283,7 +283,7 @@ TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
 TEST_F(WrappersTestBool8, CastArithmeticTest)
 {
     cudf::bool8 w1{42};
-    cudf::bool8 w2{-42};
+    cudf::bool8 w2{static_cast<char>(-42)};
 
     bool t1{42};
     bool t2{-42};
