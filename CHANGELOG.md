@@ -11,6 +11,7 @@
 - PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
 - PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2588 Update Series.append documentation
 
 ## Bug Fixes
 
