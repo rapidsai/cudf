@@ -10,6 +10,7 @@ from cudf._lib.cudf import *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
+import cudf
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 

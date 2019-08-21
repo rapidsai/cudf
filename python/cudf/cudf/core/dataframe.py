@@ -22,7 +22,7 @@ from librmm_cffi import librmm as rmm
 
 import cudf
 import cudf._lib as libcudf
-import cudf.core.column as column
+from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
 from cudf.core.column import CategoricalColumn
