@@ -3103,6 +3103,8 @@ def test_df_values_device_property(data):
         {"A": [1, 2, 3], "B": [1.0, 2.0, 3.0]},
         {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
         {"A": [1, None, 3], "B": [1.0, 2.0, None]},
+        {"A": [None, None, None], "B": [None, None, None]},
+        {"A": [], "B": []},
 
     ],
 )
