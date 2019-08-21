@@ -49,7 +49,8 @@ struct quantiles_functor {
 
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void >
-  operator()(gdf_column const& values_col, gdf_column const& group_indices,
+  operator()(gdf_column const& values_col,
+             rmm::device_vector<gdf_size_type> const& group_indices,
              rmm::device_vector<gdf_size_type> const& group_sizes,
              gdf_column& result_col, rmm::device_vector<double> const& quantile,
              gdf_quantile_method interpolation)
@@ -57,7 +58,7 @@ struct quantiles_functor {
     // prepare args to be used by lambda below
     auto result = reinterpret_cast<double*>(result_col.data);
     auto values = reinterpret_cast<T*>(values_col.data);
-    auto grp_id = reinterpret_cast<gdf_size_type*>(group_indices.data);
+    auto grp_id = group_indices.data().get();
     auto grp_size = group_sizes.data().get();
     auto d_quants = quantile.data().get();
     auto num_qnts = quantile.size();
@@ -65,7 +66,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     thrust::for_each_n(thrust::device,
       thrust::make_counting_iterator(0),
-      group_indices.size,
+      group_indices.size(),
       [=] __device__ (gdf_size_type i) {
         gdf_size_type segment_size = grp_size[i];
 
@@ -102,21 +103,16 @@ namespace detail {
 
 template <typename T>
 void print(rmm::device_vector<T> const& d_vec, std::string label = "") {
-  thrust::host_vector<gdf_size_type> h_vec = d_vec;
+  thrust::host_vector<T> h_vec = d_vec;
   printf("%s \t", label.c_str());
-  for (auto &&i : h_vec)  printf("%d ", i);
+  for (auto &&i : h_vec)  std::cout << i << " ";
   printf("\n");
 }
 
+template <typename T>
 void print(gdf_column const& col, std::string label = "") {
-  auto col_data = reinterpret_cast<gdf_index_type*>(col.data);
-  auto d_vec = rmm::device_vector<gdf_index_type>(col_data, col_data+col.size);
-  print(d_vec, label);
-}
-
-void printfloat(gdf_column const& col, std::string label = "") {
-  auto col_data = reinterpret_cast<float*>(col.data);
-  auto d_vec = rmm::device_vector<gdf_index_type>(col_data, col_data+col.size);
+  auto col_data = reinterpret_cast<T*>(col.data);
+  auto d_vec = rmm::device_vector<T>(col_data, col_data+col.size);
   print(d_vec, label);
 }
 
@@ -133,11 +129,11 @@ struct groupby {
                                         false);
 
     set_key_sort_order();
-    print(_key_sorted_order, "idx col");
+    print<gdf_size_type>(_key_sorted_order, "idx col");
     set_group_ids();
     print(_group_ids, "group ids");
     set_group_labels();
-    print(_group_labels, "labels");
+    print(_group_labels, "grp labels");
     set_unsorted_labels();
     print(_unsorted_labels, "rev labels");
   };
@@ -194,11 +190,20 @@ struct groupby {
   index_vector& group_indices() { return _group_ids; }
 
   cudf::table unique_keys() {
-    auto out_key_table = cudf::allocate_like(_key_table, _group_ids.size());
-    cudf::gather(&sorted_key_table,
-                reinterpret_cast<gdf_index_type*>(group_indices.data),
-                &out_key_table);
+    auto uniq_key_table = cudf::allocate_like(_key_table, (gdf_size_type)_group_ids.size());
+    auto idx_data = reinterpret_cast<gdf_size_type*>(_key_sorted_order.data);
+    auto transformed_group_ids = index_vector(_group_ids.size());
 
+    print(_group_ids, "group ids");
+    thrust::transform(_group_ids.begin(), _group_ids.end(),
+                      transformed_group_ids.begin(),
+      [=] __device__ (gdf_size_type i) { return idx_data[i]; } );
+    print(transformed_group_ids, "transf group ids");
+    
+    cudf::gather(&_key_table,
+                transformed_group_ids.data().get(),
+                &uniq_key_table);
+    return uniq_key_table;
   }
 
 //  private:
@@ -436,23 +441,26 @@ group_quantiles(cudf::table const& key_table,
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   cudf::table result_table(gb_obj.num_groups() * quantiles.size(),
-                           std::vector<gdf_dtype>(val_table.num_columns(),
-                                                  GDF_FLOAT64));
+                           std::vector<gdf_dtype>(val_table.num_columns(), GDF_FLOAT64),
+                           std::vector<gdf_dtype_extra_info>(val_table.num_columns()));
 
-  for (size_t i = 0; i < val_table.num_columns(); i++)
+  for (gdf_size_type i = 0; i < val_table.num_columns(); i++)
   {
     gdf_column sorted_values;
     rmm::device_vector<gdf_size_type> group_sizes;
     std::tie(sorted_values, group_sizes) =
       gb_obj.sort_values(*(val_table.get_column(i)));
 
+    detail::print(group_sizes, "grp siz");
+    detail::print<float>(sorted_values, "sorted vals");
+
     auto& result_col = *(result_table.get_column(i));
 
     // Go forth and calculate the quantiles
     // TODO: currently ignoring nulls
     type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                    sorted_values, group_indices, group_sizes, result_col, dv_quantiles,
-                    interpolation);
+                    sorted_values, group_indices, group_sizes, result_col,
+                    dv_quantiles, interpolation);
 
     gdf_column_free(&sorted_values);
   }
