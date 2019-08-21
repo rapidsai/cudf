@@ -3,7 +3,7 @@
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
-{% set py_version=environ.get('CONDA_PY', 35) %}
+{% set py_version=environ.get('CONDA_PY', 36) %}
 
 package:
   name: cudf
@@ -21,16 +21,20 @@ requirements:
     - python
     - cython >=0.29,<0.30
     - setuptools
-    - numba >=0.41
+    - numba >=0.45.1
+    - dlpack
+    - pyarrow 0.14.1.*
     - libcudf {{ version }}
   run:
     - python
-    - pandas >=0.23.4
-    - numba >=0.41
-    - pyarrow 0.12.1.*
+    - pandas>=0.24.2,<0.25
+    - numba >=0.45.1
+    - pyarrow 0.14.1.*
+    - fastavro >=0.22.0
     - rmm {{ minor_version }}.*
     - nvstrings {{ minor_version }}.*
     - cython >=0.29,<0.30
+    - dlpack
 
 test:
   commands:

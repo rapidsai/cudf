@@ -19,10 +19,7 @@
 package ai.rapids.cudf;
 
 import java.io.File;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
-import java.util.stream.IntStream;
+import java.util.*;
 
 /**
  * Class to represent a collection of ColumnVectors and operations that can be performed on them
@@ -51,7 +48,7 @@ public final class Table implements AutoCloseable {
     for (ColumnVector columnVector : columns) {
       assert (null != columnVector) : "ColumnVectors can't be null";
       assert (rows == columnVector.getRowCount()) : "All columns should have the same number of " +
-          "rows";
+          "rows " + columnVector.getType();
     }
 
     // Since Arrays are mutable objects make a copy
@@ -85,6 +82,14 @@ public final class Table implements AutoCloseable {
       }
       throw t;
     }
+  }
+
+  /**
+   * Provides a faster way to get access to the columns. Only to be used internally, and it should
+   * never be modified in anyway.
+   */
+  ColumnVector[] getColumns() {
+    return columns;
   }
 
   /**
@@ -180,8 +185,22 @@ public final class Table implements AutoCloseable {
   private static native long[] gdfReadParquet(String[] filterColumnNames,
                                               String filePath, long address, long length) throws CudfException;
 
+  /**
+   * Read in ORC formatted data.
+   * @param filterColumnNames name of the columns to read, or an empty array if we want to read
+   *                          all of them
+   * @param filePath          the path of the file to read, or null if no path should be read.
+   * @param address           the address of the buffer to read from or 0 for no buffer.
+   * @param length            the length of the buffer to read from.
+   * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
+   *                          columns to DATE64 for compatibility with NumPy.
+   */
+  private static native long[] gdfReadORC(String[] filterColumnNames,
+                                          String filePath, long address, long length,
+                                          boolean usingNumPyTypes) throws CudfException;
 
-  private static native long[] gdfGroupByCount(long inputTable, int[] indices) throws CudfException;
+  private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
+                                                   int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
 
   private static native long[] gdfOrderBy(long inputTable, long[] sortKeys, boolean[] isDescending,
                                           boolean areNullsSmallest) throws CudfException;
@@ -194,14 +213,29 @@ public final class Table implements AutoCloseable {
 
   private static native long[] concatenate(long[] cudfTablePointers) throws CudfException;
 
+  private static native long[] gdfFilter(long input, long mask);
+
   /////////////////////////////////////////////////////////////////////////////
   // TABLE CREATION APIs
   /////////////////////////////////////////////////////////////////////////////
 
+  /**
+   * Read a CSV file using the default CSVOptions.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, File path) {
     return readCSV(schema, CSVOptions.DEFAULT, path);
   }
 
+  /**
+   * Read a CSV file.
+   * @param schema the schema of the file.  You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, CSVOptions opts, File path) {
     return new Table(
         gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
@@ -216,14 +250,36 @@ public final class Table implements AutoCloseable {
             opts.getFalseValues()));
   }
 
+  /**
+   * Read CSV formatted data using the default CSVOptions.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, byte[] buffer) {
     return readCSV(schema, CSVOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
-  public static Table readCSV(Schema schema, CSVOptions options, byte[] buffer) {
-    return readCSV(schema, options, buffer, 0, buffer.length);
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer) {
+    return readCSV(schema, opts, buffer, 0, buffer.length);
   }
 
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readCSV(Schema schema, CSVOptions opts, byte[] buffer, long offset,
                               long len) {
     if (len <= 0) {
@@ -234,16 +290,30 @@ public final class Table implements AutoCloseable {
     assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
       newBuf.setBytes(0, buffer, offset, len);
-      return readCSV(schema, opts, newBuf, len);
+      return readCSV(schema, opts, newBuf, 0, len);
     }
   }
 
-  public static Table readCSV(Schema schema, CSVOptions opts, HostMemoryBuffer buffer, long len) {
+  /**
+   * Read CSV formatted data.
+   * @param schema the schema of the data. You may use Schema.INFERRED to infer the schema.
+   * @param opts various CSV parsing options.
+   * @param buffer raw UTF8 formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readCSV(Schema schema, CSVOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
     assert len > 0;
-    assert len <= buffer.getLength();
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadCSV(schema.getColumnNames(), schema.getTypesAsStrings(),
         opts.getIncludeColumnNames(), null,
-        buffer.getAddress(), len,
+        buffer.getAddress() + offset, len,
         opts.getHeaderRow(),
         opts.getDelim(),
         opts.getQuote(),
@@ -253,38 +323,162 @@ public final class Table implements AutoCloseable {
         opts.getFalseValues()));
   }
 
+  /**
+   * Read a Parquet file using the default ParquetOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readParquet(File path) {
     return readParquet(ParquetOptions.DEFAULT, path);
   }
 
+  /**
+   * Read a Parquet file.
+   * @param opts various parquet parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
         path.getAbsolutePath(), 0, 0));
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(byte[] buffer) {
-    return readParquet(ParquetOptions.DEFAULT, buffer, buffer.length);
+    return readParquet(ParquetOptions.DEFAULT, buffer, 0, buffer.length);
   }
 
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
   public static Table readParquet(ParquetOptions opts, byte[] buffer) {
-    return readParquet(opts, buffer, buffer.length);
+    return readParquet(opts, buffer, 0, buffer.length);
   }
 
-  public static Table readParquet(ParquetOptions opts, byte[] buffer, long len) {
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, byte[] buffer, long offset, long len) {
     if (len <= 0) {
-      len = buffer.length;
+      len = buffer.length - offset;
     }
     assert len > 0;
-    assert len <= buffer.length;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
     try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
-      newBuf.setBytes(0, buffer, 0, len);
-      return readParquet(opts, newBuf, len);
+      newBuf.setBytes(0, buffer, offset, len);
+      return readParquet(opts, newBuf, 0, len);
     }
   }
 
-  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer, long len) {
+  /**
+   * Read parquet formatted data.
+   * @param opts various parquet parsing options.
+   * @param buffer raw parquet formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readParquet(ParquetOptions opts, HostMemoryBuffer buffer,
+                                  long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress(), len));
+        null, buffer.getAddress() + offset, len));
+  }
+
+  /**
+   * Read a ORC file using the default ORCOptions.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readORC(File path) { return readORC(ORCOptions.DEFAULT, path); }
+
+  /**
+   * Read a ORC file.
+   * @param opts ORC parsing options.
+   * @param path the local file to read.
+   * @return the file parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, File path) {
+    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes()));
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param buffer raw ORC formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(byte[] buffer) {
+    return readORC(ORCOptions.DEFAULT, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, byte[] buffer) {
+    return readORC(opts, buffer, 0, buffer.length);
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, byte[] buffer, long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.length - offset;
+    assert offset >= 0 && offset < buffer.length;
+    try (HostMemoryBuffer newBuf = HostMemoryBuffer.allocate(len)) {
+      newBuf.setBytes(0, buffer, offset, len);
+      return readORC(opts, newBuf, 0, len);
+    }
+  }
+
+  /**
+   * Read ORC formatted data.
+   * @param opts various ORC parsing options.
+   * @param buffer raw ORC formatted bytes.
+   * @param offset the starting offset into buffer.
+   * @param len the number of bytes to parse.
+   * @return the data parsed as a table on the GPU.
+   */
+  public static Table readORC(ORCOptions opts, HostMemoryBuffer buffer,
+                              long offset, long len) {
+    if (len <= 0) {
+      len = buffer.length - offset;
+    }
+    assert len > 0;
+    assert len <= buffer.getLength() - offset;
+    assert offset >= 0 && offset < buffer.length;
+    return new Table(gdfReadORC(opts.getIncludeColumnNames(),
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes()));
   }
 
   /**
@@ -342,13 +536,38 @@ public final class Table implements AutoCloseable {
     return new OrderByArg(index, true);
   }
 
-  public static Aggregate count() {
-    return Aggregate.count();
+  public static Aggregate count(int index) {
+    return Aggregate.count(index);
+  }
+
+  public static Aggregate max(int index) {
+    return Aggregate.max(index);
+  }
+
+  public static Aggregate min(int index) {
+    return Aggregate.min(index);
+  }
+
+  public static Aggregate sum(int index) {
+    return Aggregate.sum(index);
+  }
+
+  public static Aggregate mean(int index) {
+    return Aggregate.mean(index);
+  }
+
+  public AggregateOperation groupBy(GroupByOptions groupByOptions, int... indices) {
+    return groupByInternal(groupByOptions, indices);
   }
 
   public AggregateOperation groupBy(int... indices) {
+    return groupByInternal(GroupByOptions.builder().withIgnoreNullKeys(false).build(),
+        indices);
+  }
+
+  private AggregateOperation groupByInternal(GroupByOptions groupByOptions, int[] indices) {
     int[] operationIndicesArray = copyAndValidate(indices);
-    return new AggregateOperation(this, operationIndicesArray);
+    return new AggregateOperation(this, groupByOptions, operationIndicesArray);
   }
 
   public TableOperation onColumns(int... indices) {
@@ -365,6 +584,34 @@ public final class Table implements AutoCloseable {
     }
     return operationIndicesArray;
   }
+
+  /**
+   * Filters this table using a column of boolean values as a mask, returning a new one.
+   * <p>
+   * Given a mask column, each element `i` from the input columns
+   * is copied to the output columns if the corresponding element `i` in the mask is
+   * non-null and `true`. This operation is stable: the input order is preserved.
+   * <p>
+   * This table and mask columns must have the same number of rows.
+   * <p>
+   * The output table has size equal to the number of elements in boolean_mask
+   * that are both non-null and `true`.
+   * <p>
+   * If the original table row count is zero, there is no error, and an empty table is returned.
+   * @param mask column of type {@link DType#BOOL8} used as a mask to filter
+   *             the input column
+   * @return table containing copy of all elements of this table passing
+   * the filter defined by the boolean mask
+   */
+  public Table filter(ColumnVector mask) {
+    assert mask.getType() == DType.BOOL8 : "Mask column must be of type BOOL8";
+    assert getRowCount() == 0 || getRowCount() == mask.getRowCount() : "Mask column has incorrect size";
+    for (ColumnVector col : getColumns()){
+      assert col.getType() != DType.STRING : "STRING type must be converted to a STRING_CATEGORY for filter";
+    }
+    return new Table(gdfFilter(nativeHandle, mask.getNativeCudfColumnAddress()));
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // HELPER CLASSES
   /////////////////////////////////////////////////////////////////////////////
@@ -393,14 +640,44 @@ public final class Table implements AutoCloseable {
   }
 
   /**
+   * Keeps track of a gdf_column* and operator ids
+   */
+  private static final class ColumnOp {
+    private final long colNativeId;
+    private final int opNativeId;
+
+    ColumnOp(long column, int opNativeId){
+      this.colNativeId = column;
+      this.opNativeId = opNativeId;
+    }
+
+    @Override
+    public boolean equals(Object other) {
+      if (other instanceof ColumnOp){
+        ColumnOp otherCop = (ColumnOp) other;
+        return otherCop.colNativeId == colNativeId &&
+            otherCop.opNativeId == opNativeId;
+      }
+      return false;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(colNativeId, opNativeId);
+    }
+  }
+
+  /**
    * Class representing aggregate operations
    */
   public static final class AggregateOperation {
 
     private final Operation operation;
+    private final GroupByOptions groupByOptions;
 
-    AggregateOperation(final Table table, final int... indices) {
+    AggregateOperation(final Table table, GroupByOptions groupByOptions, final int... indices) {
       operation = new Operation(table, indices);
+      this.groupByOptions = groupByOptions;
     }
 
     /**
@@ -423,42 +700,86 @@ public final class Table implements AutoCloseable {
      */
     public Table aggregate(Aggregate... aggregates) {
       assert aggregates != null && aggregates.length > 0;
-      long[][] aggregateTables = new long[aggregates.length][];
-      for (int i = 0 ; i < aggregates.length ; i++) {
-        if (aggregates[i].isCount()) {
-          aggregateTables[i] = gdfGroupByCount(operation.table.nativeHandle, operation.indices);
-        } else {
-          IntStream.rangeClosed(0, i).forEach(index -> {
-            Arrays.stream(aggregateTables[index]).forEach(e -> {
-              //Being defensive
-              if (e != 0) {
-                ColumnVector.freeCudfColumn(e, true);
-              }
-            });
-          });
-          throw new UnsupportedOperationException("Invalid aggregate function");
+
+      // aggregateColumnIndices: the numeric indices of the columns to aggregate
+      // as provided by the user
+      List<Integer> aggregateColumnIndices = new ArrayList<>();
+      // ops: the corresponding cudf enum values for each aggregate
+      // operation, for each column index
+      List<Integer> ops = new ArrayList<>();
+      // finalAggColumns: this holds the user's desired list of aggregates,
+      // as specified in the variadic for this method
+      List<ColumnOp> finalAggColumns = new ArrayList<>();
+      // aggToCudfColumn: a map of ColumnOp (tuple of gdf_column* and enum for operation)
+      // to the index of the column that we asked cudf to compute. 
+      // These indices can then be used after the aggregate to find ColumnVector
+      // instances, we should place (and ref count) in the order as provided by the user.
+      HashMap<ColumnOp, Integer> aggToCudfColumn = new HashMap<>();
+
+      // keep track of the unique agg indices, starting at 1 after the
+      // grouping key
+      int uniqueAggIndex = operation.indices.length;
+      for (int aggregateIndex = 0; aggregateIndex < aggregates.length; aggregateIndex++) {
+        Aggregate agg = aggregates[aggregateIndex];
+        int origColumnIndex = agg.getIndex();
+        int origOpNativeId = agg.getNativeId();
+
+        // keep track of (gdf_column*, op) pairs, as that is what
+        // compute_original_requests does to track duplicates
+        ColumnOp cop = new ColumnOp(
+            operation.table.getColumn(origColumnIndex).getNativeCudfColumnAddress(),
+            origOpNativeId);
+
+        // if we haven't seen an aggregate for this (gdf_column *, agg id) pair
+        if (!aggToCudfColumn.containsKey(cop)) {
+          // add to the aggregates that cudf will perform
+          aggregateColumnIndices.add(agg.getIndex());
+          ops.add(agg.getNativeId());
+
+          // keep the index of the column where we can find the result later
+          aggToCudfColumn.put(cop, uniqueAggIndex++);
         }
+        finalAggColumns.add(cop);
       }
 
-      /**
-       * Currently Cudf calculates one aggregate at a time due to which we have multiple aggregate
-       * tables that we have to now merge into a single one
-       */
-      // copy the grouped columns to the new table
-      long[] finalAggregateTable = Arrays.copyOf(aggregateTables[0], operation.indices.length + aggregates.length);
-      // now copy the aggregated columns from each one of the aggregated tables to the end of the final table that
-      // has all the grouped columns
-      IntStream.range(1, aggregateTables.length).forEach(i -> {
-        IntStream.range(0, operation.indices.length).forEach(j -> {
-          //Being defensive
-          long e = aggregateTables[i][j];
-          if (e != 0) {
-            ColumnVector.freeCudfColumn(e, true);
-          }
-        });
-        finalAggregateTable[i + operation.indices.length] = aggregateTables[i][operation.indices.length];
-      });
-      return new Table(finalAggregateTable);
+      // aggregate with deduplicated operations
+      Table aggregate = new Table(gdfGroupByAggregate(
+          operation.table.nativeHandle,
+          operation.indices,
+          // one way of converting List[Integer] to int[
+          aggregateColumnIndices.stream().mapToInt(i->i).toArray(),
+          ops.stream().mapToInt(i->i).toArray(),
+          groupByOptions.getIgnoreNullKeys()));
+
+      // prepare the final table
+      ColumnVector[] finalCols = new ColumnVector[operation.indices.length + aggregates.length];
+
+      int aggIndex = 0;
+
+      // pick out the grouping columns
+      for (int groupIndex : operation.indices) {
+        finalCols[groupIndex] = aggregate.getColumn(groupIndex);
+        aggIndex++;
+      }
+
+      // pick out the aggregate columns (copying the reference for duplicate aggs)
+      for (ColumnOp cop : finalAggColumns) {
+        int originalIndex = aggToCudfColumn.get(cop);
+        finalCols[aggIndex] = aggregate.getColumn(originalIndex);
+        aggIndex++;
+      }
+
+      // Note: Table will increase ref counts accordingly, which means
+      // that duplicate columns in finalCols, will get a refCount equal
+      // to the number of times their references appear on the table (good)
+      Table tbl = new Table(finalCols);
+
+      // returning a brand new table now, so we close the original
+      // this brings the refCount down for each column, such that Table
+      // is the only holder
+      aggregate.close();
+
+      return tbl;
     }
   }
 

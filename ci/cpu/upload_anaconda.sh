@@ -6,13 +6,10 @@ set -e
 
 export LIBCUDF_FILE=`conda build conda/recipes/libcudf --output`
 export CUDF_FILE=`conda build conda/recipes/cudf --python=$PYTHON --output`
+export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --output`
 
 SOURCE_BRANCH=master
-CUDA_REL=${CUDA:0:3}
-if [ "${CUDA:0:2}" == '10' ]; then
-  # CUDA 10 release
-  CUDA_REL=${CUDA:0:4}
-fi
+CUDA_REL=${CUDA_VERSION%.*}
 
 # Restrict uploads to master branch
 if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
@@ -43,4 +40,10 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
   echo "Upload cudf"
   echo ${CUDF_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${CUDF_FILE}
+
+  test -e ${DASK_CUDF_FILE}
+  echo "Upload dask-cudf"
+  echo ${DASK_CUDF_FILE}
+  anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${DASK_CUDF_FILE}
+  
 fi

@@ -45,6 +45,18 @@ gdf_column empty_like(gdf_column const& input);
 gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 
 /**
+ * @brief Allocates a new column of the specified size and same type as the input.
+ *
+ * @param input The input column to emulate
+ * @param size The size of the column to allocate in rows
+ * @param allocate_mask_if_exists Optional whether or not to allocate bitmask if it exists in input
+ * @param stream Optional stream in which to perform copies
+ * @return gdf_column An allocated column of same size and type of input
+ */
+gdf_column allocate_like(gdf_column const& input, gdf_size_type size, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+
+
+/**
  * @brief Creates a new column that is a copy of input
  * 
  * @param input The input column to copy
@@ -86,6 +98,26 @@ table empty_like(table const& t);
 table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
 
 /**
+ * @brief Creates a table of columns with the specified size and same type as
+ * the input.
+ *
+ * Creates the `gdf_column` objects, and allocates underlying device memory for
+ * each column matching the input columns
+ *
+ * @note It is the caller's responsibility to free each column's device memory
+ * allocation in addition to deleting the `gdf_column` object for every column
+ * in the new table.
+ *
+ * @param t The table to emulate
+ * @param size The size of the columns to allocate
+ * @param allocate_mask_if_exists Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
+ * @param stream Optional stream in which to perform allocations
+ * @return table A table of columns with same type as @p t and specified @p size
+ */
+table allocate_like(table const& t, gdf_size_type size, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+
+
+/**
  * @brief Creates a table of columns and deep copies the data from an input
  * table.
  *
@@ -124,37 +156,69 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
                 gdf_index_type in_begin);
 
 /**
- * @brief Scatters the rows (including null values) of a set of source columns
- * into a set of destination columns.
- * 
- * The two sets of columns must have equal numbers of columns.
+ * @brief Creates a new `table` as if an in-place scatter from a `source` table 
+ * was performed on the `target` table.
  *
- * Scatters the rows of the source columns into the destination columns
- * according to a scatter map such that row "i" from the source columns will be
- * scattered to row "scatter_map[i]" in the destination columns.
+ * It is the user's reponsibility to free the device memory allocated in the 
+ * returned table `destination_table`.
  *
- * The datatypes between coresponding columns in the source and destination
- * columns must be the same.
+ * The `source_table` and the `target_table` must have equal numbers of columns.
  *
- * The number of elements in the scatter_map must equal the number of rows in
+ * The datatypes between coresponding columns in the source and target columns 
+ * must be the same.
+ *
+ * The number of rows in the scatter_map must equal the number of rows in
  * the source columns.
  *
+ * If any index in scatter_map is outside the range of [0, target.num_rows()), 
+ * the result is undefined.
+ *
+ * If the same index appears more than once in scatter_map, the result is
+ * undefined.
+ * 
+ * A column in the output will only be nullable if: 
+ * - Its corresponding column in `target` is nullable
+ * - Its corresponding column in `source` has `null_count > 0` 
+ *
+ * @Param[in] source The columns whose rows will be scattered
+ * @Param[in] scatter_map An array that maps rows in the input columns
+ * to rows in the output columns.
+ * @Param[in] target The table to copy and then perform an in-place scatter 
+ * into the copy.
+ * @return[out] The result of the scatter
+ */
+table scatter(table const& source, gdf_index_type const scatter_map[],
+              table const& target);
+
+/**
+ * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
+ * values into the rows of a `target` table in-place.
+ *
+ * `data` and `valid` of a specific row of the target_column is kept 
+ * unchanged if the `scatter_map` does not map to that row.
+ * 
+ * The datatypes between coresponding columns in the source and target
+ * columns must be the same.
+ *
  * If any index in scatter_map is outside the range of [0, num rows in
- * destination_columns), the result is undefined.
+ * target_columns), the result is undefined.
  *
  * If the same index appears more than once in scatter_map, the result is
  * undefined.
  *
- * @Param[in] source_table The columns whose rows will be scattered
- * @Param[in] scatter_map An array that maps rows in the input columns
- * to rows in the output columns.
- * @Param[out] destination_table A preallocated set of columns with a number
- * of rows equal in size to the maximum index contained in scatter_map
+ * If the scalar is null (is_valid == false) and the target column does not
+ * have a valid bitmask, the destination column will have a bitmask allocated.
  *
- * @return GDF_SUCCESS upon successful completion
+ * @Param[in] source The row to be scattered
+ * @Param[in] scatter_map An array that maps to rows in the output columns.
+ * @Param[in] target The table to copy and then perform an in-place scatter 
+ * into the copy.
+ * @return[out] The result of the scatter
+ *
  */
-void scatter(table const* source_table, gdf_index_type const scatter_map[],
-                  table* destination_table);
+table scatter(std::vector<gdf_scalar> const& source,
+              gdf_index_type const scatter_map[],
+              gdf_size_type num_scatter_rows, table const& target);
 
 /**
  * @brief Gathers the rows (including null values) of a set of source columns
@@ -186,7 +250,6 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
  *
- * @return GDF_SUCCESS upon successful completion
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);

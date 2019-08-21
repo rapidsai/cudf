@@ -1,162 +1,26 @@
-#include <cudf/cudf.h>
-#include <rmm/rmm.h>
-#include <utilities/cudf_utils.h>
-#include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <bitmask/legacy_bitmask.hpp>
-
-#include <cub/block/block_reduce.cuh>
-
-#include <limits>
-#include <type_traits>
-
-#include <cudf/reduction.hpp>
-#include "reduction_operators.cuh"
-
-namespace { // anonymous namespace
-
-static constexpr int reduction_block_size = 128;
-
 /*
-Generic reduction implementation with support for validity mask
-*/
-template<typename T_in, typename T_out, typename F, typename Ld>
-__global__
-void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
-                      gdf_size_type size, T_out *result,
-                      F functor, T_out identity, Ld loader)
-{
-    typedef cub::BlockReduce<T_out, reduction_block_size> BlockReduce;
-    __shared__ typename BlockReduce::TempStorage temp_storage;
+ * Copyright (c) 2019, NVIDIA CORPORATION.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
-    int tid = threadIdx.x;
-    int blkid = blockIdx.x;
-    int blksz = blockDim.x;
-    int gridsz = gridDim.x;
-
-    int step = blksz * gridsz;
-
-    T_out agg = identity;
-    for (int base=blkid * blksz; base<size; base+=step) {
-        // Threadblock synchronous loop
-        int i = base + tid;
-        // load
-        T_out loaded = identity;
-        if (i < size && gdf_is_valid(mask, i))
-            loaded = static_cast<T_out>(loader(data, i));
-
-        // Block reduce
-        T_out temp = BlockReduce(temp_storage).Reduce(loaded, functor);
-        // Add current block
-        agg = functor(agg, temp);
-    }
-
-    // First thread of each block stores the result.
-    if (tid == 0){
-        cudf::genericAtomicOperation(result, agg, functor);
-    }
-}
-
-template<typename T_in, typename T_out, typename Op>
-void ReduceOp(const gdf_column *input,
-                   gdf_scalar* scalar, cudaStream_t stream)
-{
-    T_out identity = Op::Op::template identity<T_out>();
-
-    // allocate temporary memory for the result
-    void *result = NULL;
-    RMM_TRY(RMM_ALLOC(&result, sizeof(T_out), stream));
-
-    // initialize output by identity value
-    CUDA_TRY(cudaMemcpyAsync(result, &identity,
-            sizeof(T_out), cudaMemcpyHostToDevice, stream));
-    CHECK_STREAM(stream);
-
-    int blocksize = reduction_block_size;
-    int gridsize = (input->size + reduction_block_size -1 )
-        /reduction_block_size;
-
-    // kernel call
-    gpu_reduction_op<<<gridsize, blocksize, 0, stream>>>(
-        static_cast<const T_in*>(input->data), input->valid, input->size,
-        static_cast<T_out*>(result),
-        typename Op::Op{}, identity, typename Op::Loader{});
-    CHECK_STREAM(stream);
-
-    // read back the result to host memory
-    // TODO: asynchronous copy
-    CUDA_TRY(cudaMemcpy(&scalar->data, result,
-            sizeof(T_out), cudaMemcpyDeviceToHost));
-
-    // cleanup temporary memory
-    RMM_TRY(RMM_FREE(result, stream));
-
-    // set scalar is valid
-    scalar->is_valid = true;
-};
-
-template <typename T_in, typename Op>
-struct ReduceOutputDispatcher {
-public:
-    template <typename T_out, typename std::enable_if<
-        std::is_constructible<T_out, T_in>::value >::type* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream)
-    {
-        ReduceOp<T_in, T_out, Op>(col, scalar, stream);
-    }
-
-    template <typename T_out, typename std::enable_if<
-        not std::is_constructible<T_out, T_in>::value >::type* = nullptr >
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream)
-    {
-        CUDF_FAIL("input data type is not convertible to output data type");
-    }
-};
-
-template <typename Op>
-struct ReduceDispatcher {
-private:
-    // return true if T is arithmetic type or
-    // Op is DeviceMin or DeviceMax for wrapper (non-arithmetic) types
-    template <typename T>
-    static constexpr bool is_supported()
-    {
-        return std::is_arithmetic<T>::value ||
-               std::is_same<T, cudf::bool8>::value ||
-               std::is_same<Op, cudf::reductions::ReductionMin>::value ||
-               std::is_same<Op, cudf::reductions::ReductionMax>::value ;
-    }
-
-public:
-    template <typename T, typename std::enable_if<
-        is_supported<T>()>::type* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream=0)
-    {
-        cudf::type_dispatcher(scalar->dtype,
-            ReduceOutputDispatcher<T, Op>(), col, scalar, stream);
-    }
-
-    template <typename T, typename std::enable_if<
-        not is_supported<T>()>::type* = nullptr>
-    void operator()(const gdf_column *col,
-                         gdf_scalar* scalar, cudaStream_t stream=0)
-    {
-        CUDF_FAIL("Reduction operators other than `min` and `max`"
-                  " are not supported for non-arithmetic types");
-    }
-};
-
-}   // anonymous namespace
-
+#include "reduction_functions.cuh"
 
 namespace cudf{
 
-
-gdf_scalar reduction(const gdf_column *col,
-                  gdf_reduction_op op, gdf_dtype output_dtype)
+gdf_scalar reduce(const gdf_column *col,
+                  cudf::reduction::operators op, gdf_dtype output_dtype,
+                  gdf_size_type ddof)
 {
     gdf_scalar scalar;
     scalar.dtype = output_dtype;
@@ -167,25 +31,30 @@ gdf_scalar reduction(const gdf_column *col,
     if( col->size <= col->null_count )return scalar;
 
     switch(op){
-    case GDF_REDUCTION_SUM:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionSum>(), col, &scalar);
+      case cudf::reduction::SUM:
+        scalar = cudf::reduction::sum(*col, output_dtype);
         break;
-    case GDF_REDUCTION_MIN:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionMin>(), col, &scalar);
+    case cudf::reduction::MIN:
+        scalar = cudf::reduction::min(*col, output_dtype);
         break;
-    case GDF_REDUCTION_MAX:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionMax>(), col, &scalar);
+    case cudf::reduction::MAX:
+        scalar = cudf::reduction::max(*col, output_dtype);
         break;
-    case GDF_REDUCTION_PRODUCT:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionProduct>(), col, &scalar);
+    case cudf::reduction::PRODUCT:
+        scalar = cudf::reduction::product(*col, output_dtype);
         break;
-    case GDF_REDUCTION_SUMOFSQUARES:
-        cudf::type_dispatcher(col->dtype,
-            ReduceDispatcher<cudf::reductions::ReductionSumOfSquares>(), col, &scalar);
+    case cudf::reduction::SUMOFSQUARES:
+        scalar = cudf::reduction::sum_of_squares(*col, output_dtype);
+        break;
+
+    case cudf::reduction::MEAN:
+        scalar = cudf::reduction::mean(*col, output_dtype);
+        break;
+    case cudf::reduction::VAR:
+        scalar = cudf::reduction::variance(*col, output_dtype, ddof);
+        break;
+    case cudf::reduction::STD:
+        scalar = cudf::reduction::standard_deviation(*col, output_dtype, ddof);
         break;
     default:
         CUDF_FAIL("Unsupported reduction operator");

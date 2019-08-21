@@ -20,10 +20,11 @@
 #include <cudf/cudf.h>
 #include <cudf/functions.h>
 #include <cudf/types.h>
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/cudf_utils.h>
 #include <utilities/column_utils.hpp>
 
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/nvcategory_utils.cuh>
@@ -128,7 +129,9 @@ const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool p
 std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_column_to_host(gdf_column * column){
 
   if (column->dtype == GDF_STRING_CATEGORY && column->dtype_info.category != nullptr && column->size > 0) {
-    NVStrings* tptr = static_cast<NVCategory*>(column->dtype_info.category)->to_strings();
+    NVStrings* tptr = static_cast<NVCategory*>(column->dtype_info.category)->gather_strings(static_cast<nv_category_index_type*>(column->data),
+                                                                                            column->size,
+                                                                                            DEVICE_ALLOCATED);
 
     unsigned int count = tptr->size();
     if( count==0 )

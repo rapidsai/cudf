@@ -15,12 +15,18 @@
  */
 
 #include "unary_ops.cuh"
+#include <cudf/unary.hpp>
+#include <cudf/copying.hpp>
 
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cmath>
 #include <algorithm>
 #include <type_traits>
+
+namespace cudf {
+
+namespace detail {
 
 // trig functions
 
@@ -147,23 +153,23 @@ struct DeviceNot {
 
 
 template<typename T, typename F>
-static gdf_error launch(gdf_column *input, gdf_column *output) {
-    return cudf::unary::Launcher<T, T, F>::launch(input, output);
+static void launch(gdf_column const* input, gdf_column *output) {
+    cudf::unary::Launcher<T, T, F>::launch(input, output);
 }
 
 
 template <typename F>
 struct MathOpDispatcher {
     template <typename T>
-    typename std::enable_if_t<std::is_arithmetic<T>::value, gdf_error>
-    operator()(gdf_column *input, gdf_column *output) {
-        return launch<T, F>(input, output);
+    typename std::enable_if_t<std::is_arithmetic<T>::value, void>
+    operator()(gdf_column const* input, gdf_column *output) {
+        launch<T, F>(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!std::is_arithmetic<T>::value, gdf_error>
-    operator()(gdf_column *input, gdf_column *output) {
-        return GDF_UNSUPPORTED_DTYPE;
+    typename std::enable_if_t<!std::is_arithmetic<T>::value, void>
+    operator()(gdf_column const* input, gdf_column *output) {
+        CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
@@ -171,15 +177,15 @@ struct MathOpDispatcher {
 template <typename F>
 struct BitwiseOpDispatcher {
     template <typename T>
-    typename std::enable_if_t<std::is_integral<T>::value, gdf_error>
-    operator()(gdf_column *input, gdf_column *output) {
-        return launch<T, F>(input, output);
+    typename std::enable_if_t<std::is_integral<T>::value, void>
+    operator()(gdf_column const* input, gdf_column *output) {
+        launch<T, F>(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!std::is_integral<T>::value, gdf_error>
-    operator()(gdf_column *input, gdf_column *output) {
-        return GDF_UNSUPPORTED_DTYPE;
+    typename std::enable_if_t<!std::is_integral<T>::value, void>
+    operator()(gdf_column const* input, gdf_column *output) {
+        CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
@@ -198,80 +204,127 @@ private:
 
 public:
     template <typename T>
-    typename std::enable_if_t<is_supported<T>(), gdf_error>
-    operator()(gdf_column *input, gdf_column *output) {
-        return cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
+    typename std::enable_if_t<is_supported<T>(), void>
+    operator()(gdf_column const* input, gdf_column *output) {
+        cudf::unary::Launcher<T, cudf::bool8, F>::launch(input, output);
     }
 
     template <typename T>
-    typename std::enable_if_t<!is_supported<T>(), gdf_error>
-    operator()(gdf_column *input, gdf_column *output) {
-        return GDF_UNSUPPORTED_DTYPE;
+    typename std::enable_if_t<!is_supported<T>(), void>
+    operator()(gdf_column const* input, gdf_column *output) {
+        CUDF_FAIL("Unsupported datatype for operation");
     }
 };
 
+} // namespace detail
 
-gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op) {
+gdf_column unary_operation(gdf_column const& input, unary_op op) {
+
+    gdf_column output{};
+
+    if (op == unary_op::NOT)
+    {
+        // TODO: replace this with a proper column constructor once
+        // cudf::column is implemented
+        bool allocate_mask = (input.valid != nullptr);
+        output = cudf::allocate_column(GDF_BOOL8, input.size, allocate_mask);
+    }
+    else
+        output = cudf::allocate_like(input);
+
+    if (input.size == 0) return output;
+
     cudf::unary::handleChecksAndValidity(input, output);
 
     switch(op){
-        case GDF_SIN:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceSin>{},
-                                        input, output);
-        case GDF_COS:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceCos>{},
-                                        input, output);
-        case GDF_TAN:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceTan>{},
-                                        input, output);
-        case GDF_ARCSIN:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceArcSin>{},
-                                        input, output);
-        case GDF_ARCCOS:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceArcCos>{},
-                                        input, output);
-        case GDF_ARCTAN:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceArcTan>{},
-                                        input, output);
-        case GDF_EXP:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceExp>{},
-                                        input, output);
-        case GDF_LOG:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceLog>{},
-                                        input, output);
-        case GDF_SQRT:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceSqrt>{},
-                                        input, output);
-        case GDF_CEIL:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceCeil>{},
-                                        input, output);
-        case GDF_FLOOR:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceFloor>{},
-                                        input, output);
-        case GDF_ABS:
-            return cudf::type_dispatcher(input->dtype,
-                                        MathOpDispatcher<DeviceAbs>{},
-                                        input, output);
-        case GDF_BIT_INVERT:
-            return cudf::type_dispatcher(input->dtype,
-                                        BitwiseOpDispatcher<DeviceInvert>{},
-                                        input, output);
-        case GDF_NOT:
-            return cudf::type_dispatcher(input->dtype,
-                                        LogicalOpDispatcher<DeviceNot>{},
-                                        input, output);
+        case unary_op::SIN:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceSin>{},
+                &input, &output);
+            break;
+        case unary_op::COS:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceCos>{},
+                &input, &output);
+            break;
+        case unary_op::TAN:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceTan>{},
+                &input, &output);
+            break;
+        case unary_op::ARCSIN:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceArcSin>{},
+                &input, &output);
+            break;
+        case unary_op::ARCCOS:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceArcCos>{},
+                &input, &output);
+            break;
+        case unary_op::ARCTAN:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceArcTan>{},
+                &input, &output);
+            break;
+        case unary_op::EXP:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceExp>{},
+                &input, &output);
+            break;
+        case unary_op::LOG:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceLog>{},
+                &input, &output);
+            break;
+        case unary_op::SQRT:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceSqrt>{},
+                &input, &output);
+            break;
+        case unary_op::CEIL:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceCeil>{},
+                &input, &output);
+            break;
+        case unary_op::FLOOR:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceFloor>{},
+                &input, &output);
+            break;
+        case unary_op::ABS:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::MathOpDispatcher<detail::DeviceAbs>{},
+                &input, &output);
+            break;
+        case unary_op::BIT_INVERT:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::BitwiseOpDispatcher<detail::DeviceInvert>{},
+                &input, &output);
+            break;
+        case unary_op::NOT:
+            cudf::type_dispatcher(
+                input.dtype,
+                detail::LogicalOpDispatcher<detail::DeviceNot>{},
+                &input, &output);
+            break;
         default:
-            return GDF_INVALID_API_CALL;
+            CUDF_FAIL("Undefined unary operation");
     }
+    return output;
 }
+
+} // namespace cudf

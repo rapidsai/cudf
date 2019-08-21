@@ -27,12 +27,12 @@
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities//type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <bitmask/legacy_bitmask.hpp>
-#include <bitmask/bit_mask.cuh>
+#include <bitmask/legacy/legacy_bitmask.hpp>
+#include <bitmask/legacy/bit_mask.cuh>
 
 using bit_mask::bit_mask_t;
 

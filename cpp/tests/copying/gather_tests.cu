@@ -15,7 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -25,7 +25,7 @@
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/types.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <random>
 
@@ -35,6 +35,210 @@ struct GatherTest : GdfTest {};
 using test_types =
     ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double, cudf::bool8>;
 TYPED_TEST_CASE(GatherTest, test_types);
+
+TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+
+  static_assert(source_size == destination_size,
+                "Source and destination columns must be the same size.");
+
+  constexpr gdf_size_type n_cols = 3;
+ 
+  std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
+    n_cols,
+    { source_size, 
+      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return true; }
+    }
+  );
+  std::vector<gdf_column*> vp_src {n_cols};
+  for(size_t i = 0; i < v_src.size(); i++){
+    vp_src[i] = v_src[i].get();  
+  }
+  
+  // Create gather_map that reverses order of source_column
+  std::vector<gdf_index_type> host_gather_map(source_size);
+  std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
+  std::reverse(host_gather_map.begin(), host_gather_map.end());
+  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+
+  std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
+    n_cols,
+    { source_size, 
+      [](gdf_index_type row){return static_cast<TypeParam>(row);},
+      [](gdf_index_type row) { return true; }
+    }
+  );
+  std::vector<gdf_column*> vp_dest {n_cols};
+  for(size_t i = 0; i < v_src.size(); i++){
+    vp_dest[i] = v_dest[i].get();  
+  }
+ 
+  cudf::table source_table{ vp_src };
+  cudf::table destination_table{ vp_dest };
+
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
+
+  for(size_t i = 0; i < n_cols; i++){
+    // Expected result is the reversal of the source column
+    std::vector<TypeParam> expected_data;
+    std::vector<gdf_valid_type> expected_bitmask;
+    std::tie(expected_data, expected_bitmask) = v_src[i].to_host();
+    std::reverse(expected_data.begin(), expected_data.end());
+
+    // Copy result of destination column to host
+    std::vector<TypeParam> result_data;
+    std::vector<gdf_valid_type> result_bitmask;
+    std::tie(result_data, result_bitmask) = v_dest[i].to_host();
+
+    auto print_all_unequal_pairs { true };
+    expect_column_values_are_equal<TypeParam>(
+        destination_size, expected_data.data(), nullptr, "Expected",
+        result_data.data(), nullptr, "Actual",
+        print_all_unequal_pairs);
+
+    for (gdf_index_type i = 0; i < destination_size; i++) {
+      EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
+          << "Value at index " << i << " should be non-null!\n";
+    }
+  }
+}
+
+TYPED_TEST(GatherTest, MultiColNullTest) {
+  constexpr gdf_size_type source_size{1000};
+  constexpr gdf_size_type destination_size{1000};
+  
+  static_assert(0 == source_size % 2,
+                "Size of source data must be a multiple of 2.");
+  static_assert(source_size == destination_size,
+                "Source and destination columns must be equal size.");
+  
+  constexpr gdf_size_type n_cols = 3;
+ 
+  // elements with even indices are null
+  std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
+    n_cols,
+    { source_size, 
+      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return row & 1; }
+    }
+  );
+  std::vector<gdf_column*> vp_src {n_cols};
+  for(size_t i = 0; i < v_src.size(); i++){
+    vp_src[i] = v_src[i].get();  
+  }
+  
+  // Create gather_map that reverses order of source_column
+  std::vector<gdf_index_type> host_gather_map(source_size);
+  for (gdf_size_type i = 0; i < destination_size / 2; ++i) {
+    host_gather_map[i] = i * 2 + 1;
+    host_gather_map[destination_size / 2 + i] = i * 2;
+  }
+  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+
+  std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
+    n_cols,
+    { source_size, 
+      [](gdf_index_type row){return static_cast<TypeParam>(row);},
+      [](gdf_index_type row) { return true; }
+    }
+  );
+  std::vector<gdf_column*> vp_dest {n_cols};
+  for(size_t i = 0; i < v_src.size(); i++){
+    vp_dest[i] = v_dest[i].get();  
+  }
+ 
+  cudf::table source_table{ vp_src };
+  cudf::table destination_table{ vp_dest };
+
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &destination_table));
+
+  for(size_t c = 0; c < n_cols; c++){
+    // Copy result of destination column to host
+    std::vector<TypeParam> result_data;
+    std::vector<gdf_valid_type> result_bitmask;
+    std::tie(result_data, result_bitmask) = v_dest[c].to_host();
+    
+    EXPECT_EQ(v_dest[c].null_count(), destination_size/2) 
+      << "Null count should be " << destination_size/2 << "\n";
+
+    for (gdf_index_type i = 0; i < destination_size; i++) {
+      // The first half of the destination column should be all valid
+      // and values should be 1, 3, 5, 7, etc.
+      if (i < destination_size / 2) {
+        EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
+            << "Value at index " << i << " should be non-null!\n";
+        EXPECT_EQ(static_cast<TypeParam>(i * 2 + 1), result_data[i]);
+      } else {
+        // The last half of the destination column should be all null
+        EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
+            << "Value at index " << i << " should be null!\n";
+      }
+    }
+  }
+}
+
+TYPED_TEST(GatherTest, MultiColInPlaceTest) {
+  constexpr gdf_size_type source_size{1000};
+  
+  static_assert(0 == source_size % 2,
+                "Size of source data must be a multiple of 2.");
+  
+  constexpr gdf_size_type n_cols = 3;
+ 
+  // elements with even indices are null
+  std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
+    n_cols,
+    { source_size, 
+      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
+      [](gdf_index_type row) { return row & 1; }
+    }
+  );
+  std::vector<gdf_column*> vp_src {n_cols};
+  for(size_t i = 0; i < v_src.size(); i++){
+    vp_src[i] = v_src[i].get();  
+  }
+  
+  // Create gather_map that reverses order of source_column
+  std::vector<gdf_index_type> host_gather_map(source_size);
+  for (gdf_size_type i = 0; i < source_size / 2; ++i) {
+    host_gather_map[i] = i * 2 + 1;
+    host_gather_map[source_size / 2 + i] = i * 2;
+  }
+  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+
+  cudf::table source_table{ vp_src };
+
+  EXPECT_NO_THROW(
+      cudf::gather(&source_table, gather_map.data().get(), &source_table));
+
+  for(size_t c = 0; c < n_cols; c++){
+    // Copy result of source column to host
+    std::vector<TypeParam> result_data;
+    std::vector<gdf_valid_type> result_bitmask;
+    std::tie(result_data, result_bitmask) = v_src[c].to_host();
+    
+    EXPECT_EQ(v_src[c].null_count(), source_size/2) 
+      << "Null count should be " << source_size/2 << "\n";
+
+    for (gdf_index_type i = 0; i < source_size; i++) {
+      // The first half of the source column should be all valid
+      // and values should be 1, 3, 5, 7, etc.
+      if (i < source_size / 2) {
+        EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i))
+            << "Value at index " << i << " should be non-null!\n";
+        EXPECT_EQ(static_cast<TypeParam>(i * 2 + 1), result_data[i]);
+      } else {
+        // The last half of the source column should be all null
+        EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i))
+            << "Value at index " << i << " should be null!\n";
+      }
+    }
+  }
+}
 
 TYPED_TEST(GatherTest, DtypeMistach){
   constexpr gdf_size_type source_size{1000};
