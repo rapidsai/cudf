@@ -470,10 +470,12 @@ class DataFrame(object):
 
     @property
     def values(self):
+        if self.isnull().all().all():
+            return np.empty(self.shape, dtype=np.object)
         cols = [
             c
             if not is_categorical_dtype(c)
-            else c.as_string_column(dtype=np.dtype("O"))
+            else c.as_string_column(dtype=np.object)
             for c in self._columns
         ]
         mat_dtype = np.find_common_type(cols, [])
