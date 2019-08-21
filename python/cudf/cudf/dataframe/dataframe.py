@@ -470,14 +470,20 @@ class DataFrame(object):
 
     @property
     def values(self):
-        cols = [self._cols[k] for k in self.columns]
-        dtype = np.find_common_type(cols, [])
-        mat = np.zeros(self.shape, dtype=dtype)
+        cols = [
+            c
+            if not is_categorical_dtype(c)
+            else c.as_string_column(dtype=np.dtype("O"))
+            for c in self._columns
+        ]
+        mat_dtype = np.find_common_type(cols, [])
+        mat = np.zeros(self.shape, dtype=mat_dtype)
         for i, col in enumerate(cols):
-            mat[:,i] = col.data.mem.copy_to_host()
+            if np.issubdtype(col.dtype, np.dtype("object")):
+                mat[:, i] = col.data.to_host()
+            else:
+                mat[:, i] = col.data.mem.copy_to_host()
         return mat
-
-
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """

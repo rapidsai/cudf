@@ -3106,6 +3106,8 @@ def test_df_values_device_property(data):
         {"A": [1, None, 3], "B": [1.0, 2.0, None]},
         {"A": [None, None, None], "B": [None, None, None]},
         {"A": [], "B": []},
+        {'A': [1,2,3], 'B': ['a','b','c']},
+        {'A': pd.Categorical(["a", "b", "c"]), 'B': [1.0, 2.0, 3.0]},
     ],
 )
 def test_df_values_property(data):
