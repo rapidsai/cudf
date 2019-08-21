@@ -18,6 +18,7 @@
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
+#include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
@@ -167,13 +168,18 @@ struct groupby {
 
     // Get number of valid values in each group
     rmm::device_vector<gdf_size_type> val_group_sizes(_group_ids.size());
+    rmm::device_vector<gdf_size_type> d_bools(sorted_val_col.size);
+    if ( is_nullable(sorted_val_col) ) {
     auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_val_col.valid);
 
-    rmm::device_vector<gdf_size_type> d_bools(sorted_val_col.size);
     thrust::transform(
       thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
       thrust::make_counting_iterator(sorted_val_col.size), d_bools.begin(),
       [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
+    } else {
+      thrust::fill(d_bools.begin(), d_bools.end(), 1);
+      print(d_bools, "col valids");
+    }
 
     thrust::reduce_by_key(thrust::device,
                           _group_labels.begin(),
@@ -181,6 +187,7 @@ struct groupby {
                           d_bools.begin(),
                           thrust::make_discard_iterator(),
                           val_group_sizes.begin());
+    print(val_group_sizes, "grp size");
 
     return std::make_pair(sorted_val_col, val_group_sizes);
   }
