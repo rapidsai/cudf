@@ -39,7 +39,14 @@ agg_names = {
 }
 
 
-def groupby(keys, values, ops, method='hash', sort_results=True):
+def apply_groupby(
+    keys,
+    values,
+    ops,
+    method='hash',
+    sort_results=True,
+    dropna=True
+):
     """
     Apply aggregations *ops* on *values*, grouping by *keys*.
 
@@ -49,7 +56,8 @@ def groupby(keys, values, ops, method='hash', sort_results=True):
     values : list of Columns
     ops : str or list of str
         Aggregation to be performed for each column in *values*
-
+    dropna : bool
+        Whether or not to drop null keys
     Returns
     -------
     result : tuple of list of Columns
@@ -72,7 +80,8 @@ def groupby(keys, values, ops, method='hash', sort_results=True):
         else:
             c_ops.push_back(agg_names[ops[i]])
 
-    cdef hash_groupby.Options *options = new hash_groupby.Options()
+    cdef bool ignore_null_keys = dropna
+    cdef hash_groupby.Options *options = new hash_groupby.Options(dropna)
 
     with nogil:
         result = hash_groupby.groupby(

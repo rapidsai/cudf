@@ -2261,6 +2261,7 @@ class Series(object):
         sort=True,
         group_keys=True,
         as_index=None,
+        dropna=True,
     ):
         if group_keys is not True:
             raise NotImplementedError(
@@ -2270,7 +2271,12 @@ class Series(object):
         from cudf.core.groupby.groupby import SeriesGroupBy
 
         return SeriesGroupBy(
-            self, by=by, level=level, sort=sort, as_index=as_index
+            self,
+            by=by,
+            level=level,
+            sort=sort,
+            as_index=as_index,
+            dropna=dropna,
         )
 
     @copy_docstring(Rolling)

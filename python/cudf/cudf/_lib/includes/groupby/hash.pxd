@@ -15,7 +15,7 @@ cimport cudf._lib.includes.groupby.common as groupby_common
 
 cdef extern from "cudf/groupby.hpp" namespace "cudf::groupby::hash" nogil:
     cdef cppclass Options(groupby_common.Options):
-        pass
+        Options(bool _ignore_null_keys) except +
 
     ctypedef enum operators:
         SUM,
