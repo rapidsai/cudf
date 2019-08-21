@@ -20,7 +20,7 @@ cimport cudf._lib.includes.rolling as cpp_rolling
 
 def rolling(inp, window, min_periods, center, op):
     from cudf.core.column import Column
-    
+
     cdef gdf_column* c_out_ptr = NULL
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0

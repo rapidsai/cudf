@@ -57,7 +57,7 @@ def groupby(keys, values, ops, method='hash', sort_results=True):
         keys and values of the result
     """
     from cudf.core.column import CategoricalColumn
-    
+
     if len(values) == 0:
         return (keys, [])
 
