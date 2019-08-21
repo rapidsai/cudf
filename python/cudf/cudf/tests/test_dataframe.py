@@ -3091,10 +3091,29 @@ def test_df_values_device_property(data):
     gdf = DataFrame.from_pandas(pdf)
 
     pmtr = pdf.values
-    gmtr = gdf.values.get()
+    gmtr = gdf.values_device.get()
 
     np.testing.assert_array_equal(pmtr, gmtr)
 
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"A": [1, 2, 3], "B": [4, 5, 6]},
+        {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
+        {"A": [1, 2, 3], "B": [1.0, 2.0, 3.0]},
+        {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
+        {"A": [1, None, 3], "B": [1.0, 2.0, None]},
+
+    ],
+)
+def test_df_values_property(data):
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = DataFrame.from_pandas(pdf)
+
+    pmtr = pdf.values
+    gmtr = gdf.values
+
+    np.testing.assert_array_equal(pmtr, gmtr)
 
 def test_value_counts():
     pdf = pd.DataFrame(
