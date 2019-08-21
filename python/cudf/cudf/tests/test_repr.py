@@ -41,9 +41,9 @@ def test_null_series(nrows, dtype):
     assert psrepr.split() == sr.__repr__().split()
 
 
-@pytest.mark.parametrize("ncols", [1, 2, 3, 4, 5])
+@pytest.mark.parametrize("ncols", [1, 2, 3, 4, 5, 10])
 def test_null_dataframe(ncols):
-    size = 5
+    size = 20
     gdf = cudf.DataFrame()
     for idx, dtype in enumerate(repr_categories):
         mask = utils.random_bitmask(size)
@@ -57,9 +57,8 @@ def test_null_dataframe(ncols):
     pdfrepr = pdfrepr.replace("NaN", "null")
     pdfrepr = pdfrepr.replace("NaT", "null")
     pdfrepr = pdfrepr.replace("-1", "null")
-    print(gdf)
     print(pdf)
-    print(pdfrepr)
+    print(gdf)
     assert pdfrepr.split() == gdf.__repr__().split()
 
 

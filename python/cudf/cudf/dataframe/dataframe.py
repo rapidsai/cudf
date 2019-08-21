@@ -593,7 +593,14 @@ class DataFrame(object):
 
     def __repr__(self):
         output = self.get_renderable_dataframe()
-        lines = output.to_pandas().__repr__().split("\n")
+        # the below is permissible: null in a datetime to_pandas() becomes
+        # NaT, which is then replaced with null in this processing step.
+        # It is not possible to have a mix of nulls and NaTs in datetime
+        # columns because we do not support NaT - pyarrow as_column
+        # preprocessing converts NaT input values from numpy or pandas into
+        # null.
+        output = output.to_pandas().__repr__().replace(" NaT", "null")
+        lines = output.split("\n")
         if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
