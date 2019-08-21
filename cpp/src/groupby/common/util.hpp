@@ -54,8 +54,7 @@ namespace common {
  * @param values The table of columns
  * @param ops The aggregation operators
  *---------------------------------------------------------------------------**/
-template<typename operators>
-void verify_operators(table const& values, std::vector<operators> const& ops) {
+static void verify_operators(table const& values, std::vector<operators> const& ops) {
   CUDF_EXPECTS(static_cast<gdf_size_type>(ops.size()) == values.num_columns(),
                "Size mismatch between ops and value columns");
   for (gdf_size_type i = 0; i < values.num_columns(); ++i) {
@@ -152,8 +151,7 @@ struct identity_initializer {
  * @param operators The aggregation operations whose identity values will be
  *used to initialize the columns.
  *---------------------------------------------------------------------------**/
-template<typename operators>
-void initialize_with_identity(cudf::table const& table,
+static void initialize_with_identity(cudf::table const& table,
                               std::vector<operators> const& ops,
                               cudaStream_t stream = 0) {
   // TODO: Initialize all the columns in a single kernel instead of invoking one

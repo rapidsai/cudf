@@ -98,3 +98,20 @@ TYPED_TEST(SingleColumnMedian, TestMedium2) {
       column_wrapper<ResultValue>{R(6), R(5), R(4), R(4)});
 }
  
+
+TYPED_TEST(SingleColumnMedian, FourGroupsOddNullValuesOddNullKeys) {
+  using Key = typename SingleColumnMedian<TypeParam>::KeyType;
+  using Value = typename SingleColumnMedian<TypeParam>::ValueType;
+  using ResultValue = cudf::test::expected_result_t<Value, op>;
+  using T = Key;
+  using R = ResultValue;
+
+  cudf::test::single_column_groupby_test<op>(
+      column_wrapper<Key>({T(1), T(1), T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
+                          [](auto index) { return not(index % 2); }),
+      column_wrapper<Value>(10, [](auto index) { return Value(index); },
+                            [](auto index) { return not(index % 2); }),
+      column_wrapper<Key>({T(1), T(2)},
+                          [](auto index) { return true; }),
+      column_wrapper<ResultValue>({R(2), R(8)}));
+}

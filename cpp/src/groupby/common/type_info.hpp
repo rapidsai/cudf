@@ -78,6 +78,10 @@ struct target_type<SourceType, SUM,
   using type = int64_t;
 };
 
+// Computing MEDIAN of SourceType, use SourceType accumulator
+template <typename SourceType>
+struct target_type<SourceType, MEDIAN> { using type = SourceType; };
+
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
 struct target_type<

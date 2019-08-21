@@ -229,7 +229,7 @@ __device__ gdf_size_type  get_group_index(
     gdf_size_type group_indices_size, 
     gdf_size_type index) 
 {
-    //todo create a MAP array
+    //TODO create a MAP array
     gdf_size_type output_index = 0;
     while (index >= group_indices[output_index] && output_index < group_indices_size) {
         output_index++;
