@@ -57,7 +57,6 @@ def apply_unary_op(incol, op):
     cdef gdf_dtype g_type
     cdef cpp_unaryops.unary_op c_op
 
-
     if callable(op):
         nb_type = numba.numpy_support.from_dtype(incol.dtype)
         type_signature = (nb_type,)
@@ -70,7 +69,12 @@ def apply_unary_op(incol, op):
             )
         g_type = dtypes[compiled_op[1]]
         with nogil:
-            c_out_col = cpp_unaryops.transform(c_incol[0], cpp_str, g_type, True)
+            c_out_col = cpp_unaryops.transform(
+                c_incol[0],
+                cpp_str,
+                g_type,
+                True
+            )
     else:
         c_op = _UNARY_OP[op]
         with nogil:

@@ -41,9 +41,9 @@ def clone_columns_with_size(in_cols, row_size):
     out_cols = []
     for col in in_cols:
         o_col = column.column_empty_like(col,
-                                            dtype=col.dtype,
-                                            masked=col.has_null_mask,
-                                            newsize=row_size)
+                                         dtype=col.dtype,
+                                         masked=col.has_null_mask,
+                                         newsize=row_size)
         out_cols.append(o_col)
 
     return out_cols
@@ -156,7 +156,7 @@ def gather(source, maps, dest=None):
 
 def scatter(source, maps, target):
     from cudf.core.column import column
-    
+
     cdef cudf_table* c_source_table
     cdef cudf_table* c_target_table
     cdef cudf_table c_result_table
@@ -218,7 +218,7 @@ def copy_column(input_col):
 
 
 def copy_range(out_col, in_col, int out_begin, int out_end,
-                     int in_begin):
+               int in_begin):
     from cudf.core.column import Column
 
     if abs(out_end - out_begin) <= 1:
@@ -249,10 +249,10 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
 
     with nogil:
         cpp_copy_range(c_out_col,
-                   c_in_col[0],
-                   out_begin,
-                   out_end,
-                   in_begin)
+                       c_in_col[0],
+                       out_begin,
+                       out_end,
+                       in_begin)
 
     out_col._update_null_count(c_out_col.null_count)
 

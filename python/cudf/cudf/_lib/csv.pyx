@@ -14,13 +14,6 @@ from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
-cimport cudf._lib.includes.csv as cpp_csv
-from cudf._lib.includes.csv cimport (
-    reader as csv_reader,
-    reader_options as csv_reader_options,
-    csv_write_arg,
-    write_csv as cpp_write_csv
-)
 from cudf._lib.includes.io cimport *
 
 import nvstrings
@@ -28,6 +21,15 @@ import numpy as np
 import collections.abc as abc
 import os
 import errno
+
+from cudf._lib.includes.csv cimport (
+    reader as csv_reader,
+    reader_options as csv_reader_options,
+    csv_write_arg,
+    write_csv as cpp_write_csv
+)
+
+cimport cudf._lib.includes.csv as cpp_csv
 
 
 def is_file_like(obj):

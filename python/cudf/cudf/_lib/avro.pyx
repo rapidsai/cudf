@@ -25,7 +25,7 @@ import os
 
 
 cpdef read_avro(filepath_or_buffer, columns=None, skip_rows=None,
-                    num_rows=None):
+                num_rows=None):
     """
     Cython function to call into libcudf API, see `read_avro`.
 

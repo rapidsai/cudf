@@ -7,23 +7,20 @@
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-
-cimport cudf._lib.includes.reduce as cpp_reduce
-
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from librmm_cffi import librmm as rmm
-
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
-
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
+from librmm_cffi import librmm as rmm
+
+from cudf._lib.cudf cimport *
+from cudf._lib.cudf import *
+cimport cudf._lib.includes.reduce as cpp_reduce
 
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 

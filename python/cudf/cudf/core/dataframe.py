@@ -1669,19 +1669,19 @@ class DataFrame(object):
             # It is possible for DataFrames with a MultiIndex columns object
             # to have columns with the same name. The followig use of
             # _cols.items and ("cudf_"... allows the use of rename in this case
-            for key, column in self._cols.items():
+            for key, col in self._cols.items():
                 if key in mapper:
                     if mapper[key] in out.columns:
                         out_column = mapper[key] + ("cudf_" + str(postfix),)
                         postfix += 1
                     else:
                         out_column = mapper[key]
-                    out[out_column] = column
+                    out[out_column] = col
                 else:
-                    out[key] = column
+                    out[key] = col
         elif callable(mapper):
-            for column in self.columns:
-                out[mapper(column)] = self[column]
+            for col in self.columns:
+                out[mapper(col)] = self[col]
 
         if inplace:
             self._cols = out._cols
@@ -3140,9 +3140,9 @@ class DataFrame(object):
         index_columns = []
         index_descriptors = []
 
-        for name, column in self._cols.items():
+        for name, col in self._cols.items():
             names.append(name)
-            arrow_col = column.to_arrow()
+            arrow_col = col.to_arrow()
             arrays.append(arrow_col)
             types.append(arrow_col.type)
 

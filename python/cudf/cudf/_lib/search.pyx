@@ -38,10 +38,18 @@ def search_sorted(column, values, side):
 
     if side == 'left':
         with nogil:
-            c_out_col = cpp_search.lower_bound(c_t[0], c_values[0], c_desc_flags)
+            c_out_col = cpp_search.lower_bound(
+                c_t[0],
+                c_values[0],
+                c_desc_flags
+            )
     elif side == 'right':
         with nogil:
-            c_out_col = cpp_search.upper_bound(c_t[0], c_values[0], c_desc_flags)
+            c_out_col = cpp_search.upper_bound(
+                c_t[0],
+                c_values[0],
+                c_desc_flags
+            )
 
     free_table(c_t)
     free_table(c_values)

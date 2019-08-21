@@ -4,7 +4,7 @@ import numpy as np
 
 from cudf.core import Buffer, DataFrame, Index, Series
 from cudf.core.column import CategoricalColumn
-from cudf.utils import cudautils, utils
+from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
 

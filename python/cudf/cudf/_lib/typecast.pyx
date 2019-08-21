@@ -7,10 +7,11 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-cimport cudf._lib.includes.unaryops as cpp_unaryops
 
 import numpy as np
 import pandas as pd
+
+cimport cudf._lib.includes.unaryops as cpp_unaryops
 
 
 def cast(incol, dtype=np.float64):

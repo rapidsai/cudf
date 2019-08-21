@@ -54,7 +54,10 @@ cdef replace_nulls_column(inp, replacement):
     cdef gdf_column c_out_col
 
     with nogil:
-        c_out_col = cpp_replace.replace_nulls(c_input_col[0], replacement_col[0])
+        c_out_col = cpp_replace.replace_nulls(
+            c_input_col[0],
+            replacement_col[0]
+        )
 
     free_column(replacement_col)
     free_column(c_input_col)
@@ -67,7 +70,10 @@ cdef replace_nulls_scalar(inp, replacement):
     cdef gdf_column c_out_col
 
     with nogil:
-        c_out_col = cpp_replace.replace_nulls(c_input_col[0], replacement_scalar[0])
+        c_out_col = cpp_replace.replace_nulls(
+            c_input_col[0],
+            replacement_scalar[0]
+        )
 
     free(replacement_scalar)
     free_column(c_input_col)

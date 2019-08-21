@@ -523,20 +523,20 @@ class MultiIndex(Index):
         # for each column of codes
         # replace column with mapping from integers to levels
         df = self.codes.copy(deep=False)
-        for idx, column in enumerate(df.columns):
+        for idx, col in enumerate(df.columns):
             # use merge as a replace fn
             level = DataFrame(
                 {
                     "idx": Series(
                         cudautils.arange(
-                            len(self.levels[idx]), dtype=df[column].dtype
+                            len(self.levels[idx]), dtype=df[col].dtype
                         )
                     ),
                     "level": self.levels[idx],
                 }
             )
-            code = DataFrame({"idx": df[column]})
-            df[column] = code.merge(level).level
+            code = DataFrame({"idx": df[col]})
+            df[col] = code.merge(level).level
         return df
 
     @property
