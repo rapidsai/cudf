@@ -18,7 +18,6 @@ from libcpp.vector cimport vector
 from libc.stdlib cimport malloc, free
 
 import cudf
-import cudf.core.index as index
 from cudf.core.buffer import Buffer
 from cudf.utils.cudautils import zeros
 
