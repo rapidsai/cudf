@@ -31,7 +31,14 @@ TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
 /**
  * @brief Base test fixture for ORC writer
  **/
-struct orc_writer_test : GdfTest {};
+struct orc_writer_test : GdfTest {
+  std::random_device rd;
+  std::default_random_engine generator{rd()};
+  std::uniform_int_distribution<int> distribution{0, 100};
+  int random(int min = 0, int max = 100) {
+    return min + (distribution(generator) % (max - min + 1));
+  }
+};
 
 /**
  * @brief Typed test fixture for type-parameterized ORC writer tests
@@ -67,10 +74,14 @@ auto columns_are_equal(const gdf_column &left, const gdf_column &right) {
   } else {
     std::ostringstream buffer;
     buffer << std::endl;
-    buffer << "    left: " << left.col_name << std::endl;
+    buffer << "    left data: " << left.col_name << std::endl;
     print_gdf_column(&left, 10, buffer);
-    buffer << "    right: " << right.col_name << std::endl;
+    buffer << "    left valid:" << std::endl;
+    print_valid_data(left.valid, left.size, buffer);
+    buffer << "    right data: " << right.col_name << std::endl;
     print_gdf_column(&right, 10, buffer);
+    buffer << "    right valid:" << std::endl;
+    print_valid_data(right.valid, right.size, buffer);
 
     return ::testing::AssertionFailure() << buffer.str();
   }
@@ -94,7 +105,7 @@ TYPED_TEST(orc_writer_typed_test, SingleColumn) {
   constexpr auto num_rows = 100;
   cudf::test::column_wrapper<TypeParam> col{random_values<TypeParam>(num_rows),
                                             [](size_t row) { return true; }};
-  column_set_name(col.get(), "col");
+  column_set_name(col.get(), "col_" + std::to_string(this->random()));
 
   auto gdf_col = col.get();
   auto expected = cudf::table{&gdf_col, 1};
@@ -116,10 +127,13 @@ TYPED_TEST(orc_writer_typed_test, SingleColumn) {
 
 TYPED_TEST(orc_writer_typed_test, SingleColumnWithNulls) {
   constexpr auto num_rows = 100;
-  auto valids_func = [](size_t row) { return (row > 20 && row < 80); };
+  auto nulls_threshold = this->random(10);
+  auto valids_func = [=](size_t row) {
+    return (row < nulls_threshold || row > (num_rows - nulls_threshold));
+  };
   cudf::test::column_wrapper<TypeParam> col{random_values<TypeParam>(num_rows),
                                             valids_func};
-  column_set_name(col.get(), "col");
+  column_set_name(col.get(), "col_" + std::to_string(this->random()));
 
   auto gdf_col = col.get();
   auto expected = cudf::table{&gdf_col, 1};
