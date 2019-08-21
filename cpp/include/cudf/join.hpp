@@ -30,13 +30,14 @@ namespace cudf {
  * Result is intersection of column 'a' from A and column 'a' from B
  *
  * @throws cudf::logic_error 
- * "GDF Validity is unsupported" by sort_join, if join_context->flag_method = GDF_SORT
- * and null_count is not set to 0.
+ * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on The column indices from left dataframe 
- * @param[in] right_on The column indices from right dataframe 
+ * @param[in] left_on left_on The column's from left to join on.
+ * Column i from left_on will be compared against column i of right_on. 
+ * @param[in] right_on The column's from right to join on. 
+ * Column i from right_on will be compared with column i of left_on. 
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
  * the indices with the same name which evetually result into a 
@@ -46,20 +47,20 @@ namespace cudf {
  * is same in both tables and being joined, this will result into
  * single column in the joined result. This vector will have {(0,1)}.
  *
- * @param[out] out_index_table The table containing 
- * joined indices of left and right table 
+ * @param[out] out_ind The table containing joined indices of left 
+ * and right table 
  * @param[in] join_context The context to use to control how 
  * the join is performed,e.g., sort vs hash based implementation*
  * 
- * @returns If Success, pair of left and right table which are joined 
+ * @returns If Success, joined table
  */
-std::pair<cudf::table, cudf::table> inner_join(
+cudf::table inner_join(
                          cudf::table const& left,
                          cudf::table const& right,
                          cudf::table const& left_on,
                          cudf::table const& right_on,
                          std::vector<std::pair<int, int>> const& joining_ind,
-                         cudf::table *out_index_table,
+                         cudf::table *out_ind,
                          gdf_context *join_context);
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
@@ -71,13 +72,14 @@ std::pair<cudf::table, cudf::table> inner_join(
  * The result would be Table-res a:{0, 1, 2}, b:{NULL, 1, 2}
  * Result is left of column 'a' only
  * @throws cudf::logic_error 
- * "GDF Validity is unsupported" by sort_join, if join_context->flag_method = GDF_SORT
- * and null_count is not set to 0.
+ * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on The column indices from left dataframe 
- * @param[in] right_on The column indices from right dataframe 
+ * @param[in] left_on left_on The column's from left to join on.
+ * Column i from left_on will be compared against column i of right_on. 
+ * @param[in] right_on The column's from right to join on. 
+ * Column i from right_on will be compared with column i of left_on. 
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
  * the indices with the same name which evetually result into a 
@@ -87,18 +89,20 @@ std::pair<cudf::table, cudf::table> inner_join(
  * is same in both tables and being joined, this will result into
  * single column in the joined result. This vector will have {(0,1)}.
  *
+ * @param[out] out_ind The table containing joined indices of left 
+ * and right table 
  * @param[in] join_context The context to use to control how 
  * the join is performed,e.g., sort vs hash based implementation
  * 
- * @returns If Success, pair of left and right table which are joined
+ * @returns If Success, joined table
  */
-std::pair<cudf::table, cudf::table> left_join(
+cudf::table left_join(
                          cudf::table const& left,
                          cudf::table const& right,
                          cudf::table const& left_on,
                          cudf::table const& right_on,
                          std::vector<std::pair<int, int>> const& joining_ind,
-                         cudf::table *out_index_table,
+                         cudf::table *out_ind,
                          gdf_context *join_context);
 
 /** 
@@ -112,13 +116,14 @@ std::pair<cudf::table, cudf::table> left_join(
  * Result is union of column 'a' and column 'b'
  *
  * @throws cudf::logic_error 
- * "GDF Validity is unsupported" by sort_join, if join_context->flag_method = GDF_SORT
- * and null_count is not set to 0.
+ * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on The column indices from left dataframe 
- * @param[in] right_on The column indices from right dataframe 
+ * @param[in] left_on left_on The column's from left to join on.
+ * Column i from left_on will be compared against column i of right_on. 
+ * @param[in] right_on The column's from right to join on. 
+ * Column i from right_on will be compared with column i of left_on. 
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
  * the indices with the same name which evetually result into a 
@@ -128,17 +133,19 @@ std::pair<cudf::table, cudf::table> left_join(
  * is same in both tables and being joined, this will result into
  * single column in the joined result. This vector will have {(0,1)}.
  *
+ * @param[out] out_ind The table containing joined indices of left 
+ * and right table 
  * @param[in] join_context The context to use to control how 
  * the join is performed,e.g., sort vs hash based implementation
  * 
- * @returns If Success, pair of left and right table which are joined 
+ * @returns If Success, joined table 
  */
-std::pair<cudf::table, cudf::table> full_join(
+cudf::table full_join(
                          cudf::table const& left,
                          cudf::table const& right,
                          cudf::table const& left_on,
                          cudf::table const& right_on,
                          std::vector<std::pair<int, int>> const& joining_ind,
-                         cudf::table *out_index_table,
+                         cudf::table *out_ind,
                          gdf_context *join_context);
 } //namespace cudf

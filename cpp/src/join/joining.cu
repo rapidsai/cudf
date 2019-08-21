@@ -256,23 +256,20 @@ void join_call(cudf::table const& left, cudf::table const& right,
  * @param[in] rjoin  Table of right join columns
  * @param[in] left   Updated left dataframe
  * @param[in] right  Updated right dataframe
- * @param[in] left_on The table containing two columns,
- * first column - indices of left table provided for join
- * second column - indices of right table provided for join
+ * @param[in] left_on The column's from left to join on.
  * @param[in] joining_ind is a vector of pairs of left and right
  * join indcies derived from left_on and right_on. This contains
  * the indices with the same name which evetually result into a 
  * single column.
- * @param[in] left_indices 
- * @param[in] right_indicess  Table contatining right join columns
- * @tparam join_type The type of join to be performed
+ * @param[in] left_indices Out indices for joined left columns
+ * @param[in] right_indicess  Out indies for joined right columns
  * 
- * @returns void
+ * @returns If Successs, joined table 
  */
 /* ----------------------------------------------------------------------------*/
 
 template <JoinType join_type, typename index_type>
-std::pair<cudf::table, cudf::table> construct_join_output_df(
+cudf::table construct_join_output_df(
         cudf::table const& ljoin,
         cudf::table const& rjoin,
         cudf::table const& left, 
@@ -324,8 +321,9 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
                                  std::begin(r_nonjoin_ind));
 
     gdf_size_type join_size = left_indices->size;
-    std::vector <gdf_dtype> rdtypes;
-    std::vector <gdf_dtype_extra_info> rdtype_infos;
+    // Update first set of type and type infos from left
+    std::vector <gdf_dtype> rdtypes = cudf::column_dtypes(left);
+    std::vector <gdf_dtype_extra_info> rdtype_infos = cudf::column_dtype_infos(left);
 
     std::vector<gdf_column*> lnonjoincol;
     std::vector<gdf_column*> rnonjoincol;
@@ -341,9 +339,8 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
         rdtypes.push_back(right.get_column(*it)->dtype);
         rdtype_infos.push_back(right.get_column(*it)->dtype_info);
     }
-  
-    cudf::table result_left(join_size, cudf::column_dtypes(left), cudf::column_dtype_infos(left), true);
-    cudf::table result_right(join_size, rdtypes, rdtype_infos, true);
+     
+    cudf::table result(join_size, rdtypes, rdtype_infos, true);
     
     std::vector<gdf_column*> result_lnonjoincol;
     std::vector<gdf_column*> result_rnonjoincol;
@@ -352,19 +349,19 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
     // Gather the left non-join col of result
     for (std::vector<int>::iterator it = l_nonjoin_ind.begin(); it != l_nonjoin_ind.end(); ++it)
     {
-        result_lnonjoincol.push_back(result_left.get_column(*it));
+        result_lnonjoincol.push_back(result.get_column(*it));
     }
         
     // Gather join-col of result 
     for (unsigned int i=0; i < joining_ind.size(); ++i)
     {
-        result_joincol.push_back(result_left.get_column(l_joining_ind[i]));
+        result_joincol.push_back(result.get_column(l_joining_ind[i]));
     }
     
-    // Gather the right non-join col of result
-    for (int i=0; i < result_right.num_columns(); ++i)
+    // Gather the right non-join col of result, starts from end of left
+    for (int i=left.num_columns(); i < result.num_columns(); ++i)
     {
-        result_rnonjoincol.push_back(result_right.get_column(i));
+        result_rnonjoincol.push_back(result.get_column(i));
     }
  
     bool const check_bounds{ join_type != JoinType::INNER_JOIN };
@@ -437,11 +434,38 @@ std::pair<cudf::table, cudf::table> construct_join_output_df(
      
     CHECK_STREAM(0);
     POP_RANGE();
-    return std::pair<cudf::table, cudf::table>(result_left, result_right);
+    return result;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Performs join on the tables
+ *
+ * @throws cudf::logic_error
+ * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
+ *
+ * @param[in] left The left dataframe
+ * @param[in] right The right dataframe
+ * @param[in] left_on left_on The column's from left to join on.
+ * Column i from left_on will be compared against column i of right_on. 
+ * @param[in] right_on The column's from right to join on. 
+ * Column i from right_on will be compared with column i of left_on. 
+ * @param[in] joining_ind is a vector of pairs of left and right
+ * join indcies derived from left_on and right_on. This contains
+ * the indices with the same name which evetually result into a 
+ * single column.
+ *
+ * @param[out] out_ind The table containing 
+ * joined indices of left and right table 
+ * @param[in] join_context The context to use to control how 
+ * the join is performed,e.g., sort vs hash based implementation*
+ * 
+ * @returns If Success, joined table
+ 
+ */
+/* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename index_type>
-std::pair<cudf::table, cudf::table> join_call_compute_df(
+cudf::table join_call_compute_df(
                          cudf::table const& left, 
                          cudf::table const& right,
                          cudf::table const& left_on,
@@ -450,13 +474,11 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
                          cudf::table *out_ind, 
                          gdf_context *join_context) {
  
-  if (0 == left_on.num_rows() || 0 == right_on.num_rows() || left_on.num_rows() != right_on.num_rows())
-  {
-      return std::pair <cudf::table, cudf::table>(cudf::empty_like(left), cudf::empty_like(right));
-  }
   CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
   CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
   CUDF_EXPECTS (nullptr != join_context, "Join context is invalid");
+  CUDF_EXPECTS(std::none_of(std::cbegin(left), std::cend(left), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported left column dtype");
+  CUDF_EXPECTS(std::none_of(std::cbegin(right), std::cend(right), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported right column dtype");
 
   std::vector<int> left_on_ind (left_on.num_rows());
   std::vector<int> right_on_ind (right_on.num_rows());
@@ -478,7 +500,9 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
       r_joining_ind [i] = joining_ind[i].second;
   }
 
-  std::vector <gdf_column*> tmp_right_cols;
+  std::vector <gdf_column*> tmp_cols;
+  cudf::table empty_left = cudf::empty_like(left);
+  cudf::table empty_right = cudf::empty_like(right);
   std::vector<int> r_col_ind(right.num_columns());
   std::iota(std::begin(r_col_ind), std::end(r_col_ind), 0);
   std::sort(std::begin(r_joining_ind), std::end(r_joining_ind));
@@ -489,31 +513,38 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
                       std::cbegin(r_joining_ind), std::cend(r_joining_ind),
                       std::begin(r_nonjoin_ind));
 
-  for (std::vector<int>::iterator it = r_nonjoin_ind.begin() ; it != r_nonjoin_ind.end(); ++it){
-      tmp_right_cols.push_back(const_cast<gdf_column *> (right.get_column(*it)));
+  for (int i = 0; i < left.num_columns() ; ++i){
+      tmp_cols.push_back(const_cast<gdf_column *> (empty_left.get_column(i)));
   }
 
-  cudf::table tmp_right_table = (tmp_right_cols.size()>0)? cudf::table (tmp_right_cols) : cudf::table{};
+  for (std::vector<int>::iterator it = r_nonjoin_ind.begin() ; it != r_nonjoin_ind.end(); ++it){
+      tmp_cols.push_back(const_cast<gdf_column *> (empty_right.get_column(*it)));
+  }
 
-  CUDF_EXPECTS(std::none_of(std::cbegin(left), std::cend(left), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported left column dtype");
-  CUDF_EXPECTS(std::none_of(std::cbegin(right), std::cend(right), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported right column dtype");
+  cudf::table tmp_table = (tmp_cols.size()>0)? cudf::table (tmp_cols) : cudf::table{};
+  
+  // If there is nothing to join, then send empty table with all columns
+  if (0 == left_on.num_rows() || 0 == right_on.num_rows() || left_on.num_rows() != right_on.num_rows())
+  {
+      return cudf::empty_like(tmp_table);
+  }
 
   // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
-  // So, there is a possibility that there will be lesser number of right columns, so the tmp_right_table.
+  // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
   // If the inputs are empty, immediately return
   if ((0 == left.num_rows()) && (0 == right.num_rows())) {
-      return std::pair <cudf::table, cudf::table>(cudf::empty_like(left), cudf::empty_like(tmp_right_table));
+      return cudf::empty_like(tmp_table);
   }
 
   // If left join and the left table is empty, return immediately
   if ((JoinType::LEFT_JOIN == join_type) && (0 == left.num_rows())) {
-      return std::pair <cudf::table, cudf::table>(cudf::empty_like(left), cudf::empty_like(tmp_right_table));
+      return cudf::empty_like(tmp_table);
   }
 
   // If Inner Join and either table is empty, return immediately
   if ((JoinType::INNER_JOIN == join_type) &&
       ((0 == left.num_rows()) || (0 == right.num_rows()))) {
-      return std::pair <cudf::table, cudf::table>(cudf::empty_like(left), cudf::empty_like(tmp_right_table));
+      return cudf::empty_like(tmp_table);
   }
 
   //if the inputs are nvcategory we need to make the dictionaries comparable
@@ -628,7 +659,7 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
             left_index_out, right_index_out,
             join_context);
 
-  std::pair<cudf::table, cudf::table> result =
+  cudf::table result =
       construct_join_output_df<join_type, index_type>(
           ljoin_ind_table, rjoin_ind_table,
           updated_left_table, updated_right_table, 
@@ -648,7 +679,7 @@ std::pair<cudf::table, cudf::table> join_call_compute_df(
   return result;
 }
 
-std::pair<cudf::table, cudf::table> left_join(
+cudf::table left_join(
                          cudf::table const& left,
                          cudf::table const& right,
                          cudf::table const& left_on,
@@ -666,7 +697,7 @@ std::pair<cudf::table, cudf::table> left_join(
                      join_context);
 }
 
-std::pair<cudf::table, cudf::table> inner_join(
+cudf::table inner_join(
                          cudf::table const& left,
                          cudf::table const& right,
                          cudf::table const& left_on,
@@ -684,7 +715,7 @@ std::pair<cudf::table, cudf::table> inner_join(
                      join_context);
 }
 
-std::pair<cudf::table, cudf::table> full_join(
+cudf::table full_join(
                          cudf::table const& left,
                          cudf::table const& right,
                          cudf::table const& left_on,

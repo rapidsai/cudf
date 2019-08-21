@@ -439,13 +439,13 @@ struct JoinTest : public GdfTest
     cudf::table left_on (l_join_col);
     cudf::table right_on (r_join_col);
     cudf::table result_idx_table (result_idx_cols);
-    std::pair <cudf::table, cudf::table> result;
+    cudf::table result;
 
     switch(op)
     {
       case join_op::LEFT:
         {
-          result = cudf::left_join(
+          cudf::left_join(
                                        left_gdf_columns, right_gdf_columns,
                                        left_on, right_on, join_ind,
                                        &result_idx_table, &ctxt);
@@ -453,7 +453,7 @@ struct JoinTest : public GdfTest
         }
       case join_op::INNER:
         {
-          result =  cudf::inner_join(
+          cudf::inner_join(
                                        left_gdf_columns, right_gdf_columns,
                                        left_on, right_on, join_ind,
                                        &result_idx_table, &ctxt);
@@ -461,7 +461,7 @@ struct JoinTest : public GdfTest
         }
       case join_op::FULL:
         {
-          result =  cudf::full_join(
+          cudf::full_join(
                                        left_gdf_columns, right_gdf_columns,
                                        left_on, right_on, join_ind,
                                        &result_idx_table, &ctxt);

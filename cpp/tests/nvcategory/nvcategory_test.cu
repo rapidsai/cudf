@@ -536,7 +536,6 @@ struct NVCategoryJoinTest : public GdfTest
     size_t num_columns = gdf_raw_left_columns.size();
     size_t result_num_cols = gdf_raw_left_columns.size() + gdf_raw_right_columns.size() - left_join_idx.size();
 
-    std::pair <cudf::table, cudf::table> result;
     gdf_column * result_col = new gdf_column{};
     void* ldata = nullptr;
     void* rdata = nullptr;
@@ -571,6 +570,7 @@ struct NVCategoryJoinTest : public GdfTest
     cudf::table right_on (right_join_ind);
     cudf::table comm_name_join_ind (join_cols);
     cudf::table result_idx_table (result_idx_cols);
+    cudf::table result;
 
     switch(op)
     {
@@ -608,16 +608,16 @@ struct NVCategoryJoinTest : public GdfTest
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
 
     // Copy result of gdf join to local result
-    EXPECT_EQ(RMM_ALLOC(&result_col->data, result.first.get_column(0)->size * cudf::size_of(result.first.get_column(0)->dtype), 0), RMM_SUCCESS);
-    EXPECT_EQ(RMM_ALLOC(&result_col->valid, gdf_valid_allocation_size(result.first.get_column(0)->size) * sizeof(gdf_valid_type), 0), RMM_SUCCESS);
-    result_col->size = result.first.get_column(0)->size;
-    result_col->dtype = result.first.get_column(0)->dtype;
+    EXPECT_EQ(RMM_ALLOC(&result_col->data, result.get_column(0)->size * cudf::size_of(result.get_column(0)->dtype), 0), RMM_SUCCESS);
+    EXPECT_EQ(RMM_ALLOC(&result_col->valid, gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(gdf_valid_type), 0), RMM_SUCCESS);
+    result_col->size = result.get_column(0)->size;
+    result_col->dtype = result.get_column(0)->dtype;
     result_col->null_count = 0;
-    result_col->dtype_info = result.first.get_column(0)->dtype_info;
-    EXPECT_EQ(cudaMemcpy(result_col->data, result.first.get_column(0)->data, 
-               result.first.get_column(0)->size * cudf::size_of(result.first.get_column(0)->dtype), cudaMemcpyDeviceToDevice), cudaSuccess);
-    EXPECT_EQ(cudaMemcpy(result_col->valid, result.first.get_column(0)->valid, 
-               gdf_valid_allocation_size(result.first.get_column(0)->size) * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice), cudaSuccess);
+    result_col->dtype_info = result.get_column(0)->dtype_info;
+    EXPECT_EQ(cudaMemcpy(result_col->data, result.get_column(0)->data, 
+               result.get_column(0)->size * cudf::size_of(result.get_column(0)->dtype), cudaMemcpyDeviceToDevice), cudaSuccess);
+    EXPECT_EQ(cudaMemcpy(result_col->valid, result.get_column(0)->valid, 
+               gdf_valid_allocation_size(result.get_column(0)->size) * sizeof(gdf_valid_type), cudaMemcpyDeviceToDevice), cudaSuccess);
     gdf_raw_result_columns.push_back (result_col);
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices

@@ -81,7 +81,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
     r_on_cols = [columnops.as_column(right_idx).astype('int32')]
     cdef cudf_table *left_on_ind = table_from_columns(l_on_cols)
     cdef cudf_table *right_on_ind = table_from_columns(r_on_cols)
-    cdef pair[cudf_table, cudf_table] result
+    cdef cudf_table result
 
     with nogil:
         if how == 'left':
@@ -117,8 +117,7 @@ cpdef join(col_lhs, col_rhs, left_on, right_on, how, method):
                 context
             )
 
-    res = columns_from_table(&result.first)
-    res.extend(columns_from_table(&result.second))
+    res = columns_from_table(&result)
 
     free(context)
 

@@ -12,7 +12,7 @@ from cudf.bindings.cudf_cpp cimport *
 
 cdef extern from "cudf/join.hpp" nogil:
 
-    cdef pair[cudf_table, cudf_table] inner_join(
+    cdef cudf_table inner_join(
         const cudf_table left_cols,
         const cudf_table right_cols,
         const cudf_table left_on_ind,
@@ -22,7 +22,7 @@ cdef extern from "cudf/join.hpp" nogil:
         gdf_context * join_context
     ) except +
 
-    cdef pair[cudf_table, cudf_table] left_join(
+    cdef cudf_table left_join(
         const cudf_table left_cols,
         const cudf_table right_cols,
         const cudf_table left_on_ind,
@@ -32,7 +32,7 @@ cdef extern from "cudf/join.hpp" nogil:
         gdf_context * join_context
     ) except +
 
-    cdef pair[cudf_table, cudf_table] full_join(
+    cdef cudf_table full_join(
         const cudf_table left_cols,
         const cudf_table right_cols,
         const cudf_table left_on_ind,
