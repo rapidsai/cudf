@@ -19,6 +19,7 @@
 
 #include <unordered_set>
 
+#include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/copying.hpp"
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
@@ -439,8 +440,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     std::vector<gdf_column *> concat_input_ptrs(tables.size());
     for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
       outcols.emplace_back(total_size, tables[0]->get_column(col_idx)->dtype,
-                           need_validity[col_idx]);
+                           need_validity[col_idx], true);
       outcol_ptrs[col_idx] = outcols[col_idx].get();
+      if (outcol_ptrs[col_idx]->dtype == GDF_TIMESTAMP) {
+        outcol_ptrs[col_idx]->dtype_info.time_unit =
+            tables[0]->get_column(col_idx)->dtype_info.time_unit;
+      }
       for (int table_idx = 0; table_idx < tables.size(); ++table_idx) {
         concat_input_ptrs[table_idx] = tables[table_idx]->get_column(col_idx);
       }
@@ -478,15 +483,33 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
 
-    cudf::jni::output_table output(env, n_input_table);
-
+    cudf::jni::output_table output(env, n_input_table, true);
     std::vector<gdf_column *> cols = output.get_gdf_columns();
+
+    for (int i = 0; i < cols.size(); i++) {
+      gdf_column * col = cols[i];
+      if (col->dtype == GDF_STRING_CATEGORY) {
+        // We need to add in the category for partition to work at all...
+        NVCategory * orig = static_cast<NVCategory *>(n_input_table->get_column(i)->dtype_info.category);
+        col->dtype_info.category = orig;
+      }
+    }
 
     JNI_GDF_TRY(env, NULL,
                 gdf_hash_partition(n_input_table->num_columns(), n_input_table->begin(),
                                    n_columns_to_hash.data(), n_columns_to_hash.size(),
                                    n_number_of_partitions, cols.data(), n_output_offsets.data(),
                                    n_cudf_hash_function));
+
+    // Need to gather the string categories after partitioning.
+    for (int i = 0; i < cols.size(); i++) {
+      gdf_column * col = cols[i];
+      if (col->dtype == GDF_STRING_CATEGORY) {
+        // We need to fix it up...
+        NVCategory * orig = static_cast<NVCategory *>(n_input_table->get_column(i)->dtype_info.category);
+        nvcategory_gather(col, orig);
+      }
+    }
 
     return output.get_native_handles_and_release();
   }
