@@ -295,7 +295,7 @@ def prefixsum(vals):
     out_col = NumericalColumn(
         data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
     )
-    libcudf.reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
+    libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 

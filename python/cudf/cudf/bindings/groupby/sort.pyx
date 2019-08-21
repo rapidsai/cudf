@@ -6,7 +6,7 @@ from cudf.bindings.utils import *
 from cudf.bindings.utils cimport *
 
 
-def apply_groupby_without_aggregations(cols, key_cols):
+def groupby_without_aggregations(cols, key_cols):
     """
     Sorts the Columns ``cols`` based on the subset ``key_cols``.
 

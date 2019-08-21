@@ -81,7 +81,7 @@ class NumericalColumn(column.TypedColumnBase):
 
     def _apply_scan_op(self, op):
         out_col = column.column_empty_like_same_mask(self, dtype=self.dtype)
-        libcudf.reduce.apply_scan(self, out_col, op, inclusive=True)
+        libcudf.reduce.scan(self, out_col, op, inclusive=True)
         return out_col
 
     def normalize_binop_value(self, other):
@@ -126,19 +126,16 @@ class NumericalColumn(column.TypedColumnBase):
 
     def as_datetime_column(self, dtype, **kwargs):
         from cudf.core.column import datetime
-        import cudf._lib.typecast as typecast
 
         return self.view(
             datetime.DatetimeColumn,
             dtype=dtype,
-            data=typecast.apply_cast(self, dtype=np.dtype(dtype)).data,
+            data=libcudf.typecast.cast(self, dtype=np.dtype(dtype)).data,
         )
 
     def as_numerical_column(self, dtype, **kwargs):
-        import cudf._lib.typecast as typecast
-
         return self.replace(
-            data=typecast.apply_cast(self, dtype).data, dtype=np.dtype(dtype)
+            data=libcudf.typecast.cast(self, dtype).data, dtype=np.dtype(dtype)
         )
 
     def sort_by_values(self, ascending=True, na_position="last"):
@@ -201,28 +198,28 @@ class NumericalColumn(column.TypedColumnBase):
         return bool(self.max(dtype=np.bool_))
 
     def min(self, dtype=None):
-        return libcudf.reduce.apply_reduce("min", self, dtype=dtype)
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudf.reduce.apply_reduce("max", self, dtype=dtype)
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
     def sum(self, dtype=None):
-        return libcudf.reduce.apply_reduce("sum", self, dtype=dtype)
+        return libcudf.reduce.reduce("sum", self, dtype=dtype)
 
     def product(self, dtype=None):
-        return libcudf.reduce.apply_reduce("product", self, dtype=dtype)
+        return libcudf.reduce.reduce("product", self, dtype=dtype)
 
     def mean(self, dtype=np.float64):
-        return libcudf.reduce.apply_reduce("mean", self, dtype=dtype)
+        return libcudf.reduce.reduce("mean", self, dtype=dtype)
 
     def var(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.apply_reduce("var", self, dtype=dtype, ddof=ddof)
+        return libcudf.reduce.reduce("var", self, dtype=dtype, ddof=ddof)
 
     def std(self, ddof=1, dtype=np.float64):
-        return libcudf.reduce.apply_reduce("std", self, dtype=dtype, ddof=ddof)
+        return libcudf.reduce.reduce("std", self, dtype=dtype, ddof=ddof)
 
     def sum_of_squares(self, dtype=None):
-        return libcudf.reduce.apply_reduce("sum_of_squares", self, dtype=dtype)
+        return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
         data = Buffer(cudautils.apply_round(self.data.mem, decimals))
@@ -303,7 +300,7 @@ class NumericalColumn(column.TypedColumnBase):
                 fill_value = _safe_cast_to_int(fill_value, self.dtype)
             else:
                 fill_value = fill_value.astype(self.dtype)
-        result = libcudf.replace.apply_replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
         return self._mimic_inplace(result, inplace)
 
     def find_first_value(self, value):

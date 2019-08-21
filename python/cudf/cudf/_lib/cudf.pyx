@@ -594,6 +594,7 @@ cdef gdf_context* create_context_view(
         _null_sort_behavior_api[flag_null_sort_behavior]
     cdef bool c_flag_groupby_include_nulls = flag_groupby_include_nulls
 
+    print(flag_null_sort_behavior)
     with nogil:
         gdf_context_view(
             context,

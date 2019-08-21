@@ -696,9 +696,7 @@ class Column(object):
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        return libcudf.quantile.apply_quantile(
-            self, quant, interpolation, exact
-        )
+        return libcudf.quantile.quantile(self, quant, interpolation, exact)
 
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.
@@ -1189,7 +1187,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = cudf._lib.utils.mask_from_devary(data)
+                mask = libcudf.unaryops.nans_to_nulls(data)
                 data = data.set_mask(mask)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):

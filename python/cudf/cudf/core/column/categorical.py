@@ -421,7 +421,7 @@ class CategoricalColumn(column.TypedColumnBase):
                 self.data.dtype
             )
 
-        result = libcudf.replace.apply_replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
 
         result = column.build_column(
             result.data, "category", result.mask, categories=self._categories

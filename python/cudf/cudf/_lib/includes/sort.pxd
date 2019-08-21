@@ -10,10 +10,6 @@ from cudf._lib.cudf cimport *
 
 cdef extern from "cudf/cudf.h" nogil:
 
-    ctypedef enum order_by_type:
-        GDF_ORDER_ASC,
-        GDF_ORDER_DESC
-
     cdef gdf_error gdf_order_by(
         gdf_column** input_columns,
         int8_t* asc_desc,

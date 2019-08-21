@@ -75,6 +75,6 @@ def get_sorted_inds(by, ascending=True, na_position="last"):
     else:
         raise ValueError("Must use a boolean or list of booleans")
 
-    libcudf.sort.apply_order_by(by, col_inds, ascending, na_position)
+    libcudf.sort.order_by(by, col_inds, ascending, na_position)
 
     return col_inds

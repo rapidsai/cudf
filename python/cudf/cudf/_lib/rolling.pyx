@@ -6,20 +6,20 @@
 # cython: language_level = 3
 
 from libc.stdint cimport uintptr_t
+from libcpp.string cimport string
 
 import numba.cuda
 import numba.numpy_support
 
 from cudf.core.column import Column
+from cudf.utils import cudautils
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._lib.rolling cimport *
-
-from cudf.utils import cudautils
+cimport cudf._lib.includes.rolling as cpp_rolling
 
 
-def apply_rolling(inp, window, min_periods, center, op):
+def rolling(inp, window, min_periods, center, op):
     cdef gdf_column* c_out_ptr = NULL
     cdef gdf_index_type c_window = 0
     cdef gdf_index_type c_forward_window = 0
@@ -86,7 +86,7 @@ def apply_rolling(inp, window, min_periods, center, op):
                 )
             g_type = dtypes[compiled_op[1]]
             with nogil:
-                c_out_col = rolling_window(
+                c_out_col = cpp_rolling.rolling_window(
                     c_in_col[0],
                     c_window,
                     c_min_periods,
@@ -102,7 +102,7 @@ def apply_rolling(inp, window, min_periods, center, op):
         else:
             c_op = agg_ops[op]
             with nogil:
-                c_out_ptr = rolling_window(
+                c_out_ptr = cpp_rolling.rolling_window(
                     c_in_col[0],
                     c_window,
                     c_min_periods,

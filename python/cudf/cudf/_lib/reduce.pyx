@@ -10,6 +10,8 @@
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
+cimport cudf._lib.includes.reduce as cpp_reduce
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -26,25 +28,25 @@ from libcpp.string  cimport string as cstring
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
 _REDUCTION_OP = {
-    'max': MAX,
-    'min': MIN,
-    'sum': SUM,
-    'product': PRODUCT,
-    'sum_of_squares': SUMOFSQUARES,
-    'mean': MEAN,
-    'var': VAR,
-    'std': STD,
+    'max': cpp_reduce.MAX,
+    'min': cpp_reduce.MIN,
+    'sum': cpp_reduce.SUM,
+    'product': cpp_reduce.PRODUCT,
+    'sum_of_squares': cpp_reduce.SUMOFSQUARES,
+    'mean': cpp_reduce.MEAN,
+    'var': cpp_reduce.VAR,
+    'std': cpp_reduce.STD,
 }
 
 _SCAN_OP = {
-    'sum': GDF_SCAN_SUM,
-    'min': GDF_SCAN_MIN,
-    'max': GDF_SCAN_MAX,
-    'product': GDF_SCAN_PRODUCT,
+    'sum': cpp_reduce.GDF_SCAN_SUM,
+    'min': cpp_reduce.GDF_SCAN_MIN,
+    'max': cpp_reduce.GDF_SCAN_MAX,
+    'product': cpp_reduce.GDF_SCAN_PRODUCT,
 }
 
 
-def apply_reduce(reduction_op, col, dtype=None, ddof=1):
+def reduce(reduction_op, col, dtype=None, ddof=1):
     """
       Call gdf reductions.
 
@@ -78,13 +80,13 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     col_dtype = col_dtype if dtype is None else dtype
 
     cdef gdf_column* c_col = column_view_from_column(col)
-    cdef operators c_op = _REDUCTION_OP[reduction_op]
     cdef gdf_dtype c_out_dtype = gdf_dtype_from_value(col, col_dtype)
     cdef gdf_scalar c_result
     cdef gdf_size_type c_ddof = ddof
+    cdef cpp_reduce.operators c_op = _REDUCTION_OP[reduction_op]
 
     with nogil:
-        c_result = reduce(
+        c_result = cpp_reduce.reduce(
             <gdf_column*>c_col,
             c_op,
             c_out_dtype,
@@ -97,7 +99,7 @@ def apply_reduce(reduction_op, col, dtype=None, ddof=1):
     return result
 
 
-def apply_scan(col_inp, col_out, scan_op, inclusive):
+def scan(col_inp, col_out, scan_op, inclusive):
     """
       Call gdf scan.
     """
@@ -107,11 +109,11 @@ def apply_scan(col_inp, col_out, scan_op, inclusive):
 
     cdef gdf_column* c_col_inp = column_view_from_column(col_inp)
     cdef gdf_column* c_col_out = column_view_from_column(col_out)
-    cdef gdf_scan_op c_op = _SCAN_OP[scan_op]
+    cdef cpp_reduce.gdf_scan_op c_op = _SCAN_OP[scan_op]
     cdef bool b_inclusive = <bool>inclusive
 
     with nogil:
-        scan(
+        cpp_reduce.scan(
             <gdf_column*>c_col_inp,
             <gdf_column*>c_col_out,
             c_op,

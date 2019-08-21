@@ -7,8 +7,10 @@
 
 from cudf._lib.cudf cimport *
 
+from libcpp.pair cimport pair
 from libcpp.string cimport string
 
+ctypedef uint32_t* bit_mask_t_ptr
 
 cdef extern from "cudf/cudf.h" nogil:
 
@@ -43,13 +45,17 @@ cdef extern from "cudf/cudf.h" nogil:
     ) except +
 
 cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
-
     cdef gdf_column transform(
         const gdf_column& input,
         const string& ptx,
         gdf_dtype output_type,
         bool is_ptx
     ) except +
+
+    cdef pair[bit_mask_t_ptr, gdf_size_type] nans_to_nulls(
+        const gdf_column& input
+    ) except +
+
 
 cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
 

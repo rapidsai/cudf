@@ -14,6 +14,8 @@ from cudf.core.column import column_empty
 from cudf.core.buffer import Buffer
 from cudf.utils.dtypes import is_categorical_dtype
 
+cimport cudf._lib.includes.transpose as cpp_transpose
+
 
 def transpose(df):
     """Transpose index and columns.
@@ -59,7 +61,7 @@ def transpose(df):
         new_cols.push_back(column_view_from_column(new_col_series[i]._column))
 
     with nogil:
-        result = gdf_transpose(
+        result = cpp_transpose.gdf_transpose(
             ncols,
             cols.data(),
             new_cols.data()

@@ -408,7 +408,7 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
     out_key_columns : list of Columns
     out_value_columns : list of Columns
     """
-    out_key_columns, out_value_columns = libcudf.groupby.apply_groupby(
+    out_key_columns, out_value_columns = libcudf.groupby.groupby(
         key_columns, value_columns, aggs
     )
 

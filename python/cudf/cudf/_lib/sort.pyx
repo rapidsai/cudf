@@ -6,21 +6,22 @@
 # cython: language_level = 3
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
-from libc.stdint cimport uintptr_t, int8_t
-from libc.stdlib cimport malloc, free
+import itertools
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-import itertools
 
+from libc.stdint cimport uintptr_t, int8_t
+from libc.stdlib cimport malloc, free
 from librmm_cffi import librmm as rmm
 
+from cudf._lib.cudf cimport *
+from cudf._lib.cudf import *
 
-cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
+cimport cudf._lib.includes.sort as cpp_sort
+
+cpdef order_by(in_cols, out_indices, ascending=True, na_position=1):
     '''
       Call gdf_order_by to retrieve a column of indices of the sorted order
       of rows.
@@ -57,11 +58,13 @@ cpdef apply_order_by(in_cols, out_indices, ascending=True, na_position=1):
     cdef gdf_error result
 
     with nogil:
-        result = gdf_order_by(<gdf_column**> input_columns,
-                              <int8_t*> asc_desc,
-                              <size_t> num_inputs,
-                              <gdf_column*> output_indices,
-                              <gdf_context*> context)
+        result = cpp_sort.gdf_order_by(
+            <gdf_column**> input_columns,
+            <int8_t*> asc_desc,
+            <size_t> num_inputs,
+            <gdf_column*> output_indices,
+            <gdf_context*> context
+        )
 
     check_gdf_error(result)
     free(context)
@@ -80,10 +83,12 @@ cpdef digitize(column, bins, right=False):
     cdef uintptr_t out_ptr = get_ctype_ptr(out)
 
     with nogil:
-        result = gdf_digitize(<gdf_column*> in_col,
-                              <gdf_column*> bins_col,
-                              <bool> cright,
-                              <gdf_index_type*> out_ptr)
+        result = cpp_sort.gdf_digitize(
+            <gdf_column*> in_col,
+            <gdf_column*> bins_col,
+            <bool> cright,
+            <gdf_index_type*> out_ptr
+        )
 
     check_gdf_error(result)
     return out

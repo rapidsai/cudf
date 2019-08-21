@@ -12,6 +12,8 @@ from cudf._lib.includes.json cimport (
     reader as json_reader,
     reader_options as json_reader_options
 )
+from cudf._lib.includes.io cimport FILE_PATH, HOST_BUFFER
+
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.string cimport string

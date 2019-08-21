@@ -145,7 +145,7 @@ class DatetimeColumn(column.TypedColumnBase):
         dtype = np.dtype(dtype)
         if dtype == self.dtype:
             return self
-        return libcudf.typecast.apply_cast(self, dtype=dtype)
+        return libcudf.typecast.cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
@@ -219,7 +219,7 @@ class DatetimeColumn(column.TypedColumnBase):
         else:
             fill_value = column.as_column(fill_value, nan_as_null=False)
 
-        result = libcudf.replace.apply_replace_nulls(self, fill_value)
+        result = libcudf.replace.replace_nulls(self, fill_value)
 
         result = result.replace(mask=None)
         return self._mimic_inplace(result, inplace)
@@ -231,10 +231,10 @@ class DatetimeColumn(column.TypedColumnBase):
         return col_keys, col_inds
 
     def min(self, dtype=None):
-        return libcudf.reduce.apply_reduce("min", self, dtype=dtype)
+        return libcudf.reduce.reduce("min", self, dtype=dtype)
 
     def max(self, dtype=None):
-        return libcudf.reduce.apply_reduce("max", self, dtype=dtype)
+        return libcudf.reduce.reduce("max", self, dtype=dtype)
 
     def find_first_value(self, value):
         """

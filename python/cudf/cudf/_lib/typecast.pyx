@@ -7,13 +7,13 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._lib.unaryops cimport *
+cimport cudf._lib.includes.unaryops as cpp_unaryops
 
 import numpy as np
 import pandas as pd
 
 
-def apply_cast(incol, dtype=np.float64):
+def cast(incol, dtype=np.float64):
     """
     Return a Column with values in `incol` casted to `dtype`.
     Currently supports numeric and datetime dtypes.
@@ -35,7 +35,7 @@ def apply_cast(incol, dtype=np.float64):
     cdef gdf_column c_out_col
 
     with nogil:
-        c_out_col = cast(
+        c_out_col = cpp_unaryops.cast(
             c_incol[0],
             c_out_dtype,
             c_out_info

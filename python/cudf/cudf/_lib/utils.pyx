@@ -84,28 +84,3 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
         c_columns.push_back(c_col)
     c_table = new cudf_table(c_columns)
     return c_table
-
-
-def mask_from_devary(py_col):
-    from cudf.core.column import as_column
-
-    py_col = as_column(py_col)
-
-    cdef gdf_column* c_col = column_view_from_column(py_col)
-
-    cdef pair[bit_mask_t_ptr, gdf_size_type] result
-
-    with nogil:
-        result = nans_to_nulls(c_col[0])
-
-    mask = None
-    if result.first:
-        mask_ptr = int(<uintptr_t>result.first)
-        mask = rmm.device_array_from_ptr(
-            mask_ptr,
-            nelem=calc_chunk_size(len(py_col), mask_bitsize),
-            dtype=mask_dtype,
-            finalizer=rmm._make_finalizer(mask_ptr, 0)
-        )
-
-    return mask

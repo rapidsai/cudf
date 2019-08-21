@@ -9,16 +9,12 @@ from numba import cuda
 from librmm_cffi import librmm as rmm
 
 import cudf
-from cudf._lib.sort import apply_segsort
-from cudf.bindings.groupby.sort import apply_groupby_without_aggregations
+import cudf._lib as libcudf
 from cudf.comm.serialize import register_distributed_serializer
 from cudf.core.buffer import Buffer
 from cudf.core.column import Column
 from cudf.core.dataframe import DataFrame
 from cudf.core.series import Series
-from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.series import Series
-from cudf.multi import concat
 from cudf.utils import cudautils
 
 
@@ -220,7 +216,7 @@ class Groupby(object):
         # Grouping
         grouped_df, sr_segs = self._group_dataframe(self._df, self._by)
         # Grouped values
-        outdf = DataFrame()
+        outdf = cudf.DataFrame()
         segs = sr_segs.to_array()
 
         for k in self._by:
@@ -295,10 +291,10 @@ class Groupby(object):
             * segs : Series.
                  Group starting index.
         """
-        sorted_cols, offsets = apply_groupby_without_aggregations(
+        sorted_cols, offsets = libcudf.groupby.groupby_without_aggregations(
             df._columns, df[levels]._columns
         )
-        outdf = DataFrame._from_columns(sorted_cols)
+        outdf = cudf.DataFrame._from_columns(sorted_cols)
         segs = Series(offsets)
         outdf.columns = df.columns
         return _dfsegs_pack(df=outdf, segs=segs)

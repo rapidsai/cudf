@@ -735,9 +735,7 @@ class StringColumn(column.TypedColumnBase):
 
     def _find_first_and_last(self, value):
         found_indices = self.str().contains(f"^{value}$")._column
-        import cudf._lib.typecast as typecast
-
-        found_indices = typecast.apply_cast(found_indices, dtype=np.int32)
+        found_indices = libcudf.typecast.cast(found_indices, dtype=np.int32)
         first = column.as_column(found_indices).find_first_value(1)
         last = column.as_column(found_indices).find_last_value(1)
         return first, last

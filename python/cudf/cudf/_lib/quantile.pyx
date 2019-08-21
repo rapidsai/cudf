@@ -38,7 +38,7 @@ def get_quantile_method(method):
     return _GDF_QUANTILE_METHODS[method]
 
 
-def apply_quantile(column, quant, method, exact):
+def quantile(column, quant, method, exact):
     """ Calculate the `quant` quantile for the column
     Returns value with the quantile specified by quant
     """

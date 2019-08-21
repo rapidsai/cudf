@@ -1250,7 +1250,7 @@ class Series(object):
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            newmask = libcudf.utils.mask_from_devary(sr._column)
+            newmask = libcudf.unaryops.nans_to_nulls(sr._column)
             return sr.set_mask(newmask)
         return self
 
@@ -1811,7 +1811,7 @@ class Series(object):
 
         try:
             rhs = column.as_column(test, dtype=self.dtype)
-            # if necessary, convert values via typecast.apply_cast
+            # if necessary, convert values via typecast
             rhs = Series(rhs.astype(self.dtype))
         except Exception:
             # pandas functionally returns all False when cleansing via

@@ -192,7 +192,7 @@ class Rolling:
         )
 
     def _apply_agg_series(self, sr, agg_name):
-        result_col = libcudf.rolling.apply_rolling(
+        result_col = libcudf.rolling.rolling(
             sr._column, self.window, self.min_periods, self.center, agg_name
         )
         return sr._copy_construct(data=result_col)
