@@ -461,12 +461,23 @@ class DataFrame(object):
         return not len(self)
 
     @property
-    def values(self):
+    def values_device(self):
         if not utils._have_cupy:
             raise ModuleNotFoundError("cuPY was not found.")
         import cupy
 
         return cupy.asarray(self.as_gpu_matrix())
+
+    @property
+    def values(self):
+        cols = [self._cols[k] for k in self.columns]
+        dtype = np.find_common_type(cols, [])
+        mat = np.zeros(self.shape, dtype=dtype)
+        for i, col in enumerate(cols):
+            mat[:,i] = col.data.mem.copy_to_host()
+        return mat
+
+
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
