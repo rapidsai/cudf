@@ -21,9 +21,9 @@
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/gather.hpp>
 #include "joining.h"
@@ -150,8 +150,19 @@ gdf_error trivial_full_join(
         allocSequenceBuffer(&l_ptr, left_size);
         result_size = left_size;
     }
-    gdf_column_view( left_result, l_ptr, nullptr, result_size, dtype);
-    gdf_column_view(right_result, r_ptr, nullptr, result_size, dtype);
+
+    gdf_column_view_augmented(left_result,
+                              l_ptr, nullptr,
+                              result_size, dtype, 0,
+                              left_result->dtype_info,
+                              left_result->col_name);
+
+    gdf_column_view_augmented(right_result,
+                              r_ptr, nullptr,
+                              result_size, dtype, 0,
+                              right_result->dtype_info,
+                              right_result->col_name);
+
     CUDA_CHECK_LAST();
     return GDF_SUCCESS;
 }
@@ -314,7 +325,9 @@ gdf_error construct_join_output_df(
 
     //create left and right output column data buffers
     for (int i = 0; i < left_table_end; ++i) {
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
+        gdf_column* col = lnonjoincol[i];
+        gdf_column_view_augmented(result_cols[i], nullptr, nullptr, join_size,
+                                  col->dtype, 0, col->dtype_info, col->col_name);
         int col_width = cudf::byte_width(*(result_cols[i]));
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
@@ -322,7 +335,9 @@ gdf_error construct_join_output_df(
         CHECK_STREAM(0);
     }
     for (int i = right_table_begin; i < result_num_cols; ++i) {
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
+        gdf_column* col = rnonjoincol[i - right_table_begin];
+        gdf_column_view_augmented(result_cols[i], nullptr, nullptr, join_size,
+                                  col->dtype, 0, col->dtype_info, col->col_name);
         int col_width = cudf::byte_width(*(result_cols[i]));
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
@@ -332,7 +347,9 @@ gdf_error construct_join_output_df(
     //create joined output column data buffers
     for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
         int i = left_table_end + join_index;
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
+        gdf_column* col = left_cols[left_join_cols[join_index]];
+        gdf_column_view_augmented(result_cols[i], nullptr, nullptr, join_size,
+                                  col->dtype, 0, col->dtype_info, col->col_name);
         int col_width = cudf::byte_width(*(result_cols[i]));
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
         RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );

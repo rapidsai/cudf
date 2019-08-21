@@ -1,12 +1,12 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import pickle
 import warnings
-from numbers import Number
 
+import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
 import nvstrings
 from librmm_cffi import librmm as rmm
@@ -14,7 +14,6 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.binops as cpp_binops
 from cudf.bindings.cudf_cpp import get_ctype_ptr
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import column, columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, utils
@@ -512,45 +511,6 @@ class StringColumn(columnops.TypedColumnBase):
             self._indices = Buffer(out_dev_arr)
         return self._indices
 
-    def element_indexing(self, arg):
-        from cudf.dataframe.numerical import NumericalColumn
-
-        if isinstance(arg, Number):
-            arg = int(arg)
-            if arg < 0:
-                arg = len(self) + arg
-            if arg > (len(self) - 1):
-                raise IndexError
-            out = self._data[arg].to_host()[0]
-            return out
-        elif isinstance(arg, slice):
-            out = self._data[arg]
-        elif isinstance(arg, list):
-            out = self._data[arg]
-        elif isinstance(arg, np.ndarray):
-            gpu_arr = rmm.to_device(arg)
-            return self.element_indexing(gpu_arr)
-        elif isinstance(arg, DeviceNDArray):
-            # NVStrings gather call expects an array of int32s
-            import cudf.bindings.typecast as typecast
-
-            arg = typecast.apply_cast(columnops.as_column(arg), dtype=np.int32)
-            arg = cudautils.modulo(arg.data.mem, len(self))
-            if len(arg) > 0:
-                gpu_ptr = get_ctype_ptr(arg)
-                out = self._data.gather(gpu_ptr, len(arg))
-            else:
-                out = self._data.gather([])
-        elif isinstance(arg, NumericalColumn):
-            return self.element_indexing(arg.data.mem)
-        else:
-            raise NotImplementedError(type(arg))
-
-        return columnops.as_column(out)
-
-    def __getitem__(self, arg):
-        return self.element_indexing(arg)
-
     def as_numerical_column(self, dtype, **kwargs):
 
         mem_dtype = np.dtype(dtype)
@@ -632,8 +592,9 @@ class StringColumn(columnops.TypedColumnBase):
 
         return self.to_arrow().to_pandas()
 
-    def serialize(self, serialize):
+    def serialize(self):
         header = {"null_count": self._null_count}
+        header["type"] = pickle.dumps(type(self))
         frames = []
         sub_headers = []
 
@@ -647,23 +608,43 @@ class StringColumn(columnops.TypedColumnBase):
             nbuf=get_ctype_ptr(nbuf),
             bdevmem=True,
         )
-
         for item in [nbuf, sbuf, obuf]:
-            sheader, [frame] = serialize(item)
+            sheader = item.__cuda_array_interface__.copy()
+            sheader["dtype"] = item.dtype.str
             sub_headers.append(sheader)
-            frames.append(frame)
+            frames.append(item)
 
         header["nvstrings"] = len(self._data)
         header["subheaders"] = sub_headers
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
+    def deserialize(cls, header, frames):
         # Deserialize the mask, value, and offset frames
         arrays = []
+
         for i, frame in enumerate(frames):
-            subheader = header["subheaders"][i]
-            arrays.append(get_ctype_ptr(deserialize(subheader, [frame])))
+            if isinstance(frame, memoryview):
+                sheader = header["subheaders"][i]
+                dtype = sheader["dtype"]
+                frame = np.frombuffer(frame, dtype=dtype)
+                frame = cudautils.to_device(frame)
+            elif not (
+                isinstance(frame, np.ndarray)
+                or numba.cuda.driver.is_device_memory(frame)
+            ):
+                # this is probably a ucp_py.BufferRegion memory object
+                # check the header for info -- this should be encoded from
+                # serialization process.  Lastly, `typestr` and `shape` *must*
+                # manually set *before* consuming the buffer as a DeviceNDArray
+                sheader = header["subheaders"][i]
+                frame.typestr = sheader.get("dtype", "B")
+                frame.shape = sheader.get("shape", len(frame))
+                frame = np.frombuffer(frame, dtype=dtype)
+                frame = cudautils.to_device(frame)
+
+            arrays.append(get_ctype_ptr(frame))
 
         # Use from_offsets to get nvstring data.
         # Note: array items = [nbuf, sbuf, obuf]
@@ -697,12 +678,9 @@ class StringColumn(columnops.TypedColumnBase):
         return col_keys, col_inds
 
     def _replace_defaults(self):
-        params = {
-            "data": self.data,
-            "mask": self.mask,
-            "null_count": self.null_count,
-        }
-        return params
+        import cudf.dataframe.column as c
+
+        return c.Column._replace_defaults(self)
 
     def copy(self, deep=True):
         params = self._replace_defaults()
@@ -794,9 +772,6 @@ class StringColumn(columnops.TypedColumnBase):
     def default_na_value(self):
         return None
 
-    def take(self, indices):
-        return self.element_indexing(indices)
-
     def binary_operator(self, binop, rhs, reflect=False):
         lhs = self
         if reflect:
@@ -827,6 +802,12 @@ class StringColumn(columnops.TypedColumnBase):
             ).all()
         return self._is_monotonic_decreasing
 
+    @property
+    def __cuda_array_interface__(self):
+        raise NotImplementedError(
+            "Strings are not yet supported via `__cuda_array_interface__`"
+        )
+
 
 def string_column_binop(lhs, rhs, op):
     nvtx_range_push("CUDF_BINARY_OP", "orange")
@@ -839,6 +820,3 @@ def string_column_binop(lhs, rhs, op):
     result = out.replace(null_count=null_count)
     nvtx_range_pop()
     return result
-
-
-register_distributed_serializer(StringColumn)

@@ -11,10 +11,8 @@ from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.search cimport *
 from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 from libcpp.vector cimport vector
-from libc.stdlib cimport free
-
-from cudf.dataframe.column import Column
 
 
 def search_sorted(column, values, side):
@@ -36,17 +34,16 @@ def search_sorted(column, values, side):
     cdef vector[bool] c_desc_flags
     c_desc_flags.push_back(False)
 
-    cdef gdf_column result
+    cdef gdf_column c_out_col
 
     if side == 'left':
         with nogil:
-            result = lower_bound(c_t[0], c_values[0], c_desc_flags)
-    if side == 'right':
+            c_out_col = lower_bound(c_t[0], c_values[0], c_desc_flags)
+    elif side == 'right':
         with nogil:
-            result = upper_bound(c_t[0], c_values[0], c_desc_flags)
+            c_out_col = upper_bound(c_t[0], c_values[0], c_desc_flags)
 
-    free(c_t)
-    free(c_values)
+    free_table(c_t)
+    free_table(c_values)
 
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    return gdf_column_to_column(&c_out_col)

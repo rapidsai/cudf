@@ -18,7 +18,7 @@
 
 #include <cudf/types.hpp>
 #include "slice.hpp"
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/error_utils.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 

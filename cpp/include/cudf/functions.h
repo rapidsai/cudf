@@ -76,8 +76,6 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 
-
-
 /* context operations */
 
 /**
@@ -89,13 +87,16 @@ gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
  * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
  * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
+ * @param[in] flag_groupby_include_nulls false = Nulls are ignored (Pandas style)
+ *                                       true = Nulls compare as equal (SQL style)
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
  *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace,
+			   bool flag_groupby_include_nulls,
                            gdf_null_sort_behavior flag_null_sort_behavior);
 
 
@@ -135,67 +136,6 @@ const char * gdf_cuda_error_string(int cuda_error);
  */
 const char * gdf_cuda_error_name(int cuda_error);
 
-
-/* segmented sorting */
-
-/**
- * @brief  Constructor for the gdf_segmented_radixsort_plan_type object
- *
- * @param[in] Number of items to sort
- * @param[in] Indicates if sort should be ascending or descending. 1 = Descending, 0 = Ascending
- * @param[in] The least-significant bit index (inclusive) needed for key comparison
- * @param[in] The most-significant bit index (exclusive) needed for key comparison (e.g., sizeof(unsigned int) * 8)
- *
- * @returns  gdf_segmented_radixsort_plan_type object pointer
- */
-gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items,
-                                                                int descending,
-                                                                unsigned begin_bit,
-                                                                unsigned end_bit);
-
-/**
- * @brief  Allocates device memory for the segmented radixsort
- *
- * @param[in] Segmented Radix sort plan
- * @param[in] sizeof data type of key
- * @param[in] sizeof data type of val
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *hdl,
-                                            size_t sizeof_key,
-                                            size_t sizeof_val);
-
-/**
- * @brief  Frees device memory used for the segmented radixsort
- *
- * @param[in] Segmented Radix sort plan
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl);
-
-
-/**
- * @brief  Performs a segmented radixsort on the key and value columns
- * 
- * The null_count of the keycol and valcol columns are expected to be 0
- * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
-                                  gdf_column *keycol, gdf_column *valcol,
-                                  unsigned num_segments,
-                                  unsigned *d_begin_offsets,
-                                  unsigned *d_end_offsets);
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
@@ -587,3 +527,5 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
+
+

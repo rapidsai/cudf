@@ -20,15 +20,9 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.security.acl.Group;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -683,16 +677,24 @@ public class TableTest {
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
+        .categoryColumn("1", "2", "3")
+        .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L)
         .column(11.0, 12.0, 13.0).build();
          Table t2 = new Table.TestBuilder()
              .column(4, 5)
+             .categoryColumn("4", "3")
+             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 3L)
              .column(14.0, 15.0).build();
          Table t3 = new Table.TestBuilder()
              .column(6, 7, 8, 9)
+             .categoryColumn("4", "1", "2", "2")
+             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 1L, 2L, 2L)
              .column(16.0, 17.0, 18.0, 19.0).build();
          Table concat = Table.concatenate(t1, t2, t3);
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4, 5, 6, 7, 8, 9)
+             .categoryColumn("1", "2", "3", "4", "3", "4", "1", "2", "2")
+             .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L, 4L, 3L, 4L, 1L, 2L, 2L)
              .column(11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0).build()) {
       assertTablesAreEqual(expected, concat);
     }
@@ -725,12 +727,18 @@ public class TableTest {
            for (int i = 0; i < count; i++) {
              b.append(i / 2);
            }
+         });
+         ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
          })) {
+
       HashSet<Long> expected = new HashSet<>();
       for (long i = 0; i < count; i++) {
         expected.add(i);
       }
-      try (Table input = new Table(new ColumnVector[]{aIn, bIn});
+      try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).partition(5, HashFunction.MURMUR3)) {
         int[] parts = output.getPartitions();
         assertEquals(5, parts.length);
@@ -745,14 +753,18 @@ public class TableTest {
         assertTrue(rows <= count);
         ColumnVector aOut = output.getColumn(0);
         ColumnVector bOut = output.getColumn(1);
+        ColumnVector cOut = output.getColumn(2);
 
         aOut.ensureOnHost();
         bOut.ensureOnHost();
+        cOut.ensureOnHost();
         for (int i = 0; i < count; i++) {
           long fromA = aOut.getLong(i);
           long fromB = bOut.getInt(i);
+          String fromC = cOut.getJavaString(i);
           assertTrue(expected.remove(fromA));
           assertEquals(fromA / 2, fromB);
+          assertEquals(String.valueOf(fromA), fromC, "At Index " + i);
         }
         assertTrue(expected.isEmpty());
       }
@@ -1161,6 +1173,233 @@ public class TableTest {
         assertEquals(7, sortedMax.get(0));
         assertEquals(9, sortedMax.get(1));
       }
+    }
+  }
+
+  @Test
+  void testMaskWithValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        if (i % 2 != 0) {
+          builder.setNullAt(i);
+        }
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        filtered.ensureOnHost();
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(3, filtered.getRowCount());
+        assertEquals(1, filtered.getInt(0));
+        assertEquals(2, filtered.getInt(1));
+        assertTrue(filtered.isNull(2));
+      }
+    }
+  }
+
+  @Test
+  void testMaskDataOnly() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedBytes((byte) 1, null, (byte) 2, (byte) 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      filtered.ensureOnHost();
+      assertEquals(DType.INT8, filtered.getType());
+      assertEquals(3, filtered.getRowCount());
+      assertTrue(filtered.isNull(0));
+      assertEquals(3, filtered.getByte(1));
+      assertTrue(filtered.isNull(2));
+    }
+  }
+
+  @Test
+  void testAllFilteredFromData() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, false);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+         Table filteredTable = input.filter(mask)) {
+      ColumnVector filtered = filteredTable.getColumn(0);
+      assertEquals(DType.INT32, filtered.getType());
+      assertEquals(0, filtered.getRowCount());
+    }
+  }
+
+  @Test
+  void testAllFilteredFromValidity() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    final int numRows = 5;
+    try (ColumnVector.Builder builder = ColumnVector.builder(DType.BOOL8, numRows)) {
+      for (int i = 0; i < numRows; ++i) {
+        builder.append((byte) 1);
+        builder.setNullAt(i);
+      }
+      try (ColumnVector mask = builder.build();
+           Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null));
+           Table filteredTable = input.filter(mask)) {
+        ColumnVector filtered = filteredTable.getColumn(0);
+        assertEquals(DType.INT32, filtered.getType());
+        assertEquals(0, filtered.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testMismatchedSizes() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[3];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromBoxedInts(1, null, 2, 3, null))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  @Test
+  void testTableBasedFilter() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    byte[] maskVals = new byte[]{0, 1, 0, 1, 1};
+    try (ColumnVector mask = ColumnVector.boolFromBytes(maskVals);
+         Table input = new Table(
+             ColumnVector.fromBoxedInts(1, null, 2, 3, null),
+             ColumnVector.categoryFromStrings("one", "two", "three", null, "five"));
+         Table filtered = input.filter(mask);
+         Table expected = new Table(
+             ColumnVector.fromBoxedInts(null, 3, null),
+             ColumnVector.categoryFromStrings("two", null, "five"))) {
+      assertTablesAreEqual(filtered, expected);
+    }
+  }
+
+  @Test
+  void testStringsAreNotSupported() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    Boolean[] maskVals = new Boolean[5];
+    Arrays.fill(maskVals, true);
+    try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
+         Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
+      assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  final byte[] jsonData = ("[1, 1.1, \"a\"]\n" +
+      "[3, 4.2, \"hello\"]\n" +
+      "[7, 1.3, \"seven\u24E1\u25B6\"]").getBytes(StandardCharsets.UTF_8);
+
+  private File createTempFile(byte[] jsonData) throws IOException {
+    File tempFile = File.createTempFile("test", ".json");
+    try (OutputStream out = new FileOutputStream(tempFile)) {
+      out.write(jsonData);
+    }
+    tempFile.deleteOnExit();
+    return tempFile;
+  }
+
+  @Test
+  void testJSONReadWithFilePath() throws IOException {
+    File tempFile = createTempFile(jsonData);
+
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    Table expectedTable = new Table.TestBuilder()
+        .column( 1l,      3l,                 7l)
+        .column(1.1,     4.2,                1.3)
+        .column("a", "hello", "seven\u24E1\u25B6")
+        .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadWithFilePathAndDataTypes() throws IOException {
+    File tempFile = createTempFile(jsonData);
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBuffer() {
+    try (Table t = Table.readJSON(jsonData);
+         Table expectedTable = new Table.TestBuilder()
+             .column( 1l,      3l,                 7l)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithDataTypes() {
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(jsonData, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1f,     4.2f,                1.3f)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithRange() {
+    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+         Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterColumnsWithNames() {
+    // the schema can't skip any column
+    final byte[] jsonDataWithNames = ("{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n" +
+        "{\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n" +
+        "{\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}")
+        .getBytes(StandardCharsets.UTF_8);
+
+    Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
+        .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
+    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1l,       3l,                  7l)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterWithoutNames() {
+    // the schema can't skip any column and since we are using json without explicit names provided
+    // in the json file we will have to set the data types using the column names that will be used
+    // by the libcudf API i.e. 0, 1, 2 ... 
+    Schema schema = Schema.builder().column(DType.FLOAT32, "1")
+        .column(DType.INT32, "0").column(DType.STRING, "2").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
+    try (Table t = Table.readJSON(jsonData, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
     }
   }
 }

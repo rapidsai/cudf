@@ -27,7 +27,7 @@ cpdef gdf_time_unit np_dtype_to_gdf_time_unit(dtype)
 cpdef gdf_time_unit_to_np_dtype(gdf_time_unit time_unit)
 
 cdef np_dtype_from_gdf_column(gdf_column* col)
-cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*)
+
 
 cdef get_scalar_value(gdf_scalar scalar, dtype)
 
@@ -40,11 +40,13 @@ cdef gdf_column* column_view_from_NDArrays(
     null_count
 ) except? NULL
 cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=*) except? NULL
+cdef gdf_column_to_column(gdf_column* c_col, int_col_name=*)
 cdef gdf_column_to_column_mem(gdf_column* input_col)
 cdef update_nvstrings_col(col, uintptr_t category_ptr)
 cdef gdf_column* column_view_from_string_column(col, col_name=*) except? NULL
 cdef gdf_column** cols_view_from_cols(cols)
-cdef free_table(cudf_table* table0, gdf_column** cols)
+cdef free_table(cudf_table* table0, gdf_column** cols=*)
+cdef free_column(gdf_column* c_col)
 
 cdef gdf_context* create_context_view(
     flag_sorted,
@@ -52,8 +54,10 @@ cdef gdf_context* create_context_view(
     flag_distinct,
     flag_sort_result,
     flag_sort_inplace,
-    null_sort_behavior
+    flag_null_sort_behavior,
+    flag_groupby_include_nulls
 )
+
 
 cpdef uintptr_t column_view_pointer(col)
 
@@ -139,10 +143,6 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_dtype_extra_info dtype_info
         char *col_name
 
-    ctypedef enum gdf_null_sort_behavior:
-        GDF_NULL_AS_LARGEST = 0,
-        GDF_NULL_AS_SMALLEST,
-
     ctypedef enum gdf_method:
         GDF_SORT = 0,
         GDF_HASH,
@@ -163,6 +163,8 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_AVG,
         GDF_COUNT,
         GDF_COUNT_DISTINCT,
+        GDF_NUMBA_GENERIC_AGG_OPS,
+        GDF_CUDA_GENERIC_AGG_OPS,
         N_GDF_AGG_OPS,
 
     ctypedef enum gdf_color:
@@ -177,12 +179,18 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_ORANGE,
         GDF_NUM_COLORS,
 
+    ctypedef enum gdf_null_sort_behavior:
+        GDF_NULL_AS_LARGEST = 0,
+        GDF_NULL_AS_SMALLEST,
+
     ctypedef struct gdf_context:
         int flag_sorted
         gdf_method flag_method
         int flag_distinct
         int flag_sort_result
         int flag_sort_inplace
+        bool flag_groupby_include_nulls
+        gdf_null_sort_behavior flag_null_sort_behavior
 
     ctypedef enum window_function_type:
         GDF_WINDOW_RANGE,
@@ -224,6 +232,18 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_dtype dtype
     ) except +
 
+    # version with name parameter
+    cdef gdf_error gdf_column_view_augmented(
+        gdf_column *column,
+        void *data,
+        gdf_valid_type *valid,
+        gdf_size_type size,
+        gdf_dtype dtype,
+        gdf_size_type null_count,
+        gdf_dtype_extra_info extra_info,
+        const char* name) except +
+
+    # version without name parameter
     cdef gdf_error gdf_column_view_augmented(
         gdf_column *column,
         void *data,
@@ -243,6 +263,7 @@ cdef extern from "cudf/cudf.h" nogil:
         int flag_distinct,
         int flag_sort_result,
         int flag_sort_inplace,
+        bool flag_groupby_include_nulls,
         gdf_null_sort_behavior flag_null_sort_behavior
     ) except +
 
@@ -379,3 +400,5 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 #        const gdf_column* const* begin() const except +
 #        gdf_column const* const* end() const
 #        gdf_column const* get_column(gdf_index_type index) const except +
+
+cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid

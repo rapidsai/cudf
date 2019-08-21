@@ -1,4 +1,5 @@
 import datetime as dt
+import pickle
 
 import numpy as np
 import pandas as pd
@@ -13,11 +14,10 @@ import cudf.bindings.unaryops as cpp_unaryops
 from cudf._sort import get_sorted_inds
 from cudf.bindings.cudf_cpp import get_ctype_ptr, np_to_pa_dtype
 from cudf.bindings.nvtx import nvtx_range_pop, nvtx_range_push
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import utils
-from cudf.utils.utils import is_single_value
+from cudf.utils.utils import is_scalar
 
 # nanoseconds per time_unit
 _numpy_to_pandas_conversion = {
@@ -49,22 +49,18 @@ class DatetimeColumn(columnops.TypedColumnBase):
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
-    def serialize(self, serialize):
-        header, frames = super(DatetimeColumn, self).serialize(serialize)
-        assert "dtype" not in header
-        header["dtype"] = serialize(self._dtype)
+    def serialize(self):
+        header, frames = super(DatetimeColumn, self).serialize()
+        header["type"] = pickle.dumps(type(self))
+        header["dtype"] = self._dtype.str
         return header, frames
 
     @classmethod
-    def deserialize(cls, deserialize, header, frames):
-        data, mask = super(DatetimeColumn, cls).deserialize(
-            deserialize, header, frames
-        )
+    def deserialize(cls, header, frames):
+        data, mask = super(DatetimeColumn, cls).deserialize(header, frames)
+        dtype = header["dtype"]
         col = cls(
-            data=data,
-            mask=mask,
-            null_count=header["null_count"],
-            dtype=deserialize(*header["dtype"]),
+            data=data, mask=mask, null_count=header["null_count"], dtype=dtype
         )
         return col
 
@@ -155,7 +151,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def as_datetime_column(self, dtype, **kwargs):
         import cudf.bindings.typecast as typecast
 
-        return typecast.apply_cast(self, dtype=np.dtype(dtype))
+        dtype = np.dtype(dtype)
+        if dtype == self.dtype:
+            return self
+        return typecast.apply_cast(self, dtype=dtype)
 
     def as_numerical_column(self, dtype, **kwargs):
         return self.as_numerical.astype(dtype)
@@ -224,7 +223,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             )
 
     def fillna(self, fill_value, inplace=False):
-        if is_single_value(fill_value):
+        if is_scalar(fill_value):
             fill_value = np.datetime64(fill_value, self.time_unit)
         else:
             fill_value = columnops.as_column(fill_value, nan_as_null=False)
@@ -236,7 +235,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = cpp_copying.apply_gather_column(self, col_inds.data.mem)
+        col_keys = cpp_copying.apply_gather(self, col_inds)
         col_inds.name = self.name
         return col_keys, col_inds
 
@@ -274,7 +273,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = cpp_copying.apply_gather_array(sortedvals, segs)
+        out_col = cpp_copying.apply_gather(sortedvals, segs)
         return out_col
 
     @property
@@ -306,6 +305,3 @@ def binop(lhs, rhs, op, out_dtype):
     out = out.replace(null_count=null_count)
     nvtx_range_pop()
     return out
-
-
-register_distributed_serializer(DatetimeColumn)

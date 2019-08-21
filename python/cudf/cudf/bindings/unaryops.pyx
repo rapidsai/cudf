@@ -4,19 +4,23 @@
 # distutils: language = c++
 # cython: embedsignature = True
 # cython: language_level = 3
+
 from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.cudf_cpp import *
 from cudf.bindings.unaryops cimport *
 from cudf.bindings.GDFError import GDFError
-from cudf.dataframe.column import Column
 from libcpp.vector cimport vector
-from libc.stdlib cimport free
 
 from librmm_cffi import librmm as rmm
 
 from libcpp.string cimport string
 
 import numpy as np
+
+from cudf.utils import cudautils
+import numba.cuda
+import numba.numpy_support
+
 
 _UNARY_OP = {
     'sin': SIN,
@@ -45,37 +49,36 @@ def apply_unary_op(incol, op):
 
     cdef gdf_column* c_incol = column_view_from_column(incol)
 
-    cdef gdf_column result
-    cdef unary_op c_op = _UNARY_OP[op]
-    with nogil:
-        result = unary_operation(
-            c_incol[0],
-            c_op
-        )
+    cdef gdf_column c_out_col
 
-    free(c_incol)
-    data, mask = gdf_column_to_column_mem(&result)
-    return Column.from_mem_views(data, mask)
+    cdef unary_op c_op
+    cdef string cpp_str
+    cdef gdf_dtype g_type
 
+    if callable(op):
+        nb_type = numba.numpy_support.from_dtype(incol.dtype)
+        type_signature = (nb_type,)
+        compiled_op = cudautils.compile_udf(op, type_signature)
+        cpp_str = compiled_op[0].encode('UTF-8')
+        if compiled_op[1] not in dtypes:
+            raise TypeError(
+                "Result of window function has unsupported dtype {}"
+                .format(op[1])
+            )
+        g_type = dtypes[compiled_op[1]]
+        with nogil:
+            c_out_col = transform(c_incol[0], cpp_str, g_type, True)
+    else:
+        c_op = _UNARY_OP[op]
+        with nogil:
+            c_out_col = unary_operation(
+                c_incol[0],
+                c_op
+            )
 
-def column_applymap(incol, udf_ptx, np_dtype):
+    free_column(c_incol)
 
-    cdef gdf_column* c_incol = column_view_from_column(incol)
-
-    cdef string cpp_str = udf_ptx.encode('UTF-8')
-    cdef gdf_column c_outcol
-
-    # get the gdf_type related to the input np type
-    cdef gdf_dtype g_type = dtypes[np_dtype]
-
-    with nogil:
-        c_outcol = transform(<gdf_column>c_incol[0], cpp_str, g_type, True)
-
-    data, mask = gdf_column_to_column_mem(&c_outcol)
-
-    free(c_incol)
-
-    return Column.from_mem_views(data, mask)
+    return gdf_column_to_column(&c_out_col)
 
 
 def apply_dt_extract_op(incol, outcol, op):
@@ -122,7 +125,7 @@ def apply_dt_extract_op(incol, outcol, op):
                 <gdf_column*>c_outcol
             )
 
-    free(c_incol)
-    free(c_outcol)
+    free_column(c_incol)
+    free_column(c_outcol)
 
     check_gdf_error(result)

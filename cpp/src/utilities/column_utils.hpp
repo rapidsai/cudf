@@ -28,7 +28,7 @@
 #ifndef UTILITIES_COLUMN_UTILS_HPP_
 #define UTILITIES_COLUMN_UTILS_HPP_
 
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
 

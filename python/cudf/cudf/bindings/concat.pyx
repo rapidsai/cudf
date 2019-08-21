@@ -28,8 +28,8 @@ def _column_concat(cols_to_concat, output_col):
 
     check_gdf_error(result)
 
-    free(c_output_col)
+    free_column(c_output_col)
     for c_col in c_input_cols:
-        free(c_col)
+        free_column(c_col)
 
     return output_col

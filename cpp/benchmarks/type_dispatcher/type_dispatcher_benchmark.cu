@@ -24,7 +24,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 #include <table/legacy/device_table.cuh>
 

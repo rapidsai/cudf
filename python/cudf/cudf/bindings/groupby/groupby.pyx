@@ -28,6 +28,7 @@ from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
 from cudf.bindings.nvtx import nvtx_range_pop
 from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 cimport cudf.bindings.groupby.hash as hash_groupby
 
 
@@ -51,7 +52,14 @@ def dataframe_from_columns(cols, index=None, columns=None):
     return df
 
 
-def apply_groupby(keys, values, ops, method='hash', sort_results=True):
+def apply_groupby(
+    keys,
+    values,
+    ops,
+    method='hash',
+    sort_results=True,
+    dropna=True
+):
     """
     Apply aggregations *ops* on *values*, grouping by *keys*.
 
@@ -61,7 +69,8 @@ def apply_groupby(keys, values, ops, method='hash', sort_results=True):
     values : list of Columns
     ops : str or list of str
         Aggregation to be performed for each column in *values*
-
+    dropna : bool
+        Whether or not to drop null keys
     Returns
     -------
     result : tuple of list of Columns
@@ -82,7 +91,8 @@ def apply_groupby(keys, values, ops, method='hash', sort_results=True):
         else:
             c_ops.push_back(agg_names[ops[i]])
 
-    cdef hash_groupby.Options *options = new hash_groupby.Options()
+    cdef bool ignore_null_keys = dropna
+    cdef hash_groupby.Options *options = new hash_groupby.Options(dropna)
 
     with nogil:
         result = hash_groupby.groupby(
