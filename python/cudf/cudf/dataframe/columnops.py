@@ -19,7 +19,7 @@ from cudf.dataframe.buffer import Buffer
 from cudf.dataframe.column import Column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import is_categorical_dtype
-from cudf.utils.utils import buffers_from_pyarrow, min_scalar_type
+from cudf.utils.utils import buffers_from_pyarrow
 
 
 class TypedColumnBase(Column):
