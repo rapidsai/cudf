@@ -39,7 +39,7 @@ agg_names = {
 }
 
 
-def apply_groupby(
+def groupby(
     keys,
     values,
     ops,
