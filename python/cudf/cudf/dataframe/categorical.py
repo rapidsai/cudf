@@ -486,6 +486,9 @@ class CategoricalColumn(columnops.TypedColumnBase):
         )
 
     def _get_decategorized_column(self):
+        if self.null_count == len(self):
+            # self._categories is empty; just return codes
+            return self.cat().codes._column
         gather_map = (
             self.cat().codes.astype("int32").fillna(0)._column.data.mem
         )
