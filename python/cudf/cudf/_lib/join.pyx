@@ -6,21 +6,19 @@
 # cython: language_level = 3
 
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
-import numpy as np
+from cudf._lib.includes.join cimport *
+from cudf._lib.cudf cimport *
+from cudf._lib.cudf import *
 
 from librmm_cffi import librmm as rmm
+import numpy as np
 import nvcategory
 import nvstrings
 
-from cudf._lib.cudf cimport *
-from cudf._lib.cudf import *
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 cimport cython
-
-from cudf._lib.includes.join cimport *
 
 
 @cython.boundscheck(False)
