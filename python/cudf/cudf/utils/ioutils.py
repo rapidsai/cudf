@@ -812,8 +812,11 @@ def is_file_like(obj):
 
 
 def _is_local_filesystem(fs):
-    if isinstance(fs, fsspec.implementations.local.LocalFileSystem):
-        return True
+    local_filesystem_protocols = ["file"]
+
+    if hasattr(fs, "protocol"):
+        if fs.protocol in local_filesystem_protocols:
+            return True
     else:
         return False
 
@@ -848,6 +851,11 @@ def get_filepath_or_buffer(
         fs, _, paths = fsspec.get_fs_token_paths(
             path_or_data, mode="rb", storage_options=storage_options
         )
+        if len(paths) == 0:
+            raise IOError(
+                "%s could not be resolved to any files" % path_or_data
+            )
+
         if _is_local_filesystem(fs):
             # Doing this as `read_json` accepts a json string
             # path_or_data need not be a filepath like string
