@@ -15,6 +15,7 @@
  */
 
 #include <quantiles/quantiles.hpp>
+#include <copying/scatter.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
@@ -136,19 +137,19 @@ struct groupby {
     set_group_labels();
     print(_group_labels, "grp labels");
     set_unsorted_labels();
-    print(_unsorted_labels, "rev labels");
+    print<gdf_size_type>(_unsorted_labels, "rev labels");
   };
+
+  // TODO: destructor that frees _key_sorted_order.
+  // Or make _key_sorted_order thrust vector and add private functions to get column from vector
 
   std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
   sort_values(gdf_column const& val_col) {
     auto idx_col = allocate_column(gdf_dtype_of<gdf_index_type>(),
                                   _key_table.num_rows(),
                                   false);
-    gdf_column group_labels_col{};
     auto unsorted_val_col = const_cast<gdf_column*> (&val_col);
-    gdf_column_view(&group_labels_col, _unsorted_labels.data().get(), nullptr,
-                    _unsorted_labels.size(), gdf_dtype_of<gdf_size_type>());
-    auto unsorted_table = cudf::table{&group_labels_col, unsorted_val_col};
+    auto unsorted_table = cudf::table{&_unsorted_labels, unsorted_val_col};
 
     gdf_context context{};
     context.flag_groupby_include_nulls = _include_nulls;
@@ -159,7 +160,7 @@ struct groupby {
                 const_cast<gdf_context*>(&context));
 
     cudf::table unsorted_val_col_table{unsorted_val_col};
-    auto sorted_val_col = allocate_like(val_col);
+    auto sorted_val_col = allocate_like(val_col, _num_keys);
     cudf::table sorted_val_col_table{&sorted_val_col};
     cudf::gather(&unsorted_val_col_table,
                 reinterpret_cast<gdf_size_type*>(idx_col.data),
@@ -170,12 +171,12 @@ struct groupby {
     rmm::device_vector<gdf_size_type> val_group_sizes(_group_ids.size());
     rmm::device_vector<gdf_size_type> d_bools(sorted_val_col.size);
     if ( is_nullable(sorted_val_col) ) {
-    auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_val_col.valid);
+      auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_val_col.valid);
 
-    thrust::transform(
-      thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
-      thrust::make_counting_iterator(sorted_val_col.size), d_bools.begin(),
-      [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
+      thrust::transform(
+        thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
+        thrust::make_counting_iterator(sorted_val_col.size), d_bools.begin(),
+        [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
     } else {
       thrust::fill(d_bools.begin(), d_bools.end(), 1);
       print(d_bools, "col valids");
@@ -249,37 +250,28 @@ struct groupby {
   }
 
   void set_group_ids() {
-    gdf_size_type nrows = _key_table.num_rows();
-
-    gdf_index_type* result_end;
-
-    // Allocating memory for GDF column
-    gdf_column unique_indices{};
-    RMM_TRY(
-        RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type) * nrows, nullptr));
-    unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
-    auto idx_data = static_cast<gdf_index_type*>(unique_indices.data);
+    index_vector idx_data(_num_keys);
 
     auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
     auto device_input_table = device_table::create(_key_table);
     bool nullable = device_input_table.get()->has_nulls();
     auto sorted_order = reinterpret_cast<gdf_size_type*>(_key_sorted_order.data);
+    decltype(idx_data.begin()) result_end;
+
     if (nullable) {
       auto comp = row_equality_comparator<true>(*device_input_table, true);
       result_end = thrust::unique_copy(
-          thrust::device, counting_iter, counting_iter + nrows,
-          idx_data, transform_row_eq_comparator<true>{comp, sorted_order});
+        thrust::device, counting_iter, counting_iter + _num_keys,
+        idx_data.begin(), transform_row_eq_comparator<true>{comp, sorted_order});
     } else {
       auto comp = row_equality_comparator<false>(*device_input_table, true);
       result_end = thrust::unique_copy(
-          thrust::device, counting_iter, counting_iter + nrows,
-          idx_data, transform_row_eq_comparator<false>{comp, sorted_order});
+        thrust::device, counting_iter, counting_iter + _num_keys,
+        idx_data.begin(), transform_row_eq_comparator<false>{comp, sorted_order});
     }
 
-    gdf_size_type num_groups = thrust::distance(idx_data, result_end);
-    _group_ids = index_vector(idx_data, idx_data + num_groups);
-    // Free old column, as we have resized (implicitly)
-    gdf_column_free(&unique_indices);
+    gdf_size_type num_groups = thrust::distance(idx_data.begin(), result_end);
+    _group_ids = index_vector(idx_data.begin(), idx_data.begin() + num_groups);
   }
 
   void set_group_labels() {
@@ -300,137 +292,35 @@ struct groupby {
   }
 
   void set_unsorted_labels() {
-    _unsorted_labels = index_vector(_group_labels.size());
-    thrust::scatter(thrust::device,
-                    _group_labels.begin(), _group_labels.end(),
-                    reinterpret_cast<gdf_size_type*>(_key_sorted_order.data),
-                    _unsorted_labels.begin());
+    _unsorted_labels = allocate_column(gdf_dtype_of<gdf_size_type>(),
+                                      _key_sorted_order.size);
+    cudaMemset(_unsorted_labels.valid, 0,
+               gdf_num_bitmask_elements(_unsorted_labels.size));
+    
+    gdf_column group_labels_col{};
+    gdf_column_view(&group_labels_col, _group_labels.data().get(), nullptr,
+                    _group_labels.size(), gdf_dtype_of<gdf_size_type>());
+    cudf::table sorted_labels{&group_labels_col};
+    cudf::table unsorted_labels{&_unsorted_labels};
+    cudf::detail::scatter(&sorted_labels,
+                          reinterpret_cast<gdf_size_type*>(_key_sorted_order.data),
+                          &unsorted_labels);
+    print<gdf_size_type>(_unsorted_labels);
   }
 
  private:
 
   gdf_column         _key_sorted_order;
+  gdf_column         _unsorted_labels;
   cudf::table const& _key_table;
 
   index_vector       _group_ids;
   index_vector       _group_labels;
-  index_vector       _unsorted_labels;
 
   gdf_size_type      _num_keys;
   bool               _include_nulls;
 
 };
-
-
-// TODO: optimize this so that it doesn't have to generate the sorted table
-// But that needs a cudf::gather that can take a transformed iterator
-std::tuple<cudf::table, gdf_column, std::vector<gdf_column*>,
-  std::vector<rmm::device_vector<gdf_size_type> > >
-group_values_and_indices(cudf::table const& key_table,
-                              cudf::table const& val_table,
-                              gdf_context const& context)
-{
-  // Sort and groupby the input table
-  cudf::table sorted_table;
-  gdf_column group_indices;
-  std::vector<gdf_index_type> key_col_indices(key_table.num_columns());
-  std::iota(key_col_indices.begin(), key_col_indices.end(), 0);
-
-  // Combine key and val tables. We'll just segmentize the vals right now
-  std::vector<gdf_column*> key_cols(key_table.get_columns());
-  std::vector<gdf_column*> val_cols(val_table.get_columns());
-  auto all_cols = key_cols;
-  all_cols.insert(all_cols.end(), val_cols.begin(), val_cols.end());
-  auto combined_table = cudf::table(all_cols);
-
-  std::tie(sorted_table, group_indices) =
-    gdf_group_by_without_aggregations(combined_table,
-                                      key_table.num_columns(),
-                                      key_col_indices.data(),
-                                      const_cast<gdf_context*>(&context));
-
-  // Get group labels for future use in segmented sorting
-  gdf_size_type nrows = sorted_table.num_rows();
-  rmm::device_vector<gdf_size_type> group_labels(nrows);
-  thrust::fill(group_labels.begin(), group_labels.end(), 0);
-  auto group_labels_ptr = group_labels.data().get();
-  auto group_indices_ptr = reinterpret_cast<gdf_size_type*>(group_indices.data);
-  thrust::for_each_n(thrust::make_counting_iterator(1),
-                     group_indices.size - 1,
-                     [=] __device__ (gdf_size_type i) { 
-                       group_labels_ptr[group_indices_ptr[i]] = 1;
-                     });
-  thrust::inclusive_scan(thrust::device,
-                        group_labels.begin(),
-                        group_labels.end(),
-                        group_labels.begin());
-
-  // Sort individual value columns group wise
-  auto seg_val_cols =
-    std::vector<gdf_column*>(sorted_table.begin() + key_table.num_columns(),
-                             sorted_table.end());
-
-  auto idx_col = allocate_column(gdf_dtype_of<gdf_index_type>(),
-                                 sorted_table.num_rows(),
-                                 false);
-  gdf_column group_labels_col;
-  gdf_column_view(&group_labels_col, group_labels.data().get(), nullptr,
-    group_labels.size(), gdf_dtype_of<gdf_size_type>());
-  for (auto seg_val_col : seg_val_cols) {
-    auto seg_table = cudf::table{&group_labels_col, seg_val_col};
-    gdf_order_by(seg_table.begin(),
-                 nullptr,
-                 seg_table.num_columns(), // always 2
-                 &idx_col,
-                 const_cast<gdf_context*>(&context));
-
-    cudf::table seg_val_col_table{seg_val_col};
-    cudf::gather(&seg_val_col_table,
-                 reinterpret_cast<gdf_size_type*>(idx_col.data),
-                 &seg_val_col_table);
-  }
-
-  // Get number of valid values in each group
-  std::vector<rmm::device_vector<gdf_size_type> > vals_group_sizes;
-  for (auto seg_val_col : seg_val_cols)
-  {
-    rmm::device_vector<gdf_size_type> val_group_sizes(group_indices.size);
-    auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(seg_val_col->valid);
-
-    rmm::device_vector<gdf_size_type> d_bools(seg_val_col->size);
-    thrust::transform(
-        thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
-        thrust::make_counting_iterator(seg_val_col->size), d_bools.begin(),
-        [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
-
-    thrust::reduce_by_key(
-                          group_labels.begin(),
-                          group_labels.end(),
-                          d_bools.begin(),
-                          thrust::make_discard_iterator(),
-                          val_group_sizes.begin());
-    vals_group_sizes.push_back(val_group_sizes);
-  }
-
-  // Get output_keys using group_indices and sorted_key_table
-  // Separate key and value cols
-  auto sorted_key_cols =
-    std::vector<gdf_column*>(sorted_table.begin(),
-                             sorted_table.begin() + key_table.num_columns());
-  auto sorted_key_table = cudf::table(sorted_key_cols);
-
-  gdf_size_type num_grps = group_indices.size;
-  auto out_key_table = cudf::allocate_like_of_size(key_table, num_grps);
-  cudf::gather(&sorted_key_table,
-               reinterpret_cast<gdf_index_type*>(group_indices.data),
-               &out_key_table);
-
-  // No longer need sorted key columns
-  sorted_key_table.destroy();
-
-  return std::make_tuple(out_key_table, group_indices, seg_val_cols,
-    vals_group_sizes);
-}
 
 } // namespace detail
 
@@ -459,7 +349,7 @@ group_quantiles(cudf::table const& key_table,
       gb_obj.sort_values(*(val_table.get_column(i)));
 
     detail::print(group_sizes, "grp siz");
-    detail::print<float>(sorted_values, "sorted vals");
+    // detail::print<double>(sorted_values, "sorted vals");
 
     auto& result_col = *(result_table.get_column(i));
 
@@ -472,7 +362,7 @@ group_quantiles(cudf::table const& key_table,
     gdf_column_free(&sorted_values);
   }
 
-  return std::make_pair(out_key_table, result_table);
+  return std::make_pair(gb_obj.unique_keys(), result_table);
 }
     
 } // namespace cudf
