@@ -11,6 +11,8 @@ from libc.stdlib cimport free
 from libc.stdint cimport uintptr_t, uint32_t
 from libcpp.vector cimport vector
 
+from cudf._lib.includes.hash cimport *
+
 
 def hash_columns(columns, result, initial_hash_values=None):
     """Hash the *columns* and store in *result*.

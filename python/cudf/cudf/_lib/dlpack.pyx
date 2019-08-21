@@ -9,7 +9,6 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._lib.dlpack cimport *
 from librmm_cffi import librmm as rmm
 
 from libc.stdint cimport uintptr_t, int8_t
@@ -20,6 +19,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import warnings
+
+from cudf._lib.includes.dlpack cimport *
 
 
 cpdef from_dlpack(dlpack_capsule):

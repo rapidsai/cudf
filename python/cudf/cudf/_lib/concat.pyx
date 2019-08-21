@@ -10,6 +10,8 @@ from cudf._lib.cudf import *
 from libc.stdlib cimport free
 from libcpp.vector cimport vector
 
+from cudf._lib.includes.concat cimport gdf_column_concat
+
 
 def _column_concat(cols_to_concat, output_col):
     cdef gdf_column* c_output_col = column_view_from_column(output_col)

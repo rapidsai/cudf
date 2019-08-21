@@ -13,6 +13,8 @@ from cudf._lib.arrow._cuda cimport *
 from cudf._lib.arrow.libarrow_cuda cimport *
 from numba.cuda.cudadrv.devicearray import DeviceNDArray
 
+from cudf._lib.includes.gpuarrow cimport *
+
 
 cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
 

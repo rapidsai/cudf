@@ -7,7 +7,6 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._lib.binops cimport *
 from cudf._lib.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdlib cimport free
@@ -15,6 +14,9 @@ from libc.stdlib cimport free
 from libcpp.string cimport string
 
 from librmm_cffi import librmm as rmm
+
+from cudf._lib.includes.binops cimport *
+
 
 _BINARY_OP = {
     'add': GDF_ADD,

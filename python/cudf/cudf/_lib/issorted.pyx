@@ -9,9 +9,10 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._lib.issorted cimport *
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
+
+from cudf._lib.issorted cimport is_sorted
 
 cpdef issorted(columns, descending=[], nulls_are_smallest=False):
     """

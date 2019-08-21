@@ -15,11 +15,12 @@ import nvstrings
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf._lib.join cimport *
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
 from libc.stdlib cimport calloc, malloc, free
 cimport cython
+
+from cudf._lib.includes.join cimport *
 
 
 @cython.boundscheck(False)
