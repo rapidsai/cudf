@@ -573,7 +573,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         throw new IllegalArgumentException(src + " is not a supported buffer type.");
     }
 
-    assert srcOffset + length <= srcBuffer.length;
+    assert srcOffset + length <= srcBuffer.length : "would copy off end of buffer "
+        + srcOffset + " + " + length + " > " + srcBuffer.length;
     UnsafeMemoryAccessor.getBytes(dst, dstOffset,
         srcBuffer.getAddress() + srcOffset, length);
   }
