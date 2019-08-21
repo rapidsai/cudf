@@ -303,13 +303,16 @@ def _is_nep18_active():
     except ValueError:
         return False
 
+
 def _have_cupy():
     try:
         import cupy
+
         _have_cupy = True
     except ModuleNotFoundError:
         _have_cupy = False
     return _have_cupy
+
 
 IS_NEP18_ACTIVE = _is_nep18_active()
 _have_cupy = _have_cupy()

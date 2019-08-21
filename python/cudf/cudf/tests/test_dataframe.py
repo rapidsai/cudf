@@ -3095,6 +3095,7 @@ def test_df_values_device_property(data):
 
     np.testing.assert_array_equal(pmtr, gmtr)
 
+
 @pytest.mark.parametrize(
     "data",
     [
@@ -3105,7 +3106,6 @@ def test_df_values_device_property(data):
         {"A": [1, None, 3], "B": [1.0, 2.0, None]},
         {"A": [None, None, None], "B": [None, None, None]},
         {"A": [], "B": []},
-
     ],
 )
 def test_df_values_property(data):
@@ -3116,6 +3116,7 @@ def test_df_values_property(data):
     gmtr = gdf.values
 
     np.testing.assert_array_equal(pmtr, gmtr)
+
 
 def test_value_counts():
     pdf = pd.DataFrame(

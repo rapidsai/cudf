@@ -137,8 +137,10 @@ class Series(object):
         if not utils._have_cupy:
             raise ModuleNotFoundError("cuPY was not found.")
         import cupy
-        
-        if (is_categorical_dtype(self.dtype) or np.issubdtype(self.dtype, np.dtype("object"))):
+
+        if is_categorical_dtype(self.dtype) or np.issubdtype(
+            self.dtype, np.dtype("object")
+        ):
             raise TypeError("Data must be numeric")
 
         if self.data.mem.size == 0:
