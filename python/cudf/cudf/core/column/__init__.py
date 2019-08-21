@@ -1,3 +1,4 @@
+from cudf.core.column.categorical import CategoricalColumn  # noqa: F401
 from cudf.core.column.column import (  # noqa: F401
     Column,
     TypedColumnBase,
@@ -10,7 +11,6 @@ from cudf.core.column.column import (  # noqa: F401
     column_select_by_boolmask,
     column_select_by_position,
 )
-from cudf.core.column.numerical import NumericalColumn  # noqa: F401
 from cudf.core.column.datetime import DatetimeColumn  # noqa: F401
-from cudf.core.column.categorical import CategoricalColumn  # noqa: F401
+from cudf.core.column.numerical import NumericalColumn  # noqa: F401
 from cudf.core.column.string import StringColumn  # noqa: F401
