@@ -37,7 +37,7 @@ from cudf.dataframe.series import Series
 from cudf.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.utils import applyutils, cudautils, ioutils, queryutils, utils
 from cudf.utils.docutils import copy_docstring
-from cudf.utils.dtypes import is_categorical_dtype
+from cudf.utils.dtypes import is_categorical_dtype, is_datetime_dtype
 from cudf.window import Rolling
 
 
@@ -577,7 +577,11 @@ class DataFrame(object):
             )
         temp_mi_columns = output.columns
         for col in output._cols:
-            if self._cols[col].null_count > 0:
+            if (
+                self._cols[col].null_count > 0
+                and not self._cols[col].dtype == "O"
+                and not is_datetime_dtype(self._cols[col].dtype)
+            ):
                 output[col] = (
                     output._cols[col].astype("str").str.fillna("null")
                 )

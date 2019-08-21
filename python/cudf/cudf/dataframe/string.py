@@ -492,14 +492,6 @@ class StringColumn(columnops.TypedColumnBase):
         """
         return self._mask
 
-    def set_mask(self, mask, null_count=None):
-        mask_size = utils.calc_chunk_size(len(self.data), utils.mask_bitsize)
-        out_mask_arr = rmm.device_array(mask_size, dtype="int8")
-        out_mask_ptr = get_ctype_ptr(out_mask_arr)
-        self.data.set_null_bitmask(out_mask_ptr, bdevmem=True)
-        self._mask = Buffer(out_mask_arr)
-        return self
-
     @property
     def nvcategory(self):
         if self._nvcategory is None:

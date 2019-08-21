@@ -9,26 +9,25 @@ from hypothesis import given, settings
 import cudf
 from cudf.tests import utils
 
+repr_categories = [
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+    "datetime64[ns]",
+    "str",
+    "category",
+]
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ns]",
-        "str",
-        "category",
-    ],
-)
+
+@pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [0, 5, 10])
 def test_null_series(nrows, dtype):
     size = 5
     mask = utils.random_bitmask(size)
-    data = cudf.Series(np.random.randint(100, 1000, size))
+    data = cudf.Series(np.random.randint(0, 128, size))
     column = data.set_mask(mask)
     sr = cudf.Series(column).astype(dtype)
     ps = sr.to_pandas()
@@ -38,24 +37,33 @@ def test_null_series(nrows, dtype):
     psrepr = psrepr.replace("NaT", "null")
     psrepr = psrepr.replace("-1\n", "null\n")
     print(psrepr)
-    print(sr.__repr__())
+    print(sr)
     assert psrepr.split() == sr.__repr__().split()
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "str",
-        "category",
-    ],
-)
+@pytest.mark.parametrize("ncols", [1, 2, 3, 4, 5])
+def test_null_dataframe(ncols):
+    size = 5
+    gdf = cudf.DataFrame()
+    for idx, dtype in enumerate(repr_categories):
+        mask = utils.random_bitmask(size)
+        data = cudf.Series(np.random.randint(0, 128, size))
+        column = data.set_mask(mask)
+        sr = cudf.Series(column).astype(dtype)
+        gdf[dtype] = sr
+    pdf = gdf.to_pandas()
+    pd.options.display.max_columns = int(ncols)
+    pdfrepr = pdf.__repr__()
+    pdfrepr = pdfrepr.replace("NaN", "null")
+    pdfrepr = pdfrepr.replace("NaT", "null")
+    pdfrepr = pdfrepr.replace("-1", "null")
+    print(gdf)
+    print(pdf)
+    print(pdfrepr)
+    assert pdfrepr.split() == gdf.__repr__().split()
+
+
+@pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [0, 1, 2, 9, 10, 11, 19, 20, 21])
 def test_full_series(nrows, dtype):
     size = 20
@@ -65,20 +73,7 @@ def test_full_series(nrows, dtype):
     assert ps.__repr__() == sr.__repr__()
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "str",
-        "category",
-    ],
-)
+@pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
 @pytest.mark.parametrize("ncols", [0, 1, 2, 9, 20 / 2, 11, 20 - 1, 20, 20 + 1])
 def test_full_dataframe_20(dtype, nrows, ncols):
@@ -92,20 +87,7 @@ def test_full_dataframe_20(dtype, nrows, ncols):
     assert pdf._repr_latex_() == gdf._repr_latex_()
 
 
-@pytest.mark.parametrize(
-    "dtype",
-    [
-        "int8",
-        "int16",
-        "int32",
-        "int64",
-        "float32",
-        "float64",
-        "datetime64[ms]",
-        "str",
-        "category",
-    ],
-)
+@pytest.mark.parametrize("dtype", repr_categories)
 @pytest.mark.parametrize("nrows", [9, 21 / 2, 11, 21 - 1])
 @pytest.mark.parametrize("ncols", [9, 21 / 2, 11, 21 - 1])
 def test_full_dataframe_21(dtype, nrows, ncols):
