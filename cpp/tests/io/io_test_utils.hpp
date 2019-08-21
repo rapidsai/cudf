@@ -24,6 +24,7 @@
 
 #include <cuda_runtime.h>
 
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
 
 /**---------------------------------------------------------------------------*
@@ -36,14 +37,18 @@ bool checkFile(std::string const &fname);
  *---------------------------------------------------------------------------**/
 void checkStrColumn(gdf_column const *col, std::vector<std::string> const &refs);
 
-/**---------------------------------------------------------------------------*
- * @brief Generates the specified number of random values of type T.
- *---------------------------------------------------------------------------**/
-template <typename T> inline auto random_values(size_t size) {
+/**
+ * @brief Generates a vector of uniform random values of type T
+ **/
+template <typename T>
+inline auto random_values(size_t size) {
   std::vector<T> values(size);
 
-  using uniform_distribution = typename std::conditional<std::is_integral<T>::value, std::uniform_int_distribution<T>,
-                                                         std::uniform_real_distribution<T>>::type;
+  using uniform_distribution = typename std::conditional_t<
+      std::is_same<T, bool>::value, std::bernoulli_distribution,
+      std::conditional_t<std::is_floating_point<T>::value,
+                         std::uniform_real_distribution<T>,
+                         std::uniform_int_distribution<T>>>;
 
   static constexpr auto seed = 0xf00d;
   static std::mt19937 engine{seed};
@@ -52,6 +57,23 @@ template <typename T> inline auto random_values(size_t size) {
 
   return values;
 }
+
+/**
+ * @brief Specialization that generates a vector of uniform random bools
+ **/
+template <>
+inline auto random_values<cudf::bool8>(size_t size) {
+  std::vector<cudf::bool8> values(size);
+
+  static constexpr auto seed = 0xf00d;
+  static std::mt19937 engine{seed};
+  static std::bernoulli_distribution dist{};
+  std::generate_n(values.begin(), size,
+                  [&]() { return cudf::bool8{dist(engine)}; });
+
+  return values;
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Simple test internal helper class to transfer cudf column data
  * from device to host for test comparisons and debugging/development.
