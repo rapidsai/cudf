@@ -375,7 +375,11 @@ class DataFrame(_Frame, dd.core.DataFrame):
         return type(self)(self.dask, self._name, self._meta, divisions)
 
     def set_index(self, other, **kwargs):
-        kwargs.pop("shuffle", None)
+        if kwargs.pop("shuffle", "tasks") != "tasks":
+            raise ValueError(
+                "Dask-cudf only supports task based shuffling, got %s"
+                % kwargs["shuffle"]
+            )
         return super().set_index(other, shuffle="tasks", **kwargs)
 
     def reset_index(self, force=False, drop=False):
