@@ -44,6 +44,19 @@ class NumericalColumn(columnops.TypedColumnBase):
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
 
+    def __contains__(self, item):
+        """
+        Returns True if column contains item, else False.
+        """
+        item_found = False
+        try:
+            if self.find_first_value(item):
+                item_found = True
+        except ValueError:
+            """This means value not found"""
+
+        return item_found
+
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
             kwargs["dtype"] = kwargs["data"].dtype
@@ -79,7 +92,7 @@ class NumericalColumn(columnops.TypedColumnBase):
             if binop in ["mod", "floordiv"]:
                 if (
                     (np.isscalar(tmp) and (0 == tmp))
-                    or (is_zero_in_column(tmp))
+                    or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
                 ) and (tmp.dtype in int_dtypes):
                     out_dtype = np.dtype("float_")
             return numeric_column_binop(
@@ -494,28 +507,3 @@ def digitize(column, bins, right=False):
     bins_buf = Buffer(rmm.to_device(bins))
     bin_col = NumericalColumn(data=bins_buf, dtype=bins.dtype)
     return cpp_sort.digitize(column, bin_col, right)
-
-
-def is_zero_in_column(col=None):
-    """ Returns True if column contains 0 else False.
-
-    Paramters
-    ---------
-    col : NumericalColumn
-        Input column.
-
-    Returns
-    -------
-    True/False
-    """
-    found_zero_in_column = False
-    if isinstance(col, NumericalColumn):
-        try:
-            if col.find_first_value(0.0):
-                found_zero_in_column = True
-        except ValueError:
-            """This means value not found"""
-    else:
-        found_zero_in_column = False
-
-    return found_zero_in_column
