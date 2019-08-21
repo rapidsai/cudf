@@ -349,6 +349,7 @@ add_library(cudf
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
+            src/quantiles/groupby.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu

@@ -163,7 +163,6 @@ class DataFrameGroupBy(_Groupby):
         )
 
     def quantile(self, q=0.5, interpolation="linear"):
-        print("this will do chief")
         # Get Key_cols from _GroupbyHelper. It's generated at init.
         key_cols = self._groupby.key_columns
         # Do the things that'll make it generate the value columns

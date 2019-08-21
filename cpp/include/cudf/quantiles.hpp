@@ -26,7 +26,7 @@ group_quantiles(cudf::table const& key_table,
                 cudf::table const& val_table,
                 std::vector<double> const& quantiles,
                 gdf_quantile_method interpolation = GDF_QUANT_LINEAR,
-                gdf_context const& context = gdf_context{});
+                bool include_nulls = false);
 
 
 } // namespace cudf
