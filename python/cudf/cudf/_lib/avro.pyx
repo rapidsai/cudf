@@ -15,7 +15,6 @@ from libc.stdlib cimport free
 from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
 
-from cudf.core.column import Column
 from cudf.utils import ioutils
 from cudf._lib.nvtx import nvtx_range_push, nvtx_range_pop
 
