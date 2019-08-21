@@ -134,13 +134,9 @@ class Series(object):
 
     @property
     def values_device(self):
-        try:
-            import cupy
-            _have_cupy = True
-        except ImportError:
-            _have_cupy = False
-        if not _have_cupy:
+        if not utils._have_cupy:
             raise ModuleNotFoundError("cuPY was not found.")
+        import cupy
         
         if (is_categorical_dtype(self.dtype) or np.issubdtype(self.dtype, np.dtype("object"))):
             raise TypeError("Data must be numeric")
