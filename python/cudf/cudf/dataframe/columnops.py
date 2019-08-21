@@ -234,7 +234,6 @@ def column_empty(row_count, dtype, masked, categories=None):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
-        dtype = min_scalar_type(len(categories))
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
         dtype = "category"
