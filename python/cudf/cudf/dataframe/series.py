@@ -490,7 +490,6 @@ class Series(object):
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
-        print(lines)
         if is_categorical_dtype(preprocess.dtype):
             for idx, value in enumerate(preprocess):
                 if value is None:
