@@ -144,7 +144,7 @@ cudf::table drop_duplicates(const cudf::table& input_table,
  *
  * Given an input column, number of unique elements in this column is returned
  * 
- * @param input_column input column
+ * @param input_column The column whose unique elements will be counted.
  *
  * @return number of unique elements
  */
