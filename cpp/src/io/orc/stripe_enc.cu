@@ -523,7 +523,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                                                                | ((s->vals.u8[(idx8 + 4) & 0x7ff] & 1) << 3)
                                                                | ((s->vals.u8[(idx8 + 5) & 0x7ff] & 1) << 2)
                                                                | ((s->vals.u8[(idx8 + 6) & 0x7ff] & 1) << 1)
-                                                               | ((s->vals.u8[(idx8 + 6) & 0x7ff] & 1) << 0);
+                                                               | ((s->vals.u8[(idx8 + 7) & 0x7ff] & 1) << 0);
                 }
                 __syncthreads();
             }
