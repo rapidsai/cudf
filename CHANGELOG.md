@@ -25,6 +25,7 @@
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
+- PR #2658 Fix astype() for null categorical columns
 
 
 # cuDF 0.9.0 (Date TBD)
