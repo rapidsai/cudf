@@ -17,7 +17,7 @@
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
-
+- PR #2628 groupby_without_aggregation: Fix this function for cases when the input table don't have valids, the output table should not also have valids
 
 # cuDF 0.9.0 (Date TBD)
 
