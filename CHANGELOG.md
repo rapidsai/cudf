@@ -2,6 +2,7 @@
 
 ## New Features
 
+- PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
@@ -52,7 +53,6 @@
 - PR #2368 Full cudf+dask Parquet Support
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
-- PR #2423 Added `groupby.quantile()`
 - PR #2221 MultiIndex full indexing - Support iloc and wildcards for loc
 - PR #2429 Java support for getting length of strings in a ColumnVector
 - PR #2415 Add `value_counts` for series of any type

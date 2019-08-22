@@ -65,7 +65,7 @@ namespace{ // anonymous
 
     CUDF_EXPECTS(interpolation < N_GDF_QUANT_METHODS &&
                  interpolation >= 0,
-      "Invalid quntile interpolation method");
+      "Invalid quantile interpolation method");
 
     result = cudf::detail::select_quantile(devarr, n, quant, interpolation);
     

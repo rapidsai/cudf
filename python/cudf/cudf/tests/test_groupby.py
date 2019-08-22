@@ -798,8 +798,8 @@ def test_groupby_index_type():
 )
 def test_groupby_quantile(interpolation):
     raw_data = {
-        "x": [0, 1, 0, 1, 0, 1, None, 1],
-        "y": [25000., 35000, 45000, None, 60000, 70000, 65000, 36000],
+        "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
+        "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
     }
     pdf = pd.DataFrame(raw_data)
     gdf = DataFrame.from_pandas(pdf)
