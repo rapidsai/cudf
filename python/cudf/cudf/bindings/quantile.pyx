@@ -94,16 +94,6 @@ def apply_group_quantile(key_columns, value_columns, quant, method):
         quant = [quant]
     cdef vector[double] q = quant
     cdef gdf_quantile_method c_interpolation = get_quantile_method(method)
-    cdef gdf_context* ctx = create_context_view(
-        0,
-        'sort',
-        0,
-        0,
-        0,
-        'null_as_largest'
-    )
-
-    ctx.flag_groupby_include_nulls = False
 
     cdef pair[cudf_table, cudf_table] c_result
     with nogil:
@@ -111,13 +101,12 @@ def apply_group_quantile(key_columns, value_columns, quant, method):
                                    c_val[0],
                                    q,
                                    c_interpolation,
-                                   ctx[0])
+                                   False)
 
     result_key_cols = columns_from_table(&c_result.first)
     result_val_cols = columns_from_table(&c_result.second)
 
     free(c_t)
     free(c_val)
-    free(ctx)
 
     return (result_key_cols, result_val_cols)

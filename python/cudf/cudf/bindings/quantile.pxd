@@ -17,5 +17,5 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         const cudf_table& val_table,
         const vector[double]& quantiles,
         gdf_quantile_method interpolation,
-        const gdf_context& context
+        bool ignore_nulls
     ) except +
