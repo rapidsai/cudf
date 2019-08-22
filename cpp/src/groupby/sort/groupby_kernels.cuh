@@ -254,8 +254,6 @@ __global__ void aggregate_all_rows(
       continue;
     }
     auto group_index = group_labels[i];
-    printf("row: %d | group_id: %d \n", i, group_index);
-
     aggregate_row<values_have_nulls>(output_values, group_index,
                                       input_values, key_sorted_order[i], ops);
     i += blockDim.x * gridDim.x;

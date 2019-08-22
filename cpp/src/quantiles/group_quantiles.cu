@@ -16,7 +16,7 @@
 
 #include "groupby.hpp"
 
-#include <groupby/sort/quantiles/quantiles.hpp>
+#include <quantiles/quantiles.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
@@ -99,13 +99,8 @@ group_quantiles(cudf::table const& key_table,
     std::tie(sorted_values, group_sizes) =
       gb_obj.sort_values(*(val_table.get_column(i)));
 
-    detail::print(group_sizes, "grp siz");
-    // detail::print<double>(sorted_values, "sorted vals");
-
     auto& result_col = *(result_table.get_column(i));
 
-    // Go forth and calculate the quantiles
-    // TODO: currently ignoring nulls
     type_dispatcher(sorted_values.dtype, quantiles_functor{},
                     sorted_values, group_indices, group_sizes, result_col,
                     dv_quantiles, interpolation);
