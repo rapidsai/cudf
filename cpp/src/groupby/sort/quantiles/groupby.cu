@@ -48,6 +48,16 @@ struct transform_row_eq_comparator {
   }
 };
 
+struct permutation_label_setter {
+  gdf_size_type* group_labels_ptr;
+  gdf_size_type* group_ids_ptr;
+
+  CUDA_DEVICE_CALLABLE
+  void operator() (gdf_size_type i) { 
+    group_labels_ptr[group_ids_ptr[i]] = 1;
+  }
+};
+
 } // namespace anonymous
 
 
@@ -122,9 +132,7 @@ void groupby::set_group_labels() {
   auto group_ids_ptr = _group_ids.data().get();
   thrust::for_each_n(thrust::make_counting_iterator(1),
                     _group_ids.size() - 1,
-                    [=] __device__ (gdf_size_type i) { 
-                      group_labels_ptr[group_ids_ptr[i]] = 1;
-                    });
+                    permutation_label_setter{group_labels_ptr, group_ids_ptr});
   thrust::inclusive_scan(thrust::device,
                         _group_labels.begin(),
                         _group_labels.end(),

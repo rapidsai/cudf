@@ -92,7 +92,7 @@ struct groupby {
   }
   //////////////////////////////////////////////////////////////////////////
 
-//  private:
+ private:
   void set_key_sort_order();
 
   void set_group_ids();
