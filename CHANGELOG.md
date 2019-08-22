@@ -11,6 +11,9 @@
 - PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
 - PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2588 Update Series.append documentation
+- PR #2632 Replace dask-cudf set_index code with upstream
+
 
 ## Bug Fixes
 
@@ -19,11 +22,14 @@
 - PR #2614 Update Java version to match
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
+- PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
 - PR #2649 Fix groupby issue resulting from column_empty bug
+- PR #2658 Fix astype() for null categorical columns
+- PR #2660 fix column string category and timeunit concat in the java API
 
 
 # cuDF 0.9.0 (Date TBD)
