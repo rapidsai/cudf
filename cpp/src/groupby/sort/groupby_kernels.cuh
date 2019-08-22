@@ -239,27 +239,25 @@ __device__ gdf_size_type  get_group_index(
 
 template <bool skip_rows_with_nulls, bool values_have_nulls>
 __global__ void aggregate_all_rows(
-    device_table input_keys, 
+    gdf_size_type num_rows, 
     device_table input_values,
     device_table output_values,
-    gdf_size_type* sorted_indices, 
-    gdf_size_type* group_indices, 
-    gdf_size_type group_indices_size,
+    gdf_size_type* key_sorted_order, 
+    gdf_size_type* group_labels, 
     operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  while (i < input_keys.num_rows()) {
-    if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, i)) {
+  while (i < num_rows) {
+    if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
       i += blockDim.x * gridDim.x;
       continue;
     }
-
-    auto group_index = get_group_index(group_indices, group_indices_size, i);
+    auto group_index = group_labels[i];
     printf("row: %d | group_id: %d \n", i, group_index);
 
     aggregate_row<values_have_nulls>(output_values, group_index,
-                                      input_values, sorted_indices[i], ops);
+                                      input_values, key_sorted_order[i], ops);
     i += blockDim.x * gridDim.x;
   }
 }

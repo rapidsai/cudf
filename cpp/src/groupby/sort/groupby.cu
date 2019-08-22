@@ -39,6 +39,9 @@
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
 
+// TODO: replace this quantiles includes and wait until they are merged  
+#include "quantiles/groupby.hpp"
+
 using namespace cudf::groupby::common;
 
 namespace cudf {
@@ -47,74 +50,7 @@ namespace sort {
 
 namespace {
 
-cudf::table compose_inputs(cudf::table input_table, gdf_column* col) {
-  std::vector<gdf_column*> output(input_table.num_columns());
-  std::transform(input_table.begin(), input_table.end(), output.begin(), [](const gdf_column *item){
-    return (gdf_column *)item;
-  });
-  output.push_back(col);
-
-  gdf_column **group_by_input_key = output.data();
-  return cudf::table{group_by_input_key, input_table.num_columns() + 1};
-}
-
-cudf::table compose_output_keys(cudf::table input_table) {
-  std::vector<gdf_column*> output(input_table.num_columns() - 1);
-  std::transform(input_table.begin(), input_table.end() - 1, output.begin(), [](const gdf_column *item){
-    return (gdf_column *)item;
-  });
-  return cudf::table {output};
-}
-
-rmm::device_vector<gdf_size_type> get_last_column (cudf::table current_table) {
-  auto num_column = current_table.num_columns();
-  gdf_column * sorted_column = current_table.get_column(num_column - 1);
-  rmm::device_vector<gdf_size_type> returned_vector(current_table.num_rows());
-  cudaMemcpy(returned_vector.data().get(), sorted_column->data, sorted_column->size * sizeof(gdf_size_type), cudaMemcpyDeviceToDevice);
-  return returned_vector;
-}
-
-std::pair<cudf::table, gdf_column> compute_sort_groupby_wo_agg(cudf::table const& input_keys,
-                            Options options,
-                            rmm::device_vector<gdf_size_type> &d_sorted_indices,
-                            cudaStream_t stream) {
-  gdf_context context;
-  auto ignore_null_keys = options.ignore_null_keys;
-  if (not ignore_null_keys) { // SQL
-    context.flag_groupby_include_nulls = true;
-    context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-  } else { // PANDAS
-    context.flag_groupby_include_nulls = false;
-    context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-  }
-
-  std::vector<int> groupby_col_indices;
-  for (gdf_size_type i = 0; i < input_keys.num_columns(); i++)
-    groupby_col_indices.push_back(i);
-
-  cudf::table sorted_keys_table;
-  gdf_column group_indices_col;
-
-  auto nrows = input_keys.num_rows();
-  rmm::device_vector<gdf_size_type> d_seq_indices_values(nrows);
-  thrust::sequence(d_seq_indices_values.begin(), d_seq_indices_values.end(), 0, 1);
-
-  gdf_column seq_indices_col{};
-  CUDF_TRY(gdf_column_view(&seq_indices_col,
-                           (void *)(d_seq_indices_values.data().get()), nullptr,
-                           nrows, GDF_INT32));
-
-  auto input_table = compose_inputs(input_keys, &seq_indices_col);
-  std::tie(sorted_keys_table,
-                        group_indices_col) = gdf_group_by_without_aggregations(input_table,
-                                                                          groupby_col_indices.size(),
-                                                                          groupby_col_indices.data(),
-                                                                          &context);
-  cudf::table output_keys = compose_output_keys(sorted_keys_table);
-  d_sorted_indices = get_last_column(sorted_keys_table);
-  return std::make_pair(output_keys, group_indices_col);
-}
-
+using index_vector = rmm::device_vector<gdf_size_type>;
 
 struct median_result_type {
   template <typename SourceType>
@@ -122,151 +58,13 @@ struct median_result_type {
     return cudf::gdf_dtype_of<target_type_t<SourceType, MEDIAN>>();  
   }
 };
-
-template <typename T>
-struct compute_median_operator {
-    gdf_size_type* map; // keys_sorted_indices
-    gdf_size_type* map_group; // value_col_sorted_indices
-    T* values;
-    gdf_index_type* group_indices;
-    gdf_index_type* group_sizes;
-
-  __device__ inline T operator()(gdf_index_type i) {
-    gdf_size_type num_elements = group_sizes[i];
-    gdf_size_type index = group_indices[i];
-    gdf_size_type index_medium = index + num_elements / 2;
-    return values[ map[ map_group[index_medium] ] ];
-  }
-};
-
-struct compute_group_size_operator {
-  gdf_index_type * group_indices;
-  gdf_index_type group_indices_size;
-  gdf_index_type values_size;
-
-  __device__ inline gdf_size_type operator () (gdf_size_type index){
-    gdf_size_type num_elements;
-    if (index + 1 == group_indices_size)
-      num_elements =  values_size - group_indices[index];
-    else
-      num_elements =  group_indices[index+1] - group_indices[index];
-    return num_elements;
-  }
-};
-
-struct dispath_mediam_forwarder {
-  template <typename T>
-  bool operator()(const gdf_column *input_column, gdf_column *output_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, const gdf_column& group_indices_col, cudaStream_t stream) const {
-
-    rmm::device_vector<gdf_size_type> group_sizes(group_indices_col.size);
-    compute_group_size_operator transform_op {(gdf_index_type *)group_indices_col.data,group_indices_col.size, input_column->size};
-    thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(group_indices_col.size)), group_sizes.data().get(), transform_op);
-
-    compute_median_operator<T> op{sorted_indices.data().get(), map_indices_group.data().get(), (T*)input_column->data, (gdf_index_type *)group_indices_col.data, group_sizes.data().get()};
-    thrust::transform(rmm::exec_policy(stream)->on(stream), thrust::make_counting_iterator(gdf_size_type(0)), thrust::make_counting_iterator(gdf_size_type(group_indices_col.size)), (T *)output_column->data, op);
-    return true;
-  }
-};
-
-// value_col_indices_group
-gdf_column* compute_median(const gdf_column& group_indices_col,  const gdf_column &input_column, rmm::device_vector<gdf_size_type> & map_indices_group, rmm::device_vector<gdf_size_type> & sorted_indices, cudaStream_t stream) {
-  auto ngroups = group_indices_col.size;
-  gdf_column* median = new gdf_column{};
-  median->dtype = cudf::type_dispatcher(input_column.dtype, median_result_type{});
-  const auto byte_width = (input_column.dtype == GDF_STRING)
-                          ? sizeof(std::pair<const char *, size_t>)
-                          : cudf::size_of(input_column.dtype);
-  median->size = ngroups;
-  RMM_TRY(RMM_ALLOC(&median->data, byte_width * ngroups, stream));
-  median->valid = nullptr;
-
-  if (cudf::is_nullable(input_column)) { 
-    // TODO: how to handle nulls?
-    // RMM_TRY(RMM_ALLOC(
-    //     &median->valid,
-    //     sizeof(gdf_size_type) * gdf_valid_allocation_size(ngroups), stream));
-  }
-  cudf::type_dispatcher(input_column.dtype, dispath_mediam_forwarder{}, &input_column, median, map_indices_group, sorted_indices, group_indices_col, stream);
-  return median;
-}
-
-template <bool nullable = true>
-struct row_group_inequality_comparator
-{
-  row_inequality_comparator<nullable> cmp;
-  gdf_size_type *index_map;
-  gdf_size_type* group_indices;
-  gdf_size_type group_indices_size;
-
-    __device__ inline bool operator()(gdf_index_type x, gdf_index_type y) const
-  {
-    gdf_index_type group_id_x = get_group_index(group_indices, group_indices_size, x);
-    gdf_index_type group_id_y = get_group_index(group_indices, group_indices_size, y);
-    if(group_id_x < group_id_y) {
-      return true;
-    }else if (group_id_x == group_id_y) {
-      return cmp(index_map[x], index_map[y]);
-    }
-    return false;
-  }
-};
-
-gdf_error gdf_order_by_groups(const gdf_column& group_indices_col,
-                       table input_keys,
-                       gdf_column const* const* cols, // value column
-                       int8_t* asc_desc,
-                       size_t num_inputs,
-                       gdf_column* output_indices,
-                       rmm::device_vector<gdf_size_type> &d_index_map, // keys_sorted_indices
-                       Options options,
-                       cudaStream_t stream)
-{
-  gdf_context context;
-  auto ignore_null_keys = options.ignore_null_keys;
-  if (not ignore_null_keys) { // SQL
-    context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-  } else { // PANDAS
-    context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-  }
-
-  GDF_REQUIRE(cols != nullptr && output_indices != nullptr, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(cols[0]->size == output_indices->size, GDF_COLUMN_SIZE_MISMATCH);
-  /* NOTE: providing support for indexes to be multiple different types explodes compilation time, such that it become infeasible */
-  GDF_REQUIRE(output_indices->dtype == GDF_INT32, GDF_UNSUPPORTED_DTYPE);
-
-  bool nulls_are_smallest = false;
-  if (context.flag_null_sort_behavior == GDF_NULL_AS_SMALLEST) {
-  /* When sorting NULLS will be treated as the smallest number */
-    nulls_are_smallest = true;
-  }
-  gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
-  gdf_size_type nrows = cols[0]->size;
-
-  thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
-  auto table = device_table::create(num_inputs, cols, stream);
-  bool nullable = table.get()->has_nulls();
-  if (nullable) {
-    auto ineq_op = row_inequality_comparator<true>(*table, nulls_are_smallest, asc_desc);
-    row_group_inequality_comparator<true> cmp {ineq_op, d_index_map.data().get(), (gdf_size_type*)group_indices_col.data, group_indices_col.size};
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  cmp);
-  } else {
-    auto ineq_op = row_inequality_comparator<false>(*table, nulls_are_smallest, asc_desc);
-    row_group_inequality_comparator<false> cmp {ineq_op, d_index_map.data().get(), (gdf_size_type*)group_indices_col.data, group_indices_col.size};
-    thrust::sort(rmm::exec_policy(stream)->on(stream),
-                  d_indx, d_indx+nrows,
-                  cmp);
-  }
-  return GDF_SUCCESS;
-}
-
+  
 cudf::table compute_remain_stats_requests(
     cudf::table current_output_values,
     std::vector<AggRequestType> const& original_requests,
     table input_keys,
     const gdf_column& group_indices_col,
-    rmm::device_vector<gdf_size_type> d_sorted_indices,
+    rmm::device_vector<gdf_size_type> key_sorted_order,
     Options options,
     cudaStream_t stream) {
 
@@ -278,18 +76,19 @@ cudf::table compute_remain_stats_requests(
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
     if (element.second == MEDIAN) {
-      gdf_column * value_col = element.first;
+      // gdf_column * value_col = element.first;
+      // auto nrows = input_keys.num_rows();
+      
 
-      auto nrows = input_keys.num_rows();
-      rmm::device_vector<gdf_size_type> value_col_sorted_indices_vector(thrust::make_counting_iterator(int(0)),
-                                        thrust::make_counting_iterator(int(nrows)));
+      // rmm::device_vector<gdf_size_type> value_col_sorted_indices_vector(thrust::make_counting_iterator(int(0)),
+      //                                   thrust::make_counting_iterator(int(nrows)));
 
-      gdf_column value_col_sorted_indices{};
-      CUDF_TRY(gdf_column_view(&value_col_sorted_indices,
-                              (void*)(value_col_sorted_indices_vector.data().get()), nullptr, nrows,
-                              GDF_INT32));
-      gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &value_col_sorted_indices, d_sorted_indices, options, stream);
-      final_value_columns[i] = compute_median(group_indices_col, *value_col, value_col_sorted_indices_vector, d_sorted_indices, stream);
+      // gdf_column value_col_sorted_indices{};
+      // CUDF_TRY(gdf_column_view(&value_col_sorted_indices,
+      //                         (void*)(value_col_sorted_indices_vector.data().get()), nullptr, nrows,
+      //                         GDF_INT32));
+      // // gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &value_col_sorted_indices, key_sorted_order, options, stream);
+      // final_value_columns[i] = compute_median(group_indices_col, *value_col, value_col_sorted_indices_vector, key_sorted_order, stream);
     }
   }
   return cudf::table{final_value_columns};
@@ -299,18 +98,18 @@ template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& input_values,
                           std::vector<operators> const& input_ops, Options options,
                           cudaStream_t stream) {
-  cudf::table sorted_keys_table;
-  gdf_column group_indices_col;
+  auto include_nulls = not options.ignore_null_keys;
+  auto groupby = cudf::sort::groupby(input_keys, include_nulls);
+  index_vector group_indices = groupby.group_indices();
 
-  rmm::device_vector<gdf_size_type> d_sorted_indices;
-  std::tie(sorted_keys_table,
-                          group_indices_col) = compute_sort_groupby_wo_agg(input_keys, options, d_sorted_indices, stream);
-
-  if (sorted_keys_table.num_rows() == 0) {
+  if (group_indices.size() == 0) {
     return std::make_pair(
         cudf::empty_like(input_keys),
         cudf::table(0, target_dtypes(column_dtypes(input_values), input_ops), column_dtype_infos(input_values)));
   }
+  gdf_column key_sorted_order = groupby.key_sorted_order();
+  index_vector group_labels = groupby.group_labels();
+  gdf_size_type num_groups = (gdf_size_type)group_indices.size();
 
   std::vector<AggRequestType> original_requests(input_values.num_columns());
   std::transform(input_values.begin(), input_values.end(), input_ops.begin(),
@@ -336,41 +135,30 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
     cudf::table simple_values_table{simple_values_columns};
 
     cudf::table simple_output_values{
-        group_indices_col.size, target_dtypes(column_dtypes(simple_values_table), simple_operators),
+        num_groups, target_dtypes(column_dtypes(simple_values_table), simple_operators),
         column_dtype_infos(simple_values_table), values_have_nulls, false, stream};
 
     initialize_with_identity(simple_output_values, simple_operators, stream);
 
-    auto d_input_keys = device_table::create(sorted_keys_table);
     auto d_input_values = device_table::create(simple_values_table);
     auto d_output_values = device_table::create(simple_output_values, stream);
     rmm::device_vector<operators> d_ops(simple_operators);
 
-    auto row_bitmask = cudf::row_bitmask(sorted_keys_table, stream);
+    auto row_bitmask = cudf::row_bitmask(input_keys, stream);
 
-    cudf::util::cuda::grid_config_1d grid_params{sorted_keys_table.num_rows(), 256};
+    cudf::util::cuda::grid_config_1d grid_params{input_keys.num_rows(), 256};
 
     cudf::groupby::sort::aggregate_all_rows<keys_have_nulls, values_have_nulls><<<
         grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
-        *d_input_keys, *d_input_values, *d_output_values, d_sorted_indices.data().get(),
-        (gdf_index_type *)group_indices_col.data, group_indices_col.size,
+        input_keys.num_rows(), *d_input_values, *d_output_values, (gdf_index_type *)key_sorted_order.data,
+        group_labels.data().get(),
         d_ops.data().get(), row_bitmask.data().get());
 
     current_output_values = compute_original_requests(
         original_requests, simple_requests, simple_output_values, stream);
   }
-  cudf::table final_output_values = compute_remain_stats_requests(current_output_values, original_requests,  input_keys, group_indices_col, d_sorted_indices, options, stream);
-
-  cudf::table destination_table(group_indices_col.size,
-                                cudf::column_dtypes(sorted_keys_table),
-                                cudf::column_dtype_infos(sorted_keys_table),
-                                keys_have_nulls);
-
-  cudf::gather(&sorted_keys_table, (gdf_index_type *)group_indices_col.data,
-              &destination_table);
-
-  // FIX: destroy temporal tables, and temporal gdf_columns!
-  return std::make_pair(destination_table, final_output_values);
+  // cudf::table final_output_values = compute_remain_stats_requests(current_output_values, original_requests,  input_keys, group_indices_col, key_sorted_order, options, stream);
+  return std::make_pair(groupby.unique_keys(), current_output_values);
 }
 
 /**---------------------------------------------------------------------------*
