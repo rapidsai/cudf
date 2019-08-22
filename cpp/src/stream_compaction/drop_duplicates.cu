@@ -197,7 +197,7 @@ gdf_size_type unique_count(gdf_column& input_column)
   const cudf::table key_columns(cols, 1);
   gdf_size_type unique_count; 
   std::tie(std::ignore, unique_count) =
-    detail::get_unique_ordered_indices(key_columns, duplicate_keep_option::KEEP_FIRST, true);
+    detail::get_unique_ordered_indices({&input_column}, duplicate_keep_option::KEEP_FIRST, true);
   return unique_count;
 }
 
