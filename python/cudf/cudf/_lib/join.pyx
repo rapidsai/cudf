@@ -5,7 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-# Copyright (c) 2018, NVIDIA CORPORATION.
 from cudf._lib.includes.join cimport *
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
