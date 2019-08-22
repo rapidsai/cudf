@@ -168,7 +168,6 @@ class OrcMetadata {
     if (stripe != -1) {
       CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
       selection.emplace_back(&ff.stripes[stripe], nullptr);
-      row_start = 0;
       if (row_count < 0) {
         row_count = ff.stripes[stripe].numberOfRows;
       } else {
