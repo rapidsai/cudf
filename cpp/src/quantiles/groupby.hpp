@@ -29,17 +29,17 @@ namespace detail {
 
 template <typename T>
 void print(rmm::device_vector<T> const& d_vec, std::string label = "") {
-  // thrust::host_vector<T> h_vec = d_vec;
-  // printf("%s \t", label.c_str());
-  // for (auto &&i : h_vec)  std::cout << i << " ";
-  // printf("\n");
+  thrust::host_vector<T> h_vec = d_vec;
+  printf("%s \t", label.c_str());
+  for (auto &&i : h_vec)  std::cout << i << " ";
+  printf("\n");
 }
 
 template <typename T>
 void print(gdf_column const& col, std::string label = "") {
-  // auto col_data = reinterpret_cast<T*>(col.data);
-  // auto d_vec = rmm::device_vector<T>(col_data, col_data+col.size);
-  // print(d_vec, label);
+  auto col_data = reinterpret_cast<T*>(col.data);
+  auto d_vec = rmm::device_vector<T>(col_data, col_data+col.size);
+  print(d_vec, label);
 }
 
 struct groupby {
@@ -55,21 +55,15 @@ struct groupby {
                                         false);
 
     set_key_sort_order();
-    print<gdf_size_type>(_key_sorted_order, "idx col");
     set_group_ids();
-    print(_group_ids, "group ids");
     set_group_labels();
-    print(_group_labels, "grp labels");
     set_unsorted_labels();
-    print<gdf_size_type>(_unsorted_labels, "rev labels");
   };
 
   ~groupby() {
     gdf_column_free(&_key_sorted_order);
     gdf_column_free(&_unsorted_labels);
   }
-
-  // TODO: destructor that frees _key_sorted_order and _unsorted_labels
 
   std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
   sort_values(gdf_column const& val_col);
@@ -80,7 +74,7 @@ struct groupby {
 
   index_vector& group_indices() { return _group_ids; }
 
-//  private:
+ private:
   void set_key_sort_order();
 
   void set_group_ids();
