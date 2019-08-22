@@ -22,13 +22,6 @@ import collections.abc as abc
 import os
 import errno
 
-from cudf._lib.includes.csv cimport (
-    reader as csv_reader,
-    reader_options as csv_reader_options,
-    csv_write_arg,
-    write_csv as cpp_write_csv
-)
-
 cimport cudf._lib.includes.csv as cpp_csv
 
 
@@ -102,7 +95,7 @@ cpdef read_csv(
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
-    cdef csv_reader_options args = csv_reader_options()
+    cdef cpp_csv.reader_options args = cpp_csv.reader_options()
 
     # Populate args struct
     if is_file_like(filepath_or_buffer):
@@ -214,9 +207,9 @@ cpdef read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    cdef unique_ptr[csv_reader] reader
+    cdef unique_ptr[cpp_csv.reader] reader
     with nogil:
-        reader = unique_ptr[csv_reader](new csv_reader(args))
+        reader = unique_ptr[cpp_csv.reader](new cpp_csv.reader(args))
 
     cdef cudf_table c_out_table
     if byte_range is not None:
@@ -270,7 +263,7 @@ cpdef write_csv(
     from cudf.core.series import Series
 
     cdef gdf_column* c_col
-    cdef csv_write_arg csv_writer = csv_write_arg()
+    cdef cpp_csv.csv_write_arg csv_writer = cpp_csv.csv_write_arg()
 
     path = str(os.path.expanduser(str(path))).encode()
     csv_writer.filepath = path
@@ -322,7 +315,7 @@ cpdef write_csv(
 
     # Call write_csv
     with nogil:
-        result = cpp_write_csv(&csv_writer)
+        result = cpp_csv.write_csv(&csv_writer)
 
     check_gdf_error(result)
 
