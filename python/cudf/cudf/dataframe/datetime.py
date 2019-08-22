@@ -49,6 +49,15 @@ class DatetimeColumn(columnops.TypedColumnBase):
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
+    def __contains__(self, item):
+        print ("RGSL : In date and time")
+        try:
+            item = pd.to_datetime(item)
+            item = columnops.as_column(item).as_numerical[0]
+            return (item in self.as_numerical)
+        except:
+            return False
+
     def serialize(self):
         header, frames = super(DatetimeColumn, self).serialize()
         header["type"] = pickle.dumps(type(self))

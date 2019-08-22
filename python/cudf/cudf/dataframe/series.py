@@ -128,6 +128,11 @@ class Series(object):
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
 
+    def __contains__ (self, item):
+        print ("In series")
+        print ("Type of column", type(self._column))
+        return item in self._column
+
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)

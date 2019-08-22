@@ -43,6 +43,11 @@ class Index(object):
         header["frame_count"] = len(frames)
         return header, frames
 
+    def __contains__(self, item):
+        print ("In index")
+        print (type(self._values))
+        return (item in self._values)
+
     @classmethod
     def deserialize(cls, header, frames):
         """
@@ -381,6 +386,10 @@ class RangeIndex(Index):
         self.name = name
         self._cached_values = None
 
+    def __contains__(self, item):
+        print ("In range index")
+        return (item in self._values)
+
     def copy(self, deep=True):
         if deep:
             result = deepcopy(self)
@@ -604,6 +613,10 @@ class GenericIndex(Index):
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
 
+    def __contains__(self, item):
+        print ("In genindex")
+        return (item in self._values)
+
     def copy(self, deep=True):
         if deep:
             result = deepcopy(self)
@@ -750,6 +763,10 @@ class DatetimeIndex(GenericIndex):
         super(DatetimeIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
 
+    def __contains__(self, item):
+        print ("DatetimeIndex")
+        return item in self._values
+
     @property
     def year(self):
         return self.get_dt_field("year")
@@ -828,6 +845,10 @@ class CategoricalIndex(GenericIndex):
         super(CategoricalIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
 
+    def __contains__(self, item):
+        print ("Categorical index")
+        return item in self._values
+
     @property
     def names(self):
         return [self._values.name]
@@ -862,6 +883,10 @@ class StringIndex(GenericIndex):
             )
         super(StringIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
+
+    def __contains__(self, item):
+        print ("String index")
+        return item in self._values
 
     def to_pandas(self):
         return pd.Index(self.values, name=self.name, dtype="object")

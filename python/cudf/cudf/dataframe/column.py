@@ -19,6 +19,7 @@ from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
+from cudf.dataframe import columnops
 
 
 class Column(object):
@@ -197,6 +198,11 @@ class Column(object):
             assert mask.size * utils.mask_bitsize >= len(self)
 
         self._update_null_count(null_count)
+
+    def __contains__(self, item):
+       print ("In columns")
+       print ("Type of data", type(self._data))
+       return item in columnops.as_column(self._data) 
 
     def equals(self, other):
         if self is other:

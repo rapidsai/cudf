@@ -463,6 +463,21 @@ class StringColumn(columnops.TypedColumnBase):
         self._nvcategory = None
         self._indices = None
 
+    def __contains__(self, item):
+        print ("In string contains")
+        found = False
+        try:
+            if (True in self.str().contains(f"^{item}$")._column):
+                print (self.str().contains(f"^{item}$")._column)
+                print ("found")
+                found = True
+        except:
+            "column doesn't have the item"
+            print ("didn't find")
+
+        return found
+            
+
     def __reduce__(self):
         cpumem = self.to_arrow()
         return columnops.as_column, (cpumem, False, np.dtype("object"))
