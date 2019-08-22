@@ -25,7 +25,7 @@
 
 namespace cudf {
 
-namespace sort {
+namespace detail {
 
 template <typename T>
 void print(rmm::device_vector<T> const& d_vec, std::string label = "") {
@@ -55,25 +55,19 @@ struct groupby {
                                         false);
 
     set_key_sort_order();
-    if (_num_keys != 0) {
-      print<gdf_size_type>(_key_sorted_order, "idx col");
+    if (_num_keys != 0) { // check if the number of groups is zero
       set_group_ids();
-      print(_group_ids, "group ids");
       set_group_labels();
-      print(_group_labels, "grp labels");
       set_unsorted_labels();
-      print<gdf_size_type>(_unsorted_labels, "rev labels");
     }
   };
 
   ~groupby() {
     gdf_column_free(&_key_sorted_order);
-    if (_num_keys != 0) {
+    if (num_groups() != 0) {
       gdf_column_free(&_unsorted_labels);
     }
   }
-
-  // TODO: destructor that frees _key_sorted_order and _unsorted_labels
 
   std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
   sort_values(gdf_column const& val_col);
@@ -84,13 +78,9 @@ struct groupby {
 
   index_vector& group_indices() { return _group_ids; }
 
-  //////////////////////////////////////////////////////////////////////////
   gdf_column         key_sorted_order() { return _key_sorted_order; }
   
-  index_vector       group_labels() {
-    return _group_labels;
-  }
-  //////////////////////////////////////////////////////////////////////////
+  index_vector       group_labels() { return _group_labels; }
 
  private:
   void set_key_sort_order();
@@ -115,6 +105,6 @@ struct groupby {
 
 };
 
-} // namespace sort
+} // namespace detail
   
 } // namespace cudf

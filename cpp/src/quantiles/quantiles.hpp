@@ -19,11 +19,14 @@
 //Quantile (percentile) functionality
 
 #include <cudf/cudf.h>
+#include <utilities/cudf_utils.h>
+#include <utilities/release_assert.cuh>
 
 namespace cudf {
 namespace interpolate {
 
 template <typename T_out, typename T_in>
+CUDA_HOST_DEVICE_CALLABLE
 void linear(T_out& result, T_in lhs, T_in rhs, double frac)
 {
     // TODO: safe operation to avoid overflow/underflow
@@ -43,6 +46,7 @@ void linear(T_out& result, T_in lhs, T_in rhs, double frac)
 
 
 template <typename T_out, typename T_in>
+CUDA_HOST_DEVICE_CALLABLE
 void midpoint(T_out& result, T_in lhs, T_in rhs)
 {
     // TODO: try std::midpoint (C++20) if available
@@ -56,6 +60,7 @@ void midpoint(T_out& result, T_in lhs, T_in rhs)
 // @overloads
 
 template <typename T_out>
+CUDA_HOST_DEVICE_CALLABLE
 void midpoint(T_out& result, int64_t lhs, int64_t rhs)
 {
     // caring to avoid integer overflow and underflow between int64_t and T_out( double )
@@ -67,6 +72,7 @@ void midpoint(T_out& result, int64_t lhs, int64_t rhs)
 
 
 template <>
+CUDA_HOST_DEVICE_CALLABLE
 void midpoint(int64_t& result, int64_t lhs, int64_t rhs)
 {
     // caring to avoid integer overflow
@@ -80,5 +86,99 @@ void midpoint(int64_t& result, int64_t lhs, int64_t rhs)
 }
 
 } // end of namespace interpolate
+
+namespace detail {
+
+struct QuantileIndex {
+    gdf_size_type lower_bound;
+    gdf_size_type upper_bound;
+    gdf_size_type nearest;
+    double fraction;
+
+    CUDA_HOST_DEVICE_CALLABLE
+    QuantileIndex(gdf_size_type length, double quant)
+    {
+        // clamp quant value.
+        // Todo: use std::clamp if c++17 is supported.
+        quant = std::min(std::max(quant, 0.0), 1.0);
+
+        // since gdf_size_type is int32_t, there is no underflow/overflow
+        double val = quant*(length -1);
+        lower_bound = std::floor(val);
+        upper_bound = static_cast<size_t>(std::ceil(val));
+        nearest = static_cast<size_t>(std::nearbyint(val));
+        fraction = val - lower_bound;
+    }
+};
+
+template<typename T>
+void singleMemcpy(T& res, T const* input)
+{
+    //TODO: async with streams?
+    CUDA_TRY( cudaMemcpy(&res, input, sizeof(T), cudaMemcpyDeviceToHost) );
+}
+
+template <typename T>
+CUDA_HOST_DEVICE_CALLABLE
+void get_array_value(T& result, T const* devarr, gdf_size_type location)
+{
+#if defined(__CUDA_ARCH__)
+    result = devarr[location];
+#else
+    singleMemcpy(result, devarr + location);
+#endif
+}
+
+template <typename T,
+          typename RetT = double>
+CUDA_HOST_DEVICE_CALLABLE
+RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
+                       gdf_quantile_method interpolation)
+{
+    T temp[2];
+    RetT result;
+    
+    if( size < 2 )
+    {
+        get_array_value(temp[0], devarr, 0);
+        result = static_cast<RetT>( temp[0] );
+        return result;
+    }
+
+    QuantileIndex qi(size, quantile);
+
+    switch( interpolation )
+    {
+    case GDF_QUANT_LINEAR:
+        get_array_value(temp[0], devarr, qi.lower_bound);
+        get_array_value(temp[1], devarr, qi.upper_bound);
+        cudf::interpolate::linear(result, temp[0], temp[1], qi.fraction);
+        break;
+    case GDF_QUANT_MIDPOINT:
+        get_array_value(temp[0], devarr, qi.lower_bound);
+        get_array_value(temp[1], devarr, qi.upper_bound);
+        cudf::interpolate::midpoint(result, temp[0], temp[1]);
+        break;
+    case GDF_QUANT_LOWER:
+        get_array_value(temp[0], devarr, qi.lower_bound);
+        result = static_cast<RetT>( temp[0] );
+        break;
+    case GDF_QUANT_HIGHER:
+        get_array_value(temp[0], devarr, qi.upper_bound);
+        result = static_cast<RetT>( temp[0] );
+        break;
+    case GDF_QUANT_NEAREST:
+        get_array_value(temp[0], devarr, qi.nearest);
+        result = static_cast<RetT>( temp[0] );
+        break;
+    default:
+        release_assert(false && "Invalid interpolation operation for quantiles");
+    }
+
+    return result;
+}
+
+} // namespace detail
+
 } // end of namespace cudf
 

@@ -39,9 +39,8 @@
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
 
-// TODO: replace this quantiles includes and wait until they are merged  
-#include "quantiles/groupby.hpp"
-#include "groupby/sort/quantiles/quantiles.hpp"
+#include <quantiles/groupby.hpp>
+#include <quantiles/quantiles.hpp>
 
 using namespace cudf::groupby::common;
 
@@ -87,7 +86,7 @@ struct quantiles_functor {
 
         for (gdf_size_type j = 0; j < num_qnts; j++) {
           gdf_size_type k = i * num_qnts + j;
-          result[k] = cudf::quantiles::select_quantile(values + grp_id[i], segment_size,
+          result[k] = cudf::detail::select_quantile(values + grp_id[i], segment_size,
                                               d_quants[j], interpolation);
         }
       }
@@ -101,10 +100,10 @@ struct quantiles_functor {
   }
 };
 
-cudf::table compute_remain_requests(
+cudf::table compute_complex_request(
     cudf::table current_output_values,
     std::vector<AggRequestType> const& original_requests,
-    cudf::sort::groupby &groupby,
+    cudf::detail::groupby &groupby,
     cudaStream_t stream) {
 
   std::vector<gdf_column*> final_value_columns(original_requests.size());
@@ -147,7 +146,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                           std::vector<operators> const& input_ops, Options options,
                           cudaStream_t stream) {
   auto include_nulls = not options.ignore_null_keys;
-  auto groupby = cudf::sort::groupby(input_keys, include_nulls);
+  auto groupby = cudf::detail::groupby(input_keys, include_nulls);
   index_vector group_indices = groupby.group_indices();
 
   if (group_indices.size() == 0) {
@@ -202,10 +201,12 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
         group_labels.data().get(),
         d_ops.data().get(), row_bitmask.data().get());
 
+    // compute_simple_request
     current_output_values = compute_original_requests(
         original_requests, simple_requests, simple_output_values, stream);
   }
-  cudf::table final_output_values = compute_remain_requests(current_output_values, original_requests, groupby, stream);
+  // compute_complex_request
+  cudf::table final_output_values = compute_complex_request(current_output_values, original_requests, groupby, stream);
   return std::make_pair(groupby.unique_keys(), final_output_values);
 }
 

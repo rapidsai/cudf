@@ -63,7 +63,7 @@ struct permutation_label_setter {
 
 namespace cudf {
 
-namespace sort {
+namespace detail {
 
 void groupby::set_key_sort_order() {
   if (_include_nulls ||
@@ -153,7 +153,6 @@ void groupby::set_unsorted_labels() {
   cudf::detail::scatter(&sorted_labels,
                         reinterpret_cast<gdf_size_type*>(_key_sorted_order.data),
                         &unsorted_labels);
-  print<gdf_size_type>(_unsorted_labels);
 }
 
 
@@ -193,7 +192,6 @@ groupby::sort_values(gdf_column const& val_col) {
       [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
   } else {
     thrust::fill(d_bools.begin(), d_bools.end(), 1);
-    print(d_bools, "col valids");
   }
 
   thrust::reduce_by_key(thrust::device,
@@ -202,7 +200,6 @@ groupby::sort_values(gdf_column const& val_col) {
                         d_bools.begin(),
                         thrust::make_discard_iterator(),
                         val_group_sizes.begin());
-  print(val_group_sizes, "grp size");
 
   return std::make_pair(sorted_val_col, val_group_sizes);
 }
@@ -215,11 +212,9 @@ cudf::table groupby::unique_keys() {
   util::cuda::scoped_stream stream;
   auto exec = rmm::exec_policy(stream)->on(stream);
 
-  print(_group_ids, "group ids");
   thrust::transform(exec, _group_ids.begin(), _group_ids.end(),
                     transformed_group_ids.begin(),
     [=] __device__ (gdf_size_type i) { return idx_data[i]; } );
-  print(transformed_group_ids, "transf group ids");
   cudaStreamSynchronize(stream);
   
   cudf::gather(&_key_table,
@@ -229,6 +224,6 @@ cudf::table groupby::unique_keys() {
 }
 
 
-} // namespace sort
+} // namespace detail
   
 } // namespace cudf

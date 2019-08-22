@@ -30,36 +30,6 @@
 
 namespace{ // anonymous
 
-  struct QuantileIndex {
-    gdf_size_type lower_bound;
-    gdf_size_type upper_bound;
-    gdf_size_type nearest;
-    double fraction;
-
-    QuantileIndex(gdf_size_type length, double quant)
-    {
-      // clamp quant value.
-      // Todo: use std::clamp if c++17 is supported.
-      quant = std::min(std::max(quant, 0.0), 1.0);
-
-      // since gdf_size_type is int32_t, there is no underflow/overflow
-      double val = quant*(length -1);
-      lower_bound = std::floor(val);
-      upper_bound = static_cast<size_t>(std::ceil(val));
-      nearest = static_cast<size_t>(std::nearbyint(val));
-      fraction = val - lower_bound;
-    }
-  };
-
-
-  template<typename T>
-  void singleMemcpy(T& res, T* input, cudaStream_t stream)
-  {
-    (void)stream;
-    //TODO: async with streams?
-    CUDA_TRY( cudaMemcpy(&res, input, sizeof(T), cudaMemcpyDeviceToHost) );
-  }
-
   // compute quantile value as `result` from `quant` value by `interpolation` method
   template<typename T, typename RetT>
   gdf_error select_quantile(T* devarr,
@@ -70,28 +40,21 @@ namespace{ // anonymous
                           bool flag_sorted,
                           cudaStream_t stream)
   {
-    std::vector<T> hvalue(2);
-
-    if( n < 2 )
-    {
-      singleMemcpy(hvalue[0], devarr, stream);
-      result = static_cast<RetT>( hvalue[0] );
-      return GDF_SUCCESS;
-    }
+    T hvalue;
 
     if( quant >= 1.0 && !flag_sorted )
     {
       T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      singleMemcpy(hvalue[0], d_res, stream);
-      result = static_cast<RetT>( hvalue[0] );
+      cudf::detail::singleMemcpy(hvalue, d_res);
+      result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
 
     if( quant <= 0.0 && !flag_sorted )
     {
       T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      singleMemcpy(hvalue[0], d_res, stream);
-      result = static_cast<RetT>( hvalue[0] );
+      cudf::detail::singleMemcpy(hvalue, d_res);
+      result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
 
@@ -100,36 +63,11 @@ namespace{ // anonymous
       thrust::sort(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
     }
 
-    QuantileIndex qi(n, quant);
+    CUDF_EXPECTS(interpolation < N_GDF_QUANT_METHODS &&
+                 interpolation >= 0,
+      "Invalid quantile interpolation method");
 
-    switch( interpolation )
-    {
-    case GDF_QUANT_LINEAR:
-      singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
-      singleMemcpy(hvalue[1], devarr+qi.upper_bound, stream);
-      cudf::interpolate::linear(result, hvalue[0], hvalue[1], qi.fraction);
-      break;
-    case GDF_QUANT_MIDPOINT:
-      singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
-      singleMemcpy(hvalue[1], devarr+qi.upper_bound, stream);
-      cudf::interpolate::midpoint(result, hvalue[0], hvalue[1]);
-      break;
-    case GDF_QUANT_LOWER:
-      singleMemcpy(hvalue[0], devarr+qi.lower_bound, stream);
-      result = static_cast<RetT>( hvalue[0] );
-      break;
-    case GDF_QUANT_HIGHER:
-      singleMemcpy(hvalue[0], devarr+qi.upper_bound, stream);
-      result = static_cast<RetT>( hvalue[0] );
-      break;
-    case GDF_QUANT_NEAREST:
-      singleMemcpy(hvalue[0], devarr+qi.nearest, stream);
-      result = static_cast<RetT>( hvalue[0] );
-      break;
-
-    default:
-      return GDF_UNSUPPORTED_METHOD;
-    }
+    result = cudf::detail::select_quantile(devarr, n, quant, interpolation);
     
     return GDF_SUCCESS;
   }

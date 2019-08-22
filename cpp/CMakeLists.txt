@@ -320,8 +320,6 @@ add_library(cudf
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
-            src/groupby/sort/quantiles/quantiles.cu
-            src/groupby/sort/quantiles/groupby.cu
             src/groupby/sort/groupby.cu
             src/groupby/groupby_without_aggregation.cu
             src/groupby/common/aggregation_requests.cpp
@@ -350,6 +348,8 @@ add_library(cudf
             src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
+            src/quantiles/group_quantiles.cu
+            src/quantiles/groupby.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
