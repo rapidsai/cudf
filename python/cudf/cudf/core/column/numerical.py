@@ -40,6 +40,19 @@ class NumericalColumn(column.TypedColumnBase):
         super(NumericalColumn, self).__init__(**kwargs)
         assert self._dtype == self._data.dtype
 
+    def __contains__(self, item):
+        """
+        Returns True if column contains item, else False.
+        """
+        item_found = False
+        try:
+            if self.find_first_value(item):
+                item_found = True
+        except ValueError:
+            """This means value not found"""
+
+        return item_found
+
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
             kwargs["dtype"] = kwargs["data"].dtype
@@ -61,8 +74,23 @@ class NumericalColumn(column.TypedColumnBase):
         return col
 
     def binary_operator(self, binop, rhs, reflect=False):
+        int_dtypes = [
+            np.dtype("int8"),
+            np.dtype("int16"),
+            np.dtype("int32"),
+            np.dtype("int64"),
+        ]
+        tmp = rhs
+        if reflect:
+            tmp = self
         if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
+            if binop in ["mod", "floordiv"]:
+                if (
+                    (np.isscalar(tmp) and (0 == tmp))
+                    or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
+                ) and (tmp.dtype in int_dtypes):
+                    out_dtype = np.dtype("float_")
             return _numeric_column_binop(
                 lhs=self,
                 rhs=rhs,

@@ -2984,6 +2984,13 @@ def test_series_astype_null_cases():
     )
 
 
+def test_series_astype_null_categorical():
+    sr = gd.Series([None, None, None], dtype="category")
+    expect = gd.Series([None, None, None], dtype="int32")
+    got = sr.astype("int32")
+    assert_eq(expect, got)
+
+
 @pytest.mark.parametrize(
     "data",
     [

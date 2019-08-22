@@ -440,8 +440,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     std::vector<gdf_column *> concat_input_ptrs(tables.size());
     for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
       outcols.emplace_back(total_size, tables[0]->get_column(col_idx)->dtype,
-                           need_validity[col_idx]);
+                           need_validity[col_idx], true);
       outcol_ptrs[col_idx] = outcols[col_idx].get();
+      if (outcol_ptrs[col_idx]->dtype == GDF_TIMESTAMP) {
+        outcol_ptrs[col_idx]->dtype_info.time_unit =
+            tables[0]->get_column(col_idx)->dtype_info.time_unit;
+      }
       for (int table_idx = 0; table_idx < tables.size(); ++table_idx) {
         concat_input_ptrs[table_idx] = tables[table_idx]->get_column(col_idx);
       }
