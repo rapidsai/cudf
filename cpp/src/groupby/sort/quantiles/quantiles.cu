@@ -45,7 +45,7 @@ namespace{ // anonymous
     if( quant >= 1.0 && !flag_sorted )
     {
       T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      cudf::sort::singleMemcpy(hvalue, d_res);
+      cudf::quantiles::singleMemcpy(hvalue, d_res);
       result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
@@ -53,7 +53,7 @@ namespace{ // anonymous
     if( quant <= 0.0 && !flag_sorted )
     {
       T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      cudf::sort::singleMemcpy(hvalue, d_res);
+      cudf::quantiles::singleMemcpy(hvalue, d_res);
       result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
@@ -67,7 +67,7 @@ namespace{ // anonymous
                  interpolation >= 0,
       "Invalid quntile interpolation method");
 
-    result = cudf::sort::select_quantile(devarr, n, quant, interpolation);
+    result = cudf::quantiles::select_quantile(devarr, n, quant, interpolation);
     
     return GDF_SUCCESS;
   }

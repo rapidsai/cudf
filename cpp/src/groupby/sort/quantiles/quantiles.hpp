@@ -23,7 +23,7 @@
 #include <utilities/release_assert.cuh>
 
 namespace cudf {
-namespace sort{
+namespace quantiles{
 namespace interpolate {
 
 template <typename T_out, typename T_in>
@@ -151,12 +151,12 @@ RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
     case GDF_QUANT_LINEAR:
         get_array_value(temp[0], devarr, qi.lower_bound);
         get_array_value(temp[1], devarr, qi.upper_bound);
-        cudf::sort::interpolate::linear(result, temp[0], temp[1], qi.fraction);
+        cudf::quantiles::interpolate::linear(result, temp[0], temp[1], qi.fraction);
         break;
     case GDF_QUANT_MIDPOINT:
         get_array_value(temp[0], devarr, qi.lower_bound);
         get_array_value(temp[1], devarr, qi.upper_bound);
-        cudf::sort::interpolate::midpoint(result, temp[0], temp[1]);
+        cudf::quantiles::interpolate::midpoint(result, temp[0], temp[1]);
         break;
     case GDF_QUANT_LOWER:
         get_array_value(temp[0], devarr, qi.lower_bound);
@@ -177,6 +177,6 @@ RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
     return result;
 }
 
-} //namespace sort
+} //namespace quantiles
 } // end of namespace cudf
 

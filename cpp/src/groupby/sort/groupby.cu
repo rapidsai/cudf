@@ -41,6 +41,7 @@
 
 // TODO: replace this quantiles includes and wait until they are merged  
 #include "quantiles/groupby.hpp"
+#include "groupby/sort/quantiles/quantiles.hpp"
 
 using namespace cudf::groupby::common;
 
@@ -48,9 +49,9 @@ namespace cudf {
 namespace groupby {
 namespace sort {
 
-namespace {
-
 using index_vector = rmm::device_vector<gdf_size_type>;
+
+namespace {
 
 struct median_result_type {
   template <typename SourceType>
@@ -58,14 +59,52 @@ struct median_result_type {
     return cudf::gdf_dtype_of<target_type_t<SourceType, MEDIAN>>();  
   }
 };
-  
-cudf::table compute_remain_stats_requests(
+
+struct quantiles_functor {
+
+  template <typename T>
+  std::enable_if_t<std::is_arithmetic<T>::value, void >
+  operator()(gdf_column const& values_col,
+             rmm::device_vector<gdf_size_type> const& group_indices,
+             rmm::device_vector<gdf_size_type> const& group_sizes,
+             gdf_column& result_col, rmm::device_vector<double> const& quantile,
+             gdf_quantile_method interpolation)
+  {
+    // prepare args to be used by lambda below
+    auto result = reinterpret_cast<double*>(result_col.data);
+    auto values = reinterpret_cast<T*>(values_col.data);
+    auto grp_id = group_indices.data().get();
+    auto grp_size = group_sizes.data().get();
+    auto d_quants = quantile.data().get();
+    auto num_qnts = quantile.size();
+
+    // For each group, calculate quantile
+    thrust::for_each_n(thrust::device,
+      thrust::make_counting_iterator(0),
+      group_indices.size(),
+      [=] __device__ (gdf_size_type i) {
+        gdf_size_type segment_size = grp_size[i];
+
+        for (gdf_size_type j = 0; j < num_qnts; j++) {
+          gdf_size_type k = i * num_qnts + j;
+          result[k] = cudf::quantiles::select_quantile(values + grp_id[i], segment_size,
+                                              d_quants[j], interpolation);
+        }
+      }
+    );
+  }
+
+  template <typename T, typename... Args>
+  std::enable_if_t<!std::is_arithmetic<T>::value, void >
+  operator()(Args&&... args) {
+    CUDF_FAIL("Only arithmetic types are supported in quantile");
+  }
+};
+
+cudf::table compute_remain_requests(
     cudf::table current_output_values,
     std::vector<AggRequestType> const& original_requests,
-    table input_keys,
-    const gdf_column& group_indices_col,
-    rmm::device_vector<gdf_size_type> key_sorted_order,
-    Options options,
+    cudf::sort::groupby &groupby,
     cudaStream_t stream) {
 
   std::vector<gdf_column*> final_value_columns(original_requests.size());
@@ -73,22 +112,31 @@ cudf::table compute_remain_stats_requests(
     final_value_columns[i] = current_output_values.get_column(i);
   }
 
+  rmm::device_vector<gdf_size_type> group_indices = groupby.group_indices();
+  index_vector group_labels = groupby.group_labels();
+  gdf_size_type num_groups = (gdf_size_type)group_indices.size();
+
+  const std::vector<float> quantiles = {0.5};
+  const gdf_quantile_method interpolation = GDF_QUANT_LINEAR;
+  rmm::device_vector<double> dv_quantiles(quantiles);
+
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
     if (element.second == MEDIAN) {
-      // gdf_column * value_col = element.first;
-      // auto nrows = input_keys.num_rows();
-      
+      gdf_column * value_col = element.first;
+      gdf_column sorted_values;
+      rmm::device_vector<gdf_size_type> group_sizes;
 
-      // rmm::device_vector<gdf_size_type> value_col_sorted_indices_vector(thrust::make_counting_iterator(int(0)),
-      //                                   thrust::make_counting_iterator(int(nrows)));
+      std::tie(sorted_values, group_sizes) = groupby.sort_values(*value_col);
+      gdf_column* result_col = new gdf_column;
+      *result_col = cudf::allocate_column(GDF_FLOAT64, groupby.num_groups(), false);
 
-      // gdf_column value_col_sorted_indices{};
-      // CUDF_TRY(gdf_column_view(&value_col_sorted_indices,
-      //                         (void*)(value_col_sorted_indices_vector.data().get()), nullptr, nrows,
-      //                         GDF_INT32));
-      // // gdf_order_by_groups(group_indices_col, input_keys, &value_col, nullptr, 1, &value_col_sorted_indices, key_sorted_order, options, stream);
-      // final_value_columns[i] = compute_median(group_indices_col, *value_col, value_col_sorted_indices_vector, key_sorted_order, stream);
+      cudf::type_dispatcher(sorted_values.dtype, quantiles_functor{},
+                          sorted_values, group_indices, group_sizes, 
+                          *result_col,
+                          dv_quantiles, interpolation);
+      final_value_columns[i] = result_col;
+      gdf_column_free(&sorted_values);
     }
   }
   return cudf::table{final_value_columns};
@@ -157,8 +205,8 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
     current_output_values = compute_original_requests(
         original_requests, simple_requests, simple_output_values, stream);
   }
-  // cudf::table final_output_values = compute_remain_stats_requests(current_output_values, original_requests,  input_keys, group_indices_col, key_sorted_order, options, stream);
-  return std::make_pair(groupby.unique_keys(), current_output_values);
+  cudf::table final_output_values = compute_remain_requests(current_output_values, original_requests, groupby, stream);
+  return std::make_pair(groupby.unique_keys(), final_output_values);
 }
 
 /**---------------------------------------------------------------------------*
