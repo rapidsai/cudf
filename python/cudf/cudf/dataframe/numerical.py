@@ -49,11 +49,8 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns True if column contains item, else False.
         """
         item_found = False
-        try:
-            if self.find_first_value(item):
-                item_found = True
-        except ValueError:
-            """This means value not found"""
+        if cudautils.find_first(self.data.mem, item) != -1:
+            item_found = True
 
         return item_found
 
@@ -90,10 +87,10 @@ class NumericalColumn(columnops.TypedColumnBase):
         if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
-                if (
+                if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
-                ) and (tmp.dtype in int_dtypes):
+                ):
                     out_dtype = np.dtype("float_")
             return numeric_column_binop(
                 lhs=self,
