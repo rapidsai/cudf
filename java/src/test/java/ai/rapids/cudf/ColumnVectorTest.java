@@ -91,6 +91,31 @@ public class ColumnVectorTest {
   }
 
   @Test
+  void testConcaCategories() {
+    try (ColumnVector v0 = ColumnVector.categoryFromStrings("0","1","2",null);
+         ColumnVector v1 = ColumnVector.categoryFromStrings(null, "5", "6","7");
+         ColumnVector expected = ColumnVector.categoryFromStrings(
+           "0","1","2",null,
+           null,"5","6","7");
+         ColumnVector v = ColumnVector.concatenate(v0, v1)) {
+      assertColumnsAreEqual(v, expected);
+    }
+  }
+
+  @Test
+  void testConcaTimestamps() {
+    try (ColumnVector v0 = ColumnVector.timestampsFromBoxedLongs(TimeUnit.MICROSECONDS, 0L, 1L, 2L, null);
+         ColumnVector v1 = ColumnVector.timestampsFromBoxedLongs(TimeUnit.MICROSECONDS, null, 5L, 6L, 7L);
+         ColumnVector expected = ColumnVector.timestampsFromBoxedLongs(
+           TimeUnit.MICROSECONDS,
+           0L, 1L, 2L, null,
+           null, 5L, 6L, 7L);
+         ColumnVector v = ColumnVector.concatenate(v0, v1)) {
+      assertColumnsAreEqual(v, expected);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts();
