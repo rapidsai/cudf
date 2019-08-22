@@ -35,13 +35,22 @@ namespace gpu {
 #define BALLOT(v)       __ballot(v)
 #endif
 
-#define OUTBUFSZ        (512*10+16)
+#define SCRATCH_BFRSZ   (512*4)
 
 struct byterle_enc_state_s
 {
     uint32_t literal_run;
     uint32_t repeat_run;
     volatile uint32_t rpt_map[(512 / 32) + 1];
+};
+
+struct intrle_enc_state_s
+{
+    uint32_t literal_run;
+    uint32_t delta_run;
+    volatile uint32_t delta_map[(512 / 32) + 1];
+    volatile uint8_t maxlen[512 / 32];
+    volatile uint16_t maxpos[512 / 32];
 };
 
 
@@ -59,10 +68,11 @@ struct orcenc_state_s
     uint8_t valid_buf[512]; // valid map bits
     union {
         byterle_enc_state_s byterle;
+        intrle_enc_state_s intrle;
     } u;
     union {
-        uint8_t u8[OUTBUFSZ];       // output scratch buffer
-        uint32_t u32[OUTBUFSZ/4];
+        uint8_t u8[SCRATCH_BFRSZ];  // general scratch buffer
+        uint32_t u32[SCRATCH_BFRSZ /4];
     } buf;
     union {
         uint8_t u8[2048];
@@ -212,6 +222,7 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
             dst += num_runs + literal_run;
             out_cnt += literal_run;
             numvals -= literal_run;
+            inpos += literal_run;
         }
         repeat_run = s->u.byterle.repeat_run;
         if (repeat_run > 0)
@@ -226,6 +237,7 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
                 dst += 2;
                 out_cnt += 130;
                 numvals -= 130;
+                inpos += 130;
                 repeat_run -= 130;
             }
             if (!flush)
@@ -244,6 +256,7 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
                 dst += 2;
                 out_cnt += repeat_run;
                 numvals -= repeat_run;
+                inpos += repeat_run;
             }
         }
     }
@@ -274,7 +287,72 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
 template<StreamIndexType cid, class T, bool is_signed, uint32_t inmask>
 static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_t inpos, uint32_t numvals, uint32_t flush, int t)
 {
-    return numvals;
+    uint8_t *dst = s->chunk.streams[cid] + s->strm_pos[cid];
+    uint32_t out_cnt = 0;
+
+    while (numvals > 0)
+    {
+        T v0 = (t < numvals) ? inbuf[(inpos + t) & inmask] : 0;
+        T v1 = (t + 1 < numvals) ? inbuf[(inpos + t + 1) & inmask] : 0;
+        T v2 = (t + 2 < numvals) ? inbuf[(inpos + t + 2) & inmask] : 0;
+        uint32_t delta_map = BALLOT(t + 2 < numvals && v1 - v0 == v2 - v1), maxvals = min(numvals, 512), literal_run, delta_run;
+        if (!(t & 0x1f))
+            s->u.intrle.delta_map[t >> 5] = delta_map;
+        __syncthreads();
+        if (!t)
+        {
+            // Find the start of the next delta run (2 consecutive values with the same delta)
+            literal_run = delta_run = 0;
+            while (literal_run < maxvals)
+            {
+                if (delta_map != 0)
+                {
+                    uint32_t literal_run_ofs = __ffs(delta_map) - 1;
+                    literal_run += literal_run_ofs;
+                    delta_run = __ffs(~((delta_map >> literal_run_ofs) >> 1));
+                    if (literal_run_ofs + delta_run == 32)
+                    {
+                        for (;;)
+                        {
+                            uint32_t delta_idx = (literal_run + delta_run) >> 5;
+                            delta_map = (delta_idx < 512/32) ? s->u.intrle.delta_map[delta_idx] : 0;
+                            if (delta_map != ~0)
+                                break;
+                            delta_run += 32;
+                        }
+                        delta_run += __ffs(~delta_map) - 1;
+                    }
+                    delta_run += 2;
+                    break;
+                }
+                literal_run += 32;
+                delta_map = s->u.intrle.delta_map[(literal_run >> 5)];
+            }
+            literal_run = min(literal_run, maxvals);
+            s->u.intrle.literal_run = literal_run;
+            s->u.intrle.delta_run = min(delta_run, maxvals - literal_run);
+        }
+        __syncthreads();
+        literal_run = s->u.intrle.literal_run;
+
+        numvals -= literal_run;
+        inpos += literal_run;
+        out_cnt += literal_run;
+        delta_run = s->u.intrle.delta_run;
+        if (delta_run > 0)
+        {
+            __syncthreads();
+            numvals -= delta_run;
+            inpos += delta_run;
+            out_cnt += delta_run;
+        }
+    }
+    if (!t)
+    {
+        s->strm_pos[cid] = static_cast<uint32_t>(dst - s->chunk.streams[cid]);
+    }
+    __syncthreads();
+    return out_cnt;
 }
 
 /**
@@ -463,6 +541,10 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 7 : 0, n;
                 switch (s->chunk.type_kind)
                 {
+                case INT:
+                case DATE:
+                    n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t);
+                    break;
                 case BYTE:
                     n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
                     break;

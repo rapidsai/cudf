@@ -141,6 +141,7 @@ void writer::Impl::write(const cudf::table& table) {
     {
         TypeKind kind = to_orckind(columns[i]->dtype);
         StreamKind data_kind = DATA, data2_kind = LENGTH;
+        ColumnEncodingKind encoding_kind = DIRECT;
         int32_t present_stream_size = 0, data_stream_size = 0, data2_stream_size = 0;
 
         ff.types[1 + i].kind = kind;
@@ -159,35 +160,40 @@ void writer::Impl::write(const cudf::table& table) {
             break;
         case SHORT:
             data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 2 + 2);
+            encoding_kind = DIRECT_V2;
             break;
         case FLOAT:
-            if (!columns[i]->null_count)
-            {
-                data_stream_size = -1; // Pass through (no RLE encoding for floating point)
-                break;
+            if (!columns[i]->null_count) {
+              data_stream_size = -1; // Pass through (no RLE encoding for floating point)
+            } else {
+              data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 4 + 2);
             }
-            // Fall through
+            break;
         case INT:
         case DATE:
             data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 4 + 2);
+            encoding_kind = DIRECT_V2;
             break;
         case DOUBLE:
-            if (!columns[i]->null_count)
-            {
-                data_stream_size = -1; // Pass through (no RLE encoding for floating point)
-                break;
+            if (!columns[i]->null_count) {
+              data_stream_size = -1; // Pass through (no RLE encoding for floating point)
+            } else {
+              data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 8 + 2);
             }
-            // Fall through
+            break;
         case LONG:
             data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 8 + 2);
+            encoding_kind = DIRECT_V2;
             break;
         case STRING:
             data_stream_size = -1; // TODO
             data2_stream_size = data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 4 + 2);
+            encoding_kind = DIRECT_V2;
             break;
         case TIMESTAMP:
             data2_stream_size = data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512*4 + 2);
             data2_kind = SECONDARY;
+            encoding_kind = DIRECT_V2;
             has_timestamp_column = true;
             break;
         default:
@@ -225,7 +231,7 @@ void writer::Impl::write(const cudf::table& table) {
             ff.types[0].fieldNames[i].assign(columns[i]->col_name);
         else
             ff.types[0].fieldNames[i] = "_col" + std::to_string(i);
-        sf.columns[i].kind = DIRECT_V2;
+        sf.columns[i].kind = encoding_kind;
         sf.columns[i].dictionarySize = 0;
     }
     sf.writerTimezone = (has_timestamp_column) ? "UTC" : "";
@@ -250,7 +256,7 @@ void writer::Impl::write(const cudf::table& table) {
             ck->column_data_base = columns[i]->data;
             ck->start_row = (uint32_t)(j * ff.rowIndexStride);
             ck->num_rows = (uint32_t)std::min((uint32_t)ff.rowIndexStride, (uint32_t)(ff.numberOfRows - ck->start_row));
-            ck->valid_rows = std::min(ck->num_rows, (uint32_t)std::max((int32_t)(columns[i]->size - ck->start_row), 0));
+            ck->valid_rows = (uint32_t)columns[i]->size;
             ck->encoding_kind = (uint8_t)sf.columns[i].kind;
             ck->type_kind = (uint8_t)ff.types[1+i].kind;
             ck->dtype_len = 0;
