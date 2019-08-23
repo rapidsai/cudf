@@ -10,11 +10,11 @@ import pyarrow as pa
 
 from librmm_cffi import librmm as rmm
 
-from cudf.bindings.arrow._cuda import CudaBuffer
-from cudf.bindings.gpuarrow import (
+from cudf._lib.arrow._cuda import CudaBuffer
+from cudf._lib.gpuarrow import (
     CudaRecordBatchStreamReader as _CudaRecordBatchStreamReader,
 )
-from cudf.dataframe import Series
+from cudf.core import Series
 from cudf.utils.utils import mask_bitsize, mask_dtype
 
 
@@ -191,7 +191,7 @@ def array_to_series(array):
     dtype = arrow_to_pandas_dtype(array.type)
 
     if pa.types.is_dictionary(array.type):
-        from cudf.dataframe import CategoricalColumn
+        from cudf.core.column import CategoricalColumn
 
         codes = array_to_series(array.indices)
         categories = array_to_series(array.dictionary)

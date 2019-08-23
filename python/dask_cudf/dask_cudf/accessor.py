@@ -15,10 +15,10 @@ accessor properties.
 from toolz import partial
 
 import cudf
-from cudf.dataframe.categorical import (
+from cudf.core.column.categorical import (
     CategoricalAccessor as GdfCategoricalAccessor,
 )
-from cudf.dataframe.series import DatetimeProperties
+from cudf.core.series import DatetimeProperties
 
 # Adapted from
 # https://github.com/dask/dask/blob/master/dask/dataframe/accessor.py
@@ -152,7 +152,9 @@ class DatetimeAccessor(Accessor):
     _accessor_name = "dt"
 
     def _validate(self, series):
-        if not isinstance(series._meta._column, cudf.dataframe.DatetimeColumn):
+        if not isinstance(
+            series._meta._column, cudf.core.column.DatetimeColumn
+        ):
             raise AttributeError(
                 "Can only use .dt accessor with datetimelike " "values"
             )
@@ -169,7 +171,7 @@ class CategoricalAccessor(Accessor):
 
     def _validate(self, series):
         if not isinstance(
-            series._meta._column, cudf.dataframe.categorical.CategoricalColumn
+            series._meta._column, cudf.core.column.CategoricalColumn
         ):
             raise AttributeError(
                 "Can only use .cat accessor with categorical values"

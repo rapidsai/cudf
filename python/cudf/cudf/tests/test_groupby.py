@@ -6,7 +6,7 @@ import pytest
 from numpy.testing import assert_array_equal
 
 import cudf
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 _now = np.datetime64("now")
@@ -790,7 +790,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+    assert isinstance(res.index, cudf.core.index.StringIndex)
 
 
 def test_groupby_size():

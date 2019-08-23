@@ -1,13 +1,12 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
-from cudf.bindings import dlpack as cpp_dlpack
-from cudf.bindings.GDFError import GDFError
-from cudf.dataframe import columnops
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.column import Column
-from cudf.dataframe.dataframe import DataFrame
-from cudf.dataframe.index import Index
-from cudf.dataframe.series import Series
+from cudf._lib import dlpack as cpp_dlpack
+from cudf._lib.GDFError import GDFError
+from cudf.core.buffer import Buffer
+from cudf.core.column import Column, column
+from cudf.core.dataframe import DataFrame
+from cudf.core.index import Index
+from cudf.core.series import Series
 from cudf.utils import ioutils
 
 
@@ -47,7 +46,7 @@ def from_dlpack(pycapsule_obj):
         if valids[idx]:
             mask = Buffer(valids[idx])
         cols.append(
-            columnops.build_column(
+            column.build_column(
                 Buffer(res[idx]), dtype=res[idx].dtype, mask=mask
             )
         )
