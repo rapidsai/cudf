@@ -38,7 +38,7 @@ public class ORCOptions extends ColumnFilterOptions {
     return useNumPyTypes;
   }
 
-  TimeUnit usingTimeStamp() {
+  TimeUnit timeUnit() {
     return unit;
   }
 
@@ -51,8 +51,8 @@ public class ORCOptions extends ColumnFilterOptions {
     private TimeUnit unit = TimeUnit.NONE;
 
     /**
-     * Specify whether the parser should implicitly promote DATE32 and
-     * TIMESTAMP columns to DATE64 for compatibility with NumPy.
+     * Specify whether the parser should implicitly promote DATE32
+     * column to DATE64 for compatibility with NumPy.
      *
      * @param useNumPyTypes true to request this conversion, false to avoid.
      * @return builder for chaining
@@ -63,11 +63,11 @@ public class ORCOptions extends ColumnFilterOptions {
     }
 
     /**
-     * Specify the return timestamp in units.
+     * Specify the time unit to use when returning timestamps.
      * @param unit TimeUnit specified by the user
      * @return builder for chaining
      */
-    public Builder withTimeStamp(TimeUnit unit) {
+    public Builder withTimeUnit(TimeUnit unit) {
       this.unit = unit;
       return this;
     }

@@ -33,7 +33,7 @@ public class ParquetOptions extends ColumnFilterOptions {
     unit = builder.unit;
   }
 
-  TimeUnit usingTimeStamp() {
+  TimeUnit timeUnit() {
     return unit;
   }
 
@@ -45,11 +45,11 @@ public class ParquetOptions extends ColumnFilterOptions {
     private TimeUnit unit = TimeUnit.NONE;
 
     /**
-     * Specify the return timestamp in units.
+     * Specify the time unit to use when returning timestamps.
      * @param unit TimeUnit specified by the user
      * @return builder for chaining
      */
-    public Builder withTimeStamp(TimeUnit unit) {
+    public Builder withTimeUnit(TimeUnit unit) {
       this.unit = unit;
       return this;
     }
