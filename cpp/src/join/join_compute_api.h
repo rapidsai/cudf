@@ -21,7 +21,7 @@
 
 #include "join_kernels.cuh"
 
-#include <table/device_table.cuh>
+#include <table/legacy/device_table.cuh>
 #include <rmm/rmm.h>
 #include <utilities/error_utils.hpp>
 #include "full_join.cuh"
@@ -61,7 +61,7 @@ template <JoinType join_type,
           typename multimap_type>
 gdf_error estimate_join_output_size(device_table const & build_table,
                                     device_table const & probe_table,
-                                    multimap_type const & hash_table,
+                                    multimap_type hash_table,
                                     gdf_size_type * join_output_size_estimate)
 {
   const gdf_size_type build_table_num_rows{build_table.num_rows()};
@@ -143,7 +143,7 @@ gdf_error estimate_join_output_size(device_table const & build_table,
                              multimap_type,
                              block_size,
                              DEFAULT_CUDA_CACHE_SIZE>
-    <<<numBlocks * num_sms, block_size>>>(&hash_table,
+    <<<numBlocks * num_sms, block_size>>>(hash_table,
                                           build_table,
                                           probe_table,
                                           sample_probe_num_rows,
@@ -256,7 +256,7 @@ gdf_error compute_hash_join(
   size_t const hash_table_size =
       std::max(compute_hash_table_size(build_table_num_rows), size_t{1});
 
-  std::unique_ptr<multimap_type> hash_table(new multimap_type(hash_table_size));
+  auto hash_table = multimap_type::create(hash_table_size);
 
   // FIXME: use GPU device id from the context?
   // (although should be possible once we move to Arrow)
@@ -277,7 +277,7 @@ gdf_error compute_hash_join(
   if(build_table_num_rows > 0)
   {
     const gdf_size_type build_grid_size{(build_table_num_rows + block_size - 1)/block_size};
-    build_hash_table<<<build_grid_size, block_size>>>(hash_table.get(),
+    build_hash_table<<<build_grid_size, block_size>>>(*hash_table,
                                                       *build_table,
                                                       build_table_num_rows,
                                                       d_gdf_error_code);
@@ -342,7 +342,7 @@ gdf_error compute_hash_join(
                      output_index_type,
                      block_size,
                      DEFAULT_CUDA_CACHE_SIZE>
-    <<<probe_grid_size, block_size>>> (hash_table.get(),
+    <<<probe_grid_size, block_size>>> (*hash_table,
                                        *build_table,
                                        *probe_table,
                                        probe_table->num_rows(),

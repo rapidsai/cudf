@@ -1,5 +1,5 @@
 #include <bitmask/legacy/bit_mask.cuh>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/cudf.h>
 #include <cudf/functions.h>
@@ -163,9 +163,21 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
 
 gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
                           gdf_size_type output_column_length,
-                          gdf_valid_type* masks_to_concat[],
-                          gdf_size_type* column_lengths,
+                          gdf_column *columns_to_concat[],
                           gdf_size_type num_columns) {
+  std::vector<gdf_valid_type*> h_masks(num_columns);
+  std::vector<gdf_size_type> h_column_lengths(num_columns);
+  std::transform(columns_to_concat, columns_to_concat + num_columns,
+                 h_masks.begin(), [](auto col) { return col->valid; });
+  std::transform(columns_to_concat, columns_to_concat + num_columns,
+                h_column_lengths.begin(), [](auto col) { return col->size; });
+
+  rmm::device_vector<gdf_valid_type*> d_masks(h_masks);
+  rmm::device_vector<gdf_size_type> d_column_lengths(h_column_lengths);
+
+  gdf_valid_type** masks_to_concat = thrust::raw_pointer_cast(d_masks.data());
+  gdf_size_type* column_lengths = thrust::raw_pointer_cast(d_column_lengths.data());
+
   // This lambda is executed in a thrust algorithm. Each thread computes and
   // returns one gdf_valid_type element for the concatenated output mask
   auto mask_concatenator = [=] __device__(gdf_size_type mask_index) {
@@ -228,8 +240,8 @@ gdf_error all_bitmask_on(gdf_valid_type* valid_out,
 
 gdf_error apply_bitmask_to_bitmask(gdf_size_type& out_null_count,
                                    gdf_valid_type* valid_out,
-                                   gdf_valid_type* valid_left,
-                                   gdf_valid_type* valid_right,
+                                   const gdf_valid_type* valid_left,
+                                   const gdf_valid_type* valid_right,
                                    cudaStream_t stream,
                                    gdf_size_type num_values) {
   gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);

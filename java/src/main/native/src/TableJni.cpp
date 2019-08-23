@@ -15,11 +15,16 @@
  */
 
 #include <cstring>
+#include <map>
 
+#include <unordered_set>
+
+#include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/copying.hpp"
 #include "cudf/groupby.hpp"
 #include "cudf/io_readers.hpp"
-#include "cudf/table.hpp"
+#include "cudf/legacy/table.hpp"
+#include "cudf/stream_compaction.hpp"
 #include "cudf/types.hpp"
 
 #include "jni_utils.hpp"
@@ -92,7 +97,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfOrderBy(
     auto is_descending = cudf::jni::copy_to_device(env, n_is_descending);
 
     cudf::table *input_table = reinterpret_cast<cudf::table *>(j_input_table);
-    cudf::jni::output_table output(env, input_table);
+    cudf::jni::output_table output(env, input_table, true);
 
     bool are_nulls_smallest = static_cast<bool>(j_are_nulls_smallest);
 
@@ -124,6 +129,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfOrderBy(
 
     cudf::table *cudf_table = output.get_cudf_table();
 
+    // gather handles string categories
     gather(input_table, col_data.get(), cudf_table);
 
     return output.get_native_handles_and_release();
@@ -204,7 +210,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
     read_arg.comment = comment;
 
     cudf::table result = read_csv(read_arg);
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
                                                 result.num_columns());
 
     return native_handles.get_jArray();
@@ -253,7 +259,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     read_arg.strings_to_categorical = false;
 
     cudf::table result = read_parquet(read_arg);
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
                                                 result.num_columns());
 
     return native_handles.get_jArray();
@@ -263,7 +269,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length) {
+    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -293,16 +299,15 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     }
 
     cudf::orc_read_arg read_arg{*source};
-
     read_arg.columns = n_filter_col_names.as_cpp_vector();
-
     read_arg.stripe = -1;
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.use_index = false;
+    read_arg.use_np_dtypes = static_cast<bool>(usingNumPyTypes);
 
     cudf::table result = read_orc(read_arg);
-    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong*>(result.begin()),
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
                                                 result.num_columns());
     return native_handles.get_jArray();
   }
@@ -436,8 +441,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     std::vector<gdf_column *> concat_input_ptrs(tables.size());
     for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
       outcols.emplace_back(total_size, tables[0]->get_column(col_idx)->dtype,
-                           need_validity[col_idx]);
+                           need_validity[col_idx], true);
       outcol_ptrs[col_idx] = outcols[col_idx].get();
+      if (outcol_ptrs[col_idx]->dtype == GDF_TIMESTAMP) {
+        outcol_ptrs[col_idx]->dtype_info.time_unit =
+            tables[0]->get_column(col_idx)->dtype_info.time_unit;
+      }
       for (int table_idx = 0; table_idx < tables.size(); ++table_idx) {
         concat_input_ptrs[table_idx] = tables[table_idx]->get_column(col_idx);
       }
@@ -475,15 +484,33 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 
     JNI_ARG_CHECK(env, n_columns_to_hash.size() > 0, "columns_to_hash is zero", NULL);
 
-    cudf::jni::output_table output(env, n_input_table);
-
+    cudf::jni::output_table output(env, n_input_table, true);
     std::vector<gdf_column *> cols = output.get_gdf_columns();
+
+    for (int i = 0; i < cols.size(); i++) {
+      gdf_column * col = cols[i];
+      if (col->dtype == GDF_STRING_CATEGORY) {
+        // We need to add in the category for partition to work at all...
+        NVCategory * orig = static_cast<NVCategory *>(n_input_table->get_column(i)->dtype_info.category);
+        col->dtype_info.category = orig;
+      }
+    }
 
     JNI_GDF_TRY(env, NULL,
                 gdf_hash_partition(n_input_table->num_columns(), n_input_table->begin(),
                                    n_columns_to_hash.data(), n_columns_to_hash.size(),
                                    n_number_of_partitions, cols.data(), n_output_offsets.data(),
                                    n_cudf_hash_function));
+
+    // Need to gather the string categories after partitioning.
+    for (int i = 0; i < cols.size(); i++) {
+      gdf_column * col = cols[i];
+      if (col->dtype == GDF_STRING_CATEGORY) {
+        // We need to fix it up...
+        NVCategory * orig = static_cast<NVCategory *>(n_input_table->get_column(i)->dtype_info.category);
+        nvcategory_gather(col, orig);
+      }
+    }
 
     return output.get_native_handles_and_release();
   }
@@ -492,7 +519,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfPartition(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     JNIEnv *env, jclass clazz, jlong input_table, jintArray keys,
-    jintArray aggregate_column_indices, jintArray agg_types) {
+    jintArray aggregate_column_indices, jintArray agg_types, jboolean ignore_null_keys) {
   JNI_NULL_CHECK(env, input_table, "input table is null", NULL);
   JNI_NULL_CHECK(env, keys, "input keys are null", NULL);
   JNI_NULL_CHECK(env, aggregate_column_indices, "input aggregate_column_indices are null", NULL);
@@ -522,8 +549,8 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
       ops.push_back(static_cast<cudf::groupby::hash::operators>(n_ops[i]));
     }
 
-    std::pair<cudf::table, cudf::table> result =
-        cudf::groupby::hash::groupby(n_keys_table, n_values_table, ops);
+    std::pair<cudf::table, cudf::table> result = cudf::groupby::hash::groupby(
+        n_keys_table, n_values_table, ops, cudf::groupby::hash::Options(ignore_null_keys));
 
     try {
       std::vector<gdf_column *> output_columns;
@@ -538,6 +565,111 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
       result.second.destroy();
       throw;
     }
+  }
+  CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfFilter(JNIEnv *env, jclass,
+                                                                 jlong input_jtable,
+                                                                 jlong mask_jcol) {
+  JNI_NULL_CHECK(env, input_jtable, "input table is null", 0);
+  JNI_NULL_CHECK(env, mask_jcol, "mask column is null", 0);
+  try {
+    cudf::table *input = reinterpret_cast<cudf::table *>(input_jtable);
+    gdf_column *mask = reinterpret_cast<gdf_column *>(mask_jcol);
+    cudf::table result = cudf::apply_boolean_mask(*input, *mask);
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
+                                                result.num_columns());
+    return native_handles.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadJSON(
+    JNIEnv *env, jclass clazz, jstring input_filepath, jlong buffer, jlong buffer_length,
+    jlong start_range, jlong range_length, jobjectArray filter_col_names, jobjectArray col_names,
+    jobjectArray data_types) {
+  bool read_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, input_filepath, "input file or buffer must be supplied", NULL);
+    read_buffer = false;
+  } else if (input_filepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an inputfilepath", NULL);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported",
+                  NULL);
+  }
+  try {
+    cudf::jni::native_jstring filename(env, input_filepath);
+    if (!read_buffer && filename.is_empty()) {
+      JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "inputfilepath can't be empty",
+                    NULL);
+    }
+
+    std::unique_ptr<cudf::source_info> source;
+    if (read_buffer) {
+      source.reset(new cudf::source_info(reinterpret_cast<char *>(buffer), buffer_length));
+    } else {
+      source.reset(new cudf::source_info(filename.get()));
+    }
+
+    cudf::jni::native_jstringArray n_filter_col_names(env, filter_col_names);
+
+    cudf::json_read_arg read_arg{*source};
+    read_arg.lines = true;
+    read_arg.byte_range_offset = start_range;
+    read_arg.byte_range_size = range_length;
+    if (data_types != 0) {
+      cudf::jni::native_jstringArray n_data_types(env, data_types);
+      if (col_names != nullptr) {
+        cudf::jni::native_jstringArray n_col_names(env, col_names);
+        JNI_ARG_CHECK(env, n_col_names.size() == n_data_types.size(),
+                      "col_types and col_names should have the same size", NULL);
+        std::vector<std::string> data_types_vector(n_data_types.as_cpp_vector());
+        std::vector<std::string> col_names_vector(n_col_names.as_cpp_vector());
+        std::transform(col_names_vector.begin(), col_names_vector.end(), data_types_vector.begin(),
+                       data_types_vector.begin(),
+                       [](std::string s1, std::string s2) -> std::string { return s1 + ":" + s2; });
+        read_arg.dtype = data_types_vector;
+      } else {
+        read_arg.dtype = n_data_types.as_cpp_vector();
+      }
+    }
+    cudf::table result = read_json(read_arg);
+    try {
+
+      if (n_filter_col_names.size() == 0) {
+        cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
+                                                    result.num_columns());
+        return native_handles.get_jArray();
+      }
+
+      std::vector<std::string> col_vector = n_filter_col_names.as_cpp_vector();
+      std::unordered_set<std::string> filter_col_lookup(col_vector.begin(), col_vector.end());
+      std::map<std::string, gdf_column *> names_to_cols;
+      // traverse the table and if we don't need that column free it
+      // create a map from name -> col
+      for (auto iter = result.begin(); iter != result.end(); iter++) {
+        std::unordered_set<std::string>::const_iterator got =
+            filter_col_lookup.find((*iter)->col_name);
+        if (got == filter_col_lookup.end()) {
+          gdf_column_free(*iter);
+        } else {
+          names_to_cols[*got] = *iter;
+        }
+      }
+      // this is the list of columns that we will finally return to the client
+      std::vector<gdf_column *> final_columns_to_return;
+      for (auto iter = col_vector.begin(); iter != col_vector.end(); iter++) {
+        final_columns_to_return.push_back(names_to_cols[*iter]);
+      }
+      cudf::table final_result(final_columns_to_return);
+      cudf::jni::native_jlongArray native_handles(
+          env, reinterpret_cast<jlong *>(final_result.begin()), final_result.num_columns());
+
+      return native_handles.get_jArray();
+    } catch (...) { result.destroy(); }
   }
   CATCH_STD(env, NULL);
 }

@@ -16,18 +16,84 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "cudf.h"
-#include "table.hpp"
+#include <cudf/legacy/table.hpp>
 
 // Forward declarations
 namespace arrow { namespace io {  class RandomAccessFile; } }
 
 namespace cudf {
 namespace io {
+namespace avro {
+/**---------------------------------------------------------------------------*
+ * @brief Options for the Avro reader
+ *---------------------------------------------------------------------------**/
+struct reader_options {
+  std::vector<std::string> columns;
+
+  reader_options() = default;
+  reader_options(reader_options const &) = default;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor to populate reader options.
+   *
+   * @param[in] columns List of columns to read. If empty, all columns are read
+   *---------------------------------------------------------------------------**/
+  reader_options(std::vector<std::string> cols) : columns(std::move(cols)) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Class to read Apache Avro data into cuDF columns
+ *---------------------------------------------------------------------------**/
+class reader {
+ private:
+  class Impl;
+  std::unique_ptr<Impl> impl_;
+
+ public:
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for a file path source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::string filepath, reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_all();
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns a range of rows.
+   *
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] num_rows Number of rows to read; use `0` for all remaining data
+   *
+   * @return cudf::table Object that contains the array of gdf_columns.
+   *---------------------------------------------------------------------------**/
+  table read_rows(size_t skip_rows, size_t num_rows);
+
+  ~reader();
+};
+
+}  // namespace avro
+
 namespace json {
 /**---------------------------------------------------------------------------*
  * @brief Arguments to the read_json interface.
@@ -219,6 +285,8 @@ namespace orc {
 struct reader_options {
   std::vector<std::string> columns;
   bool use_index = true;
+  bool use_np_dtypes = true;
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -226,11 +294,17 @@ struct reader_options {
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
    *
-   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] use_index_lookup Whether to use row index for faster scanning
+   * @param[in] np_compat Whether to use numpy-compatible dtypes
+   * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
-  reader_options(std::vector<std::string> cols, bool use_index_lookup)
-      : columns(std::move(cols)), use_index(use_index_lookup) {}
+  reader_options(std::vector<std::string> cols, bool use_index_lookup,
+                 bool np_compat, gdf_time_unit timestamp_time_unit)
+      : columns(std::move(cols)),
+        use_index(use_index_lookup),
+        use_np_dtypes(np_compat),
+        timestamp_unit(timestamp_time_unit) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -297,6 +371,7 @@ namespace parquet {
 struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -304,13 +379,15 @@ struct reader_options {
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
    *
-   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
+   * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
-  reader_options(std::vector<std::string> cols,
-                       bool strings_as_category)
+  reader_options(std::vector<std::string> cols, bool strings_as_category,
+                 gdf_time_unit timestamp_time_unit)
       : columns(std::move(cols)),
-        strings_to_categorical(strings_as_category) {}
+        strings_to_categorical(strings_as_category),
+        timestamp_unit(timestamp_time_unit) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -333,7 +410,7 @@ class reader {
   explicit reader(const char *buffer, size_t length,
                   reader_options const &options);
 
- /**---------------------------------------------------------------------------*
+  /**---------------------------------------------------------------------------*
    * @brief Constructor for an Arrow file source
    *---------------------------------------------------------------------------**/
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
@@ -375,6 +452,6 @@ class reader {
   ~reader();
 };
 
-} // namespace parquet
-} // namespace io
-} // namespace cudf
+}  // namespace parquet
+}  // namespace io
+}  // namespace cudf

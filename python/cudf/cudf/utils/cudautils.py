@@ -1,6 +1,7 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from math import fmod, isnan
+from functools import lru_cache
+from math import fmod
 
 import numpy as np
 from numba import cuda, int32, numpy_support
@@ -110,23 +111,6 @@ def gpu_copy(inp, out):
     tid = cuda.grid(1)
     if tid < inp.size:
         out[tid] = inp[tid]
-
-
-def astype(ary, dtype):
-    if ary.dtype == np.dtype(dtype):
-        return ary
-    elif (
-        ary.dtype == np.int64 or ary.dtype == np.dtype("datetime64[ms]")
-    ) and (dtype == np.dtype("int64") or dtype == np.dtype("datetime64[ms]")):
-        return ary.view(dtype)
-    elif ary.size == 0:
-        return rmm.device_array(shape=ary.shape, dtype=dtype)
-    else:
-        out = rmm.device_array(shape=ary.shape, dtype=dtype)
-        if out.size > 0:
-            configured = gpu_copy.forall(out.size)
-            configured(ary, out)
-        return out
 
 
 def copy_array(arr, out=None):
@@ -294,10 +278,10 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
+    import cudf._lib as libcudf
 
-    import cudf.bindings.reduce as cpp_reduce
-    from cudf.dataframe.numerical import NumericalColumn
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.column import NumericalColumn
+    from cudf.core.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
@@ -311,7 +295,7 @@ def prefixsum(vals):
     out_col = NumericalColumn(
         data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
     )
-    cpp_reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
+    libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 
@@ -363,25 +347,6 @@ def compact_mask_bytes(boolbytes):
     return bits
 
 
-@cuda.jit
-def gpu_mask_from_devary(ary, bits):
-    tid = cuda.grid(1)
-    base = tid * mask_bitsize
-    for i in range(base, base + mask_bitsize):
-        if i >= len(ary):
-            break
-        if not isnan(ary[i]):
-            mask_set(bits, i)
-
-
-def mask_from_devary(ary):
-    bits = make_mask(len(ary))
-    if bits.size > 0:
-        gpu_fill_value.forall(bits.size)(bits, 0)
-        gpu_mask_from_devary.forall(bits.size)(ary, bits)
-    return bits
-
-
 def make_empty_mask(size):
     bits = make_mask(size)
     if bits.size > 0:
@@ -401,15 +366,6 @@ def gpu_fill_masked(value, validity, out):
         valid = mask_get(validity, tid)
         if not valid:
             out[tid] = value
-
-
-def fillna(data, mask, value):
-    out = rmm.device_array_like(data)
-    out.copy_to_device(data)
-    if data.size > 0:
-        configured = gpu_fill_masked.forall(data.size)
-        configured(value, mask, out)
-    return out
 
 
 @cuda.jit
@@ -823,7 +779,7 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     min_index = found_col.min()
@@ -856,7 +812,7 @@ def find_last(arr, val, compare="eq"):
                 gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
             else:
                 gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     max_index = found_col.max()
@@ -907,22 +863,6 @@ def find_segments(arr, segs=None, markers=None):
             markers, scanned, begins
         )
     return begins, markers
-
-
-@cuda.jit
-def gpu_value_counts(arr, counts, total_size):
-    i = cuda.grid(1)
-    if 0 <= i < arr.size - 1:
-        counts[i] = arr[i + 1] - arr[i]
-    elif i == arr.size - 1:
-        counts[i] = total_size - arr[i]
-
-
-def value_count(arr, total_size):
-    counts = rmm.device_array(shape=len(arr), dtype=np.intp)
-    if arr.size > 0:
-        gpu_value_counts.forall(arr.size)(arr, counts, total_size)
-    return counts
 
 
 @cuda.jit
@@ -987,3 +927,41 @@ def window_sizes_from_offset(arr, offset):
             arr, window_sizes, offset
         )
     return window_sizes
+
+
+@lru_cache(maxsize=32)
+def compile_udf(udf, type_signature):
+    """Copmile ``udf`` with `numba`
+
+    Compile a python callable function ``udf`` with
+    `numba.cuda.jit(device=True)` using ``type_signature`` into CUDA PTX
+    together with the generated output type.
+
+    The output is expected to be passed to the PTX parser in `libcudf`
+    to generate a CUDA device funtion to be inlined into CUDA kernels,
+    compiled at runtime and launched.
+
+    Parameters
+    --------
+    udf:
+      a python callable function
+
+    type_signature:
+      a tuple that specifies types of each of the input parameters of ``udf``.
+      The types should be one in `numba.types` and could be converted from
+      numpy types with `numba.numpy_support.from_dtype(...)`.
+
+    Returns
+    --------
+    ptx_code:
+      The compiled CUDA PTX
+
+    output_type:
+      An numpy type
+
+    """
+    decorated_udf = cuda.jit(udf, device=True)
+    compiled = decorated_udf.compile(type_signature)
+    ptx_code = decorated_udf.inspect_ptx(type_signature).decode("utf-8")
+    output_type = numpy_support.as_dtype(compiled.signature.return_type)
+    return (ptx_code, output_type.type)

@@ -21,6 +21,7 @@
 #include "cudf/reduction.hpp"
 #include "cudf/replace.hpp"
 #include "cudf/stream_compaction.hpp"
+#include "cudf/unary.hpp"
 
 #include "jni_utils.hpp"
 
@@ -212,6 +213,11 @@ static jlong cast_string_cat_to(JNIEnv *env, NVCategory *cat, gdf_dtype target_t
                                 gdf_size_type null_count, gdf_valid_type *valid) {
   switch (target_type) {
     case GDF_STRING: {
+      if (size == 0) {
+        gdf_column_wrapper output(size, target_type, null_count, nullptr,
+                                nullptr);
+        return reinterpret_cast<jlong>(output.release());
+      }
       unique_nvstr_ptr str(cat->to_strings(), &NVStrings::destroy);
 
       jni_rmm_unique_ptr<gdf_valid_type> valid_copy = copy_validity(env, size, null_count, valid);
@@ -228,6 +234,11 @@ static jlong cast_string_to(JNIEnv *env, NVStrings *str, gdf_dtype target_type,
                             gdf_valid_type *valid) {
   switch (target_type) {
     case GDF_STRING_CATEGORY: {
+      if (size == 0) {
+        gdf_column_wrapper output(size, target_type, null_count, nullptr,
+                                nullptr, nullptr);
+        return reinterpret_cast<jlong>(output.release());
+      }
       unique_nvcat_ptr cat(NVCategory::create_from_strings(*str), &NVCategory::destroy);
       auto cat_data = jni_rmm_alloc<int>(env, sizeof(int) * size);
       if (size != cat->get_values(cat_data.get(), true)) {
@@ -279,12 +290,10 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfUnaryMath(JNIEnv *env, jclas
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
     gdf_dtype out_type = static_cast<gdf_dtype>(out_dtype);
-    gdf_unary_math_op op = static_cast<gdf_unary_math_op>(int_op);
-    cudf::jni::gdf_column_wrapper ret(input->size, out_type, 
-                                      input->valid != nullptr);
-    // TODO should null count         input->null_count > 0);
-
-    JNI_GDF_TRY(env, 0, gdf_unary_math(input, ret.get(), op));
+    cudf::unary_op op = static_cast<cudf::unary_op>(int_op);
+    std::unique_ptr<gdf_column, decltype(free) *> ret(
+        static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
+    *ret.get() = cudf::unary_operation(*input, op);
     return reinterpret_cast<jlong>(ret.release());
   }
   CATCH_STD(env, 0);
@@ -429,6 +438,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
     gdf_dtype c_dtype = static_cast<gdf_dtype>(dtype);
+    gdf_dtype_extra_info info{};
     gdf_time_unit c_time_unit = static_cast<gdf_time_unit>(time_unit);
     size_t size = input->size;
     if (input->dtype == GDF_STRING) {
@@ -440,35 +450,12 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfCast(JNIEnv *env, jclass, jl
       return cudf::jni::cast_string_cat_to(env, cat, c_dtype, c_time_unit, size, input->null_count,
                                            input->valid);
     } else {
-      // TODO should be but bug in cudf cudf::jni::gdf_column_wrapper
-      // output(input->size, c_dtype,
-      // input->null_count != 0);
-      cudf::jni::gdf_column_wrapper output(input->size, c_dtype, input->valid != nullptr);
-      output.get()->dtype_info.time_unit = c_time_unit;
-      JNI_GDF_TRY(env, 0, gdf_cast(input, output.get()));
-      return reinterpret_cast<jlong>(output.release());
+      std::unique_ptr<gdf_column, decltype(free) *> ret(
+          static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
+      info.time_unit = c_time_unit;
+      *ret.get() = cudf::cast(*input, c_dtype, info);
+      return reinterpret_cast<jlong>(ret.release());
     }
-  }
-  CATCH_STD(env, 0);
-}
-
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_filter(JNIEnv *env, jclass, jlong input_jcol,
-                                                        jlong mask_jcol) {
-  JNI_NULL_CHECK(env, input_jcol, "input column is null", 0);
-  JNI_NULL_CHECK(env, mask_jcol, "mask column is null", 0);
-  try {
-    gdf_column *input = reinterpret_cast<gdf_column *>(input_jcol);
-    gdf_column *mask = reinterpret_cast<gdf_column *>(mask_jcol);
-    std::unique_ptr<gdf_column, decltype(free) *> result(
-        static_cast<gdf_column *>(malloc(sizeof(gdf_column))), free);
-    if (result.get() == nullptr) {
-      cudf::jni::throw_java_exception(env, "java/lang/OutOfMemoryError",
-                                      "Could not allocate native memory");
-    }
-    *result.get() = cudf::apply_boolean_mask(*input, *mask);
-    // workaround for apply_boolean_mask returning an uninitialized column name
-    result->col_name = nullptr;
-    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
@@ -511,8 +498,8 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cudf_fill(JNIEnv *env, jclass, jlong 
   CATCH_STD(env, );
 }
 
-JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cudf_reduce(JNIEnv *env, jclass, jlong jcol,
-                                                          jint jop, jint jdtype) {
+JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cudf_reduce(JNIEnv *env, jclass, jlong jcol, jint jop,
+                                                          jint jdtype) {
   JNI_NULL_CHECK(env, jcol, "input column is null", 0);
   try {
     gdf_column *col = reinterpret_cast<gdf_column *>(jcol);
@@ -530,6 +517,10 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cudf_getCategoryIndex(JNIEnv *env, jc
   JNI_NULL_CHECK(env, jstr, "string data is null", -1);
   try {
     gdf_column *col = reinterpret_cast<gdf_column *>(jcol);
+    if (col->size <= 0) {
+      // it is empty so nothing is in there.
+      return -1;
+    }
     NVCategory *cat = static_cast<NVCategory *>(col->dtype_info.category);
     JNI_NULL_CHECK(env, cat, "category is null", -1);
 

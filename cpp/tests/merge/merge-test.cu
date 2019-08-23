@@ -11,9 +11,9 @@
 #include <cudf/functions.h>
 #include <cudf/merge.hpp>
 #include <rmm/thrust_rmm_allocator.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 
-#include "string/nvcategory_util.hpp"
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include "tests/utilities/column_wrapper.cuh"
 #include "tests/utilities/column_wrapper_factory.hpp"
 #include "tests/utilities/cudf_test_fixtures.h"

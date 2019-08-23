@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.dataframe import Series
+from cudf.core import Series
 
 params_dtypes = [np.int32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -79,12 +79,6 @@ def test_series_unique():
         sr = Series.from_masked_array(arr, Series(mask).as_mask())
         assert set(arr[mask]) == set(sr.unique().to_array())
         assert len(set(arr[mask])) == sr.nunique()
-        df = pd.DataFrame(data=arr[mask], columns=["col"])
-        expect = df.col.value_counts().sort_index()
-        got = sr.value_counts().to_pandas().sort_index()
-        print(expect.head())
-        print(got.head())
-        assert got.equals(expect)
 
 
 @pytest.mark.parametrize(

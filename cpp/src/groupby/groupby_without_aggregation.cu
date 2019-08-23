@@ -18,9 +18,9 @@
 #include <utilities/nvtx/nvtx_utils.h>
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
-#include <string/nvcategory_util.hpp>
-#include <table/device_table.cuh>
-#include <table/device_table_row_operators.cuh>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/error_utils.hpp>
 
 #include <thrust/fill.h>
@@ -92,7 +92,10 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   gdf_size_type nrows = input_table.num_rows();
 
   // Allocate output columns
-  cudf::table destination_table(nrows, cudf::column_dtypes(input_table), true);
+  cudf::table destination_table(nrows,
+                                cudf::column_dtypes(input_table),
+                                cudf::column_dtype_infos(input_table),
+                                true);
 
   std::vector<gdf_column*> key_cols_vect(num_key_cols);
   std::transform(

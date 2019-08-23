@@ -15,12 +15,35 @@
  */
 
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <utilities/error_utils.hpp>
 
 using namespace cudf::io;
 
 namespace cudf {
+
+table read_avro(avro_read_arg const &args) {
+  auto reader = [&]() {
+    avro::reader_options options{args.columns};
+
+    if (args.source.type == FILE_PATH) {
+      return std::make_unique<avro::reader>(args.source.filepath, options);
+    } else if (args.source.type == HOST_BUFFER) {
+      return std::make_unique<avro::reader>(args.source.buffer.first,
+                                           args.source.buffer.second, options);
+    } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
+      return std::make_unique<avro::reader>(args.source.file, options);
+    } else {
+      CUDF_FAIL("Unsupported source type");
+    }
+  }();
+
+  if (args.skip_rows != -1 || args.num_rows != -1) {
+    return reader->read_rows(args.skip_rows, args.num_rows);
+  } else {
+    return reader->read_all();
+  }
+}
 
 table read_csv(csv_read_arg const &args) {
   auto reader = [&]() {
@@ -103,7 +126,8 @@ table read_json(json_read_arg const &args) {
 
 table read_orc(orc_read_arg const &args) {
   auto reader = [&]() {
-    orc::reader_options options{args.columns, args.use_index};
+    orc::reader_options options{args.columns, args.use_index,
+                                args.use_np_dtypes, args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<orc::reader>(args.source.filepath, options);
@@ -128,7 +152,8 @@ table read_orc(orc_read_arg const &args) {
 
 table read_parquet(parquet_read_arg const &args) {
   auto reader = [&]() {
-    parquet::reader_options options{args.columns, args.strings_to_categorical};
+    parquet::reader_options options{args.columns, args.strings_to_categorical,
+                                    args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<parquet::reader>(args.source.filepath, options);
@@ -151,4 +176,4 @@ table read_parquet(parquet_read_arg const &args) {
   }
 }
 
-} // namespace cudf
+}  // namespace cudf

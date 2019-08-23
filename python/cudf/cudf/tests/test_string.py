@@ -11,8 +11,8 @@ from numba import cuda
 from librmm_cffi import librmm as rmm
 
 from cudf import concat
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import StringColumn, StringIndex
+from cudf.core import DataFrame, Series
+from cudf.core.index import StringColumn, StringIndex
 from cudf.tests.utils import assert_eq
 
 data_list = [
@@ -897,6 +897,19 @@ def test_string_equality():
     got = gs1 == gs2
 
     assert_eq(expect, got.fillna(False))
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got.fillna(False))
+
+    ps1 = pd.Series(["a"])
+    gs1 = Series(["a"])
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(

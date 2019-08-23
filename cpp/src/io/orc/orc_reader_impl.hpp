@@ -21,7 +21,7 @@
 #include <vector>
 
 #include <cudf/cudf.h>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -44,7 +44,7 @@ class reader::Impl {
   /**
    * @brief Constructor from a dataset source with reader options.
    **/
-  explicit Impl(std::unique_ptr<DataSource> source,
+  explicit Impl(std::unique_ptr<datasource> source,
                 reader_options const &options);
 
   /**
@@ -126,12 +126,14 @@ class reader::Impl {
                           const std::vector<gdf_column_wrapper> &columns);
 
  private:
-  std::unique_ptr<DataSource> source_;
+  std::unique_ptr<datasource> source_;
   std::unique_ptr<OrcMetadata> md_;
 
   std::vector<int> selected_cols_;
   bool has_timestamp_column_ = false;
   bool use_index_ = true;
+  bool use_np_dtypes_ = true;
+  gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
 } // namespace orc
