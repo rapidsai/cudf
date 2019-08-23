@@ -184,16 +184,17 @@ class OrcMetadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(int stripe, int row_start, int &row_count) {
+  auto select_stripes(int stripe, int &row_start, int &row_count) {
     std::vector<OrcStripeInfo> selection;
 
     if (stripe != -1) {
       CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
-      for (int i = 0; i < stripe; ++i) {
-        row_start += ff.stripes[i].numberOfRows;
-      }
       selection.emplace_back(&ff.stripes[stripe], nullptr);
-      row_count = ff.stripes[stripe].numberOfRows;
+      if (row_count < 0) {
+        row_count = ff.stripes[stripe].numberOfRows;
+      } else {
+        row_count = std::min(row_count, (int)ff.stripes[stripe].numberOfRows);
+      }
     } else {
       row_start = std::max(row_start, 0);
       if (row_count == -1) {
@@ -202,15 +203,20 @@ class OrcMetadata {
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
 
+      int stripe_skip_rows = 0;
       for (int i = 0, count = 0; i < (int)ff.stripes.size(); ++i) {
         count += ff.stripes[i].numberOfRows;
-        if (count > row_start || count == 0) {
+        if (count > row_start) {
+          if (selection.size() == 0) {
+            stripe_skip_rows = row_start - (count - ff.stripes[i].numberOfRows);
+          }
           selection.emplace_back(&ff.stripes[i], nullptr);
         }
         if (count >= (row_start + row_count)) {
           break;
         }
       }
+      row_start = stripe_skip_rows;
     }
 
     // Read each stripe's stripefooter metadata
