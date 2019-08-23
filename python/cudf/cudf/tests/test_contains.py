@@ -19,12 +19,14 @@ def cudf_num_series(start, stop, step=1):
 
 def get_categorical_series():
     return Series(
-        pd.Categorical(["a", "a", "b", "c", "a"], categories=["a", "b", "c"])
+        pd.Categorical(
+            ["ab", "ac", "cd", "ab", "cd"], categories=["ab", "ac", "cd"]
+        )
     )
 
 
 def get_string_series():
-    return Series(["a", "a", "b", "c", "a"])
+    return Series(["ab", "ac", "ba", "cc", "ad"])
 
 
 # If the type being searched is different from type of series, exceptions
@@ -42,11 +44,14 @@ testdata_all = [
         False,
     ),
     (cudf_date_series("20010101", "20020215", freq="400h"), 20000101, False),
-    (get_categorical_series(), "c", True),
-    (get_categorical_series(), "d", False),
+    (get_categorical_series(), "cd", True),
+    (get_categorical_series(), "dc", False),
+    (get_categorical_series(), "c", False),
+    (get_categorical_series(), "c", False),
     (get_categorical_series(), 1, False),
-    (get_string_series(), "c", True),
-    (get_string_series(), "d", False),
+    (get_string_series(), "ac", True),
+    (get_string_series(), "ca", False),
+    (get_string_series(), "c", False),
     (get_string_series(), 97, False),
     (cudf_num_series(0, 100, 5), 60, True),
     (cudf_num_series(0, 100, 5), 71, False),
