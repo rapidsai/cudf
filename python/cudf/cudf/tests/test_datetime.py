@@ -10,8 +10,8 @@ from pandas.util.testing import (
 )
 
 import cudf
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import DatetimeIndex
+from cudf.core import DataFrame, Series
+from cudf.core.index import DatetimeIndex
 from cudf.tests.utils import assert_eq
 
 

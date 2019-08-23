@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import Series
-from cudf.dataframe.index import as_index
+from cudf.core import Series
+from cudf.core.index import as_index
 from cudf.tests import utils
 
 _binops = [
@@ -630,10 +630,6 @@ def test_binop_bool_uint(func, rhs):
     # TODO: remove this once issue #2172 is resolved
     if func == "rmod" or func == "rfloordiv":
         return
-    # TODO: remove this once issue #2173 is resolved
-    if func == "mod" or func == "floordiv":
-        if rhs == 0:
-            return
     psr = pd.Series([True, False, False])
     gsr = cudf.from_pandas(psr)
     utils.assert_eq(
