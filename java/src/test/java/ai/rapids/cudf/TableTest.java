@@ -596,6 +596,7 @@ public class TableTest {
   void testReadORCNumPyTypes() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     // by default ORC will promote DATE32 to DATE64
+    // and TIMESTAMP is kept as it is
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
       assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
@@ -616,7 +617,10 @@ public class TableTest {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     // specifying no NumPy types should load them as DATE32 and TIMESTAMP
     // specifying TimeUnit will return the result in that unit
-    ORCOptions opts = ORCOptions.builder().withNumPyTypes(false).withTimeUnit(TimeUnit.SECONDS).build();
+    ORCOptions opts = ORCOptions.builder()
+        .withNumPyTypes(false)
+        .withTimeUnit(TimeUnit.SECONDS)
+        .build();
     try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
       assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
