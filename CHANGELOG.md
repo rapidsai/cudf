@@ -34,6 +34,7 @@
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
 - PR #2654 Allow Java gdfOrderBy to work with string categories
 - PR #2669 AVRO reader: fix non-deterministic output
+- PR #2668 Update Java API for ORC and Parquet readers
 
 
 # cuDF 0.9.0 (Date TBD)
