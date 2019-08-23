@@ -48,19 +48,17 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Returns True if column contains item, else False.
         """
-        item_found = False
+        # Handles improper item types
         try:
-            if (
-                cudautils.find_first(
-                    self.astype("float_").data.mem, float(item)
-                )
-                != -1
-            ):
-                item_found = True
+            item = float(item)
         except Exception:
-            "Nothing to be done"
+            """It means that the item was not a numerical type"""
+            return False
 
-        return item_found
+        return (
+            cudautils.find_first(self.astype("float_").data.mem, float(item))
+            != -1
+        )
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:

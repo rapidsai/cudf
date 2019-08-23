@@ -16,7 +16,6 @@ from librmm_cffi import librmm as rmm
 import cudf.bindings.quantile as cpp_quantile
 from cudf.bindings.concat import _column_concat
 from cudf.bindings.cudf_cpp import column_view_pointer, count_nonzero_mask
-from cudf.dataframe import columnops
 from cudf.dataframe.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import is_categorical_dtype
@@ -200,7 +199,7 @@ class Column(object):
         self._update_null_count(null_count)
 
     def __contains__(self, item):
-        return item in columnops.as_column(self._data)
+        raise (NotImplementedError)
 
     def equals(self, other):
         if self is other:

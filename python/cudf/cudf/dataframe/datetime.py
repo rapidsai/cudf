@@ -50,12 +50,12 @@ class DatetimeColumn(columnops.TypedColumnBase):
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def __contains__(self, item):
+        # Handles improper item types
         try:
-            item = pd.to_datetime(item)
-            item = columnops.as_column(item).as_numerical[0]
-            return item in self.as_numerical
+            item = pd.to_datetime(item).to_datetime64()
         except Exception:
             return False
+        return item in self.as_numerical
 
     def serialize(self):
         header, frames = super(DatetimeColumn, self).serialize()

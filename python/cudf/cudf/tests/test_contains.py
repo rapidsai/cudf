@@ -3,7 +3,6 @@ from datetime import datetime as dt
 import pandas as pd
 import pytest
 
-from cudf.dataframe.column import Column
 from cudf.dataframe.index import RangeIndex, as_index
 from cudf.dataframe.series import Series
 from cudf.tests.utils import assert_eq
@@ -58,28 +57,16 @@ testdata_all = [
     (cudf_num_series(0, 100, 5), "a", False),
 ]
 
-testdata_num = [
-    (cudf_num_series(0, 100, 5), 60, True),
-    (cudf_num_series(0, 100, 5), 71, False),
-    (cudf_num_series(0, 100, 5), "a", False),
-]
-
 
 @pytest.mark.parametrize("values, item, expected", testdata_all)
 def test_series_contains(values, item, expected):
-    assert_eq(expected, item in values)
+    assert_eq(expected, item in Series(index=values))
 
 
 @pytest.mark.parametrize("values, item, expected", testdata_all)
 def test_index_contains(values, item, expected):
     index = as_index(values)
     assert_eq(expected, item in index)
-
-
-@pytest.mark.parametrize("values, item, expected", testdata_num)
-def test_column_contains(values, item, expected):
-    col = Column(values.data)
-    assert_eq(expected, item in col)
 
 
 def test_rangeindex_contains():

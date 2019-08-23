@@ -129,7 +129,7 @@ class Series(object):
         self._name = name
 
     def __contains__(self, item):
-        return item in self._column
+        return item in self._index
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):

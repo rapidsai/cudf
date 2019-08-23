@@ -464,14 +464,7 @@ class StringColumn(columnops.TypedColumnBase):
         self._indices = None
 
     def __contains__(self, item):
-        found = False
-        try:
-            if True in self.str().contains(f"^{item}$")._column:
-                found = True
-        except Exception:
-            "column doesn't have the item"
-
-        return found
+        return True in self.str().contains(f"^{item}$")._column
 
     def __reduce__(self):
         cpumem = self.to_arrow()

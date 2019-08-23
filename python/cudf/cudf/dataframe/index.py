@@ -385,7 +385,10 @@ class RangeIndex(Index):
         self._cached_values = None
 
     def __contains__(self, item):
-        return item in self._values
+        if self._start <= item < self._stop:
+            return True
+        else:
+            return False
 
     def copy(self, deep=True):
         if deep:
@@ -610,9 +613,6 @@ class GenericIndex(Index):
 
         assert isinstance(values, columnops.TypedColumnBase), type(values)
 
-    def __contains__(self, item):
-        return item in self._values
-
     def copy(self, deep=True):
         if deep:
             result = deepcopy(self)
@@ -759,9 +759,6 @@ class DatetimeIndex(GenericIndex):
         super(DatetimeIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
 
-    def __contains__(self, item):
-        return item in self._values
-
     @property
     def year(self):
         return self.get_dt_field("year")
@@ -840,9 +837,6 @@ class CategoricalIndex(GenericIndex):
         super(CategoricalIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
 
-    def __contains__(self, item):
-        return item in self._values
-
     @property
     def names(self):
         return [self._values.name]
@@ -877,9 +871,6 @@ class StringIndex(GenericIndex):
             )
         super(StringIndex, self).__init__(values, **kwargs)
         assert self._values.null_count == 0
-
-    def __contains__(self, item):
-        return item in self._values
 
     def to_pandas(self):
         return pd.Index(self.values, name=self.name, dtype="object")
