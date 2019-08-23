@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from __future__ import division, print_function
 
 import pickle
 from copy import copy, deepcopy
