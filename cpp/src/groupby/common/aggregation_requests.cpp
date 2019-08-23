@@ -34,7 +34,6 @@
 
 namespace cudf {
 namespace groupby {
-namespace common {
 
 std::vector<SimpleAggRequestCounter> compound_to_simple(
     std::vector<AggRequestType> const& compound_requests) {
@@ -191,6 +190,5 @@ table compute_original_requests(
 
   return cudf::table{final_value_columns};
 }
-}  // namespace common
 }  // namespace groupby
 }  // namespace cudf

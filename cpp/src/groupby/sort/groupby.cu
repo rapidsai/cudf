@@ -35,14 +35,12 @@
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
  #include "../common/aggregation_requests.hpp"
-#include "../common/util.hpp"
+#include "../common/utils.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
 
 #include <quantiles/groupby.hpp>
 #include <quantiles/quantiles.hpp>
-
-using namespace cudf::groupby::common;
 
 namespace cudf {
 namespace groupby {

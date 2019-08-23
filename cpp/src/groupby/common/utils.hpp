@@ -40,7 +40,6 @@
 
 namespace cudf {
 namespace groupby {
-namespace common { 
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.
@@ -183,8 +182,7 @@ static void update_nvcategories(table const& input_keys, table& output_keys,
 }
 
 
-} // namespace cudf 
 } // namespace groupby 
-} // namespace common 
+} // namespace cudf 
 
 #endif

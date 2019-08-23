@@ -30,7 +30,6 @@ struct DeviceMax;
 struct DeviceSum;
 
 namespace groupby {
-namespace common { 
 /**---------------------------------------------------------------------------*
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
@@ -117,7 +116,6 @@ struct target_type_mapper {
   }
 };
 
-}  // namespace common
 }  // namespace groupby
 }  // namespace cudf
 

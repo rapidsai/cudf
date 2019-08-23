@@ -31,13 +31,11 @@
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
 #include "../common/type_info.hpp"
-#include "../common/util.hpp"
+#include "../common/utils.hpp"
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
 #include <type_traits>
 #include <vector>
-
-using namespace cudf::groupby::common;
 
 namespace cudf {
 namespace groupby {
