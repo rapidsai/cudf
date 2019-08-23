@@ -2549,7 +2549,28 @@ def test_ndim():
         np.array([1.123, 2.343, np.nan, 0.0]),
     ],
 )
-@pytest.mark.parametrize("decimal", range(0, 10))
+@pytest.mark.parametrize(
+    "decimal",
+    [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        pytest.param(
+            -1,
+            marks=[
+                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
+            ],
+        ),
+    ],
+)
 def test_round(arr, decimal):
     pser = pd.Series(arr)
     ser = Series(arr)
