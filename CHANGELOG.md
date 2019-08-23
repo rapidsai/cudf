@@ -3,14 +3,35 @@
 ## New Features
 
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2607 Add Java bindings for parsing JSON
+- PR #2629 Add dropna= parameter to groupby
+- PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 
 ## Improvements
 
+- PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
+- PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2648 Cython/Python reorg
+- PR #2588 Update Series.append documentation
+- PR #2632 Replace dask-cudf set_index code with upstream
+
 
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2619 Fix groupby serialization/deserialization
+- PR #2614 Update Java version to match
+- PR #2601 Fixes nlargest(1) issue in Series and Dataframe
+- PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
+- PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
+- PR #2611 Types Test: fix static casting from negative int to string
+- PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
+- PR #2615 fix string category partitioning in java API
+- PR #2641 fix string category and timeunit concat in the java API
+- PR #2658 Fix astype() for null categorical columns
+- PR #2660 fix column string category and timeunit concat in the java API
+- PR #2664 ORC reader: fix `skip_rows` larger than first stripe
 
 
 # cuDF 0.9.0 (Date TBD)
@@ -117,6 +138,8 @@
 - PR #2510 Java api: uses table based apply_boolean_mask
 - PR #2432 Use pandas formatting for console, html, and latex output
 - PR #2573 Bump numba version to 0.45.1
+- PR #2606 Fix references to notebooks-contrib
+
 
 ## Bug Fixes
 
@@ -184,6 +207,7 @@
 - PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
 - PR #2565 Orc reader: fix incorrect data decoding of int64 data types
 - PR #2577 Fix search benchmark compilation error by adding necessary header
+- PR #2604 Fix a bug in copying.pyx:_normalize_types that upcasted int32 to int64
 
 
 # cuDF 0.8.0 (27 June 2019)

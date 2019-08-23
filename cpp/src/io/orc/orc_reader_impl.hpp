@@ -133,6 +133,7 @@ class reader::Impl {
   bool has_timestamp_column_ = false;
   bool use_index_ = true;
   bool use_np_dtypes_ = true;
+  gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
 } // namespace orc
