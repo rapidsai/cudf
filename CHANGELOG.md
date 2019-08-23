@@ -16,7 +16,6 @@
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
 
-
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
