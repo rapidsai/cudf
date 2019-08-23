@@ -2541,7 +2541,7 @@ def test_ndim():
 
 @pytest.mark.parametrize(
     "arr", [
-        np.random.normal(0, 100, 1000),
+        np.random.normal(-100, 100, 1000),
         np.random.randint(-50, 50, 1000),
         np.zeros(1000),
         np.repeat(np.nan, 1000),
