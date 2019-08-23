@@ -257,13 +257,15 @@ class NumericalColumn(column.TypedColumnBase):
         if decimals < 0:
             msg = "Decimal values < 0 are not yet supported."
             raise NotImplementedError(msg)
-        
+
         mask_dary = None
         if self.has_null_mask:
             mask_dary = self.nullmask.mem
         data = Buffer(
-            cudautils.apply_round(self.astype('float').data.mem, mask_dary,
-                                  decimals))
+            cudautils.apply_round(
+                self.astype("float").data.mem, mask_dary, decimals
+            )
+        )
         return self.replace(data=data)
 
     def applymap(self, udf, out_dtype=None):

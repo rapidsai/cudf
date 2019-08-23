@@ -561,9 +561,9 @@ def gpu_round(in_col, out_col, decimal):
             out_col[i] = newval
 
         elif (
-                remainder != 0
-                and abs(remainder) < (0.5 * round_val)
-                and current < 0
+            remainder != 0
+            and abs(remainder) < (0.5 * round_val)
+            and current < 0
         ):
             newval = newval + round_val
             out_col[i] = newval
@@ -597,9 +597,9 @@ def gpu_round_masked(in_col, out_col, mask, decimal):
             out_col[i] = newval
 
         elif (
-                remainder != 0
-                and abs(remainder) < (0.5 * round_val)
-                and current < 0
+            remainder != 0
+            and abs(remainder) < (0.5 * round_val)
+            and current < 0
         ):
             newval = newval + round_val
             out_col[i] = newval
@@ -612,8 +612,9 @@ def apply_round(data, mask, decimal):
     output_dary = rmm.device_array_like(data)
     if output_dary.size > 0:
         if mask is not None:
-            gpu_round_masked.forall(output_dary.size)(data, output_dary, mask,
-                                                      decimal)
+            gpu_round_masked.forall(output_dary.size)(
+                data, output_dary, mask, decimal
+            )
         else:
             gpu_round.forall(output_dary.size)(data, output_dary, decimal)
     return output_dary
