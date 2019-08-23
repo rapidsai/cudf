@@ -183,7 +183,7 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 if we should not.
    * @param length            the length of the buffer to read from.
-   * @param timeUnit              return type of TimeStamp in units
+   * @param timeUnit          return type of TimeStamp in units
    */
   private static native long[] gdfReadParquet(String[] filterColumnNames, String filePath,
                                               long address, long length, int timeUnit) throws CudfException;
