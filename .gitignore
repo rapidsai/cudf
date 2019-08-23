@@ -20,9 +20,9 @@ dist/
 cudf.egg-info/
 python/build
 python/*/build
-python/cudf/*/bindings/**/*.cpp
-python/cudf/*/bindings/**/*.h
-python/cudf/*/bindings/.nfs*
+python/cudf/*/_lib/**/*.cpp
+python/cudf/*/_lib/**/*.h
+python/cudf/*/_lib/.nfs*
 python/cudf/*.ipynb
 python/cudf/.ipynb_checkpoints
 .Python

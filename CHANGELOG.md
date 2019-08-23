@@ -5,13 +5,16 @@
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
+- PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 
 ## Improvements
 
 - PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
 - PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
+- PR #2632 Replace dask-cudf set_index code with upstream
 - PR #2642 Improve null printing and testing
 
 ## Bug Fixes
@@ -26,6 +29,10 @@
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
+- PR #2658 Fix astype() for null categorical columns
+- PR #2660 fix column string category and timeunit concat in the java API
+- PR #2664 ORC reader: fix `skip_rows` larger than first stripe
+- PR #2654 Allow Java gdfOrderBy to work with string categories
 
 
 # cuDF 0.9.0 (Date TBD)
