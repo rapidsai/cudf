@@ -247,6 +247,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         header["type"] = pickle.dumps(type(self))
         header["dtype"] = self._dtype.str
         frames.extend(category_frames)
+        header["frame_count"] = len(frames)
         return header, frames
 
     @classmethod
