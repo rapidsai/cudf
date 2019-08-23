@@ -48,10 +48,14 @@ class NumericalColumn(columnops.TypedColumnBase):
         """
         Returns True if column contains item, else False.
         """
-        print ("In numerical")
         item_found = False
         try:
-            if cudautils.find_first(self.astype('float_').data.mem, float(item)) != -1:
+            if (
+                cudautils.find_first(
+                    self.astype("float_").data.mem, float(item)
+                )
+                != -1
+            ):
                 item_found = True
         except:
             "Nothing to be done"

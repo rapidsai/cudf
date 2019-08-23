@@ -50,11 +50,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
         self._time_unit, _ = np.datetime_data(self.dtype)
 
     def __contains__(self, item):
-        print ("RGSL : In date and time")
         try:
             item = pd.to_datetime(item)
             item = columnops.as_column(item).as_numerical[0]
-            return (item in self.as_numerical)
+            return item in self.as_numerical
         except:
             return False
 

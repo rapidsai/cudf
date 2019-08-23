@@ -200,9 +200,7 @@ class Column(object):
         self._update_null_count(null_count)
 
     def __contains__(self, item):
-       print ("In columns")
-       print ("Type of data", type(self._data))
-       return item in columnops.as_column(self._data) 
+        return item in columnops.as_column(self._data)
 
     def equals(self, other):
         if self is other:

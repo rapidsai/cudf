@@ -240,8 +240,7 @@ class CategoricalColumn(columnops.TypedColumnBase):
         self._ordered = ordered
 
     def __contains__(self, item):
-        print ("In categorical")
-        return (self._encode(item) in self.as_numerical)
+        return self._encode(item) in self.as_numerical
 
     def serialize(self):
         header, frames = super(CategoricalColumn, self).serialize()

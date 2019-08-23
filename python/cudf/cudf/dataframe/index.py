@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from __future__ import division, print_function
 
 import pickle
 from copy import copy, deepcopy
@@ -44,9 +43,7 @@ class Index(object):
         return header, frames
 
     def __contains__(self, item):
-        print ("In index")
-        print (type(self._values))
-        return (item in self._values)
+        return item in self._values
 
     @classmethod
     def deserialize(cls, header, frames):
@@ -387,8 +384,7 @@ class RangeIndex(Index):
         self._cached_values = None
 
     def __contains__(self, item):
-        print ("In range index")
-        return (item in self._values)
+        return item in self._values
 
     def copy(self, deep=True):
         if deep:
@@ -614,8 +610,7 @@ class GenericIndex(Index):
         assert isinstance(values, columnops.TypedColumnBase), type(values)
 
     def __contains__(self, item):
-        print ("In genindex")
-        return (item in self._values)
+        return item in self._values
 
     def copy(self, deep=True):
         if deep:
@@ -764,7 +759,6 @@ class DatetimeIndex(GenericIndex):
         assert self._values.null_count == 0
 
     def __contains__(self, item):
-        print ("DatetimeIndex")
         return item in self._values
 
     @property
@@ -846,7 +840,6 @@ class CategoricalIndex(GenericIndex):
         assert self._values.null_count == 0
 
     def __contains__(self, item):
-        print ("Categorical index")
         return item in self._values
 
     @property
@@ -885,7 +878,6 @@ class StringIndex(GenericIndex):
         assert self._values.null_count == 0
 
     def __contains__(self, item):
-        print ("String index")
         return item in self._values
 
     def to_pandas(self):

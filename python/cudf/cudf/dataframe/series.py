@@ -128,9 +128,7 @@ class Series(object):
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
 
-    def __contains__ (self, item):
-        print ("In series")
-        print ("Type of column", type(self._column))
+    def __contains__(self, item):
         return item in self._column
 
     @classmethod
