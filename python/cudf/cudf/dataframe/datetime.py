@@ -54,7 +54,7 @@ class DatetimeColumn(columnops.TypedColumnBase):
             item = pd.to_datetime(item)
             item = columnops.as_column(item).as_numerical[0]
             return item in self.as_numerical
-        except:
+        except Exception:
             return False
 
     def serialize(self):

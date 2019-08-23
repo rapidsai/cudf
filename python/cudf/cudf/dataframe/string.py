@@ -468,7 +468,7 @@ class StringColumn(columnops.TypedColumnBase):
         try:
             if True in self.str().contains(f"^{item}$")._column:
                 found = True
-        except:
+        except Exception:
             "column doesn't have the item"
 
         return found

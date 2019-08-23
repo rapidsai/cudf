@@ -57,7 +57,7 @@ class NumericalColumn(columnops.TypedColumnBase):
                 != -1
             ):
                 item_found = True
-        except:
+        except Exception:
             "Nothing to be done"
 
         return item_found

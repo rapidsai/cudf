@@ -1,13 +1,11 @@
+from datetime import datetime as dt
+
+import pandas as pd
 import pytest
 
-from datetime import datetime as dt
-import pandas as pd
-
-from cudf.dataframe import columnops
-from cudf.dataframe.index import as_index, RangeIndex
-from cudf.dataframe.series import Series
 from cudf.dataframe.column import Column
-
+from cudf.dataframe.index import RangeIndex, as_index
+from cudf.dataframe.series import Series
 from cudf.tests.utils import assert_eq
 
 
@@ -29,9 +27,9 @@ def get_string_series():
     return Series(["a", "a", "b", "c", "a"])
 
 
-## If the type being searched is different from type of series, exceptions
-## are thrown well within the python code, and needs to be handled.
-## Some of the test cases check this scenario. Example : String Vs Numerical
+# If the type being searched is different from type of series, exceptions
+# are thrown well within the python code, and needs to be handled.
+# Some of the test cases check this scenario. Example : String Vs Numerical
 testdata_all = [
     (
         cudf_date_series("20010101", "20020215", freq="400h"),
