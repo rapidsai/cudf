@@ -222,7 +222,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.fp64 = val
     elif val.dtype.type == np.float32:
         scalar.data.fp32 = val
-    elif val.dtype.type == np.int64:
+    elif val.dtype.type == np.int64 or val.dtype.type == np.longlong:
         scalar.data.si64 = val
     elif val.dtype.type == np.int32:
         scalar.data.si32 = val
