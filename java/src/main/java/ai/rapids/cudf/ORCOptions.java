@@ -26,14 +26,20 @@ public class ORCOptions extends ColumnFilterOptions {
   public static ORCOptions DEFAULT = new ORCOptions(new Builder());
 
   private final boolean useNumPyTypes;
+  private final TimeUnit unit;
 
   private ORCOptions(Builder builder) {
     super(builder);
     useNumPyTypes = builder.useNumPyTypes;
+    unit = builder.unit;
   }
 
   boolean usingNumPyTypes() {
     return useNumPyTypes;
+  }
+
+  TimeUnit usingTimeStamp() {
+    return unit;
   }
 
   public static Builder builder() {
@@ -42,6 +48,7 @@ public class ORCOptions extends ColumnFilterOptions {
 
   public static class Builder extends ColumnFilterOptions.Builder<Builder> {
     private boolean useNumPyTypes = true;
+    private TimeUnit unit = TimeUnit.NONE;
 
     /**
      * Specify whether the parser should implicitly promote DATE32 and
@@ -52,6 +59,16 @@ public class ORCOptions extends ColumnFilterOptions {
      */
     public Builder withNumPyTypes(boolean useNumPyTypes) {
       this.useNumPyTypes = useNumPyTypes;
+      return this;
+    }
+
+    /**
+     * Specify the return timestamp in units.
+     * @param unit TimeUnit specified by the user
+     * @return builder for chaining
+     */
+    public Builder withTimeStamp(TimeUnit unit) {
+      this.unit = unit;
       return this;
     }
 
