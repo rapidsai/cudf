@@ -2539,9 +2539,16 @@ def test_ndim():
     assert s.ndim == gs.ndim
 
 
-@pytest.mark.parametrize("decimal", range(-8, 8))
-def test_round(decimal):
-    arr = np.random.normal(0, 100, 10000)
+@pytest.mark.parametrize(
+    "arr", [
+        np.random.normal(0, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(1000),
+        np.repeat(np.nan, 1000),
+    ]
+)
+@pytest.mark.parametrize("decimal", range(0, 10))
+def test_round(arr, decimal):
     pser = pd.Series(arr)
     ser = Series(arr)
     result = ser.round(decimal)
@@ -2551,7 +2558,8 @@ def test_round(decimal):
     )
 
     # with nulls, maintaining existing null mask
-    mask = np.random.randint(0, 2, 10000)
+    arr = arr.astype('float64') # for pandas nulls
+    mask = np.random.randint(0, 2, 1000)
     arr[mask == 1] = np.nan
 
     pser = pd.Series(arr)

@@ -254,7 +254,12 @@ class NumericalColumn(column.TypedColumnBase):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
-        data = Buffer(cudautils.apply_round(self.data.mem, decimals))
+        mask_dary = None
+        if self.has_null_mask:
+            mask_dary = self.nullmask.mem
+        data = Buffer(
+            cudautils.apply_round(self.astype('float').data.mem, mask_dary,
+                                  decimals))
         return self.replace(data=data)
 
     def applymap(self, udf, out_dtype=None):
