@@ -93,7 +93,7 @@ def test_array_func_missing_cudf_dataframe(pd_df, func):
 @pytest.mark.parametrize("np_ar", [np.random.random(100)])
 @pytest.mark.parametrize("func", [lambda x: np.sum(x)])
 def test_array_func_cudf_index(np_ar, func):
-    cudf_index = cudf.dataframe.index.as_index(cudf.Series(np_ar))
+    cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
     expect = func(np_ar)
     got = func(cudf_index)
 
@@ -115,7 +115,7 @@ def test_array_func_cudf_index(np_ar, func):
     ],
 )
 def test_array_func_missing_cudf_index(np_ar, func):
-    cudf_index = cudf.dataframe.index.as_index(cudf.Series(np_ar))
+    cudf_index = cudf.core.index.as_index(cudf.Series(np_ar))
     with pytest.raises(TypeError):
         func(cudf_index)
 
