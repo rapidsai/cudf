@@ -148,7 +148,7 @@ cudf::table drop_duplicates(const cudf::table& input_table,
  *
  * @return number of unique elements
  */
-gdf_size_type unique_count(gdf_column& input_column);
+gdf_size_type unique_count(gdf_column const& input_column);
 }  // namespace cudf
 
 #endif
