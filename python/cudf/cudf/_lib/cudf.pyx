@@ -27,6 +27,7 @@ dtypes = {
     np.float64: GDF_FLOAT64,
     np.float32: GDF_FLOAT32,
     np.int64: GDF_INT64,
+    np.longlong: GDF_INT64,
     np.int32: GDF_INT32,
     np.int16: GDF_INT16,
     np.int8: GDF_INT8,
