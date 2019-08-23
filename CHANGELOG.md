@@ -32,7 +32,6 @@
 - PR #2658 Fix astype() for null categorical columns
 - PR #2660 fix column string category and timeunit concat in the java API
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
-- PR #2672 Fix null and integer handling in round
 - PR #2654 Allow Java gdfOrderBy to work with string categories
 - PR #2672 Fix null and integer handling in round
 
