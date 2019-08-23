@@ -15,6 +15,7 @@ from cudf._lib.copying import clone_columns_with_size
 from cudf._lib.includes.stream_compaction cimport (
     duplicate_keep_option,
     drop_duplicates as cpp_drop_duplicates,
+    unique_count as cpp_unique_count,
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask
 )
@@ -93,7 +94,7 @@ def nunique(in_col):
     cdef gdf_column* c_in_col = column_view_from_column(in_col_null)
     cdef int count = 0
     with nogil:
-        count = unique_count(c_in_col[0])
+        count = cpp_unique_count(c_in_col[0])
     # if null and nan both are present, increment count by 1
     if in_col.null_count>0 and in_col_null.null_count > in_col.null_count:
         count = count + 1
