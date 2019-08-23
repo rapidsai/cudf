@@ -193,7 +193,6 @@ gdf_size_type unique_count(gdf_column& input_column)
   if (0 == input_column.size) {
     return 0;
   }
-  gdf_column* cols[]{&input_column};
   const cudf::table key_columns(cols, 1);
   gdf_size_type unique_count; 
   std::tie(std::ignore, unique_count) =
