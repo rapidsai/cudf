@@ -188,7 +188,7 @@ rows in input table should be equal to number of rows in key colums table");
   return destination_table;
 }
 
-gdf_size_type unique_count(gdf_column& input_column)
+gdf_size_type unique_count(gdf_column const& input_column)
 {
   if (0 == input_column.size) {
     return 0;

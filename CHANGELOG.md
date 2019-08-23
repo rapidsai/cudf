@@ -16,6 +16,7 @@
 - PR #2601 Fixes nlargest(1) issue in Series and Dataframe
 - PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
+- PR #2645 libcudf unique_count for Series.nunique 
 
 
 # cuDF 0.9.0 (Date TBD)
