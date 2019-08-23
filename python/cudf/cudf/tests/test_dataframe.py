@@ -2540,13 +2540,14 @@ def test_ndim():
 
 
 @pytest.mark.parametrize(
-    "arr", [
+    "arr",
+    [
         np.random.normal(-100, 100, 1000),
         np.random.randint(-50, 50, 1000),
         np.zeros(100),
         np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0])
-    ]
+        np.array([1.123, 2.343, np.nan, 0.0]),
+    ],
 )
 @pytest.mark.parametrize("decimal", range(0, 10))
 def test_round(arr, decimal):
@@ -2559,7 +2560,7 @@ def test_round(arr, decimal):
     )
 
     # with nulls, maintaining existing null mask
-    arr = arr.astype('float64') # for pandas nulls
+    arr = arr.astype("float64")  # for pandas nulls
     mask = np.random.randint(0, 2, arr.shape[0])
     arr[mask == 1] = np.nan
 
