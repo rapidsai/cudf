@@ -206,6 +206,64 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
   CATCH_STD(env, );
 }
 
+NVStrings::timestamp_units translateTimestampUnit(gdf_time_unit time_unit) {
+  switch (time_unit) {
+    case TIME_UNIT_s: return NVStrings::seconds;
+    case TIME_UNIT_ms: return NVStrings::ms;
+    case TIME_UNIT_us: return NVStrings::us;
+    case TIME_UNIT_ns: return NVStrings::ns;
+  }
+  throw std::logic_error("UNSUPPORTED COLUMN VECTOR TIMESTAMP UNIT");
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimestamp(JNIEnv *env,
+                                                                                    jobject j_object,
+                                                                                    jlong handle,
+                                                                                    jint time_unit,
+                                                                                    jstring formatObj) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  if (formatObj == NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "must pass a timestamp format string", 0)
+  }
+
+  try {
+    cudf::jni::native_jstring format(env, formatObj);
+
+    gdf_column *column = reinterpret_cast<gdf_column *>(handle);
+
+    if (column->dtype == GDF_STRING) {
+      cudf::jni::gdf_column_wrapper output(column->size, gdf_dtype::GDF_TIMESTAMP,
+                                           column->null_count != 0);
+      output->dtype_info.time_unit = (gdf_time_unit)time_unit;
+
+      if (column->size > 0) {
+        NVStrings *strings = static_cast<NVStrings *>(column->data);
+        JNI_ARG_CHECK(env, column->size == strings->size(),
+                      "NVStrings size and gdf_column size mismatch", 0);
+        int result = strings->timestamp2long(format.get(),
+                                             translateTimestampUnit(output->dtype_info.time_unit),
+                                             static_cast<unsigned long *>(output->data));
+        if (result == -1) {
+          throw std::logic_error("timestamp2long returned with errors");
+        }
+        if (column->null_count > 0) {
+          CUDA_TRY(cudaMemcpy(output->valid, column->valid,
+                              gdf_num_bitmask_elements(column->size),
+                              cudaMemcpyDeviceToDevice));
+          output->null_count = column->null_count;
+        }
+      }
+      return reinterpret_cast<jlong>(output.release());
+    } else {
+      throw std::logic_error("ONLY STRING TYPES ARE SUPPORTED...");
+    }
+  }
+  CATCH_STD(env, 0);
+
+  return 0;
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *env,
                                                                       jobject j_object,
                                                                       jlong handle) {

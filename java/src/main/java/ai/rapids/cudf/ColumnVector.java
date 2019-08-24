@@ -1409,7 +1409,41 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestamp(TimeUnit unit) {
+    if (type == DType.STRING)
+      return asTimestamp(unit, "%Y-%m-%dT%H:%M:%SZ");
     return castTo(DType.TIMESTAMP, unit);
+  }
+
+  /**
+   * Native method to parse and convert a NVString column vector to unix timestamp. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
+   * positive or negative direction. This mirrors the functionality spark sql's to_unix_timestamp.
+   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @param unit integer native ID of the time unit to parse the timestamp into.
+   * @param format strptime format specifier string of the timestamp. Used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   * @return native handle of the resulting cudf column, used to construct the Java column vector
+   *         by the timestampToLong method.
+   */
+  private static native long stringTimestampToTimestamp(long cudfColumnHandle, int unit, String format);
+
+  /**
+   * Wrap static native string timestamp to long conversion method. Retrieves the column vector's
+   * cudf native handle and uses it to invoke the native function that calls NVStrings'
+   * timestamp2long method.
+   * @param unit time unit to parse the timestamp into.
+   * @param format strptime format specifier string of the timestamp. Used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   * @return A new ColumnVector containing the long representations of the timestamps in the
+   *         original column vector.
+   */
+  public ColumnVector asTimestamp(TimeUnit unit, String format) {
+    assert type == DType.STRING : "A column of type string is required " +
+                                  "for .timestampToLong() operation";
+    assert unit != TimeUnit.NONE : "Time unit may not be TimeUnit.NONE";
+    assert format != null : "Format string may not be NULL";
+    return new ColumnVector(stringTimestampToTimestamp(getNativeCudfColumnAddress(),
+                                                       unit.getNativeId(), format));
   }
 
   /**
@@ -1543,7 +1577,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Wrap static native string capitilization methods, retrieves the column vectors cudf native
-   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does
+   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does not
    * support String categories yet.
    * @return A new ColumnVector containing the upper case versions of the strings in the original
    *         column vector.
@@ -1555,7 +1589,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Wrap static native string capitilization methods, retrieves the column vectors cudf native
-   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does
+   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does not
    * support String categories yet.
    * @return A new ColumnVector containing the lower case versions of the strings in the original
    *         column vector.
