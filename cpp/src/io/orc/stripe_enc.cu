@@ -37,6 +37,8 @@ namespace gpu {
 
 #define SCRATCH_BFRSZ   (512*4)
 
+static __device__ __constant__ int64_t kORCTimeToUTC = 1420070400; // Seconds from January 1st, 1970 to January 1st, 2015
+
 struct byterle_enc_state_s
 {
     uint32_t literal_run;
@@ -49,8 +51,10 @@ struct intrle_enc_state_s
     uint32_t literal_run;
     uint32_t delta_run;
     volatile uint32_t delta_map[(512 / 32) + 1];
-    volatile uint8_t maxlen[512 / 32];
-    volatile uint16_t maxpos[512 / 32];
+    volatile union {
+        uint32_t u32[(512 / 32) * 2];
+        uint32_t u64[(512 / 32) * 2];
+    } scratch;
 };
 
 
@@ -86,6 +90,12 @@ struct orcenc_state_s
         uint32_t u32[1024];
     } lengths;
 };
+
+
+static inline __device__ uint32_t zigzag32(int32_t v) { int32_t s = (v >> 31); return ((v ^ s) * 2) - s; }
+static inline __device__ uint64_t zigzag64(int64_t v) { int64_t s = (v < 0) ? 1 : 0; return ((v ^ -s) * 2) + s; }
+static inline __device__ uint32_t CountLeadingBytes32(uint32_t v) { return __clz(v) >> 3; }
+static inline __device__ uint32_t CountLeadingBytes64(uint64_t v) { return __clzll(v) >> 3; }
 
 
 /**
@@ -270,6 +280,39 @@ static __device__ uint32_t ByteRLE(orcenc_state_s *s, const uint8_t *inbuf, uint
 
 
 /**
+ * @brief Maps the symbol size in bytes to RLEv2 5-bit length code
+ **/
+static const __device__ __constant__ uint8_t kByteLengthToRLEv2_W[9] =
+{
+    0, 7, 15, 23, 27, 28, 29, 30, 31
+};
+
+
+/**
+ * @brief Encode a varint value, return the number of bytes written
+ **/
+static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
+{
+    uint32_t bytecnt = 0;
+    for (;;)
+    {
+        uint32_t c = (uint32_t)(v & 0x7f);
+        v >>= 7u;
+        if (v == 0)
+        {
+            dst[bytecnt++] = c;
+            break;
+        }
+        else
+        {
+            dst[bytecnt++] = c + 0x80;
+        }
+    }
+    return bytecnt;
+}
+
+
+/**
  * @brief Integer RLEv2 encoder
  *
  * @param[in] cid stream type (strm_pos[cid] will be updated and output stored at streams[cid]+strm_pos[cid])
@@ -334,14 +377,165 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
         }
         __syncthreads();
         literal_run = s->u.intrle.literal_run;
-
-        numvals -= literal_run;
-        inpos += literal_run;
-        out_cnt += literal_run;
+        // Find minimum and maximum values
+        if (literal_run > 0)
+        {
+            // Find min & max
+            T vmin = (t < literal_run) ? v0 : (is_signed) ? INT32_MAX : UINT32_MAX;
+            T vmax = (t < literal_run) ? v0 : (is_signed) ? INT32_MIN : 0;
+            uint32_t literal_mode, literal_w;
+            vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
+            vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
+            vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
+            vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
+            vmin = min(vmin, (T)SHFL_XOR(vmin, 16));
+            vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
+            vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
+            vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
+            vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
+            vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
+            if (!(t & 0x1f))
+            {
+                s->u.intrle.scratch.u64[(t >> 4)+0] = vmin;
+                s->u.intrle.scratch.u64[(t >> 4)+1] = vmax;
+            }
+            __syncthreads();
+            if (t < 32)
+            {
+                vmin = (T)s->u.intrle.scratch.u64[(t >> 4) + 0];
+                vmax = (T)s->u.intrle.scratch.u64[(t >> 4) + 1];
+                vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
+                vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
+                vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
+                vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
+                vmin = min(vmin, (T)SHFL_XOR(vmin, 16));
+                vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
+                vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
+                vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
+                vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
+                vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
+                if (t == 0)
+                {
+                    uint32_t mode1_w, mode2_w;
+                    s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
+                    if (sizeof(T) > 4)
+                    {
+                        uint64_t vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
+                        uint64_t vrange_mode2 = (uint64_t)(vmax - vmin);
+                        mode1_w = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
+                        mode2_w = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
+                    }
+                    else
+                    {
+                        uint32_t vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
+                        uint32_t vrange_mode2 = (uint32_t)(vmax - vmin);
+                        mode1_w = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
+                        mode2_w = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
+                    }
+                    s->u.intrle.scratch.u32[2] = (mode1_w <= mode2_w) ? 1 : 2;
+                    s->u.intrle.scratch.u32[3] = min(mode1_w, mode2_w);
+                }
+            }
+            __syncthreads();
+            vmin = (T)s->u.intrle.scratch.u64[0];
+            literal_mode = s->u.intrle.scratch.u32[2];
+            literal_w = s->u.intrle.scratch.u32[3];
+            if (literal_mode == 1)
+            {
+                // Direct mode
+                if (!t)
+                {
+                    dst[0] = 0x40 + kByteLengthToRLEv2_W[literal_w] * 2 + ((literal_run - 1) >> 8);
+                    dst[1] = (literal_run - 1) & 0xff;
+                }
+                dst += 2;
+                if (t < literal_run)
+                {
+                    if (sizeof(T) > 4)
+                        v0 = zigzag64(v0);
+                    else
+                        v0 = zigzag32(v0);
+                    for (uint32_t i = 0, b = literal_w * 8; i < literal_w; i++)
+                    {
+                        b -= 8;
+                        dst[t * literal_w + i] = static_cast<uint8_t>(v0 >> b);
+                    }
+                }
+            }
+            else
+            {
+                // Patched base mode
+                uint32_t bw;
+                vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
+                bw =  (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax), 7)) : (4 - min(CountLeadingBytes32(vmax), 3));
+                if (!t)
+                {
+                    dst[0] = 0x80 + kByteLengthToRLEv2_W[literal_w] * 2 + ((literal_run - 1) >> 8);
+                    dst[1] = (literal_run - 1) & 0xff;
+                    dst[2] = (bw - 1) << 5;
+                    dst[3] = 0;
+                    if (is_signed)
+                    {
+                        vmax >>= 1;
+                        vmax |= vmin & ((T)1 << (bw*8-1));
+                    }
+                    for (uint32_t i = 0, b = bw * 8; i < bw; i++)
+                    {
+                        b -= 8;
+                        dst[4 + i] = static_cast<uint8_t>(vmax >> b);
+                    }
+                }
+                dst += 4 + bw;
+                if (t < literal_run)
+                {
+                    v0 -= vmin;
+                    for (uint32_t i = 0, b = literal_w * 8; i < literal_w; i++)
+                    {
+                        b -= 8;
+                        dst[t * literal_w + i] = static_cast<uint8_t>(v0 >> b);
+                    }
+                }
+            }
+            dst += literal_run * literal_w;
+            numvals -= literal_run;
+            inpos += literal_run;
+            out_cnt += literal_run;
+            __syncthreads();
+        }
         delta_run = s->u.intrle.delta_run;
         if (delta_run > 0)
         {
+            if (t == literal_run)
+            {
+                int64_t delta = v1 - v0;
+                uint64_t delta_base = (is_signed) ? (sizeof(T) > 4) ? zigzag64(v0) : zigzag32(v0) : v0;
+                uint32_t delta_bw = 8 - CountLeadingBytes64(delta_base);
+                if (delta == 0 && delta_run >= 3 && delta_run <= 10)
+                {
+                    // Short repeat
+                    delta_bw = max(delta_bw, 1);
+                    dst[0] = ((delta_bw - 1) << 3) + (delta_run - 3);
+                    for (uint32_t i = 0, b = delta_bw * 8; i < delta_bw; i++)
+                    {
+                        b -= 8;
+                        dst[1 + i] = static_cast<uint8_t>(delta_base >> b);
+                    }
+                    s->u.intrle.scratch.u32[0] = 1 + delta_bw;
+                }
+                else
+                {
+                    // Delta
+                    uint64_t delta_u = zigzag64(delta);
+                    uint32_t bytecnt = 2;
+                    dst[0] = 0xC0 + ((delta_run - 1) >> 8);
+                    dst[1] = (delta_run - 1) & 0xff;
+                    bytecnt += StoreVarint(dst + bytecnt, delta_base);
+                    bytecnt += StoreVarint(dst + bytecnt, delta_u);
+                    s->u.intrle.scratch.u32[0] = bytecnt;
+                }
+            }
             __syncthreads();
+            dst += s->u.intrle.scratch.u32[0];
             numvals -= delta_run;
             inpos += delta_run;
             out_cnt += delta_run;
@@ -374,6 +568,14 @@ inline __device__ void lengths_to_positions(volatile T *vals, uint32_t numvals, 
     }
 }
 
+
+/**
+ * @brief Timestamp scale table (powers of 10)
+ **/
+static const __device__ __constant__ int32_t kTimeScale[10] =
+{
+    1000000000, 100000000, 10000000, 1000000, 100000, 10000, 1000, 100, 10, 1
+};
 
 
 /**
@@ -505,6 +707,39 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 case BYTE:
                     s->vals.u8[nz_idx] = reinterpret_cast<const uint8_t *>(base)[row];
                     break;
+                case TIMESTAMP: {
+                    int64_t ts = reinterpret_cast<const int64_t *>(base)[row];
+                    int32_t ts_scale = kTimeScale[min(s->chunk.scale, 9)];
+                    int64_t seconds = ts / ts_scale;
+                    int32_t nanos = (ts - seconds * ts_scale);
+                    if (nanos < 0)
+                    {
+                        seconds += 1;
+                        nanos += ts_scale;
+                    }
+                    s->vals.i64[nz_idx] = seconds - kORCTimeToUTC;
+                    if (nanos != 0)
+                    {
+                        // Trailing zeroes are encoded in the lower 3-bits
+                        uint32_t zeroes = 0;
+                        nanos *= kTimeScale[9 - min(s->chunk.scale, 9)];
+                        if (!(nanos % 100))
+                        {
+                            nanos /= 100;
+                            zeroes = 1;
+                            while (zeroes < 7 && !(nanos % 10))
+                            {
+                                nanos /= 10;
+                                zeroes++;
+                            }
+                        }
+                        nanos = (nanos << 3) + zeroes;
+                    }
+                    s->lengths.u32[nz_idx] = nanos;
+                    break;
+                  }
+                default:
+                    break;
                 }
             }
             __syncthreads();
@@ -532,6 +767,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 uint32_t nz = s->buf.u32[511];
                 s->nnz += nz;
                 s->numvals += nz;
+                s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == STRING) ? nz : 0;
                 s->cur_row += nrows;
             }
             __syncthreads();
@@ -544,6 +780,10 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 case INT:
                 case DATE:
                     n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t);
+                    break;
+                case LONG:
+                case TIMESTAMP:
+                    n = IntegerRLE<CI_DATA, int64_t, true, 0x3ff>(s, s->vals.i64, s->nnz - s->numvals, s->numvals, flush, t);
                     break;
                 case BYTE:
                     n = ByteRLE<CI_DATA, 0x3ff>(s, s->vals.u8, s->nnz - s->numvals, s->numvals, flush, t);
@@ -569,13 +809,23 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                     s->numvals -= min(n, s->numvals);
                 }
             }
+            // Encode secondary stream values
             if (s->numlengths > 0)
             {
-                // TODO
+                uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 1 : 0, n;
+                switch (s->chunk.type_kind)
+                {
+                case TIMESTAMP:
+                    n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t);
+                    break;
+                default:
+                    n = s->numlengths;
+                    break;
+                }
                 __syncthreads();
                 if (!t)
                 {
-                    s->numlengths = 0;
+                    s->numlengths -= min(n, s->numlengths);
                 }
             }
         }
