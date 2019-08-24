@@ -17,6 +17,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    min_signed_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
@@ -298,10 +299,17 @@ class NumericalColumn(column.TypedColumnBase):
         Return col with *to_replace* replaced with *value*.
         """
         to_replace_col = column.as_column(to_replace)
+        to_replace_dtype = min_signed_column_type(to_replace_col)
+        to_replace_col = to_replace_col.astype(to_replace_dtype)
+
         replacement_dtype = self.dtype if all_nan else None
         replacement_col = column.as_column(
             replacement, dtype=replacement_dtype
         )
+        if not all_nan:
+            replacement_dtype = min_signed_column_type(replacement_col)
+            replacement_col = replacement_col.astype(replacement_dtype)
+
         replaced = self.copy()
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
