@@ -1184,13 +1184,8 @@ class Series(object):
             if all_nan:
                 new_value = [other] * len(to_replace)
             else:
-                # pre-determining the dtype to match the pandas's output
-                typ = to_replace.dtype
-                if np.dtype(type(other)).kind in "f" and typ.kind in "i":
-                    typ = np.int64 if other == int(other) else np.float64
-
                 new_value = utils.scalar_broadcast_to(
-                    other, (len(to_replace),), np.dtype(typ)
+                    other, (len(to_replace),), np.dtype(type(other))
                 )
         else:
             raise NotImplementedError(
@@ -1200,7 +1195,13 @@ class Series(object):
         result = self._column.find_and_replace(
             to_replace, new_value, all_nan=all_nan
         )
-
+        if (
+            np.dtype(type(other)).kind in "f"
+            and to_replace.dtype.kind in "i"
+            and other == int(other)
+        ):
+            # Matching dtype to pandas output
+            result = result.astype("int64")
         # To replace nulls:: If there are nulls in `cond` series, then we will
         # fill them with `False`, which means, by default, elements containing
         # nulls, are failing the given condition.
