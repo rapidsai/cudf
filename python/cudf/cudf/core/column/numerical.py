@@ -300,6 +300,10 @@ class NumericalColumn(column.TypedColumnBase):
         """
         to_replace_col = column.as_column(to_replace)
         to_replace_dtype = min_signed_column_type(to_replace_col)
+        if np.issubdtype(to_replace_dtype, np.floating) and np.issubdtype(
+            self.dtype, np.floating
+        ):
+            to_replace_dtype = self.dtype
         to_replace_col = to_replace_col.astype(to_replace_dtype)
 
         replacement_dtype = self.dtype if all_nan else None
@@ -308,6 +312,10 @@ class NumericalColumn(column.TypedColumnBase):
         )
         if not all_nan:
             replacement_dtype = min_signed_column_type(replacement_col)
+            if np.issubdtype(replacement_dtype, np.floating) and np.issubdtype(
+                self.dtype, np.floating
+            ):
+                replacement_dtype = self.dtype
             replacement_col = replacement_col.astype(replacement_dtype)
 
         replaced = self.copy()
