@@ -87,8 +87,7 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
 set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 
-option(BUILD_TESTS "Configure CMake to build tests"
-       ON)
+option(BUILD_TESTS "Configure CMake to build tests" ON)
 
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
@@ -192,22 +191,28 @@ message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
-message(STATUS "BUILDING NVSTRINGS")
-include(ConfigureNVStrings)
+option(BUILD_NVSTRINGS "Compile NVStrings alongside cuDF" OFF)
+if(BUILD_NVSTRINGS)
+    message(WARNING "NVSTRINGS: COMPILING NVSTRINGS ALONGSIDE CUDF")
+else()
+    find_path(NVSTRINGS_INCLUDE "nvstrings"
+              HINTS "$ENV{NVSTRINGS_ROOT}/include"
+                    "$ENV{CONDA_PREFIX}/include/nvstrings"
+                    "$ENV{CONDA_PREFIX}/include")
+    if(NVSTRINGS_INCLUDE)
+        set(NVSTRINGS_LIBRARY_DIR "${NVSTRINGS_INCLUDE}/../../lib")  # assumes /path/to/include/nvstrings/../../lib is a valid path
+        message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
+        message(STATUS "NVSTRINGS: NVSTRINGS_LIRBARY_DIR set to ${NVSTRINGS_LIRBARY_DIR}")
+        add_library(NVStrings SHARED IMPORTED)
+        set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so)
 
-if(NVSTRINGS_BUILT)
-  message(STATUS "NVStrings built successfully")
-  message(STATUS "NVStrings library path: " ${NVSTRINGS_LIBRARY_DIR})
-  
-  add_library(NVStrings SHARED IMPORTED)
-  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so)
+        add_library(NVCategory SHARED IMPORTED)
+        set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so)
 
-  add_library(NVCategory SHARED IMPORTED)
-  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so)
-
-  add_library(NVText SHARED IMPORTED)
-  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVText.so)
-endif(NVSTRINGS_BUILT)
+        add_library(NVText SHARED IMPORTED)
+        set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVText.so)        
+    endif(NVSTRINGS_INCLUDE)
+endif(BUILD_NVSTRINGS)
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -283,7 +288,51 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
+
 option(BUILD_SHARED_LIBS "Build a shared library" ON)
+
+if(BUILD_NVSTRINGS)
+    add_library(NVStrings SHARED 
+            custrings/strings/NVStrings.cu
+            custrings/strings/NVStringsImpl.cu
+            custrings/strings/array.cu
+            custrings/strings/attrs.cu
+            custrings/strings/case.cu
+            custrings/strings/combine.cu
+            custrings/strings/convert.cu
+            custrings/strings/count.cu
+            custrings/strings/datetime.cu
+            custrings/strings/extract.cu
+            custrings/strings/extract_record.cu
+            custrings/strings/find.cu
+            custrings/strings/findall.cu
+            custrings/strings/findall_record.cu
+            custrings/strings/modify.cu
+            custrings/strings/pad.cu
+            custrings/strings/replace.cu
+            custrings/strings/replace_backref.cu
+            custrings/strings/replace_multi.cu
+            custrings/strings/split.cu
+            custrings/strings/strip.cu
+            custrings/strings/substr.cu
+            custrings/strings/urlencode.cu
+            custrings/util.cu
+            custrings/regex/regexec.cpp
+            custrings/regex/regcomp.cpp)
+
+    add_library(NVCategory SHARED
+                custrings/category/NVCategory.cu
+                custrings/category/numeric_category.cu
+                custrings/category/numeric_category_int.cu
+                custrings/category/numeric_category_long.cu
+                custrings/category/numeric_category_float.cu
+                custrings/category/numeric_category_double.cu)
+    
+    add_library(NVText SHARED
+                custrings/text/NVText.cu
+                custrings/util.cu)
+endif(BUILD_NVSTRINGS)
+
 add_library(cudf 
             src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
@@ -382,7 +431,7 @@ add_library(cudf
             src/search/search.cu)
 
 #Override RPATH for cudf
-SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -423,38 +472,67 @@ endif(HT_LEGACY_ALLOCATOR)
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-SET(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
-
-target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
+set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
+if(BUILD_NVSTRINGS)
+    # link targets for NVStrings
+    target_link_libraries(NVStrings rmm cudart cuda)
+    target_link_libraries(NVCategory NVStrings rmm cudart cuda)
+    target_link_libraries(NVText NVStrings rmm cudart cuda)
+    # link targets for cuDF
+    target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
+else()
+    # link targets for cuDF
+    target_link_libraries(cudf rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES} NVCategory NVStrings nvrtc)
+endif(BUILD_NVSTRINGS)
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
-install(FILES ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so
-              ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so
-              ${NVSTRINGS_LIBRARY_DIR}/libNVText.so
-        DESTINATION lib)
-
-install(TARGETS cudf
-        DESTINATION lib)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
-        DESTINATION include)
-
-install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
-        DESTINATION include)
+if(BUILD_NVSTRINGS)
+    # install targets for NVStrings
+    install(TARGETS NVStrings
+            DESTINATION lib)
+    install(TARGETS NVCategory
+            DESTINATION lib)
+    install(TARGETS NVText
+            DESTINATION lib)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
+            DESTINATION include)
+    # install targets for cuDF
+    install(TARGETS cudf
+            DESTINATION lib)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
+            DESTINATION include)
+else()
+    # install targets for cuDF
+    install(TARGETS cudf
+            DESTINATION lib)
+    install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
+            DESTINATION include)
+endif(BUILD_NVSTRINGS)
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
-add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM)
+if(BUILD_NVSTRINGS)
+    # doc targets for nvstrings
+    add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
+                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
+                       COMMAND doxygen Doxyfile
+                       VERBATIM)
+    add_custom_target(nvstrings_doc DEPENDS NVSTRINGS_DOXYGEN)
+    # doc targets for cuDF
+    add_custom_command(OUTPUT CUDF_DOXYGEN
+                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
+                       COMMAND doxygen Doxyfile
+                       VERBATIM)
+    add_custom_target(doc DEPENDS CUDF_DOXYGEN)
+else()
+    # doc targets for cuDF
+    add_custom_command(OUTPUT CUDF_DOXYGEN
+                       WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
+                       COMMAND doxygen Doxyfile
+                       VERBATIM)
+    add_custom_target(doc DEPENDS CUDF_DOXYGEN)
+endif(BUILD_NVSTRINGS)
 
-add_custom_command(OUTPUT CUDF_DOXYGEN
-                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
-                   COMMAND doxygen Doxyfile
-                   VERBATIM)
-
-add_custom_target(doc DEPENDS CUDF_DOXYGEN NVSTRINGS_DOXYGEN)
