@@ -335,8 +335,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
                                       "resulting column is too large");
     }
-    cudf::jni::gdf_column_wrapper outcol(total_size, columns[0]->dtype, need_validity);
+    cudf::jni::gdf_column_wrapper outcol(total_size, columns[0]->dtype, need_validity, true);
     JNI_GDF_TRY(env, 0, gdf_column_concat(outcol.get(), columns.data(), columns.size()));
+    if (outcol->dtype == GDF_TIMESTAMP) {
+      outcol->dtype_info.time_unit = columns[0]->dtype_info.time_unit;
+    }
     return reinterpret_cast<jlong>(outcol.release());
   }
   CATCH_STD(env, 0);

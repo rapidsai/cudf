@@ -120,6 +120,7 @@ class reader::Impl {
   std::string index_col_;
   std::vector<std::pair<int, std::string>> selected_cols_;
   bool strings_to_categorical_ = false;
+  gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
 } // namespace parquet

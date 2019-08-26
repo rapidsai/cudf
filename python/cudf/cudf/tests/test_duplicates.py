@@ -3,7 +3,7 @@ import pytest
 from pandas import DataFrame, Series, date_range
 
 import cudf
-from cudf.multi import concat
+from cudf import concat
 from cudf.tests.utils import assert_eq
 
 
