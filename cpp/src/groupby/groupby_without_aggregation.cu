@@ -92,15 +92,12 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   gdf_size_type nrows = input_table.num_rows();
 
   // Ask if input table has nulls
-  auto get_key_table = [&]() {
-    std::vector<gdf_column *> key_columns;
-    for (gdf_size_type i = 0; i < num_key_cols; i++) {
-      gdf_size_type target_index = key_col_indices [i];
-      key_columns.push_back((gdf_column *)input_table.get_column(target_index));
-    } 
-    return cudf::table{key_columns.data(), num_key_cols};
-  };
-  auto allocate_bitmasks =  cudf::has_nulls( get_key_table() );
+  std::vector<gdf_column *> key_columns;
+  for (gdf_size_type i = 0; i < num_key_cols; i++) {
+    gdf_size_type target_index = key_col_indices [i];
+    key_columns.push_back((gdf_column *)input_table.get_column(target_index));
+  } 
+  auto allocate_bitmasks =  cudf::has_nulls( cudf::table(key_columns.data(), num_key_cols) );
 
   // Allocate output columns
   cudf::table destination_table(nrows,
