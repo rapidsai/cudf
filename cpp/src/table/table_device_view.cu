@@ -22,6 +22,7 @@
 #include <rmm/rmm.h>
 
 #include <algorithm>
+#include <numeric>
 
 namespace cudf {
 namespace detail {
