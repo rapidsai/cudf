@@ -194,7 +194,7 @@ def _is_nep18_active():
 
 def _have_cupy():
     try:
-        import cupy # noqa: F401
+        import cupy  # noqa: F401
 
         _have_cupy = True
     except ModuleNotFoundError:
