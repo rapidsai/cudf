@@ -9,8 +9,8 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from cudf.bindings.quantile import *
-from cudf.bindings.utils cimport *
+from cudf._lib.includes.quantile cimport *
+from cudf._lib.utils cimport *
 
 import numpy as np
 import pandas as pd
@@ -83,7 +83,7 @@ def quantile(column, quant, method, exact):
 
     return res
 
-def apply_group_quantile(key_columns, value_columns, quant, method):
+def group_quantile(key_columns, value_columns, quant, method):
     """ Calculate the group wise `quant` quantile for the value_columns
     Returns column of group wise quantile specified by quant
     """
