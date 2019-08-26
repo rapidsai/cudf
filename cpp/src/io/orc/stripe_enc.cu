@@ -791,6 +791,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 uint32_t flush = (s->cur_row == s->chunk.num_rows) ? 7 : 0, n;
                 switch (s->chunk.type_kind)
                 {
+                case SHORT:
                 case INT:
                 case DATE:
                     n = IntegerRLE<CI_DATA, int32_t, true, 0x3ff>(s, s->vals.i32, s->nnz - s->numvals, s->numvals, flush, t);

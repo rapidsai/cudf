@@ -124,7 +124,7 @@ void writer::Impl::write(const cudf::table& table) {
     ff.types[0].subtypes.resize(num_columns);
     ff.types[0].fieldNames.resize(num_columns);
     stream_ids.resize(num_columns * gpu::CI_NUM_STREAMS, -1);
-    sf.columns.resize(num_columns);
+    sf.columns.resize(num_columns + 1);
     sf.streams.resize(num_columns + 1);
     sf.streams[0].column = 0;
     sf.streams[0].kind = ROW_INDEX;
@@ -137,6 +137,8 @@ void writer::Impl::write(const cudf::table& table) {
         sf.streams[1+i].kind = ROW_INDEX;
         sf.streams[1+i].length = 0;
     }
+    sf.columns[0].kind = DIRECT;
+    sf.columns[0].dictionarySize = 0;
     for (int i = 0; i < num_columns; i++)
     {
         TypeKind kind = to_orckind(columns[i]->dtype);
@@ -231,8 +233,8 @@ void writer::Impl::write(const cudf::table& table) {
             ff.types[0].fieldNames[i].assign(columns[i]->col_name);
         else
             ff.types[0].fieldNames[i] = "_col" + std::to_string(i);
-        sf.columns[i].kind = encoding_kind;
-        sf.columns[i].dictionarySize = 0;
+        sf.columns[1 + i].kind = encoding_kind;
+        sf.columns[1 + i].dictionarySize = 0;
     }
     sf.writerTimezone = (has_timestamp_column) ? "UTC" : "";
     num_rowgroups = (ff.numberOfRows + ff.rowIndexStride - 1) / ff.rowIndexStride;
