@@ -296,6 +296,49 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
                                gdf_size_type              num_indices);
 
 /**
+ * @brief Slices a table (including null values) into a set of tables across
+ * rows according to a set of indices.
+ *
+ * The "slice" function divides part of the input table into multiple intervals
+ * of rows using the indices values and it stores the intervals into the output
+ * tables. Regarding the interval of indices, a pair of values are taken from
+ * the indices array in a consecutive manner. The pair of indices are left-closed
+ * and right-open.
+ *
+ * The pairs of indices in the array are required to comply with the following
+ * conditions:
+ * a, b belongs to Range[0, number of rows in input table]
+ * a <= b, where the position of a is less or equal to the position of b.
+  *
+ * Exceptional cases for the indices array are:
+ * When the values in the pair are equal, the function returns an empty table.
+ * When the values in the pair are 'strictly decreasing', the outcome is
+ * undefined.
+ * When any of the values in the pair don't belong to the range[0, number of
+ * rows in input table), the outcome is undefined.
+ * When the indices array is empty, an empty vector of tables is returned.
+ *
+ * The columns of output tables will be allocated by the function.
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * indices: {1, 3, 5, 9, 2, 4, 8, 8}
+ * output:  {[{12, 14}, {2, 3}], [{20, 22, 24, 26}, {0, 2, 4, 6}], 
+ *           [{14, 16}, {3, 4}], [{}, {}]}
+ *
+ * @param[in] input_table   The input table whose rows will be sliced.
+ * @param[in] indices       An device array of indices that are used to take 'slices'
+ * of the input table.
+ * @return  A std::vector of cudf::table, each of which may have a different number of rows.
+ * a different number of rows that are equal to the difference of two
+ * consecutive indices in the indices array.
+ */
+std::vector<cudf::table> slice(cudf::table const &        input_table,
+                               gdf_index_type const*      indices,
+                               gdf_size_type              num_indices);
+
+/**
  * @brief Splits a column (including null values) into a set of columns
  * according to a set of indices.
  *
@@ -344,6 +387,57 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices);
 
+
+/**
+ * @brief Splits a table (including null values) into a set of tables across
+ * rows according to a set of indices.
+ *
+ * The "split" function divides each input table into multiple intervals
+ * of rows using the indices values and it stores the intervals into the output
+ * tables. Regarding the interval of indices, a pair of values are taken from
+ * the indices array in a consecutive manner. The pair of indices are left-closed
+ * and right-open.
+ *
+ * The indices array ('indices') is require to be a monotonic non-decreasing set.
+ * The indices in the array are required to comply with the following conditions:
+ * a, b belongs to Range[0, number of rows in input table]
+ * a <= b, where the position of a is less or equal to the position of b.
+ *
+ * The split function will take a pair of indices from the indices array
+ * ('indices') in a consecutive manner. For the first pair, the function will
+ * take the value 0 and the first element of the indices array. For the last pair,
+ * the function will take the last element of the indices array and the number
+ * of rows in the table.
+ *
+ * Exceptional cases for the indices array are:
+ * When the values in the pair are equal, the function return an empty table.
+ * When the values in the pair are 'strictly decreasing', the outcome is
+ * undefined.
+ * When any of the values in the pair don't belong to the range[0, number of
+ * rows in input table), the outcome is undefined.
+ * When the indices array is empty, an empty vector of tables is returned.
+ *
+ * It is required that the columns of output tables will be preallocated. The
+ * number of rows in each table can be of different value. The number of tables
+ * must be equal to the number of indices in the array plus one. The datatypes
+ * of the columns of input tables and the output tables must be the same.
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * indices: {2, 5, 9}
+ * output:  { [{10, 12}, {1, 2}], [{14, 16, 18}, {3, 4, null}], 
+ *            [{20, 22, 24, 26}, {0, 2, 4, 6}], [{28}, {2}]}
+ *
+ * @param[in] input_table  The input table whose rows will be split.
+ * @param[in] indices       An device array of indices that are used to divide
+ * the input table into multiple tables.
+ * @return A std::vector of cudf::table, each of which may have a different size
+ * a different number of rows.
+ */
+std::vector<cudf::table> split(cudf::table const &        input_table,
+                               gdf_index_type const*      indices,
+                               gdf_size_type              num_indices);
 }  // namespace cudf
 
 #endif  // COPYING_H
