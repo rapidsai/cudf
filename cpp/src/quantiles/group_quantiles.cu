@@ -43,8 +43,8 @@ struct quantiles_functor {
              quantile_method interpolation, cudaStream_t stream)
   {
     // prepare args to be used by lambda below
-    auto result = reinterpret_cast<double*>(result_col.data);
-    auto values = reinterpret_cast<T*>(values_col.data);
+    auto result = static_cast<double*>(result_col.data);
+    auto values = static_cast<T*>(values_col.data);
     auto group_id = group_indices.data().get();
     auto group_size = group_sizes.data().get();
     auto d_quantiles = quantile.data().get();

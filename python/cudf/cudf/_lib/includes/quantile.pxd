@@ -20,7 +20,6 @@ cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
         QUANT_NEAREST,
         N_QUANT_METHODS,
 
-
     cdef gdf_error quantile_exact(
         gdf_column* col_in,
         quantile_method prec,

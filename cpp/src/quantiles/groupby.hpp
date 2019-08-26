@@ -27,6 +27,17 @@ namespace cudf {
 
 namespace detail {
 
+/**
+ * @brief Helper class for computing sort-based groupby
+ * 
+ * This class serves the purpose of sorting the keys and values and provides
+ * helping building blocks for aggregations. It can provide:
+ * 1. On demand grouping and sorting of a value column based on the key table
+ *   which is provided at construction
+ * 2. Group indices: starting indices of all groups in sorted key table
+ * 3. Group valid sizes: The nnumber of valid values in each group in a sorted
+ *   value column
+ */
 struct groupby {
   using index_vector = rmm::device_vector<gdf_size_type>;
 
