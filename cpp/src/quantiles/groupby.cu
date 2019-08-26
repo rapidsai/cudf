@@ -65,6 +65,25 @@ namespace cudf {
 
 namespace detail {
 
+
+void groupby::set_key_pre_sorted_order() {
+  gdf_index_type* d_indx = static_cast<gdf_index_type*>(_key_sorted_order.data);
+  gdf_size_type nrows = _key_table.num_rows();
+  util::cuda::scoped_stream stream;
+
+  thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
+
+  if ( not (_include_nulls ||
+      !cudf::has_nulls(_key_table)) ) {  // Pandas style
+    auto key_cols_bitmask = row_bitmask(_key_table);
+    CUDF_TRY(gdf_count_nonzero_mask(
+        reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get()),
+        _key_table.num_rows(),
+        &_num_keys));
+  }
+}
+
+
 void groupby::set_key_sort_order() {
   if (_include_nulls ||
       !cudf::has_nulls(_key_table)) {  // SQL style
@@ -86,7 +105,7 @@ void groupby::set_key_sort_order() {
                                       modified_key_cols_vect.size());
 
     gdf_context temp_ctx;
-    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+    temp_ctx.flag_null_sort_behavior = _null_sort_behavior;
 
     CUDF_TRY(gdf_order_by(modified_key_col_table.begin(), nullptr,
                           modified_key_col_table.num_columns(),

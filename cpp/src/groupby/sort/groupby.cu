@@ -144,7 +144,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                           std::vector<operators> const& input_ops, Options options,
                           cudaStream_t stream) {
   auto include_nulls = not options.ignore_null_keys;
-  auto groupby = cudf::detail::groupby(input_keys, include_nulls);
+  auto groupby = cudf::detail::groupby(input_keys, include_nulls, options.null_sort_behavior, options.input_sorted);
   index_vector group_indices = groupby.group_indices();
 
   if (group_indices.size() == 0) {

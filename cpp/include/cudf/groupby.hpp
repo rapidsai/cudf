@@ -124,8 +124,15 @@ namespace sort {
  *
  *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {
-  Options(bool _ignore_null_keys = true)
-      : groupby::Options(_ignore_null_keys) {}
+  bool input_sorted; ///< Indicates if the input data is sorted. 0 = No, 1 = yes
+  gdf_null_sort_behavior null_sort_behavior; ///< Indicates how nulls are
+                                             ///< treated in group_by operations
+  Options(bool _ignore_null_keys = true,
+          gdf_null_sort_behavior _null_sort_behavior = GDF_NULL_AS_LARGEST,
+          bool _input_sorted = false)
+      : groupby::Options(_ignore_null_keys),
+        input_sorted(_input_sorted),
+        null_sort_behavior(_null_sort_behavior) {}
 };
 
 /**---------------------------------------------------------------------------*

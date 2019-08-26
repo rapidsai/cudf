@@ -45,16 +45,25 @@ void print(gdf_column const& col, std::string label = "") {
 struct groupby {
   using index_vector = rmm::device_vector<gdf_size_type>;
 
-  groupby(cudf::table const& key_table, bool include_nulls = false)
+  groupby(cudf::table const& key_table, bool include_nulls = false, 
+          gdf_null_sort_behavior null_sort_behavior = GDF_NULL_AS_LARGEST,
+          bool input_sorted = false)
   : _key_table(key_table)
   , _num_keys(key_table.num_rows())
   , _include_nulls(include_nulls)
+  , _null_sort_behavior(null_sort_behavior)
+  , _input_sorted(input_sorted)
   {
     _key_sorted_order = allocate_column(gdf_dtype_of<gdf_index_type>(),
                                         key_table.num_rows(),
                                         false);
 
-    set_key_sort_order();
+    if (not _input_sorted) {
+      set_key_sort_order();
+    } else {
+      set_key_pre_sorted_order();
+    }
+
     if (_num_keys != 0) { // check if the number of groups is zero
       set_group_ids();
       set_group_labels();
@@ -85,6 +94,8 @@ struct groupby {
  private:
   void set_key_sort_order();
 
+  void set_key_pre_sorted_order();
+
   void set_group_ids();
 
   void set_group_labels();
@@ -102,6 +113,8 @@ struct groupby {
 
   gdf_size_type      _num_keys;
   bool               _include_nulls;
+  bool                _input_sorted;
+  gdf_null_sort_behavior _null_sort_behavior;
 
 };
 
