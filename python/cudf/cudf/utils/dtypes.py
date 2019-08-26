@@ -195,9 +195,8 @@ def min_signed_column_type(x):
 
     if not isinstance(x, NumericalColumn):
         raise TypeError("Argument x must be of type column.NumericaColumn")
-    if not np.issubdtype(x.dtype, np.signedinteger):
+    if not np.issubdtype(x.dtype, np.signedinteger) or x.valid_count == 0:
         return x.dtype
-    max_val = x.max()
-    if max_val is None or max_val is np.nan:
-        return x.dtype
-    return min_signed_type(max_val)
+    max_bound_dtype = np.dtype(min_signed_type(x.max()))
+    min_bound_dtype = np.dtype(min_signed_type(x.min()))
+    return max(max_bound_dtype, min_bound_dtype)
