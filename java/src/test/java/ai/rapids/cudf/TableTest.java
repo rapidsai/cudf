@@ -677,16 +677,24 @@ public class TableTest {
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
+        .categoryColumn("1", "2", "3")
+        .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L)
         .column(11.0, 12.0, 13.0).build();
          Table t2 = new Table.TestBuilder()
              .column(4, 5)
+             .categoryColumn("4", "3")
+             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 3L)
              .column(14.0, 15.0).build();
          Table t3 = new Table.TestBuilder()
              .column(6, 7, 8, 9)
+             .categoryColumn("4", "1", "2", "2")
+             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 1L, 2L, 2L)
              .column(16.0, 17.0, 18.0, 19.0).build();
          Table concat = Table.concatenate(t1, t2, t3);
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4, 5, 6, 7, 8, 9)
+             .categoryColumn("1", "2", "3", "4", "3", "4", "1", "2", "2")
+             .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L, 4L, 3L, 4L, 1L, 2L, 2L)
              .column(11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0).build()) {
       assertTablesAreEqual(expected, concat);
     }
@@ -719,12 +727,18 @@ public class TableTest {
            for (int i = 0; i < count; i++) {
              b.append(i / 2);
            }
+         });
+         ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
          })) {
+
       HashSet<Long> expected = new HashSet<>();
       for (long i = 0; i < count; i++) {
         expected.add(i);
       }
-      try (Table input = new Table(new ColumnVector[]{aIn, bIn});
+      try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).partition(5, HashFunction.MURMUR3)) {
         int[] parts = output.getPartitions();
         assertEquals(5, parts.length);
@@ -739,14 +753,18 @@ public class TableTest {
         assertTrue(rows <= count);
         ColumnVector aOut = output.getColumn(0);
         ColumnVector bOut = output.getColumn(1);
+        ColumnVector cOut = output.getColumn(2);
 
         aOut.ensureOnHost();
         bOut.ensureOnHost();
+        cOut.ensureOnHost();
         for (int i = 0; i < count; i++) {
           long fromA = aOut.getLong(i);
           long fromB = bOut.getInt(i);
+          String fromC = cOut.getJavaString(i);
           assertTrue(expected.remove(fromA));
           assertEquals(fromA / 2, fromB);
+          assertEquals(String.valueOf(fromA), fromC, "At Index " + i);
         }
         assertTrue(expected.isEmpty());
       }

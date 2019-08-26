@@ -8,6 +8,7 @@ import cudf
 from cudf import MultiIndex
 from cudf.bindings.groupby import apply_groupby as cpp_apply_groupby
 from cudf.bindings.nvtx import nvtx_range_pop
+from cudf.dataframe.columnops import deserialize_columns, serialize_columns
 from cudf.utils.utils import is_scalar
 
 
@@ -52,32 +53,40 @@ class _Groupby(object):
         data = cudf.Series(column_empty(nrows, "int8", masked=False))
         return data.groupby(self._groupby.key_columns).count()
 
+    def serialize(self):
+        header, frames = self._groupby.serialize()
+        header["type"] = pickle.dumps(type(self))
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        groupby_type = pickle.loads(header["type"])
+        _groupby = _GroupbyHelper.deserialize(header, frames)
+        return groupby_type(
+            _groupby.obj,
+            by=_groupby.by,
+            sort=_groupby.sort,
+            as_index=_groupby.as_index,
+        )
+
 
 class SeriesGroupBy(_Groupby):
     def __init__(
-        self, sr, by=None, level=None, method="hash", sort=True, as_index=None
+        self,
+        sr,
+        by=None,
+        level=None,
+        method="hash",
+        sort=True,
+        as_index=None,
+        dropna=True,
     ):
         self._sr = sr
         if as_index not in (True, None):
             raise TypeError("as_index must be True for SeriesGroupBy")
         self._groupby = _GroupbyHelper(
-            obj=self._sr, by=by, level=level, sort=sort
+            obj=self._sr, by=by, level=level, sort=sort, dropna=dropna
         )
-
-    def serialize(self):
-        header = {}
-        header["groupby"] = pickle.dumps(self)
-        header["type"] = pickle.dumps(type(self))
-        header["sr"], frames = self._sr.serialize()
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        groupby = pickle.loads(header["groupby"])
-        sr_typ = pickle.loads(header["sr"]["type"])
-        sr = sr_typ.deserialize(header["sr"], frames)
-        groupby._sr = sr
-        return groupby
 
     def _apply_aggregation(self, agg):
         return self._groupby.compute_result(agg)
@@ -85,11 +94,23 @@ class SeriesGroupBy(_Groupby):
 
 class DataFrameGroupBy(_Groupby):
     def __init__(
-        self, df, by=None, as_index=True, level=None, sort=True, method="hash"
+        self,
+        df,
+        by=None,
+        as_index=True,
+        level=None,
+        sort=True,
+        method="hash",
+        dropna=True,
     ):
         self._df = df
         self._groupby = _GroupbyHelper(
-            obj=self._df, by=by, as_index=as_index, level=level, sort=sort
+            obj=self._df,
+            by=by,
+            as_index=as_index,
+            level=level,
+            sort=sort,
+            dropna=dropna,
         )
 
     def _apply_aggregation(self, agg):
@@ -114,6 +135,7 @@ class DataFrameGroupBy(_Groupby):
                 by_list,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
+                dropna=self._groupby.dropna,
             )
 
     def __getattr__(self, key):
@@ -130,32 +152,20 @@ class DataFrameGroupBy(_Groupby):
                 by_list,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
+                dropna=self._groupby.dropna,
             )
         raise AttributeError(
             "'DataFrameGroupBy' object has no attribute " "'{}'".format(key)
         )
-
-    def serialize(self):
-        header = {}
-        header["groupby"] = pickle.dumps(self)
-        header["type"] = pickle.dumps(type(self))
-        header["df"], frames = self._df.serialize()
-        return header, frames
-
-    @classmethod
-    def deserialize(cls, header, frames):
-        groupby = pickle.loads(header["groupby"])
-        df_typ = pickle.loads(header["df"]["type"])
-        df = df_typ.deserialize(header["df"], frames)
-        groupby._df = df
-        return groupby
 
 
 class _GroupbyHelper(object):
 
     NAMED_AGGS = ("sum", "mean", "min", "max", "count")
 
-    def __init__(self, obj, by=None, level=None, as_index=True, sort=None):
+    def __init__(
+        self, obj, by=None, level=None, as_index=True, sort=None, dropna=True
+    ):
         """
         Helper class for both SeriesGroupBy and DataFrameGroupBy classes.
         """
@@ -169,7 +179,52 @@ class _GroupbyHelper(object):
         self.by = by
         self.as_index = as_index
         self.sort = sort
+        self.dropna = dropna
         self.normalize_keys()
+
+    def serialize(self):
+        header = {}
+        frames = []
+
+        header["obj"], obj_frames = self.obj.serialize()
+        header["obj_type"] = pickle.dumps(type(self.obj))
+        header["obj_frame_count"] = len(obj_frames)
+        frames.extend(obj_frames)
+
+        header["key_names"] = self.key_names
+        header["as_index"] = self.as_index
+        header["sort"] = self.sort
+
+        key_columns_header, key_columns_frames = serialize_columns(
+            self.key_columns
+        )
+
+        header["key_columns"] = key_columns_header
+        frames.extend(key_columns_frames)
+
+        return header, frames
+
+    @classmethod
+    def deserialize(cls, header, frames):
+        obj_frames = frames[: header["obj_frame_count"]]
+
+        obj_type = pickle.loads(header["obj_type"])
+        obj = obj_type.deserialize(header["obj"], obj_frames)
+
+        as_index = header["as_index"]
+        sort = header["sort"]
+
+        key_column_frames = frames[header["obj_frame_count"] :]
+        key_columns = deserialize_columns(
+            header["key_columns"], key_column_frames
+        )
+
+        for col_name, col in zip(header["key_names"], key_columns):
+            col.name = col_name
+
+        gby = cls(obj, by=key_columns, as_index=as_index, sort=sort)
+
+        return gby
 
     def get_by_from_level(self, level):
         """
@@ -232,7 +287,11 @@ class _GroupbyHelper(object):
         aggs_as_list = self.get_aggs_as_list()
 
         out_key_columns, out_value_columns = _groupby_engine(
-            self.key_columns, self.value_columns, aggs_as_list, self.sort
+            self.key_columns,
+            self.value_columns,
+            aggs_as_list,
+            self.sort,
+            self.dropna,
         )
 
         return self.construct_result(out_key_columns, out_value_columns)
@@ -397,7 +456,7 @@ class _GroupbyHelper(object):
         return aggs_as_list
 
 
-def _groupby_engine(key_columns, value_columns, aggs, sort):
+def _groupby_engine(key_columns, value_columns, aggs, sort, dropna):
     """
     Parameters
     ----------
@@ -405,6 +464,7 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
     value_columns : list of Columns
     aggs : list of str
     sort : bool
+    dropna : bool
 
     Returns
     -------
@@ -412,7 +472,7 @@ def _groupby_engine(key_columns, value_columns, aggs, sort):
     out_value_columns : list of Columns
     """
     out_key_columns, out_value_columns = cpp_apply_groupby(
-        key_columns, value_columns, aggs
+        key_columns, value_columns, aggs, dropna=dropna
     )
 
     if sort:

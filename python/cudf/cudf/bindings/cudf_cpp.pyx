@@ -5,7 +5,6 @@
 # cython: embedsignature = True
 # cython: language_level = 3
 
-from cudf.bindings.cudf_cpp cimport *
 from cudf.bindings.GDFError import GDFError
 from libcpp.vector cimport vector
 from libc.stdint cimport uintptr_t
@@ -579,7 +578,8 @@ cdef gdf_context* create_context_view(
     flag_distinct,
     flag_sort_result,
     flag_sort_inplace,
-    flag_null_sort_behavior
+    flag_null_sort_behavior,
+    flag_groupby_include_nulls
 ):
 
     cdef gdf_method method_api = _join_method_api[method]
@@ -591,6 +591,7 @@ cdef gdf_context* create_context_view(
     cdef int c_flag_sort_inplace = flag_sort_inplace
     cdef gdf_null_sort_behavior nulls_sort_behavior_api = \
         _null_sort_behavior_api[flag_null_sort_behavior]
+    cdef bool c_flag_groupby_include_nulls = flag_groupby_include_nulls
 
     with nogil:
         gdf_context_view(
@@ -600,7 +601,8 @@ cdef gdf_context* create_context_view(
             c_flag_distinct,
             c_flag_sort_result,
             c_flag_sort_inplace,
-            nulls_sort_behavior_api
+            c_flag_groupby_include_nulls,
+            nulls_sort_behavior_api,
         )
 
     return context
