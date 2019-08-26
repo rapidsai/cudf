@@ -1,7 +1,6 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-from librmm_cffi import librmm as _rmm
-from librmm_cffi import librmm_config as _rmm_cfg
+from librmm_cffi import librmm as _rmm, librmm_config as _rmm_cfg
 
 from cudf import core, datasets
 from cudf._version import get_versions
@@ -31,7 +30,6 @@ from cudf.io import (
     read_orc,
     read_parquet,
 )
-
 from cudf.utils.utils import initfunc as _initfunc
 
 
