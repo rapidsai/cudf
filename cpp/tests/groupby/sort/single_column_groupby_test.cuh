@@ -113,7 +113,8 @@ template <cudf::groupby::operators op, typename Key, typename Value,
 void single_column_groupby_test(column_wrapper<Key> keys,
                                 column_wrapper<Value> values,
                                 column_wrapper<Key> expected_keys,
-                                column_wrapper<ResultValue> expected_values) {
+                                column_wrapper<ResultValue> expected_values,
+                                bool ignore_null_keys = true) {
   using namespace cudf::test;
   using namespace cudf::groupby::sort;
    
@@ -129,9 +130,9 @@ void single_column_groupby_test(column_wrapper<Key> keys,
 
   cudf::table actual_keys_table;
   cudf::table actual_values_table;
-
+  cudf::groupby::sort::Options options{ignore_null_keys};
   std::tie(actual_keys_table, actual_values_table) =
-      cudf::groupby::sort::groupby(input_keys, input_values, {op});
+      cudf::groupby::sort::groupby(input_keys, input_values, {op}, options);
 
   EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
 
@@ -144,13 +145,13 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   cudf::table sorted_expected_values;
   std::tie(sorted_expected_keys, sorted_expected_values) =
       detail::sort_by_key({expected_keys.get()}, {expected_values.get()});
-
+  
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
                                                        sorted_expected_keys));
 
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_values,
                                                        sorted_expected_values));
-
+  
   detail::destroy_table(&sorted_actual_keys);
   detail::destroy_table(&sorted_actual_values);
   detail::destroy_table(&sorted_expected_keys);

@@ -33,11 +33,12 @@ __global__ void aggregate_all_rows(
     gdf_size_type* key_sorted_order, 
     gdf_size_type* group_labels, 
     operators* ops,
-    bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
+    bit_mask::bit_mask_t const* const __restrict__ row_bitmask,
+    bool skip_null_keys) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
   while (i < num_rows) {
-    if (skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
+    if (skip_null_keys and skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
       i += blockDim.x * gridDim.x;
       continue;
     }

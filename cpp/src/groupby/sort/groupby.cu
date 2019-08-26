@@ -197,7 +197,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
         grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
         input_keys.num_rows(), *d_input_values, *d_output_values, (gdf_index_type *)key_sorted_order.data,
         group_labels.data().get(),
-        d_ops.data().get(), row_bitmask.data().get());
+        d_ops.data().get(), row_bitmask.data().get(), options.ignore_null_keys);
 
     // compute_simple_request
     current_output_values = compute_original_requests(
