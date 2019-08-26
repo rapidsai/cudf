@@ -33,6 +33,7 @@
 - PR #2660 fix column string category and timeunit concat in the java API
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
 - PR #2654 Allow Java gdfOrderBy to work with string categories
+- PR #2680 Fix `replace` upcasting column dtype to `int64` or `float64`
 
 
 # cuDF 0.9.0 (Date TBD)
