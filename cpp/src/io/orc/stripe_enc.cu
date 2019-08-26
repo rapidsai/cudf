@@ -312,6 +312,11 @@ static inline __device__ uint32_t StoreVarint(uint8_t *dst, uint64_t v)
 }
 
 
+static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax)   { vmin = INT64_MIN; vmax = INT64_MAX; }
+//static inline __device__ void intrle_minmax(uint64_t &vmin, uint64_t &vmax) { vmin = UINT64_C(0); vmax = UINT64_MAX; }
+static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax)   { vmin = INT32_MIN; vmax = INT32_MAX; }
+static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax) { vmin = UINT32_C(0); vmax = UINT32_MAX; }
+
 /**
  * @brief Integer RLEv2 encoder
  *
@@ -381,9 +386,16 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
         if (literal_run > 0)
         {
             // Find min & max
-            T vmin = (t < literal_run) ? v0 : (is_signed) ? INT32_MAX : UINT32_MAX;
-            T vmax = (t < literal_run) ? v0 : (is_signed) ? INT32_MIN : 0;
+            T vmin, vmax;
             uint32_t literal_mode, literal_w;
+            if (t < literal_run)
+            {
+                vmin = vmax = v0;
+            }
+            else
+            {
+                intrle_minmax(vmax, vmin);
+            }
             vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
             vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
             vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
@@ -396,14 +408,14 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
             vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
             if (!(t & 0x1f))
             {
-                s->u.intrle.scratch.u64[(t >> 4)+0] = vmin;
-                s->u.intrle.scratch.u64[(t >> 4)+1] = vmax;
+                s->u.intrle.scratch.u64[(t >> 5) * 2 + 0] = vmin;
+                s->u.intrle.scratch.u64[(t >> 5) * 2 + 1] = vmax;
             }
             __syncthreads();
             if (t < 32)
             {
-                vmin = (T)s->u.intrle.scratch.u64[(t >> 4) + 0];
-                vmax = (T)s->u.intrle.scratch.u64[(t >> 4) + 1];
+                vmin = (T)s->u.intrle.scratch.u64[(t >> 5) * 2 + 0];
+                vmax = (T)s->u.intrle.scratch.u64[(t >> 5) * 2 + 1];
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
@@ -451,10 +463,13 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 dst += 2;
                 if (t < literal_run)
                 {
-                    if (sizeof(T) > 4)
-                        v0 = zigzag64(v0);
-                    else
-                        v0 = zigzag32(v0);
+                    if (is_signed)
+                    {
+                        if (sizeof(T) > 4)
+                            v0 = zigzag64(v0);
+                        else
+                            v0 = zigzag32(v0);
+                    }
                     for (uint32_t i = 0, b = literal_w * 8; i < literal_w; i++)
                     {
                         b -= 8;
@@ -509,11 +524,10 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
             {
                 int64_t delta = v1 - v0;
                 uint64_t delta_base = (is_signed) ? (sizeof(T) > 4) ? zigzag64(v0) : zigzag32(v0) : v0;
-                uint32_t delta_bw = 8 - CountLeadingBytes64(delta_base);
                 if (delta == 0 && delta_run >= 3 && delta_run <= 10)
                 {
                     // Short repeat
-                    delta_bw = max(delta_bw, 1);
+                    uint32_t delta_bw = 8 - min(CountLeadingBytes64(delta_base), 7);
                     dst[0] = ((delta_bw - 1) << 3) + (delta_run - 3);
                     for (uint32_t i = 0, b = delta_bw * 8; i < delta_bw; i++)
                     {
