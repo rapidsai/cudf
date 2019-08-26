@@ -15,7 +15,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
-
+- PR #2682 Add cudf.set_allocator() function for easier allocator init
 
 ## Bug Fixes
 
