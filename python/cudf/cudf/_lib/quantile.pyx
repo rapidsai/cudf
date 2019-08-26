@@ -83,6 +83,7 @@ def quantile(column, quant, method, exact):
 
     return res
 
+
 def group_quantile(key_columns, value_columns, quant, method):
     """ Calculate the group wise `quant` quantile for the value_columns
     Returns column of group wise quantile specified by quant
