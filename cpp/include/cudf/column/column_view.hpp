@@ -158,7 +158,7 @@ class column_view_base {
   bitmask_type const* _null_mask{};  ///< Pointer to device memory containing
                                      ///< bitmask representing null elements.
                                      ///< Optional if `null_count() == 0`
-  size_type _null_count{};           ///< The number of null elements
+  mutable size_type _null_count{};   ///< The number of null elements
   size_type _offset{};               ///< Index position of the first element.
                                      ///< Enables zero-copy slicing
 
