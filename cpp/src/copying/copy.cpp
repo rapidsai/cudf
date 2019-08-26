@@ -41,7 +41,7 @@ gdf_column empty_like(gdf_column const& input)
 
   CUDF_EXPECTS(GDF_SUCCESS == 
                gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                         input.dtype, 0, info),
+                                         input.dtype, 0, info, input.col_name),
                "Invalid column parameters");
 
   return output;

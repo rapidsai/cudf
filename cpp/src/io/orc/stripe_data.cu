@@ -798,7 +798,7 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                         {
                             uint64_t baseval, mask;
                             bytestream_readbe(bs, pos * 8, bw * 8, baseval);
-                            mask = 2;
+                            mask = 1;
                             mask <<= (bw*8) - 1;
                             mask -= 1;
                             rle->baseval.u64[r] = (baseval > mask) ? (-(int64_t)(baseval & mask)) : baseval;
@@ -1901,7 +1901,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             {
                 if (s->chunk.type_kind == TIMESTAMP)
                 {
-                    s->top.data.buffered_count = s->top.data.max_vals - (numvals + vals_skipped);
+                    s->top.data.buffered_count = s->top.data.max_vals - numvals;
                 }
                 s->top.data.max_vals = numvals;
             }
@@ -2003,7 +2003,10 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
                         {
                             seconds -= 1;
                         }
-                        reinterpret_cast<int64_t *>(data_out)[row] = seconds * ORC_TS_CLKRATE + (nanos + (499999999 / ORC_TS_CLKRATE)) / (1000000000 / ORC_TS_CLKRATE); // Output to desired clock rate
+                        if (s->chunk.ts_clock_rate)
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * s->chunk.ts_clock_rate + (nanos + (499999999 / s->chunk.ts_clock_rate)) / (1000000000 / s->chunk.ts_clock_rate); // Output to desired clock rate
+                        else
+                            reinterpret_cast<int64_t *>(data_out)[row] = seconds * 1000000000 + nanos;
                         break;
                     }
                     }
@@ -2013,7 +2016,7 @@ gpuDecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dictionary, i
             // Buffer secondary stream values
             if (s->chunk.type_kind == TIMESTAMP)
             {
-                int buffer_pos = s->top.data.max_vals + vals_skipped;
+                int buffer_pos = s->top.data.max_vals;
                 if (t >= buffer_pos && t < buffer_pos + s->top.data.buffered_count)
                 {
                     s->vals.u32[t - buffer_pos] = secondary_val;

@@ -74,8 +74,7 @@ struct row_hasher {
  * @tparam values_have_nulls Indicates if rows in `input_values` contain null
  * values
  * @tparam Map The type of the hash map
- * @param map Pointer to hash map object to insert key,value pairs into.
- * (Assumed to be allocated with managed memory)
+ * @param map Hash map object to insert key,value pairs into.
  * @param input_keys The table whose rows will be keys of the hash map
  * @param input_values The table whose rows will be aggregated in the values of
  * the hash map
@@ -89,7 +88,7 @@ struct row_hasher {
  *---------------------------------------------------------------------------**/
 template <bool skip_rows_with_nulls, bool values_have_nulls, typename Map>
 __global__ void build_aggregation_map(
-    Map* map, device_table input_keys, device_table input_values,
+    Map map, device_table input_keys, device_table input_values,
     device_table output_values, operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
@@ -100,7 +99,7 @@ __global__ void build_aggregation_map(
       continue;
     }
 
-    auto result = map->insert(thrust::make_pair(i, i));
+    auto result = map.insert(thrust::make_pair(i, i));
 
     aggregate_row<values_have_nulls>(output_values, result.first->second,
                                      input_values, i, ops);
@@ -135,7 +134,7 @@ __global__ void build_aggregation_map(
  * result size.
  *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls, typename Map>
-__global__ void extract_groupby_result(Map* map, device_table const input_keys,
+__global__ void extract_groupby_result(Map map, device_table const input_keys,
                                        device_table output_keys,
                                        device_table const sparse_output_values,
                                        device_table dense_output_values,
@@ -144,9 +143,9 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
 
   using pair_type = typename Map::value_type;
 
-  pair_type const* const __restrict__ table_pairs{map->data()};
+  pair_type const* const __restrict__ table_pairs{map.data()};
 
-  while (i < map->capacity()) {
+  while (i < map.capacity()) {
     gdf_size_type source_key_row_index;
     gdf_size_type source_value_row_index;
 
@@ -154,7 +153,7 @@ __global__ void extract_groupby_result(Map* map, device_table const input_keys,
     // equal, but lets be generic just in case that ever changes.
     thrust::tie(source_key_row_index, source_value_row_index) = table_pairs[i];
 
-    if (source_key_row_index != map->get_unused_key()) {
+    if (source_key_row_index != map.get_unused_key()) {
       auto output_index = atomicAdd(output_write_index, 1);
 
       // TODO: Optimize setting bits in output bitmask. Currently, we rely on

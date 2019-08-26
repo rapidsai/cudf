@@ -11,8 +11,8 @@ from numba import cuda
 from librmm_cffi import librmm as rmm
 
 from cudf import concat
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import StringColumn, StringIndex
+from cudf.core import DataFrame, Series
+from cudf.core.index import StringColumn, StringIndex
 from cudf.tests.utils import assert_eq
 
 data_list = [

@@ -20,15 +20,9 @@ package ai.rapids.cudf;
 
 import org.junit.jupiter.api.Test;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.security.acl.Group;
 import java.util.*;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
@@ -222,14 +216,36 @@ public class TableTest {
     try (Table table = new Table.TestBuilder()
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
+	.categoryColumn("4", "3", "2", "1", "0")
         .column(1, 3, 5, 7, 9)
         .build();
          Table expected = new Table.TestBuilder()
              .column(1, 1, 3, 5, null)
              .column(null, null, 4, 5, 3)
+	     .categoryColumn("1", "0", "2", "4", "3")
              .column(7, 9, 5, 1, 3)
              .build();
          Table sortedTable = table.orderBy(false, Table.asc(0), Table.desc(1))) {
+      assertTablesAreEqual(expected, sortedTable);
+    }
+  }
+
+  @Test
+  void testOrderByWithNullsAndStrings() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (Table table = new Table.TestBuilder()
+	.categoryColumn("4", "3", "2", "1", "0")
+        .column(5, null, 3, 1, 1)
+        .column(5, 3, 4, null, null)
+        .column(1, 3, 5, 7, 9)
+        .build();
+         Table expected = new Table.TestBuilder()
+	     .categoryColumn("0", "1", "2", "3", "4")
+             .column(1, 1, 3, null, 5)
+             .column(null, null, 4, 3, 5)
+             .column(9, 7, 5, 3, 1)
+             .build();
+         Table sortedTable = table.orderBy(false, Table.asc(0))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }
@@ -579,10 +595,11 @@ public class TableTest {
   @Test
   void testReadORCNumPyTypes() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
-    // by default ORC will promote date and timestamp columns to DATE64
+    // by default ORC will promote DATE32 to DATE64
+    // and TIMESTAMP is kept as it is
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
-      assertEquals(DType.DATE64, table.getColumn(0).getType());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
       assertEquals(DType.DATE64, table.getColumn(1).getType());
     }
 
@@ -592,6 +609,23 @@ public class TableTest {
       assertEquals(2, table.getNumberOfColumns());
       assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
       assertEquals(DType.DATE32, table.getColumn(1).getType());
+    }
+  }
+
+  @Test
+  void testReadORCTimeUnit() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    // specifying TimeUnit will return the result in that unit
+    ORCOptions opts = ORCOptions.builder()
+        .withNumPyTypes(false)
+        .withTimeUnit(TimeUnit.SECONDS)
+        .build();
+    try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
+      assertEquals(DType.DATE32, table.getColumn(1).getType());
+      assertEquals(TimeUnit.SECONDS,table.getColumn(0).getTimeUnit());
     }
   }
 
@@ -683,16 +717,24 @@ public class TableTest {
   void testConcatNoNulls() {
     try (Table t1 = new Table.TestBuilder()
         .column(1, 2, 3)
+        .categoryColumn("1", "2", "3")
+        .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L)
         .column(11.0, 12.0, 13.0).build();
          Table t2 = new Table.TestBuilder()
              .column(4, 5)
+             .categoryColumn("4", "3")
+             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 3L)
              .column(14.0, 15.0).build();
          Table t3 = new Table.TestBuilder()
              .column(6, 7, 8, 9)
+             .categoryColumn("4", "1", "2", "2")
+             .timestampColumn(TimeUnit.MICROSECONDS, 4L, 1L, 2L, 2L)
              .column(16.0, 17.0, 18.0, 19.0).build();
          Table concat = Table.concatenate(t1, t2, t3);
          Table expected = new Table.TestBuilder()
              .column(1, 2, 3, 4, 5, 6, 7, 8, 9)
+             .categoryColumn("1", "2", "3", "4", "3", "4", "1", "2", "2")
+             .timestampColumn(TimeUnit.MICROSECONDS, 1L, 2L, 3L, 4L, 3L, 4L, 1L, 2L, 2L)
              .column(11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0).build()) {
       assertTablesAreEqual(expected, concat);
     }
@@ -725,12 +767,18 @@ public class TableTest {
            for (int i = 0; i < count; i++) {
              b.append(i / 2);
            }
+         });
+         ColumnVector cIn = ColumnVector.build(DType.STRING_CATEGORY, count, (b) -> {
+           for (int i = 0; i < count; i++) {
+             b.appendUTF8String(String.valueOf(i).getBytes());
+           }
          })) {
+
       HashSet<Long> expected = new HashSet<>();
       for (long i = 0; i < count; i++) {
         expected.add(i);
       }
-      try (Table input = new Table(new ColumnVector[]{aIn, bIn});
+      try (Table input = new Table(new ColumnVector[]{aIn, bIn, cIn});
            PartitionedTable output = input.onColumns(0).partition(5, HashFunction.MURMUR3)) {
         int[] parts = output.getPartitions();
         assertEquals(5, parts.length);
@@ -745,14 +793,18 @@ public class TableTest {
         assertTrue(rows <= count);
         ColumnVector aOut = output.getColumn(0);
         ColumnVector bOut = output.getColumn(1);
+        ColumnVector cOut = output.getColumn(2);
 
         aOut.ensureOnHost();
         bOut.ensureOnHost();
+        cOut.ensureOnHost();
         for (int i = 0; i < count; i++) {
           long fromA = aOut.getLong(i);
           long fromB = bOut.getInt(i);
+          String fromC = cOut.getJavaString(i);
           assertTrue(expected.remove(fromA));
           assertEquals(fromA / 2, fromB);
+          assertEquals(String.valueOf(fromA), fromC, "At Index " + i);
         }
         assertTrue(expected.isEmpty());
       }
@@ -1274,6 +1326,120 @@ public class TableTest {
     try (ColumnVector mask = ColumnVector.fromBoxedBooleans(maskVals);
          Table input = new Table(ColumnVector.fromStrings("1","2","3","4","5"))) {
       assertThrows(AssertionError.class, () -> input.filter(mask).close());
+    }
+  }
+
+  final byte[] jsonData = ("[1, 1.1, \"a\"]\n" +
+      "[3, 4.2, \"hello\"]\n" +
+      "[7, 1.3, \"seven\u24E1\u25B6\"]").getBytes(StandardCharsets.UTF_8);
+
+  private File createTempFile(byte[] jsonData) throws IOException {
+    File tempFile = File.createTempFile("test", ".json");
+    try (OutputStream out = new FileOutputStream(tempFile)) {
+      out.write(jsonData);
+    }
+    tempFile.deleteOnExit();
+    return tempFile;
+  }
+
+  @Test
+  void testJSONReadWithFilePath() throws IOException {
+    File tempFile = createTempFile(jsonData);
+
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath());
+    Table expectedTable = new Table.TestBuilder()
+        .column( 1l,      3l,                 7l)
+        .column(1.1,     4.2,                1.3)
+        .column("a", "hello", "seven\u24E1\u25B6")
+        .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadWithFilePathAndDataTypes() throws IOException {
+    File tempFile = createTempFile(jsonData);
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT64, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(tempFile.getAbsolutePath(), schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBuffer() {
+    try (Table t = Table.readJSON(jsonData);
+         Table expectedTable = new Table.TestBuilder()
+             .column( 1l,      3l,                 7l)
+             .column(1.1,     4.2,                1.3)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithDataTypes() {
+    Schema schema = Schema.builder().column(DType.INT32, "0")
+        .column(DType.FLOAT32, "1").column(DType.STRING, "2").build();
+    try (Table t = Table.readJSON(jsonData, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column(1.1f,     4.2f,                1.3f)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferWithRange() {
+    try (Table t = Table.readJSON(jsonData, 14, 17, JSONOptions.DEFAULT, Schema.INFERRED);
+         Table expectedTable = new Table.TestBuilder().column(3l).column(4.2).column("hello")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterColumnsWithNames() {
+    // the schema can't skip any column
+    final byte[] jsonDataWithNames = ("{\"col1\": 1, \"col2\": 1.1, \"col3\": \"a\"}\n" +
+        "{\"col1\": 3, \"col2\": 4.2, \"col3\": \"hello\"}\n" +
+        "{\"col1\": 7, \"col2\": 1.3, \"col3\": \"seven\u24E1\u25B6\"}")
+        .getBytes(StandardCharsets.UTF_8);
+
+    Schema schema = Schema.builder().column(DType.FLOAT32, "col2")
+        .column(DType.INT64, "col1").column(DType.STRING, "col3").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("col1", "col3").build();
+    try (Table t = Table.readJSON(jsonDataWithNames, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1l,       3l,                  7l)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
+    }
+  }
+
+  @Test
+  void testJSONReadBufferFilterWithoutNames() {
+    // the schema can't skip any column and since we are using json without explicit names provided
+    // in the json file we will have to set the data types using the column names that will be used
+    // by the libcudf API i.e. 0, 1, 2 ... 
+    Schema schema = Schema.builder().column(DType.FLOAT32, "1")
+        .column(DType.INT32, "0").column(DType.STRING, "2").build();
+    JSONOptions opts = JSONOptions.builder().includeColumn("0", "2").build();
+    try (Table t = Table.readJSON(jsonData, opts, schema);
+         Table expectedTable = new Table.TestBuilder()
+             .column(  1,       3,                  7)
+             .column("a", "hello", "seven\u24E1\u25B6")
+             .build()) {
+      assertTablesAreEqual(expectedTable, t);
     }
   }
 }

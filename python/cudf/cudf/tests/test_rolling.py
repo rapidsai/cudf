@@ -1,3 +1,5 @@
+import math
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -162,3 +164,95 @@ def test_rolling_getitem_window():
     pdf = pd.DataFrame({"x": np.arange(len(index))}, index=index)
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf.rolling("2h").x.mean(), gdf.rolling("2h").x.mean())
+
+
+@pytest.mark.parametrize(
+    "data,index", [([1.2, 4.5, 5.9, 2.4, 9.3, 7.1], None), ([], [])]
+)
+@pytest.mark.parametrize("center", [True, False])
+def test_rollling_series_numba_udf_basic(data, index, center):
+
+    psr = pd.Series(data, index=index)
+    gsr = cudf.from_pandas(psr)
+
+    def some_func(A):
+        b = 0
+        for a in A:
+            b = max(b, math.sqrt(a))
+        return b
+
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
+            assert_eq(
+                psr.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                gsr.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                check_dtype=False,
+            )
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"a": [], "b": []},
+        {"a": [1, 2, 3, 4], "b": [1, 2, 3, 4]},
+        {"a": [1, 2, 4, 9, 9, 4], "b": [1, 2, 4, 9, 9, 4]},
+        {
+            "a": np.array([1, 2, 4, 9, 9, 4]),
+            "b": np.array([1.5, 2.2, 2.2, 8.0, 9.1, 4.2]),
+        },
+    ],
+)
+@pytest.mark.parametrize("center", [True, False])
+def test_rolling_dataframe_numba_udf_basic(data, center):
+
+    pdf = pd.DataFrame(data)
+    gdf = cudf.from_pandas(pdf)
+
+    def some_func(A):
+        b = 0
+        for a in A:
+            b = b + a ** 2
+        return b / len(A)
+
+    for window_size in range(1, len(data) + 1):
+        for min_periods in range(1, window_size + 1):
+            assert_eq(
+                pdf.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                gdf.rolling(window_size, min_periods, center)
+                .apply(some_func)
+                .fillna(-1),
+                check_dtype=False,
+            )
+
+
+def test_rolling_numba_udf_with_offset():
+    psr = pd.Series(
+        [1, 2, 4, 4, 8, 9],
+        index=[
+            pd.Timestamp("20190101 09:00:00"),
+            pd.Timestamp("20190101 09:00:01"),
+            pd.Timestamp("20190101 09:00:02"),
+            pd.Timestamp("20190101 09:00:04"),
+            pd.Timestamp("20190101 09:00:07"),
+            pd.Timestamp("20190101 09:00:08"),
+        ],
+    )
+    gsr = cudf.from_pandas(psr)
+
+    def some_func(A):
+        b = 0
+        for a in A:
+            b = b + a
+        return b / len(A)
+
+    assert_eq(
+        psr.rolling("2s").apply(some_func).fillna(-1),
+        gsr.rolling("2s").apply(some_func).fillna(-1),
+        check_dtype=False,
+    )
