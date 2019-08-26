@@ -1762,7 +1762,10 @@ class DataFrame(object):
             raise ValueError("require at least 1 column")
         if nrow < 1:
             raise ValueError("require at least 1 row")
-        if any((np.issubdtype(c, np.dtype("object")) or is_categorical_dtype(c)) for c in cols):
+        if any(
+            (np.issubdtype(c, np.dtype("object")) or is_categorical_dtype(c))
+            for c in cols
+        ):
             raise TypeError("Data must be homogenous numeric")
         dtype = np.find_common_type(cols, [])
         for k, c in self._cols.items():
