@@ -3046,11 +3046,11 @@ def test_create_dataframe_column():
         ["m", "a", "d", "v"],
     ],
 )
-def test_series_values_property(data):
+def test_series_values_host_property(data):
     pds = pd.Series(data)
     gds = Series(data)
 
-    np.testing.assert_array_equal(pds.values, gds.values)
+    np.testing.assert_array_equal(pds.values, gds.values_host)
 
 
 @pytest.mark.parametrize(
@@ -3068,14 +3068,14 @@ def test_series_values_property(data):
         ),
     ],
 )
-def test_series_values_device_property(data):
+def test_series_values_property(data):
     if not _have_cupy:
         pytest.skip("CuPy is not installed")
     import cupy
 
     pds = pd.Series(data)
     gds = Series(data)
-    gds_vals = gds.values_device
+    gds_vals = gds.values
     assert isinstance(gds_vals, cupy.ndarray)
     np.testing.assert_array_equal(gds_vals.get(), pds.values)
 
@@ -3089,14 +3089,14 @@ def test_series_values_device_property(data):
         {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
     ],
 )
-def test_df_values_device_property(data):
+def test_df_values_property(data):
     if not _have_cupy:
         pytest.skip("CuPy is not installed")
     pdf = pd.DataFrame.from_dict(data)
     gdf = DataFrame.from_pandas(pdf)
 
     pmtr = pdf.values
-    gmtr = gdf.values_device.get()
+    gmtr = gdf.values.get()
 
     np.testing.assert_array_equal(pmtr, gmtr)
 
@@ -3115,12 +3115,12 @@ def test_df_values_device_property(data):
         {"A": pd.Categorical(["a", "b", "c"]), "B": [1.0, 2.0, 3.0]},
     ],
 )
-def test_df_values_property(data):
+def test_df_values_host_property(data):
     pdf = pd.DataFrame.from_dict(data)
     gdf = DataFrame.from_pandas(pdf)
 
     pmtr = pdf.values
-    gmtr = gdf.values
+    gmtr = gdf.values_host
 
     np.testing.assert_array_equal(pmtr, gmtr)
 

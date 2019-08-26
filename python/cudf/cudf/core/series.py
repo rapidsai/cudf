@@ -133,7 +133,7 @@ class Series(object):
         return cls(s, nan_as_null=nan_as_null)
 
     @property
-    def values_device(self):
+    def values(self):
         if not utils._have_cupy:
             raise ModuleNotFoundError("cuPY was not found.")
         import cupy
@@ -149,7 +149,7 @@ class Series(object):
         return cupy.asarray(self._column.to_gpu_array())
 
     @property
-    def values(self):
+    def values_host(self):
         if self.dtype == np.dtype("object"):
             return self.data.to_host()
         elif is_categorical_dtype(self.dtype):

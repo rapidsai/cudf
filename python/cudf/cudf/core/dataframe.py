@@ -447,7 +447,7 @@ class DataFrame(object):
         return not len(self)
 
     @property
-    def values_device(self):
+    def values(self):
         if not utils._have_cupy:
             raise ModuleNotFoundError("cuPY was not found.")
         import cupy
@@ -455,7 +455,7 @@ class DataFrame(object):
         return cupy.asarray(self.as_gpu_matrix())
 
     @property
-    def values(self):
+    def values_host(self):
         if self.isnull().all().all():
             return np.empty(self.shape, dtype=np.object)
         cols = [
