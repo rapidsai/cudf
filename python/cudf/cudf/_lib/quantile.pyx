@@ -26,19 +26,19 @@ from libcpp.utility cimport pair
 
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
-_GDF_QUANTILE_METHODS = {
-    'linear': GDF_QUANT_LINEAR,
-    'lower': GDF_QUANT_LOWER,
-    'higher': GDF_QUANT_HIGHER,
-    'midpoint': GDF_QUANT_MIDPOINT,
-    'nearest': GDF_QUANT_NEAREST,
+_QUANTILE_METHODS = {
+    'linear': QUANT_LINEAR,
+    'lower': QUANT_LOWER,
+    'higher': QUANT_HIGHER,
+    'midpoint': QUANT_MIDPOINT,
+    'nearest': QUANT_NEAREST,
 }
 
 
 def get_quantile_method(method):
     """Util to convert method to gdf gdf_quantile_method.
     """
-    return _GDF_QUANTILE_METHODS[method]
+    return _QUANTILE_METHODS[method]
 
 
 def quantile(column, quant, method, exact):
@@ -61,7 +61,7 @@ def quantile(column, quant, method, exact):
     cdef gdf_scalar* c_result = <gdf_scalar*>malloc(sizeof(gdf_scalar))
     for q in quant:
         if exact:
-            gdf_quantile_exact(
+            quantile_exact(
                 <gdf_column*>c_col,
                 get_quantile_method(method),
                 q,
@@ -69,7 +69,7 @@ def quantile(column, quant, method, exact):
                 ctx
             )
         else:
-            gdf_quantile_approx(
+            quantile_approx(
                 <gdf_column*>c_col,
                 q,
                 c_result,
@@ -94,7 +94,7 @@ def group_quantile(key_columns, value_columns, quant, method):
     if np.isscalar(quant):
         quant = [quant]
     cdef vector[double] q = quant
-    cdef gdf_quantile_method c_interpolation = get_quantile_method(method)
+    cdef quantile_method c_interpolation = get_quantile_method(method)
 
     cdef pair[cudf_table, cudf_table] c_result
     with nogil:

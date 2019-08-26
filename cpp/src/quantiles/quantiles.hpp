@@ -19,6 +19,7 @@
 //Quantile (percentile) functionality
 
 #include <cudf/cudf.h>
+#include <cudf/quantiles.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/release_assert.cuh>
 
@@ -133,7 +134,7 @@ template <typename T,
           typename RetT = double>
 CUDA_HOST_DEVICE_CALLABLE
 RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
-                       gdf_quantile_method interpolation)
+                       quantile_method interpolation)
 {
     T temp[2];
     RetT result;
@@ -149,25 +150,25 @@ RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
 
     switch( interpolation )
     {
-    case GDF_QUANT_LINEAR:
+    case QUANT_LINEAR:
         get_array_value(temp[0], devarr, qi.lower_bound);
         get_array_value(temp[1], devarr, qi.upper_bound);
         cudf::interpolate::linear(result, temp[0], temp[1], qi.fraction);
         break;
-    case GDF_QUANT_MIDPOINT:
+    case QUANT_MIDPOINT:
         get_array_value(temp[0], devarr, qi.lower_bound);
         get_array_value(temp[1], devarr, qi.upper_bound);
         cudf::interpolate::midpoint(result, temp[0], temp[1]);
         break;
-    case GDF_QUANT_LOWER:
+    case QUANT_LOWER:
         get_array_value(temp[0], devarr, qi.lower_bound);
         result = static_cast<RetT>( temp[0] );
         break;
-    case GDF_QUANT_HIGHER:
+    case QUANT_HIGHER:
         get_array_value(temp[0], devarr, qi.upper_bound);
         result = static_cast<RetT>( temp[0] );
         break;
-    case GDF_QUANT_NEAREST:
+    case QUANT_NEAREST:
         get_array_value(temp[0], devarr, qi.nearest);
         result = static_cast<RetT>( temp[0] );
         break;

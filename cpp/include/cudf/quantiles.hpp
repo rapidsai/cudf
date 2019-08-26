@@ -22,6 +22,55 @@
 namespace cudf {
 
 /**
+ * @brief Interpolation method to use, when the desired quantile lies between 
+ * two data points i and j
+ * 
+ */
+enum quantile_method{
+  QUANT_LINEAR =0,      ///< Linear interpolation between i and j
+  QUANT_LOWER,          ///< Lower data point (i)
+  QUANT_HIGHER,         ///< Higher data point (j)
+  QUANT_MIDPOINT,       ///< (i + j)/2
+  QUANT_NEAREST,        ///< i or j, whichever is nearest
+  N_QUANT_METHODS,
+};
+
+/**
+ * @brief  Computes exact quantile
+ * computes quantile as double. This function works with arithmetic colum.
+ *
+ * @param[in] input column
+ * @param[in] precision: type of quantile method calculation
+ * @param[in] requested quantile in [0,1]
+ * @param[out] result the result as double. The type can be changed in future
+ * @param[in] struct with additional info
+ *
+ * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ */
+gdf_error quantile_exact(gdf_column* col_in,
+                         quantile_method prec,
+                         double q,
+                         gdf_scalar*  result,
+                         gdf_context* ctxt);
+
+/**
+ * @brief  Computes approximate quantile
+ * computes quantile with the same type as @p col_in.
+ * This function works with arithmetic colum.
+ *
+ * @param[in] input column
+ * @param[in] requested quantile in [0,1]
+ * @param[out] result quantile, with the same type as @p col_in
+ * @param[in] struct with additional info
+ *
+ * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ */
+gdf_error quantile_approx(gdf_column* col_in,
+                          double q,
+                          gdf_scalar*  result,
+                          gdf_context* ctxt);
+
+/**
  * @brief Find value at given quantiles within groups
  * 
  * Computes groupby @p key_table and finds values at each quantile specified in
@@ -55,15 +104,15 @@ namespace cudf {
  * @param quantiles List of quantiles q where q is in [0,1]
  * @param interpolation interpolation method to use, when the desired quantile
  *  lies between two data points
- * @param include_nulls Whether to consider nulls when finding length of group
+ * @param include_nulls Whether to consider rows in `key_table` that contain `NULL` values. 
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
  *  keys in @p key_table. Second table contains per-group values at quantiles
  */
 std::pair<cudf::table, cudf::table>
-group_quantiles(cudf::table const& key_table,
-                cudf::table const& val_table,
+group_quantiles(cudf::table const& keys,
+                cudf::table const& values,
                 std::vector<double> const& quantiles,
-                gdf_quantile_method interpolation = GDF_QUANT_LINEAR,
+                quantile_method interpolation = QUANT_LINEAR,
                 bool include_nulls = false);
 
 
