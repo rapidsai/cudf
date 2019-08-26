@@ -49,16 +49,20 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns True if column contains item, else False.
         """
         # Handles improper item types
-        try:
-            item = float(item)
-        except Exception:
-            """It means that the item was not a numerical type"""
+        if np.can_cast(item, self.data.mem.dtype):
+            item = self.data.mem.dtype.type(item)
+        else:
             return False
-
-        return (
-            cudautils.find_first(self.astype("float_").data.mem, float(item))
-            != -1
-        )
+        # Issue with cudautils with bool araray, always returns True.
+        if self.data.mem.dtype == np.bool:
+            return (
+                cudautils.find_first(
+                    self.astype("int_").data.mem, np.int_(item)
+                )
+                != -1
+            )
+        else:
+            return cudautils.find_first(self.data.mem, item) != -1
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:

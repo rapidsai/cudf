@@ -52,10 +52,10 @@ class DatetimeColumn(columnops.TypedColumnBase):
     def __contains__(self, item):
         # Handles improper item types
         try:
-            item = pd.to_datetime(item).to_datetime64()
+            item = np.datetime64(item, self._time_unit)
         except Exception:
             return False
-        return item in self.as_numerical
+        return item.astype("int_") in self.as_numerical
 
     def serialize(self):
         header, frames = super(DatetimeColumn, self).serialize()
