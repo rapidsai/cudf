@@ -179,6 +179,22 @@ def compare_and_get_name(a, b):
     return None
 
 
+def initfunc(f):
+    """
+    Decorator for initialization functions that should
+    be run exactly once.
+    """
+
+    def wrapper(*args, **kwargs):
+        if wrapper.initialized:
+            return
+        wrapper.initialized = True
+        return f(*args, **kwargs)
+
+    wrapper.initialized = False
+    return wrapper
+
+
 # taken from dask array
 # https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
 def _is_nep18_active():
