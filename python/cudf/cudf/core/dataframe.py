@@ -13,7 +13,6 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
-import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -3462,6 +3461,16 @@ class DataFrame(object):
         -------
         CuPy NDArray
         """
+
+        if not utils.IS_CUPY_AVAILABLE:
+            msg = (
+                "Row-wise operations currently require CuPy. "
+                " Please install CuPy to use these operations."
+            )
+            raise ImportError(msg)
+
+        import cupy as cp
+
         if any([col.null_count for col in self._columns]):
             msg = (
                 "Rowwise operations do not currently support columns with "
@@ -3490,17 +3499,30 @@ class DataFrame(object):
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
-    def min(self, **kwargs):
+    def min(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("min")
         return self._apply_support_method("min", **kwargs)
 
-    def max(self, **kwargs):
+    def max(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("max")
         return self._apply_support_method("max", **kwargs)
 
-    def sum(self, **kwargs):
+    def sum(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("sum")
         return self._apply_support_method("sum", **kwargs)
 
-    def product(self, **kwargs):
+    def product(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("prod")
         return self._apply_support_method("product", **kwargs)
+
+    def prod(self, axis=0, **kwargs):
+        """Alias for product.
+        """
+        return self.product(axis, **kwargs)
 
     def cummin(self, **kwargs):
         return self._apply_support_method("cummin", **kwargs)
@@ -3508,45 +3530,49 @@ class DataFrame(object):
     def cummax(self, **kwargs):
         return self._apply_support_method("cummax", **kwargs)
 
-    def cumsum(self, **kwargs):
+    def cumsum(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("cumsum")
         return self._apply_support_method("cumsum", **kwargs)
 
-    def cumprod(self, **kwargs):
+    def cumprod(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("cumprod")
         return self._apply_support_method("cumprod", **kwargs)
 
-    def mean(self, numeric_only=None, **kwargs):
+    def mean(self, numeric_only=None, axis=0, **kwargs):
         """Return the mean of the values for the requested axis.
-
         Parameters
         ----------
         axis : {index (0), columns (1)}
             Axis for the function to be applied on.
-
         skipna : bool, default True
             Exclude NA/null values when computing the result.
-
         level : int or level name, default None
             If the axis is a MultiIndex (hierarchical), count along a
             particular level, collapsing into a Series.
-
         numeric_only : bool, default None
             Include only float, int, boolean columns. If None, will attempt to
             use everything, then use only numeric data. Not implemented for
             Series.
-
         **kwargs
             Additional keyword arguments to be passed to the function.
-
         Returns
         -------
         mean : Series or DataFrame (if level specified)
         """
+        if axis == 1:
+            return self._apply_rowwise_op("mean")
         return self._apply_support_method("mean", **kwargs)
 
-    def std(self, **kwargs):
+    def std(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("std")
         return self._apply_support_method("std", **kwargs)
 
-    def var(self, **kwargs):
+    def var(self, axis=0, **kwargs):
+        if axis == 1:
+            return self._apply_rowwise_op("var")
         return self._apply_support_method("var", **kwargs)
 
     def all(self, bool_only=None, **kwargs):
