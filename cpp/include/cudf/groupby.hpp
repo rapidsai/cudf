@@ -223,7 +223,7 @@ namespace cudf {
  *
  * @param[in] input_table  The input table whose rows will be grouped to
  * vector of tables
- * @param[in] group_ids    The input column containing group index of each row
+ * @param[in] scatter_map    Non-nullable column of `GDF_INT32` values that map each row in `input` into one of the output tables. 
  * in the input table
  *
  * @return A std::vector of cudf::table, each of which may have a different size
