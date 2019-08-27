@@ -552,7 +552,6 @@ def gpu_round(in_col, out_col, decimal):
 
     if i < in_col.size:
         current = in_col[i]
-
         newval = current // round_val * round_val
         remainder = fmod(current, round_val)
 
@@ -579,33 +578,30 @@ def gpu_round_masked(in_col, out_col, mask, decimal):
 
     if i < in_col.size:
         valid = mask_get(mask, i)
-        current = in_col[i]
 
-        if not valid:
-            out_col[i] = np.nan
-            return
+        if valid:
+            current = in_col[i]
+            newval = current // round_val * round_val
+            remainder = fmod(current, round_val)
 
-        if current == 0:
-            out_col[i] = 0
-            return
+            if (
+                remainder != 0
+                and remainder > (0.5 * round_val)
+                and current > 0
+            ):
+                newval = newval + round_val
+                out_col[i] = newval
 
-        newval = current // round_val * round_val
-        remainder = fmod(current, round_val)
+            elif (
+                remainder != 0
+                and abs(remainder) < (0.5 * round_val)
+                and current < 0
+            ):
+                newval = newval + round_val
+                out_col[i] = newval
 
-        if remainder != 0 and remainder > (0.5 * round_val) and current > 0:
-            newval = newval + round_val
-            out_col[i] = newval
-
-        elif (
-            remainder != 0
-            and abs(remainder) < (0.5 * round_val)
-            and current < 0
-        ):
-            newval = newval + round_val
-            out_col[i] = newval
-
-        else:
-            out_col[i] = newval
+            else:
+                out_col[i] = newval
 
 
 def apply_round(data, mask, decimal):

@@ -2596,6 +2596,27 @@ def test_round(arr, decimal):
 
 
 @pytest.mark.parametrize(
+    "series",
+    [
+        Series([1.0, None, np.nan, 4.0], nan_as_null=False),
+        Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
+        Series([1.24430, np.nan, 4.423530], nan_as_null=False),
+        Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
+        Series(np.repeat(np.nan, 100)),
+    ],
+)
+@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
+def test_round_nan_as_null_false(series, decimal):
+    pser = series.to_pandas()
+    ser = Series(series)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(
+        result.to_pandas(), expected, decimal=10
+    )
+
+
+@pytest.mark.parametrize(
     "data",
     [
         [0, 1, 2, 3],
