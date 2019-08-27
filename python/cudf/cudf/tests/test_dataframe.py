@@ -3396,6 +3396,8 @@ def test_rowwise_ops(data, op):
     gdf = data
     pdf = gdf.to_pandas()
 
+    # pandas errors due to not removing non-numeric columns before these ops,
+    # which feels like a bug not a feature
     if op in ("cumsum", "cumprod"):
         pdf = pdf.select_dtypes([np.number])
 
