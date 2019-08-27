@@ -436,7 +436,7 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
  * a different number of rows.
  */
 std::vector<cudf::table> split(cudf::table const &        input_table,
-                               gdf_index_type const*      indices,
+                               gdf_column const&      splits,
                                gdf_size_type              num_indices);
 }  // namespace cudf
 
