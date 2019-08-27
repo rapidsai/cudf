@@ -88,7 +88,8 @@ gdf_column const& groupby::key_sort_order() {
     modified_fist_key_col.valid =
         reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get());
 
-    std::vector<gdf_column*> modified_key_cols_vect = _key_table.get_columns();
+    auto keys = const_cast<cudf::table*>(&_key_table);
+    std::vector<gdf_column*> modified_key_cols_vect(keys->begin(), keys->end());
     modified_key_cols_vect[0] = &modified_fist_key_col;
     cudf::table modified_key_col_table(modified_key_cols_vect.data(),
                                       modified_key_cols_vect.size());

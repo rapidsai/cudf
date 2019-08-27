@@ -126,10 +126,6 @@ struct table {
     return _columns[index];
   }
   
-  std::vector<gdf_column*> get_columns() const {
-    return std::vector<gdf_column*>(this->_columns);
-  }
-
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of _columns in the table
    *
