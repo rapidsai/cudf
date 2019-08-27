@@ -19,11 +19,31 @@
 package ai.rapids.cudf;
 
 /**
- * Arguments for Window function (see cudf::rolling_window)
- * windowSize, minPeriods and forwardWindow is used for creating static sizes
- * for all the rows.
- * windowCol, minPeriodsCol and forwardWindowCol is used to support dynamic window.
- * i.e each row will have it's own windowsize, minPeriods and forwardWindow.
+ * Arguments for Window function
+ * The window size, the number of observations and window size in forward direction
+ * can be static or dynamic (varying for each element).
+ * windowSize    - The static rolling window size. If windowCol = NULL,
+ *                   output_col[i] accumulates values from input_col[i-window+1]
+ *                   to input_col[i] inclusive
+ * minPeriods    - Minimum number of observations in window required to
+ *                   have a value, otherwise 0 is stored in the valid bit mask for
+ *                   element i. If minPeriodsCol != NULL, then minimum number of
+ *                   observations for element i is obtained from minPeriodsCol[i]
+ * forwardWindow - The static window size in the forward direction. If
+ *                   forwardWindowCol = NULL, output_col[i] accumulates values
+ *                   from input_col[i] to input_col[i+forward_window] inclusive
+ * aggType       - The rolling window aggregtion type (sum, max, min, etc.)
+ * windowCol     - The window size values, windowCol[i] specifies window
+ *                   size for element i. If windowCol = NULL, then windowSize is
+ *                   used as the static window size for all elements
+ * minPeriodsCol - The minimum number of observation values, minPeriodsCol[i]
+ *                   specifies minimum number of observations for element i.
+ *                   If minPeriodsCol = NULL, then minPeriods is used as
+ *                   the static value for all elements
+ *forwardWindowCol-The forward window size values, forwardWindowCol[i] specifies
+ *                   forward window size for element i. If forwardWindowCol = NULL,
+ *                   then forwardWindow is used as the static forward window size
+ *                   for all elements
  * WindowOptions does not take ownership of ColumnVectors passed in,
  * so the caller is responsible for closing the vectors after the call using
  * WindowOptions is complete.

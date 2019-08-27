@@ -50,7 +50,6 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private long nullCount;
   private int refCount;
 
-
   /**
    * Wrap an existing on device gdf_column with the corresponding ColumnVector.
    */
@@ -2144,7 +2143,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
-   * Calculate aggregation result for each row in the column.
+   * This function aggregates values in a window around each element i of the input
+   * column. Please refer to WindowsOptions for various options that can be passed.
    * @param opts various window function arguments.
    * @return Column containing aggregate function result.
    */
