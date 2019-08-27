@@ -27,6 +27,9 @@ package ai.rapids.cudf;
  * WindowOptions does not take ownership of ColumnVectors passed in,
  * so the caller is responsible for closing the vectors after the call using
  * WindowOptions is complete.
+ * Currently there is a bug where if minPeriods is not satisfied for a particular row,
+ * then that row is not updated with null.
+ * Being tracked in https://github.com/rapidsai/cudf/issues/2689
  */
 public class WindowOptions {
 

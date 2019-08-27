@@ -681,11 +681,11 @@ public class ColumnVectorTest {
 
   @Test
   void testWindowDynamic() {
-    try (ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3, 1, 1)) {
-         WindowOptions v0 = WindowOptions.builder().minPeriods(3).forwardWindow(2).
+    try (ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3, 1, 2)) {
+         WindowOptions v0 = WindowOptions.builder().minPeriods(2).forwardWindow(2).
              windowCol(arraywindowCol).aggType(AggregateOp.SUM).build();
-      try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, 7, 6, null);
-           ColumnVector expected = ColumnVector.fromInts(16, 22, 22, 0, 0);
+      try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, 7, 6, 8);
+           ColumnVector expected = ColumnVector.fromInts(16, 22, 30, 14, 14);
            ColumnVector result = v1.rollingWindow(v0)) {
         result.ensureOnHost();
         assertColumnsAreEqual(result, expected);
