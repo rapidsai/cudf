@@ -57,11 +57,16 @@ struct quantiles_functor {
       [=] __device__ (gdf_size_type i) {
         gdf_size_type segment_size = group_size[i];
 
-        for (gdf_size_type j = 0; j < num_quantiles; j++) {
-          gdf_size_type k = i * num_quantiles + j;
-          result[k] = detail::select_quantile(values + group_id[i], segment_size,
-                                              d_quantiles[j], interpolation);
-        }
+        auto value = values + group_id[i];
+        thrust::transform(thrust::seq, d_quantiles, d_quantiles + num_quantiles,
+                          result + i * num_quantiles,
+                          [=](auto q) { 
+                            return detail::select_quantile(value,
+                                                           segment_size, 
+                                                           q, 
+                                                           interpolation); 
+                          }
+                         );
       }
     );
   }
@@ -69,7 +74,7 @@ struct quantiles_functor {
   template <typename T, typename... Args>
   std::enable_if_t<!std::is_arithmetic<T>::value, void >
   operator()(Args&&... args) {
-    CUDF_FAIL("Only arithmetic types are supported in quantile");
+    CUDF_FAIL("Only arithmetic types are supported in quantiles");
   }
 };
 

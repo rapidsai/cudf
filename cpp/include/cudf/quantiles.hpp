@@ -27,12 +27,12 @@ namespace cudf {
  * 
  */
 enum quantile_method{
-  QUANT_LINEAR =0,      ///< Linear interpolation between i and j
-  QUANT_LOWER,          ///< Lower data point (i)
-  QUANT_HIGHER,         ///< Higher data point (j)
-  QUANT_MIDPOINT,       ///< (i + j)/2
-  QUANT_NEAREST,        ///< i or j, whichever is nearest
-  N_QUANT_METHODS,
+  QUANTILE_LINEAR =0,      ///< Linear interpolation between i and j
+  QUANTILE_LOWER,          ///< Lower data point (i)
+  QUANTILE_HIGHER,         ///< Higher data point (j)
+  QUANTILE_MIDPOINT,       ///< (i + j)/2
+  QUANTILE_NEAREST,        ///< i or j, whichever is nearest
+  N_QUANTILE_METHODS,
 };
 
 /**
@@ -71,10 +71,10 @@ gdf_error quantile_approx(gdf_column* col_in,
                           gdf_context* ctxt);
 
 /**
- * @brief Find value at given quantiles within groups
+ * @brief Find values at given quantiles within groups
  * 
- * Computes groupby @p key_table and finds values at each quantile specified in
- * @p quantiles in each group of each column in @p val_table. When the quantile
+ * Computes groupby @p keys and finds values at each quantile specified in
+ * @p quantiles in each group of each column in @p values. When the quantile
  * does not correspond to an exact index, but lies between index i and j, the 
  * result is an interpolation of values at index i and j, using the method 
  * specified in @p interpolation.
@@ -84,10 +84,10 @@ gdf_error quantile_approx(gdf_column* col_in,
  * 
  * Illustration:
  * Let
- * key_table = {[ a, c, b, c, a],}
- * val_table = {[v1,v2,v3,v4,v5],}
+ * keys   = {[ a, c, b, c, a],}
+ * values = {[v1,v2,v3,v4,v5],}
  * quantiles = {q1, q2}
- * out_keys, out_values = group_quantiles(key_table, val_table, quantiles)
+ * out_keys, out_values = group_quantiles(keys, values, quantiles)
  * 
  * out_keys = {[ a,      b,     c     ],}
  * out_vals = {[x1, x2, y1, y2, z1, z2],}
@@ -99,20 +99,19 @@ gdf_error quantile_approx(gdf_column* col_in,
  * z1 = value at quantile q1 in group [v2,v4]
  * z2 = value at quantile q2 in group [v2,v4]
  * 
- * @param key_table Keys to group by
- * @param val_table Values to find the quantiles in
+ * @param keys Keys to group by
+ * @param values Values to find the quantiles in
  * @param quantiles List of quantiles q where q is in [0,1]
- * @param interpolation interpolation method to use, when the desired quantile
- *  lies between two data points
- * @param include_nulls Whether to consider rows in `key_table` that contain `NULL` values. 
+ * @param interpolation Method to use for interpolating quantiles that lie between points
+ * @param include_nulls Whether to consider rows in `keys` that contain `NULL` values. 
  * @return std::pair<cudf::table, cudf::table> First table contains the unique
- *  keys in @p key_table. Second table contains per-group values at quantiles
+ *  keys in @p keys. Second table contains per-group values at quantiles
  */
 std::pair<cudf::table, cudf::table>
 group_quantiles(cudf::table const& keys,
                 cudf::table const& values,
                 std::vector<double> const& quantiles,
-                quantile_method interpolation = QUANT_LINEAR,
+                quantile_method interpolation = QUANTILE_LINEAR,
                 bool include_nulls = false);
 
 

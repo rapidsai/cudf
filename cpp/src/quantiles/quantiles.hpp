@@ -90,14 +90,25 @@ void midpoint(int64_t& result, int64_t lhs, int64_t rhs)
 
 namespace detail {
 
-struct QuantileIndex {
+/**
+ * @brief Helper struct that calculates the values needed to get quantile values
+ * by interpolation.
+ * 
+ * For a quantile that lies between indices i and j, this struct calculates 
+ * i (lower_bound),
+ * j (upper_bound),
+ * index nearest to quantile between i and j (nearest),
+ * and the fractional distance that the quantile lies ahead i (fraction)
+ * 
+ */
+struct quantile_index {
     gdf_size_type lower_bound;
     gdf_size_type upper_bound;
     gdf_size_type nearest;
     double fraction;
 
     CUDA_HOST_DEVICE_CALLABLE
-    QuantileIndex(gdf_size_type length, double quant)
+    quantile_index(gdf_size_type length, double quant)
     {
         // clamp quant value.
         // Todo: use std::clamp if c++17 is supported.
@@ -112,22 +123,17 @@ struct QuantileIndex {
     }
 };
 
-template<typename T>
-void singleMemcpy(T& res, T const* input)
-{
-    //TODO: async with streams?
-    CUDA_TRY( cudaMemcpy(&res, input, sizeof(T), cudaMemcpyDeviceToHost) );
-}
-
 template <typename T>
 CUDA_HOST_DEVICE_CALLABLE
-void get_array_value(T& result, T const* devarr, gdf_size_type location)
+T get_array_value(T const* devarr, gdf_size_type location)
 {
+    T result;
 #if defined(__CUDA_ARCH__)
     result = devarr[location];
 #else
-    singleMemcpy(result, devarr + location);
+    CUDA_TRY( cudaMemcpy(&result, devarr + location, sizeof(T), cudaMemcpyDeviceToHost) );
 #endif
+    return result;
 }
 
 template <typename T,
@@ -141,35 +147,35 @@ RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
     
     if( size < 2 )
     {
-        get_array_value(temp[0], devarr, 0);
+        temp[0] = get_array_value(devarr, 0);
         result = static_cast<RetT>( temp[0] );
         return result;
     }
 
-    QuantileIndex qi(size, quantile);
+    quantile_index qi(size, quantile);
 
     switch( interpolation )
     {
-    case QUANT_LINEAR:
-        get_array_value(temp[0], devarr, qi.lower_bound);
-        get_array_value(temp[1], devarr, qi.upper_bound);
+    case QUANTILE_LINEAR:
+        temp[0] = get_array_value(devarr, qi.lower_bound);
+        temp[1] = get_array_value(devarr, qi.upper_bound);
         cudf::interpolate::linear(result, temp[0], temp[1], qi.fraction);
         break;
-    case QUANT_MIDPOINT:
-        get_array_value(temp[0], devarr, qi.lower_bound);
-        get_array_value(temp[1], devarr, qi.upper_bound);
+    case QUANTILE_MIDPOINT:
+        temp[0] = get_array_value(devarr, qi.lower_bound);
+        temp[1] = get_array_value(devarr, qi.upper_bound);
         cudf::interpolate::midpoint(result, temp[0], temp[1]);
         break;
-    case QUANT_LOWER:
-        get_array_value(temp[0], devarr, qi.lower_bound);
+    case QUANTILE_LOWER:
+        temp[0] = get_array_value(devarr, qi.lower_bound);
         result = static_cast<RetT>( temp[0] );
         break;
-    case QUANT_HIGHER:
-        get_array_value(temp[0], devarr, qi.upper_bound);
+    case QUANTILE_HIGHER:
+        temp[0] = get_array_value(devarr, qi.upper_bound);
         result = static_cast<RetT>( temp[0] );
         break;
-    case QUANT_NEAREST:
-        get_array_value(temp[0], devarr, qi.nearest);
+    case QUANTILE_NEAREST:
+        temp[0] = get_array_value(devarr, qi.nearest);
         result = static_cast<RetT>( temp[0] );
         break;
     default:

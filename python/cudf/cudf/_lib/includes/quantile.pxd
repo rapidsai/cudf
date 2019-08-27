@@ -13,12 +13,12 @@ from libcpp.utility cimport pair
 cdef extern from "cudf/quantiles.hpp" namespace "cudf" nogil:
 
     ctypedef enum quantile_method:
-        QUANT_LINEAR =0,
-        QUANT_LOWER,
-        QUANT_HIGHER,
-        QUANT_MIDPOINT,
-        QUANT_NEAREST,
-        N_QUANT_METHODS,
+        QUANTILE_LINEAR =0,
+        QUANTILE_LOWER,
+        QUANTILE_HIGHER,
+        QUANTILE_MIDPOINT,
+        QUANTILE_NEAREST,
+        N_QUANTILE_METHODS,
 
     cdef gdf_error quantile_exact(
         gdf_column* col_in,

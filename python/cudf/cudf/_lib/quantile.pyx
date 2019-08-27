@@ -27,11 +27,11 @@ from libcpp.utility cimport pair
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
 _QUANTILE_METHODS = {
-    'linear': QUANT_LINEAR,
-    'lower': QUANT_LOWER,
-    'higher': QUANT_HIGHER,
-    'midpoint': QUANT_MIDPOINT,
-    'nearest': QUANT_NEAREST,
+    'linear': QUANTILE_LINEAR,
+    'lower': QUANTILE_LOWER,
+    'higher': QUANTILE_HIGHER,
+    'midpoint': QUANTILE_MIDPOINT,
+    'nearest': QUANTILE_NEAREST,
 }
 
 
