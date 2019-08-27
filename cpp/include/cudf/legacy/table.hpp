@@ -125,7 +125,7 @@ struct table {
     assert(index < _columns.size());
     return _columns[index];
   }
-  
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of _columns in the table
    *
