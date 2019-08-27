@@ -20,21 +20,20 @@
 #include <thrust/fill.h>
 #include <tuple>
 
-
-#include <cudf/cudf.h>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <cudf/copying.hpp>
+#include <cudf/cudf.h>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/bitmask.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
- #include "../common/aggregation_requests.hpp"
+#include "../common/aggregation_requests.hpp"
 #include "../common/utils.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"

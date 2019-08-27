@@ -119,16 +119,19 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
 namespace sort {
 
+enum class null_order : bool { AFTER, BEFORE }; 
+
 /**---------------------------------------------------------------------------*
  * @brief  Options unique to the sort-based groupby
- *
+ * The priority of determining the sort flags:
+ * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
  *---------------------------------------------------------------------------**/
 struct Options : groupby::Options {
-  bool input_sorted; ///< Indicates if the input data is sorted. 0 = No, 1 = yes
-  gdf_null_sort_behavior null_sort_behavior; ///< Indicates how nulls are
-                                             ///< treated in group_by operations
+  null_order null_sort_behavior; ///< Indicates how nulls are treated
+  bool input_sorted; ///< Indicates if the input data is sorted. 
+
   Options(bool _ignore_null_keys = true,
-          gdf_null_sort_behavior _null_sort_behavior = GDF_NULL_AS_LARGEST,
+          null_order _null_sort_behavior = null_order::AFTER,
           bool _input_sorted = false)
       : groupby::Options(_ignore_null_keys),
         input_sorted(_input_sorted),

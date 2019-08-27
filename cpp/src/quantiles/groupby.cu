@@ -105,8 +105,11 @@ void groupby::set_key_sort_order() {
                                       modified_key_cols_vect.size());
 
     gdf_context temp_ctx;
-    temp_ctx.flag_null_sort_behavior = _null_sort_behavior;
-
+    if (_null_sort_behavior == null_order::AFTER)
+      temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
+    else
+      temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_SMALLEST;
+    
     CUDF_TRY(gdf_order_by(modified_key_col_table.begin(), nullptr,
                           modified_key_col_table.num_columns(),
                           &_key_sorted_order, &temp_ctx));

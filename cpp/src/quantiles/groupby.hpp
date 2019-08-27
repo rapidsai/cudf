@@ -20,6 +20,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/groupby.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -42,11 +43,13 @@ void print(gdf_column const& col, std::string label = "") {
   print(d_vec, label);
 }
 
+using null_order = groupby::sort::null_order;
+
 struct groupby {
   using index_vector = rmm::device_vector<gdf_size_type>;
 
   groupby(cudf::table const& key_table, bool include_nulls = false, 
-          gdf_null_sort_behavior null_sort_behavior = GDF_NULL_AS_LARGEST,
+          null_order null_sort_behavior = null_order::AFTER,
           bool input_sorted = false)
   : _key_table(key_table)
   , _num_keys(key_table.num_rows())
@@ -113,8 +116,8 @@ struct groupby {
 
   gdf_size_type      _num_keys;
   bool               _include_nulls;
-  bool                _input_sorted;
-  gdf_null_sort_behavior _null_sort_behavior;
+  bool               _input_sorted;
+  null_order         _null_sort_behavior;
 
 };
 

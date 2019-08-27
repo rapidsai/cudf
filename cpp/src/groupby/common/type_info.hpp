@@ -77,7 +77,8 @@ struct target_type<SourceType, SUM,
   using type = int64_t;
 };
 
-// Computing MEDIAN of SourceType, use SourceType accumulator
+// Always use `double` for MEDIAN. It is because it involves 
+// division ((a+b)/2) for cases where the number of rows is even.  
 template <typename SourceType>
 struct target_type<SourceType, MEDIAN> { using type = double; };
 
