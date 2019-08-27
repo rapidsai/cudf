@@ -13,12 +13,12 @@ from collections import OrderedDict
 from collections.abc import Mapping, Sequence
 from types import GeneratorType
 
+import cupy as cp
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.api.types import is_dict_like
 from numba import cuda
-import cupy as cp
+from pandas.api.types import is_dict_like
 
 from librmm_cffi import librmm as rmm
 
