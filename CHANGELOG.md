@@ -25,7 +25,7 @@
 - PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
-- PR #2628 groupby_without_aggregation: Fix this function for cases when the input table don't have valids, the output table should not also have valids
+- PR #2628 groupby_without_aggregation non-nullable input table produces non-nullable output
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
 - PR #2658 Fix astype() for null categorical columns
