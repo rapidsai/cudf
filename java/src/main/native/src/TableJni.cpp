@@ -220,7 +220,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length) {
+    jlong buffer, jlong buffer_length, jint unit) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -257,6 +257,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.strings_to_categorical = false;
+    read_arg.timestamp_unit = static_cast<gdf_time_unit>(unit);
 
     cudf::table result = read_parquet(read_arg);
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
@@ -269,7 +270,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes) {
+    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes, jint unit) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -305,6 +306,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     read_arg.num_rows = -1;
     read_arg.use_index = false;
     read_arg.use_np_dtypes = static_cast<bool>(usingNumPyTypes);
+    read_arg.timestamp_unit = static_cast<gdf_time_unit>(unit);
 
     cudf::table result = read_orc(read_arg);
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
