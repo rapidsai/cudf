@@ -3461,7 +3461,6 @@ class DataFrame(object):
         -------
         CuPy NDArray
         """
-
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "Row-wise operations currently require CuPy. "
