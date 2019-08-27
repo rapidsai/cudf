@@ -335,7 +335,7 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
  * consecutive indices in the indices array.
  */
 std::vector<cudf::table> slice(cudf::table const &        input_table,
-                               gdf_index_type const*      indices,
+                               gdf_index_type const*      slice_ranges,
                                gdf_size_type              num_indices);
 
 /**
