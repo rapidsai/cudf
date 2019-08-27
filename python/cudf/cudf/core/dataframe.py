@@ -17,6 +17,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
+from numba import cuda
+import cupy as cp
 
 from librmm_cffi import librmm as rmm
 
@@ -3453,6 +3455,38 @@ class DataFrame(object):
     #
     # Stats
     #
+    def _prepare_for_rowwise_method(self):
+        """Prepare a dataframe for rowwise operations via CuPy.
+
+        Returns
+        -------
+        CuPy NDArray
+        """
+        if any([col.null_count for col in self._columns]):
+            msg = (
+                "Rowwise operations do not currently support columns with "
+                "null values. Consider using .fillna() to fill null values."
+            )
+            raise ValueError(msg)
+
+        filtered = self.select_dtypes(include=[np.number])
+        common_dtype = np.find_common_type(filtered.dtypes, [np.number])
+        coerced = filtered._apply_support_method("astype", dtype=common_dtype)
+        arr = cp.asarray(coerced.as_gpu_matrix())
+        return arr
+
+    def _apply_rowwise_op(self, op, axis=1, **kwargs):
+        kwargs["axis"] = axis
+        arr = self._prepare_for_rowwise_method()
+        result = getattr(arr, op)(**kwargs)
+
+        if len(result.shape) == 1:
+            return Series(cuda.as_cuda_array(result), index=self.index)
+        else:
+            return DataFrame.from_gpu_matrix(
+                cuda.as_cuda_array(result)
+            ).set_index(self.index)
+
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 

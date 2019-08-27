@@ -3349,3 +3349,63 @@ def test_constructor_properties():
     # Inorrect use of _constructor_expanddim (Raises for DataFrame)
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": int}
+        ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
+        ),
+        pytest.param(
+            gd.DataFrame(),
+            marks=[
+                pytest.mark.xfail(
+                    reason="_apply_support_method fails on empty dataframes."
+                )
+            ],
+        ),
+        pytest.param(
+            gd.DataFrame({"a": [0, 1, 2], "b": [1, None, 3]}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Rowwise ops do not currently support nulls."
+                )
+            ],
+        ),
+    ],
+)
+@pytest.mark.parametrize(
+    "op",
+    [
+        "max",
+        "min",
+        "sum",
+        "product",
+        "mean",
+        "var",
+        "std",
+        "cumsum",
+        "cumprod",
+    ],
+)
+def test_rowwise_ops(data, op):
+    gdf = data
+    pdf = gdf.to_pandas()
+
+    if op in ("cumsum", "cumprod"):
+        pdf = pdf.select_dtypes([np.number])
+
+    if op in ("var", "std"):
+        expected = getattr(pdf, op)(axis=1, ddof=0)
+        got = getattr(gdf, op)(axis=1, ddof=0)
+    else:
+        expected = getattr(pdf, op)(axis=1)
+        got = getattr(gdf, op)(axis=1)
+
+    np.testing.assert_array_almost_equal(
+        expected.values, got.to_pandas().values, 5
+    )
