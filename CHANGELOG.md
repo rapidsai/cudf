@@ -6,6 +6,7 @@
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2691 Row-wise reduction and scan operations via CuPy
 
 ## Improvements
 
