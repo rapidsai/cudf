@@ -229,7 +229,7 @@ namespace cudf {
  * @return A std::vector of cudf::table, each of which may have a different size
  * a different number of rows.
  */
-std::vector<cudf::table> groups_to_tables(cudf::table const& input_table,
+std::vector<cudf::table> groups_to_tables(cudf::table const& input,
                                           gdf_column const& group_ids);
 }  // namespace cudf
 
