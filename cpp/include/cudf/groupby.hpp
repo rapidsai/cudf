@@ -202,7 +202,7 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
 namespace cudf {
 
  /**
- * @brief Groups rows of input table into a group of tables according to its 
+ * @brief Scatters the rows of a table into `n` tables according to a `scatter_map`.  
  * group indices
  *
  * This function groups rows with same group index to individual tables where
