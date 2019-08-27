@@ -67,18 +67,19 @@ namespace detail {
 
 gdf_column const& groupby::key_sort_order() {
   if (_key_sorted_order)
-    return *(&_key_sorted_order);
+    return *_key_sorted_order;
 
-  _key_sorted_order = allocate_column(gdf_dtype_of<gdf_index_type>(),
-                                      _key_table.num_rows(),
-                                      false);
+  _key_sorted_order = std::make_unique<gdf_column>(
+    allocate_column(gdf_dtype_of<gdf_index_type>(),
+                    _key_table.num_rows(),
+                    false));
 
   if (_include_nulls ||
       !cudf::has_nulls(_key_table)) {  // SQL style
     gdf_context context{};
     context.flag_groupby_include_nulls = true;
     CUDF_TRY(gdf_order_by(_key_table.begin(), nullptr,
-                          _key_table.num_columns(), &_key_sorted_order,
+                          _key_table.num_columns(), _key_sorted_order.get(),
                           &context));
   } else {  // Pandas style
     auto key_cols_bitmask = row_bitmask(_key_table);
@@ -97,7 +98,7 @@ gdf_column const& groupby::key_sort_order() {
 
     CUDF_TRY(gdf_order_by(modified_key_col_table.begin(), nullptr,
                           modified_key_col_table.num_columns(),
-                          &_key_sorted_order, &temp_ctx));
+                          _key_sorted_order.get(), &temp_ctx));
 
     CUDF_TRY(gdf_count_nonzero_mask(
         reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get()),
@@ -105,12 +106,12 @@ gdf_column const& groupby::key_sort_order() {
         &_num_keys));
   }
 
-  return *(&_key_sorted_order);
+  return *_key_sorted_order;
 }
 
 rmm::device_vector<gdf_size_type> const& groupby::group_indices() {
   if (_group_ids)
-    return *(&_group_ids);
+    return *_group_ids;
 
   index_vector idx_data(_num_keys);
 
@@ -133,19 +134,19 @@ rmm::device_vector<gdf_size_type> const& groupby::group_indices() {
   }
 
   gdf_size_type num_groups = thrust::distance(idx_data.begin(), result_end);
-  _group_ids = index_vector(idx_data.begin(), idx_data.begin() + num_groups);
+  _group_ids = std::make_unique<index_vector>(idx_data.begin(), idx_data.begin() + num_groups);
 
-  return *(&_group_ids);
+  return *_group_ids;
 }
 
 rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
   if (_group_labels)
-    return *(&_group_labels);
+    return *_group_labels;
 
   // Get group labels for future use in segmented sorting
-  _group_labels = index_vector(_num_keys);
+  _group_labels = std::make_unique<index_vector>(_num_keys);
 
-  auto& group_labels = *(&_group_labels);
+  auto& group_labels = *_group_labels;
   thrust::fill(group_labels.begin(), group_labels.end(), 0);
   auto group_labels_ptr = group_labels.data().get();
   auto group_ids_ptr = group_indices().data().get();
@@ -162,11 +163,12 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
 
 gdf_column const& groupby::unsorted_labels() {
   if (_unsorted_labels)
-    return *(&_unsorted_labels);
+    return *_unsorted_labels;
 
-  _unsorted_labels = allocate_column(gdf_dtype_of<gdf_size_type>(),
-                                    key_sort_order().size);
-  auto& unsorted_labels = *(&_unsorted_labels);
+  _unsorted_labels = std::make_unique<gdf_column>(
+    allocate_column(gdf_dtype_of<gdf_size_type>(),
+                    key_sort_order().size));
+  auto& unsorted_labels = *_unsorted_labels;
   cudaMemset(unsorted_labels.valid, 0,
               gdf_num_bitmask_elements(unsorted_labels.size));
   

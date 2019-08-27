@@ -23,23 +23,6 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace {
-
-template <typename T>
-struct optional {
-  optional() : contains_value(false) {};
-  optional(T value) : value(value), contains_value(true) {};
-
-  operator bool() { return contains_value; }
-  T* operator&() { return &value; }
-
- private:
-  T value;
-  bool contains_value;
-};
-
-} // namespace anonymous
-
 
 namespace cudf {
 
@@ -58,6 +41,8 @@ namespace detail {
  */
 struct groupby {
   using index_vector = rmm::device_vector<gdf_size_type>;
+  using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
+  using index_vec_pointer = std::unique_ptr<rmm::device_vector<gdf_size_type>>;
 
   groupby(cudf::table const& key_table, bool include_nulls = false)
   : _key_table(key_table)
@@ -66,8 +51,10 @@ struct groupby {
   {};
 
   ~groupby() {
-    gdf_column_free(&_key_sorted_order);
-    gdf_column_free(&_unsorted_labels);
+    if (_key_sorted_order)
+      gdf_column_free(_key_sorted_order.get());
+    if (_unsorted_labels)
+      gdf_column_free(_unsorted_labels.get());
   }
 
   /**
@@ -100,61 +87,61 @@ struct groupby {
   gdf_size_type num_groups() { return group_indices().size(); }
 
   /**
-   * @brief Get the member _key_sorted_order.
+   * @brief Get the key sorted order.
    * 
-   * This member contains the sort order indices for _key_table. Gathering the
-   * _key_table by _key_sorted_order would produce the sorted key table
+   * This member contains the sort order indices for key table. Gathering the
+   *  key table by key sorted order would produce the sorted key table
    * 
-   * This method will compute set the uninitialized _key_sorted_order on first 
+   * This method will compute set the uninitialized key sorted order on first 
    * call and return the precomputed value on every subsequent call
    */
   gdf_column const& key_sort_order();
 
   /**
-   * @brief Get the member _group_ids.
+   * @brief Get the group indices.
    * 
-   * _group_ids contains the indices for the starting points of each group in
+   * group indices contains the indices for the starting points of each group in
    * the sorted key table
    * 
-   * This method will compute set the uninitialized _group_ids on first 
+   * This method will compute set the uninitialized  group indices on first 
    * call and return the precomputed value on every subsequent call
    */
   index_vector const& group_indices();
 
   /**
-   * @brief Get the member _group_labels
+   * @brief Get the group labels
    * 
-   * _group_labels contains a value for each row in the sorted key column
-   * signifying which group in _group_ids it belongs to
+   * group labels contains a value for each row in the sorted key column
+   * signifying which group in  group ids it belongs to
    * 
-   * This method will compute set the uninitialized _key_sorted_order on first 
+   * This method will compute set the uninitialized group labels on first 
    * call and return the precomputed value on every subsequent call
    */
   index_vector const& group_labels();
 
   /**
-   * @brief Get the member _unsorted_labels
+   * @brief Get the unsorted labels
    * 
-   * _unsorted_labels contains the group labels but in the order of the 
-   * unsorted _key_table so that for each row in _key_table, _unsorted_labels
+   * unsorted labels contains the group labels but in the order of the 
+   * unsorted key table so that for each row in key table, unsorted labels
    * contains the group it would belong to, after sorting
    * 
-   * This method will compute set the uninitialized _key_sorted_order on first 
+   * This method will compute set the uninitialized unsorted labels on first 
    * call and return the precomputed value on every subsequent call
    */
   gdf_column const& unsorted_labels();
 
  private:
 
-  optional<gdf_column>    _key_sorted_order;
-  optional<gdf_column>    _unsorted_labels;
-  cudf::table const&      _key_table;
+  gdf_col_pointer     _key_sorted_order;
+  gdf_col_pointer     _unsorted_labels;
+  cudf::table const&  _key_table;
 
-  optional<index_vector>  _group_ids;
-  optional<index_vector>  _group_labels;
+  index_vec_pointer   _group_ids;
+  index_vec_pointer   _group_labels;
 
-  gdf_size_type           _num_keys;
-  bool                    _include_nulls;
+  gdf_size_type       _num_keys;
+  bool                _include_nulls;
 
 };
 

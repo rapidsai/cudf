@@ -89,7 +89,7 @@ group_quantiles(cudf::table const& keys,
                 quantile_method interpolation,
                 bool include_nulls)
 {
-  auto gb_obj = detail::groupby(keys, include_nulls);
+  detail::groupby gb_obj(keys, include_nulls);
   auto group_indices = gb_obj.group_indices();
 
   rmm::device_vector<double> dv_quantiles(quantiles);
