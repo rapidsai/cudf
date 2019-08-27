@@ -49,9 +49,13 @@ class NumericalColumn(columnops.TypedColumnBase):
         Returns True if column contains item, else False.
         """
         # Handles improper item types
-        if np.can_cast(item, self.data.mem.dtype):
-            item = self.data.mem.dtype.type(item)
-        else:
+        # Fails if item is of type None, so the handler.
+        try:
+            if np.can_cast(item, self.data.mem.dtype):
+                item = self.data.mem.dtype.type(item)
+            else:
+                return False
+        except Exception:
             return False
         # Issue with cudautils with bool araray, always returns True.
         if self.data.mem.dtype == np.bool:
