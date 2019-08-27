@@ -34,14 +34,15 @@ namespace cudf {
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on left_on The columns from left to join on.
- * Column i from left_on will be compared against column i of right_on.
- * @param[in] right_on The columns from right to join on.
- * Column i from right_on will be compared with column i of left_on. 
- * @param[in] joining_ind is a vector of pairs of left and right
- * join indcies derived from left_on and right_on. This contains
- * the indices with the same name which evetually result into a 
- * single column.
+ * @param[in] left_on The column's indices from `left` to join on.
+ * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * @param[in] right_on The column's indices from `right` to join on.
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`.
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * columns, only a single output column will be produced, which is gathered
+ * from `left_on`. Else, for every column in `left_on` and `right_on`,
+ * an output column will be produced.
  *
  * @example Considering the example provided above, column name 'a'
  * is same in both tables and being joined, this will result into
@@ -57,9 +58,9 @@ namespace cudf {
 cudf::table inner_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         cudf::table const& left_on,
-                         cudf::table const& right_on,
-                         std::vector<std::pair<int, int>> const& joining_ind,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
                          cudf::table *out_ind,
                          gdf_context *join_context);
 /** 
@@ -76,14 +77,15 @@ cudf::table inner_join(
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on left_on The columns from left to join on.
- * Column i from left_on will be compared against column i of right_on.
- * @param[in] right_on The columns from right to join on.
- * Column i from right_on will be compared with column i of left_on. 
- * @param[in] joining_ind is a vector of pairs of left and right
- * join indcies derived from left_on and right_on. This contains
- * the indices with the same name which evetually result into a 
- * single column.
+ * @param[in] left_on The column's indices from `left` to join on.
+ * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * @param[in] right_on The column's indices from `right` to join on.
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`.
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * columns, only a single output column will be produced, which is gathered
+ * from `left_on`. Else, for every column in `left_on` and `right_on`,
+ * an output column will be produced.
  *
  * @example Considering the example provided above, column name 'a'
  * is same in both tables and being joined, this will result into
@@ -99,9 +101,9 @@ cudf::table inner_join(
 cudf::table left_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         cudf::table const& left_on,
-                         cudf::table const& right_on,
-                         std::vector<std::pair<int, int>> const& joining_ind,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
                          cudf::table *out_ind,
                          gdf_context *join_context);
 
@@ -120,11 +122,15 @@ cudf::table left_join(
  *
  * @param[in] left The left dataframe
  * @param[in] right The right dataframe
- * @param[in] left_on left_on The columns from left to join on.
- * Column i from left_on will be compared against column i of right_on.
- * @param[in] right_on The columns from right to join on.
- * Column i from right_on will be compared with column i of left_on. 
- * @param[in] joining_ind is a vector of pairs of left and right
+ * @param[in] left_on The column's indices from `left` to join on.
+ * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * @param[in] right_on The column's indices from `right` to join on.
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`.
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * columns, only a single output column will be produced, which is gathered
+ * from `left_on`. Else, for every column in `left_on` and `right_on`,
+ * an output column will be produced.
  * join indcies derived from left_on and right_on. This contains
  * the indices with the same name which evetually result into a 
  * single column.
@@ -143,9 +149,9 @@ cudf::table left_join(
 cudf::table full_join(
                          cudf::table const& left,
                          cudf::table const& right,
-                         cudf::table const& left_on,
-                         cudf::table const& right_on,
-                         std::vector<std::pair<int, int>> const& joining_ind,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
                          cudf::table *out_ind,
                          gdf_context *join_context);
 } //namespace cudf

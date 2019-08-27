@@ -414,30 +414,21 @@ struct JoinTest : public GdfTest
     gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
-    void* data = nullptr;
-    gdf_column join_col{};
-    std::vector<int> range;
-    std::vector<std::pair<int, int>> join_ind (num_columns);
+    std::vector<gdf_size_type> range;
+    std::vector<std::pair<int, int>> columns_in_common (num_columns);
 
     for (int i = 0; i < num_columns; ++i) 
     {
         range.push_back(i);
-        join_ind[i].first = i;
-        join_ind[i].second = i;
+        columns_in_common[i].first = i;
+        columns_in_common[i].second = i;
     }
-    EXPECT_EQ(RMM_ALLOC(&data, range.size() * sizeof(int), 0), RMM_SUCCESS);
-    EXPECT_EQ(cudaMemcpy(data, range.data(), range.size() * sizeof(int), cudaMemcpyHostToDevice), cudaSuccess);
-    gdf_column_view (&join_col, data, nullptr, range.size(), cudf::gdf_dtype_of<int>());
 
     // Both left and right col join indexes are same
 
-    std::vector <gdf_column *> l_join_col = {&join_col};
-    std::vector <gdf_column *> r_join_col = {&join_col};
     std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
     cudf::table left_gdf_columns(gdf_raw_left_columns);
     cudf::table right_gdf_columns(gdf_raw_right_columns);
-    cudf::table left_on (l_join_col);
-    cudf::table right_on (r_join_col);
     cudf::table result_idx_table (result_idx_cols);
     cudf::table result;
 
@@ -447,7 +438,7 @@ struct JoinTest : public GdfTest
         {
           cudf::left_join(
                                        left_gdf_columns, right_gdf_columns,
-                                       left_on, right_on, join_ind,
+                                       range, range, columns_in_common,
                                        &result_idx_table, &ctxt);
           break;
         }
@@ -455,7 +446,7 @@ struct JoinTest : public GdfTest
         {
           cudf::inner_join(
                                        left_gdf_columns, right_gdf_columns,
-                                       left_on, right_on, join_ind,
+                                       range, range, columns_in_common,
                                        &result_idx_table, &ctxt);
           break;
         }
@@ -463,7 +454,7 @@ struct JoinTest : public GdfTest
         {
           cudf::full_join(
                                        left_gdf_columns, right_gdf_columns,
-                                       left_on, right_on, join_ind,
+                                       range, range, columns_in_common,
                                        &result_idx_table, &ctxt);
           break;
         }
@@ -472,7 +463,6 @@ struct JoinTest : public GdfTest
         EXPECT_TRUE(false);
     }
   
-    EXPECT_EQ( RMM_FREE(data, 0), RMM_SUCCESS); 
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices

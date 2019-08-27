@@ -119,8 +119,6 @@ gdf_column copy(gdf_column const& input, cudaStream_t stream)
 }
 
 table empty_like(table const& t) {
-  if (t.num_columns() == 0)
-      return table{};
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
     [](gdf_column* out_col, gdf_column const* in_col) {
@@ -133,8 +131,6 @@ table empty_like(table const& t) {
 }
 
 table allocate_like(table const& t, bool allocate_mask_if_exists, cudaStream_t stream) {
-  if (t.num_columns() == 0)
-      return table{};
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
     [allocate_mask_if_exists,stream](gdf_column* out_col, gdf_column const* in_col) {
@@ -148,8 +144,6 @@ table allocate_like(table const& t, bool allocate_mask_if_exists, cudaStream_t s
 
 table allocate_like(table const& t, gdf_size_type size, 
                     bool allocate_mask_if_exists, cudaStream_t stream) {
-  if (t.num_columns() == 0)
-      return table{};
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
     [size,allocate_mask_if_exists,stream](gdf_column* out_col, gdf_column const* in_col) {
@@ -162,8 +156,6 @@ table allocate_like(table const& t, gdf_size_type size,
 }
 
 table copy(table const& t, cudaStream_t stream) {
-  if (t.num_columns() == 0)
-      return table{};
   std::vector<gdf_column*> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
     [stream](gdf_column* out_col, gdf_column const* in_col) {
