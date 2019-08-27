@@ -221,7 +221,7 @@ namespace cudf {
  * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
  *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
  *
- * @param[in] input_table  The input table whose rows will be grouped to
+ * @param[in] input_table  Table whose rows will be partitioned into a set of tables according to `scatter_map`
  * vector of tables
  * @param[in] scatter_map    Non-nullable column of `GDF_INT32` values that map each row in `input` into one of the output tables. 
  * in the input table
