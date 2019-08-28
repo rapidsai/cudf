@@ -306,6 +306,37 @@ TEST(gdf_csv_test, Dates)
     }
 }
 
+TEST(gdf_csv_test, Timestamps)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CsvTimestamps.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "true,334.0,2014-02-01T12:30:23.000-06:00\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "timestamp" };
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->gdf_dtype_extra_info.time_unit, TIME_UNIT_ms );
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        std::cerr << "Time Unit= " << df.get_column(0)->dtype_info.time_unit;
+
+                gdf_column output;
+                gdf_dtype_extra_info info{};
+                info.time_unit = TIME_UNIT_us;
+                output = cudf::cast(*df.get_column(0), GDF_TIMESTAMP, info);
+
+    }
+}
+
 TEST(gdf_csv_test, FloatingPoint)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvFloatingPoint.csv";
