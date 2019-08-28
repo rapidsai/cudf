@@ -9,15 +9,18 @@ endif()
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
+set(NVSTRINGS_TEST_LIST CACHE INTERNAL "NVSTRINGS_TEST_LIST")
+
 function(ConfigureTest CMAKE_TEST_NAME CMAKE_TEST_SRC)
     add_executable(${CMAKE_TEST_NAME}
                    ${CMAKE_TEST_SRC})
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
     target_link_libraries(${CMAKE_TEST_NAME} gmock gtest gmock_main gtest_main pthread
-                          rmm cudart cuda NVCategory NVStrings NVText)
+                          rmm cudart cuda libNVCategory libNVStrings libNVText)
     set_target_properties(${CMAKE_TEST_NAME} PROPERTIES
                             RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/gtests")
     add_test(NAME ${CMAKE_TEST_NAME} COMMAND ${CMAKE_TEST_NAME})
+    set(NVSTRINGS_TEST_LIST ${NVSTRINGS_TEST_LIST} ${CMAKE_TEST_NAME} CACHE INTERNAL "NVSTRINGS_TEST_LIST")
 endfunction(ConfigureTest)
 
 ###################################################################################################

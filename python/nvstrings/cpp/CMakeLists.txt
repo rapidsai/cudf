@@ -66,16 +66,28 @@ option(BUILD_TESTS "Configure CMake to build tests"
        ON)
 
 ###################################################################################################
+# - conda environment -----------------------------------------------------------------------------
+
+if ("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif (DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif ()
+
+###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/rmm"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    RMM_INCLUDE "rmm"
+    HINTS "$ENV{RMM_ROOT}/include"
+)
 
-find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+find_library(
+    RMM_LIBRARY "rmm"
+    HINTS "$ENV{RMM_ROOT}/lib"
+)
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -88,26 +100,49 @@ endif (RMM_INCLUDE AND RMM_LIBRARY)
 ###################################################################################################
 # - NVStrings -------------------------------------------------------------------------------------
 
-if(EXISTS "${CMAKE_SOURCE_DIR}/../../../cpp/build/nvstrings/libNVStrings.so" AND
-   EXISTS "${CMAKE_SOURCE_DIR}/../../../cpp/build/nvstrings/libNVCategory.so" AND
-   EXISTS "${CMAKE_SOURCE_DIR}/../../../cpp/build/nvstrings/libNVText.so")
-  set(NVSTRINGS_LIBRARY_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../cpp/build/nvstrings")
-  message(STATUS "NVStrings found")
-  message(STATUS "NVStrings library path: " ${NVSTRINGS_LIBRARY_DIR})
-  
-  add_library(NVStrings SHARED IMPORTED)
-  set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVStrings.so)
+find_path(
+    NVSTRINGS_INCLUDE "nvstrings"
+    HINTS "$ENV{NVSTRINGS_ROOT}/include"
+)
 
-  add_library(NVCategory SHARED IMPORTED)
-  set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVCategory.so)
+find_library(
+    NVSTRINGS_LIBRARY "NVStrings"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
 
-  add_library(NVText SHARED IMPORTED)
-  set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY_DIR}/libNVText.so)
-else()
-  message(FATAL_ERROR "Could not find NVStrings under `cudf/cpp/build`")
-endif(EXISTS "${CMAKE_SOURCE_DIR}/../../../cpp/build/nvstrings/libNVStrings.so" AND
-      EXISTS "${CMAKE_SOURCE_DIR}/../../../cpp/build/nvstrings/libNVCategory.so" AND
-      EXISTS "${CMAKE_SOURCE_DIR}/../../../cpp/build/nvstrings/libNVText.so")
+find_library(
+    NVCATEGORY_LIBRARY "NVCategory"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
+
+find_library(
+    NVTEXT_LIBRARY "NVText"
+    HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+)
+
+message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
+message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
+message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
+message(STATUS "NVSTRINGS: NVTEXT_LIBRARY set to ${NVTEXT_LIBRARY}")
+
+if (not (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY AND NVCATEGORY_LIBRARY AND NVTEXT_LIBRARY))
+    message(FATAL_ERROR "Unable to find NVStrings libraries")
+endif (not (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY AND NVCATEGORY_LIBRARY AND NVTEXT_LIBRARY))
+
+add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
+if (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
+    set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
+endif (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
+
+add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
+if (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
+    set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
+endif (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
+
+add_library(NVText SHARED IMPORTED ${NVTEXT_LIBRARY})
+if (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
+    set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVTEXT_LIBRARY})
+endif (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
 
 ###################################################################################################
 # - python ----------------------------------------------------------------------------------------

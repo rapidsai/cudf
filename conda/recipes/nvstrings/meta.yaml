@@ -6,7 +6,7 @@
 {% set py_version=environ.get('CONDA_PY', 36) %}
 
 package:
-  name: cudf
+  name: nvstrings
   version: {{ version }}
 
 source:
@@ -15,34 +15,34 @@ source:
 build:
   number: {{ git_revision_count }}
   string: py{{ py_version }}_{{ git_revision_count }}
+  script_env:
+    - CC
+    - CXX
+    - CUDAHOSTCXX
+    - CUDA_VERSION
+    - PARALLEL_LEVEL
 
 requirements:
   build:
+    - cmake >=3.12
     - python
-    - cython >=0.29,<0.30
+  host:
+    - python
     - setuptools
-    - numba >=0.45.1
-    - dlpack
-    - pyarrow 0.14.1.*
-    - libcudf {{ version }}
+    - cmake_setuptools 0.1.3.*
+    - libnvstrings {{ version }}
   run:
     - python
-    - pandas>=0.24.2,<0.25
-    - numba >=0.45.1
-    - pyarrow 0.14.1.*
-    - fastavro >=0.22.0
-    - rmm {{ minor_version }}.*
-    - nvstrings {{ minor_version }}.*
-    - cython >=0.29,<0.30
-    - dlpack
 
 test:
   commands:
-    - python -c "import cudf"
+    - python -c "import nvstrings"
+    - python -c "import nvtext"
+    - python -c "import nvcategory"
 
 about:
   home: http://rapids.ai/
   license: Apache-2.0
   license_family: Apache
   license_file: LICENSE
-  summary: cuDF GPU DataFrame core library
+  summary: nvstrings library

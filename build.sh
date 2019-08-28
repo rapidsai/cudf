@@ -24,6 +24,8 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
                   over)
    libcudf      - build the cudf C++ code only
    cudf         - build the cudf Python package
+   libnvstrings - build the nvstrings C++ code only
+   nvstrings    - build the nvstrings Python package
    dask_cudf    - build the dask_cudf Python package
    -v           - verbose build mode
    -g           - build for debug
@@ -35,8 +37,10 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
 "
 LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
+LIBNVSTRINGS_BUILD_DIR=${REPODIR}/cpp/build
+NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR} ${LIBNVSTRINGS_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
@@ -94,6 +98,28 @@ if hasArg clean; then
 fi
 
 ################################################################################
+# Configure, build, and install libnvstrings
+if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
+
+    mkdir -p ${LIBNVSTRINGS_BUILD_DIR}
+    cd ${LIBNVSTRINGS_BUILD_DIR}
+    cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
+          -DCMAKE_CXX11_ABI=ON \
+          -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
+    make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE} ${INSTALL_TARGET}
+fi
+
+# Build and install the nvstrings Python package
+if (( ${NUMARGS} == 0 )) || hasArg nvstrings; then
+    cd ${REPODIR}/python/nvstrings
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+    python setup.py build_ext
+    python setup.py install --single-version-externally-managed --record=record.txt
+    else
+    python setup.py build_ext --library-dir=${LIBNVSTRINGS_BUILD_DIR}
+    fi
+fi
+
 # Configure, build, and install libcudf
 if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
 
@@ -102,19 +128,11 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
-    make -j${PARALLEL_LEVEL} VERBOSE=${VERBOSE} ${INSTALL_TARGET}
+    make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE} ${INSTALL_TARGET}
 fi
 
-# Build and install the nvstrings and cudf Python packages
+# Build and install the cudf Python package
 if (( ${NUMARGS} == 0 )) || hasArg cudf; then
-
-    cd ${REPODIR}/python/nvstrings
-    if [[ ${INSTALL_TARGET} != "" ]]; then
-    python setup.py build_ext
-    python setup.py install --single-version-externally-managed --record=record.txt
-    else
-    python setup.py build_ext --library-dir=${LIBCUDF_BUILD_DIR}/nvstrings
-    fi
 
     cd ${REPODIR}/python/cudf
     if [[ ${INSTALL_TARGET} != "" ]]; then
