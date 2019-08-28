@@ -428,6 +428,24 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
                 if (t == 0)
                 {
+                #if 1
+                    // For some reason, Apache ORC RLEv2 decoder chokes on zero patch list lengths
+                    // For now use mode1 only
+                    uint32_t mode1_w;
+                    s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
+                    if (sizeof(T) > 4)
+                    {
+                        uint64_t vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
+                        mode1_w = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
+                    }
+                    else
+                    {
+                        uint32_t vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
+                        mode1_w = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
+                    }
+                    s->u.intrle.scratch.u32[2] = 1;
+                    s->u.intrle.scratch.u32[3] = mode1_w;
+                #else
                     uint32_t mode1_w, mode2_w;
                     s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
                     if (sizeof(T) > 4)
@@ -446,6 +464,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                     }
                     s->u.intrle.scratch.u32[2] = (mode1_w <= mode2_w) ? 1 : 2;
                     s->u.intrle.scratch.u32[3] = min(mode1_w, mode2_w);
+                #endif
                 }
             }
             __syncthreads();
