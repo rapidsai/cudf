@@ -59,7 +59,6 @@ struct groupby {
 
   /**
    * @brief Group and sort a column of values
-   * values within each group
    * 
    * Sorts and groups the @p val_col where the groups are dictated by key table
    * and the elements are sorted ascending within the groups. Calculates and
@@ -82,7 +81,7 @@ struct groupby {
    * @brief Get the number of groups in the key table
    * 
    */
-  gdf_size_type num_groups() const { return group_indices().size(); }
+  gdf_size_type num_groups() { return group_indices().size(); }
 
   /**
    * @brief Get the key sorted order.
@@ -111,7 +110,8 @@ struct groupby {
    * 
    * @return vector of group ID for each row in the sorted key column
    * 
-   * Computes and stores labels on first invocation and returns stored labels on subsequent calls.
+   * Computes and stores labels on first invocation and returns stored labels on
+   * subsequent calls.
    */
   index_vector const& group_labels();
 
@@ -120,10 +120,11 @@ struct groupby {
    * 
    * @return column of group labels in the order of the unsorted key table
    * 
-   * For each row in the key table, the unsorted label is the group it would belong to after sorting.
-   * contains the group it would belong to, after sorting
+   * For each row in the key table, the unsorted label is the group it would
+   * belong to after sorting.
    * 
-   * Computes and stores unsorted labels on first invocation and returns stored labels on subsequent calls.
+   * Computes and stores unsorted labels on first invocation and returns stored
+   * labels on subsequent calls.
    */
   gdf_column const& unsorted_labels();
 

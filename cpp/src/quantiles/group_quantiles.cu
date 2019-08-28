@@ -65,8 +65,7 @@ struct quantiles_functor {
                                                            segment_size, 
                                                            q, 
                                                            interpolation); 
-                          }
-                         );
+                          });
       }
     );
   }
