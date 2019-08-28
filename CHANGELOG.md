@@ -32,7 +32,7 @@
 - PR #2658 Fix astype() for null categorical columns
 - PR #2660 fix column string category and timeunit concat in the java API
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
-
+- PR #2698 Return RangeIndex from contiguous slice of RangeIndex
 
 # cuDF 0.9.0 (Date TBD)
 
