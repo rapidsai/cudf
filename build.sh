@@ -106,7 +106,11 @@ if (( ${NUMARGS} == 0 )) || hasArg libnvstrings; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
-    make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE} ${INSTALL_TARGET}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_nvstrings VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} nvstrings VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the nvstrings Python package
@@ -128,7 +132,11 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
-    make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE} ${INSTALL_TARGET}
+    if [[ ${INSTALL_TARGET} != "" ]]; then
+        make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
+    else
+        make -j${PARALLEL_LEVEL} cudf VERBOSE=${VERBOSE}
+    fi
 fi
 
 # Build and install the cudf Python package
