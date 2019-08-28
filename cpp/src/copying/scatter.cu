@@ -29,6 +29,9 @@
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
+#include <reductions/reduction_functions.cuh>
+#include <stream_compaction/copy_if.cuh>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 
 using bit_mask::bit_mask_t;
 
@@ -177,6 +180,38 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 
 }
 
+void scatter_to_tables(cudf::table const& input_table,
+                       gdf_column const& scatter_map,
+                       std::vector<cudf::table>& output_tables) {
+
+  CUDF_EXPECTS(scatter_map.dtype == GDF_INT32,
+      "scatter_map is not GDF_INT32 column.");
+  CUDF_EXPECTS(scatter_map.size == input_table.num_rows(),
+      "scatter_map length is not equal to number of rows in input table.");
+  if (scatter_map.size == 0 || 
+      input_table.num_columns() == 0 ||
+      input_table.num_rows() == 0)
+    return;
+
+  gdf_index_type nrows = input_table.num_rows();
+  //null supported
+  gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
+  gdf_index_type num_groups = max_elem.is_valid ? max_elem.data.si32 + 1 : 0;
+  gdf_index_type* scatter_array =
+    static_cast<gdf_index_type*>(scatter_map.data);
+
+  output_tables.reserve(size_t(num_groups));
+  rmm::device_vector<gdf_index_type> gather_map(nrows);
+  for (gdf_index_type it=0; it<num_groups; it++) {
+    output_tables.push_back(
+        detail::copy_if(input_table, 
+          [scatter_map, scatter_array, it] __device__ (gdf_index_type& row) 
+          { //null supported
+          return gdf_is_valid(scatter_map.valid, row) && (it==scatter_array[row]);
+          }));
+  }
+}
+
 }  // namespace detail
 
 table scatter(table const& source, gdf_index_type const scatter_map[], 
@@ -228,6 +263,14 @@ table scatter(std::vector<gdf_scalar> const& source,
   detail::scalar_scatter(source, scatter_map, num_scatter_rows, &output);
   
   return output;
+}
+
+std::vector<cudf::table> 
+scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map) {
+
+  std::vector<cudf::table> output_tables;
+  detail::scatter_to_tables(input_table, scatter_map, output_tables);
+  return output_tables;
 }
 
 }  // namespace cudf
