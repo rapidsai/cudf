@@ -136,6 +136,15 @@ T get_array_value(T const* devarr, gdf_size_type location)
     return result;
 }
 
+/**
+ * @brief Gets the value at the given quantile
+ * 
+ * @param devarr array of values to get quantile from
+ * @param size size of @p devarr
+ * @param quantile Number in [0,1] indicating quantile to get
+ * @param interpolation method to calculate value when quantile lies at inexact index
+ * @return value at quantile 
+ */
 template <typename T,
           typename RetT = double>
 CUDA_HOST_DEVICE_CALLABLE

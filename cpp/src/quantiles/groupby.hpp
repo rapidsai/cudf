@@ -33,9 +33,9 @@ namespace detail {
  * 
  * This class serves the purpose of sorting the keys and values and provides
  * building blocks for aggregations. It can provide:
- * 1. On-demand grouping and sorting of a value column based on the key table
+ * 1. On-demand grouping and sorting of a value column based on `keys`
  *   which is provided at construction
- * 2. Group indices: starting indices of all groups in sorted key table
+ * 2. Group offsets: starting offsets of all groups in sorted key table
  * 3. Group valid sizes: The number of valid values in each group in a sorted
  *   value column
  */
@@ -44,33 +44,30 @@ struct groupby {
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
   using index_vec_pointer = std::unique_ptr<rmm::device_vector<gdf_size_type>>;
 
-  groupby(cudf::table const& key_table, bool include_nulls = false,
+  groupby(cudf::table const& keys, bool include_nulls = false,
           cudaStream_t stream = 0)
-  : _key_table(key_table)
-  , _num_keys(key_table.num_rows())
+  : _keys(keys)
+  , _num_keys(keys.num_rows())
   , _include_nulls(include_nulls)
   , _stream(stream)
   {};
 
-  ~groupby() {
-    if (_key_sorted_order)
-      gdf_column_free(_key_sorted_order.get());
-    if (_unsorted_labels)
-      gdf_column_free(_unsorted_labels.get());
-  }
+  ~groupby() {}
 
   /**
    * @brief Group and sort a column of values
    * 
-   * Sorts and groups the @p val_col where the groups are dictated by key table
+   * Sorts and groups the @p values where the groups are dictated by key table
    * and the elements are sorted ascending within the groups. Calculates and
-   * returns the number of valid values within each group.
+   * returns the number of valid values within each group. 
    * 
-   * @param val_col The value column to group and sort
+   * @note Size of @p values should be equal to number of rows in keys
+   * 
+   * @param values The value column to group and sort
    * @return the sorted and grouped column and per-group valid count
    */
   std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
-  sort_values(gdf_column const& val_col);
+  sort_values(gdf_column const& values);
 
   /**
    * @brief Get a table of sorted unique keys
@@ -80,53 +77,55 @@ struct groupby {
   cudf::table unique_keys();
 
   /**
-   * @brief Get the number of groups in the key table
+   * @brief Get the number of groups in `keys`
    * 
    */
-  gdf_size_type num_groups() { return group_indices().size(); }
+  gdf_size_type num_groups() { return group_offsets().size(); }
 
   /**
-   * @brief Get the key sorted order.
-   * 
-   * @return the sort order indices for the key table.
+   * @brief Get the sorted order of `keys`.
    *
-   * Gathering the key table by sort order indices will produce the sorted key table.
+   * Gathering `keys` by sort order indices will produce the sorted key table.
    * 
    * Computes and stores the key sorted order on first invocation, and returns the
    * stored order on subsequent calls.
+   * 
+   * @return the sort order indices for `keys`.
    */
   gdf_column const& key_sort_order();
 
   /**
-   * @brief Get the group indices.
+   * @brief Get the group offsets.
    * 
-   * @return vector of indices of the starting point of each group in the sorted key table
+   * Computes and stores the group offsets on first invocation and returns
+   * the stored group offsets on subsequent calls.
    * 
-   * Computes and stores the group indices on first invocation and returns
-   * the stored group indices on subsequent calls.
+   * @return vector of offsets of the starting point of each group in the sorted key table
    */
-  index_vector const& group_indices();
+  index_vector const& group_offsets();
 
   /**
    * @brief Get the group labels
    * 
-   * @return vector of group ID for each row in the sorted key column
+   * For a row in `keys`, its group label is the group which it belongs to
    * 
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
+   * 
+   * @return vector of group labels for each row in the sorted key column
    */
   index_vector const& group_labels();
 
   /**
    * @brief Get the unsorted labels
    * 
-   * @return column of group labels in the order of the unsorted key table
-   * 
-   * For each row in the key table, the unsorted label is the group it would
+   * For each row in `keys`, the unsorted label is the group it would
    * belong to after sorting.
    * 
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
+   * 
+   * @return column of group labels in the order of the unsorted key table
    */
   gdf_column const& unsorted_labels();
 
@@ -134,9 +133,9 @@ struct groupby {
 
   gdf_col_pointer     _key_sorted_order;
   gdf_col_pointer     _unsorted_labels;
-  cudf::table const&  _key_table;
+  cudf::table const&  _keys;
 
-  index_vec_pointer   _group_ids;
+  index_vec_pointer   _group_offsets;
   index_vec_pointer   _group_labels;
 
   gdf_size_type       _num_keys;

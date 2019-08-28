@@ -77,12 +77,13 @@ gdf_error quantile_approx(gdf_column* col_in,
  * @p quantiles in each group of each column in @p values. When the quantile
  * does not correspond to an exact index, but lies between index i and j, the 
  * result is an interpolation of values at index i and j, using the method 
- * specified in @p interpolation.
+ * specified in @p interpolation. Nulls are always ignored in @p values.
  * 
  * When multiple quantiles are requested, the result contains values in a
  * strided format.
  * 
  * Illustration:
+ * ```
  * Let
  * keys   = {[ a, c, b, c, a],}
  * values = {[v1,v2,v3,v4,v5],}
@@ -98,6 +99,7 @@ gdf_error quantile_approx(gdf_column* col_in,
  * y2 = value at quantile q2 in group [v3]
  * z1 = value at quantile q1 in group [v2,v4]
  * z2 = value at quantile q2 in group [v2,v4]
+ * ```
  * 
  * @param keys Keys to group by
  * @param values Values to find the quantiles in

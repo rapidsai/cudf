@@ -37,15 +37,15 @@ struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void >
   operator()(gdf_column const& values_col,
-             rmm::device_vector<gdf_size_type> const& group_indices,
+             rmm::device_vector<gdf_size_type> const& group_offsets,
              rmm::device_vector<gdf_size_type> const& group_sizes,
-             gdf_column& result_col, rmm::device_vector<double> const& quantile,
-             quantile_method interpolation, cudaStream_t stream)
+             gdf_column* result_col, rmm::device_vector<double> const& quantile,
+             quantile_method interpolation, cudaStream_t stream = 0)
   {
     // prepare args to be used by lambda below
-    auto result = static_cast<double*>(result_col.data);
+    auto result = static_cast<double*>(result_col->data);
     auto values = static_cast<T*>(values_col.data);
-    auto group_id = group_indices.data().get();
+    auto group_id = group_offsets.data().get();
     auto group_size = group_sizes.data().get();
     auto d_quantiles = quantile.data().get();
     auto num_quantiles = quantile.size();
@@ -53,7 +53,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     thrust::for_each_n(rmm::exec_policy(stream)->on(stream),
       thrust::make_counting_iterator(0),
-      group_indices.size(),
+      group_offsets.size(),
       [=] __device__ (gdf_size_type i) {
         gdf_size_type segment_size = group_size[i];
 
@@ -89,15 +89,13 @@ group_quantiles(cudf::table const& keys,
                 bool include_nulls)
 {
   detail::groupby gb_obj(keys, include_nulls);
-  auto group_indices = gb_obj.group_indices();
+  auto group_offsets = gb_obj.group_offsets();
 
   rmm::device_vector<double> dv_quantiles(quantiles);
 
   cudf::table result_table(gb_obj.num_groups() * quantiles.size(),
                            std::vector<gdf_dtype>(values.num_columns(), GDF_FLOAT64),
                            std::vector<gdf_dtype_extra_info>(values.num_columns()));
-
-  util::cuda::scoped_stream stream{};
 
   for (gdf_size_type i = 0; i < values.num_columns(); i++)
   {
@@ -106,11 +104,11 @@ group_quantiles(cudf::table const& keys,
     std::tie(sorted_values, group_sizes) =
       gb_obj.sort_values(*(values.get_column(i)));
 
-    auto& result_col = *(result_table.get_column(i));
+    gdf_column* result_col = result_table.get_column(i);
 
     type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                    sorted_values, group_indices, group_sizes, result_col,
-                    dv_quantiles, interpolation, stream);
+                    sorted_values, group_offsets, group_sizes, result_col,
+                    dv_quantiles, interpolation);
 
     gdf_column_free(&sorted_values);
   }
