@@ -630,8 +630,9 @@ table reader::Impl::read()
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
+      auto time_unit = dtypes[active_col] == GDF_DATE64 ? TIME_UNIT_ms : TIME_UNIT_NONE;
       columns.emplace_back(num_records, dtypes[active_col],
-                           gdf_dtype_extra_info{TIME_UNIT_NONE},
+                           gdf_dtype_extra_info{time_unit},
                            col_names[col]);
       CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
       active_col++;
