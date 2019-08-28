@@ -7,6 +7,7 @@
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 - PR #2653 Add Java bindings for rolling window operations
+- PR #2702 Add make_bool to dataset generation functions
 
 ## Improvements
 
