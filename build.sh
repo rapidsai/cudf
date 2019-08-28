@@ -32,8 +32,8 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
    -n           - no install step
    -h           - print this text
 
-   default action (no args) is to build and install 'libcudf' then 'cudf' then
-   'dask_cudf' targets
+   default action (no args) is to build and install 'libnvstrings' then
+   'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
 LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
 CUDF_BUILD_DIR=${REPODIR}/python/cudf/build

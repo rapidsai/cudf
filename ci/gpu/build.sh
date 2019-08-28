@@ -65,10 +65,11 @@ conda list
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libcudf cudf dask_cudf
+$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libcudf and cuDF
+# TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
+# cuDF
 ################################################################################
 
 if hasArg --skip-tests; then
@@ -77,9 +78,13 @@ else
     logger "Check GPU usage..."
     nvidia-smi
 
+    logger "GoogleTest for libnvstrings..."
+    cd $WORKSPACE/cpp/build
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_nvstrings
+
     logger "GoogleTest for libcudf..."
     cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
@@ -89,13 +94,12 @@ else
       export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
+    cd $WORKSPACE/python/nvstrings
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
 
     logger "Python py.test for cuDF..."
     cd $WORKSPACE/python/cudf
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
-    
-    cd $WORKSPACE/python/nvstrings
-    py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
