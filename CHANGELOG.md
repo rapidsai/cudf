@@ -34,6 +34,7 @@
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
 - PR #2698 Return RangeIndex from contiguous slice of RangeIndex
 
+
 # cuDF 0.9.0 (Date TBD)
 
 ## New Features
