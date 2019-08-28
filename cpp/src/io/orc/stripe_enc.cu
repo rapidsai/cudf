@@ -53,7 +53,7 @@ struct intrle_enc_state_s
     volatile uint32_t delta_map[(512 / 32) + 1];
     volatile union {
         uint32_t u32[(512 / 32) * 2];
-        uint32_t u64[(512 / 32) * 2];
+        uint64_t u64[(512 / 32) * 2];
     } scratch;
 };
 
