@@ -126,7 +126,7 @@ class column {
   void set_null_count(size_type new_null_count);
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if it is possible for the column to contain null values,
+   * @brief Indicates whether it is possible for the column to contain null values,
    * i.e., it has an allocated null mask.
    *
    * This may return `false` iff `null_count() == 0`.
@@ -140,7 +140,7 @@ class column {
   bool nullable() const noexcept { return (_null_mask.size() > 0); }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if the column contains null elements.
+   * @brief Indicates whether the column contains null elements.
    *
    * @return true One or more elements are null
    * @return false Zero elements are null
