@@ -15,6 +15,7 @@
  */
 
 #include <cudf/cudf.h>
+#include <cudf/unary.hpp>
 #include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>
@@ -325,15 +326,16 @@ TEST(gdf_csv_test, Timestamps)
 
         EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
         ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
-        ASSERT_EQ( df.get_column(0)->gdf_dtype_extra_info.time_unit, TIME_UNIT_ms );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ms );
         auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
         std::cerr << "Time Unit= " << df.get_column(0)->dtype_info.time_unit;
 
-                gdf_column output;
-                gdf_dtype_extra_info info{};
-                info.time_unit = TIME_UNIT_us;
-                output = cudf::cast(*df.get_column(0), GDF_TIMESTAMP, info);
-
+        gdf_column output;
+        gdf_dtype_extra_info info{};
+        info.time_unit = TIME_UNIT_us;
+        output = cudf::cast(*df.get_column(0), GDF_TIMESTAMP, info);
+        ASSERT_EQ( output.dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( output.dtype_info.time_unit, TIME_UNIT_us );
     }
 }
 

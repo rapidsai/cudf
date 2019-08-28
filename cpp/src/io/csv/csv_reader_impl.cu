@@ -630,7 +630,10 @@ table reader::Impl::read()
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
-      auto time_unit = dtypes[active_col] == GDF_DATE64 ? TIME_UNIT_ms : TIME_UNIT_NONE;
+      auto time_unit = TIME_UNIT_NONE;
+      if (dtypes[active_col] == GDF_DATE64 || dtypes[active_col] == GDF_TIMESTAMP) {
+        time_unit = TIME_UNIT_ms;
+      }
       columns.emplace_back(num_records, dtypes[active_col],
                            gdf_dtype_extra_info{time_unit},
                            col_names[col]);
