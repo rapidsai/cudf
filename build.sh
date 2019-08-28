@@ -18,14 +18,14 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libcudf cudf dask_cudf -v -g -n -h"
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf -v -g -n -h"
 HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
-   libcudf      - build the cudf C++ code only
-   cudf         - build the cudf Python package
    libnvstrings - build the nvstrings C++ code only
    nvstrings    - build the nvstrings Python package
+   libcudf      - build the cudf C++ code only
+   cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
    -v           - verbose build mode
    -g           - build for debug
@@ -35,12 +35,12 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
    default action (no args) is to build and install 'libnvstrings' then
    'nvstrings' then 'libcudf' then 'cudf' then 'dask_cudf' targets
 "
-LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
-CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 LIBNVSTRINGS_BUILD_DIR=${REPODIR}/cpp/build
 NVSTRINGS_BUILD_DIR=${REPODIR}/python/nvstrings/build
+LIBCUDF_BUILD_DIR=${REPODIR}/cpp/build
+CUDF_BUILD_DIR=${REPODIR}/python/cudf/build
 DASK_CUDF_BUILD_DIR=${REPODIR}/python/dask_cudf/build
-BUILD_DIRS="${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR} ${LIBNVSTRINGS_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
+BUILD_DIRS="${LIBNVSTRINGS_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${LIBCUDF_BUILD_DIR} ${CUDF_BUILD_DIR} ${DASK_CUDF_BUILD_DIR}"
 
 # Set defaults for vars modified by flags to this script
 VERBOSE=""
