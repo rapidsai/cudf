@@ -32,8 +32,8 @@ namespace detail {
  * @brief Helper class for computing sort-based groupby
  * 
  * This class serves the purpose of sorting the keys and values and provides
- * helping building blocks for aggregations. It can provide:
- * 1. On demand grouping and sorting of a value column based on the key table
+ * building blocks for aggregations. It can provide:
+ * 1. On-demand grouping and sorting of a value column based on the key table
  *   which is provided at construction
  * 2. Group indices: starting indices of all groups in sorted key table
  * 3. Group valid sizes: The number of valid values in each group in a sorted
@@ -58,76 +58,72 @@ struct groupby {
   }
 
   /**
-   * @brief Returns a grouped and sorted values column and a count of valid
+   * @brief Group and sort a column of values
    * values within each group
    * 
    * Sorts and groups the @p val_col where the groups are dictated by key table
-   * and the elements are sorted ascending within the groups. Calculates the
-   * number of valid values within each group and also returns this
+   * and the elements are sorted ascending within the groups. Calculates and
+   * returns the number of valid values within each group.
    * 
    * @param val_col The value column to group and sort
-   * @return std::pair<gdf_column, rmm::device_vector<gdf_size_type> > 
-   *  The sorted and grouped column, and per group valid count
+   * @return the sorted and grouped column and per-group valid count
    */
   std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
   sort_values(gdf_column const& val_col);
 
   /**
-   * @brief Returns a table of sorted unique keys
+   * @brief Get a table of sorted unique keys
    * 
-   * The result contains a new table where each row is a unique row in the
-   * sorted key table
+   * @return a new table in which each row is a unique row in the sorted key table.
    */
   cudf::table unique_keys();
 
   /**
-   * @brief Returns the number of groups in the key table
+   * @brief Get the number of groups in the key table
    * 
    */
-  gdf_size_type num_groups() { return group_indices().size(); }
+  gdf_size_type num_groups() const { return group_indices().size(); }
 
   /**
    * @brief Get the key sorted order.
    * 
-   * This member contains the sort order indices for key table. Gathering the
-   *  key table by key sorted order would produce the sorted key table
+   * @return the sort order indices for the key table.
+   *
+   * Gathering the key table by sort order indices will produce the sorted key table.
    * 
-   * This method will compute set the uninitialized key sorted order on first 
-   * call and return the precomputed value on every subsequent call
+   * Computes and stores the key sorted order on first invocation, and returns the
+   * stored order on subsequent calls.
    */
   gdf_column const& key_sort_order();
 
   /**
    * @brief Get the group indices.
    * 
-   * group indices contains the indices for the starting points of each group in
-   * the sorted key table
+   * @return vector of indices of the starting point of each group in the sorted key table
    * 
-   * This method will compute set the uninitialized  group indices on first 
-   * call and return the precomputed value on every subsequent call
+   * Computes and stores the group indices on first invocation and returns
+   * the stored group indices on subsequent calls.
    */
   index_vector const& group_indices();
 
   /**
    * @brief Get the group labels
    * 
-   * group labels contains a value for each row in the sorted key column
-   * signifying which group in  group ids it belongs to
+   * @return vector of group ID for each row in the sorted key column
    * 
-   * This method will compute set the uninitialized group labels on first 
-   * call and return the precomputed value on every subsequent call
+   * Computes and stores labels on first invocation and returns stored labels on subsequent calls.
    */
   index_vector const& group_labels();
 
   /**
    * @brief Get the unsorted labels
    * 
-   * unsorted labels contains the group labels but in the order of the 
-   * unsorted key table so that for each row in key table, unsorted labels
+   * @return column of group labels in the order of the unsorted key table
+   * 
+   * For each row in the key table, the unsorted label is the group it would belong to after sorting.
    * contains the group it would belong to, after sorting
    * 
-   * This method will compute set the uninitialized unsorted labels on first 
-   * call and return the precomputed value on every subsequent call
+   * Computes and stores unsorted labels on first invocation and returns stored labels on subsequent calls.
    */
   gdf_column const& unsorted_labels();
 

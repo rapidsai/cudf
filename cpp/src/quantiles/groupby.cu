@@ -84,13 +84,13 @@ gdf_column const& groupby::key_sort_order() {
   } else {  // Pandas style
     auto key_cols_bitmask = row_bitmask(_key_table);
 
-    gdf_column modified_fist_key_col = *(_key_table.get_column(0));
-    modified_fist_key_col.valid =
+    gdf_column modified_first_key_col = *(_key_table.get_column(0));
+    modified_first_key_col.valid =
         reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get());
 
     auto keys = const_cast<cudf::table*>(&_key_table);
     std::vector<gdf_column*> modified_key_cols_vect(keys->begin(), keys->end());
-    modified_key_cols_vect[0] = &modified_fist_key_col;
+    modified_key_cols_vect[0] = &modified_first_key_col;
     cudf::table modified_key_col_table(modified_key_cols_vect.data(),
                                       modified_key_cols_vect.size());
 
