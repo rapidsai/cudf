@@ -42,7 +42,8 @@ struct orc_writer_typed_test : orc_writer_test {};
 /**
  * @brief cuDF types that can be written to ORC types
  **/
-using test_types = ::testing::Types<cudf::bool8, int8_t, float, double>;
+using test_types = ::testing::Types<cudf::bool8, int8_t, int16_t, int32_t,
+                                    int64_t, float, double>;
 TYPED_TEST_CASE(orc_writer_typed_test, test_types);
 
 namespace {
@@ -154,21 +155,29 @@ TEST_F(orc_writer_test, MultiColumn) {
       random_values<cudf::bool8>(num_rows), valids_func};
   cudf::test::column_wrapper<int8_t> col1{random_values<int8_t>(num_rows),
                                           valids_func};
-  cudf::test::column_wrapper<float> col2{random_values<float>(num_rows),
+  cudf::test::column_wrapper<int16_t> col2{random_values<int16_t>(num_rows),
+                                           valids_func};
+  cudf::test::column_wrapper<int32_t> col3{random_values<int32_t>(num_rows),
+                                           valids_func};
+  cudf::test::column_wrapper<float> col4{random_values<float>(num_rows),
                                          valids_func};
-  cudf::test::column_wrapper<double> col3{random_values<double>(num_rows),
+  cudf::test::column_wrapper<double> col5{random_values<double>(num_rows),
                                           valids_func};
   column_set_name(col0.get(), "bools");
   column_set_name(col1.get(), "int8s");
-  column_set_name(col2.get(), "floats");
-  column_set_name(col3.get(), "doubles");
+  column_set_name(col2.get(), "int16s");
+  column_set_name(col3.get(), "int32s");
+  column_set_name(col4.get(), "floats");
+  column_set_name(col5.get(), "doubles");
 
   std::vector<gdf_column *> cols;
   cols.push_back(col0.get());
   cols.push_back(col1.get());
   cols.push_back(col2.get());
   cols.push_back(col3.get());
-  auto expected = cudf::table{cols.data(), 4};
+  cols.push_back(col4.get());
+  cols.push_back(col5.get());
+  auto expected = cudf::table{cols.data(), 6};
   EXPECT_EQ(cols.size(), expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcWriterMultiColumn.orc");
@@ -194,25 +203,36 @@ TEST_F(orc_writer_test, MultiColumnWithNulls) {
   // Bytes column with valids only before row 10
   cudf::test::column_wrapper<int8_t> col1{
       random_values<int8_t>(num_rows), [=](size_t row) { return (row < 10); }};
+  // Shorts column with all valids
+  cudf::test::column_wrapper<int16_t> col2{random_values<int16_t>(num_rows),
+                                           [=](size_t row) { return true; }};
+  // Integers column with only last row valid
+  cudf::test::column_wrapper<int32_t> col3{
+      random_values<int32_t>(num_rows),
+      [=](size_t row) { return (row == (num_rows - 1)); }};
   // Floats column with valids only within rows 40 to 60
-  cudf::test::column_wrapper<float> col2{
+  cudf::test::column_wrapper<float> col4{
       random_values<float>(num_rows),
       [=](size_t row) { return (row >= 40 || row <= 60); }};
   // Doubles column with valids only after row 80
-  cudf::test::column_wrapper<double> col3{
+  cudf::test::column_wrapper<double> col5{
       random_values<double>(num_rows), [=](size_t row) { return (row > 80); }};
 
   column_set_name(col0.get(), "bools");
   column_set_name(col1.get(), "int8s");
-  column_set_name(col2.get(), "floats");
-  column_set_name(col3.get(), "doubles");
+  column_set_name(col2.get(), "int16s");
+  column_set_name(col3.get(), "int32s");
+  column_set_name(col4.get(), "floats");
+  column_set_name(col5.get(), "doubles");
 
   std::vector<gdf_column *> cols;
   cols.push_back(col0.get());
   cols.push_back(col1.get());
   cols.push_back(col2.get());
   cols.push_back(col3.get());
-  auto expected = cudf::table{cols.data(), 4};
+  cols.push_back(col4.get());
+  cols.push_back(col5.get());
+  auto expected = cudf::table{cols.data(), 6};
   EXPECT_EQ(cols.size(), expected.num_columns());
 
   auto filepath =
