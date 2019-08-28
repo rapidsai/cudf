@@ -11,6 +11,7 @@ from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 
 from cudf._lib.copying import clone_columns_with_size
+from cudf._lib.unaryops import nans_to_nulls
 
 from cudf._lib.includes.stream_compaction cimport (
     duplicate_keep_option,
@@ -89,7 +90,7 @@ def nunique(in_col):
     in_col_null = in_col
     # convert nans_to_nulls
     if (in_col.dtype in [np.float16, np.float32, np.float64]):
-        in_col_null = in_col.set_mask(mask_from_devary(in_col))
+        in_col_null = in_col.set_mask(nans_to_nulls(in_col))
     check_gdf_compatibility(in_col_null)
     cdef gdf_column* c_in_col = column_view_from_column(in_col_null)
     cdef int count = 0

@@ -139,6 +139,54 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   return std::make_pair(unique_indices, 
                         thrust::distance(unique_indices.begin(), result_end));
 }
+
+gdf_size_type unique_count(const cudf::table& key_columns,
+             const bool nulls_are_equal = true,
+             cudaStream_t stream=0)
+{
+  gdf_size_type ncols = key_columns.num_columns();
+  gdf_size_type nrows = key_columns.num_rows();
+
+  // sort only indices
+  rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  gdf_context context;
+  gdf_column sorted_indices_col;
+  CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
+        nullptr, nrows, GDF_INT32));
+  CUDF_TRY(gdf_order_by(key_columns.begin(),
+        nullptr,
+        key_columns.num_columns(),
+        &sorted_indices_col,
+        &context));
+
+  // count unique elements
+  auto first = sorted_indices.begin();
+  auto exec = rmm::exec_policy(stream)->on(stream);
+  auto device_input_table = device_table::create(key_columns, stream);
+  rmm::device_vector<gdf_size_type>::iterator result_end;
+
+  bool nullable = device_input_table->has_nulls();
+  if(nullable) {
+    auto comp = row_equality_comparator<true>(*device_input_table,
+        nulls_are_equal);
+    return thrust::count_if(exec,
+              thrust::counting_iterator<gdf_size_type>(0),
+              thrust::counting_iterator<gdf_size_type>(nrows),
+              [first, comp] __device__ (const gdf_size_type i) {
+              return (i == 0 || !comp(first[i], first[i-1]));
+              });
+  } else {
+    auto comp = row_equality_comparator<false>(*device_input_table,
+        nulls_are_equal);
+    return thrust::count_if(exec,
+              thrust::counting_iterator<gdf_size_type>(0),
+              thrust::counting_iterator<gdf_size_type>(nrows),
+              [first, comp] __device__ (const gdf_size_type i) {
+              return (i == 0 || !comp(first[i], first[i-1]));
+              });
+  }
+}
+
 } //namespace detail
 
 cudf::table drop_duplicates(const cudf::table& input_table,
@@ -193,10 +241,7 @@ gdf_size_type unique_count(gdf_column const& input_column)
   if (0 == input_column.size || input_column.null_count == input_column.size) {
     return 0;
   }
-  gdf_size_type unique_count; 
-  std::tie(std::ignore, unique_count) =
-    detail::get_unique_ordered_indices({const_cast<gdf_column*>(&input_column)}, duplicate_keep_option::KEEP_FIRST, true);
-  return unique_count;
+  
+  return detail::unique_count({const_cast<gdf_column*>(&input_column)}, true);
 }
-
 }  // namespace cudf
