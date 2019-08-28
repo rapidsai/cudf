@@ -3478,18 +3478,14 @@ class DataFrame(object):
             )
             raise ValueError(msg)
 
-        if any(
-            [
-                col.dtype in (np.object, pd.CategoricalDtype)
-                for col in self._columns
-            ]
-        ):
-            if numeric_only not in (None, True):
-                msg = (
-                    "Row-wise operations currently only support int, float, "
-                    "and bool dtypes."
-                )
-                raise TypeError(msg)
+        # Currently, we don't support row-wise operations on
+        # datetimes, strings, or categoricals.
+        if numeric_only not in (None, True):
+            msg = (
+                "Row-wise operations currently only support int, float, "
+                "and bool dtypes."
+            )
+            raise TypeError(msg)
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
         common_dtype = np.find_common_type(filtered.dtypes, [np.number])
