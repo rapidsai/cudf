@@ -80,6 +80,14 @@ class reader::Impl {
                    size_t total_dictionary_entries,
                    const std::vector<gdf_column_wrapper> &columns);
 
+  /**
+   * @brief Convert the string columns to NvStrings container
+   *
+   * @param[in, out] columns List of gdf_columns
+   **/
+  void init_string_columns(const std::vector<gdf_column_wrapper> &columns);
+
+
  private:
   std::unique_ptr<datasource> source_;
   std::unique_ptr<avro_metadata> md_;

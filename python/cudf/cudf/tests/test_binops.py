@@ -11,8 +11,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import Series
-from cudf.dataframe.index import as_index
+from cudf.core import Series
+from cudf.core.index import as_index
 from cudf.tests import utils
 
 _binops = [
