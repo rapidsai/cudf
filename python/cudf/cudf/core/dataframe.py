@@ -1686,6 +1686,16 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
+
+        # remove empty dataframes from the list
+
+        non_empty_objs = [obj for obj in objs if len(obj.columns) > 0]
+
+        if len(non_empty_objs) == 0:
+            return objs[0]
+
+        objs = non_empty_objs
+
         libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
         if len(set(frozenset(o.columns) for o in objs)) != 1:
             what = set(frozenset(o.columns) for o in objs)

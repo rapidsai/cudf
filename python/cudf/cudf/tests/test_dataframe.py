@@ -750,16 +750,27 @@ def test_dataframe_concat_different_column_types():
         gd.concat([df1, df2])
 
 
-def test_dataframe_empty_concat():
-    gdf1 = DataFrame()
-    gdf1["a"] = []
-    gdf1["b"] = []
+@pytest.mark.parametrize(
+    "df_1", [DataFrame({"a": [1, 2], "b": [1, 3]}), DataFrame({})]
+)
+@pytest.mark.parametrize(
+    "df_2", [DataFrame({"a": [], "b": []}), DataFrame({})]
+)
+def test_concat_empty_dataframe(df_1, df_2):
 
-    gdf2 = gdf1.copy()
+    got = gd.concat([df_1, df_2])
+    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()])
 
-    gdf3 = gd.concat([gdf1, gdf2])
-    assert len(gdf3) == 0
-    assert len(gdf3.columns) == 2
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+
+@pytest.mark.parametrize("ser_1", [pd.Series([1, 2, 3]), pd.Series([])])
+@pytest.mark.parametrize("ser_2", [pd.Series([])])
+def test_concat_empty_series(ser_1, ser_2):
+    got = gd.concat([Series(ser_1), Series(ser_2)])
+    expect = pd.concat([ser_1, ser_2])
+
+    pd.testing.assert_series_equal(got.to_pandas(), expect)
 
 
 def test_concat_with_axis():
