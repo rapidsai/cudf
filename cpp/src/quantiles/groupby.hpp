@@ -44,10 +44,12 @@ struct groupby {
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
   using index_vec_pointer = std::unique_ptr<rmm::device_vector<gdf_size_type>>;
 
-  groupby(cudf::table const& key_table, bool include_nulls = false)
+  groupby(cudf::table const& key_table, bool include_nulls = false,
+          cudaStream_t stream = 0)
   : _key_table(key_table)
   , _num_keys(key_table.num_rows())
   , _include_nulls(include_nulls)
+  , _stream(stream)
   {};
 
   ~groupby() {
@@ -139,6 +141,8 @@ struct groupby {
 
   gdf_size_type       _num_keys;
   bool                _include_nulls;
+
+  cudaStream_t        _stream;
 
 };
 
