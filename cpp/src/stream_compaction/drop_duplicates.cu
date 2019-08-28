@@ -190,7 +190,7 @@ rows in input table should be equal to number of rows in key colums table");
 
 gdf_size_type unique_count(gdf_column const& input_column)
 {
-  if (0 == input_column.size || input_column.null_count == input_column.input_size) {
+  if (0 == input_column.size || input_column.null_count == input_column.size) {
     return 0;
   }
   gdf_size_type unique_count; 
