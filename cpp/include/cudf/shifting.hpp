@@ -18,12 +18,10 @@
 #define SHIFTING_HPP
 
 #include "cudf.h"
-// #include "types.hpp"
-// #include <vector>
 
 namespace cudf {
 
-    void shift(/*table const &in_table, table *out_table, int offset*/);
+    void shift(table *out_table, table const &in_table, gdf_index_type offset);
 }
 
 #endif

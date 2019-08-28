@@ -17,7 +17,7 @@
  #include <tests/utilities/cudf_test_fixtures.h>
  #include <tests/utilities/column_wrapper.cuh>
  #include <cudf/copying.hpp>
- #include <cudf/shift.hpp>
+ #include <cudf/shifting.hpp>
  
  using cudf::test::column_wrapper;
  
@@ -45,15 +45,15 @@
     auto source0 = column_wrapper<int32_t>{ 5, 3, 1, 10 };
     auto source1 = column_wrapper<int32_t>{ 7, 4, 8, 12 };
 
-    auto expect0 = column_wrapper<int32_t>{ 5, 3, 1, 10 };
-    auto expect1 = column_wrapper<int32_t>{ 7, 4, 8, 12 };
+    auto expect0 = column_wrapper<int32_t>{ 5, 5, 3, 1, };
+    auto expect1 = column_wrapper<int32_t>{ 7, 7, 4, 8 };
 
     cudf::table source{source0.get(), source1.get()};
     cudf::table expect{expect0.get(), expect1.get()};
     cudf::table shifted = cudf::copy(source);
 
     //// b
-    cudf::shift();
+    cudf::shift(&shifted, source, 1);
     //// e
 
     ASSERT_EQ(expect0, *shifted.get_column(0));
