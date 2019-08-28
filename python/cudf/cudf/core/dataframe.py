@@ -3488,7 +3488,7 @@ class DataFrame(object):
             raise TypeError(msg)
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
-        common_dtype = np.find_common_type(filtered.dtypes, [np.number])
+        common_dtype = np.find_common_type(filtered.dtypes, [])
         coerced = filtered._apply_support_method("astype", dtype=common_dtype)
         arr = cp.asarray(coerced.as_gpu_matrix())
         return arr
