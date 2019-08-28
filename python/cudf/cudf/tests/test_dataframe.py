@@ -3360,6 +3360,9 @@ def test_constructor_properties():
         gd.datasets.randomdata(
             nrows=10, dtypes={"a": "category", "b": int, "c": float, "d": str}
         ),
+        gd.datasets.randomdata(
+            nrows=10, dtypes={"a": bool, "b": int, "c": float, "d": str}
+        ),
         pytest.param(
             gd.DataFrame(),
             marks=[
@@ -3399,7 +3402,7 @@ def test_rowwise_ops(data, op):
     # pandas errors due to not removing non-numeric columns before these ops,
     # which feels like a bug not a feature
     if op in ("cumsum", "cumprod"):
-        pdf = pdf.select_dtypes([np.number])
+        pdf = pdf.select_dtypes([np.number, np.bool_])
 
     if op in ("var", "std"):
         expected = getattr(pdf, op)(axis=1, ddof=0)
