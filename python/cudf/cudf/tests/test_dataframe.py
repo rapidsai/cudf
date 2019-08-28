@@ -761,6 +761,9 @@ def test_concat_empty_dataframe(df_1, df_2):
     got = gd.concat([df_1, df_2])
     expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()])
 
+    # ignoring dtypes as pandas upcasts int to float
+    # on concatenation with empty dataframes
+
     pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
 
 
