@@ -30,6 +30,12 @@ requirements:
   host:
     - librmm {{ minor_version }}.*
     - cudatoolkit {{ cuda_version }}.*
+    - arrow-cpp 0.14.1.*
+    - double-conversion
+    - rapidjson
+    - flatbuffers
+    - boost-cpp
+    - dlpack
   run:
     - {{ pin_compatible('cudatoolkit', max_pin='x.x') }}
 
