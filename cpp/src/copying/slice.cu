@@ -295,11 +295,11 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
 
 
 std::vector<cudf::table> slice(cudf::table const &        input_table,
-                               gdf_index_type const*      indices,
+                               gdf_index_type const*      slice_ranges,
                                gdf_size_type              num_indices) {
   std::vector<std::vector<gdf_column*> > sliced_columns; //cols, slices
   for (auto const& input_column : input_table) {
-    sliced_columns.push_back(cudf::detail::slice(*input_column, indices, num_indices));
+    sliced_columns.push_back(cudf::detail::slice(*input_column, slice_ranges, num_indices));
   }
   std::vector<cudf::table> output_tables;
   for (gdf_size_type slice_num = 0; slice_num < num_indices/2; slice_num++) {

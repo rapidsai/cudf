@@ -53,21 +53,21 @@ std::vector<gdf_column*> split(gdf_column const &         input_column,
 }
 
 std::vector<cudf::table> split(cudf::table const &        input_table,
-                               gdf_index_type const*      indices,
-                               gdf_size_type              num_indices) {
+                               gdf_index_type const*      splits,
+                               gdf_size_type              num_splits) {
 
-    if (num_indices == 0 || indices == nullptr){
+    if (num_splits == 0 || splits == nullptr){
       return std::vector<cudf::table>();
     } else {
       //TODO: all following operations can be done device side (avoid memCpy split.cu and slice.cu) (same as above)
       // Get indexes on host side
-      std::vector<gdf_size_type> host_indices(num_indices);
-      CUDA_TRY( cudaMemcpy(host_indices.data(), indices, num_indices * sizeof(gdf_size_type), cudaMemcpyDeviceToHost) );
+      std::vector<gdf_size_type> host_indices(num_splits);
+      CUDA_TRY( cudaMemcpy(host_indices.data(), splits, num_splits * sizeof(gdf_size_type), cudaMemcpyDeviceToHost) );
 
       // Convert to slice indices
-      std::vector<gdf_size_type> host_slice_indices((num_indices + 1) * 2);
+      std::vector<gdf_size_type> host_slice_indices((num_splits + 1) * 2);
       host_slice_indices[0] = 0;
-      for (gdf_size_type i = 0; i < num_indices; i++){
+      for (gdf_size_type i = 0; i < num_splits; i++){
         host_slice_indices[2*i + 1] = host_indices[i];
         host_slice_indices[2*i + 2] = host_indices[i];
       }

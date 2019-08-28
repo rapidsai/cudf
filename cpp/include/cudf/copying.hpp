@@ -398,7 +398,7 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
  * the indices array in a consecutive manner. The pair of indices are left-closed
  * and right-open.
  *
- * The indices array ('indices') is require to be a monotonic non-decreasing set.
+ * The indices array ('splits') is require to be a monotonic non-decreasing set.
  * The indices in the array are required to comply with the following conditions:
  * a, b belongs to Range[0, number of rows in input table]
  * a <= b, where the position of a is less or equal to the position of b.
@@ -430,14 +430,15 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
  *            [{20, 22, 24, 26}, {0, 2, 4, 6}], [{28}, {2}]}
  *
  * @param[in] input_table  The input table whose rows will be split.
- * @param[in] indices       An device array of indices that are used to divide
+ * @param[in] splits       An device array of indices that are used to divide
+ * @param[in] num_splits   Number of splits in the indices array
  * the input table into multiple tables.
  * @return A std::vector of cudf::table, each of which may have a different size
  * a different number of rows.
  */
 std::vector<cudf::table> split(cudf::table const &        input_table,
-                               gdf_column const&      splits,
-                               gdf_size_type              num_indices);
+                               gdf_index_type const*      splits,
+                               gdf_size_type              num_splits);
 }  // namespace cudf
 
 #endif  // COPYING_H

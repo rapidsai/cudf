@@ -183,12 +183,10 @@ std::vector<cudf::table> groups_to_tables(cudf::table const& input,
 {
     gdf_index_type const key_col_indices[1]{0};
     gdf_context context;
-    std::vector<gdf_column*> all_cols(const_cast<gdf_column*>(group_ids));
-    all_cols.insert(all_cols.end(), input.begin(), input.end());
+    std::vector<gdf_column*> all_cols(input.num_columns()+1);
     all_cols[0] = const_cast<gdf_column*>(&group_ids);
     std::transform(input.begin(), input.end(), all_cols.begin()+1,
       [](gdf_column const* col) { return const_cast<gdf_column*>(col); });
-    //cudf::table input_and_group(all_cols);
 
     cudf::table grouped_table;
     gdf_column unique_indices;
