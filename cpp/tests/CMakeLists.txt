@@ -435,6 +435,14 @@ set(SEARCH_TEST_SRC
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
+###################################################################################################
+# - search test -----------------------------------------------------------------------------------
+
+set(SHIFT_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/shifting/shift_test.cu")
+
+ConfigureTest(SHIFT_TEST "${SHIFT_TEST_SRC}")
+
 
 
 ###################################################################################################
