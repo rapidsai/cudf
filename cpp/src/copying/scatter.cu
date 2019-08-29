@@ -186,6 +186,7 @@ void scatter_to_tables(cudf::table const& input_table,
 
   CUDF_EXPECTS(scatter_map.dtype == GDF_INT32,
       "scatter_map is not GDF_INT32 column.");
+     CUDF_EXPECTS(not cudf::has_nulls(scatter_map), "Scatter map cannot contain null elements.");
   CUDF_EXPECTS(scatter_map.size == input_table.num_rows(),
       "scatter_map length is not equal to number of rows in input table.");
   if (scatter_map.size == 0 || 
