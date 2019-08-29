@@ -144,10 +144,6 @@ class Series(object):
         else:
             return self.data.mem.copy_to_host()
 
-    @property
-    def column(self):
-        return self._column
-
     @classmethod
     def from_arrow(cls, s):
         return cls(s)

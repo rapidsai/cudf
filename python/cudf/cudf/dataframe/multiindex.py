@@ -226,7 +226,7 @@ class MultiIndex(Index):
             for idx, row in enumerate(row_tuple):
                 if row == slice(None):
                     continue
-                if row not in index.levels[idx].column:
+                if row not in index.levels[idx]._column:
                     raise KeyError(row)
         return result
 
