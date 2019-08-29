@@ -108,7 +108,7 @@ rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
   if (_group_offsets)
     return *_group_offsets;
 
-  _group_offsets = std::make_unique<index_vector>(_num_keys);
+  _group_offsets = std::make_unique<index_vector>(num_keys());
 
   auto device_input_table = device_table::create(_keys, _stream);
   auto sorted_order = static_cast<gdf_size_type*>(key_sort_order().data);
@@ -119,13 +119,13 @@ rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
     auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(exec,
       thrust::make_counting_iterator<gdf_size_type>(0),
-      thrust::make_counting_iterator<gdf_size_type>(_num_keys),
+      thrust::make_counting_iterator<gdf_size_type>(num_keys()),
       _group_offsets->begin(), transform_row_eq_comparator<true>{comp, sorted_order});
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, 
       thrust::make_counting_iterator<gdf_size_type>(0),
-      thrust::make_counting_iterator<gdf_size_type>(_num_keys),
+      thrust::make_counting_iterator<gdf_size_type>(num_keys()),
       _group_offsets->begin(), transform_row_eq_comparator<false>{comp, sorted_order});
   }
 
@@ -140,7 +140,7 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
     return *_group_labels;
 
   // Get group labels for future use in segmented sorting
-  _group_labels = std::make_unique<index_vector>(_num_keys);
+  _group_labels = std::make_unique<index_vector>(num_keys());
 
   auto& group_labels = *_group_labels;
   auto exec = rmm::exec_policy(_stream)->on(_stream);
@@ -217,7 +217,7 @@ groupby::sort_values(gdf_column const& values) {
               &context);
 
   cudf::table unsorted_values_table{unsorted_values};
-  auto sorted_values = allocate_like(values, _num_keys, true, _stream);
+  auto sorted_values = allocate_like(values, num_keys(), true, _stream);
   cudf::table sorted_values_table{&sorted_values};
   cudf::gather(&unsorted_values_table,
               static_cast<gdf_size_type*>(values_sort_order->data),
@@ -226,6 +226,7 @@ groupby::sort_values(gdf_column const& values) {
   // Get number of valid values in each group
   rmm::device_vector<gdf_size_type> val_group_sizes(num_groups());
   auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_values.valid);
+  
   auto bitmask_iterator = thrust::make_transform_iterator(
     thrust::make_counting_iterator(0), 
     [col_valid] __device__ (gdf_size_type i) -> int { 

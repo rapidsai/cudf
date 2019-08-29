@@ -83,6 +83,15 @@ struct groupby {
   gdf_size_type num_groups() { return group_offsets().size(); }
 
   /**
+   * @brief Return the effective number of keys
+   * 
+   * When include_nulls = true, returned value is same as `keys.num_rows()`
+   * When include_nulls = false, returned value is the number of rows in `keys`
+   *  in which no element is null
+   */
+  gdf_size_type num_keys() { return _num_keys; }
+
+  /**
    * @brief Get the sorted order of `keys`.
    *
    * Gathering `keys` by sort order indices will produce the sorted key table.
