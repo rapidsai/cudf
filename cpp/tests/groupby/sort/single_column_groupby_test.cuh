@@ -45,7 +45,8 @@ namespace detail {
  * sorted keys and second element contains reordered values.
  *---------------------------------------------------------------------------**/
 inline std::pair<table, table> sort_by_key(cudf::table const& keys,
-                                           cudf::table const& values) {
+                                           cudf::table const& values,
+                                           bool include_nulls = true) {
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between keys and values");
   rmm::device_vector<gdf_index_type> sorted_indices(keys.num_rows());
@@ -53,7 +54,7 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys,
   gdf_column_view(&gdf_sorted_indices, sorted_indices.data().get(), nullptr,
                   sorted_indices.size(), GDF_INT32);
   gdf_context context;
-  context.flag_groupby_include_nulls = true; // for sql
+  context.flag_groupby_include_nulls = include_nulls; // for sql
   context.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
   gdf_order_by(keys.begin(), nullptr, keys.num_columns(), &gdf_sorted_indices,
                &context);
@@ -139,12 +140,12 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   cudf::table sorted_actual_keys;
   cudf::table sorted_actual_values;
   std::tie(sorted_actual_keys, sorted_actual_values) =
-      detail::sort_by_key(actual_keys_table, actual_values_table);
+      detail::sort_by_key(actual_keys_table, actual_values_table, not ignore_null_keys);
 
   cudf::table sorted_expected_keys;
   cudf::table sorted_expected_values;
   std::tie(sorted_expected_keys, sorted_expected_values) =
-      detail::sort_by_key({expected_keys.get()}, {expected_values.get()});
+      detail::sort_by_key({expected_keys.get()}, {expected_values.get()}, not ignore_null_keys);
   
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
                                                        sorted_expected_keys));
@@ -161,7 +162,8 @@ void single_column_groupby_test(column_wrapper<Key> keys,
 inline void multi_column_groupby_test(
     cudf::table const& keys, cudf::table const& values,
     std::vector<cudf::groupby::operators> const& ops,
-    cudf::table const& expected_keys, cudf::table const& expected_values) {
+    cudf::table const& expected_keys, cudf::table const& expected_values,
+    bool ignore_null_keys = true) {
   using namespace cudf::test;
   using namespace cudf::groupby::hash;
 
@@ -175,12 +177,12 @@ inline void multi_column_groupby_test(
   cudf::table sorted_actual_keys;
   cudf::table sorted_actual_values;
   std::tie(sorted_actual_keys, sorted_actual_values) =
-      detail::sort_by_key(actual_keys_table, actual_values_table);
+      detail::sort_by_key(actual_keys_table, actual_values_table, not ignore_null_keys);
 
   cudf::table sorted_expected_keys;
   cudf::table sorted_expected_values;
   std::tie(sorted_expected_keys, sorted_expected_values) =
-      detail::sort_by_key(expected_keys, expected_values);
+      detail::sort_by_key(expected_keys, expected_values, not ignore_null_keys);
 
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
                                                        sorted_expected_keys));
