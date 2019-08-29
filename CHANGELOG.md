@@ -6,6 +6,7 @@
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2653 Add Java bindings for rolling window operations
 
 ## Improvements
 
@@ -37,6 +38,7 @@
 - PR #2668 Update Java bindings to specify timestamp units for ORC and Parquet readers
 - PR #2679 AVRO reader: fix cuda errors when decoding compressed streams
 - PR #2692 Add concatenation for data-frame with different headers (empty and non-empty)
+- PR #2651 Remove nvidia driver installation from ci/cpu/build.sh
 
 
 # cuDF 0.9.0 (Date TBD)
