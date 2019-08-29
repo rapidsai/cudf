@@ -163,7 +163,6 @@ gdf_size_type unique_count(const cudf::table& key_columns,
   auto first = sorted_indices.begin();
   auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(key_columns, stream);
-  rmm::device_vector<gdf_size_type>::iterator result_end;
 
   bool nullable = device_input_table->has_nulls();
   if(cudf::has_nulls(key_columns)) {
