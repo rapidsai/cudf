@@ -165,15 +165,11 @@ endif(Boost_FOUND)
 ###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
-find_path(
-    RMM_INCLUDE "rmm"
-    HINTS "$ENV{RMM_ROOT}/include"
-)
+find_path(RMM_INCLUDE "rmm"
+          HINTS "$ENV{RMM_ROOT}/include")
 
-find_library(
-    RMM_LIBRARY "rmm"
-    HINTS "$ENV{RMM_ROOT}/lib"
-)
+find_library(RMM_LIBRARY "rmm"
+             HINTS "$ENV{RMM_ROOT}/lib")
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
@@ -226,9 +222,9 @@ message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-  
+
   include(ConfigureGoogleBenchmark)
-  
+
   if(GBENCH_FOUND)
     message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
     include_directories(${GBENCH_INCLUDE_DIR})
@@ -280,141 +276,141 @@ endif(CONDA_LINK_DIRS)
 # - library targets -------------------------------------------------------------------------------
 
 add_library(libNVStrings
-    custrings/strings/NVStrings.cu
-    custrings/strings/NVStringsImpl.cu
-    custrings/strings/array.cu
-    custrings/strings/attrs.cu
-    custrings/strings/case.cu
-    custrings/strings/combine.cu
-    custrings/strings/convert.cu
-    custrings/strings/count.cu
-    custrings/strings/datetime.cu
-    custrings/strings/extract.cu
-    custrings/strings/extract_record.cu
-    custrings/strings/find.cu
-    custrings/strings/findall.cu
-    custrings/strings/findall_record.cu
-    custrings/strings/modify.cu
-    custrings/strings/pad.cu
-    custrings/strings/replace.cu
-    custrings/strings/replace_backref.cu
-    custrings/strings/replace_multi.cu
-    custrings/strings/split.cu
-    custrings/strings/strip.cu
-    custrings/strings/substr.cu
-    custrings/strings/urlencode.cu
-    custrings/util.cu
-    custrings/regex/regexec.cpp
-    custrings/regex/regcomp.cpp)
+            custrings/strings/NVStrings.cu
+            custrings/strings/NVStringsImpl.cu
+            custrings/strings/array.cu
+            custrings/strings/attrs.cu
+            custrings/strings/case.cu
+            custrings/strings/combine.cu
+            custrings/strings/convert.cu
+            custrings/strings/count.cu
+            custrings/strings/datetime.cu
+            custrings/strings/extract.cu
+            custrings/strings/extract_record.cu
+            custrings/strings/find.cu
+            custrings/strings/findall.cu
+            custrings/strings/findall_record.cu
+            custrings/strings/modify.cu
+            custrings/strings/pad.cu
+            custrings/strings/replace.cu
+            custrings/strings/replace_backref.cu
+            custrings/strings/replace_multi.cu
+            custrings/strings/split.cu
+            custrings/strings/strip.cu
+            custrings/strings/substr.cu
+            custrings/strings/urlencode.cu
+            custrings/util.cu
+            custrings/regex/regexec.cpp
+            custrings/regex/regcomp.cpp)
 
 add_library(libNVCategory
-    custrings/category/NVCategory.cu
-    custrings/category/numeric_category.cu
-    custrings/category/numeric_category_int.cu
-    custrings/category/numeric_category_long.cu
-    custrings/category/numeric_category_float.cu
-    custrings/category/numeric_category_double.cu)
+            custrings/category/NVCategory.cu
+            custrings/category/numeric_category.cu
+            custrings/category/numeric_category_int.cu
+            custrings/category/numeric_category_long.cu
+            custrings/category/numeric_category_float.cu
+            custrings/category/numeric_category_double.cu)
 
 add_library(libNVText
-    custrings/text/NVText.cu
-    custrings/util.cu)
+            custrings/text/NVText.cu
+            custrings/util.cu)
 
 add_library(cudf
-    src/comms/ipc/ipc.cpp
-    src/column/legacy/column.cpp
-    src/column/legacy/context.cpp
-    src/table/legacy/table.cpp
-    src/string/nvcategory_util.cpp
-    src/join/joining.cu
-    src/orderby/orderby.cu
-    src/predicates/is_sorted.cu
-    src/sort/digitize.cu
-    src/groupby/hash/groupby.cu
-    src/groupby/groupby_without_aggregation.cu
-    src/groupby/hash/aggregation_requests.cpp
-    src/rolling/rolling.cu
-    src/rolling/jit/code/kernel.cpp
-    src/rolling/jit/code/operation.cpp
-    src/rolling/jit/util/type.cpp
-    src/binaryop/binaryop.cpp
-    src/binaryop/compiled/binary_ops.cu
-    src/binaryop/jit/code/kernel.cpp
-    src/binaryop/jit/code/operation.cpp
-    src/binaryop/jit/code/traits.cpp
-    src/binaryop/jit/util/operator.cpp
-    src/binaryop/jit/util/type.cpp
-    src/jit/type.cpp
-    src/jit/types_h_jit.cpp
-    src/jit/parser.cpp
-    src/jit/cache.cpp
-    src/jit/launcher.cpp
-    src/transform/transform.cpp
-    src/transform/jit/code/kernel.cpp
-    src/transform/nans_to_nulls.cu
-    src/bitmask/legacy/bitmask_ops.cu
-    src/stream_compaction/apply_boolean_mask.cu
-    src/stream_compaction/drop_nulls.cu
-    src/stream_compaction/drop_duplicates.cu
-    src/datetime/datetime_ops.cu
-    src/datetime/datetime_util.cpp
-    src/hash/hashing.cu
-    src/quantiles/quantiles.cu
-    src/reductions/reductions.cu
-    src/reductions/min.cu
-    src/reductions/max.cu
-    src/reductions/sum.cu
-    src/reductions/product.cu
-    src/reductions/sum_of_squares.cu
-    src/reductions/mean.cu
-    src/reductions/var.cu
-    src/reductions/std.cu
-    src/replace/replace.cu
-    src/reductions/scan.cu
-    src/transpose/transpose.cu
-    src/merge/merge.cu
-    src/unary/math_ops.cu
-    src/unary/cast_ops.cu
-    src/io/cuio_common.cpp
-    src/io/io_functions.cpp
-    src/io/convert/csr/cudf_to_csr.cu
-    src/io/convert/dlpack/cudf_dlpack.cpp
-    src/io/avro/avro_reader_impl.cu
-    src/io/avro/avro_gpu.cu
-    src/io/avro/avro.cpp
-    src/io/csv/csv_reader_impl.cu
-    src/io/csv/csv_writer.cu
-    src/io/json/json_reader_impl.cu
-    src/io/orc/orc_reader_impl.cu
-    src/io/orc/orc.cpp
-    src/io/orc/timezone.cpp
-    src/io/orc/stripe_data.cu
-    src/io/orc/stripe_init.cu
-    src/io/parquet/page_data.cu
-    src/io/parquet/page_hdr.cu
-    src/io/parquet/parquet_reader_impl.cu
-    src/io/parquet/parquet.cpp
-    src/io/comp/cpu_unbz2.cpp
-    src/io/comp/uncomp.cpp
-    src/io/comp/brotli_dict.cpp
-    src/io/comp/debrotli.cu
-    src/io/comp/unsnap.cu
-    src/io/comp/gpuinflate.cu
-    src/io/utilities/datasource.cpp
-    src/io/utilities/parsing_utils.cu
-    src/utilities/cuda_utils.cu
-    src/utilities/column_utils.cpp
-    src/utilities/error_utils.cpp
-    src/utilities/nvtx/nvtx_utils.cpp
-    src/copying/copy.cpp
-    src/copying/gather.cu
-    src/copying/scatter.cu
-    src/copying/slice.cu
-    src/copying/split.cu
-    src/bitmask/legacy/legacy_bitmask.cpp
-    src/gis/point_in_polygon.cu
-    src/copying/copy_range.cu
-    src/filling/fill.cu
-    src/search/search.cu)
+            src/comms/ipc/ipc.cpp
+            src/column/legacy/column.cpp
+            src/column/legacy/context.cpp
+            src/table/legacy/table.cpp
+            src/string/nvcategory_util.cpp
+            src/join/joining.cu
+            src/orderby/orderby.cu
+            src/predicates/is_sorted.cu
+            src/sort/digitize.cu
+            src/groupby/hash/groupby.cu
+            src/groupby/groupby_without_aggregation.cu
+            src/groupby/hash/aggregation_requests.cpp
+            src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
+            src/rolling/jit/util/type.cpp
+            src/binaryop/binaryop.cpp
+            src/binaryop/compiled/binary_ops.cu
+            src/binaryop/jit/code/kernel.cpp
+            src/binaryop/jit/code/operation.cpp
+            src/binaryop/jit/code/traits.cpp
+            src/binaryop/jit/util/operator.cpp
+            src/binaryop/jit/util/type.cpp
+            src/jit/type.cpp
+            src/jit/types_h_jit.cpp
+            src/jit/parser.cpp
+            src/jit/cache.cpp
+            src/jit/launcher.cpp
+            src/transform/transform.cpp
+            src/transform/jit/code/kernel.cpp
+            src/transform/nans_to_nulls.cu
+            src/bitmask/legacy/bitmask_ops.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
+            src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
+            src/hash/hashing.cu
+            src/quantiles/quantiles.cu
+            src/reductions/reductions.cu
+            src/reductions/min.cu
+            src/reductions/max.cu
+            src/reductions/sum.cu
+            src/reductions/product.cu
+            src/reductions/sum_of_squares.cu
+            src/reductions/mean.cu
+            src/reductions/var.cu
+            src/reductions/std.cu
+            src/replace/replace.cu
+            src/reductions/scan.cu
+            src/transpose/transpose.cu
+            src/merge/merge.cu
+            src/unary/math_ops.cu
+            src/unary/cast_ops.cu
+            src/io/cuio_common.cpp
+            src/io/io_functions.cpp
+            src/io/convert/csr/cudf_to_csr.cu
+            src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro_gpu.cu
+            src/io/avro/avro.cpp
+            src/io/csv/csv_reader_impl.cu
+            src/io/csv/csv_writer.cu
+            src/io/json/json_reader_impl.cu
+            src/io/orc/orc_reader_impl.cu
+            src/io/orc/orc.cpp
+            src/io/orc/timezone.cpp
+            src/io/orc/stripe_data.cu
+            src/io/orc/stripe_init.cu
+            src/io/parquet/page_data.cu
+            src/io/parquet/page_hdr.cu
+            src/io/parquet/parquet_reader_impl.cu
+            src/io/parquet/parquet.cpp
+            src/io/comp/cpu_unbz2.cpp
+            src/io/comp/uncomp.cpp
+            src/io/comp/brotli_dict.cpp
+            src/io/comp/debrotli.cu
+            src/io/comp/unsnap.cu
+            src/io/comp/gpuinflate.cu
+            src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
+            src/utilities/cuda_utils.cu
+            src/utilities/column_utils.cpp
+            src/utilities/error_utils.cpp
+            src/utilities/nvtx/nvtx_utils.cpp
+            src/copying/copy.cpp
+            src/copying/gather.cu
+            src/copying/scatter.cu
+            src/copying/slice.cu
+            src/copying/split.cu
+            src/bitmask/legacy/legacy_bitmask.cpp
+            src/gis/point_in_polygon.cu
+            src/copying/copy_range.cu
+            src/filling/fill.cu
+            src/search/search.cu)
 
 # Override RPATH for nvstrings
 set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
@@ -483,97 +479,70 @@ target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARR
 # - install targets -------------------------------------------------------------------------------
 
 # install targets for NVStrings
-install(
-    TARGETS libNVStrings
-    DESTINATION lib
-    COMPONENT nvstrings
-)
+install(TARGETS libNVStrings
+        DESTINATION lib
+        COMPONENT nvstrings)
 
-install(
-    TARGETS libNVCategory
-    DESTINATION lib
-    COMPONENT nvstrings
-)
+install(TARGETS libNVCategory
+        DESTINATION lib
+        COMPONENT nvstrings)
 
-install(
-    TARGETS libNVText
-    DESTINATION lib
-    COMPONENT nvstrings
-)
+install(TARGETS libNVText
+        DESTINATION lib
+        COMPONENT nvstrings)
 
-install(
-    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
-    DESTINATION include
-    COMPONENT nvstrings
-)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
+        DESTINATION include
+        COMPONENT nvstrings)
 
 add_custom_target(nvstrings
-    DEPENDS libNVStrings libNVCategory libNVText
-)
+                  DEPENDS libNVStrings libNVCategory libNVText)
 
 # install targets for cuDF
-install(
-    TARGETS cudf
-    DESTINATION lib
-    COMPONENT cudf
-)
-install(
-    DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
-    DESTINATION include
-    COMPONENT cudf
-)
+install(TARGETS cudf
+        DESTINATION lib
+        COMPONENT cudf)
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
+        DESTINATION include
+        COMPONENT cudf)
 
-add_custom_target(
-    install_cudf
-    COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-    DEPENDS cudf
-)
+add_custom_target(install_cudf
+                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+                  DEPENDS cudf)
 
-add_custom_target(
-    install_nvstrings
-    COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
-    DEPENDS nvstrings
-)
+add_custom_target(install_nvstrings
+                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+                  DEPENDS nvstrings)
 
-add_custom_target(
-    build_tests_cudf
-    DEPENDS ${CUDF_TEST_LIST}
-)
+add_custom_target(build_tests_cudf
+                  DEPENDS ${CUDF_TEST_LIST})
 
-add_custom_target(
-    build_tests_nvstrings
-    DEPENDS ${NVSTRINGS_TEST_LIST}
-)
+add_custom_target(build_tests_nvstrings
+                  DEPENDS ${NVSTRINGS_TEST_LIST})
 
-add_custom_target(
-    test_cudf
-    COMMAND ctest -E "NVSTRINGS"
-    DEPENDS build_tests_cudf
-)
+add_custom_target(test_cudf
+                  COMMAND ctest -E "NVSTRINGS"
+                  DEPENDS build_tests_cudf)
 
-add_custom_target(
-    test_nvstrings
-    COMMAND ctest -R "NVSTRINGS"
-    DEPENDS build_tests_nvstrings
-)
+add_custom_target(test_nvstrings
+                  COMMAND ctest -R "NVSTRINGS"
+                  DEPENDS build_tests_nvstrings)
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
 # doc targets for nvstrings
-add_custom_command(
-    OUTPUT NVSTRINGS_DOXYGEN
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
-    COMMAND doxygen Doxyfile
-    VERBATIM
+add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
+                   COMMAND doxygen Doxyfile
+                   VERBATIM
 )
 add_custom_target(docs_nvstrings DEPENDS NVSTRINGS_DOXYGEN)
 
 # doc targets for cuDF
-add_custom_command(
-    OUTPUT CUDF_DOXYGEN
-    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
-    COMMAND doxygen Doxyfile
-    VERBATIM
-)
+add_custom_command(OUTPUT CUDF_DOXYGEN
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
+                   COMMAND doxygen Doxyfile
+                   VERBATIM)
+
 add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)
