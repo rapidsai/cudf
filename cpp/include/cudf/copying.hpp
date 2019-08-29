@@ -450,27 +450,28 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  *
  * The scatter map must be 'int32' column with length equal to number of rows in
  * input table and contains numbers in range of [0, n] where n < number of rows
- * in input table. The rows corresponding to null values are not copied.
+ * in input table. The column cannot contain any null values.
  * The datatypes of the columns of input tables and the output tables must be
  * the same.
  * The columns of output tables are allocated by the function. 
  *
  * Exceptional cases for the scatter_map column are:
  * When length of scatter_map is not equal to number of rows in input table, the
- * function throws error
+ * function throws error.
+ * When scatter_map contains null values, the function throws error.
  * When any of the values in the scatter_map don't belong to the range[0, number
  * of rows in input table), the outcome is undefined.
  *
  * Example:
  * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
  *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * indices:  {3,null,  3,  2,  4,  4,  0,  1,  1,  1}
+ * indices:  { 3,  4,  3,  2,  4,  4,  0,  1,  1,  1}
  * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
- *           [{10, 14}, {1, 3}], [{18, 20}, {null, 0}]}
+ *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
  *
  * @param[in] input_table  Table whose rows will be partitioned into a set of tables according to `scatter_map`
  * vector of tables
- * @param[in] scatter_map    Non-nullable column of `GDF_INT32` values that map each row in `input` into one of the output tables. 
+ * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map each row in `input_table` into one of the output tables. 
  * in the input table
  *
  * @return A std::vector of cudf::table, each of which may have a different size

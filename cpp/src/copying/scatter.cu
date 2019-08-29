@@ -186,16 +186,16 @@ void scatter_to_tables(cudf::table const& input_table,
 
   CUDF_EXPECTS(scatter_map.dtype == GDF_INT32,
       "scatter_map is not GDF_INT32 column.");
-     CUDF_EXPECTS(not cudf::has_nulls(scatter_map), "Scatter map cannot contain null elements.");
+  CUDF_EXPECTS(not cudf::has_nulls(scatter_map),
+      "Scatter map cannot contain null elements.");
   CUDF_EXPECTS(scatter_map.size == input_table.num_rows(),
       "scatter_map length is not equal to number of rows in input table.");
-  if (scatter_map.size == 0 || 
+  if (scatter_map.size == 0 ||
       input_table.num_columns() == 0 ||
       input_table.num_rows() == 0)
     return;
 
   gdf_index_type nrows = input_table.num_rows();
-  //null supported
   gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
   gdf_index_type num_groups = max_elem.is_valid ? max_elem.data.si32 + 1 : 0;
   gdf_index_type* scatter_array =
@@ -205,10 +205,9 @@ void scatter_to_tables(cudf::table const& input_table,
   rmm::device_vector<gdf_index_type> gather_map(nrows);
   for (gdf_index_type it=0; it<num_groups; it++) {
     output_tables.push_back(
-        detail::copy_if(input_table, 
-          [scatter_map, scatter_array, it] __device__ (gdf_index_type& row) 
-          { //null supported
-          return gdf_is_valid(scatter_map.valid, row) && (it==scatter_array[row]);
+        detail::copy_if(input_table,
+          [scatter_array, it] __device__ (gdf_index_type& row)
+          { return it==scatter_array[row];
           }));
   }
 }
@@ -266,7 +265,7 @@ table scatter(std::vector<gdf_scalar> const& source,
   return output;
 }
 
-std::vector<cudf::table> 
+std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map) {
 
   std::vector<cudf::table> output_tables;
