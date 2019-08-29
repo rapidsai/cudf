@@ -179,6 +179,27 @@ def compare_and_get_name(a, b):
     return None
 
 
+def get_null_series(size, dtype=np.bool):
+    """
+    Creates a null series of provided dtype and size
+
+    Parameters
+    ----------
+    size:  length of series
+    dtype: dtype of series to create; defaults to bool.
+
+    Returns
+    -------
+    a null cudf series of provided `size` and `dtype`
+    """
+    from cudf.utils import cudautils
+    from cudf.core import Series
+
+    device_array = cudautils.zeros(size, dtype=dtype)
+    mask = cudautils.zeros(len(device_array), dtype=np.uint8)
+    return Series(device_array).set_mask(mask, null_count=len(mask))
+
+
 # taken from dask array
 # https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
 def _is_nep18_active():

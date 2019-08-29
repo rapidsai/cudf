@@ -1687,19 +1687,8 @@ class DataFrame(object):
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
 
-        # remove empty dataframes from the list
-        non_empty_objs = [obj for obj in objs if len(obj.columns) > 0]
-        if len(non_empty_objs) == 0:
-            return objs[0]
-
-        objs = non_empty_objs
-
         libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
-        if len(set(frozenset(o.columns) for o in objs)) != 1:
-            what = set(frozenset(o.columns) for o in objs)
-            raise ValueError("columns mismatch: {}".format(what))
 
-        objs = [o for o in objs]
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         elif isinstance(objs[0].index, cudf.core.multiindex.MultiIndex):
@@ -1708,10 +1697,26 @@ class DataFrame(object):
             )
         else:
             index = Index._concat([o.index for o in objs])
-        data = [
-            (c, Series._concat([o[c] for o in objs], index=index))
-            for c in objs[0].columns
-        ]
+
+        all_columns = set()
+        for o in objs:
+            all_columns.update(o.columns)
+
+        # Concatenate cudf.series for all columns
+
+        data = []
+        # done to ensure consistency with pandas
+        # pandas sorts columns by their names
+        for c in sorted(all_columns):
+            series_list = [
+                o[c]
+                if c in o.columns
+                else utils.get_null_series(size=len(o), dtype=np.bool)
+                for o in objs
+            ]
+            concatenated_series = Series._concat(series_list, index=index)
+            data.append((c, concatenated_series))
+
         out = cls(data)
         out._index = index
         libcudf.nvtx.nvtx_range_pop()

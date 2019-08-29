@@ -767,6 +767,51 @@ def test_concat_empty_dataframe(df_1, df_2):
     pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
 
 
+@pytest.mark.parametrize(
+    "df_1_d",
+    [
+        {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
+        {"b": [1.9, 10.9], "c": ["s1", "s2"]},
+    ],
+)
+@pytest.mark.parametrize(
+    "df_2_d",
+    [
+        {"a": [1, 2, 3]},
+        {"a": [1, None, 3], "b": [True, True, False], "c": ["s3", None, "s4"]},
+        {"a": [], "b": []},
+        {},
+    ],
+)
+def test_concat_different_column_dataframe(df_1_d, df_2_d):
+    got = gd.concat([DataFrame(df_1_d), DataFrame(df_2_d), DataFrame(df_1_d)])
+
+    expect = pd.concat(
+        [pd.DataFrame(df_1_d), pd.DataFrame(df_2_d), pd.DataFrame(df_1_d)]
+    )
+
+    # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
+    # casts nan to -1 in non-float numerical columns
+
+    numeric_cols = got.dtypes[got.dtypes != "object"].index
+    for col in numeric_cols:
+        got[col] = got[col].astype(np.float64).fillna(np.nan)
+
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+    got = gd.concat([DataFrame(df_1_d), DataFrame(df_2_d), DataFrame(df_1_d)])
+
+    expect = pd.concat(
+        [pd.DataFrame(df_1_d), pd.DataFrame(df_2_d), pd.DataFrame(df_1_d)]
+    )
+
+    numeric_cols = got.dtypes[got.dtypes != "object"].index
+    for col in numeric_cols:
+        got[col] = got[col].astype(np.float64).fillna(np.nan)
+
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+
 @pytest.mark.parametrize("ser_1", [pd.Series([1, 2, 3]), pd.Series([])])
 @pytest.mark.parametrize("ser_2", [pd.Series([])])
 def test_concat_empty_series(ser_1, ser_2):
@@ -836,14 +881,23 @@ def test_concat_with_axis():
     gdg2 = gdf2.groupby(["x", "y"]).min()
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
-    assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
-    assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
+
+    # pandas does not change column order in multi-index concat
+    # but changes order in normal concat (it becomes sorted by name)
+
+    assert_eq(
+        gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]).sort_index(axis=1)
+    )
+    assert_eq(
+        gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]).sort_index(axis=1)
+    )
 
     # series multi index concat
     gdgz1 = gdg1.z
     gdgz2 = gdg2.z
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
+
     assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
     assert_eq(gd.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
 
