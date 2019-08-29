@@ -13,20 +13,34 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-#ifndef SHIFTING_HPP
-#define SHIFTING_HPP
-
-#include "cudf.h"
-
+ 
 namespace cudf {
 
-    void shift(
-        table *out_table,
-        table const &in_table,
-        gdf_index_type offset,
-        gdf_scalar const &fill_value
-    );
-} // namespace cudf
+namespace detail {
 
-#endif
+struct scalar_factory {
+    gdf_scalar value;
+  
+    template <typename T>
+    struct scalar {
+      T value;
+      bool is_valid;
+  
+      __device__
+      T data(gdf_index_type index) { return value; }
+  
+      __device__
+      bool valid(gdf_index_type index) { return is_valid; }
+    };
+  
+    template <typename T>
+    scalar<T> make() {
+      T val{}; // Safe type pun, compiler should optimize away the memcpy
+      memcpy(&val, &value.data, sizeof(T));
+      return scalar<T>{val, value.is_valid};
+    }
+};
+
+} // namespace detail
+
+} // namespace cudf

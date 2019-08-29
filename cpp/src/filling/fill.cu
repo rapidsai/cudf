@@ -16,34 +16,9 @@
 
 #include <copying/copy_range.cuh>
 
+#include "fill.cuh"
+
 namespace cudf {
-
-namespace detail {
-
-struct scalar_factory {
-  gdf_scalar value;
-
-  template <typename T>
-  struct scalar {
-    T value;
-    bool is_valid;
-
-    __device__
-    T data(gdf_index_type index) { return value; }
-
-    __device__
-    bool valid(gdf_index_type index) { return is_valid; }
-  };
-
-  template <typename T>
-  scalar<T> make() {
-    T val{}; // Safe type pun, compiler should optimize away the memcpy
-    memcpy(&val, &value.data, sizeof(T));
-    return scalar<T>{val, value.is_valid};
-  }
-};
-
-}; // namespace detail
 
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end)

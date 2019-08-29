@@ -19,40 +19,6 @@
 
 namespace cudf {
 
-namespace detail {
-
-struct column_range_factory {
-  gdf_column column;
-  gdf_index_type begin;
-
-  template <typename T>
-  struct column_range {
-    T const * column_data;
-    bit_mask_t const * bitmask;
-    gdf_index_type begin;
-
-    __device__
-    T data(gdf_index_type index) { 
-      return column_data[begin + index]; }
-
-    __device__
-    bool valid(gdf_index_type index) {
-      return bit_mask::is_valid(bitmask, begin + index);
-    }
-  };
-
-  template <typename T>
-  column_range<T> make() {
-    return column_range<T>{
-      static_cast<T*>(column.data),
-      reinterpret_cast<bit_mask_t*>(column.valid),
-      begin
-    };
-  }
-};
-
-}; // namespace detail
-
 void copy_range(gdf_column *out_column, gdf_column const &in_column,
                 gdf_index_type out_begin, gdf_index_type out_end, 
                 gdf_index_type in_begin)
