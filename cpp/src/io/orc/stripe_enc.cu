@@ -16,6 +16,10 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
+// Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
+// Workaround replaces zero-length patch lists by a dummy zero patch
+#define ZERO_PLL_WAR        1
+
 namespace cudf {
 namespace io {
 namespace orc {
@@ -50,6 +54,11 @@ struct intrle_enc_state_s
 {
     uint32_t literal_run;
     uint32_t delta_run;
+    uint32_t literal_mode;
+    uint32_t literal_w;
+    uint32_t mode1_w;
+    uint32_t hdr_bytes;
+    uint32_t pl_bytes;
     volatile uint32_t delta_map[(512 / 32) + 1];
     volatile union {
         uint32_t u32[(512 / 32) * 2];
@@ -317,6 +326,16 @@ static inline __device__ void intrle_minmax(int64_t &vmin, int64_t &vmax)   { vm
 static inline __device__ void intrle_minmax(int32_t &vmin, int32_t &vmax)   { vmin = INT32_MIN; vmax = INT32_MAX; }
 static inline __device__ void intrle_minmax(uint32_t &vmin, uint32_t &vmax) { vmin = UINT32_C(0); vmax = UINT32_MAX; }
 
+template<class T>
+static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
+{
+    for (uint32_t i = 0, b = w * 8; i < w; ++i)
+    {
+        b -= 8;
+        dst[i] = static_cast<uint8_t>(v >> b);
+    }
+}
+
 /**
  * @brief Integer RLEv2 encoder
  *
@@ -428,49 +447,52 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
                 if (t == 0)
                 {
-                #if 1
-                    // For some reason, Apache ORC RLEv2 decoder chokes on zero patch list lengths
-                    // For now use mode1 only
-                    uint32_t mode1_w;
-                    s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
-                    if (sizeof(T) > 4)
-                    {
-                        uint64_t vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
-                        mode1_w = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
-                    }
-                    else
-                    {
-                        uint32_t vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
-                        mode1_w = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
-                    }
-                    s->u.intrle.scratch.u32[2] = 1;
-                    s->u.intrle.scratch.u32[3] = mode1_w;
-                #else
                     uint32_t mode1_w, mode2_w;
+                    T vrange_mode1, vrange_mode2;
                     s->u.intrle.scratch.u64[0] = (uint64_t)vmin;
                     if (sizeof(T) > 4)
                     {
-                        uint64_t vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
-                        uint64_t vrange_mode2 = (uint64_t)(vmax - vmin);
+                        vrange_mode1 = (is_signed) ? max(zigzag64(vmin), zigzag64(vmax)) : vmax;
+                        vrange_mode2 = vmax - vmin;
                         mode1_w = 8 - min(CountLeadingBytes64(vrange_mode1), 7);
                         mode2_w = 8 - min(CountLeadingBytes64(vrange_mode2), 7);
                     }
                     else
                     {
-                        uint32_t vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
-                        uint32_t vrange_mode2 = (uint32_t)(vmax - vmin);
+                        vrange_mode1 = (is_signed) ? max(zigzag32(vmin), zigzag32(vmax)) : vmax;
+                        vrange_mode2 = vmax - vmin;
                         mode1_w = 4 - min(CountLeadingBytes32(vrange_mode1), 3);
                         mode2_w = 4 - min(CountLeadingBytes32(vrange_mode2), 3);
                     }
-                    s->u.intrle.scratch.u32[2] = (mode1_w <= mode2_w) ? 1 : 2;
-                    s->u.intrle.scratch.u32[3] = min(mode1_w, mode2_w);
-                #endif
+                    // Decide between mode1 & mode2 (also mode3 for length=2 repeat)
+                    if (vrange_mode2 == 0 && mode1_w > 1)
+                    {
+                        // Should only occur if literal_run==2 (otherwise would have resulted in repeat_run >= 3)
+                        uint32_t bytecnt = 2;
+                        dst[0] = 0xC0 + ((literal_run - 1) >> 8);
+                        dst[1] = (literal_run - 1) & 0xff;
+                        bytecnt += StoreVarint(dst + 2, vrange_mode1);
+                        dst[bytecnt++] = 0; // Zero delta
+                        s->u.intrle.literal_mode = 3;
+                        s->u.intrle.literal_w = bytecnt;
+                    }
+                    else if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4)
+                    {
+                        s->u.intrle.literal_mode = 2;
+                        s->u.intrle.literal_w = mode2_w;
+                        s->u.intrle.mode1_w = mode1_w;
+                    }
+                    else
+                    {
+                        s->u.intrle.literal_mode = 1;
+                        s->u.intrle.literal_w = mode1_w;
+                    }
                 }
             }
             __syncthreads();
             vmin = (T)s->u.intrle.scratch.u64[0];
-            literal_mode = s->u.intrle.scratch.u32[2];
-            literal_w = s->u.intrle.scratch.u32[3];
+            literal_mode = s->u.intrle.literal_mode;
+            literal_w = s->u.intrle.literal_w;
             if (literal_mode == 1)
             {
                 // Direct mode
@@ -489,46 +511,52 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                         else
                             v0 = zigzag32(v0);
                     }
-                    for (uint32_t i = 0, b = literal_w * 8; i < literal_w; i++)
-                    {
-                        b -= 8;
-                        dst[t * literal_w + i] = static_cast<uint8_t>(v0 >> b);
-                    }
+                    StoreBytesBigEndian(dst + t * literal_w, v0, literal_w);
                 }
             }
-            else
+            else if (literal_mode == 2)
             {
                 // Patched base mode
-                uint32_t bw;
-                vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
-                bw =  (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax), 7)) : (4 - min(CountLeadingBytes32(vmax), 3));
                 if (!t)
                 {
+                    uint32_t bw, pw = 1, pll, pgw = 1;
+                    vmax = (is_signed) ? ((vmin < 0) ? -vmin : vmin) * 2 : vmin;
+                    bw = (sizeof(T) > 4) ? (8 - min(CountLeadingBytes64(vmax), 7)) : (4 - min(CountLeadingBytes32(vmax), 3));
+                #if ZERO_PLL_WAR
+                    // Insert a dummy zero patch
+                    pll = 1;
+                    dst[4 + bw + literal_run * literal_w + 0] = 0;
+                    dst[4 + bw + literal_run * literal_w + 1] = 0;
+                #else
+                    pll = 0;
+                #endif
                     dst[0] = 0x80 + kByteLengthToRLEv2_W[literal_w] * 2 + ((literal_run - 1) >> 8);
                     dst[1] = (literal_run - 1) & 0xff;
-                    dst[2] = (bw - 1) << 5;
-                    dst[3] = 0;
+                    dst[2] = ((bw - 1) << 5) | kByteLengthToRLEv2_W[pw];
+                    dst[3] = ((pgw - 1) << 5) | pll;
                     if (is_signed)
                     {
                         vmax >>= 1;
                         vmax |= vmin & ((T)1 << (bw*8-1));
                     }
-                    for (uint32_t i = 0, b = bw * 8; i < bw; i++)
-                    {
-                        b -= 8;
-                        dst[4 + i] = static_cast<uint8_t>(vmax >> b);
-                    }
+                    StoreBytesBigEndian(dst + 4, vmax, bw);
+                    s->u.intrle.hdr_bytes = 4 + bw;
+                    s->u.intrle.pl_bytes = (pll * (pw * 8 + pgw) + 7) >> 3;
                 }
-                dst += 4 + bw;
+                __syncthreads();
+                dst += s->u.intrle.hdr_bytes;
                 if (t < literal_run)
                 {
                     v0 -= vmin;
-                    for (uint32_t i = 0, b = literal_w * 8; i < literal_w; i++)
-                    {
-                        b -= 8;
-                        dst[t * literal_w + i] = static_cast<uint8_t>(v0 >> b);
-                    }
+                    StoreBytesBigEndian(dst + t * literal_w, v0, literal_w);
                 }
+                dst += s->u.intrle.pl_bytes;
+            }
+            else
+            {
+                // Delta mode
+                dst += literal_w;
+                literal_w = 0;
             }
             dst += literal_run * literal_w;
             numvals -= literal_run;
@@ -553,7 +581,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                         b -= 8;
                         dst[1 + i] = static_cast<uint8_t>(delta_base >> b);
                     }
-                    s->u.intrle.scratch.u32[0] = 1 + delta_bw;
+                    s->u.intrle.hdr_bytes = 1 + delta_bw;
                 }
                 else
                 {
@@ -564,11 +592,11 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                     dst[1] = (delta_run - 1) & 0xff;
                     bytecnt += StoreVarint(dst + bytecnt, delta_base);
                     bytecnt += StoreVarint(dst + bytecnt, delta_u);
-                    s->u.intrle.scratch.u32[0] = bytecnt;
+                    s->u.intrle.hdr_bytes = bytecnt;
                 }
             }
             __syncthreads();
-            dst += s->u.intrle.scratch.u32[0];
+            dst += s->u.intrle.hdr_bytes;
             numvals -= delta_run;
             inpos += delta_run;
             out_cnt += delta_run;
