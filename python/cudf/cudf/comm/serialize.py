@@ -1,23 +1,29 @@
-import functools
+import pickle
+
+from distributed.protocol.cuda import cuda_deserialize, cuda_serialize
+from distributed.utils import log_errors
+
+import cudf
+import cudf.core.groupby.groupby
 
 
-def register_distributed_serializer(cls):
-    try:
-        from distributed.protocol.cuda import cuda_serialize, cuda_deserialize
-        from distributed.protocol import serialize, deserialize
+# all (de-)serializtion code lives in the cudf codebase
+# here we ammend the returned headers with `is_gpu` for
+# UCX buffer consumption
+@cuda_serialize.register(
+    (cudf.DataFrame, cudf.Series, cudf.core.groupby.groupby._Groupby)
+)
+def serialize_cudf_dataframe(x):
+    with log_errors():
+        header, frames = x.serialize()
+        return header, frames
 
-        serialize_part = functools.partial(
-            serialize, serializers=["cuda", "dask", "pickle"]
-        )
-        deserialize_part = functools.partial(
-            deserialize, deserializers=["cuda", "dask", "pickle"]
-        )
 
-        cuda_serialize.register(cls)(
-            functools.partial(cls.serialize, serialize=serialize_part)
-        )
-        cuda_deserialize.register(cls)(
-            functools.partial(cls.deserialize, deserialize_part)
-        )
-    except ImportError:
-        pass
+@cuda_deserialize.register(
+    (cudf.DataFrame, cudf.Series, cudf.core.groupby.groupby._Groupby)
+)
+def deserialize_cudf_dataframe(header, frames):
+    with log_errors():
+        cudf_typ = pickle.loads(header["type"])
+        cudf_obj = cudf_typ.deserialize(header, frames)
+        return cudf_obj
