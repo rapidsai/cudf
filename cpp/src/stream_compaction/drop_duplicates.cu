@@ -166,7 +166,7 @@ gdf_size_type unique_count(const cudf::table& key_columns,
   rmm::device_vector<gdf_size_type>::iterator result_end;
 
   bool nullable = device_input_table->has_nulls();
-  if(nullable) {
+  if(cudf::has_nulls(key_columns)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
     return thrust::count_if(exec,
