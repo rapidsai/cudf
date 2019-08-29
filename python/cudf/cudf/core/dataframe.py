@@ -1698,16 +1698,22 @@ class DataFrame(object):
         else:
             index = Index._concat([o.index for o in objs])
 
-        all_columns = set()
+        # Currently we only support sort = False
+        # Change below when we want to support sort = True
+        # below functions as an ordered set
+
+        all_columns_list = []
+        all_columns_set = set()
         for o in objs:
-            all_columns.update(o.columns)
+            for col in o.columns:
+                if col not in all_columns_set:
+                    all_columns_list.append(col)
+                    all_columns_set.add(col)
 
         # Concatenate cudf.series for all columns
-
         data = []
-        # done to ensure consistency with pandas
-        # pandas sorts columns by their names
-        for c in sorted(all_columns):
+
+        for c in all_columns_list:
             series_list = [
                 o[c]
                 if c in o.columns

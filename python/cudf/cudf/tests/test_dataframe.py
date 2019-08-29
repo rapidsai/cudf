@@ -759,7 +759,7 @@ def test_dataframe_concat_different_column_types():
 def test_concat_empty_dataframe(df_1, df_2):
 
     got = gd.concat([df_1, df_2])
-    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()])
+    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
 
     # ignoring dtypes as pandas upcasts int to float
     # on concatenation with empty dataframes
@@ -768,14 +768,15 @@ def test_concat_empty_dataframe(df_1, df_2):
 
 
 @pytest.mark.parametrize(
-    "df_1_d",
+    "df1_d",
     [
         {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
         {"b": [1.9, 10.9], "c": ["s1", "s2"]},
+        {"c": ["s1"], "b": [None], "a": [False]},
     ],
 )
 @pytest.mark.parametrize(
-    "df_2_d",
+    "df2_d",
     [
         {"a": [1, 2, 3]},
         {"a": [1, None, 3], "b": [True, True, False], "c": ["s3", None, "s4"]},
@@ -783,27 +784,18 @@ def test_concat_empty_dataframe(df_1, df_2):
         {},
     ],
 )
-def test_concat_different_column_dataframe(df_1_d, df_2_d):
-    got = gd.concat([DataFrame(df_1_d), DataFrame(df_2_d), DataFrame(df_1_d)])
+def test_concat_different_column_dataframe(df1_d, df2_d):
+    got = gd.concat(
+        [DataFrame(df1_d), DataFrame(df2_d), DataFrame(df1_d)], sort=False
+    )
 
     expect = pd.concat(
-        [pd.DataFrame(df_1_d), pd.DataFrame(df_2_d), pd.DataFrame(df_1_d)]
+        [pd.DataFrame(df1_d), pd.DataFrame(df2_d), pd.DataFrame(df1_d)],
+        sort=False,
     )
 
     # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
     # casts nan to -1 in non-float numerical columns
-
-    numeric_cols = got.dtypes[got.dtypes != "object"].index
-    for col in numeric_cols:
-        got[col] = got[col].astype(np.float64).fillna(np.nan)
-
-    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
-
-    got = gd.concat([DataFrame(df_1_d), DataFrame(df_2_d), DataFrame(df_1_d)])
-
-    expect = pd.concat(
-        [pd.DataFrame(df_1_d), pd.DataFrame(df_2_d), pd.DataFrame(df_1_d)]
-    )
 
     numeric_cols = got.dtypes[got.dtypes != "object"].index
     for col in numeric_cols:
@@ -882,15 +874,8 @@ def test_concat_with_axis():
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
 
-    # pandas does not change column order in multi-index concat
-    # but changes order in normal concat (it becomes sorted by name)
-
-    assert_eq(
-        gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]).sort_index(axis=1)
-    )
-    assert_eq(
-        gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]).sort_index(axis=1)
-    )
+    assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
+    assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
 
     # series multi index concat
     gdgz1 = gdg1.z
