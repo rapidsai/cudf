@@ -1,9 +1,9 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 import numpy as np
+from utils import assert_eq
 
 import nvstrings
-from utils import assert_eq
 
 
 def test_hash():

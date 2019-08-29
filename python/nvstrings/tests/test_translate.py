@@ -4,9 +4,9 @@ import string
 
 import pandas as pd
 import pytest
+from utils import assert_eq
 
 import nvstrings
-from utils import assert_eq
 
 
 @pytest.mark.parametrize(

@@ -2,8 +2,9 @@
 
 import urllib.parse
 
-import nvstrings
 from utils import assert_eq
+
+import nvstrings
 
 urls1 = ["http://www.hellow.com", "/home/nvidia/nfs", "123.45 ~ABCDEF"]
 urls2 = [

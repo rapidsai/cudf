@@ -1,8 +1,9 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+from utils import assert_eq
+
 import nvstrings
 import nvtext
-from utils import assert_eq
 
 hstrs = [
     "the quick brown fox jumps over the lazy dog",

@@ -1,8 +1,7 @@
 import os
 
-from setuptools import setup
-
 from cmake_setuptools import CMakeBuildExt, CMakeExtension
+from setuptools import setup
 
 install_requires = []
 

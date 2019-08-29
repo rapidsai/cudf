@@ -2,10 +2,10 @@
 
 import numpy as np
 import pytest
+from utils import assert_eq
 
 import nvcategory
 import nvstrings
-from utils import assert_eq
 
 
 def test_size():

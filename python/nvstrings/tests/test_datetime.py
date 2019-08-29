@@ -2,9 +2,9 @@
 
 import numpy as np
 import pandas as pd
+from utils import assert_eq
 
 import nvstrings
-from utils import assert_eq
 
 
 def test_timestamp2int():

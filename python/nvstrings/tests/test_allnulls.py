@@ -1,9 +1,9 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 import pytest
+from utils import methodcaller
 
 import nvstrings
-from utils import methodcaller
 
 
 @pytest.mark.parametrize(

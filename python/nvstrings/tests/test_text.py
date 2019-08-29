@@ -1,6 +1,7 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
 import numpy as np
+
 from librmm_cffi import librmm as rmm
 
 import nvstrings
