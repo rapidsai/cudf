@@ -151,7 +151,7 @@ gdf_size_type unique_count(const cudf::table& key_columns,
   rmm::device_vector<gdf_size_type> sorted_indices(nrows);
   gdf_context context;
   gdf_column sorted_indices_col;
-  CUDF_TRY(gdf_column_view(&sorted_indices_col, (void*)(sorted_indices.data().get()),
+  CUDF_TRY(gdf_column_view(&sorted_indices_col, static_cast<void*>(sorted_indices.data().get()),
         nullptr, nrows, GDF_INT32));
   CUDF_TRY(gdf_order_by(key_columns.begin(),
         nullptr,
