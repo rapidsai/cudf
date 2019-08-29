@@ -19,7 +19,7 @@ project(CUDA_DATAFRAME VERSION 0.10.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
-endif()
+endif(NOT CMAKE_CUDA_COMPILER)
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -34,7 +34,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   # Set the possible values of build type for cmake-gui
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
     "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-endif()
+endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
@@ -73,7 +73,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xc
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
-if (CMAKE_CUDA_LINEINFO)
+if(CMAKE_CUDA_LINEINFO)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
 endif(CMAKE_CUDA_LINEINFO)
 
@@ -104,17 +104,17 @@ include(CheckLibraryExists)
 ###################################################################################################
 # - conda environment -----------------------------------------------------------------------------
 
-if ("$ENV{CONDA_BUILD}" STREQUAL "1")
+if("$ENV{CONDA_BUILD}" STREQUAL "1")
     set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
     set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
     set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
     message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-elseif (DEFINED ENV{CONDA_PREFIX})
+elseif(DEFINED ENV{CONDA_PREFIX})
     set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
     set(CONDA_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
     set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
     message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
-endif ()
+endif("$ENV{CONDA_BUILD}" STREQUAL "1")
 
 ###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
@@ -122,7 +122,7 @@ endif ()
 message(STATUS "BUILDING ARROW")
 include(ConfigureArrow)
 
-if (ARROW_FOUND)
+if(ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
@@ -179,9 +179,9 @@ message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
-if (RMM_INCLUDE AND RMM_LIBRARY)
+if(RMM_INCLUDE AND RMM_LIBRARY)
     set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
-endif (RMM_INCLUDE AND RMM_LIBRARY)
+endif(RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
 # - DLPACK -------------------------------------------------------------------------------------------
@@ -242,9 +242,9 @@ endif(BUILD_BENCHMARKS)
 ###################################################################################################
 # - include paths ---------------------------------------------------------------------------------
 
-if (CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
+if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif ()
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
@@ -258,9 +258,9 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${RMM_INCLUDE}"
                     "${DLPACK_INCLUDE}")
 
-if (CONDA_INCLUDE_DIRS)
+if(CONDA_INCLUDE_DIRS)
     include_directories("${CONDA_INCLUDE_DIRS}")
-endif ()
+endif(CONDA_INCLUDE_DIRS)
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
@@ -272,9 +272,9 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
                  "${GTEST_LIBRARY_DIR}"
                  "${RMM_LIBRARY}")
 
-if (CONDA_LINK_DIRS)
+if(CONDA_LINK_DIRS)
     link_directories("${CONDA_LINK_DIRS}")
-endif ()
+endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
