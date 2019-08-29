@@ -225,22 +225,17 @@ groupby::sort_values(gdf_column const& values) {
 
   // Get number of valid values in each group
   rmm::device_vector<gdf_size_type> val_group_sizes(num_groups());
-  rmm::device_vector<gdf_size_type> d_bools(sorted_values.size);
-  if ( is_nullable(sorted_values) ) {
-    auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_values.valid);
-
-    thrust::transform(rmm::exec_policy(_stream)->on(_stream),
-      thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
-      thrust::make_counting_iterator(sorted_values.size), d_bools.begin(),
-      [col_valid] __device__ (gdf_size_type i) { return bit_mask::is_valid(col_valid, i); });
-  } else {
-    thrust::fill(d_bools.begin(), d_bools.end(), 1);
-  }
+  auto col_valid = reinterpret_cast<bit_mask::bit_mask_t*>(sorted_values.valid);
+  auto bitmask_iterator = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0), 
+    [col_valid] __device__ (gdf_size_type i) -> int { 
+      return (col_valid) ? bit_mask::is_valid(col_valid, i) : true;
+    });
 
   thrust::reduce_by_key(rmm::exec_policy(_stream)->on(_stream),
                         group_labels().begin(),
                         group_labels().end(),
-                        d_bools.begin(),
+                        bitmask_iterator,
                         thrust::make_discard_iterator(),
                         val_group_sizes.begin());
 
