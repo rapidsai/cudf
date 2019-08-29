@@ -38,6 +38,7 @@
 - PR #2668 Update Java bindings to specify timestamp units for ORC and Parquet readers
 - PR #2679 AVRO reader: fix cuda errors when decoding compressed streams
 - PR #2651 Remove nvidia driver installation from ci/cpu/build.sh
+- PR #2697 Ensure csv reader sets datetime column time units
 
 
 # cuDF 0.9.0 (Date TBD)
