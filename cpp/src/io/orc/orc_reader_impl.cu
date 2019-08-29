@@ -17,15 +17,14 @@
 #include "orc_reader_impl.hpp"
 #include "timezone.h"
 
-#include <cudf/cudf.h>
 #include <io/comp/gpuinflate.h>
-
 #include <cuda_runtime.h>
-#include <nvstrings/NVStrings.h>
 
+#include <algorithm>
 #include <cstring>
 #include <iostream>
 #include <numeric>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -776,42 +775,19 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
     }
 
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-      if (column->dtype == GDF_STRING) {
-        // Kernel doesn't init invalid entries but NvStrings expects zero length
-        CUDA_TRY(cudaMemsetAsync(
-            column->data, 0,
-            column->size * sizeof(std::pair<const char *, size_t>)));
-      }
+      column.allocate();
     }
     decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table,
                        row_groups, md_->get_row_index_stride(), columns);
+
+    for (auto &column : columns) {
+      column.finalize();
+    }
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-      if (column->dtype == GDF_STRING) {
-        // Kernel doesn't init invalid entries but NvStrings expects zero length
-        CUDA_TRY(cudaMemsetAsync(
-            column->data, 0,
-            column->size * sizeof(std::pair<const char *, size_t>)));
-      }
-    }
-  }
-
-  // For string dtype, allocate an NvStrings container instance, deallocating
-  // the original string list memory in the process.
-  // This container takes a list of string pointers and lengths, and copies
-  // into its own memory so the source memory must not be released yet.
-  for (auto &column : columns) {
-    if (column->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
-
-      auto str_list = static_cast<str_pair *>(column->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
-                       &NVStrings::destroy);
-      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+      column.allocate();
+      column.finalize();
     }
   }
 
@@ -821,7 +797,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
     out_cols[i] = columns[i].release();
   }
 
-  return table(out_cols.data(), out_cols.size());
+  return cudf::table(out_cols.data(), out_cols.size());
 }
 
 reader::reader(std::string filepath, reader_options const &options)
