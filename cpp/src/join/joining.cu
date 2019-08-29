@@ -89,7 +89,7 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
  * are empty
  *
  * @throws cudf::logic_error
- * "Dataset is empty" if both left_dataframe and right_dataframe is empty
+ * "Dataset is empty" if both left_dataframe and right_dataframe are empty
  * 
  * @param[in] left_size The size of the left table
  * @param[in] right_size The size of the right table
