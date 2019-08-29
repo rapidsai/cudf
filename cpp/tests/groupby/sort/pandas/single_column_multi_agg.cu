@@ -68,6 +68,7 @@ TYPED_TEST(SingleColumnMultiAgg, RepeatedAgg) {
   auto val_col = column_wrapper<Value>(size, [](auto index) { return Value(index); });
   auto expected_key_col = column_wrapper<Key>({key});
   auto expected_val_col = column_wrapper<ResultValue>({sum});
+  
   cudf::test::multi_column_groupby_test(
       cudf::table{key_col.get()}, cudf::table{val_col.get(), val_col.get()},
       {SUM, SUM}, cudf::table{expected_key_col.get()},

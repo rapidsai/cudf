@@ -51,7 +51,7 @@ std::vector<SimpleAggRequestCounter> compound_to_simple(
         if (op == MEAN) {
           columns_to_ops[col].insert(COUNT);
           columns_to_ops[col].insert(SUM);
-        } else if (op != MEDIAN) { // Skip Median
+        } else if (op != MEDIAN && op != QUANTILE) { // Skip Median and Quantiles
           columns_to_ops[col].insert(op);
         }
       });
@@ -154,7 +154,7 @@ table compute_original_requests(
   // Process simple requests
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& req = original_requests[i];
-    if (req.second != MEAN && req.second != MEDIAN) {
+    if (req.second != MEAN && req.second != MEDIAN && req.second != QUANTILE) {
       // For non-compound requests, append the result to the final output
       // and remove it from the map
       auto found = simple_requests_to_outputs.find(req);

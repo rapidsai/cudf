@@ -14,45 +14,39 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <cudf/groupby.hpp>
-#include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
-#include <tests/utilities/compare_column_wrappers.cuh>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "../single_column_groupby_test.cuh"
 #include "../type_info.hpp"
+#include <cudf/groupby.hpp>
+#include <cudf/legacy/table.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/compare_column_wrappers.cuh>
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-static constexpr cudf::groupby::operators op{
-    cudf::groupby::operators::SUM};
+static constexpr cudf::groupby::operators op{cudf::groupby::operators::SUM};
 
-template <typename KV>
-struct SingleColumnSumSql : public GdfTest {
+template <typename KV> struct SingleColumnSumSql : public GdfTest {
   using KeyType = typename KV::Key;
   using ValueType = typename KV::Value;
 };
 
-template <typename T>
-using column_wrapper = cudf::test::column_wrapper<T>;
+template <typename T> using column_wrapper = cudf::test::column_wrapper<T>;
 
-template <typename K, typename V>
-struct KV {
+template <typename K, typename V> struct KV {
   using Key = K;
   using Value = V;
 };
 
-using TestingTypes =
-    ::testing::Types<KV<int8_t, int8_t>>;
+using TestingTypes = ::testing::Types<KV<int8_t, int8_t>>;
 
 // TODO: tests for cudf::bool8
 
 TYPED_TEST_CASE(SingleColumnSumSql, TestingTypes);
- 
 
 TYPED_TEST(SingleColumnSumSql, HalfWithNullKeys) {
   using Key = typename SingleColumnSumSql<TypeParam>::KeyType;
@@ -62,12 +56,14 @@ TYPED_TEST(SingleColumnSumSql, HalfWithNullKeys) {
   using R = ResultValue;
   bool ignore_null_keys = false;
 
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
-      column_wrapper<Key>({T(1), T(1), T(0), T(0)}, [](auto index) { return index < 2; }),
+      std::move(operation_with_args),
+      column_wrapper<Key>({T(1), T(1), T(0), T(0)},
+                          [](auto index) { return index < 2; }),
       column_wrapper<Value>(4, [](auto index) { return Value(1); }),
       column_wrapper<Key>({T(1), T(0)}, [](auto index) { return index == 0; }),
-      column_wrapper<ResultValue>({R(2), R(2)}),
-      ignore_null_keys);
+      column_wrapper<ResultValue>({R(2), R(2)}), ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnSumSql, OneGroupNoNulls) {
@@ -78,7 +74,9 @@ TYPED_TEST(SingleColumnSumSql, OneGroupNoNulls) {
   Key key{42};
   ResultValue sum{((size - 1) * size) / 2};
   bool ignore_null_keys = false;
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
+      std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}), column_wrapper<ResultValue>({sum}),
@@ -94,13 +92,14 @@ TYPED_TEST(SingleColumnSumSql, OneGroupAllNullKeys) {
   Key key{42};
   bool ignore_null_keys = false;
   // If all keys are null, then there should be no output
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
+      std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return false; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key}, [](auto index) { return false; }),
-      column_wrapper<ResultValue>({R(45)}),
-      ignore_null_keys);
+      column_wrapper<ResultValue>({R(45)}), ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnSumSql, OneGroupAllNullValues) {
@@ -111,7 +110,9 @@ TYPED_TEST(SingleColumnSumSql, OneGroupAllNullValues) {
   Key key{42};
   bool ignore_null_keys = false;
   // If all values are null, then there should be a single NULL output value
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
+      std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return false; }),
@@ -127,14 +128,15 @@ TYPED_TEST(SingleColumnSumSql, OneGroupEvenNullKeys) {
   Key key{42};
   bool ignore_null_keys = false;
   // The sum of n odd numbers is n^2
-  ResultValue sum = (size/2) * (size/2);
+  ResultValue sum = (size / 2) * (size / 2);
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
+      std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key, 0}, [](auto index) { return index == 0; }),
-      column_wrapper<ResultValue>({sum, 20}),
-      ignore_null_keys);
+      column_wrapper<ResultValue>({sum, 20}), ignore_null_keys);
 }
 
 TYPED_TEST(SingleColumnSumSql, OneGroupOddNullKeys) {
@@ -145,14 +147,15 @@ TYPED_TEST(SingleColumnSumSql, OneGroupOddNullKeys) {
   Key key{42};
   bool ignore_null_keys = false;
   // The number of even values in the range [0,n) is (n-1)/2
-  int num_even_numbers = (size-1)/2;
+  int num_even_numbers = (size - 1) / 2;
   // The sum of n even numbers is n(n+1)
   ResultValue sum = num_even_numbers * (num_even_numbers + 1);
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
   cudf::test::single_column_groupby_test<op>(
+      std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>({key, 0}, [](auto index) { return index == 0; }),
-      column_wrapper<ResultValue>({sum, 25}),
-      ignore_null_keys);
+      column_wrapper<ResultValue>({sum, 25}), ignore_null_keys);
 }

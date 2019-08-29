@@ -98,6 +98,11 @@ struct expected_result_type<
     SourceType, MEDIAN> {
   using type = double;
 };
+template <typename SourceType>
+struct expected_result_type<
+    SourceType, QUANTILE> {
+  using type = double;
+};
 template <typename SourceType, operators op>
 using expected_result_t = typename expected_result_type<SourceType, op>::type;
 }  // namespace test

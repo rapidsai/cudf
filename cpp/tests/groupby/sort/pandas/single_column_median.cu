@@ -60,12 +60,14 @@ TYPED_TEST(SingleColumnMedian, TestMedium0) {
   using T = Key;
   using R = ResultValue;
 
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>{T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
       column_wrapper<Key>{T(1), T(2)},
       column_wrapper<ResultValue>{R(1), R(5)});
-} 
+ 
+}  
 
 TYPED_TEST(SingleColumnMedian, TestMedium1) {
   using Key = typename SingleColumnMedian<TypeParam>::KeyType;
@@ -75,7 +77,8 @@ TYPED_TEST(SingleColumnMedian, TestMedium1) {
   using V = Value;
   using R = ResultValue;
 
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>({T(3), T(2), T(1), T(1), T(2), T(3), T(3), T(2), T(1)}),
       column_wrapper<Value>({V(1), V(2), V(3), V(4), V(4), V(3), V(2), V(1), V(0)}),
       column_wrapper<Key>({T(1), T(2), T(3)}),
@@ -91,7 +94,8 @@ TYPED_TEST(SingleColumnMedian, TestMedium2) {
   using V = Value;
   using R = ResultValue;
 
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>({T(1),T(2),T(3),T(3),T(2),T(1),T(0),T(3),T(0),T(1),T(0),T(2),T(3),T(0),T(3),T(3),T(2),T(1),T(0)}),
       column_wrapper<Value>({V(0),V(1),V(2),V(3),V(4),V(5),V(6),V(7),V(8),V(9),V(8),V(7),V(6),V(5),V(4),V(3),V(2),V(1),V(0)}),
       column_wrapper<Key>({T(0), T(1), T(2), T(3)}),
@@ -106,7 +110,8 @@ TYPED_TEST(SingleColumnMedian, FourGroupsOddNullValuesOddNullKeys) {
   using T = Key;
   using R = ResultValue;
 
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args {op, nullptr}; 
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>({T(1), T(1), T(1), T(1), T(1), T(2), T(2), T(2), T(2), T(2)},
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(10, [](auto index) { return Value(index); },

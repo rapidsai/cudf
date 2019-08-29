@@ -117,8 +117,10 @@ set(SORT_GROUPBY_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_count.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_min.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_max.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_multi_agg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_quantile.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_median.cu"
+
+    # "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_multi_agg.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/sql/single_column_sum.cu"
 )
 

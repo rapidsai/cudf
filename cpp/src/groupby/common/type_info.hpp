@@ -82,6 +82,10 @@ struct target_type<SourceType, SUM,
 template <typename SourceType>
 struct target_type<SourceType, MEDIAN> { using type = double; };
 
+// Always use `double` for QUANTILES 
+template <typename SourceType>
+struct target_type<SourceType, QUANTILE> { using type = double; };
+
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
 struct target_type<
@@ -111,6 +115,10 @@ struct target_type_mapper {
         return gdf_dtype_of<target_type_t<SourceType, operators::COUNT>>();
       case MEAN:
         return gdf_dtype_of<target_type_t<SourceType, operators::MEAN>>();
+      case MEDIAN:
+        return gdf_dtype_of<target_type_t<SourceType, operators::MEDIAN>>();
+      case QUANTILE:
+        return gdf_dtype_of<target_type_t<SourceType, operators::QUANTILE>>();  
       default :
         return GDF_invalid;
     }

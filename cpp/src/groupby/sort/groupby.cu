@@ -48,14 +48,7 @@ namespace sort {
 using index_vector = rmm::device_vector<gdf_size_type>;
 
 namespace {
-
-struct median_result_type {
-  template <typename SourceType>
-  gdf_dtype operator()() {
-    return cudf::gdf_dtype_of<target_type_t<SourceType, MEDIAN>>();  
-  }
-};
-
+ 
 struct quantiles_functor {
 
   template <typename T>
@@ -97,9 +90,10 @@ struct quantiles_functor {
   }
 };
 
-cudf::table compute_complex_request(
+std::vector<gdf_column*>  compute_complex_request(
     cudf::table current_output_values,
     std::vector<AggRequestType> const& original_requests,
+     std::vector<operation_args*> const& input_ops_args,
     cudf::detail::groupby &groupby,
     cudaStream_t stream) {
 
@@ -112,20 +106,29 @@ cudf::table compute_complex_request(
   index_vector group_labels = groupby.group_labels();
   gdf_size_type num_groups = (gdf_size_type)group_indices.size();
 
-  const std::vector<float> quantiles = {0.5};
-  const gdf_quantile_method interpolation = GDF_QUANT_LINEAR;
-  rmm::device_vector<double> dv_quantiles(quantiles);
 
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
-    if (element.second == MEDIAN) {
+    if (element.second == MEDIAN || element.second == QUANTILE) {
+      std::vector<double> quantiles;
+      gdf_quantile_method interpolation;
+
+      if (element.second == MEDIAN) {
+        quantiles.push_back(0.5);
+        interpolation = GDF_QUANT_LINEAR;
+      } else if (element.second == QUANTILE){
+        quantile_args * args = static_cast<quantile_args*>(input_ops_args[i]);
+        quantiles = args->quantiles;
+        interpolation = args->interpolation;
+      }
       gdf_column * value_col = element.first;
       gdf_column sorted_values;
       rmm::device_vector<gdf_size_type> group_sizes;
 
       std::tie(sorted_values, group_sizes) = groupby.sort_values(*value_col);
       gdf_column* result_col = new gdf_column;
-      *result_col = cudf::allocate_column(GDF_FLOAT64, groupby.num_groups(), false);
+      *result_col = cudf::allocate_column(GDF_FLOAT64, quantiles.size() * groupby.num_groups(), false);
+      rmm::device_vector<double> dv_quantiles(quantiles);
 
       cudf::type_dispatcher(sorted_values.dtype, quantiles_functor{},
                           sorted_values, group_indices, group_sizes, 
@@ -135,7 +138,17 @@ cudf::table compute_complex_request(
       gdf_column_free(&sorted_values);
     }
   }
-  return cudf::table{final_value_columns};
+  
+  // Update size and null count of output columns
+  auto update_column = [](gdf_column* col) {
+    CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
+    set_null_count(*col);
+    return col;
+  };
+  for (size_t i = 0; i < final_value_columns.size(); i++) {
+    update_column(final_value_columns[i]);
+  }
+  return final_value_columns;
 }
 
 template <bool keys_have_nulls, bool values_have_nulls>
@@ -181,16 +194,20 @@ cudf::table process_original_requests(const cudf::table &input_keys,
 
 template <bool keys_have_nulls, bool values_have_nulls>
 auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& input_values,
-                          std::vector<operators> const& input_ops, Options options,
+                          std::vector<operators> const& input_ops,
+                          std::vector<operation_args*> const& input_ops_args,
+                          Options options,
                           cudaStream_t stream) {
   auto include_nulls = not options.ignore_null_keys;
   auto groupby = cudf::detail::groupby(input_keys, include_nulls, options.null_sort_behavior, options.input_sorted);
   index_vector group_indices = groupby.group_indices();
 
   if (group_indices.size() == 0) {
+    cudf::table output_values(0, target_dtypes(column_dtypes(input_values), input_ops), column_dtype_infos(input_values));
     return std::make_pair(
         cudf::empty_like(input_keys),
-        cudf::table(0, target_dtypes(column_dtypes(input_values), input_ops), column_dtype_infos(input_values)));
+        output_values.get_columns()
+        );
   }
 
   std::vector<AggRequestType> original_requests(input_values.num_columns());
@@ -224,7 +241,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                               stream);
   }
   // compute_complex_request
-  cudf::table final_output_values = compute_complex_request(current_output_values, original_requests, groupby, stream);
+  std::vector<gdf_column*> final_output_values = compute_complex_request(current_output_values, original_requests, input_ops_args, groupby, stream);
   return std::make_pair(groupby.unique_keys(), final_output_values);
 }
 
@@ -273,12 +290,56 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
 
   auto compute_groupby = groupby_null_specialization(keys, values);
 
+  std::vector<operation_args*> ops_args(ops.size(), nullptr);
+  
   cudf::table output_keys;
-  cudf::table output_values;
+  std::vector<gdf_column*> output_values;
   std::tie(output_keys, output_values) =
-      compute_groupby(keys, values, ops, options, stream);
-  update_nvcategories(keys, output_keys, values, output_values);
-  return std::make_pair(output_keys, output_values);
+      compute_groupby(keys, values, ops, ops_args, options, stream);
+  
+  // update_nvcategories(keys, output_keys, values, output_values);
+
+  return std::make_pair(output_keys, cudf::table{output_values});
+}
+
+ 
+std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
+                                            cudf::table const& values,
+                                            std::vector<operation> const& ops,
+                                            Options options,
+                                            cudaStream_t stream) {
+  CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
+               "Size mismatch between number of rows in keys and values.");
+  std::vector<operators> optype_list;
+  for (auto &op : ops) {
+    optype_list.push_back( op.op_name );
+  }
+  verify_operators(values, optype_list);
+  // Empty inputs
+  if (keys.num_rows() == 0) {
+    cudf::table output_values(0, target_dtypes(column_dtypes(values), optype_list), column_dtype_infos(values));
+    return std::make_pair(
+        cudf::empty_like(keys),
+        output_values.get_columns()
+        );
+  }
+
+  auto compute_groupby = groupby_null_specialization(keys, values);
+
+  std::vector<operation_args*> ops_args;
+  for (auto &op : ops) {
+    ops_args.emplace_back( op.args.get() );
+  }
+
+  cudf::table output_keys;
+  std::vector<gdf_column*> output_values;
+  std::tie(output_keys, output_values) =
+      compute_groupby(keys, values, optype_list, ops_args, options, stream);
+  
+  cudf::table table_output_values(output_values);
+  
+  update_nvcategories(keys, output_keys, values, table_output_values);
+  return std::make_pair(output_keys, output_values);                                              
 }
 
 } // namespace detail
@@ -289,6 +350,14 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
                                             Options options) {
   return detail::groupby(keys, values, ops, options);
 }
+
+std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const &keys,
+                                            cudf::table const &values,
+                                            std::vector<operation> const &ops,
+                                            Options options) {
+  return detail::groupby(keys, values, ops, options);
+}
+
 
 } // END: namespace sort
 } // END: namespace groupby

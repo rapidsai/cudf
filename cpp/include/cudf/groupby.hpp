@@ -78,7 +78,7 @@ struct Options {
  * @brief Supported aggregation operations
  *
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN };
+enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE};
 
 namespace hash {
 
@@ -118,6 +118,22 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 }  // namespace hash
 
 namespace sort {
+
+struct operation_args {};
+
+struct quantile_args : operation_args {
+  std::vector<double> quantiles;
+  gdf_quantile_method interpolation;
+  
+  quantile_args(const std::vector<double> &_quantiles,  gdf_quantile_method _interpolation)
+  : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
+  {}
+};
+
+struct operation {
+  operators                         op_name;
+  std::shared_ptr<operation_args>   args;
+};
 
 enum class null_order : bool { AFTER, BEFORE }; 
 
@@ -161,6 +177,11 @@ struct Options : groupby::Options {
 std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
+                                            Options options = Options{});
+
+std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
+                                            cudf::table const& values,
+                                            std::vector<operation> const& ops,
                                             Options options = Options{});
 }  // namespace sort
 }  // namespace groupby
