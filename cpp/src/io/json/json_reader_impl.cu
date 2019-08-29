@@ -379,6 +379,7 @@ void reader::Impl::convertDataToColumns() {
     columns_[i]->null_count = columns_[i]->size - h_valid_counts[i];
   }
 
+  // Perform any final column preparation (may reference decoded data)
   for (auto &column : columns_) {
     column.finalize();
   }

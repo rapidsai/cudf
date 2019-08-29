@@ -701,6 +701,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
 
     decode_page_data(chunks, pages, chunk_map, skip_rows, num_rows);
 
+    // Perform any final column preparation (may reference decoded data)
     for (auto &column : columns) {
       column.finalize();
     }

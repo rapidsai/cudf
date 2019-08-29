@@ -254,6 +254,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
     decode_data(block_data, dict, global_dictionary, total_dictionary_entries,
                 columns);
 
+    // Perform any final column preparation (may reference decoded data)
     for (auto &column : columns) {
       column.finalize();
     }

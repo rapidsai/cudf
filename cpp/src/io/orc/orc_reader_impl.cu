@@ -777,9 +777,11 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
     for (auto &column : columns) {
       column.allocate();
     }
+
     decode_stream_data(chunks, num_dict_entries, skip_rows, tz_table,
                        row_groups, md_->get_row_index_stride(), columns);
 
+    // Perform any final column preparation (may reference decoded data)
     for (auto &column : columns) {
       column.finalize();
     }

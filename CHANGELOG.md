@@ -17,7 +17,6 @@
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
 
-
 ## Bug Fixes
 
 - PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
@@ -38,6 +37,7 @@
 - PR #2668 Update Java bindings to specify timestamp units for ORC and Parquet readers
 - PR #2679 AVRO reader: fix cuda errors when decoding compressed streams
 - PR #2651 Remove nvidia driver installation from ci/cpu/build.sh
+- PR #2704 Parquet Reader: Fix crash when loading string column with nulls
 
 
 # cuDF 0.9.0 (Date TBD)
