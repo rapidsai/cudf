@@ -270,38 +270,7 @@ auto groupby_null_specialization(table const& keys, table const& values) {
 }
 } // anonymous namespace
 
-namespace detail {
-
-std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
-                                            cudf::table const &values,
-                                            std::vector<operators> const &ops,
-                                            Options options,
-                                            cudaStream_t stream) {
-  CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
-               "Size mismatch between number of rows in keys and values.");
-
-  verify_operators(values, ops);
-  // Empty inputs
-  if (keys.num_rows() == 0) {
-    return std::make_pair(
-        cudf::empty_like(keys),
-        cudf::table(0, target_dtypes(column_dtypes(values), ops), column_dtype_infos(values)));
-  }
-
-  auto compute_groupby = groupby_null_specialization(keys, values);
-
-  std::vector<operation_args*> ops_args(ops.size(), nullptr);
-  
-  cudf::table output_keys;
-  std::vector<gdf_column*> output_values;
-  std::tie(output_keys, output_values) =
-      compute_groupby(keys, values, ops, ops_args, options, stream);
-  
-  // update_nvcategories(keys, output_keys, values, output_values);
-
-  return std::make_pair(output_keys, cudf::table{output_values});
-}
-
+namespace detail { 
  
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                             cudf::table const& values,
@@ -343,13 +312,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
 }
 
 } // namespace detail
-
-std::pair<cudf::table, cudf::table> groupby(cudf::table const &keys,
-                                            cudf::table const &values,
-                                            std::vector<operators> const &ops,
-                                            Options options) {
-  return detail::groupby(keys, values, ops, options);
-}
+ 
 
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const &keys,
                                             cudf::table const &values,

@@ -132,7 +132,7 @@ struct quantile_args : operation_args {
 
 struct operation {
   operators                         op_name;
-  std::shared_ptr<operation_args>   args;
+  std::unique_ptr<operation_args>   args;
 };
 
 enum class null_order : bool { AFTER, BEFORE }; 
@@ -172,13 +172,8 @@ struct Options : groupby::Options {
  * @param values The table of aggregation values
  * @param ops The list of aggregation operations
  * @return A tuple whose first member contains the table of output keys, and
- * second member contains the table of reduced output values
+ * second member contains the reduced output values
  *---------------------------------------------------------------------------**/
-std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
-                                            cudf::table const& values,
-                                            std::vector<operators> const& ops,
-                                            Options options = Options{});
-
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operation> const& ops,

@@ -26,14 +26,8 @@
 namespace cudf {
 namespace groupby {
 namespace sort {
-namespace detail {
-
-std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
-                                             cudf::table const& values,
-                                             std::vector<operators> const& ops,
-                                             Options options,
-                                             cudaStream_t stream = 0);
-
+namespace detail { 
+    
 std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operation> const& ops,
