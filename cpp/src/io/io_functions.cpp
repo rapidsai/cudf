@@ -129,7 +129,7 @@ table read_orc(orc_read_arg const &args) {
   namespace orc = cudf::io::orc;
   auto reader = [&]() {
     orc::reader_options options{args.columns, args.use_index,
-                                args.use_np_dtypes};
+                                args.use_np_dtypes, args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<orc::reader>(args.source.filepath, options);
@@ -170,7 +170,8 @@ void write_orc(orc_write_arg const &args) {
 table read_parquet(parquet_read_arg const &args) {
   namespace parquet = cudf::io::parquet;
   auto reader = [&]() {
-    parquet::reader_options options{args.columns, args.strings_to_categorical};
+    parquet::reader_options options{args.columns, args.strings_to_categorical,
+                                    args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<parquet::reader>(args.source.filepath, options);

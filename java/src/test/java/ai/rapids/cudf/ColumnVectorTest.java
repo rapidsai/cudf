@@ -91,6 +91,31 @@ public class ColumnVectorTest {
   }
 
   @Test
+  void testConcaCategories() {
+    try (ColumnVector v0 = ColumnVector.categoryFromStrings("0","1","2",null);
+         ColumnVector v1 = ColumnVector.categoryFromStrings(null, "5", "6","7");
+         ColumnVector expected = ColumnVector.categoryFromStrings(
+           "0","1","2",null,
+           null,"5","6","7");
+         ColumnVector v = ColumnVector.concatenate(v0, v1)) {
+      assertColumnsAreEqual(v, expected);
+    }
+  }
+
+  @Test
+  void testConcaTimestamps() {
+    try (ColumnVector v0 = ColumnVector.timestampsFromBoxedLongs(TimeUnit.MICROSECONDS, 0L, 1L, 2L, null);
+         ColumnVector v1 = ColumnVector.timestampsFromBoxedLongs(TimeUnit.MICROSECONDS, null, 5L, 6L, 7L);
+         ColumnVector expected = ColumnVector.timestampsFromBoxedLongs(
+           TimeUnit.MICROSECONDS,
+           0L, 1L, 2L, null,
+           null, 5L, 6L, 7L);
+         ColumnVector v = ColumnVector.concatenate(v0, v1)) {
+      assertColumnsAreEqual(v, expected);
+    }
+  }
+
+  @Test
   void isNotNullTestEmptyColumn() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector v = ColumnVector.fromBoxedInts();
@@ -639,5 +664,41 @@ public class ColumnVectorTest {
       try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
            ColumnVector upper = cv.upper()) {}
     });
+  }
+
+  @Test
+  void testWindowStatic() {
+    WindowOptions v0 = WindowOptions.builder().windowSize(3).minPeriods(1).forwardWindow(1).
+        aggType(AggregateOp.SUM).build();
+    try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, 7, 6, 8);
+         ColumnVector expected = ColumnVector.fromInts(9, 16, 22, 25, 21);
+         ColumnVector result = v1.rollingWindow(v0)) {
+      result.ensureOnHost();
+      assertFalse(result.hasNulls());
+      assertColumnsAreEqual(result, expected);
+    }
+  }
+
+  @Test
+  void testWindowDynamic() {
+    try (ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3, 1, 2)) {
+         WindowOptions v0 = WindowOptions.builder().minPeriods(2).forwardWindow(2).
+             windowCol(arraywindowCol).aggType(AggregateOp.SUM).build();
+      try (ColumnVector v1 = ColumnVector.fromBoxedInts(5, 4, 7, 6, 8);
+           ColumnVector expected = ColumnVector.fromInts(16, 22, 30, 14, 14);
+           ColumnVector result = v1.rollingWindow(v0)) {
+        result.ensureOnHost();
+        assertColumnsAreEqual(result, expected);
+      }
+    }
+  }
+
+  @Test
+  void testWindowThrowsException() {
+    try (ColumnVector arraywindowCol = ColumnVector.fromBoxedInts(1, 2, 3 ,1, 1)) {
+      assertThrows(IllegalArgumentException.class, () -> WindowOptions.builder().
+              windowSize(3).minPeriods(3).forwardWindow(2).windowCol(arraywindowCol).
+              aggType(AggregateOp.SUM).build());
+    }
   }
 }

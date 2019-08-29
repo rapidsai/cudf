@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 sort_nelem_args = [2, 257]
@@ -211,8 +211,8 @@ def test_dataframe_multi_column(
     )
 
 
-@pytest.mark.parametrize("num_cols", [1, 2, 3, 5])
-@pytest.mark.parametrize("num_rows", [0, 1, 2, 1000])
+@pytest.mark.parametrize("num_cols", [1, 2, 3])
+@pytest.mark.parametrize("num_rows", [0, 1, 2, 3, 5])
 @pytest.mark.parametrize("dtype", ["float32", "float64"])
 @pytest.mark.parametrize("nulls", ["some", "all"])
 @pytest.mark.parametrize("ascending", [True, False])
@@ -227,7 +227,7 @@ def test_dataframe_multi_column_nulls(
     by = list(ascii_lowercase[:num_cols])
     pdf = pd.DataFrame()
 
-    for i in range(5):
+    for i in range(3):
         colname = ascii_lowercase[i]
         data = np.random.randint(0, 26, num_rows).astype(dtype)
         if nulls == "some":

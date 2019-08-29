@@ -150,11 +150,12 @@ def test_orc_reader_trailing_nulls(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.parametrize("use_index", [False, True])
 @pytest.mark.parametrize(
     "inputfile",
     ["TestOrcFile.testDate1900.orc", "TestOrcFile.testDate2038.orc"],
 )
-def test_orc_reader_datetimestamp(datadir, inputfile):
+def test_orc_reader_datetimestamp(datadir, inputfile, use_index):
     path = datadir / inputfile
     try:
         orcfile = pa.orc.ORCFile(path)
@@ -162,13 +163,7 @@ def test_orc_reader_datetimestamp(datadir, inputfile):
         pytest.skip(".orc file is not found: %s" % e)
 
     pdf = orcfile.read().to_pandas(date_as_object=False)
-    gdf = cudf.read_orc(path, engine="cudf")
-
-    # cuDF DatetimeColumn currenly only supports millisecond units
-    # Convert to lesser precision for comparison
-    timedelta = np.timedelta64(1, "ms").astype("timedelta64[ns]")
-    pdf["time"] = pdf["time"].astype(np.int64) // timedelta.astype(np.int64)
-    gdf["time"] = gdf["time"].astype(np.int64)
+    gdf = cudf.read_orc(path, engine="cudf", use_index=use_index)
 
     assert_eq(pdf, gdf, check_categorical=False)
 
@@ -199,12 +194,6 @@ def test_orc_read_stripe(datadir):
 
     gdf = [cudf.read_orc(path, stripe=i) for i in range(stripes)]
     gdf = cudf.concat(gdf).reset_index(drop=True)
-
-    # cuDF DatetimeColumn currenly only supports millisecond units
-    # Convert to lesser precision for comparison
-    timedelta = np.timedelta64(1, "ms").astype("timedelta64[ns]")
-    pdf["time"] = pdf["time"].astype(np.int64) // timedelta.astype(np.int64)
-    gdf["time"] = gdf["time"].astype(np.int64)
 
     assert_eq(pdf, gdf, check_categorical=False)
 
@@ -269,7 +258,7 @@ def test_orc_writer(datadir, tmpdir):
             print(type(excpr).__name__)
 
     expect = orcfile.read(columns=columns).to_pandas()
-    cudf.dataframe.from_pandas(expect).to_orc(gdf_fname.strpath)
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
     got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
 
     assert_eq(expect, got)

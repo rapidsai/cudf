@@ -44,21 +44,6 @@ conda list
 conda config --set ssl_verify False
 
 ################################################################################
-# INSTALL - Install NVIDIA driver
-################################################################################
-
-logger "Install NVIDIA driver for CUDA $CUDA..."
-apt-get update -q
-DRIVER_VER="396.44-1"
-LIBCUDA_VER="396"
-if [ "$CUDA" == "10.0" ]; then
-  DRIVER_VER="410.72-1"
-  LIBCUDA_VER="410"
-fi
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  cuda-drivers=${DRIVER_VER} libcuda1-${LIBCUDA_VER}
-
-################################################################################
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
 

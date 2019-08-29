@@ -4,8 +4,8 @@ import warnings
 
 import pyarrow.orc as orc
 
-from cudf.bindings.orc import cpp_read_orc, cpp_write_orc
-from cudf.dataframe.dataframe import DataFrame
+import cudf
+import cudf._lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -41,14 +41,14 @@ def read_orc(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        df = cpp_read_orc(
+        df = libcudf.orc.read_orc(
             filepath_or_buffer, columns, stripe, skip_rows, num_rows, use_index
         )
     else:
         warnings.warn("Using CPU via PyArrow to read ORC dataset.")
         orc_file = orc.ORCFile(filepath_or_buffer)
         pa_table = orc_file.read(columns=columns)
-        df = DataFrame.from_arrow(pa_table)
+        df = cudf.DataFrame.from_arrow(pa_table)
 
     return df
 
@@ -57,4 +57,4 @@ def read_orc(
 def to_orc(df, path, *args, **kwargs):
     """{docstring}"""
 
-    df = cpp_write_orc(df._cols, path)
+    libcudf.orc.write_orc(df._cols, path)
