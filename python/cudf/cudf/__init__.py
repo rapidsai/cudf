@@ -28,7 +28,7 @@ from cudf.io import (
     read_hdf,
     read_json,
     read_orc,
-    read_parquet
+    read_parquet,
 )
 
 __version__ = get_versions()["version"]

@@ -3705,7 +3705,7 @@ class DataFrame(object):
         """{docstring}"""
         import cudf.io.orc as orc
 
-        return orc.to_orc(self, fname, *args, **kwargs)
+        orc.to_orc(self, fname, *args, **kwargs)
 
 
 def from_pandas(obj):
