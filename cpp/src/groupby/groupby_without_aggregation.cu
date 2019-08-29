@@ -176,23 +176,3 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   return std::make_pair(destination_table,
                         gdf_unique_indices(key_col_sorted_table, *context));
 }
-
-namespace cudf {
-std::vector<cudf::table> groups_to_tables(cudf::table const& input,
-                                                gdf_column const& group_ids)
-{
-    gdf_index_type const key_col_indices[1]{0};
-    gdf_context context;
-    std::vector<gdf_column*> all_cols(input.num_columns()+1);
-    all_cols[0] = const_cast<gdf_column*>(&group_ids);
-    std::transform(input.begin(), input.end(), all_cols.begin()+1,
-      [](gdf_column const* col) { return const_cast<gdf_column*>(col); });
-
-    cudf::table grouped_table;
-    gdf_column unique_indices;
-    std::tie(grouped_table, unique_indices) = gdf_group_by_without_aggregations(
-    all_cols, 1, key_col_indices, &context);
-    cudf::table sorted_table(grouped_table.begin()+1, input.num_columns());
-    return cudf::split(sorted_table, static_cast<gdf_index_type*>(unique_indices.data), unique_indices.size);
-}
-}  // namespace cudf

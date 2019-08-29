@@ -199,38 +199,4 @@ gdf_group_by_without_aggregations(cudf::table const& input_table,
                                   gdf_size_type num_key_cols,
                                   gdf_index_type const* key_col_indices,
                                   gdf_context* context);
-namespace cudf {
-
- /**
- * @brief Scatters the rows of a table into `n` tables according to a `scatter_map`.  
- * group indices
- *
- * This function groups rows with same group index to individual tables where
- * group index of each row is given by input group index column.
- * The number of output tables will be equal to number of unique group indices.
- * The datatypes of the columns of input tables and the output tables must be
- * the same.
- *
- * The length of group indices column must be equal to number of rows. 
- * The columns of output tables are allocated by the function. 
- *
- * Example:
- * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
- *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * indices:  {25, 33, 25,  3, 33, 33,  0,  1,  1,  1}
- * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
- *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
- *
- * @param[in] input_table  Table whose rows will be partitioned into a set of tables according to `scatter_map`
- * vector of tables
- * @param[in] scatter_map    Non-nullable column of `GDF_INT32` values that map each row in `input` into one of the output tables. 
- * in the input table
- *
- * @return A std::vector of cudf::table, each of which may have a different size
- * a different number of rows.
- */
-std::vector<cudf::table> groups_to_tables(cudf::table const& input,
-                                          gdf_column const& group_ids);
-}  // namespace cudf
-
 #endif

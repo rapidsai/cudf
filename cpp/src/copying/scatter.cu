@@ -31,7 +31,6 @@
 #include <bitmask/legacy/bit_mask.cuh>
 #include <reductions/reduction_functions.cuh>
 #include <stream_compaction/copy_if.cuh>
-#include <bitmask/legacy/legacy_bitmask.hpp>
 
 using bit_mask::bit_mask_t;
 
@@ -180,10 +179,8 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 
 }
 
-void scatter_to_tables(cudf::table const& input_table,
-                       gdf_column const& scatter_map,
-                       std::vector<cudf::table>& output_tables) {
-
+inline bool validate_scatter_map(gdf_column const& scatter_map,
+                          cudf::table const& input_table) {
   CUDF_EXPECTS(scatter_map.dtype == GDF_INT32,
       "scatter_map is not GDF_INT32 column.");
   CUDF_EXPECTS(not cudf::has_nulls(scatter_map),
@@ -193,23 +190,75 @@ void scatter_to_tables(cudf::table const& input_table,
   if (scatter_map.size == 0 ||
       input_table.num_columns() == 0 ||
       input_table.num_rows() == 0)
+    return false;
+  return true;
+}
+
+template<typename InputIterator>
+void groups_to_tables(cudf::table const& input_table,
+                       gdf_index_type* scatter_array,
+                       InputIterator first,
+                       InputIterator last,
+                       std::vector<cudf::table>& output_tables) {
+  size_t num_groups = thrust::distance(first, last);
+  output_tables.reserve(size_t(num_groups));
+  for (auto it=first; it<last; it++) {
+    typename std::iterator_traits<InputIterator>::value_type groupid = *it; 
+    output_tables.push_back(
+        detail::copy_if(input_table,
+          [scatter_array, groupid] __device__ (gdf_index_type row)
+          { return groupid==scatter_array[row];
+          }));
+  }
+}
+
+void groups_to_tables(cudf::table const& input_table,
+                     gdf_column const& scatter_map,
+                     std::vector<cudf::table>& output_tables,
+                     gdf_column& output_tables_map) {
+
+  if(not validate_scatter_map(scatter_map, input_table)) 
     return;
 
-  gdf_index_type nrows = input_table.num_rows();
-  gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
-  gdf_index_type num_groups = max_elem.is_valid ? max_elem.data.si32 + 1 : 0;
+  gdf_index_type* scatter_array =
+    static_cast<gdf_index_type*>(scatter_map.data);
+  //extract unique groups
+  rmm::device_vector<gdf_index_type> unique_ids(scatter_map.size);
+  thrust::copy(scatter_array, scatter_array+scatter_map.size, unique_ids.begin());
+  thrust::sort(unique_ids.begin(), unique_ids.end());
+  auto last = thrust::unique(unique_ids.begin(), unique_ids.end());
+  gdf_index_type num_groups = thrust::distance(unique_ids.begin(), last);
+
+  groups_to_tables(input_table,
+                    scatter_array,
+                    unique_ids.begin(),
+                    last,
+                    output_tables);
+
+  gdf_column unique_ids_col{};
+  CUDF_TRY(gdf_column_view(&unique_ids_col,
+                           (void*)(unique_ids.data().get()), nullptr, num_groups,
+                           scatter_map.dtype));
+  output_tables_map = copy(unique_ids_col);
+}
+
+void scatter_to_tables(cudf::table const& input_table,
+                       gdf_column const& scatter_map,
+                       std::vector<cudf::table>& output_tables) {
+
+  if(not validate_scatter_map(scatter_map, input_table)) 
+    return;
+
   gdf_index_type* scatter_array =
     static_cast<gdf_index_type*>(scatter_map.data);
 
-  output_tables.reserve(size_t(num_groups));
-  rmm::device_vector<gdf_index_type> gather_map(nrows);
-  for (gdf_index_type it=0; it<num_groups; it++) {
-    output_tables.push_back(
-        detail::copy_if(input_table,
-          [scatter_array, it] __device__ (gdf_index_type& row)
-          { return it==scatter_array[row];
-          }));
-  }
+  gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
+  gdf_index_type num_groups = max_elem.data.si32 + 1;
+  groups_to_tables(input_table,
+                    scatter_array,
+                    thrust::counting_iterator<gdf_index_type>(0),
+                    thrust::counting_iterator<gdf_index_type>(num_groups),
+                    output_tables);
 }
 
 }  // namespace detail
@@ -263,6 +312,16 @@ table scatter(std::vector<gdf_scalar> const& source,
   detail::scalar_scatter(source, scatter_map, num_scatter_rows, &output);
   
   return output;
+}
+
+std::pair<std::vector<cudf::table>, gdf_column>
+groups_to_tables(cudf::table const& input_table, gdf_column const& scatter_map) {
+
+  std::vector<cudf::table> output_tables;
+  gdf_column output_tables_map;
+  detail::groups_to_tables(input_table, scatter_map, 
+      output_tables, output_tables_map);
+  return std::make_pair(output_tables, output_tables_map);
 }
 
 std::vector<cudf::table>

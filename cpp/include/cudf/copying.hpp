@@ -445,15 +445,16 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  *
  * This 'scatter_to_tables' function copies the rows from the input table to new
  * tables according to the table indices given by scatter map.
- * The number of output tables will be equal to (1 + maximum of scatter map
+ * The number of output tables will be equal to n = (1 + maximum of scatter map
  * values)
+ * If a value in [0,n] does not appear in scatter_map, then the corresponding
+ * output table will be empty.
  *
  * The scatter map must be 'int32' column with length equal to number of rows in
  * input table and contains numbers in range of [0, n] where n < number of rows
  * in input table. The column cannot contain any null values.
  * The datatypes of the columns of input tables and the output tables must be
  * the same.
- * The columns of output tables are allocated by the function. 
  *
  * Exceptional cases for the scatter_map column are:
  * When length of scatter_map is not equal to number of rows in input table, the
@@ -469,10 +470,10 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
  *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
  *
- * @param[in] input_table  Table whose rows will be partitioned into a set of tables according to `scatter_map`
- * vector of tables
- * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map each row in `input_table` into one of the output tables. 
- * in the input table
+ * @param[in] input_table  Table whose rows will be partitioned into a set of
+ * tables according to `scatter_map` 
+ * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map
+ * each row in `input_table` into one of the output tables. 
  *
  * @return A std::vector of cudf::table, each of which may have a different size
  * a different number of rows.
@@ -480,6 +481,42 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  */
 std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map);
+
+ /**
+ * @brief Scatters the rows of a table into `n` tables according to a `scatter_map`.  
+ * group indices
+ *
+ * This function groups rows with same group index to individual tables where
+ * group index of each row is given by input group index column.
+ * The number of output tables will be equal to number of unique group indices.
+ * The datatypes of the columns of input tables and the output tables must be
+ * the same.
+ *
+ * The function returns vector of scattered tables and unique group indices in
+ * order matching to order of scattered tables in the vector.
+ * i.e. table[i] contains rows with group index of row[i] in unique group
+ * indices. 
+ *
+ * The length of group indices column must be equal to number of rows. 
+ * The columns of output tables are allocated by the function. 
+ *
+ * Example:
+ * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * indices:  {25, 33, 25,  3, 33, 33,  0,  1,  1,  1}
+ * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
+ *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
+ *
+ * @param[in] input_table  Table whose rows will be partitioned into a set of
+ * tables according to `scatter_map`
+ * @param[in] scatter_map    Non-nullable column of `GDF_INT32` values that map
+ * each row in `input` into one of the output tables in the input table
+ *
+ * @return A std::pair of (std::vector of cudf::table, and gdf_column), each
+ * table may have a different a different number of rows.
+ */
+std::pair<std::vector<cudf::table>, gdf_column>
+groups_to_tables(cudf::table const& input_table, gdf_column const& scatter_map);
 }  // namespace cudf
 
 #endif  // COPYING_H
