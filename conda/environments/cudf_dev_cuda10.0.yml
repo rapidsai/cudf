@@ -38,6 +38,7 @@ dependencies:
 - pre_commit
 - dask>=2.1.0
 - distributed>=2.1.0
+- streamz
 - dlpack
 - arrow-cpp=0.14.1
 - boost-cpp

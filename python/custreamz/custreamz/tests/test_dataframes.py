@@ -57,7 +57,7 @@ def test_identity(stream):
 
     sdf.emit(df)
     assert isinstance(L2[0], cudf.Series)
-    assert assert_eq(L2[0], df.x)
+    assert_eq(L2[0], df.x)
 
 
 def test_dtype(stream):
@@ -301,8 +301,8 @@ def test_groupby_aggregate(agg, grouper, indexer, stream):
 
     h = f(df)
 
-    assert assert_eq(L[0], g)
-    assert assert_eq(L[-1], h)
+    assert_eq(L[0], g)
+    assert_eq(L[-1], h)
 
 
 @pytest.mark.xfail(
