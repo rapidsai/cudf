@@ -66,6 +66,13 @@ struct intrle_enc_state_s
     } scratch;
 };
 
+struct strdata_enc_state_s
+{
+    uint32_t char_count;
+    uint32_t lengths_red[(512 / 32)];
+    const char *str_data[512];
+};
+
 
 struct orcenc_state_s
 {
@@ -82,6 +89,7 @@ struct orcenc_state_s
     union {
         byterle_enc_state_s byterle;
         intrle_enc_state_s intrle;
+        strdata_enc_state_s strenc;
     } u;
     union {
         uint8_t u8[SCRATCH_BFRSZ];  // general scratch buffer
@@ -610,6 +618,60 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
     return out_cnt;
 }
 
+
+/**
+ * @brief Store a group of strings as a single concatenated string
+ *
+ * @param[in] dst destination buffer
+ * @param[in] strenc string encoder state
+ * @param[in] len(t) string length (per thread)
+ * @param[in] t thread id
+ *
+ **/
+static __device__ void StoreStringData(uint8_t *dst, strdata_enc_state_s *strenc, uint32_t len, int t)
+{
+    // Start with summing up all the lengths
+    uint32_t pos = len;
+    uint32_t wt = t & 0x1f;
+    for (uint32_t n = 1; n<32; n <<= 1)
+    {
+        uint32_t tmp = SHFL(pos, (wt & ~n) | (n - 1));
+        pos += (wt & n) ? tmp : 0;
+    }
+    if (wt == 0x1f)
+    {
+        strenc->lengths_red[t >> 5] = pos;
+    }
+    dst += pos - len;
+    __syncthreads();
+    if (t < 32)
+    {
+        uint32_t wlen = (wt < 16) ? strenc->lengths_red[wt] : 0;
+        uint32_t wpos = wlen;
+        for (uint32_t n = 1; n<16; n <<= 1)
+        {
+            uint32_t tmp = SHFL(wpos, (wt & ~n) | (n - 1));
+            wpos += (wt & n) ? tmp : 0;
+        }
+        if (wt < 16)
+        {
+            strenc->lengths_red[wt] = wpos - wlen;
+        }
+        if (wt == 0xf)
+        {
+            strenc->char_count = wpos; // Update stream position
+        }
+    }
+    __syncthreads();
+    // TBD: Might be more efficient to loop over 4 strings and copy 8 consecutive character at a time
+    // rather than have each thread to a memcpy
+    if (len > 0)
+    {
+        memcpy(dst + strenc->lengths_red[t >> 5], strenc->str_data[t], len);
+    }
+}
+
+
 /**
  * @brief In-place conversion from lengths to positions
  *
@@ -674,6 +736,13 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
         s->present_out = 0;
         s->numvals = 0;
         s->numlengths = 0;
+        s->nnz = 0;
+        // Dictionary data is encoded in a separate kernel
+        if (s->chunk.encoding_kind == DICTIONARY_V2)
+        {
+            s->strm_pos[CI_DATA2] = s->chunk.strm_len[CI_DATA2];
+            s->strm_pos[CI_DICTIONARY] = s->chunk.strm_len[CI_DICTIONARY];
+        }
     }
     __syncthreads();
     while (s->cur_row < s->chunk.num_rows || s->numvals + s->numlengths != 0)
@@ -799,12 +868,39 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                     s->lengths.u32[nz_idx] = nanos;
                     break;
                   }
+                case STRING:
+                    if (s->chunk.encoding_kind == DICTIONARY_V2)
+                    {
+                        s->vals.u32[nz_idx] = reinterpret_cast<const uint32_t *>(base)[row];
+                    }
+                    else
+                    {
+                        const nvstrdesc_s *str_desc = reinterpret_cast<const nvstrdesc_s *>(base) + row;
+                        const char *ptr = str_desc->ptr;
+                        uint32_t count = static_cast<uint32_t>(str_desc->count);
+                        s->u.strenc.str_data[s->buf.u32[t] - 1] = ptr;
+                        s->lengths.u32[nz_idx] = count;
+                    }
+                    break;
                 default:
                     break;
                 }
             }
             __syncthreads();
-            if (s->chunk.type_kind == BOOLEAN)
+            if (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2)
+            {
+                // Store string data
+                uint32_t nz = s->buf.u32[511];
+                uint32_t nz_idx = (s->nnz + t) & 0x3ff;
+                uint32_t len = (t < nz && s->u.strenc.str_data[t]) ? s->lengths.u32[nz_idx] : 0;
+                StoreStringData(s->chunk.streams[CI_DATA] + s->strm_pos[CI_DATA], &s->u.strenc, len, t);
+                if (!t)
+                {
+                    s->strm_pos[CI_DATA] += s->u.strenc.char_count;
+                }
+                __syncthreads();
+            }
+            else if (s->chunk.type_kind == BOOLEAN)
             {
                 // bool8 -> 8x bool1
                 uint32_t nz = s->buf.u32[511];
@@ -828,7 +924,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 uint32_t nz = s->buf.u32[511];
                 s->nnz += nz;
                 s->numvals += nz;
-                s->numlengths += (s->chunk.type_kind == TIMESTAMP || s->chunk.type_kind == STRING) ? nz : 0;
+                s->numlengths += (s->chunk.type_kind == TIMESTAMP || (s->chunk.type_kind == STRING && s->chunk.encoding_kind != DICTIONARY_V2)) ? nz : 0;
                 s->cur_row += nrows;
             }
             __syncthreads();
@@ -861,6 +957,13 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                     StoreBytes<CI_DATA, 0x1fff>(s, s->vals.u8, (s->nnz - s->numvals) * 8, s->numvals * 8, t);
                     n = s->numvals;
                     break;
+                case STRING:
+                    if (s->chunk.encoding_kind == DICTIONARY_V2) {
+                        n = IntegerRLE<CI_DATA, uint32_t, false, 0x3ff>(s, s->vals.u32, s->nnz - s->numvals, s->numvals, flush, t);
+                    } else {
+                        n = s->numvals;
+                    }
+                    break;
                 default:
                     n = s->numvals;
                     break;
@@ -878,6 +981,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 switch (s->chunk.type_kind)
                 {
                 case TIMESTAMP:
+                case STRING:
                     n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s, s->lengths.u32, s->nnz - s->numlengths, s->numlengths, flush, t);
                     break;
                 default:
@@ -894,7 +998,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
         __syncthreads();
     }
     __syncthreads();
-    if (t < CI_NUM_STREAMS && s->chunk.strm_id[t] >= 0)
+    if (t <= CI_PRESENT && s->chunk.strm_id[t] >= 0)
     {
         // Update actual compressed length
         chunks[group_id * num_columns + col_id].strm_len[t] = s->strm_pos[t];
