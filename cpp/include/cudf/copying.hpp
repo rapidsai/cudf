@@ -475,7 +475,7 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map
  * each row in `input_table` into one of the output tables. 
  *
- * @return A std::vector of cudf::table, each of which may have a different size
+ * @return A std::vector of `table`s containing the scattered rows of `input`. `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`. 
  * a different number of rows.
  *
  */
