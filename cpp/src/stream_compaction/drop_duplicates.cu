@@ -160,7 +160,7 @@ gdf_size_type unique_count(const cudf::table& key_columns,
         &context));
 
   // count unique elements
-  auto first = sorted_indices.begin();
+  auto sorted_index_iter = sorted_indices.begin();
   auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(key_columns, stream);
 
@@ -171,7 +171,8 @@ gdf_size_type unique_count(const cudf::table& key_columns,
     return thrust::count_if(exec,
               thrust::counting_iterator<gdf_size_type>(0),
               thrust::counting_iterator<gdf_size_type>(nrows),
-              [first, comp] __device__ (const gdf_size_type i) {
+              [first = sorted_index_iter, comp] 
+              __device__ (const gdf_size_type i) {
               return (i == 0 || !comp(first[i], first[i-1]));
               });
   } else {
@@ -180,7 +181,8 @@ gdf_size_type unique_count(const cudf::table& key_columns,
     return thrust::count_if(exec,
               thrust::counting_iterator<gdf_size_type>(0),
               thrust::counting_iterator<gdf_size_type>(nrows),
-              [first, comp] __device__ (const gdf_size_type i) {
+              [first = sorted_index_iter, comp]
+              __device__ (const gdf_size_type i) {
               return (i == 0 || !comp(first[i], first[i-1]));
               });
   }
