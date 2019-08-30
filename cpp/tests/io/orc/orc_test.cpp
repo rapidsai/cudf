@@ -52,11 +52,9 @@ namespace {
  * @brief Helper function to set column name
  **/
 void column_set_name(gdf_column *col, const std::string &name) {
-  if (col->col_name) {
-    free(col->col_name);
-  }
   col->col_name = static_cast<char *>(malloc(name.length() + 1));
-  std::snprintf(col->col_name, name.length() + 1, "%s", name.c_str());
+  std::copy(name.begin(), name.end(), col->col_name);
+  col->col_name[name.length()] = '\0';
 }
 
 /**
@@ -170,15 +168,15 @@ TEST_F(orc_writer_test, MultiColumn) {
   column_set_name(col4.get(), "floats");
   column_set_name(col5.get(), "doubles");
 
-  std::vector<gdf_column *> cols;
-  cols.push_back(col0.get());
-  cols.push_back(col1.get());
-  cols.push_back(col2.get());
-  cols.push_back(col3.get());
-  cols.push_back(col4.get());
-  cols.push_back(col5.get());
-  auto expected = cudf::table{cols.data(), 6};
-  EXPECT_EQ(cols.size(), expected.num_columns());
+  std::vector<gdf_column *> columns;
+  columns.push_back(col0.get());
+  columns.push_back(col1.get());
+  columns.push_back(col2.get());
+  columns.push_back(col3.get());
+  columns.push_back(col4.get());
+  columns.push_back(col5.get());
+  auto expected = cudf::table{columns.data(), 6};
+  EXPECT_EQ(columns.size(), expected.num_columns());
 
   auto filepath = temp_env->get_temp_filepath("OrcWriterMultiColumn.orc");
 
@@ -225,15 +223,15 @@ TEST_F(orc_writer_test, MultiColumnWithNulls) {
   column_set_name(col4.get(), "floats");
   column_set_name(col5.get(), "doubles");
 
-  std::vector<gdf_column *> cols;
-  cols.push_back(col0.get());
-  cols.push_back(col1.get());
-  cols.push_back(col2.get());
-  cols.push_back(col3.get());
-  cols.push_back(col4.get());
-  cols.push_back(col5.get());
-  auto expected = cudf::table{cols.data(), 6};
-  EXPECT_EQ(cols.size(), expected.num_columns());
+  std::vector<gdf_column *> columns;
+  columns.push_back(col0.get());
+  columns.push_back(col1.get());
+  columns.push_back(col2.get());
+  columns.push_back(col3.get());
+  columns.push_back(col4.get());
+  columns.push_back(col5.get());
+  auto expected = cudf::table{columns.data(), 6};
+  EXPECT_EQ(columns.size(), expected.num_columns());
 
   auto filepath =
       temp_env->get_temp_filepath("OrcWriterMultiColumnWithNulls.orc");
