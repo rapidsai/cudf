@@ -312,22 +312,29 @@ void ProtobufWriter::put_row_index_entry(int32_t present_blk, int32_t present_of
     }
     if (data_ofs >= 0)
     {
-        sz += put_uint(data_ofs) + 1;
-        putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
-        if (kind == BOOLEAN)
+        sz += put_uint(data_ofs);
+        if (kind != STRING && kind != FLOAT && kind != DOUBLE)
         {
-            putb(0); // bit position in byte, always zero
+            putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
             sz++;
+            if (kind == BOOLEAN)
+            {
+                putb(0); // bit position in byte, always zero
+                sz++;
+            }
         }
     }
-    if (data2_blk >= 0)
+    if (kind != INT) // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
     {
-        sz += put_uint(data2_blk);
-    }
-    if (data2_ofs >= 0)
-    {
-        sz += put_uint(data2_ofs) + 1;
-        putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+        if (data2_blk >= 0)
+        {
+            sz += put_uint(data2_blk);
+        }
+        if (data2_ofs >= 0)
+        {
+            sz += put_uint(data2_ofs) + 1;
+            putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+        }
     }
     m_buf->data()[lpos] = (uint8_t)(sz + 2);
     m_buf->data()[lpos+2] = (uint8_t)(sz);
