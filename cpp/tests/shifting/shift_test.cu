@@ -22,43 +22,44 @@
  
  using cudf::test::column_wrapper;
  using cudf::test::scalar_wrapper;
- 
- class ShiftTest : public GdfTest {};
- 
- TEST_F(ShiftTest, positive)
+
+ template <typename ColumnType>
+ cudf::test::column_wrapper<ColumnType> make_column_wrapper(
+   std::vector<ColumnType> data,
+   std::vector<gdf_valid_type> mask
+ )
  {
-    auto fill_value = -9000;
-    auto source0 = column_wrapper<int32_t>{ 5, 3, 1, 10 };
-    auto source1 = column_wrapper<int32_t>{ 7, 4, 8, 12 };
-
-    auto expect0 = column_wrapper<int32_t>{ fill_value, 5, 3, 1, };
-    auto expect1 = column_wrapper<int32_t>{ fill_value, 7, 4, 8 };
-
-    cudf::table source{source0.get(), source1.get()};
-    cudf::table expect{expect0.get(), expect1.get()};
-    cudf::table shifted = cudf::copy(source);
-
-    cudf::shift(&shifted, source, 1, scalar_wrapper<int32_t>{fill_value, true});
-
-    ASSERT_EQ(expect0, *shifted.get_column(0));
-    ASSERT_EQ(expect1, *shifted.get_column(1));
+   return cudf::test::column_wrapper<ColumnType>(
+     data,
+     [mask](gdf_size_type row){ return mask[row]; }
+   );
  }
+ 
+class ShiftTest : public GdfTest {};
 
- TEST_F(ShiftTest, negative)
- {
-    auto fill_value = -9000;
-    auto source0 = column_wrapper<int32_t>{ 5, 3, 1, 10 };
-    auto source1 = column_wrapper<int32_t>{ 7, 4, 8, 12 };
+TEST_F(ShiftTest, positive)
+{
+  auto source_column = make_column_wrapper<int32_t>(
+    {9, 8, 7, 6, 5, 4, 3, 2, 1},
+    {0, 1, 0, 1, 1, 1, 0, 1, 0}
+  );
 
-    auto expect0 = column_wrapper<int32_t>{ 3, 1, 10, fill_value };
-    auto expect1 = column_wrapper<int32_t>{ 4, 8, 12, fill_value };
+  auto expect_column = make_column_wrapper<int32_t>(
+    {9, 8, 7, 8, 5, 6, 5, 4, 1},
+    {0, 0, 0, 1, 0, 1, 1, 1, 0}
+  );
 
-    cudf::table source{source0.get(), source1.get()};
-    cudf::table expect{expect0.get(), expect1.get()};
-    cudf::table shifted = cudf::copy(source);
+  cudf::table source{source_column.get()};
+  cudf::table expect{expect_column.get()};
+  cudf::table shifted = cudf::copy(source);
 
-    cudf::shift(&shifted, source, -1, scalar_wrapper<int32_t>{fill_value, true});
+  cudf::shift(&shifted, source, 2, scalar_wrapper<int32_t>{0, false});
 
-    ASSERT_EQ(expect0, *shifted.get_column(0));
-    ASSERT_EQ(expect1, *shifted.get_column(1));
- }
+  auto actual_column = *shifted.get_column(0);
+
+  print_gdf_column(source_column.get());
+  print_gdf_column(expect_column.get());
+  print_gdf_column(&actual_column);
+
+  ASSERT_EQ(expect_column, *shifted.get_column(0));
+}

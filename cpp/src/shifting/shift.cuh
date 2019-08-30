@@ -14,28 +14,28 @@
  * limitations under the License.
  */
  
- #include <copying/copy_range.cuh>
+//  #include <copying/copy_range.cuh>
 
 namespace cudf {
 
 namespace detail {
 
-    void shift(
-        gdf_column *out_column,
-        gdf_column const &in_column,
-        gdf_index_type period,
-        gdf_scalar const &fill_value
-    )
-    {
-        if (period >= 0) {
-            detail::copy_range(out_column, detail::scalar_factory{fill_value}, 0, period);
-            detail::copy_range(out_column, detail::column_range_factory{in_column}, period, out_column->size);
-        } else {
-            auto mid = out_column->size + period;
-            detail::copy_range(out_column, detail::column_range_factory{in_column, -period}, 0, mid);
-            detail::copy_range(out_column, detail::scalar_factory{fill_value}, mid, out_column->size);
-        }
-    }
+void shift(
+  gdf_column *out_column,
+  gdf_column const &in_column,
+  gdf_index_type period,
+  gdf_scalar const &fill_value
+)
+{
+  if (period >= 0) {
+    detail::copy_range(out_column, detail::scalar_factory{fill_value}, 0, period);
+    detail::copy_range(out_column, detail::column_range_factory{in_column, 0}, period, out_column->size);
+  } else {
+    auto mid = out_column->size + period;
+    detail::copy_range(out_column, detail::column_range_factory{in_column, -period}, 0, mid);
+    detail::copy_range(out_column, detail::scalar_factory{fill_value}, mid, out_column->size);
+  }
+}
     
 }; // namespace: detail
 
