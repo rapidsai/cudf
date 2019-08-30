@@ -453,9 +453,8 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  * If a value in [0,n] does not appear in scatter_map, then the corresponding
  * output table will be empty.
  *
- * The scatter map must be 'int32' column with length equal to number of rows in
- * input table and contains numbers in range of [0, n].
- * The column cannot contain any null values.
+ * `scatter_map` is a non-nullable column of `GDF_INT32` elements whose `size`
+ * equals `input.num_rows()` and contains numbers in range of [0, n].
  * The datatypes of the columns of input tables and the output tables must be
  * the same.
  *
@@ -465,11 +464,11 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
  *
  * Example:
- * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
- *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * indices:  { 3,  4,  3,  2,  4,  4,  0,  1,  1,  1}
- * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
- *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
+ * input:       [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ *               { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * scatter_map:  { 3,  4,  3,  2,  4,  4,  0,  1,  1,  1}
+ * output:      {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
+ *              [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
  *
  * @param[in] input_table  Table whose rows will be partitioned into a set of
  * tables according to `scatter_map` 
@@ -507,11 +506,11 @@ scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map)
  * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
  *
  * Example:
- * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
- *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * indices:  {25, 33, 25,  3, 33, 33,  0,  1,  1,  1}
- * output:  {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
- *           [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
+ * input:      [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ *              { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * scatter_map: {25, 33, 25,  3, 33, 33,  0,  1,  1,  1}
+ * output:     {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
+ *              [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
  *
  * @param[in] input_table  Table whose rows will be partitioned into a set of
  * tables according to `scatter_map`
