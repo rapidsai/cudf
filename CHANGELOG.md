@@ -16,6 +16,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2703 move dask serialization dispatch into cudf
 
 
 ## Bug Fixes
