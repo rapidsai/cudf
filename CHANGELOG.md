@@ -6,6 +6,7 @@
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2685 Add cudf::scatter_to_tables and cudf::groups_to_tables 
 
 ## Improvements
 
