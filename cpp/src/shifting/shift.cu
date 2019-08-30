@@ -28,23 +28,26 @@
 
 namespace cudf {
 
-void shift(
-    table *out_table,
-    table const &in_table,
-    gdf_index_type period,
-    gdf_scalar const &fill_value
+table shift(
+  table const &in_table,
+  gdf_index_type period,
+  gdf_scalar const &fill_value
 )
 {
-    // TODO(cwharris): assert in / out same row count
-    auto num_rows = out_table->num_rows();
+  cudf::table out_table = cudf::copy(in_table);
 
-    for (gdf_index_type i = 0; i < out_table->num_columns(); i++)
-    {
-        auto out_column = const_cast<gdf_column*>(out_table->get_column(i));
-        auto in_column = const_cast<gdf_column*>(in_table.get_column(i));
+  // TODO(cwharris): assert in / out same row count
+  auto num_rows = out_table.num_rows();
 
-        detail::shift(out_column, *in_column, period, fill_value);
-    }
+  for (gdf_index_type i = 0; i < out_table.num_columns(); i++)
+  {
+      auto out_column = const_cast<gdf_column*>(out_table.get_column(i));
+      auto in_column = const_cast<gdf_column*>(in_table.get_column(i));
+
+      detail::shift(out_column, *in_column, period, fill_value);
+  }
+
+  return out_table;
 }
 
 }; // namespace cudf

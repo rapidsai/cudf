@@ -51,9 +51,8 @@ TEST_F(ShiftTest, positive)
 
   cudf::table source{source_column.get()};
   cudf::table expect{expect_column.get()};
-  cudf::table shifted = cudf::copy(source);
 
-  cudf::shift(&shifted, source, 2, scalar_wrapper<int32_t>{0, false});
+  auto shifted = cudf::shift(source, 2, scalar_wrapper<int32_t>{0, false});
 
   auto actual_column = *shifted.get_column(0);
 
