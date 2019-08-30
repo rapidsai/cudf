@@ -287,9 +287,10 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * @param[in] input_column  The input column whose rows will be sliced.
  * @param[in] indices       An device array of indices that are used to take 'slices'
  * of the input column.
- * @return  A std::vector of gdf_column*, each of which may have a different number of rows.
- * a different number of rows that are equal to the difference of two
- * consecutive indices in the indices array.
+ * @param[in] num_indices   Number of indices in the indices array
+ * @return  A std::vector of gdf_column*, each of which may have a different
+ * number of rows. a different number of rows that are equal to the difference
+ * of two consecutive indices in the indices array.
  */
 std::vector<gdf_column*> slice(gdf_column const &          input_column,
                                gdf_index_type const*      indices,
@@ -330,9 +331,10 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
  * @param[in] input_table   The input table whose rows will be sliced.
  * @param[in] slice_ranges  An device array of indices that are used to take 'slices'
  * of the input table.
- * @return  A std::vector of cudf::table, each of which may have a different number of rows.
- * a different number of rows that are equal to the difference of two
- * consecutive indices in the indices array.
+ * @param[in] num_indices   Number of indices in the indices array
+ * @return  A std::vector of cudf::table, each of which may have a different
+ * number of rows. a different number of rows that are equal to the difference
+ * of two consecutive indices in the indices array.
  */
 std::vector<cudf::table> slice(cudf::table const &        input_table,
                                gdf_index_type const*      slice_ranges,
@@ -343,18 +345,18 @@ std::vector<cudf::table> slice(cudf::table const &        input_table,
  * according to a set of indices.
  *
  * The "split" function divides the input column into multiple intervals
- * of rows using the indices values and it stores the intervals into the output
- * columns. Regarding the interval of indices, a pair of values are taken from
- * the indices array in a consecutive manner. The pair of indices are left-closed
- * and right-open.
+ * of rows using the splits indices values and it stores the intervals into the
+ * output columns. Regarding the interval of indices, a pair of values are taken
+ * from the indices array in a consecutive manner. The pair of indices are
+ * left-closed and right-open.
  *
- * The indices array ('indices') is require to be a monotonic non-decreasing set.
+ * The indices array ('splits') is require to be a monotonic non-decreasing set.
  * The indices in the array are required to comply with the following conditions:
  * a, b belongs to Range[0, input column size]
  * a <= b, where the position of a is less or equal to the position of b.
  *
  * The split function will take a pair of indices from the indices array
- * ('indices') in a consecutive manner. For the first pair, the function will
+ * ('splits') in a consecutive manner. For the first pair, the function will
  * take the value 0 and the first element of the indices array. For the last pair,
  * the function will take the last element of the indices array and the size of
  * the input column.
@@ -374,18 +376,19 @@ std::vector<cudf::table> slice(cudf::table const &        input_table,
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * indices: {2, 5, 9}
+ * splits: {2, 5, 9}
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
  * @param[in] input_column  The input column whose rows will be split.
- * @param[in] indices       An device array of indices that are used to divide the input
- * column into multiple columns.
+ * @param[in] splits        An device array of indices that are used to divide
+ * the input column into multiple columns.
+ * @param[in] num_splits   Number of splits in the splits indices array
  * @return A std::vector of gdf_column*, each of which may have a different size
  * a different number of rows.
  */
-std::vector<gdf_column*> split(gdf_column const &          input_column,
-                               gdf_index_type const*      indices,
-                               gdf_size_type              num_indices);
+std::vector<gdf_column*> split(gdf_column const &         input_column,
+                               gdf_index_type const*      splits,
+                               gdf_size_type              num_splits);
 
 
 /**
@@ -404,7 +407,7 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
  * a <= b, where the position of a is less or equal to the position of b.
  *
  * The split function will take a pair of indices from the indices array
- * ('indices') in a consecutive manner. For the first pair, the function will
+ * ('splits') in a consecutive manner. For the first pair, the function will
  * take the value 0 and the first element of the indices array. For the last pair,
  * the function will take the last element of the indices array and the number
  * of rows in the table.
@@ -425,13 +428,13 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
  * Example:
  * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
  *           { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * indices: {2, 5, 9}
+ * splits: {2, 5, 9}
  * output:  { [{10, 12}, {1, 2}], [{14, 16, 18}, {3, 4, null}], 
  *            [{20, 22, 24, 26}, {0, 2, 4, 6}], [{28}, {2}]}
  *
  * @param[in] input_table  The input table whose rows will be split.
  * @param[in] splits       An device array of indices that are used to divide
- * @param[in] num_splits   Number of splits in the indices array
+ * @param[in] num_splits   Number of splits in the splits indices array
  * the input table into multiple tables.
  * @return A std::vector of cudf::table, each of which may have a different size
  * a different number of rows.
@@ -451,17 +454,15 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  * output table will be empty.
  *
  * The scatter map must be 'int32' column with length equal to number of rows in
- * input table and contains numbers in range of [0, n] where n < number of rows
- * in input table. The column cannot contain any null values.
+ * input table and contains numbers in range of [0, n].
+ * The column cannot contain any null values.
  * The datatypes of the columns of input tables and the output tables must be
  * the same.
  *
  * Exceptional cases for the scatter_map column are:
- * When length of scatter_map is not equal to number of rows in input table, the
- * function throws error.
- * When scatter_map contains null values, the function throws error.
- * When any of the values in the scatter_map don't belong to the range[0, number
- * of rows in input table), the outcome is undefined.
+ * @throws cudf::logic_error when `scatter_map.dtype != GDF_INT32`
+ * @throws cudf::logic_error when `scatter_map.size != input_table.num_rows()`
+ * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
  *
  * Example:
  * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
@@ -491,14 +492,19 @@ scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map)
  * The number of output tables will be equal to number of unique group indices.
  * The datatypes of the columns of input tables and the output tables must be
  * the same.
+ * The vector of output tables is similar to scatter_to_tables but without empty
+ * tables.
  *
  * The function returns vector of scattered tables and unique group indices in
  * order matching to order of scattered tables in the vector.
  * i.e. table[i] contains rows with group index of row[i] in unique group
  * indices. 
- *
  * The length of group indices column must be equal to number of rows. 
- * The columns of output tables are allocated by the function. 
+ *
+ * Exceptional cases for the scatter_map column are:
+ * @throws cudf::logic_error when `scatter_map.dtype != GDF_INT32`
+ * @throws cudf::logic_error when `scatter_map.size != input_table.num_rows()`
+ * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
  *
  * Example:
  * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 

@@ -201,9 +201,9 @@ void groups_to_tables(cudf::table const& input_table,
                        InputIterator last,
                        std::vector<cudf::table>& output_tables) {
   size_t num_groups = thrust::distance(first, last);
-  output_tables.reserve(size_t(num_groups));
-  for (auto it=first; it<last; it++) {
-    typename std::iterator_traits<InputIterator>::value_type groupid = *it; 
+  output_tables.reserve(num_groups);
+  for (auto iter=first; iter<last; iter++) {
+    typename std::iterator_traits<InputIterator>::value_type groupid = *iter; 
     output_tables.push_back(
         detail::copy_if(input_table,
           [scatter_array, groupid] __device__ (gdf_index_type row)
