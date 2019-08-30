@@ -40,7 +40,7 @@ struct quantiles_functor {
              rmm::device_vector<gdf_size_type> const& group_offsets,
              rmm::device_vector<gdf_size_type> const& group_sizes,
              gdf_column* result_col, rmm::device_vector<double> const& quantile,
-             quantile_method interpolation, cudaStream_t stream = 0)
+             cudf::interpolation interpolation, cudaStream_t stream = 0)
   {
     // prepare args to be used by lambda below
     auto result = static_cast<double*>(result_col->data);
@@ -85,7 +85,7 @@ std::pair<cudf::table, cudf::table>
 group_quantiles(cudf::table const& keys,
                 cudf::table const& values,
                 std::vector<double> const& quantiles,
-                quantile_method interpolation,
+                cudf::interpolation interpolation,
                 bool include_nulls)
 {
   detail::groupby gb_obj(keys, include_nulls);
@@ -117,5 +117,3 @@ group_quantiles(cudf::table const& keys,
 }
     
 } // namespace cudf
-
-

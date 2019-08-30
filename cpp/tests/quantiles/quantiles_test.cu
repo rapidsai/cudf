@@ -76,7 +76,7 @@ void f_quantile_tester(
 
       for(size_t i = 0;i<n_methods;++i)
         {
-          ret = cudf::quantile_exact(col_in, static_cast<cudf::quantile_method>(i), q, result_exact.get(), &ctxt);
+          ret = cudf::quantile_exact(col_in, static_cast<cudf::interpolation>(i), q, result_exact.get(), &ctxt);
           EXPECT_EQ( ret, expected_error) << "exact " << methods[i] << " returns unexpected failure\n";
 
           if( ret == GDF_SUCCESS ){

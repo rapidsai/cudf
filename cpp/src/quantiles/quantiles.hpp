@@ -149,7 +149,7 @@ template <typename T,
           typename RetT = double>
 CUDA_HOST_DEVICE_CALLABLE
 RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
-                       quantile_method interpolation)
+                       interpolation interpolation)
 {
     T temp[2];
     RetT result;
@@ -165,30 +165,34 @@ RetT select_quantile(T const* devarr, gdf_size_type size, double quantile,
 
     switch( interpolation )
     {
-    case QUANTILE_LINEAR:
+    case LINEAR:
         temp[0] = get_array_value(devarr, qi.lower_bound);
         temp[1] = get_array_value(devarr, qi.upper_bound);
         cudf::interpolate::linear(result, temp[0], temp[1], qi.fraction);
         break;
-    case QUANTILE_MIDPOINT:
+    case MIDPOINT:
         temp[0] = get_array_value(devarr, qi.lower_bound);
         temp[1] = get_array_value(devarr, qi.upper_bound);
         cudf::interpolate::midpoint(result, temp[0], temp[1]);
         break;
-    case QUANTILE_LOWER:
+    case LOWER:
         temp[0] = get_array_value(devarr, qi.lower_bound);
         result = static_cast<RetT>( temp[0] );
         break;
-    case QUANTILE_HIGHER:
+    case HIGHER:
         temp[0] = get_array_value(devarr, qi.upper_bound);
         result = static_cast<RetT>( temp[0] );
         break;
-    case QUANTILE_NEAREST:
+    case NEAREST:
         temp[0] = get_array_value(devarr, qi.nearest);
         result = static_cast<RetT>( temp[0] );
         break;
     default:
-        release_assert(false && "Invalid interpolation operation for quantiles");
+        #if defined(__CUDA_ARCH__)
+            release_assert(false && "Invalid interpolation operation for quantiles");
+        #else
+            CUDF_FAIL("Invalid interpolation operation for quantiles");
+        #endif
     }
 
     return result;

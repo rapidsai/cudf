@@ -26,13 +26,12 @@ namespace cudf {
  * two data points i and j
  * 
  */
-enum quantile_method{
-  QUANTILE_LINEAR =0,      ///< Linear interpolation between i and j
-  QUANTILE_LOWER,          ///< Lower data point (i)
-  QUANTILE_HIGHER,         ///< Higher data point (j)
-  QUANTILE_MIDPOINT,       ///< (i + j)/2
-  QUANTILE_NEAREST,        ///< i or j, whichever is nearest
-  N_QUANTILE_METHODS,
+enum interpolation{
+  LINEAR =0,      ///< Linear interpolation between i and j
+  LOWER,          ///< Lower data point (i)
+  HIGHER,         ///< Higher data point (j)
+  MIDPOINT,       ///< (i + j)/2
+  NEAREST,        ///< i or j, whichever is nearest
 };
 
 /**
@@ -48,7 +47,7 @@ enum quantile_method{
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error quantile_exact(gdf_column* col_in,
-                         quantile_method prec,
+                         interpolation prec,
                          double q,
                          gdf_scalar*  result,
                          gdf_context* ctxt);
@@ -113,7 +112,7 @@ std::pair<cudf::table, cudf::table>
 group_quantiles(cudf::table const& keys,
                 cudf::table const& values,
                 std::vector<double> const& quantiles,
-                quantile_method interpolation = QUANTILE_LINEAR,
+                interpolation interpolation = LINEAR,
                 bool include_nulls = false);
 
 
