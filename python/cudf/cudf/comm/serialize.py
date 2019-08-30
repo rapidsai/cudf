@@ -10,7 +10,13 @@ try:
     # all (de-)serializtion are attached to cudf Objects:
     # Series/DataFrame/Index/Column/Buffer/etc
     @cuda_serialize.register(
-        (cudf.DataFrame, cudf.Series, cudf.core.groupby.groupby._Groupby)
+        (
+            cudf.DataFrame,
+            cudf.Series,
+            cudf.core.series.Series,
+            cudf.core.groupby.groupby._Groupby,
+            cudf.core.column.column.Column,
+        )
     )
     def serialize_cudf_dataframe(x):
         with log_errors():
@@ -18,7 +24,13 @@ try:
             return header, frames
 
     @cuda_deserialize.register(
-        (cudf.DataFrame, cudf.Series, cudf.core.groupby.groupby._Groupby)
+        (
+            cudf.DataFrame,
+            cudf.Series,
+            cudf.core.series.Series,
+            cudf.core.groupby.groupby._Groupby,
+            cudf.core.column.column.Column,
+        )
     )
     def deserialize_cudf_dataframe(header, frames):
         with log_errors():
