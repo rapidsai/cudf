@@ -27,11 +27,11 @@ from libcpp.utility cimport pair
 pandas_version = tuple(map(int, pd.__version__.split('.', 2)[:2]))
 
 _QUANTILE_METHODS = {
-    'linear': QUANTILE_LINEAR,
-    'lower': QUANTILE_LOWER,
-    'higher': QUANTILE_HIGHER,
-    'midpoint': QUANTILE_MIDPOINT,
-    'nearest': QUANTILE_NEAREST,
+    'linear': LINEAR,
+    'lower': LOWER,
+    'higher': HIGHER,
+    'midpoint': MIDPOINT,
+    'nearest': NEAREST,
 }
 
 
@@ -94,7 +94,7 @@ def group_quantile(key_columns, value_columns, quant, method):
     if np.isscalar(quant):
         quant = [quant]
     cdef vector[double] q = quant
-    cdef quantile_method c_interpolation = get_quantile_method(method)
+    cdef interpolation c_interpolation = get_quantile_method(method)
 
     cdef pair[cudf_table, cudf_table] c_result
     with nogil:
