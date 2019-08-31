@@ -441,18 +441,16 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
             __syncthreads();
             if (t < 32)
             {
-                vmin = (T)s->u.intrle.scratch.u64[(t >> 5) * 2 + 0];
-                vmax = (T)s->u.intrle.scratch.u64[(t >> 5) * 2 + 1];
+                vmin = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 0];
+                vmax = (T)s->u.intrle.scratch.u64[(t & 0xf) * 2 + 1];
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 1));
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 2));
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 4));
                 vmin = min(vmin, (T)SHFL_XOR(vmin, 8));
-                vmin = min(vmin, (T)SHFL_XOR(vmin, 16));
                 vmax = max(vmax, (T)SHFL_XOR(vmax, 1));
                 vmax = max(vmax, (T)SHFL_XOR(vmax, 2));
                 vmax = max(vmax, (T)SHFL_XOR(vmax, 4));
                 vmax = max(vmax, (T)SHFL_XOR(vmax, 8));
-                vmax = max(vmax, (T)SHFL_XOR(vmax, 16));
                 if (t == 0)
                 {
                     uint32_t mode1_w, mode2_w;

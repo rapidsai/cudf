@@ -135,6 +135,24 @@ struct EncChunk
 
 
 /**
+ * @brief Struct to describe a dictionary chunk
+ **/
+struct DictionaryChunk
+{
+    const uint32_t *valid_map_base;             // base ptr of input valid bit map
+    const void *column_data_base;               // base ptr of column data (ptr,len pair)
+    uint32_t *dictionary_index;                 // dictionary indices
+    uint32_t *sorted_dictionary;                // sorted row positions of unique strings
+    uint32_t start_row;                         // start row of this chunk
+    uint32_t num_rows;                          // num rows in this chunk
+    uint32_t num_dictionary_entries;            // number of entries in dictionary
+    uint32_t dictionary_char_count;             // size of dictionary data
+    uint32_t string_char_count;                 // size of non-dictionary data
+    uint32_t rowgroup_id;                       // row group in stripe
+};
+
+
+/**
  * @brief Launches kernel for parsing the compressed stripe data
  *
  * @param[in] strm_info List of compressed streams
@@ -222,6 +240,19 @@ cudaError_t DecodeOrcColumnData(ColumnDesc *chunks, DictionaryEntry *global_dict
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for building string dictionaries
+ *
+ * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] num_columns Number of columns
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t BuildOrcStringDictionaries(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream = (cudaStream_t)0);
 
 
 } // namespace gpu
