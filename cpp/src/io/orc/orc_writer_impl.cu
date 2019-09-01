@@ -368,7 +368,7 @@ void writer::Impl::write(const cudf::table& table) {
                 }
                 if (ck->strm_id[gpu::CI_DATA2] > 0)
                 {
-                    data_pos = 0;
+                    data2_pos = 0;
                 }
             }
             for (size_t g = group; g < group + groups_in_stripe; g++)
