@@ -45,6 +45,9 @@ class Index(object):
         header["frame_count"] = len(frames)
         return header, frames
 
+    def __contains__(self, item):
+        return item in self._values
+
     @classmethod
     def deserialize(cls, header, frames):
         """
@@ -382,6 +385,12 @@ class RangeIndex(Index):
         self._stop = int(stop)
         self.name = name
         self._cached_values = None
+
+    def __contains__(self, item):
+        if self._start <= item < self._stop:
+            return True
+        else:
+            return False
 
     def copy(self, deep=True):
         if deep:

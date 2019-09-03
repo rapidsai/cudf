@@ -128,6 +128,9 @@ class Series(object):
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
 
+    def __contains__(self, item):
+        return item in self._index
+
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
