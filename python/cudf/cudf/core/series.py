@@ -1818,15 +1818,46 @@ class Series(object):
         )
 
     def cov(self, other):
-        """Covariance
+        """Calculates the sample covariance between two Series,
+        excluding missing values.
         """
-        lhs = self.nans_to_nulls().dropna().astype("float64")
-        rhs = other.nans_to_nulls().dropna().astype("float64")
+        if self.empty or other.empty:
+            return np.nan
+
+        lhs = self.nans_to_nulls().dropna()
+        rhs = other.nans_to_nulls().dropna()
         lhs, rhs = _align_indices(lhs, rhs, join="inner")
 
         if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
             return np.nan
-        return lhs._column.cov(other=rhs)
+
+        result = (lhs - lhs.mean()) * (rhs - rhs.mean())
+        cov_sample = result.sum() / (len(lhs) - 1)
+        return cov_sample
+
+    def corr(self, other, method="pearson"):
+        """Calculates the sample correlation between two Series,
+        excluding missing values.
+        """
+        if method not in ("pearson",):
+            raise ValueError
+
+        if self.empty or other.empty:
+            return np.nan
+
+        lhs = self.nans_to_nulls().dropna()
+        rhs = other.nans_to_nulls().dropna()
+        lhs, rhs = _align_indices(lhs, rhs, join="inner")
+
+        if lhs.empty or rhs.empty:
+            return np.nan
+
+        cov = lhs.cov(rhs)
+        lhs_std, rhs_std = lhs.std(), rhs.std()
+
+        if not cov or lhs_std == 0 or rhs_std == 0:
+            return np.nan
+        return cov / lhs_std / rhs_std
 
     def isin(self, test):
 
