@@ -114,9 +114,10 @@ struct groupby {
   index_vector const& group_offsets();
 
   /**
-   * @brief Get the group labels
+   * @brief Get the group labels corresponding to the sorted order of `keys`. 
    * 
-   * For a row in `keys`, its group label is the group which it belongs to
+   * Each group is assigned a unique numerical "label" in `[0, 1, 2, ... , num_groups() - 1, num_groups())`. For 
+   * a row in `keys`, its group label indicates which group it belongs to. 
    * 
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.

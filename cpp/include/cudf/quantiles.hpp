@@ -78,7 +78,8 @@ gdf_error quantile_approx(gdf_column* col_in,
  * result is an interpolation of values at index i and j, using the method 
  * specified in @p interpolation. Nulls are always ignored in @p values.
  * 
- * When multiple quantiles are requested, the result contains values in a
+ * The resulting quantile(s) for all groups will be returned in a single column. When more than one quantile is 
+ * requested, each group's result will be stored contiguously in the same order specified in `quantiles`. 
  * strided format.
  * 
  * Illustration:

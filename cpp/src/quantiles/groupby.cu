@@ -78,6 +78,9 @@ gdf_column const& groupby::key_sort_order() {
   } else {  // Pandas style
     auto keys_row_bitmask = row_bitmask(_keys, _stream);
 
+   // Temporarily replace the first column's bitmask with one that indicates the 
+   // presence of a null value within a row.  This allows moving all rows that contain
+   // a null value to the end of the sorted order. 
     gdf_column null_row_representative = *(_keys.get_column(0));
     null_row_representative.valid =
         reinterpret_cast<gdf_valid_type*>(keys_row_bitmask.data().get());
@@ -95,6 +98,10 @@ gdf_column const& groupby::key_sort_order() {
                           modified_keys_table.num_columns(),
                           _key_sorted_order.get(), &temp_ctx));
 
+    // All rows with one or more null values are at the end of the resulting sorted order.
+    // The number of rows w/o null values `n` is indicated by number of valid bits
+    // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
+    // in the sorted order are considered for grouping. 
     CUDF_TRY(gdf_count_nonzero_mask(
         reinterpret_cast<gdf_valid_type*>(keys_row_bitmask.data().get()),
         _keys.num_rows(),
