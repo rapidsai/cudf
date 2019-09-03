@@ -292,7 +292,7 @@ bool ProtobufReader::InitSchema(FileFooter *ff)
  */
 void ProtobufWriter::put_row_index_entry(int32_t present_blk, int32_t present_ofs, int32_t data_blk, int32_t data_ofs, int32_t data2_blk, int32_t data2_ofs, TypeKind kind)
 {
-    size_t sz = 1, lpos;
+    size_t sz = 0, lpos;
     putb(1*8+PB_TYPE_FIXEDLEN); // 1:RowIndex.entry
     lpos = m_buf->size();
     putb(0xcd); // sz+2
