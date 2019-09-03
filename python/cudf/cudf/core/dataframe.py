@@ -449,7 +449,7 @@ class DataFrame(object):
     @property
     def values(self):
         if not utils._have_cupy:
-            raise ModuleNotFoundError("cuPY was not found.")
+            raise ModuleNotFoundError("CuPy was not found.")
         import cupy
 
         return cupy.asarray(self.as_gpu_matrix())
