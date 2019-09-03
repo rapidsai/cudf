@@ -38,14 +38,41 @@
 
 namespace {
 
+/**---------------------------------------------------------------------------*
+ * @brief Compares two `table` rows for equality as if the table were
+ * ordered according to a specified permutation map.
+ *
+ *---------------------------------------------------------------------------**/
 template <bool nullable = true>
-struct transform_row_eq_comparator {
-  row_equality_comparator<nullable> cmp;
-  gdf_size_type const* sorted_order;
+struct permuted_row_equality_comparator {
+  row_equality_comparator<nullable> _comparator;
+  gdf_size_type const *_map;
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a permuted_row_equality_comparator.
+   *
+   * @param t The `table` whose rows will be compared
+   * @param map The permutation map that specifies the effective ordering of
+   *`t`. Must be the same size as `t.num_rows()`
+   *---------------------------------------------------------------------------**/
+  permuted_row_equality_comparator(device_table const &t,
+                                   gdf_size_type const *map)
+      : _comparator(t, t, true), _map{map} {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Computes if the two rows at the specified indices in the permuted
+   * order are equivalent.
+   *
+   * For example, comparing rows `i` and `j` is
+   * equivalent to comparing rows `map[i]` and `map[j]` in the original table.
+   *
+   * @param lhs The index of the first row
+   * @param rhs The index of the second row
+   * @returns if the two specified rows in the permuted order are equivalent
+   *---------------------------------------------------------------------------**/
   CUDA_DEVICE_CALLABLE
-  bool operator() (gdf_size_type lhs, gdf_size_type rhs) {
-    return cmp(sorted_order[lhs], sorted_order[rhs]);
+  bool operator()(gdf_size_type lhs, gdf_size_type rhs) {
+    return _comparator(_map[lhs], _map[rhs]);
   }
 };
 
@@ -124,17 +151,17 @@ rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
   auto exec = rmm::exec_policy(_stream)->on(_stream);
 
   if (has_nulls(_keys)) {
-    auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(exec,
       thrust::make_counting_iterator<gdf_size_type>(0),
       thrust::make_counting_iterator<gdf_size_type>(num_keys()),
-      _group_offsets->begin(), transform_row_eq_comparator<true>{comp, sorted_order});
+      _group_offsets->begin(),
+      permuted_row_equality_comparator<true>(*device_input_table, sorted_order));
   } else {
-    auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(exec, 
       thrust::make_counting_iterator<gdf_size_type>(0),
       thrust::make_counting_iterator<gdf_size_type>(num_keys()),
-      _group_offsets->begin(), transform_row_eq_comparator<false>{comp, sorted_order});
+      _group_offsets->begin(),
+      permuted_row_equality_comparator<false>(*device_input_table, sorted_order));
   }
 
   gdf_size_type num_groups = thrust::distance(_group_offsets->begin(), result_end);
@@ -152,9 +179,9 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
 
   auto& group_labels = *_group_labels;
   auto exec = rmm::exec_policy(_stream)->on(_stream);
-  thrust::scatter(exec, 
-    thrust::make_constant_iterator(1, size_t(0)), 
-    thrust::make_constant_iterator(1, group_offsets().size()), 
+  thrust::scatter(exec,
+    thrust::make_constant_iterator(1, decltype(num_groups())(0)), 
+    thrust::make_constant_iterator(1, num_groups()), 
     group_offsets().begin(), 
     group_labels.begin());
  
@@ -209,7 +236,9 @@ groupby::sort_values(gdf_column const& values) {
                       _stream)),
     [](gdf_column* col) { gdf_column_free(col); });
 
-  // We need a table constructor that can take const initializer list
+  // Need to const_cast because there cannot be a table constructor that can 
+  // take const initializer list. Making separate constructors for const objects
+  // is not supported in C++14 https://stackoverflow.com/a/49151864/3325146
   auto unsorted_values = const_cast<gdf_column*> (&values);
   auto unsorted_label_col = const_cast<gdf_column*> (&unsorted_labels());
   auto unsorted_table = cudf::table{unsorted_label_col, unsorted_values};
