@@ -42,6 +42,14 @@ class DatetimeColumn(column.TypedColumnBase):
         assert self.dtype.type is np.datetime64
         self._time_unit, _ = np.datetime_data(self.dtype)
 
+    def __contains__(self, item):
+        # Handles improper item types
+        try:
+            item = np.datetime64(item, self._time_unit)
+        except Exception:
+            return False
+        return item.astype("int_") in self.as_numerical
+
     def serialize(self):
         header, frames = super(DatetimeColumn, self).serialize()
         header["type"] = pickle.dumps(type(self))

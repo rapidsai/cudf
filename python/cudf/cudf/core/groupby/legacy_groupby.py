@@ -10,7 +10,6 @@ from librmm_cffi import librmm as rmm
 
 import cudf
 import cudf._lib as libcudf
-from cudf.comm.serialize import register_distributed_serializer
 from cudf.core.series import Series
 
 
@@ -530,6 +529,3 @@ class Groupby(object):
         df, segs = self.as_df()
         kwargs.update({"chunks": segs})
         return df.apply_chunks(function, **kwargs)
-
-
-register_distributed_serializer(Groupby)
