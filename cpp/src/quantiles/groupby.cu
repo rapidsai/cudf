@@ -30,6 +30,7 @@
 #include <thrust/unique.h>
 #include <thrust/iterator/counting_iterator.h>
 #include <thrust/iterator/discard_iterator.h>
+#include <thrust/iterator/constant_iterator.h>
 
 #include <algorithm>
 #include <tuple>
@@ -151,14 +152,12 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
 
   auto& group_labels = *_group_labels;
   auto exec = rmm::exec_policy(_stream)->on(_stream);
-  auto group_labels_ptr = group_labels.data().get();
-  auto group_offsets_ptr = group_offsets().data().get();
-  thrust::for_each_n(exec,
-    thrust::make_counting_iterator(1),
-    num_groups() - 1,
-    [group_labels_ptr, group_offsets_ptr] __device__ (gdf_size_type i) {
-      group_labels_ptr[group_offsets_ptr[i]] = 1;
-    });
+  thrust::scatter(exec, 
+    thrust::make_constant_iterator(1, size_t(0)), 
+    thrust::make_constant_iterator(1, group_offsets().size()), 
+    group_offsets().begin(), 
+    group_labels.begin());
+ 
   thrust::inclusive_scan(exec,
                         group_labels.begin(),
                         group_labels.end(),

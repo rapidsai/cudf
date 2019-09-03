@@ -44,6 +44,13 @@ struct groupby {
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
   using index_vec_pointer = std::unique_ptr<rmm::device_vector<gdf_size_type>>;
 
+  /**
+   * @brief Construct a new groupby object
+   * 
+   * @param keys table to group by
+   * @param include_nulls whether to include null keys in groupby
+   * @param stream used for all the computation in this groupby object
+   */
   groupby(cudf::table const& keys, bool include_nulls = false,
           cudaStream_t stream = 0)
   : _keys(keys)
