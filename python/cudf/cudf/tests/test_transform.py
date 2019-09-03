@@ -7,7 +7,7 @@ import numpy as np
 import pytest
 from packaging.version import Version
 
-from cudf.dataframe import Series
+from cudf.core import Series
 
 supported_types = ["int8", "int16", "int32", "int64", "float32", "float64"]
 
