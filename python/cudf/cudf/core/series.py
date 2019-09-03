@@ -143,7 +143,7 @@ class Series(object):
         ):
             raise TypeError("Data must be numeric")
 
-        if self.data.mem.size == 0:
+        if len(self) == 0:
             return cupy.asarray([])
 
         return cupy.asarray(self._column.to_gpu_array())
