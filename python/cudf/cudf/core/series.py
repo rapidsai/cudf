@@ -135,7 +135,7 @@ class Series(object):
     @property
     def values(self):
         if not utils._have_cupy:
-            raise ModuleNotFoundError("cuPY was not found.")
+            raise ModuleNotFoundError("CuPy was not found.")
         import cupy
 
         if is_categorical_dtype(self.dtype) or np.issubdtype(
