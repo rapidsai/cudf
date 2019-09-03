@@ -751,7 +751,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
             uint32_t present_rows = s->present_rows;
             uint32_t nrows = min(s->chunk.num_rows - present_rows, 512 * 8 - (present_rows - (min(s->cur_row, s->present_out) & ~7)));
             uint32_t nrows_out;
-            if (t < nrows)
+            if (t*8 < nrows)
             {
                 uint32_t row = s->chunk.start_row + present_rows + t * 8;
                 uint8_t valid = 0;
@@ -810,6 +810,7 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
             uint32_t row = s->chunk.start_row + s->cur_row + t;
             uint32_t valid = (t < nrows) ? (s->valid_buf[(row >> 3) & 0x1ff] >> (row & 7)) & 1 : 0;
             s->buf.u32[t] = valid;
+
             // TODO: Could use a faster reduction relying on _popc() for the initial phase
             lengths_to_positions(s->buf.u32, 512, t);
             __syncthreads();
