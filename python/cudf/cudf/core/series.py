@@ -128,6 +128,9 @@ class Series(object):
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
 
+    def __contains__(self, item):
+        return item in self._index
+
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
@@ -445,6 +448,16 @@ class Series(object):
         else:
             out = ["" if v is None else str(v) for v in values]
         return out
+
+    def tolist(self):
+        """
+        Return a list type from series data.
+
+        Returns
+        -------
+        list
+        """
+        return self.to_arrow().to_pylist()
 
     def head(self, n=5):
         return self.iloc[:n]
