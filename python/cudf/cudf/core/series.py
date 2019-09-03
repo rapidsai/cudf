@@ -2549,7 +2549,7 @@ class DatetimeProperties(object):
         return Series(data=out_column, index=self.series._index)
 
 
-def _align_indices(lhs, rhs):
+def _align_indices(lhs, rhs, join="outer"):
     """
     Internal util to align the indices of two Series. Returns a tuple of the
     aligned series, or the original arguments if the indices are the same, or
@@ -2557,5 +2557,5 @@ def _align_indices(lhs, rhs):
     """
     if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
-        lhs, rhs = lhs.join(rhs, how="outer", sort=True)._cols.values()
+        lhs, rhs = lhs.join(rhs, how=join, sort=True)._cols.values()
     return lhs, rhs
