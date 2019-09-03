@@ -151,7 +151,7 @@ class Series(object):
     @property
     def values_host(self):
         if self.dtype == np.dtype("object"):
-            return self.data.to_host()
+            return np.array(self.data.to_host(), dtype='object')
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
