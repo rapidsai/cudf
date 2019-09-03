@@ -418,6 +418,8 @@ class RangeIndex(Index):
             stop += self._start
             if sln == 0:
                 return RangeIndex(0)
+            elif step == 1:
+                return RangeIndex(start, stop)
             else:
                 return index_from_range(start, stop, step)
 
@@ -550,8 +552,15 @@ class RangeIndex(Index):
         return self._start >= self._stop
 
     def get_slice_bound(self, label, side, kind):
-        # TODO: Range-specific implementation here
-        raise (NotImplementedError)
+        if label < self._start:
+            return 0
+        elif label >= self._stop:
+            return len(self)
+        else:
+            if side == "left":
+                return label - self._start
+            elif side == "right":
+                return (label - self._start) + 1
 
     @property
     def __cuda_array_interface__(self):
