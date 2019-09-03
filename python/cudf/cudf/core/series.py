@@ -1817,6 +1817,17 @@ class Series(object):
             index=self.index,
         )
 
+    def cov(self, other):
+        """Covariance
+        """
+        lhs = self.nans_to_nulls().dropna().astype("float64")
+        rhs = other.nans_to_nulls().dropna().astype("float64")
+        lhs, rhs = _align_indices(lhs, rhs, join="inner")
+
+        if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
+            return np.nan
+        return lhs._column.cov(other=rhs)
+
     def isin(self, test):
 
         from cudf import DataFrame
