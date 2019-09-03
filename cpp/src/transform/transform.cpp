@@ -21,13 +21,18 @@
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cudf/copying.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>
-#include "jit/core/launcher.h"
 
 #include <utilities/column_utils.hpp>
 
 #include <cudf/legacy/column.hpp>
+
+#include <jit/launcher.h>
+#include <jit/type.h>
+#include <jit/types_h_jit.h>
+#include <jit/parser.h>
+#include "jit/code/code.h"
 
 namespace cudf {
 namespace transformation {
@@ -43,9 +48,39 @@ namespace transformation {
 
 namespace jit {
 
-void unary_operation(gdf_column* out, const gdf_column* in,
-                     const std::string& udf, const std::string& output_type, bool is_ptx) {
-  Launcher(udf, output_type, is_ptx).setKernelInst("kernel", out, in).launch(out, in);
+void unary_operation(gdf_column& output, const gdf_column& input,
+                     const std::string& udf, gdf_dtype output_type, bool is_ptx) {
+ 
+  std::string hash = "prog_tranform." 
+    + std::to_string(std::hash<std::string>{}(udf));
+
+  std::string cuda_source;
+  if(is_ptx){
+    cuda_source = 
+      cudf::jit::parse_single_function_ptx(
+          udf, "GENERIC_UNARY_OP", 
+          cudf::jit::getTypeName(output_type), {0}
+          ) + code::kernel;
+  }else{  
+    cuda_source = 
+      cudf::jit::parse_single_function_cuda(
+          udf, "GENERIC_UNARY_OP") + code::kernel;
+  }
+  
+  // Launch the jitify kernel
+  cudf::jit::launcher(
+    hash, cuda_source,
+    { cudf_types_h },
+    { "-std=c++14" }, nullptr
+  ).set_kernel_inst(
+    "kernel", // name of the kernel we are launching
+    { cudf::jit::getTypeName(output.dtype), // list of template arguments
+      cudf::jit::getTypeName(input.dtype) }
+  ).launch(
+    output.size,
+    output.data,
+    input.data
+  );
 
 }
 
@@ -79,7 +114,7 @@ gdf_column transform(const gdf_column& input,
     CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));
   }
 
-  transformation::jit::unary_operation(&output, &input, unary_udf, cudf::jit::getTypeName(output_type), is_ptx);
+  transformation::jit::unary_operation(output, input, unary_udf, output_type, is_ptx);
 
   return output;
 }

@@ -11,7 +11,7 @@ from numba import cuda
 from cudf import DataFrame
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
+@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
 def test_df_apply_rows(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
@@ -43,7 +43,7 @@ def test_df_apply_rows(nelem):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 1000, 5000])
+@pytest.mark.parametrize("nelem", [1, 2, 64, 128, 129])
 @pytest.mark.parametrize("chunksize", [1, 2, 3, 4, 23])
 def test_df_apply_chunks(nelem, chunksize):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
@@ -77,7 +77,7 @@ def test_df_apply_chunks(nelem, chunksize):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 1000])
+@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
 def test_df_apply_custom_chunks(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
@@ -116,7 +116,7 @@ def test_df_apply_custom_chunks(nelem):
     np.testing.assert_array_almost_equal(got_out2, expect_out2)
 
 
-@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 1000])
+@pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
 @pytest.mark.parametrize("tpb", [1, 8, 16, 64])
 def test_df_apply_custom_chunks_tpb(nelem, tpb):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):

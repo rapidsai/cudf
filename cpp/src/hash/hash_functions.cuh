@@ -17,7 +17,7 @@
 #ifndef HASH_FUNCTIONS_CUH
 #define HASH_FUNCTIONS_CUH
 
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 
 using hash_value_type = uint32_t;
 
@@ -119,7 +119,7 @@ struct MurmurHash3_32
         return h1;
     }
 private:
-    const uint32_t m_seed;
+    uint32_t m_seed;
 };
 
 /* --------------------------------------------------------------------------*/

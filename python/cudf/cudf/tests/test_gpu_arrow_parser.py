@@ -6,6 +6,7 @@ import pytest
 
 from librmm_cffi import librmm as rmm
 
+import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
 
 try:
@@ -210,6 +211,44 @@ def test_gpu_parse_arrow_int(dtype):
     assert columns["depdelay"].dtype == dtype
     assert set(columns) == {"depdelay", "arrdelay"}
     assert list(columns["depdelay"]) == [0, 0, -3, -2, 11, 6, -7, -4, 4, -3]
+
+
+@pytest.mark.skipif(
+    arrow_version is None,
+    reason="need compatible pyarrow to generate test data",
+)
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_gpu_parse_arrow_timestamps(dtype):
+    timestamp = (
+        cudf.datasets.timeseries(
+            start="2000-01-01", end="2000-01-02", freq="3600s", dtypes={}
+        )
+        .reset_index()["timestamp"]
+        .reset_index(drop=True)
+    )
+    gdf = cudf.DataFrame({"timestamp": timestamp.astype(dtype)})
+    pdf = gdf.to_arrow(preserve_index=False)
+    schema_data = pdf.schema.serialize()
+    recbatch_data = pdf.to_batches()[0].serialize()
+
+    # To ensure compatibility for OmniSci we're going to create this numpy
+    # array to be read-only as that's how numpy arrays created from foreign
+    # memory buffers will be set
+    cpu_schema = np.frombuffer(schema_data, dtype=np.uint8)
+    cpu_data = np.frombuffer(recbatch_data, dtype=np.uint8)
+    gpu_data = rmm.to_device(cpu_data)
+    del cpu_data
+
+    # test reader
+    reader = GpuArrowReader(cpu_schema, gpu_data)
+    assert reader[0].name == "timestamp"
+    timestamp_arr = reader[0].data.copy_to_host()
+    np.testing.assert_array_equal(timestamp_arr, gdf["timestamp"].to_array())
+    dct = reader.to_dict()
+    np.testing.assert_array_equal(timestamp_arr, dct["timestamp"].to_array())
 
 
 if __name__ == "__main__":

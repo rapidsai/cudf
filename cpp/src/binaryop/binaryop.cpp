@@ -17,22 +17,27 @@
  * limitations under the License.
  */
 
-#include "jit/core/launcher.h"
-#include "jit/util/operator.h"
-#include "compiled/binary_ops.hpp"
 #include <bitmask/legacy/bitmask_ops.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
 #include <cudf/cudf.h>
 #include <bitmask/legacy/legacy_bitmask.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <cudf/copying.hpp>
-#include <string/nvcategory_util.hpp>
 #include <utilities/error_utils.hpp>
+#include <nvstrings/NVCategory.h>
+
 #include "compiled/binary_ops.hpp"
-#include "jit/core/launcher.h"
+
+#include <jit/launcher.h>
+#include <jit/type.h>
+#include <jit/types_h_jit.h>
+#include <jit/parser.h>
+#include "jit/code/code.h"
+#include "jit/util/type.h"
 #include "jit/util/operator.h"
 #include <nvstrings/NVCategory.h>
+#include <cudf/datetime.hpp>
 
 namespace cudf {
 namespace binops {
@@ -144,34 +149,96 @@ void scalar_col_valid_mask_and(gdf_size_type& out_null_count,
 
 namespace jit {
 
+  const std::string hash = "prog_binop";
+
+  const std::vector<std::string> compiler_flags { "-std=c++14" };
+  const std::vector<std::string> headers_name
+        { "operation.h" , "traits.h", cudf_types_h };
+  
+  std::istream* headers_code(std::string filename, std::iostream& stream) {
+      if (filename == "operation.h") {
+          stream << code::operation;
+          return &stream;
+      }
+      if (filename == "traits.h") {
+          stream << code::traits;
+          return &stream;
+      }
+      return nullptr;
+  }
+
 void binary_operation(gdf_column* out, gdf_scalar* lhs, gdf_column* rhs,
                       gdf_binary_operator ope) {
-  Launcher()
-      .setKernelInst("kernel_v_s", ope, Operator::Type::Reverse, out, rhs, lhs)
-      .launch(out, rhs, lhs);
+  
+  cudf::jit::launcher(
+    hash, code::kernel, headers_name, compiler_flags, headers_code
+  ).set_kernel_inst(
+    "kernel_v_s", // name of the kernel we are launching
+    { cudf::jit::getTypeName(out->dtype), // list of template arguments
+      cudf::jit::getTypeName(rhs->dtype),
+      cudf::jit::getTypeName(lhs->dtype),
+      Operator{}.getOperatorName(ope, Operator::Type::Reverse) } 
+  ).launch(
+    out->size, out->data, rhs->data, lhs->data
+  );
+
 }
 
 void binary_operation(gdf_column* out, gdf_column* lhs, gdf_scalar* rhs,
                       gdf_binary_operator ope) {
-  Launcher()
-      .setKernelInst("kernel_v_s", ope, Operator::Type::Direct, out, lhs, rhs)
-      .launch(out, lhs, rhs);
+  
+  cudf::jit::launcher(
+    hash, code::kernel, headers_name, compiler_flags, headers_code
+  ).set_kernel_inst(
+    "kernel_v_s", // name of the kernel we are launching
+    { cudf::jit::getTypeName(out->dtype), // list of template arguments
+      cudf::jit::getTypeName(lhs->dtype),
+      cudf::jit::getTypeName(rhs->dtype),
+      Operator{}.getOperatorName(ope, Operator::Type::Direct) } 
+  ).launch(
+    out->size, out->data, lhs->data, rhs->data
+  );
+
 }
 
 void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
                       gdf_binary_operator ope) {
-  Launcher()
-      .setKernelInst("kernel_v_v", ope, Operator::Type::Direct, out, lhs, rhs)
-      .launch(out, lhs, rhs);
+
+  cudf::jit::launcher(
+    hash, code::kernel, headers_name, compiler_flags, headers_code
+  ).set_kernel_inst(
+    "kernel_v_v", // name of the kernel we are launching
+    { cudf::jit::getTypeName(out->dtype), // list of template arguments
+      cudf::jit::getTypeName(lhs->dtype),
+      cudf::jit::getTypeName(rhs->dtype),
+      Operator{}.getOperatorName(ope, Operator::Type::Direct) } 
+  ).launch(
+    out->size, out->data, lhs->data, rhs->data
+  );
+
 }
 
 void binary_operation(gdf_column* out, const gdf_column* lhs,
                       const gdf_column* rhs, const std::string& ptx,
                       const std::string& output_type) {
-  Launcher(ptx, output_type)
-      .setKernelInst("kernel_v_v", GDF_GENERIC_BINARY, Operator::Type::Direct,
-                     out, lhs, rhs)
-      .launch(out, lhs, rhs);
+  
+  std::string ptx_hash = 
+    hash + "." + std::to_string(std::hash<std::string>{}(ptx + output_type)); 
+  std::string cuda_source =
+    cudf::jit::parse_single_function_ptx(ptx, "GENERIC_BINARY_OP", output_type) + code::kernel;
+
+  cudf::jit::launcher(
+    ptx_hash, cuda_source, headers_name, compiler_flags, headers_code
+  ).set_kernel_inst(
+    "kernel_v_v", // name of the kernel we are launching
+    { cudf::jit::getTypeName(out->dtype), // list of template arguments
+      cudf::jit::getTypeName(lhs->dtype),
+      cudf::jit::getTypeName(rhs->dtype),
+      Operator{}.getOperatorName(GDF_GENERIC_BINARY, Operator::Type::Direct) } 
+  ).launch(
+    out->size, out->data, lhs->data, rhs->data
+  );
+
 }
 
 }  // namespace jit
@@ -285,9 +352,22 @@ void binary_operation(gdf_column* out, gdf_column* lhs, gdf_column* rhs,
         reinterpret_cast<NVCategory*>(temp_rhs.dtype_info.category));
     return;
   }
+
+  gdf_column lhs_tmp{};
+  gdf_column rhs_tmp{};
+  // If the columns are GDF_DATE64 or timestamps with different time resolutions,
+  // cast the least-granular column to the other's resolution before the binop
+  std::tie(lhs_tmp, rhs_tmp) = cudf::datetime::cast_to_common_resolution(*lhs, *rhs);
+
+  if (lhs_tmp.size > 0) { lhs = &lhs_tmp; }
+  else if (rhs_tmp.size > 0) { rhs = &rhs_tmp; }
+
   auto err = binops::compiled::binary_operation(out, lhs, rhs, ope);
   if (err == GDF_UNSUPPORTED_DTYPE || err == GDF_INVALID_API_CALL)
     binops::jit::binary_operation(out, lhs, rhs, ope);
+
+  gdf_column_free(&lhs_tmp);
+  gdf_column_free(&rhs_tmp);
 }
 
 gdf_column binary_operation(const gdf_column& lhs, const gdf_column& rhs,

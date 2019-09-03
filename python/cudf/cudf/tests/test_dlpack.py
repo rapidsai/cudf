@@ -87,7 +87,7 @@ def test_to_dlpack_index(data_1d):
     with expectation:
         if np.isnan(data_1d).any():
             pytest.skip("Nulls not allowed in Index")
-        gi = cudf.dataframe.index.as_index(data_1d)
+        gi = cudf.core.index.as_index(data_1d)
         dlt = gi.to_dlpack()
 
         # PyCapsules are a C-API thing so couldn't come up with a better way

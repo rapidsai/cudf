@@ -23,7 +23,7 @@
 #include <cudf/cudf.h>
 #include <tests/utilities/cudf_test_utils.cuh>
 #include <utilities/bit_util.cuh>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -599,11 +599,11 @@ struct column_wrapper {
     data = host_data;
 
     // Fill the gdf_column members
-    the_column.data = data.data().get();
-    the_column.size = data.size();
-    the_column.dtype = cudf::gdf_dtype_of<ColumnType>();
     gdf_dtype_extra_info extra_info{TIME_UNIT_NONE};
-    the_column.dtype_info = extra_info;
+    extra_info.category = nullptr;
+    gdf_column_view_augmented(&the_column, data.data().get(), nullptr,
+                              data.size(), cudf::gdf_dtype_of<ColumnType>(),
+                              0, extra_info);
 
     // If a validity bitmask vector was passed in, allocate device storage
     // and copy its contents from the host vector
