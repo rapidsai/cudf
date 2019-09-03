@@ -3,8 +3,8 @@ from datetime import datetime as dt
 import pandas as pd
 import pytest
 
-from cudf.core.index import RangeIndex, as_index
 from cudf import Series
+from cudf.core.index import RangeIndex, as_index
 from cudf.tests.utils import assert_eq
 
 
