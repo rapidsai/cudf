@@ -327,7 +327,8 @@ gdf_error write_csv(csv_write_arg* args)
         //
         // This is essentially an exclusive-scan (prefix-sum) across columns.
         // Moving left-to-right, add up each column and carry each value to the next column.
-        // We do this in 3 kernel calls below.
+        // To use scan would require transpose, scan, untranspose. The 2 transpose steps
+        // would require an extra temporary buffer the size of rows*count.
         //
         rmm::device_vector<size_t> string_locations(rows*count); // all the memory pointers for each column
         string_locations[0] = 0; // first one is always 0
@@ -365,8 +366,8 @@ gdf_error write_csv(csv_write_arg* args)
         char* d_csv_data = csv_data.data().get();   // for this group of rows
         // fill in the csv_data memory one column at a time
         {
-            rmm::device_vector<std::pair<const char*,size_t> > indexes(rows); // this is used to retrieve pointers
-            std::pair<const char*,size_t>* d_indexes = indexes.data().get();  // to each element in strings instance
+            rmm::device_vector<std::pair<const char*,size_t> > indices(rows); // this is used to retrieve pointers
+            std::pair<const char*,size_t>* d_indices = indices.data().get();  // to each element in strings instance
             for( unsigned int idx=0; idx < count; ++idx )
             {
                 const gdf_column* col = columns[idx];
@@ -375,11 +376,11 @@ gdf_error write_csv(csv_write_arg* args)
                 if( strs )
                 {
                     size_t* row_offsets = d_string_locations + (idx*rows);
-                    strs->create_index(d_indexes); // get the internal pointers
+                    strs->create_index(d_indices); // get the internal pointers
                     // copy each string over to its correct position in csv_data memory
                     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0),rows,
-                        [row_offsets, d_csv_data, d_indexes] __device__ (unsigned int jdx) {
-                            memcpy(d_csv_data+row_offsets[jdx],d_indexes[jdx].first,d_indexes[jdx].second);
+                        [row_offsets, d_csv_data, d_indices] __device__ (unsigned int jdx) {
+                            memcpy(d_csv_data+row_offsets[jdx],d_indices[jdx].first,d_indices[jdx].second);
                     });
                     NVStrings::destroy(strs);
                 }
