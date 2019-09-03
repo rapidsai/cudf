@@ -1100,6 +1100,7 @@ def test_to_arrow_missing_categorical():
         "int16",
         "int32",
         "int64",
+        "longlong",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -1133,7 +1134,8 @@ def test_from_scalar_typing(data_type):
 
 
 @pytest.mark.parametrize(
-    "data_type", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "data_type",
+    ["int8", "int16", "int32", "int64", "float32", "float64", "longlong"],
 )
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)
