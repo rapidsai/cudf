@@ -146,7 +146,7 @@ class Series(object):
         if len(self) == 0:
             return cupy.asarray([], dtype=self.dtype)
 
-        return cupy.asarray(self._column.to_gpu_array())
+        return cupy.asarray(self.to_gpu_array())
 
     @property
     def values_host(self):
