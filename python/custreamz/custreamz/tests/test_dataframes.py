@@ -15,7 +15,6 @@ import pandas as pd
 import pytest
 from dask.dataframe.utils import assert_eq
 from distributed import Client
-
 from streamz import Stream
 from streamz.dask import DaskStream
 from streamz.dataframe import Aggregation, DataFrame, DataFrames, Series
@@ -32,9 +31,9 @@ def client():
         client.close()
 
 
-@pytest.fixture(params=['core', 'dask'])
+@pytest.fixture(params=["core", "dask"])
 def stream(request, client):  # flake8: noqa
-    if request.param == 'core':
+    if request.param == "core":
         return Stream()
     else:
         return DaskStream()
@@ -91,13 +90,11 @@ def test_exceptions(stream):
         sdf.emit(cudf.DataFrame())
 
 
-@pytest.mark.parametrize('func', [
-    lambda x: x.sum(),
-    lambda x: x.mean(),
-    lambda x: x.count()
-])
+@pytest.mark.parametrize(
+    "func", [lambda x: x.sum(), lambda x: x.mean(), lambda x: x.count()]
+)
 def test_reductions(stream, func):
-    df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+    df = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     for example in [df, df.iloc[:0]]:
         sdf = DataFrame(example=example, stream=stream)
 
@@ -187,9 +184,10 @@ def test_unary_operators(op, getter):
     "func",
     [
         lambda df: df.query("x > 1 and x < 4"),
-        pytest.param(lambda df: df.x.value_counts().nlargest(2)
-                     .astype(int), marks=pytest.mark.xfail(
-                         reason="Index name lost in _getattr_"))
+        pytest.param(
+            lambda df: df.x.value_counts().nlargest(2).astype(int),
+            marks=pytest.mark.xfail(reason="Index name lost in _getattr_"),
+        ),
     ],
 )
 def test_dataframe_simple(func):
@@ -270,20 +268,18 @@ def test_getitem(stream):
     assert_eq(cudf.concat(L), df[df.x > 4])
 
 
-@pytest.mark.parametrize('agg', [
-    lambda x: x.sum(),
-    lambda x: x.mean(),
-])
-@pytest.mark.parametrize('grouper', [lambda a: a.x % 3,
-                                     lambda a: 'x',
-                                     lambda a: a.index % 2,
-                                     lambda a: ['x']])
-@pytest.mark.parametrize('indexer', [lambda g: g,
-                                     lambda g: g[['y']],
-                                     lambda g: g[['x', 'y']]])
+@pytest.mark.parametrize("agg", [lambda x: x.sum(), lambda x: x.mean()])
+@pytest.mark.parametrize(
+    "grouper",
+    [lambda a: a.x % 3, lambda a: "x", lambda a: a.index % 2, lambda a: ["x"]],
+)
+@pytest.mark.parametrize(
+    "indexer", [lambda g: g, lambda g: g[["y"]], lambda g: g[["x", "y"]]]
+)
 def test_groupby_aggregate(agg, grouper, indexer, stream):
-    df = cudf.DataFrame({'x': (np.arange(10) // 2).astype(float),
-                         'y': [1.0, 2.0] * 5})
+    df = cudf.DataFrame(
+        {"x": (np.arange(10) // 2).astype(float), "y": [1.0, 2.0] * 5}
+    )
 
     a = DataFrame(example=df.iloc[:0], stream=stream)
 
@@ -307,7 +303,7 @@ def test_groupby_aggregate(agg, grouper, indexer, stream):
 
 @pytest.mark.xfail(
     reason="AttributeError: 'StringColumn' object"
-           "has no attribute 'value_counts'"
+    "has no attribute 'value_counts'"
 )
 def test_value_counts(stream):
     s = cudf.Series(["a", "b", "a"])
@@ -325,32 +321,34 @@ def test_value_counts(stream):
 
 
 def test_repr(stream):
-    df = cudf.DataFrame({'x': (np.arange(10) // 2).astype(float),
-                         'y': [1.0] * 10})
+    df = cudf.DataFrame(
+        {"x": (np.arange(10) // 2).astype(float), "y": [1.0] * 10}
+    )
     a = DataFrame(example=df, stream=stream)
 
     text = repr(a)
     assert type(a).__name__ in text
-    assert 'x' in text
-    assert 'y' in text
+    assert "x" in text
+    assert "y" in text
 
     text = repr(a.x)
     assert type(a.x).__name__ in text
-    assert 'x' in text
+    assert "x" in text
 
     text = repr(a.x.sum())
     assert type(a.x.sum()).__name__ in text
 
 
 def test_repr_html(stream):
-    df = cudf.DataFrame({'x': (np.arange(10) // 2).astype(float),
-                         'y': [1.0] * 10})
+    df = cudf.DataFrame(
+        {"x": (np.arange(10) // 2).astype(float), "y": [1.0] * 10}
+    )
     a = DataFrame(example=df, stream=stream)
 
     for x in [a, a.y, a.y.mean()]:
         html = x._repr_html_()
         assert type(x).__name__ in html
-        assert '1' in html
+        assert "1" in html
 
 
 def test_setitem(stream):
@@ -429,8 +427,8 @@ def test_setitem_overwrites(stream):
     ],
 )
 @pytest.mark.parametrize(
-    "window", [pytest.param(2), 7, pytest.param("3h"),
-               pd.Timedelta("200 minutes")]
+    "window",
+    [pytest.param(2), 7, pytest.param("3h"), pd.Timedelta("200 minutes")],
 )
 @pytest.mark.parametrize("m", [2, pytest.param(5)])
 @pytest.mark.parametrize(
@@ -441,8 +439,9 @@ def test_setitem_overwrites(stream):
         (lambda df: df, lambda df: df.x),
     ],
 )
-def test_rolling_count_aggregations(op, window, m, pre_get, post_get, kwargs,
-                                    stream):
+def test_rolling_count_aggregations(
+    op, window, m, pre_get, post_get, kwargs, stream
+):
     index = pd.DatetimeIndex(start="2000-01-01", end="2000-01-03", freq="1h")
     df = cudf.DataFrame({"x": np.arange(len(index))}, index=index)
 
@@ -454,7 +453,7 @@ def test_rolling_count_aggregations(op, window, m, pre_get, post_get, kwargs,
     assert len(L) == 0
 
     for i in range(0, len(df), m):
-        sdf.emit(df.iloc[i:i + m])
+        sdf.emit(df.iloc[i : i + m])
 
     assert len(L) > 1
 
@@ -512,7 +511,7 @@ def test_cumulative_aggregations(op, getter, stream):
     L = getattr(getter(sdf), op)().stream.gather().sink_to_list()
 
     for i in range(0, 10, 3):
-        sdf.emit(df.iloc[i:i + 3])
+        sdf.emit(df.iloc[i : i + 3])
     sdf.emit(df.iloc[:0])
 
     assert len(L) > 1
@@ -587,19 +586,19 @@ def test_window_sum(stream):
 
 
 def test_window_sum_dataframe(stream):
-    df = cudf.DataFrame({'x': [1, 2, 3], 'y': [4, 5, 6]})
+    df = cudf.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6]})
     sdf = DataFrame(example=df, stream=stream)
     L = sdf.window(n=4).sum().stream.gather().sink_to_list()
 
     sdf.emit(df)
-    assert_eq(L[0], cudf.Series([6, 15], index=['x', 'y']))
+    assert_eq(L[0], cudf.Series([6, 15], index=["x", "y"]))
     sdf.emit(df)
-    assert_eq(L[0], cudf.Series([6, 15], index=['x', 'y']))
-    assert_eq(L[1], cudf.Series([9, 21], index=['x', 'y']))
+    assert_eq(L[0], cudf.Series([6, 15], index=["x", "y"]))
+    assert_eq(L[1], cudf.Series([9, 21], index=["x", "y"]))
     sdf.emit(df)
-    assert_eq(L[0], cudf.Series([6, 15], index=['x', 'y']))
-    assert_eq(L[1], cudf.Series([9, 21], index=['x', 'y']))
-    assert_eq(L[2], cudf.Series([9, 21], index=['x', 'y']))
+    assert_eq(L[0], cudf.Series([6, 15], index=["x", "y"]))
+    assert_eq(L[1], cudf.Series([9, 21], index=["x", "y"]))
+    assert_eq(L[2], cudf.Series([9, 21], index=["x", "y"]))
 
 
 @pytest.mark.parametrize(
@@ -622,35 +621,33 @@ def test_windowing_n(func, n, getter):
     L = func(getter(sdf).window(n=n)).stream.gather().sink_to_list()
 
     for i in range(0, 10, 3):
-        sdf.emit(df.iloc[i:i + 3])
+        sdf.emit(df.iloc[i : i + 3])
     sdf.emit(df.iloc[:0])
 
     assert len(L) == 5
 
-    assert_eq(L[0], func(getter(df).iloc[max(0, 3 - n):3]))
-    assert_eq(L[-1], func(getter(df).iloc[len(df) - n:]))
+    assert_eq(L[0], func(getter(df).iloc[max(0, 3 - n) : 3]))
+    assert_eq(L[-1], func(getter(df).iloc[len(df) - n :]))
 
 
-@pytest.mark.parametrize('func', [
-    lambda x: x.sum(),
-    lambda x: x.mean(),
-])
-@pytest.mark.parametrize('value', ['10h', '1d'])
-@pytest.mark.parametrize('getter', [
-    lambda df: df,
-    lambda df: df.x,
-])
-@pytest.mark.parametrize('grouper', [lambda a: 'y',
-                                     lambda a: a.index,
-                                     lambda a: ['y']])
-@pytest.mark.parametrize('indexer', [lambda g: g,
-                                     lambda g: g[['x']],
-                                     lambda g: g[['x', 'y']]])
+@pytest.mark.parametrize("func", [lambda x: x.sum(), lambda x: x.mean()])
+@pytest.mark.parametrize("value", ["10h", "1d"])
+@pytest.mark.parametrize("getter", [lambda df: df, lambda df: df.x])
+@pytest.mark.parametrize(
+    "grouper", [lambda a: "y", lambda a: a.index, lambda a: ["y"]]
+)
+@pytest.mark.parametrize(
+    "indexer", [lambda g: g, lambda g: g[["x"]], lambda g: g[["x", "y"]]]
+)
 def test_groupby_windowing_value(func, value, getter, grouper, indexer):
-    index = pd.DatetimeIndex(start='2000-01-01', end='2000-01-03', freq='1h')
-    df = cudf.DataFrame({'x': np.arange(len(index), dtype=float),
-                         'y': np.arange(len(index), dtype=float) % 2},
-                        index=index)
+    index = pd.DatetimeIndex(start="2000-01-01", end="2000-01-03", freq="1h")
+    df = cudf.DataFrame(
+        {
+            "x": np.arange(len(index), dtype=float),
+            "y": np.arange(len(index), dtype=float) % 2,
+        },
+        index=index,
+    )
 
     value = pd.Timedelta(value)
 
@@ -663,39 +660,32 @@ def test_groupby_windowing_value(func, value, getter, grouper, indexer):
 
     diff = 13
     for i in range(0, len(index), diff):
-        sdf.emit(df.iloc[i: i + diff])
+        sdf.emit(df.iloc[i : i + diff])
 
     assert len(L) == 4
 
     first = df.iloc[:diff]
-    lost = first.loc[first.index.min() + value:]
-    first = first.iloc[len(lost):]
+    lost = first.loc[first.index.min() + value :]
+    first = first.iloc[len(lost) :]
 
     g = f(first)
     assert_eq(L[0], g)
 
-    last = df.loc[index.max() - value + pd.Timedelta('1s'):]
+    last = df.loc[index.max() - value + pd.Timedelta("1s") :]
     h = f(last)
     assert_eq(L[-1], h)
 
 
-@pytest.mark.parametrize('func', [
-    lambda x: x.sum(),
-    lambda x: x.mean(),
-])
-@pytest.mark.parametrize('n', [1, 4])
-@pytest.mark.parametrize('getter', [
-    lambda df: df,
-    lambda df: df.x,
-])
-@pytest.mark.parametrize('grouper', [lambda a: a.x % 3,
-                                     lambda a: 'y',
-                                     lambda a: a.index % 2,
-                                     lambda a: ['y']])
-@pytest.mark.parametrize('indexer', [lambda g: g,
-                                     lambda g: g[['x', 'y']]])
+@pytest.mark.parametrize("func", [lambda x: x.sum(), lambda x: x.mean()])
+@pytest.mark.parametrize("n", [1, 4])
+@pytest.mark.parametrize("getter", [lambda df: df, lambda df: df.x])
+@pytest.mark.parametrize(
+    "grouper",
+    [lambda a: a.x % 3, lambda a: "y", lambda a: a.index % 2, lambda a: ["y"]],
+)
+@pytest.mark.parametrize("indexer", [lambda g: g, lambda g: g[["x", "y"]]])
 def test_groupby_windowing_n(func, n, getter, grouper, indexer):
-    df = cudf.DataFrame({'x': np.arange(10, dtype=float), 'y': [1.0, 2.0] * 5})
+    df = cudf.DataFrame({"x": np.arange(10, dtype=float), "y": [1.0, 2.0] * 5})
 
     sdf = DataFrame(example=df)
 
@@ -706,17 +696,17 @@ def test_groupby_windowing_n(func, n, getter, grouper, indexer):
 
     diff = 3
     for i in range(0, 10, diff):
-        sdf.emit(df.iloc[i: i + diff])
+        sdf.emit(df.iloc[i : i + diff])
     sdf.emit(df.iloc[:0])
 
     assert len(L) == 5
 
-    first = df.iloc[max(0, diff - n): diff]
+    first = df.iloc[max(0, diff - n) : diff]
 
     g = f(first)
     assert_eq(L[0], g)
 
-    last = df.iloc[len(df) - n:]
+    last = df.iloc[len(df) - n :]
     h = f(last)
     assert_eq(L[-1], h)
 
