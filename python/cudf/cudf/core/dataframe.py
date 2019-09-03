@@ -1781,10 +1781,7 @@ class DataFrame(object):
                 shape=(nrow, ncol), dtype=dtype, order=order
             )
             for colidx, inpcol in enumerate(cols):
-                if inpcol.dtype == dtype:
-                    dense = inpcol.to_gpu_array(fillna="pandas")
-                else:
-                    dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
+                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
                 matrix[:, colidx].copy_to_device(dense)
         elif order == "C":
             matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
