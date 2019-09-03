@@ -571,48 +571,10 @@ def gpu_round(in_col, out_col, decimal):
             out_col[i] = newval
 
 
-@cuda.jit
-def gpu_round_masked(in_col, out_col, mask, decimal):
-    i = cuda.grid(1)
-    round_val = 10 ** (-1.0 * decimal)
-
-    if i < in_col.size:
-        valid = mask_get(mask, i)
-
-        if valid:
-            current = in_col[i]
-            newval = current // round_val * round_val
-            remainder = fmod(current, round_val)
-
-            if (
-                remainder != 0
-                and remainder > (0.5 * round_val)
-                and current > 0
-            ):
-                newval = newval + round_val
-                out_col[i] = newval
-
-            elif (
-                remainder != 0
-                and abs(remainder) < (0.5 * round_val)
-                and current < 0
-            ):
-                newval = newval + round_val
-                out_col[i] = newval
-
-            else:
-                out_col[i] = newval
-
-
-def apply_round(data, mask, decimal):
+def apply_round(data, decimal):
     output_dary = rmm.device_array_like(data)
     if output_dary.size > 0:
-        if mask is not None:
-            gpu_round_masked.forall(output_dary.size)(
-                data, output_dary, mask, decimal
-            )
-        else:
-            gpu_round.forall(output_dary.size)(data, output_dary, decimal)
+        gpu_round.forall(output_dary.size)(data, output_dary, decimal)
     return output_dary
 
 
