@@ -95,7 +95,6 @@ static __device__ void LoadNonNullIndices(volatile dictbuild_state_s *s, int t)
             if (t == 0xf)
             {
                 s->nnz += nnz_pos;
-                __threadfence_block();
             }
             if (t <= 0xf)
                 s->scratch_red[t] = nnz_pos - nnz;
@@ -110,7 +109,7 @@ static __device__ void LoadNonNullIndices(volatile dictbuild_state_s *s, int t)
 }
 
 /**
- * @brief Builds per-chunk string dictionaries
+ * @brief Gather all non-NULL string rows and compute total character data size
  *
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
@@ -119,13 +118,16 @@ static __device__ void LoadNonNullIndices(volatile dictbuild_state_s *s, int t)
  **/
 // blockDim {512,1,1}
 extern "C" __global__ void __launch_bounds__(512)
-gpuBuildOrcStringDictionaries(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups)
+gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups)
 {
     __shared__ __align__(16) dictbuild_state_s state_g;
 
     volatile dictbuild_state_s * const s = &state_g;
     uint32_t col_id = blockIdx.x;
     uint32_t group_id = blockIdx.y;
+    const nvstrdesc_s *ck_data;
+    uint32_t *dict_data;
+    uint32_t nnz, start_row;
     int t = threadIdx.x;
 
     if (t < sizeof(DictionaryChunk) / sizeof(uint32_t))
@@ -140,11 +142,14 @@ gpuBuildOrcStringDictionaries(DictionaryChunk *chunks, uint32_t num_columns, uin
     {
         s->chunk.string_char_count = 0;
     }
+    nnz = s->nnz;
+    dict_data = s->chunk.dict_data;
+    start_row = s->chunk.start_row;
+    ck_data = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
     for (uint32_t i = 0; i < s->nnz; i += 512)
     {
-        const nvstrdesc_s *ck_data = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + s->chunk.start_row;
-        uint32_t ck_row = (i + t < s->nnz) ? s->dict[i + t] : 0;
-        uint32_t len = (i + t < s->nnz) ? ck_data[ck_row].count : 0;
+        uint32_t ck_row = (i + t < nnz) ? s->dict[i + t] : 0;
+        uint32_t len = (i + t < nnz) ? ck_data[ck_row].count : 0;
         len += SHFL_XOR(len, 1);
         len += SHFL_XOR(len, 2);
         len += SHFL_XOR(len, 4);
@@ -162,19 +167,22 @@ gpuBuildOrcStringDictionaries(DictionaryChunk *chunks, uint32_t num_columns, uin
             if (t == 0)
                 s->chunk.string_char_count += len;
         }
+        if (i + t < nnz)
+        {
+            dict_data[i + t] = start_row + ck_row;
+        }
         __syncthreads();
     }
-
-    __syncthreads();
     if (!t)
     {
+        chunks[group_id * num_columns + col_id].num_strings = nnz;
         chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
     }
 }
 
 
 /**
- * @brief Launches kernel for building string dictionaries
+ * @brief Launches kernel for initializing dictionary chunks
  *
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
  * @param[in] num_columns Number of columns
@@ -183,11 +191,11 @@ gpuBuildOrcStringDictionaries(DictionaryChunk *chunks, uint32_t num_columns, uin
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t BuildOrcStringDictionaries(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream)
+cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream)
 {
     dim3 dim_block(512, 1); // 512 threads per chunk
     dim3 dim_grid(num_columns, num_rowgroups);
-    gpuBuildOrcStringDictionaries <<< dim_grid, dim_block, 0, stream >>>(chunks, num_columns, num_rowgroups);
+    gpuInitDictionaryIndices <<< dim_grid, dim_block, 0, stream >>>(chunks, num_columns, num_rowgroups);
     return cudaSuccess;
 }
 
