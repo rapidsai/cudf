@@ -23,6 +23,7 @@ requirements:
     - dask >=2.1.0
     - distributed >=2.1.0
     - python-confluent-kafka
+
 test:
   imports:
     - cudf
