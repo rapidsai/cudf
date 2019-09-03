@@ -259,7 +259,7 @@ void writer::Impl::write(const cudf::table& table) {
             ck->start_row = (uint32_t)(j * ff.rowIndexStride);
             ck->num_rows = (uint32_t)std::min((uint32_t)ff.rowIndexStride, (uint32_t)(ff.numberOfRows - ck->start_row));
             ck->valid_rows = (uint32_t)columns[i]->size;
-            ck->encoding_kind = (uint8_t)sf.columns[i].kind;
+            ck->encoding_kind = (uint8_t)sf.columns[1+i].kind;
             ck->type_kind = (uint8_t)ff.types[1+i].kind;
             ck->dtype_len = 0;
             switch(columns[i]->dtype_info.time_unit)
