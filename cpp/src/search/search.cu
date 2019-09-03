@@ -17,7 +17,7 @@
 #include <iterator/iterator.cuh>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
 
 #include <cudf/search.hpp>

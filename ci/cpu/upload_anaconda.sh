@@ -10,11 +10,7 @@ export DASK_CUDF_FILE=`conda build conda/recipes/dask-cudf --python=$PYTHON --ou
 export CUSTREAMZ_FILE=`conda build conda/recipes/custreamz --python=$PYTHON --output`
 
 SOURCE_BRANCH=master
-CUDA_REL=${CUDA:0:3}
-if [ "${CUDA:0:2}" == '10' ]; then
-  # CUDA 10 release
-  CUDA_REL=${CUDA:0:4}
-fi
+CUDA_REL=${CUDA_VERSION%.*}
 
 # Restrict uploads to master branch
 if [ ${GIT_BRANCH} != ${SOURCE_BRANCH} ]; then
@@ -55,5 +51,4 @@ if [ "$UPLOAD_CUDF" == "1" ]; then
   echo "Upload custreamz"
   echo ${CUSTREAMZ_FILE}
   anaconda -t ${MY_UPLOAD_KEY} upload -u ${CONDA_USERNAME:-rapidsai} ${LABEL_OPTION} --force ${CUSTREAMZ_FILE}
-
 fi

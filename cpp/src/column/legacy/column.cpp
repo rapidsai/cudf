@@ -24,8 +24,8 @@
 #include <utilities/error_utils.hpp>
 #include <rmm/rmm.h>
 #include <utilities/column_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <bitmask/legacy/legacy_bitmask.hpp>
 #include <cuda_runtime_api.h>
 #include <algorithm>
@@ -34,14 +34,15 @@
 
 // forward decl -- see validops.cu
 gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
-                          gdf_size_type output_column_length,            
-                          gdf_valid_type *masks_to_concat[], 
-                          gdf_size_type *column_lengths, 
+                          gdf_size_type output_column_length,
+                          gdf_column *columns_to_concat[],
                           gdf_size_type num_columns);
 
 // Concatenates multiple gdf_columns into a single, contiguous column,
 // including the validity bitmasks.
-gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_concat[], int num_columns)
+gdf_error gdf_column_concat(gdf_column *output_column,
+                            gdf_column *columns_to_concat[],
+                            int num_columns)
 {
   GDF_REQUIRE(num_columns > 0, GDF_INVALID_API_CALL);
   GDF_REQUIRE(output_column != nullptr, GDF_DATASET_EMPTY);
@@ -86,7 +87,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   int8_t* target = (int8_t*)(output_column->data);
   output_column->null_count = 0;
-  int column_byte_width = cudf::byte_width(*output_column);
+  std::size_t column_byte_width = cudf::byte_width(*output_column);
 
   // copy data
 
@@ -97,7 +98,7 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
     }
   }else{
     for (int i = 0; i < num_columns; ++i) {
-      gdf_size_type bytes = column_byte_width * columns_to_concat[i]->size;
+      std::size_t bytes = column_byte_width * columns_to_concat[i]->size;
       CUDA_TRY( cudaMemcpy(target, columns_to_concat[i]->data, bytes, cudaMemcpyDeviceToDevice) );
       target += bytes;
       output_column->null_count += columns_to_concat[i]->null_count;
@@ -105,27 +106,9 @@ gdf_error gdf_column_concat(gdf_column *output_column, gdf_column *columns_to_co
 
   }
 
-  if (at_least_one_mask_present) {
-    gdf_valid_type** masks;
-    gdf_size_type* column_lengths;
-    CUDA_TRY( cudaMallocManaged((void**)&masks, sizeof(gdf_valid_type*)*num_columns) );
-    CUDA_TRY( cudaMallocManaged((void**)&column_lengths, sizeof(gdf_size_type)*num_columns) );
-
-    for (int i = 0; i < num_columns; ++i) {   
-      masks[i] = columns_to_concat[i]->valid;
-      column_lengths[i] = columns_to_concat[i]->size;
-    }
-
-    gdf_error result = gdf_mask_concat(output_column->valid,
-                             output_column->size, 
-                             masks, 
-                             column_lengths, 
-                             num_columns);
-
-    CUDA_TRY( cudaFree(masks) );
-    CUDA_TRY( cudaFree(column_lengths) );
-
-    return result;
+  if (at_least_one_mask_present) {   
+    return gdf_mask_concat(output_column->valid, output_column->size, 
+                           columns_to_concat, num_columns);
   }
   else if (nullptr != output_column->valid) {
     // no masks, so just fill output valid mask with all 1 bits
@@ -155,6 +138,9 @@ gdf_error gdf_column_view(gdf_column *column,
   column->size = size;
   column->dtype = dtype;
   column->null_count = 0;
+  column->col_name = nullptr;
+  column->dtype_info.category = nullptr;
+  column->dtype_info.time_unit = TIME_UNIT_NONE;
   return GDF_SUCCESS;
 }
 
@@ -167,14 +153,19 @@ gdf_error gdf_column_view_augmented(gdf_column *column,
                                     gdf_size_type size,
                                     gdf_dtype dtype,
                                     gdf_size_type null_count,
-                                    gdf_dtype_extra_info extra_info)
+                                    gdf_dtype_extra_info extra_info,
+                                    const char* name)
 {
-  column->data = data;
-  column->valid = valid;
-  column->size = size;
-  column->dtype = dtype;
+  gdf_column_view(column, data, valid, size, dtype);
   column->null_count = null_count;
   column->dtype_info = extra_info;
+  if (name != nullptr) {
+    size_t len = strlen(name);
+    if (len > 0) {
+      column->col_name = (char *)malloc(strlen(name) + 1);
+      std::strcpy(column->col_name, name);
+    }
+  }
   return GDF_SUCCESS;
 }
 

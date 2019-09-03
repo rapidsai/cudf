@@ -323,7 +323,7 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s, const
                 s->row_index_entry[1][ci_id] = v;
             if (cur >= start + pos_end)
                 return length;
-            state = STORE_INDEX2;
+            state = (ci_id == CI_DATA && s->chunk.type_kind == DECIMAL) ? STORE_INDEX0 : STORE_INDEX2;
             break;
         case STORE_INDEX2:
             if (ci_id < CI_PRESENT)

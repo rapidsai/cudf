@@ -27,7 +27,7 @@
 #include <rmm/rmm.h>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities//type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>

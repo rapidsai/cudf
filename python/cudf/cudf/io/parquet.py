@@ -4,8 +4,8 @@ import warnings
 
 import pyarrow.parquet as pq
 
-from cudf.bindings.parquet import cpp_read_parquet
-from cudf.dataframe.dataframe import DataFrame
+import cudf
+import cudf._lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -43,7 +43,7 @@ def read_parquet(
         ValueError("URL content-encoding decompression is not supported")
 
     if engine == "cudf":
-        df = cpp_read_parquet(
+        df = libcudf.parquet.read_parquet(
             filepath_or_buffer,
             columns,
             row_group,
@@ -56,7 +56,7 @@ def read_parquet(
         pa_table = pq.read_pandas(
             filepath_or_buffer, columns=columns, *args, **kwargs
         )
-        df = DataFrame.from_arrow(pa_table)
+        df = cudf.DataFrame.from_arrow(pa_table)
 
     return df
 

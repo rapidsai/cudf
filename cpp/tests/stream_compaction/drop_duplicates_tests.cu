@@ -150,7 +150,9 @@ bool compare_columns_indexed(
   thrust::sequence(exec, ordered.begin(), ordered.end());
   thrust::sort_by_key(exec, index_ptr , index_ptr + rows, ordered.data().get());
 
-  cudf::table destination_table(rows, cudf::column_dtypes(out_table), true);
+  cudf::table destination_table(rows,
+                                cudf::column_dtypes(out_table),
+                                cudf::column_dtype_infos(out_table), true);
   cudf::gather(&out_table, ordered.data().get(), &destination_table);
 
   gdf_column result_col1 = *(destination_table.get_column(1));
