@@ -61,7 +61,7 @@ class NumericalColumn(columnops.TypedColumnBase):
         if self.data.mem.dtype == np.bool:
             return (
                 cudautils.find_first(
-                    self.data.mem.view('int8'), item.view('int8')
+                    self.data.mem.view("int8"), item.view("int8")
                 )
                 != -1
             )
