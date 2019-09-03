@@ -91,16 +91,14 @@ def test_serialize_series():
 
 
 def test_serialize_range_index():
-    index = cudf.dataframe.index.RangeIndex(10, 20)
-    outindex = cudf.dataframe.index.RangeIndex.deserialize(*index.serialize())
+    index = cudf.core.index.RangeIndex(10, 20)
+    outindex = cudf.core.index.RangeIndex.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
 def test_serialize_generic_index():
-    index = cudf.dataframe.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.dataframe.index.GenericIndex.deserialize(
-        *index.serialize()
-    )
+    index = cudf.core.index.GenericIndex(cudf.Series(np.arange(10)))
+    outindex = cudf.core.index.GenericIndex.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
@@ -115,7 +113,7 @@ def test_serialize_multi_index():
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdg = gdf.groupby(["a", "b"]).sum()
     multiindex = gdg.index
-    outindex = cudf.dataframe.multiindex.MultiIndex.deserialize(
+    outindex = cudf.core.multiindex.MultiIndex.deserialize(
         *multiindex.serialize()
     )
     assert_eq(multiindex, outindex)

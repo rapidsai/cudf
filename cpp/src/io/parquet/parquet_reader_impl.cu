@@ -35,11 +35,29 @@ namespace parquet {
 #endif
 
 /**
+ * @brief Function that translates cuDF time unit to Parquet clock frequency
+ **/
+constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
+  switch (time_unit) {
+    case TIME_UNIT_s:
+      return 1;
+    case TIME_UNIT_ms:
+      return 1000;
+    case TIME_UNIT_us:
+      return 1000000;
+    case TIME_UNIT_ns:
+      return 1000000000;
+    default:
+      return 0;
+  }
+}
+
+/**
  * @brief Function that translates Parquet datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     parquet::Type physical, parquet::ConvertedType logical,
-    bool strings_to_categorical) {
+    bool strings_to_categorical, gdf_time_unit ts_unit) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -52,11 +70,15 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     case parquet::DATE:
       return std::make_pair(GDF_DATE32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::TIMESTAMP_MICROS:
-    #if !PARQUET_GPU_USEC_TO_MSEC
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_us});
-    #endif
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_us});
     case parquet::TIMESTAMP_MILLIS:
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_ms});
     default:
       break;
   }
@@ -80,8 +102,10 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(strings_to_categorical ? GDF_CATEGORY : GDF_STRING,
                             gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT96:
-      // Convert Spark INT96 timestamp to GDF_DATE64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_ns});
     default:
       break;
   }
@@ -94,7 +118,8 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
  **/
 template <typename T = uint8_t>
 T required_bits(uint32_t max_level) {
-  return static_cast<T>(parquet::CompactProtocolReader::NumRequiredBits(max_level));
+  return static_cast<T>(
+      parquet::CompactProtocolReader::NumRequiredBits(max_level));
 }
 
 /**
@@ -275,7 +300,6 @@ struct ParquetMetadata : public parquet::FileMetaData {
 
 size_t reader::Impl::count_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
-
   size_t total_pages = 0;
 
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
@@ -307,7 +331,6 @@ size_t reader::Impl::count_page_headers(
 void reader::Impl::decode_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
-
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;
     chunks[c].page_info = pages.device_ptr(page_count);
@@ -335,11 +358,9 @@ void reader::Impl::decode_page_headers(
   }
 }
 
-
 device_buffer<uint8_t> reader::Impl::decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
-
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -458,7 +479,6 @@ void reader::Impl::decode_page_data(
     const hostdevice_vector<parquet::gpu::PageInfo> &pages,
     const std::vector<gdf_column *> &chunk_map, size_t min_row,
     size_t total_rows) {
-
   auto is_dict_chunk = [](const parquet::gpu::ColumnChunkDesc &chunk) {
     return (chunk.data_type & 0x7) == parquet::BYTE_ARRAY &&
            chunk.num_dict_pages > 0;
@@ -519,7 +539,6 @@ void reader::Impl::decode_page_data(
 reader::Impl::Impl(std::unique_ptr<datasource> source,
                    reader_options const &options)
     : source_(std::move(source)) {
-
   // Open and parse the source Parquet dataset metadata
   md_ = std::make_unique<ParquetMetadata>(source_.get());
 
@@ -529,12 +548,16 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
   // Select only columns required by the options
   selected_cols_ = md_->select_columns(options.columns, index_col_.c_str());
 
+  // Override output timestamp resolution if requested
+  if (options.timestamp_unit != TIME_UNIT_NONE) {
+    timestamp_unit_ = options.timestamp_unit;
+  }
+
   // Strings may be returned as either GDF_STRING or GDF_CATEGORY columns
   strings_to_categorical_ = options.strings_to_categorical;
 }
 
 table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
-
   // Select only row groups required
   const auto selected_row_groups =
       md_->select_row_groups(row_group, skip_rows, num_rows);
@@ -549,10 +572,10 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     auto row_group_0 = md_->row_groups[selected_row_groups[0].first];
     auto &col_schema = md_->schema[row_group_0.columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
-                               strings_to_categorical_);
+                               strings_to_categorical_, timestamp_unit_);
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows),
-                         dtype_info.first, dtype_info.second, col.second);
+    columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
+                         dtype_info.second, col.second);
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
                columns.size() - 1, columns.back()->col_name,
@@ -599,12 +622,15 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
                                ? (col_schema.type_length << 3)
                                : 0;
+      int32_t ts_clock_rate = 0;
       if (gdf_column->dtype == GDF_INT8)
         type_width = 1;  // I32 -> I8
       else if (gdf_column->dtype == GDF_INT16)
         type_width = 2;  // I32 -> I16
       else if (gdf_column->dtype == GDF_CATEGORY)
         type_width = 4;  // str -> hash32
+      else if (gdf_column->dtype == GDF_TIMESTAMP)
+        ts_clock_rate = to_clockrate(timestamp_unit_);
 
       uint8_t *d_compdata = nullptr;
       if (col_meta.total_compressed_size != 0) {
@@ -625,7 +651,8 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
           col_schema.type, type_width, row_group_start, row_group_rows,
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
-          required_bits(col_schema.max_repetition_level), col_meta.codec, col_schema.converted_type));
+          required_bits(col_schema.max_repetition_level), col_meta.codec,
+          col_schema.converted_type, ts_clock_rate));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "
@@ -730,6 +757,6 @@ table reader::read_row_group(size_t row_group) {
 
 reader::~reader() = default;
 
-} // namespace parquet
-} // namespace io
-} // namespace cudf
+}  // namespace parquet
+}  // namespace io
+}  // namespace cudf

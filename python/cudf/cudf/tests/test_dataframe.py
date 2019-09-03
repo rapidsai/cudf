@@ -11,8 +11,8 @@ import pytest
 from librmm_cffi import librmm as rmm
 
 import cudf as gd
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.dataframe import DataFrame, Series
+from cudf.core.buffer import Buffer
+from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
 
@@ -1100,6 +1100,7 @@ def test_to_arrow_missing_categorical():
         "int16",
         "int32",
         "int64",
+        "longlong",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -1133,7 +1134,8 @@ def test_from_scalar_typing(data_type):
 
 
 @pytest.mark.parametrize(
-    "data_type", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "data_type",
+    ["int8", "int16", "int32", "int64", "float32", "float64", "longlong"],
 )
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)
@@ -1546,7 +1548,7 @@ def test_gpu_memory_usage_with_boolmask():
     dataNumpy = np.asfortranarray(np.random.rand(nRows, nCols))
     colNames = ["col" + str(iCol) for iCol in range(nCols)]
     pandasDF = pd.DataFrame(data=dataNumpy, columns=colNames, dtype=np.float32)
-    cudaDF = cudf.dataframe.DataFrame.from_pandas(pandasDF)
+    cudaDF = cudf.core.DataFrame.from_pandas(pandasDF)
     boolmask = cudf.Series(np.random.randint(1, 2, len(cudaDF)).astype("bool"))
 
     memory_used = query_GPU_memory()
@@ -2705,30 +2707,30 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    from cudf.dataframe import columnops
+    from cudf.core.column import column
 
-    col = columnops.as_column(Series([]))
+    col = column.as_column(Series([]))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = Series(col)
     pds = pd.Series(pd.Series([]))
 
     assert_eq(pds, gds)
 
-    col = columnops.as_column(Series([]), dtype="float32")
+    col = column.as_column(Series([]), dtype="float32")
     assert_eq(col.dtype, np.dtype("float32"))
     gds = Series(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
-    col = columnops.as_column(Series([]), dtype="str")
+    col = column.as_column(Series([]), dtype="str")
     assert_eq(col.dtype, np.dtype("object"))
     gds = Series(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = columnops.as_column(Series([]), dtype="object")
+    col = column.as_column(Series([]), dtype="object")
     assert_eq(col.dtype, np.dtype("object"))
     gds = Series(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -2736,7 +2738,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
-    gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype="float32"))
+    gds = Series(column.as_column(np.array([1, 2, 3]), dtype="float32"))
 
     assert_eq(pds, gds)
 
@@ -2746,28 +2748,26 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series([])
-    gds = Series(columnops.as_column(pds))
+    gds = Series(column.as_column(pds))
     assert_eq(pds, gds)
 
     pds = pd.Series([1, 2, 4], dtype="int64")
-    gds = Series(columnops.as_column(Series([1, 2, 4]), dtype="int64"))
+    gds = Series(column.as_column(Series([1, 2, 4]), dtype="int64"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
-    gds = Series(
-        columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="float32")
-    )
+    gds = Series(column.as_column(Series([1.2, 18.0, 9.0]), dtype="float32"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
-    gds = Series(columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
+    gds = Series(column.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = Series(gd.dataframe.index.StringIndex(["1", "18", "9"]), dtype="int")
+    gds = Series(gd.core.index.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -2984,6 +2984,13 @@ def test_series_astype_null_cases():
             "category"
         ),
     )
+
+
+def test_series_astype_null_categorical():
+    sr = gd.Series([None, None, None], dtype="category")
+    expect = gd.Series([None, None, None], dtype="int32")
+    got = sr.astype("int32")
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
