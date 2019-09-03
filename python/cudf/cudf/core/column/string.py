@@ -114,7 +114,7 @@ class StringMethods(object):
 
         Parameters
         ----------
-            others : Series or List of str
+            others : Series, StringMethods or List of str
                 Strings to be appended.
                 The number of strings must match size() of this instance.
                 This must be either a Series of string dtype or a Python
@@ -149,6 +149,13 @@ class StringMethods(object):
             """
             assert others.dtype == np.dtype("object")
             others = others.data
+        elif isinstance(others, StringMethods):
+            """
+            If others is a StringMethods then get 
+            the nvstrings object from _parent, and 
+            go ahead with concatenation 
+            """
+            others = others._parent.data
         elif is_list_like(others) and others:
             """
             If others is a list-like object (in our case lists & tuples)
