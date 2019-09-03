@@ -21,19 +21,19 @@ namespace cudf {
 
 /** 
  * @brief  Performs an inner join on the specified columns of two
- * dataframes (left, right)
+ * tables (left, right)
  *
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
- *          on column 'a' with column 'a'.
+ *          TableB b:{1,2,3}, a:{1,2,5} And column 'a' from TableB
+ *          joins column 'a' from TableA.
  * The result would be Table-res a:{1, 2}, b:{1, 2}
  * Result is intersection of column 'a' from A and column 'a' from B
  *
  * @throws cudf::logic_error 
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
- * @param[in] left The left dataframe
- * @param[in] right The right dataframe
+ * @param[in] left The left table
+ * @param[in] right The right table
  * @param[in] left_on The column's indices from `left` to join on.
  * Column `i` from `left_on` will be compared against column `i` of `right_on`.
  * @param[in] right_on The column's indices from `right` to join on.
@@ -41,19 +41,23 @@ namespace cudf {
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
- * from `left_on`. Else, for every column in `left_on` and `right_on`,
+ * from `left_on` columns. Else, for every column in `left_on` and `right_on`,
  * an output column will be produced.
  *
- * @example Considering the example provided above, column name 'a'
- * is same in both tables and being joined, this will result into
- * single column in the joined result. This vector will have {(0,1)}.
+ * @param[out] * @returns joined_indices Optional, if not `nullptr`, on return, will
+ * contain two non-nullable, `GDF_INT32` columns containing the indices of
+ * matching rows between `left_on` and `right_on`. The first column corresponds to
+ * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
+ * indicates that the corresponding row in `left_on` has no match. It is the caller's
+ * responsibility to free these columns.
+ * @param[in] join_context The context to use to control how
+ * the join is performed,e.g., sort vs hash based implementation
  *
- * @param[out] out_ind The table containing joined indices of left 
- * and right table 
- * @param[in] join_context The context to use to control how 
- * the join is performed,e.g., sort vs hash based implementation*
- * 
- * @returns If Success, joined table
+ * @returns Result of joining `left` and `right` tables on the columns
+ * specified by `left_on` and `right_on`. The resulting table will be joined columns of
+ * `left` and then joined columns of `right`. For any "common" columns indicated
+ * by `columns_in_common`, only a single output column is produced and the order of the
+ * columns will be same as `left` and then `right`.
  */
 cudf::table inner_join(
                          cudf::table const& left,
@@ -61,22 +65,22 @@ cudf::table inner_join(
                          std::vector<gdf_size_type> const& left_on,
                          std::vector<gdf_size_type> const& right_on,
                          std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
-                         cudf::table *out_ind,
+                         cudf::table *joined_indices,
                          gdf_context *join_context);
 /** 
  * @brief  Performs a left join (also known as left outer join) on the
- * specified columns of two dataframes (left, right)
+ * specified columns of two tables (left, right)
  *
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
- *          on column 'a' with column 'b'.
+ *          TableB b:{1,2,3}, a:{1,2,5} And column 'a' from TableB
+ *          joins column 'a' from TableA.
  * The result would be Table-res a:{0, 1, 2}, b:{NULL, 1, 2}
- * Result is left of column 'a' only
- * @throws cudf::logic_error 
+ * Result is left of column 'a' from Table A only
+ * @throws cudf::logic_error
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
- * @param[in] left The left dataframe
- * @param[in] right The right dataframe
+ * @param[in] left The left table
+ * @param[in] right The right table
  * @param[in] left_on The column's indices from `left` to join on.
  * Column `i` from `left_on` will be compared against column `i` of `right_on`.
  * @param[in] right_on The column's indices from `right` to join on.
@@ -84,19 +88,23 @@ cudf::table inner_join(
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
- * from `left_on`. Else, for every column in `left_on` and `right_on`,
- * an output column will be produced.
+ * from intersection of respective columns in `left_on` and `right_on`. Else, for every column
+ * in `left_on` and `right_on`, an output column will be produced.
  *
- * @example Considering the example provided above, column name 'a'
- * is same in both tables and being joined, this will result into
- * single column in the joined result. This vector will have {(0,1)}.
- *
- * @param[out] out_ind The table containing joined indices of left 
- * and right table 
- * @param[in] join_context The context to use to control how 
+ * @param[out] * @returns joined_indices Optional, if not `nullptr`, on return, will
+ * contain two non-nullable, `GDF_INT32` columns containing the indices of
+ * matching rows between `left_on` and `right_on`. The first column corresponds to
+ * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
+ * indicates that the corresponding row in `left_on` has no match. It is the caller's
+ * responsibility to free these columns.
+ * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
  * 
- * @returns If Success, joined table
+ * @returns Result of joining `left` and `right` tables on the columns
+ * specified by `left_on` and `right_on`. The resulting table will be joined columns of
+ * `left` and then joined columns of `right`. For any "common" columns indicated
+ * by `columns_in_common`, only a single output column is produced and the order of the
+ * columns will be same as `left` and then `right`.
  */
 cudf::table left_join(
                          cudf::table const& left,
@@ -104,24 +112,24 @@ cudf::table left_join(
                          std::vector<gdf_size_type> const& left_on,
                          std::vector<gdf_size_type> const& right_on,
                          std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
-                         cudf::table *out_ind,
+                         cudf::table *joined_indices,
                          gdf_context *join_context);
 
 /** 
  * @brief  Performs a full join (also known as full outer join) on the
- * specified columns of two dataframes (left, right)
+ * specified columns of two tables (left, right)
  * 
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, a:{1,2,5} And TableB joins TableA 
- *          on column 'a' with column 'a'.
+ *          TableB b:{1,2,3}, a:{1,2,5} And column 'a' of TableB joins
+ *          column 'a' of TableA.
  * The result would be Table-res a:{0, 1, 2, 5}, b:{NULL, 1, 2, 3}
- * Result is union of column 'a' and column 'b'
+ * Result is union of column 'a' from Table A and column 'a' from Table B
  *
- * @throws cudf::logic_error 
+ * @throws cudf::logic_error
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
- * @param[in] left The left dataframe
- * @param[in] right The right dataframe
+ * @param[in] left The left table
+ * @param[in] right The right table
  * @param[in] left_on The column's indices from `left` to join on.
  * Column `i` from `left_on` will be compared against column `i` of `right_on`.
  * @param[in] right_on The column's indices from `right` to join on.
@@ -129,22 +137,23 @@ cudf::table left_join(
  * @param[in] columns_in_common is a vector of pairs of column indices into
  * `left_on` and `right_on`, respectively, that are "in common". For "common"
  * columns, only a single output column will be produced, which is gathered
- * from `left_on`. Else, for every column in `left_on` and `right_on`,
- * an output column will be produced.
- * join indcies derived from left_on and right_on. This contains
- * the indices with the same name which evetually result into a 
- * single column.
+ * from respective columns in `left_on` and `right_on`. Else, for every column in
+ * `left_on` and `right_on`, an output column will be produced.
  *
- * @example Considering the example provided above, column name 'a'
- * is same in both tables and being joined, this will result into
- * single column in the joined result. This vector will have {(0,1)}.
- *
- * @param[out] out_ind The table containing joined indices of left 
- * and right table 
- * @param[in] join_context The context to use to control how 
+ * @param[out] * @returns joined_indices Optional, if not `nullptr`, on return, will
+ * contain two non-nullable, `GDF_INT32` columns containing the indices of
+ * matching rows between `left_on` and `right_on`. The first column corresponds to
+ * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
+ * indicates that the corresponding row in `left_on` has no match. It is the caller's
+ * responsibility to free these columns.
+ * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
  * 
- * @returns If Success, joined table 
+ * @returns Result of joining `left` and `right` tables on the columns
+ * specified by `left_on` and `right_on`. The resulting table will be joined columns of
+ * `left` and then joined columns of `right`. For any "common" columns indicated
+ * by `columns_in_common`, only a single output column is produced and the order of the
+ * columns will be same as `left` and then `right`.
  */
 cudf::table full_join(
                          cudf::table const& left,
@@ -152,6 +161,6 @@ cudf::table full_join(
                          std::vector<gdf_size_type> const& left_on,
                          std::vector<gdf_size_type> const& right_on,
                          std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
-                         cudf::table *out_ind,
+                         cudf::table *joined_indices,
                          gdf_context *join_context);
 } //namespace cudf
