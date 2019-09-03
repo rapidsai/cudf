@@ -446,6 +446,16 @@ class Series(object):
             out = ["" if v is None else str(v) for v in values]
         return out
 
+    def tolist(self):
+        """
+        Return a list type from series data.
+
+        Returns
+        -------
+        list
+        """
+        return self.to_arrow().to_pylist()
+
     def head(self, n=5):
         return self.iloc[:n]
 
