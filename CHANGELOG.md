@@ -10,6 +10,12 @@
 - PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
 - PR #2581 Removed `managed` allocator from hash map classes.
 - PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2648 Cython/Python reorg
+- PR #2588 Update Series.append documentation
+- PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2673 Add support for np.longlong type
+- PR #2703 move dask serialization dispatch into cudf
+- PR #2640 Add dask wait/persist exmaple to 10 minute guide
 
 ## Bug Fixes
 
