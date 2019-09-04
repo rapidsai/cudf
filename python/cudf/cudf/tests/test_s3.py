@@ -110,18 +110,3 @@ def test_json():
 
     expect = pd.read_json(buffer, lines=True)
     assert_eq(expect, got)
-
-
-def test_s3_public():
-    bucket = "nyc-tlc"
-    filepath = "trip data/green_tripdata_2013-08.csv"
-    fname = "s3://{}/{}".format(bucket, filepath)
-    os.environ.pop("AWS_ACCESS_KEY_ID")
-    os.environ.pop("AWS_SECRET_ACCESS_KEY")
-    # Pandas interpreting the the wrong column as index
-    expect = pd.read_csv(fname, engine="python", index_col=False)
-    got = cudf.read_csv(fname, storage_options={"anon": True})
-    # All null columns dtype diff b/w pandas and cudf
-    got["Ehail_fee"] = got["Ehail_fee"].astype(np.float64)
-    got["Trip_type "] = got["Trip_type "].astype(np.float64)
-    assert_eq(expect, got)
