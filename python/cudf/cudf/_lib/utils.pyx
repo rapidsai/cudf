@@ -78,15 +78,8 @@ cdef cudf_table* table_from_columns(columns) except? NULL:
     cdef cudf_table* c_table
     cdef vector[gdf_column*] c_columns
     cdef gdf_column* c_col
-
-    col_names = []
-    for idx, (col_name, col) in enumerate(columns.items()):
-        col_names.append(col_name.encode())
-        if col._column.dtype.type == np.object_:
-            c_col = column_view_from_string_column(col._column, col_names[idx])
-        else:
-            c_col = column_view_from_column(col._column, col_names[idx])
+    for col in columns:
+        c_col = column_view_from_column(col)
         c_columns.push_back(c_col)
-
     c_table = new cudf_table(c_columns)
     return c_table

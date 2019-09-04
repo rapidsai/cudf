@@ -14,8 +14,7 @@ from cudf._lib.includes.orc cimport (
     writer_options as orc_writer_options
 )
 from cython.operator cimport dereference as deref
-from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
@@ -23,6 +22,19 @@ from cudf._lib.utils import *
 from io import BytesIO
 import errno
 import os
+
+
+cdef unique_ptr[cudf_table] make_table_from_columns(columns):
+    """
+    Cython function to create a `cudf_table` from an ordered dict of columns
+    """
+    cdef vector[gdf_column*] c_columns
+
+    for idx, (col_name, col) in enumerate(columns.items()):
+        check_gdf_compatibility(col._column)
+        c_columns.push_back(column_view_from_column(col._column, col_name))
+
+    return make_unique[cudf_table](c_columns)
 
 
 cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
@@ -101,6 +113,5 @@ cpdef write_orc(cols, filepath):
     )
 
     # Write data to output
-    cdef unique_ptr[cudf_table] table
-    table = unique_ptr[cudf_table](table_from_columns(cols))
-    writer.get().write_all(deref(table))
+    cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
+    writer.get().write_all(deref(c_in_table))
