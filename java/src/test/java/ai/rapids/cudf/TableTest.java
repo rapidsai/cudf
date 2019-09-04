@@ -216,14 +216,36 @@ public class TableTest {
     try (Table table = new Table.TestBuilder()
         .column(5, null, 3, 1, 1)
         .column(5, 3, 4, null, null)
+	.categoryColumn("4", "3", "2", "1", "0")
         .column(1, 3, 5, 7, 9)
         .build();
          Table expected = new Table.TestBuilder()
              .column(1, 1, 3, 5, null)
              .column(null, null, 4, 5, 3)
+	     .categoryColumn("1", "0", "2", "4", "3")
              .column(7, 9, 5, 1, 3)
              .build();
          Table sortedTable = table.orderBy(false, Table.asc(0), Table.desc(1))) {
+      assertTablesAreEqual(expected, sortedTable);
+    }
+  }
+
+  @Test
+  void testOrderByWithNullsAndStrings() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (Table table = new Table.TestBuilder()
+	.categoryColumn("4", "3", "2", "1", "0")
+        .column(5, null, 3, 1, 1)
+        .column(5, 3, 4, null, null)
+        .column(1, 3, 5, 7, 9)
+        .build();
+         Table expected = new Table.TestBuilder()
+	     .categoryColumn("0", "1", "2", "3", "4")
+             .column(1, 1, 3, null, 5)
+             .column(null, null, 4, 3, 5)
+             .column(9, 7, 5, 3, 1)
+             .build();
+         Table sortedTable = table.orderBy(false, Table.asc(0))) {
       assertTablesAreEqual(expected, sortedTable);
     }
   }
@@ -573,10 +595,11 @@ public class TableTest {
   @Test
   void testReadORCNumPyTypes() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
-    // by default ORC will promote date and timestamp columns to DATE64
+    // by default ORC will promote DATE32 to DATE64
+    // and TIMESTAMP is kept as it is
     try (Table table = Table.readORC(TEST_ORC_TIMESTAMP_DATE_FILE)) {
       assertEquals(2, table.getNumberOfColumns());
-      assertEquals(DType.DATE64, table.getColumn(0).getType());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
       assertEquals(DType.DATE64, table.getColumn(1).getType());
     }
 
@@ -586,6 +609,23 @@ public class TableTest {
       assertEquals(2, table.getNumberOfColumns());
       assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
       assertEquals(DType.DATE32, table.getColumn(1).getType());
+    }
+  }
+
+  @Test
+  void testReadORCTimeUnit() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // specifying no NumPy types should load them as DATE32 and TIMESTAMP
+    // specifying TimeUnit will return the result in that unit
+    ORCOptions opts = ORCOptions.builder()
+        .withNumPyTypes(false)
+        .withTimeUnit(TimeUnit.SECONDS)
+        .build();
+    try (Table table = Table.readORC(opts, TEST_ORC_TIMESTAMP_DATE_FILE)) {
+      assertEquals(2, table.getNumberOfColumns());
+      assertEquals(DType.TIMESTAMP, table.getColumn(0).getType());
+      assertEquals(DType.DATE32, table.getColumn(1).getType());
+      assertEquals(TimeUnit.SECONDS,table.getColumn(0).getTimeUnit());
     }
   }
 

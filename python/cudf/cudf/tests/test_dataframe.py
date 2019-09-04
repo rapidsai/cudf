@@ -1100,6 +1100,7 @@ def test_to_arrow_missing_categorical():
         "int16",
         "int32",
         "int64",
+        "longlong",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -1133,7 +1134,8 @@ def test_from_scalar_typing(data_type):
 
 
 @pytest.mark.parametrize(
-    "data_type", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "data_type",
+    ["int8", "int16", "int32", "int64", "float32", "float64", "longlong"],
 )
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)
@@ -2539,9 +2541,39 @@ def test_ndim():
     assert s.ndim == gs.ndim
 
 
-@pytest.mark.parametrize("decimal", range(-8, 8))
-def test_round(decimal):
-    arr = np.random.normal(0, 100, 10000)
+@pytest.mark.parametrize(
+    "arr",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+    ],
+)
+@pytest.mark.parametrize(
+    "decimal",
+    [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        pytest.param(
+            -1,
+            marks=[
+                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
+            ],
+        ),
+    ],
+)
+def test_round(arr, decimal):
     pser = pd.Series(arr)
     ser = Series(arr)
     result = ser.round(decimal)
@@ -2551,7 +2583,8 @@ def test_round(decimal):
     )
 
     # with nulls, maintaining existing null mask
-    mask = np.random.randint(0, 2, 10000)
+    arr = arr.astype("float64")  # for pandas nulls
+    mask = np.random.randint(0, 2, arr.shape[0])
     arr[mask == 1] = np.nan
 
     pser = pd.Series(arr)
@@ -2562,6 +2595,27 @@ def test_round(decimal):
         result.to_pandas(), expected, decimal=10
     )
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        Series([1.0, None, np.nan, 4.0], nan_as_null=False),
+        Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
+        Series([1.24430, np.nan, 4.423530], nan_as_null=False),
+        Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
+        Series(np.repeat(np.nan, 100)),
+    ],
+)
+@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
+def test_round_nan_as_null_false(series, decimal):
+    pser = series.to_pandas()
+    ser = Series(series)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(
+        result.to_pandas(), expected, decimal=10
+    )
 
 
 @pytest.mark.parametrize(
@@ -3349,6 +3403,59 @@ def test_constructor_properties():
     # Inorrect use of _constructor_expanddim (Raises for DataFrame)
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5],
+        [1, 2, None, 4, 5],
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        [1.0, 2.0, None, 4.0, 5.0],
+        ["a", "b", "c", "d", "e"],
+        ["a", "b", None, "d", "e"],
+        [None, None, None, None, None],
+        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
+        np.array(["1991-11-20", None], dtype=np.datetime64),
+        np.array(
+            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
+        ),
+        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
+    ],
+)
+def test_tolist(data):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.tolist()
+    expected = [x if not pd.isnull(x) else None for x in psr.tolist()]
+
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_tolist_mixed_nulls():
+    num_data = pa.array([1.0, None, np.float64("nan")])
+    num_data_expect = [1.0, None, np.float64("nan")]
+
+    time_data = pa.array(
+        [1, None, -9223372036854775808], type=pa.timestamp("ns")
+    )
+    time_data_expect = [
+        pd.Timestamp("1970-01-01T00:00:00.000000001"),
+        None,
+        pd.NaT,
+    ]
+
+    df = DataFrame()
+    df["num_data"] = num_data
+    df["time_data"] = time_data
+
+    num_data_got = df["num_data"].tolist()
+    time_data_got = df["time_data"].tolist()
+
+    np.testing.assert_equal(num_data_got, num_data_expect)
+    for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
+        assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
 
 
 @pytest.mark.parametrize(
