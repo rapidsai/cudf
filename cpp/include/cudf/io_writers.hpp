@@ -28,11 +28,15 @@ namespace io {
 namespace orc {
 
 /**---------------------------------------------------------------------------*
+ * @brief Supported compression algorithms for the ORC writer
+ *---------------------------------------------------------------------------**/
+enum class compression_type { none, snappy };
+
+/**---------------------------------------------------------------------------*
  * @brief Options for the ORC writer
  *---------------------------------------------------------------------------**/
 struct writer_options {
-  enum class comp_codec { none, snappy };
-  comp_codec compression = comp_codec::none;
+  compression_type compression = compression_type::none;
 
   writer_options() = default;
   writer_options(writer_options const &) = default;
@@ -42,7 +46,7 @@ struct writer_options {
    *
    * @param[in] comp Compression codec to use
    *---------------------------------------------------------------------------**/
-  explicit writer_options(comp_codec comp) : compression(comp) {}
+  explicit writer_options(compression_type comp) : compression(comp) {}
 };
 
 /**---------------------------------------------------------------------------*

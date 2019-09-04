@@ -41,15 +41,16 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::orc" nogil:
 
         cudf_table read_stripe(size_t stripe) except +
 
-    cdef cppclass comp_codec:
-        pass
+    cdef enum compression_type:
+        none 'cudf::io::orc::compression_type::none'
+        snappy 'cudf::io::orc::compression_type::snappy'
 
     cdef cppclass writer_options:
-        comp_codec compression
+        compression_type compression
 
         writer_options() except +
 
-        writer_options(comp_codec compression) except +
+        writer_options(compression_type comp) except +
 
     cdef cppclass writer:
         writer(

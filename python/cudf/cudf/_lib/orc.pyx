@@ -11,7 +11,8 @@ from cudf._lib.includes.orc cimport (
     reader as orc_reader,
     reader_options as orc_reader_options,
     writer as orc_writer,
-    writer_options as orc_writer_options
+    writer_options as orc_writer_options,
+    compression_type
 )
 from cython.operator cimport dereference as deref
 from libcpp.memory cimport unique_ptr, make_unique
@@ -94,7 +95,7 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     return table_to_dataframe(&c_out_table)
 
 
-cpdef write_orc(cols, filepath):
+cpdef write_orc(cols, filepath, compression=None):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -105,6 +106,12 @@ cpdef write_orc(cols, filepath):
 
     # Setup writer options
     cdef orc_writer_options options = orc_writer_options()
+    if compression is None:
+        options.compression = compression_type.none
+    elif compression == "snappy":
+        options.compression = compression_type.snappy
+    else:
+        raise ValueError("Unsupported `compression` type")
 
     # Create writer
     cdef unique_ptr[orc_writer] writer

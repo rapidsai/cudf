@@ -54,7 +54,7 @@ def read_orc(
 
 
 @ioutils.doc_to_orc()
-def to_orc(df, path, *args, **kwargs):
+def to_orc(df, fname, compression=None, *args, **kwargs):
     """{docstring}"""
 
-    libcudf.orc.write_orc(df._cols, path)
+    libcudf.orc.write_orc(df._cols, fname)

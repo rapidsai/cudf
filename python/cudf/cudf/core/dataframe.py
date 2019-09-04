@@ -3701,11 +3701,11 @@ class DataFrame(object):
         )
 
     @ioutils.doc_to_orc()
-    def to_orc(self, fname, *args, **kwargs):
+    def to_orc(self, fname, compression=None, *args, **kwargs):
         """{docstring}"""
         import cudf.io.orc as orc
 
-        orc.to_orc(self, fname, *args, **kwargs)
+        orc.to_orc(self, fname, compression, *args, **kwargs)
 
 
 def from_pandas(obj):

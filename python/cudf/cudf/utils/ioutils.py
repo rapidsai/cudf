@@ -231,8 +231,9 @@ Write a DataFrame to the ORC format.
 Parameters
 ----------
 fname : str
-    File path or Root Directory path. Will be used as Root Directory path
-    while writing a partitioned dataset.
+    File path or object where the ORC dataset will be stored.
+compression : {{ 'snappy', None }}, default None
+    Name of the compression to use. Use None for no compression.
 
 See Also
 --------
