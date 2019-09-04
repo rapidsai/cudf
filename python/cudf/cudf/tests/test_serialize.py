@@ -91,16 +91,14 @@ def test_serialize_series():
 
 
 def test_serialize_range_index():
-    index = cudf.dataframe.index.RangeIndex(10, 20)
-    outindex = cudf.dataframe.index.RangeIndex.deserialize(*index.serialize())
+    index = cudf.core.index.RangeIndex(10, 20)
+    outindex = cudf.core.index.RangeIndex.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
 def test_serialize_generic_index():
-    index = cudf.dataframe.index.GenericIndex(cudf.Series(np.arange(10)))
-    outindex = cudf.dataframe.index.GenericIndex.deserialize(
-        *index.serialize()
-    )
+    index = cudf.core.index.GenericIndex(cudf.Series(np.arange(10)))
+    outindex = cudf.core.index.GenericIndex.deserialize(*index.serialize())
     assert_eq(index, outindex)
 
 
@@ -115,7 +113,7 @@ def test_serialize_multi_index():
     gdf = cudf.DataFrame.from_pandas(pdf)
     gdg = gdf.groupby(["a", "b"]).sum()
     multiindex = gdg.index
-    outindex = cudf.dataframe.multiindex.MultiIndex.deserialize(
+    outindex = cudf.core.multiindex.MultiIndex.deserialize(
         *multiindex.serialize()
     )
     assert_eq(multiindex, outindex)
@@ -135,13 +133,35 @@ def test_serialize_masked_series():
 
 def test_serialize_groupby_df():
     df = cudf.DataFrame()
-    df["key"] = np.random.randint(0, 20, 100)
+    df["key_1"] = np.random.randint(0, 20, 100)
+    df["key_2"] = np.random.randint(0, 20, 100)
     df["val"] = np.arange(100, dtype=np.float32)
-    gb = df.groupby("key")
+    gb = df.groupby(["key_1", "key_2"])
     outgb = gb.deserialize(*gb.serialize())
-    got = gb.mean()
-    expect = outgb.mean()
+    expect = gb.mean()
+    got = outgb.mean()
     assert_eq(got, expect)
+
+
+def test_serialize_groupby_external():
+    df = cudf.DataFrame()
+    df["val"] = np.arange(100, dtype=np.float32)
+    gb = df.groupby(cudf.Series(np.random.randint(0, 20, 100)))
+    outgb = gb.deserialize(*gb.serialize())
+    expect = gb.mean()
+    got = outgb.mean()
+    assert_eq(got, expect)
+
+
+def test_serialize_groupby_level():
+    idx = pd.MultiIndex.from_tuples([(1, 1), (1, 2), (2, 2)], names=("a", "b"))
+    pdf = pd.DataFrame({"c": [1, 2, 3], "d": [2, 3, 4]}, index=idx)
+    df = cudf.from_pandas(pdf)
+    gb = df.groupby(level="a")
+    expect = gb.mean()
+    outgb = gb.deserialize(*gb.serialize())
+    got = outgb.mean()
+    assert_eq(expect, got)
 
 
 def test_serialize_groupby_sr():

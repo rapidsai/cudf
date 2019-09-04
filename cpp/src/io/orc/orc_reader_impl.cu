@@ -45,10 +45,28 @@ static_assert(sizeof(orc::gpu::ColumnDesc) <= 256 &&
 #endif
 
 /**
+ * @brief Function that translates cuDF time unit to ORC clock frequency
+ **/
+constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
+  switch (time_unit) {
+    case TIME_UNIT_s:
+      return 1;
+    case TIME_UNIT_ms:
+      return 1000;
+    case TIME_UNIT_us:
+      return 1000000;
+    case TIME_UNIT_ns:
+      return 1000000000;
+    default:
+      return 0;
+  }
+}
+
+/**
  * @brief Function that translates ORC datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
-    const orc::SchemaType &schema, bool use_np_dtypes = true) {
+    const orc::SchemaType &schema, bool use_np_dtypes, gdf_time_unit ts_unit) {
   switch (schema.kind) {
     case orc::BOOLEAN:
       return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{TIME_UNIT_NONE});
@@ -71,13 +89,17 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       // Variable-length types can all be mapped to GDF_STRING
       return std::make_pair(GDF_STRING, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::TIMESTAMP:
-      // There isn't a GDF_TIMESTAMP -> np.dtype mapping so use np.datetime64
-      return (use_np_dtypes) ? std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms})
-                             : std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_ns});
     case orc::DATE:
-      // There isn't a GDF_DATE32 -> np.dtype mapping so use np.datetime64
-      return (use_np_dtypes) ? std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms})
-                             : std::make_pair(GDF_DATE32, gdf_dtype_extra_info{TIME_UNIT_NONE});
+      // There isn't a (GDF_DATE32 -> np.dtype) mapping
+      return (use_np_dtypes)
+                 ? std::make_pair(GDF_DATE64,
+                                  gdf_dtype_extra_info{TIME_UNIT_ms})
+                 : std::make_pair(GDF_DATE32,
+                                  gdf_dtype_extra_info{TIME_UNIT_NONE});
     case orc::DECIMAL:
       // There isn't an arbitrary-precision type in cuDF, so map as float
       static_assert(DECIMALS_AS_FLOAT64 == 1, "Missing decimal->float");
@@ -162,16 +184,17 @@ class OrcMetadata {
    *
    * @return List of stripe info and total number of selected rows
    **/
-  auto select_stripes(int stripe, int row_start, int &row_count) {
+  auto select_stripes(int stripe, int &row_start, int &row_count) {
     std::vector<OrcStripeInfo> selection;
 
     if (stripe != -1) {
       CUDF_EXPECTS(stripe < get_num_stripes(), "Non-existent stripe");
-      for (int i = 0; i < stripe; ++i) {
-        row_start += ff.stripes[i].numberOfRows;
-      }
       selection.emplace_back(&ff.stripes[stripe], nullptr);
-      row_count = ff.stripes[stripe].numberOfRows;
+      if (row_count < 0) {
+        row_count = ff.stripes[stripe].numberOfRows;
+      } else {
+        row_count = std::min(row_count, (int)ff.stripes[stripe].numberOfRows);
+      }
     } else {
       row_start = std::max(row_start, 0);
       if (row_count == -1) {
@@ -180,15 +203,20 @@ class OrcMetadata {
       CUDF_EXPECTS(row_count >= 0, "Invalid row count");
       CUDF_EXPECTS(row_start <= get_total_rows(), "Invalid row start");
 
+      int stripe_skip_rows = 0;
       for (int i = 0, count = 0; i < (int)ff.stripes.size(); ++i) {
         count += ff.stripes[i].numberOfRows;
-        if (count > row_start || count == 0) {
+        if (count > row_start) {
+          if (selection.size() == 0) {
+            stripe_skip_rows = row_start - (count - ff.stripes[i].numberOfRows);
+          }
           selection.emplace_back(&ff.stripes[i], nullptr);
         }
         if (count >= (row_start + row_count)) {
           break;
         }
       }
+      row_start = stripe_skip_rows;
     }
 
     // Read each stripe's stripefooter metadata
@@ -362,7 +390,6 @@ size_t reader::Impl::gather_stream_info(
     size_t *num_dictionary_entries,
     hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
     std::vector<OrcStreamInfo> &stream_info) {
-
   const auto num_columns = gdf2orc.size();
   uint64_t src_offset = 0;
   uint64_t dst_offset = 0;
@@ -429,7 +456,6 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
     std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
     rmm::device_vector<orc::gpu::RowGroup> &row_groups,
     size_t row_index_stride) {
-
   // Parse the columns' compressed info
   hostdevice_vector<orc::gpu::CompressedStreamInfo> compinfo(0, stream_info.size());
   for (size_t i = 0; i < compinfo.max_size(); ++i) {
@@ -541,7 +567,6 @@ void reader::Impl::decode_stream_data(
     size_t skip_rows, const std::vector<int64_t> &timezone_table,
     rmm::device_vector<orc::gpu::RowGroup> &row_groups, size_t row_index_stride,
     const std::vector<gdf_column_wrapper> &columns) {
-
   const size_t num_columns = columns.size();
   const size_t num_stripes = chunks.size() / columns.size();
   const size_t num_rows = columns[0]->size;
@@ -594,12 +619,16 @@ void reader::Impl::decode_stream_data(
 reader::Impl::Impl(std::unique_ptr<datasource> source,
                    reader_options const &options)
     : source_(std::move(source)) {
-
   // Open and parse the source Parquet dataset metadata
   md_ = std::make_unique<OrcMetadata>(source_.get());
 
   // Select only columns required by the options
   selected_cols_ = md_->select_columns(options.columns, has_timestamp_column_);
+
+  // Override output timestamp resolution if requested
+  if (options.timestamp_unit != TIME_UNIT_NONE) {
+    timestamp_unit_ = options.timestamp_unit;
+  }
 
   // Enable or disable attempt to use row index for parsing
   use_index_ = options.use_index;
@@ -609,7 +638,6 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
 }
 
 table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
-
   // Select only stripes required (aka row groups)
   const auto selected_stripes =
       md_->select_stripes(stripe, skip_rows, num_rows);
@@ -622,7 +650,8 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
   std::vector<gdf_column_wrapper> columns;
   LOG_PRINTF("[+] Selected columns: %d\n", num_columns);
   for (const auto &col : selected_cols_) {
-    auto dtype_info = to_dtype(md_->ff.types[col], use_np_dtypes_);
+    auto dtype_info =
+        to_dtype(md_->ff.types[col], use_np_dtypes_, timestamp_unit_);
 
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
@@ -701,6 +730,9 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
         chunk.type_kind = md_->ff.types[selected_cols_[j]].kind;
         chunk.decimal_scale = md_->ff.types[selected_cols_[j]].scale;
         chunk.rowgroup_id = num_rowgroups;
+        if (chunk.type_kind == orc::TIMESTAMP) {
+          chunk.ts_clock_rate = to_clockrate(timestamp_unit_);
+        }
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
             chunk.streams[k] = d_data + stream_info[chunk.strm_id[k]].dst_pos;
@@ -813,6 +845,6 @@ table reader::read_stripe(size_t stripe) { return impl_->read(0, -1, stripe); }
 
 reader::~reader() = default;
 
-} // namespace orc
-} // namespace io
-} // namespace cudf
+}  // namespace orc
+}  // namespace io
+}  // namespace cudf

@@ -11,8 +11,8 @@ import pytest
 from librmm_cffi import librmm as rmm
 
 import cudf as gd
-from cudf.dataframe.buffer import Buffer
-from cudf.dataframe.dataframe import DataFrame, Series
+from cudf.core.buffer import Buffer
+from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
 
@@ -1100,6 +1100,7 @@ def test_to_arrow_missing_categorical():
         "int16",
         "int32",
         "int64",
+        "longlong",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -1133,7 +1134,8 @@ def test_from_scalar_typing(data_type):
 
 
 @pytest.mark.parametrize(
-    "data_type", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "data_type",
+    ["int8", "int16", "int32", "int64", "float32", "float64", "longlong"],
 )
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)
@@ -1546,7 +1548,7 @@ def test_gpu_memory_usage_with_boolmask():
     dataNumpy = np.asfortranarray(np.random.rand(nRows, nCols))
     colNames = ["col" + str(iCol) for iCol in range(nCols)]
     pandasDF = pd.DataFrame(data=dataNumpy, columns=colNames, dtype=np.float32)
-    cudaDF = cudf.dataframe.DataFrame.from_pandas(pandasDF)
+    cudaDF = cudf.core.DataFrame.from_pandas(pandasDF)
     boolmask = cudf.Series(np.random.randint(1, 2, len(cudaDF)).astype("bool"))
 
     memory_used = query_GPU_memory()
@@ -2539,9 +2541,39 @@ def test_ndim():
     assert s.ndim == gs.ndim
 
 
-@pytest.mark.parametrize("decimal", range(-8, 8))
-def test_round(decimal):
-    arr = np.random.normal(0, 100, 10000)
+@pytest.mark.parametrize(
+    "arr",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+    ],
+)
+@pytest.mark.parametrize(
+    "decimal",
+    [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        pytest.param(
+            -1,
+            marks=[
+                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
+            ],
+        ),
+    ],
+)
+def test_round(arr, decimal):
     pser = pd.Series(arr)
     ser = Series(arr)
     result = ser.round(decimal)
@@ -2551,7 +2583,8 @@ def test_round(decimal):
     )
 
     # with nulls, maintaining existing null mask
-    mask = np.random.randint(0, 2, 10000)
+    arr = arr.astype("float64")  # for pandas nulls
+    mask = np.random.randint(0, 2, arr.shape[0])
     arr[mask == 1] = np.nan
 
     pser = pd.Series(arr)
@@ -2562,6 +2595,27 @@ def test_round(decimal):
         result.to_pandas(), expected, decimal=10
     )
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        Series([1.0, None, np.nan, 4.0], nan_as_null=False),
+        Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
+        Series([1.24430, np.nan, 4.423530], nan_as_null=False),
+        Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
+        Series(np.repeat(np.nan, 100)),
+    ],
+)
+@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
+def test_round_nan_as_null_false(series, decimal):
+    pser = series.to_pandas()
+    ser = Series(series)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(
+        result.to_pandas(), expected, decimal=10
+    )
 
 
 @pytest.mark.parametrize(
@@ -2705,30 +2759,30 @@ def test_empty_dataframe_describe():
 
 
 def test_as_column_types():
-    from cudf.dataframe import columnops
+    from cudf.core.column import column
 
-    col = columnops.as_column(Series([]))
+    col = column.as_column(Series([]))
     assert_eq(col.dtype, np.dtype("float64"))
     gds = Series(col)
     pds = pd.Series(pd.Series([]))
 
     assert_eq(pds, gds)
 
-    col = columnops.as_column(Series([]), dtype="float32")
+    col = column.as_column(Series([]), dtype="float32")
     assert_eq(col.dtype, np.dtype("float32"))
     gds = Series(col)
     pds = pd.Series(pd.Series([], dtype="float32"))
 
     assert_eq(pds, gds)
 
-    col = columnops.as_column(Series([]), dtype="str")
+    col = column.as_column(Series([]), dtype="str")
     assert_eq(col.dtype, np.dtype("object"))
     gds = Series(col)
     pds = pd.Series(pd.Series([], dtype="str"))
 
     assert_eq(pds, gds)
 
-    col = columnops.as_column(Series([]), dtype="object")
+    col = column.as_column(Series([]), dtype="object")
     assert_eq(col.dtype, np.dtype("object"))
     gds = Series(col)
     pds = pd.Series(pd.Series([], dtype="object"))
@@ -2736,7 +2790,7 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series(np.array([1, 2, 3]), dtype="float32")
-    gds = Series(columnops.as_column(np.array([1, 2, 3]), dtype="float32"))
+    gds = Series(column.as_column(np.array([1, 2, 3]), dtype="float32"))
 
     assert_eq(pds, gds)
 
@@ -2746,28 +2800,26 @@ def test_as_column_types():
     assert_eq(pds, gds)
 
     pds = pd.Series([])
-    gds = Series(columnops.as_column(pds))
+    gds = Series(column.as_column(pds))
     assert_eq(pds, gds)
 
     pds = pd.Series([1, 2, 4], dtype="int64")
-    gds = Series(columnops.as_column(Series([1, 2, 4]), dtype="int64"))
+    gds = Series(column.as_column(Series([1, 2, 4]), dtype="int64"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="float32")
-    gds = Series(
-        columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="float32")
-    )
+    gds = Series(column.as_column(Series([1.2, 18.0, 9.0]), dtype="float32"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series([1.2, 18.0, 9.0], dtype="str")
-    gds = Series(columnops.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
+    gds = Series(column.as_column(Series([1.2, 18.0, 9.0]), dtype="str"))
 
     assert_eq(pds, gds)
 
     pds = pd.Series(pd.Index(["1", "18", "9"]), dtype="int")
-    gds = Series(gd.dataframe.index.StringIndex(["1", "18", "9"]), dtype="int")
+    gds = Series(gd.core.index.StringIndex(["1", "18", "9"]), dtype="int")
 
     assert_eq(pds, gds)
 
@@ -2984,6 +3036,13 @@ def test_series_astype_null_cases():
             "category"
         ),
     )
+
+
+def test_series_astype_null_categorical():
+    sr = gd.Series([None, None, None], dtype="category")
+    expect = gd.Series([None, None, None], dtype="int32")
+    got = sr.astype("int32")
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
@@ -3344,3 +3403,56 @@ def test_constructor_properties():
     # Inorrect use of _constructor_expanddim (Raises for DataFrame)
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5],
+        [1, 2, None, 4, 5],
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        [1.0, 2.0, None, 4.0, 5.0],
+        ["a", "b", "c", "d", "e"],
+        ["a", "b", None, "d", "e"],
+        [None, None, None, None, None],
+        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
+        np.array(["1991-11-20", None], dtype=np.datetime64),
+        np.array(
+            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
+        ),
+        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
+    ],
+)
+def test_tolist(data):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.tolist()
+    expected = [x if not pd.isnull(x) else None for x in psr.tolist()]
+
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_tolist_mixed_nulls():
+    num_data = pa.array([1.0, None, np.float64("nan")])
+    num_data_expect = [1.0, None, np.float64("nan")]
+
+    time_data = pa.array(
+        [1, None, -9223372036854775808], type=pa.timestamp("ns")
+    )
+    time_data_expect = [
+        pd.Timestamp("1970-01-01T00:00:00.000000001"),
+        None,
+        pd.NaT,
+    ]
+
+    df = DataFrame()
+    df["num_data"] = num_data
+    df["time_data"] = time_data
+
+    num_data_got = df["num_data"].tolist()
+    time_data_got = df["time_data"].tolist()
+
+    np.testing.assert_equal(num_data_got, num_data_expect)
+    for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
+        assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
