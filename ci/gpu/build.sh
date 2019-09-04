@@ -53,8 +53,8 @@ logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-d
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
 logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
-logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
-pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
+logger "pip install git+https://github.com/python-streamz/streamz.git"
+pip install "git+https://github.com/python-streamz/streamz.git"
 
 logger "Check versions..."
 python --version
