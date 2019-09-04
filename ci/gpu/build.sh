@@ -61,7 +61,7 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libcudf and cuDF from source
+# BUILD - Build libnvstrings, nvstrings, libcudf, cuDF and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
@@ -95,10 +95,11 @@ else
     fi
 
     cd $WORKSPACE/python/nvstrings
+    logger "Python py.test for nvstrings..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
 
-    logger "Python py.test for cuDF..."
     cd $WORKSPACE/python/cudf
+    logger "Python py.test for cuDF..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
 
     cd $WORKSPACE/python/dask_cudf
