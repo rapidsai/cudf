@@ -123,8 +123,8 @@ struct groupby {
   /**
    * @brief Get the group labels corresponding to the sorted order of `keys`. 
    * 
-   * Each group is assigned a unique numerical "label" in `[0, 1, 2, ... , num_groups() - 1, num_groups())`. For 
-   * a row in `keys`, its group label indicates which group it belongs to. 
+   * Each group is assigned a unique numerical "label" in `[0, 1, 2, ... , num_groups() - 1, num_groups())`.
+   * For a row in sorted `keys`, its corresponding group label indicates which group it belongs to. 
    * 
    * Computes and stores labels on first invocation and returns stored labels on
    * subsequent calls.
@@ -134,22 +134,21 @@ struct groupby {
   index_vector const& group_labels();
 
   /**
-   * @brief Get the unsorted labels
+   * @brief Get the group labels for unsorted keys
    * 
-   * For each row in `keys`, the unsorted label is the group it would
-   * belong to after sorting.
+   * For each row in `keys`, the label is the group it would belong to after sorting.
    * 
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
    * 
    * @return column of group labels in the order of the unsorted key table
    */
-  gdf_column const& unsorted_labels();
+  gdf_column const& unsorted_keys_labels();
 
  private:
 
   gdf_col_pointer     _key_sorted_order;
-  gdf_col_pointer     _unsorted_labels;
+  gdf_col_pointer     _unsorted_keys_labels;
   cudf::table const&  _keys;
 
   index_vec_pointer   _group_offsets;

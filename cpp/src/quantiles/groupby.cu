@@ -38,28 +38,28 @@
 
 namespace {
 
-/**---------------------------------------------------------------------------*
+/**
  * @brief Compares two `table` rows for equality as if the table were
  * ordered according to a specified permutation map.
  *
- *---------------------------------------------------------------------------**/
+ */
 template <bool nullable = true>
 struct permuted_row_equality_comparator {
   row_equality_comparator<nullable> _comparator;
   gdf_size_type const *_map;
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Construct a permuted_row_equality_comparator.
    *
    * @param t The `table` whose rows will be compared
    * @param map The permutation map that specifies the effective ordering of
    *`t`. Must be the same size as `t.num_rows()`
-   *---------------------------------------------------------------------------**/
+   */
   permuted_row_equality_comparator(device_table const &t,
                                    gdf_size_type const *map)
       : _comparator(t, t, true), _map{map} {}
 
-  /**---------------------------------------------------------------------------*
+  /**
    * @brief Returns true if the two rows at the specified indices in the permuted
    * order are equivalent.
    *
@@ -69,7 +69,7 @@ struct permuted_row_equality_comparator {
    * @param lhs The index of the first row
    * @param rhs The index of the second row
    * @returns if the two specified rows in the permuted order are equivalent
-   *---------------------------------------------------------------------------**/
+   */
   CUDA_DEVICE_CALLABLE
   bool operator()(gdf_size_type lhs, gdf_size_type rhs) {
     return _comparator(_map[lhs], _map[rhs]);
@@ -193,11 +193,11 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
   return group_labels;
 }
 
-gdf_column const& groupby::unsorted_labels() {
-  if (_unsorted_labels)
-    return *_unsorted_labels;
+gdf_column const& groupby::unsorted_keys_labels() {
+  if (_unsorted_keys_labels)
+    return *_unsorted_keys_labels;
 
-  _unsorted_labels = gdf_col_pointer(
+  _unsorted_keys_labels = gdf_col_pointer(
     new gdf_column(
       allocate_column(gdf_dtype_of<gdf_size_type>(),
                       key_sort_order().size,
@@ -206,8 +206,8 @@ gdf_column const& groupby::unsorted_labels() {
                       _stream)),
     [](gdf_column* col) { gdf_column_free(col); });
 
-  CUDA_TRY(cudaMemsetAsync(_unsorted_labels->valid, 0,
-                           gdf_num_bitmask_elements(_unsorted_labels->size), 
+  CUDA_TRY(cudaMemsetAsync(_unsorted_keys_labels->valid, 0,
+                           gdf_num_bitmask_elements(_unsorted_keys_labels->size), 
                            _stream));
   
   gdf_column group_labels_col{};
@@ -217,11 +217,11 @@ gdf_column const& groupby::unsorted_labels() {
                   group_labels().size(), 
                   gdf_dtype_of<gdf_size_type>());
   cudf::table t_sorted_labels{&group_labels_col};
-  cudf::table t_unsorted_labels{_unsorted_labels.get()};
+  cudf::table t_unsorted_keys_labels{_unsorted_keys_labels.get()};
   cudf::detail::scatter(&t_sorted_labels,
                         static_cast<gdf_size_type*>(key_sort_order().data),
-                        &t_unsorted_labels);
-  return *_unsorted_labels;
+                        &t_unsorted_keys_labels);
+  return *_unsorted_keys_labels;
 }
 
 
@@ -240,7 +240,7 @@ groupby::sort_values(gdf_column const& values) {
   // take const initializer list. Making separate constructors for const objects
   // is not supported in C++14 https://stackoverflow.com/a/49151864/3325146
   auto unsorted_values = const_cast<gdf_column*> (&values);
-  auto unsorted_label_col = const_cast<gdf_column*> (&unsorted_labels());
+  auto unsorted_label_col = const_cast<gdf_column*> (&unsorted_keys_labels());
   auto unsorted_table = cudf::table{unsorted_label_col, unsorted_values};
 
   gdf_context context{};
