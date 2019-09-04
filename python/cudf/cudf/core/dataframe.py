@@ -16,7 +16,6 @@ from types import GeneratorType
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from numba import cuda
 from pandas.api.types import is_dict_like
 
 from librmm_cffi import librmm as rmm
@@ -3499,11 +3498,9 @@ class DataFrame(object):
         result = getattr(arr, op)(**kwargs)
 
         if len(result.shape) == 1:
-            return Series(cuda.as_cuda_array(result), index=self.index)
+            return Series(result, index=self.index)
         else:
-            return DataFrame.from_gpu_matrix(
-                cuda.as_cuda_array(result)
-            ).set_index(self.index)
+            return DataFrame.from_gpu_matrix(result).set_index(self.index)
 
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
