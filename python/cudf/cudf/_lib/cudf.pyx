@@ -27,6 +27,7 @@ dtypes = {
     np.float64: GDF_FLOAT64,
     np.float32: GDF_FLOAT32,
     np.int64: GDF_INT64,
+    np.longlong: GDF_INT64,
     np.int32: GDF_INT32,
     np.int16: GDF_INT16,
     np.int8: GDF_INT8,
@@ -221,7 +222,7 @@ cdef set_scalar_value(gdf_scalar *scalar, val):
         scalar.data.fp64 = val
     elif val.dtype.type == np.float32:
         scalar.data.fp32 = val
-    elif val.dtype.type == np.int64:
+    elif val.dtype.type == np.int64 or val.dtype.type == np.longlong:
         scalar.data.si64 = val
     elif val.dtype.type == np.int32:
         scalar.data.si32 = val
