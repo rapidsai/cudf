@@ -60,7 +60,7 @@ struct permuted_row_equality_comparator {
       : _comparator(t, t, true), _map{map} {}
 
   /**---------------------------------------------------------------------------*
-   * @brief Computes if the two rows at the specified indices in the permuted
+   * @brief Returns true if the two rows at the specified indices in the permuted
    * order are equivalent.
    *
    * For example, comparing rows `i` and `j` is

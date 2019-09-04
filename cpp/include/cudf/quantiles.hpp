@@ -36,13 +36,14 @@ enum interpolation{
 
 /**
  * @brief  Computes exact quantile
- * computes quantile as double. This function works with arithmetic colum.
  *
- * @param[in] input column
- * @param[in] precision: type of quantile method calculation
- * @param[in] requested quantile in [0,1]
- * @param[out] result the result as double. The type can be changed in future
- * @param[in] struct with additional info
+ * Computes quantile using double precision. This function works only with arithmetic columns.
+ *
+ * @param[in] col_in input column
+ * @param[in] interpolation Method to use for interpolating quantiles that lie between points
+ * @param[in] q requested quantile in [0,1]
+ * @param[out] result The value at the requested quantile
+ * @param[in] ctxt Options
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
@@ -78,9 +79,8 @@ gdf_error quantile_approx(gdf_column* col_in,
  * result is an interpolation of values at index i and j, using the method 
  * specified in @p interpolation. Nulls are always ignored in @p values.
  * 
- * The resulting quantile(s) for all groups will be returned in a single column. When more than one quantile is 
- * requested, each group's result will be stored contiguously in the same order specified in `quantiles`. 
- * strided format.
+ * Returns the resulting quantile(s) for all groups in a single column. When more than one quantile is 
+ * requested, each group's results are stored contiguously in the same order specified in `quantiles`. 
  * 
  * Illustration:
  * ```
