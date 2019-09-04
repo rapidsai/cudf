@@ -44,6 +44,7 @@
 - PR #2697 Ensure csv reader sets datetime column time units
 - PR #2698 Return RangeIndex from contiguous slice of RangeIndex
 - PR #2672 Fix null and integer handling in round
+- PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 
 
 # cuDF 0.9.0 (Date TBD)
