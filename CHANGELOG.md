@@ -9,6 +9,7 @@
 - PR #2559 Add Series.tolist()
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2674 Add __contains__ for Index/Series/Column
+- PR #2722 Add Java bindings for NVTX ranges
 
 ## Improvements
 
@@ -93,6 +94,7 @@
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
+- PR #2394 Move `rapidsai/custrings` into `cudf`
 
 ## Improvements
 
