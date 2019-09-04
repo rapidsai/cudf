@@ -23,6 +23,9 @@
  using cudf::test::column_wrapper;
  using cudf::test::scalar_wrapper;
 
+ namespace
+ {
+
  template <typename ColumnType>
  cudf::test::column_wrapper<ColumnType> make_column_wrapper(
    std::vector<ColumnType> data,
@@ -34,6 +37,29 @@
      [mask](gdf_size_type row){ return mask[row]; }
    );
  }
+
+template <typename ColumnType>
+void test(
+  gdf_index_type period,
+  scalar_wrapper<ColumnType> fill_value,
+  column_wrapper<ColumnType> source_column,
+  column_wrapper<ColumnType> expect_column
+)
+{
+  cudf::table source{source_column.get()};
+  cudf::table expect{expect_column.get()};
+
+  auto shifted = cudf::shift(source, period, fill_value);
+
+  auto actual_column = *shifted.get_column(0);
+
+  print_gdf_column(source_column.get());
+  print_gdf_column(expect_column.get());
+  print_gdf_column(&actual_column);
+
+  ASSERT_EQ(expect_column, *shifted.get_column(0));
+}
+
  
 class ShiftTest : public GdfTest {};
 
@@ -45,20 +71,46 @@ TEST_F(ShiftTest, positive)
   );
 
   auto expect_column = make_column_wrapper<int32_t>(
-    {9, 8, 7, 8, 5, 6, 5, 4, 1},
+    {0, 0, 9, 8, 7, 6, 5, 4, 3},
     {0, 0, 0, 1, 0, 1, 1, 1, 0}
   );
 
-  cudf::table source{source_column.get()};
-  cudf::table expect{expect_column.get()};
+  test(
+    2,
+    scalar_wrapper<int32_t>(0, false),
+    source_column,
+    expect_column
+  );
+}
 
-  auto shifted = cudf::shift(source, 2, scalar_wrapper<int32_t>{0, false});
+TEST_F(ShiftTest, negative)
+{
+  auto source_column = make_column_wrapper<int32_t>(
+    {9, 8, 7, 6, 5, 4, 3, 2, 1},
+    {0, 1, 0, 1, 1, 1, 0, 1, 0}
+  );
 
-  auto actual_column = *shifted.get_column(0);
+  auto expect_column = make_column_wrapper<int32_t>(
+    {7, 6, 5, 4, 3, 2, 1, 0, 0},
+    {0, 1, 1, 1, 0, 1, 0, 0, 0}
+  );
 
-  print_gdf_column(source_column.get());
-  print_gdf_column(expect_column.get());
-  print_gdf_column(&actual_column);
+  test(-2, scalar_wrapper<int32_t>(0, false), source_column, expect_column);
+}
 
-  ASSERT_EQ(expect_column, *shifted.get_column(0));
+TEST_F(ShiftTest, valid_fill)
+{
+  auto source_column = make_column_wrapper<int32_t>(
+    {9, 8, 7, 6, 5, 4, 3, 2, 1},
+    {0, 1, 0, 1, 1, 1, 0, 1, 0}
+  );
+
+  auto expect_column = make_column_wrapper<int32_t>(
+    {5, 5, 5, 9, 8, 7, 6, 5, 4},
+    {1, 1, 1, 0, 1, 0, 1, 1, 1}
+  );
+
+  test(3, scalar_wrapper<int32_t>{5, true}, source_column, expect_column);
+}
+
 }
