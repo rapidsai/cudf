@@ -56,7 +56,6 @@ struct intrle_enc_state_s
     uint32_t delta_run;
     uint32_t literal_mode;
     uint32_t literal_w;
-    uint32_t mode1_w;
     uint32_t hdr_bytes;
     uint32_t pl_bytes;
     volatile uint32_t delta_map[(512 / 32) + 1];
@@ -344,6 +343,39 @@ static inline __device__ void StoreBytesBigEndian(uint8_t *dst, T v, uint32_t w)
     }
 }
 
+
+// Combine and store bits for symbol widths less than 8
+static inline __device__ void StoreBitsBigEndian(uint8_t *dst, uint32_t v, uint32_t w, int num_vals, int t)
+{
+    if (t <= (num_vals | 0x1f))
+    {
+        uint32_t mask;
+        if (w <= 1)
+        {
+            v = (v << 1) | (SHFL_XOR(v, 1) & 0x1);
+            v = (v << 2) | (SHFL_XOR(v, 2) & 0x3);
+            v = (v << 4) | (SHFL_XOR(v, 4) & 0xf);
+            mask = 0x7;
+        }
+        else if (w <= 2)
+        {
+            v = (v << 2) | (SHFL_XOR(v, 1) & 0x3);
+            v = (v << 4) | (SHFL_XOR(v, 2) & 0xf);
+            mask = 0x3;
+        }
+        else // if (w <= 4)
+        {
+            v = (v << 4) | (SHFL_XOR(v, 1) & 0xf);
+            mask = 0x1;
+        }
+        if (t < num_vals && !(t & mask))
+        {
+            dst[(t * w) >> 3] = static_cast<uint8_t>(v);
+        }
+    }
+}
+
+
 /**
  * @brief Integer RLEv2 encoder
  *
@@ -482,16 +514,26 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                         s->u.intrle.literal_mode = 3;
                         s->u.intrle.literal_w = bytecnt;
                     }
-                    else if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4)
-                    {
-                        s->u.intrle.literal_mode = 2;
-                        s->u.intrle.literal_w = mode2_w;
-                        s->u.intrle.mode1_w = mode1_w;
-                    }
                     else
                     {
-                        s->u.intrle.literal_mode = 1;
-                        s->u.intrle.literal_w = mode1_w;
+                        uint32_t range, w;
+                        if (mode1_w > mode2_w && (literal_run - 1) * (mode1_w - mode2_w) > 4)
+                        {
+                            s->u.intrle.literal_mode = 2;
+                            w = mode2_w;
+                            range = (uint32_t)vrange_mode2;
+                        }
+                        else
+                        {
+                            s->u.intrle.literal_mode = 1;
+                            w = mode1_w;
+                            range = (uint32_t)vrange_mode1;
+                        }
+                        if (w == 1)
+                            w = (range >= 16) ? w << 3 : (range >= 4) ? 4 : (range >= 2) ? 2 : 1;
+                        else
+                            w <<= 3; // bytes -> bits
+                        s->u.intrle.literal_w = w;
                     }
                 }
             }
@@ -504,21 +546,21 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 // Direct mode
                 if (!t)
                 {
-                    dst[0] = 0x40 + kByteLengthToRLEv2_W[literal_w] * 2 + ((literal_run - 1) >> 8);
+                    dst[0] = 0x40 + ((literal_w < 8) ? literal_w - 1 : kByteLengthToRLEv2_W[literal_w >> 3]) * 2 + ((literal_run - 1) >> 8);
                     dst[1] = (literal_run - 1) & 0xff;
                 }
                 dst += 2;
-                if (t < literal_run)
+                if (t < literal_run && is_signed)
                 {
-                    if (is_signed)
-                    {
-                        if (sizeof(T) > 4)
-                            v0 = zigzag64(v0);
-                        else
-                            v0 = zigzag32(v0);
-                    }
-                    StoreBytesBigEndian(dst + t * literal_w, v0, literal_w);
+                    if (sizeof(T) > 4)
+                        v0 = zigzag64(v0);
+                    else
+                        v0 = zigzag32(v0);
                 }
+                if (literal_w < 8)
+                    StoreBitsBigEndian(dst, (uint32_t)v0, literal_w, literal_run, t);
+                else if (t < literal_run)
+                    StoreBytesBigEndian(dst + t * (literal_w >> 3), v0, (literal_w >> 3));
             }
             else if (literal_mode == 2)
             {
@@ -531,12 +573,12 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 #if ZERO_PLL_WAR
                     // Insert a dummy zero patch
                     pll = 1;
-                    dst[4 + bw + literal_run * literal_w + 0] = 0;
-                    dst[4 + bw + literal_run * literal_w + 1] = 0;
+                    dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 0] = 0;
+                    dst[4 + bw + ((literal_run * literal_w + 7) >> 3) + 1] = 0;
                 #else
                     pll = 0;
                 #endif
-                    dst[0] = 0x80 + kByteLengthToRLEv2_W[literal_w] * 2 + ((literal_run - 1) >> 8);
+                    dst[0] = 0x80 + ((literal_w < 8) ? literal_w - 1 : kByteLengthToRLEv2_W[literal_w >> 3]) * 2 + ((literal_run - 1) >> 8);
                     dst[1] = (literal_run - 1) & 0xff;
                     dst[2] = ((bw - 1) << 5) | kByteLengthToRLEv2_W[pw];
                     dst[3] = ((pgw - 1) << 5) | pll;
@@ -551,11 +593,11 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 }
                 __syncthreads();
                 dst += s->u.intrle.hdr_bytes;
-                if (t < literal_run)
-                {
-                    v0 -= vmin;
-                    StoreBytesBigEndian(dst + t * literal_w, v0, literal_w);
-                }
+                v0 -= (t < literal_run) ? vmin : 0;
+                if (literal_w < 8)
+                    StoreBitsBigEndian(dst, (uint32_t)v0, literal_w, literal_run, t);
+                else if (t < literal_run)
+                    StoreBytesBigEndian(dst + t * (literal_w >> 3), v0, (literal_w >> 3));
                 dst += s->u.intrle.pl_bytes;
             }
             else
@@ -564,7 +606,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
                 dst += literal_w;
                 literal_w = 0;
             }
-            dst += literal_run * literal_w;
+            dst += (literal_run * literal_w + 7) >> 3;
             numvals -= literal_run;
             inpos += literal_run;
             out_cnt += literal_run;
