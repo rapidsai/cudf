@@ -317,21 +317,29 @@ def test_series_fillna_invalid_dtype(data_dtype):
 @pytest.mark.parametrize(
     "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.parametrize("fill_value", [100, 100.0, 100.5, 128, 128.0, 128.5])
+@pytest.mark.parametrize("fill_value", [100, 100.0, 100.5])
 def test_series_where(data_dtype, fill_value):
     psr = pd.Series(list(range(10)), dtype=data_dtype)
     sr = Series.from_pandas(psr)
 
     expect = psr.where(psr > 0, fill_value)
     got = sr.where(sr > 0, fill_value)
+    # Cudf behavior is to retain the column dtype unless fill_value is a float
+    # Pandas casts to int64 when fill_value = int(fill_value) (100.0 == 100)
+    if fill_value == 100.0:
+        expect = expect.astype(data_dtype)
     assert_eq(expect, got)
 
     expect = psr.where(psr < 0, fill_value)
     got = sr.where(sr < 0, fill_value)
+    if fill_value == 100.0:
+        expect = expect.astype(data_dtype)
     assert_eq(expect, got)
 
     expect = psr.where(psr == 0, fill_value)
     got = sr.where(sr == 0, fill_value)
+    if fill_value == 100.0:
+        expect = expect.astype(data_dtype)
     assert_eq(expect, got)
 
 
@@ -359,41 +367,13 @@ def test_series_with_nulls_where(fill_value):
     "data_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize(
-    "fill_value", [100, 128, 32768, 100.2, 128.0, 32768.1]
+    "to_replace,fill_value", [(5, 100), (0, 128), (9, 32768), (5, 100.2)]
 )
-def test_series_replace_dtype(data_dtype, fill_value):
+def test_series_replace_dtype(data_dtype, to_replace, fill_value):
     nps = np.arange(10, dtype=data_dtype)
     gs = Series(nps)
+    ps = pd.Series(nps)
     # Both scalar
-    got = gs.replace(np.random.randint(10), 100)
-    assert got.dtype == np.result_type(np.dtype("int8"), np.dtype(data_dtype))
-    got = gs.replace(np.random.randint(10), 128)
-    assert got.dtype == np.result_type(np.dtype("int16"), np.dtype(data_dtype))
-    got = gs.replace(np.random.randint(10), 32768)
-    assert got.dtype == np.result_type(np.dtype("int32"), np.dtype(data_dtype))
-    got = gs.replace(np.random.randint(10), 100.2)
-    if data_dtype == "float32":
-        assert got.dtype == np.dtype("float32")
-    else:
-        assert got.dtype == np.dtype("float64")
-
-    # to_replace is a list
-    got = gs.replace([1, 5, 9], 100)
-    assert got.dtype == np.result_type(np.dtype("int8"), np.dtype(data_dtype))
-    got = gs.replace([1, 5, 9], -129)
-    assert got.dtype == np.result_type(np.dtype("int16"), np.dtype(data_dtype))
-    got = gs.replace([1, 5, 9], 32768)
-    assert got.dtype == np.result_type(np.dtype("int32"), np.dtype(data_dtype))
-    got = gs.replace([1, 5, 9], 100.2)
-    if data_dtype == "float32":
-        assert got.dtype == np.dtype("float32")
-    else:
-        assert got.dtype == np.dtype("float64")
-
-    # Both lists
-    got = gs.replace([1, 5, 9], [100, None, -128])
-    assert got.dtype == np.result_type(np.dtype("int8"), np.dtype(data_dtype))
-    got = gs.replace([1, 5, 9], [127, -129, None])
-    assert got.dtype == np.result_type(np.dtype("int16"), np.dtype(data_dtype))
-    got = gs.replace([1, 5, 9], [None, -32769, 130])
-    assert got.dtype == np.result_type(np.dtype("int32"), np.dtype(data_dtype))
+    got = gs.replace(to_replace, fill_value)
+    expect = ps.replace(to_replace, fill_value)
+    assert_eq(got, expect)
