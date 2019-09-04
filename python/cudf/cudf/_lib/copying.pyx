@@ -10,7 +10,11 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
 import cudf.utils.utils as utils
-from cudf._lib.utils cimport columns_from_table, table_from_columns, table_to_dataframe
+from cudf._lib.utils cimport (
+    columns_from_table,
+    table_from_columns,
+    table_to_dataframe
+)
 from librmm_cffi import librmm as rmm
 from cudf._lib.includes.copying cimport (
     copy as cpp_copy,
@@ -364,4 +368,3 @@ def groups_to_tables(source, maps):
     out_maps = gdf_column_to_column(&c_out_map)
 
     return out_tables, out_maps
-

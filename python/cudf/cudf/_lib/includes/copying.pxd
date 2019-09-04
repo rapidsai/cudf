@@ -45,4 +45,3 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         const cudf_table& input_table,
         const gdf_column& scatter_map
     ) except +
-
