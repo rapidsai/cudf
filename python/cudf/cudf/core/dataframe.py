@@ -3528,7 +3528,7 @@ class DataFrame(object):
     def prod(self, axis=0, numeric_only=None, **kwargs):
         """Alias for product.
         """
-        return self.product(axis, numeric_only=None, **kwargs)
+        return self.product(axis, numeric_only=numeric_only, **kwargs)
 
     def cummin(self, **kwargs):
         return self._apply_support_method("cummin", **kwargs)
