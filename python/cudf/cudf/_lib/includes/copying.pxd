@@ -6,6 +6,8 @@
 # cython: language_level = 3
 
 from cudf._lib.cudf cimport *
+from libcpp.vector cimport vector
+from libcpp.pair cimport pair
 
 
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
@@ -33,3 +35,14 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         gdf_index_type out_end,
         gdf_index_type in_begin
     ) except +
+
+    cdef vector[cudf_table] scatter_to_tables(
+        const cudf_table& input_table,
+        const gdf_column& scatter_map
+    ) except +
+
+    cdef pair[vector[cudf_table], gdf_column] groups_to_tables(
+        const cudf_table& input_table,
+        const gdf_column& scatter_map
+    ) except +
+

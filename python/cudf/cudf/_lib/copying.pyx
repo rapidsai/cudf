@@ -10,13 +10,15 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
 import cudf.utils.utils as utils
-from cudf._lib.utils cimport columns_from_table, table_from_columns
+from cudf._lib.utils cimport columns_from_table, table_from_columns, table_to_dataframe
 from librmm_cffi import librmm as rmm
 from cudf._lib.includes.copying cimport (
     copy as cpp_copy,
     copy_range as cpp_copy_range,
     gather as cpp_gather,
     scatter as cpp_scatter,
+    scatter_to_tables as cpp_scatter_to_tables,
+    groups_to_tables as cpp_groups_to_tables
 )
 
 import numba
@@ -265,3 +267,101 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     free_column(c_out_col)
 
     return out_col
+
+
+def scatter_to_tables(source, maps):
+    """
+    Scatters rows to 'n' tables according to maps
+
+    Parameters
+    ----------
+    source : Column or list of Columns
+    maps : non-null column with values ranging from 0 to n-1 for each row
+
+    Returns
+    -------
+    list of scattered dataframes
+    """
+    from cudf.core.column import column
+
+    in_cols = source
+    for i, in_col in enumerate(in_cols):
+        in_cols[i] = column.as_column(in_cols[i])
+
+    if in_cols[0].dtype == np.dtype("object"):
+        in_size = in_cols[0].data.size()
+    else:
+        in_size = in_cols[0].data.size
+
+    maps = column.as_column(maps).astype("int32")
+
+    col_count=len(in_cols)
+    gather_count = len(maps)
+    assert(gather_count == in_size)
+
+    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
+    cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
+    cdef gdf_column* c_maps = column_view_from_column(maps)
+    cdef vector[cudf_table] c_out_tables
+
+    if gather_count != 0:
+        with nogil:
+            c_out_tables = cpp_scatter_to_tables(c_in_table[0], c_maps[0])
+
+    out_tables = []
+    for tab in c_out_tables:
+        out_tables.append(table_to_dataframe(&tab, int_col_names=False))
+
+    return out_tables
+
+
+def groups_to_tables(source, maps):
+    """
+    Groups rows to tables according to maps
+
+    Parameters
+    ----------
+    source : Column or list of Columns
+    maps : non-null column with values for each row
+
+    Returns
+    -------
+    list of grouped dataframes (whose length is n unique values in maps)
+    """
+
+    from cudf.core.column import column
+
+    in_cols = source
+    for i, in_col in enumerate(in_cols):
+        in_cols[i] = column.as_column(in_cols[i])
+
+    if in_cols[0].dtype == np.dtype("object"):
+        in_size = in_cols[0].data.size()
+    else:
+        in_size = in_cols[0].data.size
+
+    maps = column.as_column(maps).astype("int32")
+
+    col_count=len(in_cols)
+    gather_count = len(maps)
+    assert(gather_count == in_size)
+
+    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
+    cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
+    cdef gdf_column* c_maps = column_view_from_column(maps)
+    cdef vector[cudf_table] c_out_tables
+    cdef gdf_column c_out_map
+
+    if gather_count != 0:
+        with nogil:
+            result = cpp_groups_to_tables(c_in_table[0], c_maps[0])
+            c_out_tables = result.first
+            c_out_map = result.second
+
+    out_tables = []
+    for tab in c_out_tables:
+        out_tables.append(table_to_dataframe(&tab, int_col_names=False))
+    out_maps = gdf_column_to_column(&c_out_map)
+
+    return out_tables, out_maps
+
