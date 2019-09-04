@@ -1828,6 +1828,7 @@ class Series(object):
             self._column.round(decimals=decimals),
             name=self.name,
             index=self.index,
+            dtype=self.dtype,
         )
 
     def isin(self, test):
