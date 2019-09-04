@@ -99,7 +99,6 @@ gdf_column upper_bound(table const& t,
                        std::vector<bool> const& desc_flags,
                        bool nulls_as_largest = true);
 
-
 /**---------------------------------------------------------------------------*
  * @brief Find if the `value` is present in the `column`
  *
