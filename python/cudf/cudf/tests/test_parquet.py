@@ -118,7 +118,6 @@ def parquet_path_or_buf(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize(
     "columns",
@@ -169,12 +168,12 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
         gdf = cudf.read_parquet(fname, engine="cudf")
 
     if strings_to_categorical:
-        hash_ref = [989983842, 429364346, 1169108191]
-        assert gdf["b"].dtype == np.dtype("int32")
         if has_null:
-            assert gdf.to_pandas().at[1, "b"] == -1
+            hash_ref = [989983842, None, 1169108191]
         else:
-            assert list(gdf["b"]) == list(hash_ref)
+            hash_ref = [989983842, 429364346, 1169108191]
+        assert gdf["b"].dtype == np.dtype("int32")
+        assert list(gdf["b"]) == list(hash_ref)
     else:
         assert gdf["b"].dtype == np.dtype("object")
         assert list(gdf["b"]) == list(df["b"])
