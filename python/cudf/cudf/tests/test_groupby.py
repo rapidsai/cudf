@@ -6,7 +6,7 @@ import pytest
 from numpy.testing import assert_array_equal
 
 import cudf
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
 _now = np.datetime64("now")
@@ -790,7 +790,7 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+    assert isinstance(res.index, cudf.core.index.StringIndex)
 
 
 def test_groupby_size():
@@ -837,3 +837,36 @@ def test_groupby_datetime(nelem, as_index, agg):
         pdres = pdg.agg({"datetime": agg})
         gdres = gdg.agg({"datetime": agg})
     assert_eq(pdres, gdres, check_dtype=check_dtype)
+
+
+def test_groupby_dropna():
+    df = cudf.DataFrame({"a": [1, 1, None], "b": [1, 2, 3]})
+    expect = cudf.DataFrame(
+        {"b": [3, 3]}, index=cudf.Series([1, None], name="a")
+    )
+    got = df.groupby("a", dropna=False).sum()
+    assert_eq(expect, got)
+
+    df = cudf.DataFrame(
+        {"a": [1, 1, 1, None], "b": [1, None, 1, None], "c": [1, 2, 3, 4]}
+    )
+    idx = cudf.MultiIndex.from_frame(
+        df[["a", "b"]].drop_duplicates(), names=["a", "b"]
+    )
+    expect = cudf.DataFrame({"c": [4, 2, 4]}, index=idx)
+    got = df.groupby(["a", "b"], dropna=False).sum()
+
+    assert_eq(expect, got)
+
+
+def test_groupby_dropna_getattr():
+    df = cudf.DataFrame()
+    df["id"] = [0, 1, 1, None, None, 3, 3]
+    df["val"] = [0, 1, 1, 2, 2, 3, 3]
+    got = df.groupby("id", dropna=False).val.sum()
+
+    expect = cudf.Series(
+        [0, 2, 6, 4], name="val", index=cudf.Series([0, 1, 3, None], name="id")
+    )
+
+    assert_eq(expect, got)

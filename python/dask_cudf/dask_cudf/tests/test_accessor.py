@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
-from cudf.dataframe import Series
+from cudf import Series
 
 import dask_cudf as dgd
 

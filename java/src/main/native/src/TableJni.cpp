@@ -97,7 +97,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfOrderBy(
     auto is_descending = cudf::jni::copy_to_device(env, n_is_descending);
 
     cudf::table *input_table = reinterpret_cast<cudf::table *>(j_input_table);
-    cudf::jni::output_table output(env, input_table);
+    cudf::jni::output_table output(env, input_table, true);
 
     bool are_nulls_smallest = static_cast<bool>(j_are_nulls_smallest);
 
@@ -129,6 +129,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfOrderBy(
 
     cudf::table *cudf_table = output.get_cudf_table();
 
+    // gather handles string categories
     gather(input_table, col_data.get(), cudf_table);
 
     return output.get_native_handles_and_release();
@@ -219,7 +220,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadCSV(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length) {
+    jlong buffer, jlong buffer_length, jint unit) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -256,6 +257,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
     read_arg.skip_rows = -1;
     read_arg.num_rows = -1;
     read_arg.strings_to_categorical = false;
+    read_arg.timestamp_unit = static_cast<gdf_time_unit>(unit);
 
     cudf::table result = read_parquet(read_arg);
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
@@ -268,7 +270,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadParquet(
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     JNIEnv *env, jclass j_class_object, jobjectArray filter_col_names, jstring inputfilepath,
-    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes) {
+    jlong buffer, jlong buffer_length, jboolean usingNumPyTypes, jint unit) {
   bool read_buffer = true;
   if (buffer == 0) {
     JNI_NULL_CHECK(env, inputfilepath, "input file or buffer must be supplied", NULL);
@@ -304,6 +306,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     read_arg.num_rows = -1;
     read_arg.use_index = false;
     read_arg.use_np_dtypes = static_cast<bool>(usingNumPyTypes);
+    read_arg.timestamp_unit = static_cast<gdf_time_unit>(unit);
 
     cudf::table result = read_orc(read_arg);
     cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
@@ -440,8 +443,12 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_concatenate(JNIEnv *env, 
     std::vector<gdf_column *> concat_input_ptrs(tables.size());
     for (int col_idx = 0; col_idx < num_columns; ++col_idx) {
       outcols.emplace_back(total_size, tables[0]->get_column(col_idx)->dtype,
-                           need_validity[col_idx]);
+                           need_validity[col_idx], true);
       outcol_ptrs[col_idx] = outcols[col_idx].get();
+      if (outcol_ptrs[col_idx]->dtype == GDF_TIMESTAMP) {
+        outcol_ptrs[col_idx]->dtype_info.time_unit =
+            tables[0]->get_column(col_idx)->dtype_info.time_unit;
+      }
       for (int table_idx = 0; table_idx < tables.size(); ++table_idx) {
         concat_input_ptrs[table_idx] = tables[table_idx]->get_column(col_idx);
       }

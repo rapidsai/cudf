@@ -24,10 +24,8 @@ namespace io {
 namespace orc {
 namespace gpu {
 
-#define DECIMALS_AS_FLOAT64     1     // 0: store decimals as INT64, 1: store decimals as FLOAT64
-
-#define ORC_TS_CLKRATE          1000  // Rate of the output timestamp clock (1000=milliseconds, 1000000000=nanoseconds)
-
+// Decimal output type (0: INT64, 1: FLOAT64)
+#define DECIMALS_AS_FLOAT64 1
 
 struct CompressedStreamInfo {
   CompressedStreamInfo() = default;
@@ -101,6 +99,7 @@ struct ColumnDesc
     uint8_t type_kind;                          // column data type (orc::TypeKind)
     uint8_t dtype_len;                          // data type length (for types that can be mapped to different sizes)
     uint8_t decimal_scale;                      // number of fractional decimal digits for decimal type
+    int32_t ts_clock_rate;                      // output timestamp clock frequency (0=default, 1000=ms, 1000000000=ns)
 };
 
 
