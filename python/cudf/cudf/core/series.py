@@ -128,6 +128,9 @@ class Series(object):
         self._index = RangeIndex(len(data)) if index is None else index
         self._name = name
 
+    def __contains__(self, item):
+        return item in self._index
+
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
         return cls(s, nan_as_null=nan_as_null)
@@ -445,6 +448,16 @@ class Series(object):
         else:
             out = ["" if v is None else str(v) for v in values]
         return out
+
+    def tolist(self):
+        """
+        Return a list type from series data.
+
+        Returns
+        -------
+        list
+        """
+        return self.to_arrow().to_pylist()
 
     def head(self, n=5):
         return self.iloc[:n]
@@ -1184,8 +1197,13 @@ class Series(object):
             if all_nan:
                 new_value = [other] * len(to_replace)
             else:
+                # pre-determining the dtype to match the pandas's output
+                typ = to_replace.dtype
+                if np.dtype(type(other)).kind in "f" and typ.kind in "i":
+                    typ = np.int64 if other == int(other) else np.float64
+
                 new_value = utils.scalar_broadcast_to(
-                    other, (len(to_replace),), np.dtype(type(other))
+                    other, (len(to_replace),), np.dtype(typ)
                 )
         else:
             raise NotImplementedError(
@@ -1195,13 +1213,7 @@ class Series(object):
         result = self._column.find_and_replace(
             to_replace, new_value, all_nan=all_nan
         )
-        if (
-            np.dtype(type(other)).kind in "f"
-            and to_replace.dtype.kind in "i"
-            and other == int(other)
-        ):
-            # Matching dtype to pandas output
-            result = result.astype("int64")
+
         # To replace nulls:: If there are nulls in `cond` series, then we will
         # fill them with `False`, which means, by default, elements containing
         # nulls, are failing the given condition.

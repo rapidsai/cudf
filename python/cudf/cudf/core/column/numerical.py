@@ -17,7 +17,6 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
-    min_signed_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
@@ -45,14 +44,25 @@ class NumericalColumn(column.TypedColumnBase):
         """
         Returns True if column contains item, else False.
         """
-        item_found = False
+        # Handles improper item types
+        # Fails if item is of type None, so the handler.
         try:
-            if self.find_first_value(item):
-                item_found = True
-        except ValueError:
-            """This means value not found"""
-
-        return item_found
+            if np.can_cast(item, self.data.mem.dtype):
+                item = self.data.mem.dtype.type(item)
+            else:
+                return False
+        except Exception:
+            return False
+        # Issue with cudautils with bool araray, always returns True.
+        if self.data.mem.dtype == np.bool:
+            return (
+                cudautils.find_first(
+                    self.data.mem.view("int8"), item.view("int8")
+                )
+                != -1
+            )
+        else:
+            return cudautils.find_first(self.data.mem, item) != -1
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
@@ -87,10 +97,10 @@ class NumericalColumn(column.TypedColumnBase):
         if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
-                if (
+                if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
-                ) and (tmp.dtype in int_dtypes):
+                ):
                     out_dtype = np.dtype("float_")
             return _numeric_column_binop(
                 lhs=self,
@@ -299,25 +309,10 @@ class NumericalColumn(column.TypedColumnBase):
         Return col with *to_replace* replaced with *value*.
         """
         to_replace_col = column.as_column(to_replace)
-        to_replace_dtype = min_signed_column_type(to_replace_col)
-        if np.issubdtype(to_replace_dtype, np.floating) and np.issubdtype(
-            self.dtype, np.floating
-        ):
-            to_replace_dtype = self.dtype
-        to_replace_col = to_replace_col.astype(to_replace_dtype)
-
         replacement_dtype = self.dtype if all_nan else None
         replacement_col = column.as_column(
             replacement, dtype=replacement_dtype
         )
-        if not all_nan:
-            replacement_dtype = min_signed_column_type(replacement_col)
-            if np.issubdtype(replacement_dtype, np.floating) and np.issubdtype(
-                self.dtype, np.floating
-            ):
-                replacement_dtype = self.dtype
-            replacement_col = replacement_col.astype(replacement_dtype)
-
         replaced = self.copy()
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
@@ -325,6 +320,8 @@ class NumericalColumn(column.TypedColumnBase):
         output = libcudf.replace.replace(
             replaced, to_replace_col, replacement_col
         )
+        if not (self.dtype.kind in "i" and output.dtype.kind in "f"):
+            output = output.astype(self.dtype)
         return output
 
     def fillna(self, fill_value, inplace=False):
