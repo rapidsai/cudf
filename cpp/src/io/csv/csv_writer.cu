@@ -35,6 +35,7 @@ struct column_to_strings_fn
     gdf_size_type row_offset, rows;
     const char* true_string;
     const char* false_string;
+
     template<typename T>
     NVStrings* operator()()
     {
@@ -238,7 +239,7 @@ gdf_error write_csv(csv_write_arg* args)
 {
     // when args becomes a struct/class these can be modified
     auto columns = args->columns;
-    unsigned int count = (unsigned int)args->num_cols;
+    int count = args->num_cols;
     gdf_size_type total_rows = columns[0]->size;
     const char* filepath = args->filepath;
     char delimiter[2] = {',','\0'};
@@ -299,7 +300,7 @@ gdf_error write_csv(csv_write_arg* args)
         rmm::device_vector<int> string_lengths(rows*count);  // matrix of lengths
         int* d_string_lengths = string_lengths.data().get(); // each string length in each row,column
         size_t memsize = 0;
-        for( unsigned int idx=0; idx < count; ++idx )
+        for( int idx=0; idx < count; ++idx )
         {
             const gdf_column* col = columns[idx];
             const char* delim = ((idx+1)<count ? delimiter : terminator);
@@ -337,8 +338,8 @@ gdf_error write_csv(csv_write_arg* args)
             rmm::device_vector<size_t> sums(rows);
             size_t* d_sums = sums.data().get();
             // do vertical scan -- add up lengths in each column
-            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), rows,
-                [d_sums, d_string_lengths, rows, count, d_string_locations] __device__ (unsigned int idx) {
+            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<gdf_size_type>(0), rows,
+                [d_sums, d_string_lengths, rows, count, d_string_locations] __device__ (gdf_size_type idx) {
                     size_t sum = 0;
                     for( int column=0; column < count; ++column )
                     {
@@ -351,15 +352,9 @@ gdf_error write_csv(csv_write_arg* args)
             // scan these intermediate sums
             thrust::exclusive_scan(execpol->on(0), sums.begin(), sums.end(), sums.begin());
             // finish off the full scan by adding the intermediate sums to each element
-            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), rows,
-                [d_sums, rows, count, d_string_locations] __device__ (unsigned int idx) {
-                    size_t column_sum = d_sums[idx];
-                    for( int column=0; column < count; ++column )
-                    {
-                        int columnar_index = (column*rows) + idx;
-                        size_t sum = d_string_locations[columnar_index] + column_sum;
-                        d_string_locations[columnar_index] = sum;
-                    }
+            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<int>(0), rows*count,
+                [d_sums, rows, d_string_locations] __device__ (int idx) {
+                    d_string_locations[idx] += d_sums[idx % rows]; 
                 });
         }
         rmm::device_vector<char> csv_data(memsize); // this will hold the csv data
@@ -368,7 +363,7 @@ gdf_error write_csv(csv_write_arg* args)
         {
             rmm::device_vector<std::pair<const char*,size_t> > indices(rows); // this is used to retrieve pointers
             std::pair<const char*,size_t>* d_indices = indices.data().get();  // to each element in strings instance
-            for( unsigned int idx=0; idx < count; ++idx )
+            for( int idx=0; idx < count; ++idx )
             {
                 const gdf_column* col = columns[idx];
                 const char* delim = ((idx+1)<count ? delimiter : terminator);
@@ -378,8 +373,8 @@ gdf_error write_csv(csv_write_arg* args)
                     size_t* row_offsets = d_string_locations + (idx*rows);
                     strs->create_index(d_indices); // get the internal pointers
                     // copy each string over to its correct position in csv_data memory
-                    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0),rows,
-                        [row_offsets, d_csv_data, d_indices] __device__ (unsigned int jdx) {
+                    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<gdf_size_type>(0), rows,
+                        [row_offsets, d_csv_data, d_indices] __device__ (gdf_size_type jdx) {
                             memcpy(d_csv_data+row_offsets[jdx],d_indices[jdx].first,d_indices[jdx].second);
                     });
                     NVStrings::destroy(strs);
@@ -390,7 +385,7 @@ gdf_error write_csv(csv_write_arg* args)
         // first write the header
         if(include_header)
         {
-            for( unsigned int idx=0; idx < count; ++idx )
+            for( int idx=0; idx < count; ++idx )
             {
                 const gdf_column* col = columns[idx];
                 const char* delim = ((idx+1)<count ? delimiter : terminator);
