@@ -265,6 +265,13 @@ class NumericalColumn(column.TypedColumnBase):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
+        if decimals < 0:
+            msg = "Decimal values < 0 are not yet supported."
+            raise NotImplementedError(msg)
+
+        if np.issubdtype(self.dtype, np.integer):
+            return self
+
         data = Buffer(cudautils.apply_round(self.data.mem, decimals))
         return self.replace(data=data)
 
