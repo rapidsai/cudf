@@ -99,5 +99,24 @@ gdf_column upper_bound(table const& t,
                        std::vector<bool> const& desc_flags,
                        bool nulls_as_largest = true);
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Find if the `value` is present in the `column`
+ *
+ * @example:
+ *
+ *  Single Column:
+ *      idx      0   1   2   3   4
+ *   column = { 10, 20, 20, 30, 50 }
+ *  Scalar:
+ *   value = { 20 }
+ *   result = true
+ *
+ * @param column   A gdf column
+ * @param value    A scalar value to be searched in `column`
+ *
+ * @return bool    If `value` is found in `column` true, else false.
+ *---------------------------------------------------------------------------**/
+bool contains(gdf_column const& column, gdf_scalar const& value);
 } // namespace cudf
 

@@ -19,6 +19,7 @@
 #include <table/legacy/device_table_row_operators.cuh>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <utilities/column_utils.hpp>
+#include <io/utilities/wrapper_utils.hpp>
 
 #include <cudf/search.hpp>
 #include <cudf/copying.hpp>
@@ -129,4 +130,53 @@ gdf_column upper_bound(table const& t,
   return detail::search_ordered(t, values, false, desc_flags, nulls_as_largest);
 }
 
+template <bool nullable = true>
+struct compare_with_value{
+
+            compare_with_value(device_table t, device_table val, bool nulls_are_equal = true)
+                : compare(t, val, nulls_are_equal) {}
+
+            __device__ bool operator()(gdf_index_type i){
+               return compare(i, 0);
+            }
+            row_equality_comparator<nullable> compare;
+};
+
+bool contains(gdf_column const& column, gdf_scalar const& value)
+{
+  // No element to compare against
+  if (column.size == 0 || value.is_valid == false) {
+      return false;
+  }
+
+  cudaStream_t stream = 0;
+  // Create column with scalar's data
+  gdf_column_wrapper val (1, value.dtype, gdf_dtype_extra_info{}, "");
+  RMM_TRY(RMM_ALLOC(&val.get()->data, cudf::size_of(value.dtype), stream));
+  cudaMemcpyAsync(val.get()->data, (void*) &value.data,
+                  cudf::size_of(value.dtype), cudaMemcpyHostToDevice, stream);
+
+  gdf_column* tmp_column = const_cast<gdf_column *> (&column);
+  gdf_column* tmp_value = val.get();
+
+  // Creating a single column device table
+  auto d_t = device_table::create(1, &tmp_column, stream);
+  auto d_value = device_table::create(1, &tmp_value, stream);
+  auto data_it = thrust::make_counting_iterator(0);
+
+  if (column.null_count > 0) {
+    auto eq_op = compare_with_value<true>(*d_t, *d_value, true);
+
+    return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                          data_it, data_it + column.size,
+                          eq_op);
+  }
+  else {
+    auto eq_op = compare_with_value<false>(*d_t, *d_value, true);
+
+    return thrust::any_of(rmm::exec_policy(stream)->on(stream),
+                          data_it, data_it + column.size,
+                          eq_op);
+  }
+}
 } // namespace cudf
