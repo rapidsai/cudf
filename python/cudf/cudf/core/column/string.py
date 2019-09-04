@@ -151,9 +151,9 @@ class StringMethods(object):
             others = others.data
         elif isinstance(others, StringMethods):
             """
-            If others is a StringMethods then get 
-            the nvstrings object from _parent, and 
-            go ahead with concatenation 
+            If others is a StringMethods then get
+            the nvstrings object from _parent, and
+            go ahead with concatenation
             """
             others = others._parent.data
         elif is_list_like(others) and others:

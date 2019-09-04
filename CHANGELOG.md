@@ -40,7 +40,7 @@
 - PR #2679 AVRO reader: fix cuda errors when decoding compressed streams
 - PR #2651 Remove nvidia driver installation from ci/cpu/build.sh
 - PR #2697 Ensure csv reader sets datetime column time units
-
+- PR #2716 Added support for `StringMethods` in string methods
 
 # cuDF 0.9.0 (Date TBD)
 
