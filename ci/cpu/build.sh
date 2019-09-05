@@ -25,11 +25,9 @@ export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
 export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
 
 # If nightly build, append current YYMMDD to version
-#### NOTE: if statement disabled during testing to trigger on PR for validation
-#if [ ! -z "$NIGHTLY_UPLOAD_KEY" ] ; then
-  TS=`date +%y%m%d`
-  export VERSION_SUFFIX="${TS}"
-#fi
+if [ ! -z "$NIGHTLY_UPLOAD_KEY" ] ; then
+  export VERSION_SUFFIX=`date +%y%m%d`
+fi
 
 ################################################################################
 # SETUP - Check environment
