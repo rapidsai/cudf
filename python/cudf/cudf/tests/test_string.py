@@ -409,6 +409,18 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
     assert_eq(expect, got)
 
 
+@pytest.mark.xfail(raises=ValueError)
+@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
+def test_string_cat(ps_gs, sep, na_rep):
+    ps, gs = ps_gs
+
+    got = gs.str.cat(gs.str, sep=sep, na_rep=na_rep)
+    expect = ps.str.cat(ps.str, sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+
 @pytest.mark.xfail(raises=(NotImplementedError, AttributeError))
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
 def test_string_join(ps_gs, sep):

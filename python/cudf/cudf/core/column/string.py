@@ -151,11 +151,11 @@ class StringMethods(object):
             others = others.data
         elif isinstance(others, StringMethods):
             """
-            If others is a StringMethods then get
-            the nvstrings object from _parent, and
-            go ahead with concatenation
+            If others is a StringMethods then
+            raise an exception
             """
-            others = others._parent.data
+            raise ValueError("series.str is an accessor," +\
+                             " not an array-like of strings.")
         elif is_list_like(others) and others:
             """
             If others is a list-like object (in our case lists & tuples)
