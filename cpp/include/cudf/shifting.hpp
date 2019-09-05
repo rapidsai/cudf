@@ -21,7 +21,17 @@
 
 namespace cudf {
 
-table shift(table const &in_table, gdf_index_type offset, gdf_scalar const &fill_value);
+table shift(
+    table const& in_table,
+    gdf_index_type offset,
+    gdf_scalar const& fill_value
+);
+
+gdf_column shift(
+    gdf_column const& in_column,
+    gdf_index_type offset,
+    gdf_scalar const& fill_value
+);
 
 } // namespace cudf
 

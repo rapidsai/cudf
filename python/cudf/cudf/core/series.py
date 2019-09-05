@@ -2221,7 +2221,9 @@ class Series(object):
 
         return Series(numerical.digitize(self._column, bins, right))
 
-    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+    def shift(self, periods=1, freq=None, axis=0, fill_value=-1):
+        fill_value =  self.dtype.type(fill_value)
+        return Series(libcudf.shifting.shift_column(self._column, periods, fill_value), name=self.name)
         """Shift values of an input array by periods positions and store the
         output in a new array.
 
@@ -2232,15 +2234,16 @@ class Series(object):
         """
         assert axis in (None, 0) and freq is None and fill_value is None
 
-        if self.null_count != 0:
-            raise AssertionError(
-                "Shift currently requires columns with no " "null values"
-            )
+        # if self.null_count != 0:
+        #     raise AssertionError(
+        #         "Shift currently requires columns with no " "null values"
+        #     )
 
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError(
                 "Shift currently only supports " "numeric dtypes"
             )
+
         if periods == 0:
             return self
 

@@ -29,9 +29,9 @@
 namespace cudf {
 
 table shift(
-  table const &in_table,
+  const table& in_table,
   gdf_index_type period,
-  gdf_scalar const &fill_value
+  const gdf_scalar& fill_value
 )
 {
   cudf::table out_table = cudf::copy(in_table);
@@ -48,6 +48,17 @@ table shift(
   }
 
   return out_table;
+}
+
+gdf_column shift(
+  const gdf_column& in_column,
+  gdf_index_type period,
+  const gdf_scalar& fill_value
+)
+{
+  auto out_column = cudf::copy(in_column);
+  detail::shift(&out_column, in_column, period, fill_value);
+  return out_column;
 }
 
 }; // namespace cudf
