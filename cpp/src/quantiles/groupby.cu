@@ -83,6 +83,27 @@ namespace cudf {
 
 namespace detail {
 
+gdf_size_type groupby::num_keys() {
+  if (_num_keys > -1)
+    return _num_keys;
+
+  if (has_nulls(_keys)) {
+    auto keys_row_bitmask = row_bitmask(_keys, _stream);
+
+    // The number of rows w/o null values `n` is indicated by number of valid bits
+    // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
+    // in the sorted order are considered for grouping. 
+    CUDF_TRY(gdf_count_nonzero_mask(
+      reinterpret_cast<gdf_valid_type*>(keys_row_bitmask.data().get()),
+      _keys.num_rows(),
+      &_num_keys));
+  } else {
+    _num_keys = _keys.num_rows();
+  }
+
+  return _num_keys; 
+}
+
 gdf_column const& groupby::key_sort_order() {
   if (_key_sorted_order)
     return *_key_sorted_order;
@@ -127,13 +148,6 @@ gdf_column const& groupby::key_sort_order() {
                           _key_sorted_order.get(), &temp_ctx));
 
     // All rows with one or more null values are at the end of the resulting sorted order.
-    // The number of rows w/o null values `n` is indicated by number of valid bits
-    // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
-    // in the sorted order are considered for grouping. 
-    CUDF_TRY(gdf_count_nonzero_mask(
-        reinterpret_cast<gdf_valid_type*>(keys_row_bitmask.data().get()),
-        _keys.num_rows(),
-        &_num_keys));
   }
 
   return *_key_sorted_order;

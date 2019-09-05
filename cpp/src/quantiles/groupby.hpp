@@ -54,7 +54,7 @@ struct groupby {
   groupby(cudf::table const& keys, bool include_nulls = false,
           cudaStream_t stream = 0)
   : _keys(keys)
-  , _num_keys(keys.num_rows())
+  , _num_keys(-1)
   , _include_nulls(include_nulls)
   , _stream(stream)
   {};
@@ -96,7 +96,7 @@ struct groupby {
    * When include_nulls = false, returned value is the number of rows in `keys`
    *  in which no element is null
    */
-  gdf_size_type num_keys() { return _num_keys; }
+  gdf_size_type num_keys();
 
   /**
    * @brief Get the sorted order of `keys`.
@@ -111,7 +111,7 @@ struct groupby {
   gdf_column const& key_sort_order();
 
   /**
-   * @brief Get the group offsets.
+   * @brief Get each group's offset into the sorted order of `keys`. 
    * 
    * Computes and stores the group offsets on first invocation and returns
    * the stored group offsets on subsequent calls.
@@ -141,7 +141,7 @@ struct groupby {
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
    * 
-   * @return column of group labels in the order of the unsorted key table
+   * @return A nullable column of `GDF_INT32` containing group labels in the order of the unsorted key table
    */
   gdf_column const& unsorted_keys_labels();
 
