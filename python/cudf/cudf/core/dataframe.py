@@ -3493,8 +3493,8 @@ class DataFrame(object):
         arr = cp.asarray(coerced.as_gpu_matrix())
         return arr
 
-    def _apply_rowwise_op(self, op, axis=1, numeric_only=None, **kwargs):
-        kwargs["axis"] = axis
+    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
+        kwargs["axis"] = 1
         arr = self._prepare_for_rowwise_method(numeric_only=numeric_only)
         result = getattr(arr, op)(**kwargs)
 
