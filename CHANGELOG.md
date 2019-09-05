@@ -49,6 +49,7 @@
 - PR #2672 Fix null and integer handling in round
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 - PR #2731 Fix building of benchmarks
+- PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 
 
 # cuDF 0.9.0 (Date TBD)
