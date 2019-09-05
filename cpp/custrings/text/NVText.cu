@@ -21,8 +21,8 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
-#include "NVStrings.h"
-#include "NVText.h"
+#include "nvstrings/NVStrings.h"
+#include "nvstrings/NVText.h"
 
 #include "../custring_view.cuh"
 #include "../util.h"

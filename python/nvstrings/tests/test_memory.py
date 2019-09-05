@@ -26,5 +26,5 @@ def test_free():
 
 
 def test_check_device_memory():
-    assert_eq(nvstrings.to_device(["a"*7]).device_memory(), 24)
-    assert_eq(nvstrings.to_device(["ab"*7]).device_memory(), 32)
+    assert_eq(nvstrings.to_device(["a" * 7]).device_memory(), 24)
+    assert_eq(nvstrings.to_device(["ab" * 7]).device_memory(), 32)

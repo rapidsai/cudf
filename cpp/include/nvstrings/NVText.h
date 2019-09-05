@@ -32,13 +32,6 @@ class NVText
 public:
 
     /**
-     * @brief Tokenize all the strings into a single instance. Delimiter is whitespace.
-     * @param strs Strings to tokenize.
-     * @return Just the tokens. No empty or null strings.
-     */
-    static NVStrings* tokenize(NVStrings& strs);
-
-    /**
      * @brief Tokenize all the strings into a single instance.
      * @param strs Strings to tokenize.
      * @param delimiter String or character used to identify tokens. Default is whitespace.

@@ -658,7 +658,7 @@ void NVStrings::compute_statistics(StringsStatistics& stats)
             d_values[idx] = dstr ? dstr->size() : 0;
         });
     {
-        auto nend = thrust::remove(execpol->on(0), values.begin(), values.end(), 0L );
+        thrust::remove(execpol->on(0), values.begin(), values.end(), 0L );
         stats.bytes_max = *thrust::max_element(execpol->on(0), values.begin(), values.end());
         stats.bytes_min = *thrust::min_element(execpol->on(0), values.begin(), values.end());
         stats.total_bytes = thrust::reduce(execpol->on(0), values.begin(), values.end());
@@ -672,7 +672,7 @@ void NVStrings::compute_statistics(StringsStatistics& stats)
             d_values[idx] = dstr ? dstr->chars_count() : 0;
         });
     {
-        auto nend = thrust::remove(execpol->on(0), values.begin(), values.end(), 0L );
+        thrust::remove(execpol->on(0), values.begin(), values.end(), 0L );
         stats.chars_max = *thrust::max_element(execpol->on(0), values.begin(), values.end());
         stats.chars_min = *thrust::min_element(execpol->on(0), values.begin(), values.end());
         stats.total_chars = thrust::reduce(execpol->on(0), values.begin(), values.end());
@@ -686,7 +686,7 @@ void NVStrings::compute_statistics(StringsStatistics& stats)
             d_values[idx] = dstr ? dstr->alloc_size() : 0;
         });
     {
-        auto nend = thrust::remove(execpol->on(0), values.begin(), values.end(), 0L );
+        thrust::remove(execpol->on(0), values.begin(), values.end(), 0L );
         stats.mem_max = *thrust::max_element(execpol->on(0), values.begin(), values.end());
         stats.mem_min = *thrust::min_element(execpol->on(0), values.begin(), values.end());
         size_t mem_total = thrust::reduce(execpol->on(0), values.begin(), values.end());
