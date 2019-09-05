@@ -24,16 +24,27 @@ void shift(
   gdf_column *out_column,
   gdf_column const &in_column,
   gdf_index_type period,
-  gdf_scalar const &fill_value
+  gdf_scalar const *fill_value
 )
 {
-  if (period >= 0) {
-    detail::copy_range(out_column, detail::scalar_factory{fill_value}, 0, period);
+  if (period >= 0)
+  {
     detail::copy_range(out_column, detail::column_range_factory{in_column, 0}, period, out_column->size);
-  } else {
+
+    if (fill_value != nullptr)
+    {
+      detail::copy_range(out_column, detail::scalar_factory{*fill_value}, 0, period);
+    }
+  }
+  else
+  {
     auto mid = out_column->size + period;
     detail::copy_range(out_column, detail::column_range_factory{in_column, -period}, 0, mid);
-    detail::copy_range(out_column, detail::scalar_factory{fill_value}, mid, out_column->size);
+
+    if (fill_value != nullptr)
+    {
+      detail::copy_range(out_column, detail::scalar_factory{*fill_value}, mid, out_column->size);
+    }
   }
 }
     

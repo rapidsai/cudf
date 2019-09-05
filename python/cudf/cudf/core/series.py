@@ -2221,7 +2221,7 @@ class Series(object):
 
         return Series(numerical.digitize(self._column, bins, right))
 
-    def shift(self, periods=1, freq=None, axis=0, fill_value=-1):
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
         """Shift values of an input array by periods positions and store the
         output in a new array.
 
@@ -2240,7 +2240,8 @@ class Series(object):
         if periods == 0:
             return self
 
-        fill_value =  self.dtype.type(fill_value)
+        if fill_value is not None:
+            fill_value = self.dtype.type(fill_value)
 
         column = libcudf.shifting.shift_column(self._column, periods, fill_value)
 

@@ -19,15 +19,18 @@ def shift_column(input_column, period, fill_value):
         Call cudf::shift
     """
     cdef gdf_column* c_input_column = column_view_from_column(input_column)
-    cdef gdf_scalar* c_fill_value = gdf_scalar_from_scalar(fill_value)
-    cdef gdf_column c_output_column
     cdef gdf_index_type c_period = period
+    cdef gdf_scalar* c_fill_value = NULL
+    cdef gdf_column c_output_column
+
+    if fill_value is not None:
+        c_fill_value = gdf_scalar_from_scalar(fill_value)
 
     with nogil:
         c_output_column = cpp_shift(
             c_input_column[0],
             c_period,
-            c_fill_value[0]
+            c_fill_value
         )
 
     free_column(c_input_column)

@@ -2377,11 +2377,10 @@ def test_shift(dtype, period):
     gdf = DataFrame({"a": data})
     pdf = pd.DataFrame({"a": data})
 
-    shifted_outcome = gdf.a.shift(period)
+    shifted_outcome = gdf.a.shift(period, fill_value=-1)
     expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
 
     assert_eq(shifted_outcome, expected_outcome)
-
 
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
