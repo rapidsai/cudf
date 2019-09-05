@@ -31,7 +31,7 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
- 
+
 namespace cudf {
 namespace detail {
 
@@ -114,8 +114,7 @@ get_unique_ordered_indices(const cudf::table& key_columns,
   auto device_input_table = device_table::create(key_columns, stream);
   rmm::device_vector<gdf_size_type>::iterator result_end;
 
-  bool nullable = device_input_table->has_nulls();
-  if(nullable) {
+  if(cudf::has_nulls(key_columns)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
     result_end = unique_copy(exec,
@@ -160,20 +159,19 @@ gdf_size_type unique_count(const cudf::table& key_columns,
         &context));
 
   // count unique elements
-  auto sorted_index_iter = sorted_indices.begin();
+  auto sorted_row_index = sorted_indices.begin();
   auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(key_columns, stream);
 
-  bool nullable = device_input_table->has_nulls();
   if(cudf::has_nulls(key_columns)) {
     auto comp = row_equality_comparator<true>(*device_input_table,
         nulls_are_equal);
     return thrust::count_if(exec,
               thrust::counting_iterator<gdf_size_type>(0),
               thrust::counting_iterator<gdf_size_type>(nrows),
-              [first = sorted_index_iter, comp] 
+              [sorted_row_index, comp] 
               __device__ (const gdf_size_type i) {
-              return (i == 0 || !comp(first[i], first[i-1]));
+              return (i == 0 || !comp(sorted_row_index[i], sorted_row_index[i-1]));
               });
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table,
@@ -181,9 +179,9 @@ gdf_size_type unique_count(const cudf::table& key_columns,
     return thrust::count_if(exec,
               thrust::counting_iterator<gdf_size_type>(0),
               thrust::counting_iterator<gdf_size_type>(nrows),
-              [first = sorted_index_iter, comp]
+              [sorted_row_index, comp]
               __device__ (const gdf_size_type i) {
-              return (i == 0 || !comp(first[i], first[i-1]));
+              return (i == 0 || !comp(sorted_row_index[i], sorted_row_index[i-1]));
               });
   }
 }
