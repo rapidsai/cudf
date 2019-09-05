@@ -18,7 +18,6 @@
  #include <tests/utilities/column_wrapper.cuh>
  #include <tests/utilities/scalar_wrapper.cuh>
  #include <cudf/copying.hpp>
- #include <cudf/shifting.hpp>
  
  using cudf::test::column_wrapper;
  using cudf::test::scalar_wrapper;

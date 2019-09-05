@@ -17,6 +17,7 @@ from cudf._lib.includes.copying cimport (
     copy_range as cpp_copy_range,
     gather as cpp_gather,
     scatter as cpp_scatter,
+    shift as cpp_shift
 )
 
 import numba
@@ -265,3 +266,27 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     free_column(c_out_col)
 
     return out_col
+
+
+def shift_column(input_column, period, fill_value):
+    """
+        Call cudf::shift
+    """
+    cdef gdf_column* c_input_column = column_view_from_column(input_column)
+    cdef gdf_index_type c_period = period
+    cdef gdf_scalar* c_fill_value = NULL
+    cdef gdf_column c_output_columncpp_shift
+
+    if fill_value is not None:
+        c_fill_value = gdf_scalar_from_scalar(fill_value)
+
+    with nogil:
+        c_output_column = cpp_shift(
+            c_input_column[0],
+            c_period,
+            c_fill_value
+        )
+
+    free_column(c_input_column)
+
+    return gdf_column_to_column(&c_output_column)

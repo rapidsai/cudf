@@ -344,6 +344,14 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices);
 
+
+
+gdf_column shift(
+    gdf_column const& in_column,
+    gdf_index_type offset,
+    gdf_scalar const* fill_value
+);
+
 }  // namespace cudf
 
 #endif  // COPYING_H

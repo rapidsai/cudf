@@ -403,14 +403,14 @@ add_library(cudf
             src/copying/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
+            src/copying/shift.cu
             src/copying/slice.cu
             src/copying/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
-            src/search/search.cu
-            src/shifting/shift.cu)
+            src/search/search.cu)
 
 # Override RPATH for nvstrings
 set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")

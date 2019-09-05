@@ -325,6 +325,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/shift_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
@@ -434,14 +435,6 @@ set(SEARCH_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
-
-###################################################################################################
-# - search test -----------------------------------------------------------------------------------
-
-set(SHIFT_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/shifting/shift_test.cu")
-
-ConfigureTest(SHIFT_TEST "${SHIFT_TEST_SRC}")
 
 
 

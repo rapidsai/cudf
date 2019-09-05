@@ -2243,7 +2243,7 @@ class Series(object):
         if fill_value is not None:
             fill_value = self.dtype.type(fill_value)
 
-        column = libcudf.shifting.shift_column(self._column, periods, fill_value)
+        column = libcudf.copying.shift_column(self._column, periods, fill_value)
 
         return Series(column, name=self.name, index=self.index)
 

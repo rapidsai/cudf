@@ -33,3 +33,9 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         gdf_index_type out_end,
         gdf_index_type in_begin
     ) except +
+
+    cdef gdf_column shift(
+        const gdf_column& in_column,
+        gdf_index_type offset,
+        const gdf_scalar* fill_value
+    ) except +
