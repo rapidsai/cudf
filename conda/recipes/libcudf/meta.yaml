@@ -20,6 +20,7 @@ build:
     - CXX
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
+    - GIT_DESCRIBE_TAG
   run_exports:
     - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
