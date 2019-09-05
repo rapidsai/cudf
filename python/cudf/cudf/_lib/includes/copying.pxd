@@ -40,8 +40,3 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         const cudf_table& input_table,
         const gdf_column& scatter_map
     ) except +
-
-    cdef pair[vector[cudf_table], gdf_column] groups_to_tables(
-        const cudf_table& input_table,
-        const gdf_column& scatter_map
-    ) except +

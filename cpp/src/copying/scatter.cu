@@ -195,70 +195,40 @@ inline bool validate_scatter_map(gdf_column const& scatter_map,
 }
 
 template<typename InputIterator>
-void groups_to_tables(cudf::table const& input_table,
-                       gdf_index_type* scatter_array,
-                       InputIterator first,
-                       InputIterator last,
-                       std::vector<cudf::table>& output_tables) {
-  size_t num_groups = thrust::distance(first, last);
+std::vector<cudf::table>
+ordered_scatter_to_tables(cudf::table const& input_table,
+                          gdf_index_type const* scatter_array,
+                          InputIterator const order_first,
+                          InputIterator const order_last) {
+  size_t num_groups = thrust::distance(order_first, order_last);
+  std::vector<cudf::table> output_tables;
   output_tables.reserve(num_groups);
-  for (auto iter=first; iter<last; iter++) {
-    typename std::iterator_traits<InputIterator>::value_type groupid = *iter; 
+  for (auto iter=order_first; iter<order_last; iter++) {
+    auto groupid = *iter; 
     output_tables.push_back(
         detail::copy_if(input_table,
           [scatter_array, groupid] __device__ (gdf_index_type row)
           { return groupid==scatter_array[row];
           }));
   }
+  return output_tables;
 }
 
-void groups_to_tables(cudf::table const& input_table,
-                     gdf_column const& scatter_map,
-                     std::vector<cudf::table>& output_tables,
-                     gdf_column& output_tables_map) {
-
+std::vector<cudf::table>
+scatter_to_tables(cudf::table const& input_table,
+                  gdf_column const& scatter_map) {
   if(not validate_scatter_map(scatter_map, input_table)) 
-    return;
-
-  gdf_index_type* scatter_array =
-    static_cast<gdf_index_type*>(scatter_map.data);
-  //extract unique groups
-  rmm::device_vector<gdf_index_type> unique_ids(scatter_map.size);
-  thrust::copy(scatter_array, scatter_array+scatter_map.size, unique_ids.begin());
-  thrust::sort(unique_ids.begin(), unique_ids.end());
-  auto last = thrust::unique(unique_ids.begin(), unique_ids.end());
-  gdf_index_type num_groups = thrust::distance(unique_ids.begin(), last);
-
-  groups_to_tables(input_table,
-                    scatter_array,
-                    unique_ids.begin(),
-                    last,
-                    output_tables);
-
-  gdf_column unique_ids_col{};
-  CUDF_TRY(gdf_column_view(&unique_ids_col,
-                           (void*)(unique_ids.data().get()), nullptr, num_groups,
-                           scatter_map.dtype));
-  output_tables_map = copy(unique_ids_col);
-}
-
-void scatter_to_tables(cudf::table const& input_table,
-                       gdf_column const& scatter_map,
-                       std::vector<cudf::table>& output_tables) {
-
-  if(not validate_scatter_map(scatter_map, input_table)) 
-    return;
+    return std::vector<cudf::table>();
 
   gdf_index_type* scatter_array =
     static_cast<gdf_index_type*>(scatter_map.data);
 
   gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
   gdf_index_type num_groups = max_elem.data.si32 + 1;
-  groups_to_tables(input_table,
+  return ordered_scatter_to_tables(input_table,
                     scatter_array,
                     thrust::counting_iterator<gdf_index_type>(0),
-                    thrust::counting_iterator<gdf_index_type>(num_groups),
-                    output_tables);
+                    thrust::counting_iterator<gdf_index_type>(num_groups));
 }
 
 }  // namespace detail
@@ -314,22 +284,9 @@ table scatter(std::vector<gdf_scalar> const& source,
   return output;
 }
 
-std::pair<std::vector<cudf::table>, gdf_column>
-groups_to_tables(cudf::table const& input_table, gdf_column const& scatter_map) {
-
-  std::vector<cudf::table> output_tables;
-  gdf_column output_tables_map;
-  detail::groups_to_tables(input_table, scatter_map, 
-      output_tables, output_tables_map);
-  return std::make_pair(output_tables, output_tables_map);
-}
-
 std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map) {
-
-  std::vector<cudf::table> output_tables;
-  detail::scatter_to_tables(input_table, scatter_map, output_tables);
-  return output_tables;
+  return detail::scatter_to_tables(input_table, scatter_map);
 }
 
 }  // namespace cudf

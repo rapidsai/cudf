@@ -277,8 +277,6 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * size), the outcome is undefined.
  * When the indices array is empty, an empty vector of columns is returned.
  *
- * The output columns will be allocated by the function.
- *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
  * indices: {1, 3, 5, 9, 2, 4, 8, 8}
@@ -318,8 +316,6 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
  * When any of the values in the pair don't belong to the range[0, number of
  * rows in input table), the outcome is undefined.
  * When the indices array is empty, an empty vector of tables is returned.
- *
- * The columns of output tables will be allocated by the function.
  *
  * Example:
  * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
@@ -369,10 +365,8 @@ std::vector<cudf::table> slice(cudf::table const &        input_table,
  * size), the outcome is undefined.
  * When the indices array is empty, an empty vector of columns is returned.
  *
- * It is required that the output columns will be preallocated. The size of each
- * of the columns can be of different value. The number of columns must be equal
- * to the number of indices in the array plus one. The datatypes of the input
- * column and the output columns must be the same.
+ * The size of each of the columns can be of different value. The number of
+ * columns must be equal to the number of indices in the array plus one. 
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
@@ -420,10 +414,8 @@ std::vector<gdf_column*> split(gdf_column const &         input_column,
  * rows in input table), the outcome is undefined.
  * When the indices array is empty, an empty vector of tables is returned.
  *
- * It is required that the columns of output tables will be preallocated. The
- * number of rows in each table can be of different value. The number of tables
- * must be equal to the number of indices in the array plus one. The datatypes
- * of the columns of input tables and the output tables must be the same.
+ * The number of rows in each table can be of different value. The number of
+ * tables must be equal to the number of indices in the array plus one.
  *
  * Example:
  * input:   [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
@@ -455,8 +447,6 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  *
  * `scatter_map` is a non-nullable column of `GDF_INT32` elements whose `size`
  * equals `input.num_rows()` and contains numbers in range of [0, n].
- * The datatypes of the columns of input tables and the output tables must be
- * the same.
  *
  * Exceptional cases for the scatter_map column are:
  * @throws cudf::logic_error when `scatter_map.dtype != GDF_INT32`
@@ -484,47 +474,6 @@ std::vector<cudf::table> split(cudf::table const &        input_table,
  */
 std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map);
-
- /**
- * @brief Groups the rows of a table into `n` tables according to a
- * `scatter_map` group indices
- *
- * This function groups rows with same group index to individual tables where
- * group index of each row is given by input `scatter_map` column.
- *
- * The function returns vector of scattered tables and unique group indices in
- * order matching to order of scattered tables in the vector.
- * i.e. table[i] contains rows with group index of row[i] in unique group
- * indices. 
- * The number of output tables will be equal to number of unique group indices.
- * The vector of output tables is similar to scatter_to_tables but without empty
- * tables.
- * The length of `scatter_map` column must be equal to number of rows. 
- *
- * Exceptional cases for the scatter_map column are:
- * @throws cudf::logic_error when `scatter_map.dtype != GDF_INT32`
- * @throws cudf::logic_error when `scatter_map.size != input_table.num_rows()`
- * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
- *
- * Example:
- * input:      [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
- *              { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
- * scatter_map: {25, 33, 25,  3, 33, 33,  0,  1,  1,  1}
- * output:     {[{22}, {2}], [{24, 26, 28}, {4, 6, 2}], [{16}, {4}], 
- *              [{10, 14}, {1, 3}], [{12, 18, 20}, {2, null, 0}]}
- *
- * @param[in] input_table  Table whose rows will be partitioned into a set of
- * tables according to `scatter_map`
- * @param[in] scatter_map    Non-nullable column of `GDF_INT32` values that map
- * each row in `input` into one of the output tables in the input table
- *
- * @return A std::pair of (std::vector of `table`s, and `gdf_column` `output_map`),
- * `output_map` contains unique elements of `scatter_map`.
- * `table` `i` contains all rows `j` from `input_table` where 
- * `scatter_map[j] == output_map[i]`. 
- */
-std::pair<std::vector<cudf::table>, gdf_column>
-groups_to_tables(cudf::table const& input_table, gdf_column const& scatter_map);
 }  // namespace cudf
 
 #endif  // COPYING_H

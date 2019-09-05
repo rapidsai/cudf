@@ -112,9 +112,7 @@ struct table {
    *---------------------------------------------------------------------------**/
   gdf_column* get_column(gdf_index_type index) {
     assert(index < _columns.size());
-    if(index < gdf_size_type(_columns.size()))
-      return _columns[index];
-    return nullptr;
+    return _columns[index];
   }
 
   /**---------------------------------------------------------------------------*
@@ -125,9 +123,7 @@ struct table {
    *---------------------------------------------------------------------------**/
   gdf_column const* get_column(gdf_index_type index) const {
     assert(index < _columns.size());
-    if(index < gdf_size_type(_columns.size()))
-      return _columns[index];
-    return nullptr;
+    return _columns[index];
   }
 
   /**---------------------------------------------------------------------------*

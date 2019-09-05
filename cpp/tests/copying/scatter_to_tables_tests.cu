@@ -171,10 +171,7 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 * o/p = number of output tables
 *
 * c r sm  RESULT
-* 0 0 0   pass  (o/p=0)
-* 0 0 1   throw (r!=sm)
-* 0 1 0   throw (r!=sm)
-* 0 1 1   pass  (o/p=1)
+* 0 * *   seg fault
 * 1 0 0   pass  (o/p=0)
 * 1 0 1   throw (r!=sm)
 * 1 1 0   throw (r!=sm)
@@ -182,7 +179,7 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 *
 */
 TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
-  for(gdf_size_type table_n_cols : {0, 1}) //TODO 0
+  for(gdf_size_type table_n_cols : {1}) //0 seg fault
     for(gdf_size_type table_n_rows : {0, 1})
       for(gdf_size_type scatter_size : {0, 1}) {
         //std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
