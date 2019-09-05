@@ -3464,7 +3464,7 @@ class DataFrame(object):
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "Row-wise operations currently require CuPy. "
-                " Please install CuPy to use these operations."
+                "Please install CuPy to use these operations."
             )
             raise ImportError(msg)
 
@@ -3473,7 +3473,8 @@ class DataFrame(object):
         if any([col.null_count for col in self._columns]):
             msg = (
                 "Row-wise operations do not currently support columns with "
-                "null values. Consider using .fillna() to fill null values."
+                "null values. Consider filtering or using .fillna() to "
+                "fill null values."
             )
             raise ValueError(msg)
 
