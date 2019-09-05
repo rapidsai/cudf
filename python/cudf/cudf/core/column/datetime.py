@@ -5,6 +5,8 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+from librmm_cffi import librmm as rmm
+
 import cudf._lib as libcudf
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
@@ -67,6 +69,8 @@ class DatetimeColumn(column.TypedColumnBase):
 
     @classmethod
     def from_numpy(cls, array):
+        from cudf.utils.cudautils import copy_array
+
         cast_dtype = array.dtype.type == np.int64
         if array.dtype.kind == "M":
             time_unit, _ = np.datetime_data(array.dtype)
@@ -82,10 +86,29 @@ class DatetimeColumn(column.TypedColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
+
+        pa_arr = pa.array(array)
+        buffers = pa_arr.buffers()
+        if buffers[0]:
+            mask_dev_array = utils.make_mask(len(pa_arr))
+            arrow_dev_array = rmm.to_device(
+                np.array(pa_arr.buffers()[0]).view("int8")
+            )
+            copy_array(arrow_dev_array, mask_dev_array)
+            mask = Buffer(mask_dev_array)
+        else:
+            mask = None
+
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
-        return cls(data=Buffer(array), dtype=array.dtype)
+
+        return cls(
+            data=Buffer(array),
+            mask=mask,
+            null_count=pa_arr.null_count,
+            dtype=array.dtype,
+        )
 
     @property
     def time_unit(self):

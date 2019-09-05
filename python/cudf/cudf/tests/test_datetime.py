@@ -397,3 +397,39 @@ def test_datetime_nunique(data, nulls):
     expected = psr.nunique()
     got = gsr.nunique()
     assert_eq(got, expected)
+
+
+testdata = [
+    (
+        Series(
+            ["2018-01-01", None, "2019-01-31", None, "2018-01-01"],
+            dtype="datetime64[ms]",
+        ),
+        True,
+    ),
+    (
+        Series(
+            [
+                "2018-01-01",
+                "2018-01-02",
+                "2019-01-31",
+                "2018-03-01",
+                "2018-01-01",
+            ],
+            dtype="datetime64[ms]",
+        ),
+        False,
+    ),
+]
+
+
+@pytest.mark.parametrize("data, expected", testdata)
+def test_datetime_has_null_test(data, expected):
+    pd_data = data.to_pandas()
+    count = pd_data.notna().value_counts()
+    expected_count = 0
+    if False in count.keys():
+        expected_count = count[False]
+
+    assert_eq(expected, data.has_null_mask)
+    assert_eq(expected_count, data.null_count)
