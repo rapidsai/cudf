@@ -21,6 +21,7 @@
 - PR #2632 Replace dask-cudf set_index code with upstream
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2728 Add YYMMDD to version tag for nightly conda packages
 
 ## Bug Fixes
 
