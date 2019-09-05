@@ -34,10 +34,11 @@
 
 #include <jit/launcher.h>
 #include <jit/type.h>
-#include <jit/types_h_jit.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 #include "jit/util/type.h"
+
+#include <types.h.jit>
 
 namespace
 {
