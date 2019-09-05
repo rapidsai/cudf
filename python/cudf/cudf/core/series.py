@@ -2222,8 +2222,6 @@ class Series(object):
         return Series(numerical.digitize(self._column, bins, right))
 
     def shift(self, periods=1, freq=None, axis=0, fill_value=-1):
-        fill_value =  self.dtype.type(fill_value)
-        return Series(libcudf.shifting.shift_column(self._column, periods, fill_value), name=self.name)
         """Shift values of an input array by periods positions and store the
         output in a new array.
 
@@ -2232,12 +2230,7 @@ class Series(object):
         Shift currently only supports float and integer dtype columns with
         no null values.
         """
-        assert axis in (None, 0) and freq is None and fill_value is None
-
-        # if self.null_count != 0:
-        #     raise AssertionError(
-        #         "Shift currently requires columns with no " "null values"
-        #     )
+        assert axis in (None, 0) and freq is None
 
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError(
@@ -2247,12 +2240,12 @@ class Series(object):
         if periods == 0:
             return self
 
-        input_dary = self.data.to_gpu_array()
-        output_dary = rmm.device_array_like(input_dary)
-        cudautils.gpu_shift.forall(output_dary.size)(
-            input_dary, output_dary, periods
-        )
-        return Series(output_dary, name=self.name, index=self.index)
+        fill_value =  self.dtype.type(fill_value)
+
+        column = libcudf.shifting.shift_column(self._column, periods, fill_value)
+
+        return Series(column, name=self.name, index=self.index)
+
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
