@@ -150,6 +150,21 @@ struct DictionaryChunk
 
 
 /**
+ * @brief Struct to describe a dictionary
+ **/
+struct StripeDictionary
+{
+    uint32_t *dict_data;                        // row indices of corresponding string (row from dictionary index)
+    uint32_t *dict_index;                       // dictionary index from row index
+    uint32_t start_chunk;                       // first chunk in stripe
+    uint32_t num_chunks;                        // number of chunks in the stripe
+    uint32_t num_strings;                       // number of unique strings in the dictionary
+    uint32_t dict_char_count;                   // total size of dictionary string data
+};
+
+
+
+/**
  * @brief Launches kernel for parsing the compressed stripe data
  *
  * @param[in] strm_info List of compressed streams
@@ -251,6 +266,23 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t
  **/
 cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns, uint32_t num_rowgroups, cudaStream_t stream = (cudaStream_t)0);
 
+
+/**
+ * @brief Launches kernel for building stripe dictionaries
+ *
+ * @param[in] stripes_dev StripeDictionary device array [stripe][column]
+ * @param[in] stripes_host StripeDictionary host array [stripe][column]
+ * @param[in] chunks DictionaryChunk device array [rowgroup][column]
+ * @param[in] num_stripes Number of stripes
+ * @param[in] num_rowgroups Number of row groups
+ * @param[in] num_columns Number of columns
+ * @param[in] max_chunks_in_stripe Maximum number of rowgroups per stripe
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks, DictionaryChunk *chunks_host,
+                                    uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, uint32_t max_chunks_in_stripe, cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu
 } // namespace orc
