@@ -22,6 +22,7 @@
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2733 Implemented a lazy import mechanism
 
 ## Bug Fixes
 
