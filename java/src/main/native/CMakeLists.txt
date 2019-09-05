@@ -136,17 +136,20 @@ endif (RMM_INCLUDE AND RMM_LIBRARY)
 # - NVStrings -------------------------------------------------------------------------------------
 
 find_path(NVSTRINGS_INCLUDE "nvstrings"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include"
+          HINTS "${PROJECT_SOURCE_DIR}/../../../../cpp/include"
+                "$ENV{NVSTRINGS_ROOT}/include"
                 "$ENV{CONDA_PREFIX}/include/nvstrings"
                 "$ENV{CONDA_PREFIX}/include")
 
 find_library(NVSTRINGS_LIBRARY "NVStrings"
              HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+                   "$ENV{CONDA_PREFIX}/lib"
+                   "../../../../cpp/build")
 
 find_library(NVCATEGORY_LIBRARY "NVCategory"
              HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+                   "$ENV{CONDA_PREFIX}/lib"
+                   "../../../../cpp/build")
 
 message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
 message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
