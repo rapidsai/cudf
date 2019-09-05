@@ -1463,14 +1463,10 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    try:
-        import cupy
-
-        _have_cupy = True
-    except ImportError:
-        _have_cupy = False
-    if not _have_cupy:
+    if not utils.IS_CUPY_AVAILABLE:
         pytest.skip("CuPy is not installed")
+
+    import cupy
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
