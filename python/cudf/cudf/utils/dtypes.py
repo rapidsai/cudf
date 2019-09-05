@@ -11,6 +11,7 @@ _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
     np.int64: pa.int64(),
+    np.longlong: pa.int64(),
     np.int32: pa.int32(),
     np.int16: pa.int16(),
     np.int8: pa.int8(),
