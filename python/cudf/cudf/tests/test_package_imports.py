@@ -67,14 +67,14 @@ def test_from_import_star():
     spec.loader.exec_module(module)
 
     varsLoaded = __getVarsLoaded(module)
-    assert varsLoaded == set(allPossibleCudfNamespaceVars)
+    assert varsLoaded == set(allPossibleCudfNamespaceVars)  # noqa: F821
 
 
 def test_from_import_names():
     """
     Ensure "from cudf import <name>" works
     """
-    from cudf import DataFrame, from_dlpack, arccos
+    from cudf import DataFrame, from_dlpack, arccos  # noqa: F401
     import cudf
 
     # Only names explicitly imported above should be present
@@ -103,7 +103,7 @@ def test_cuda_context_created():
     option in order to avoid importing modules that may create a CUDA context
     (via other tests and/or conftest.py)
     """
-    import cudf
+    import cudf  # noqa: F401
     import numba
     try :
         numba.cuda.current_context()
