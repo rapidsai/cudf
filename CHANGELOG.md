@@ -12,6 +12,7 @@
 - PR #2722 Add Java bindings for NVTX ranges
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
+- PR #2724 Add libcudf support for __contains__
 
 ## Improvements
 
@@ -49,6 +50,7 @@
 - PR #2698 Return RangeIndex from contiguous slice of RangeIndex
 - PR #2672 Fix null and integer handling in round
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
+- PR #2731 Fix building of benchmarks
 
 
 # cuDF 0.9.0 (21 Aug 2019)
@@ -97,7 +99,6 @@
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
-
 
 ## Improvements
 
@@ -157,7 +158,6 @@
 - PR #2432 Use pandas formatting for console, html, and latex output
 - PR #2573 Bump numba version to 0.45.1
 - PR #2606 Fix references to notebooks-contrib
-
 
 ## Bug Fixes
 
