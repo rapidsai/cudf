@@ -23,3 +23,8 @@ def test_free():
     # TODO: Check that GPU memory has been freed.
     data = nvstrings.to_device(["a", "b", "c", "d"])
     nvstrings.free(data)
+
+
+def test_check_device_memory():
+    assert_eq(nvstrings.to_device(["a"*7]).device_memory(), 24)
+    assert_eq(nvstrings.to_device(["ab"*7]).device_memory(), 32)
