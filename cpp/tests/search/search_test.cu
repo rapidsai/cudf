@@ -754,38 +754,6 @@ TEST_F(SearchTest, contains_empty_column)
     ASSERT_EQ(result, expect);
 }
 
-TEST_F(SearchTest, contains_float_value)
-{
-    using element_type = int64_t;
-    bool expect = false;
-    bool  result = false;
-
-    auto column = column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
-    auto value = scalar_wrapper<float> {23.0};
-
-    result = cudf::contains(
-        column.get()[0],
-        value.get()[0]);
-
-    ASSERT_EQ(result, expect);
-}
-
-TEST_F(SearchTest, contains_float_column)
-{
-    using element_type = int64_t;
-    bool expect = false;
-    bool  result = false;
-
-    auto column = column_wrapper<float> {0.0, 1.0, 17.0, 19.0, 23.0, 29.0, 71.0};
-    auto value = scalar_wrapper<element_type> {24};
-
-    result = cudf::contains(
-        column.get()[0],
-        value.get()[0]);
-
-    ASSERT_EQ(result, expect);
-}
-
 TEST_F(SearchTest, contains_nullable_column_true)
 {
     using element_type = int64_t;

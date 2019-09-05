@@ -100,7 +100,8 @@ gdf_column upper_bound(table const& t,
                        bool nulls_as_largest = true);
 
 /**---------------------------------------------------------------------------*
- * @brief Find if the `value` is present in the `column`
+ * @brief Find if the `value` is present in the `column` and dtype of both
+ * `value` and `column` should match.
  *
  * @example:
  *
@@ -112,7 +113,7 @@ gdf_column upper_bound(table const& t,
  *   result = true
  *
  * @param column   A gdf column
- * @param value    A scalar value to be searched in `column`
+ * @param value    A scalar value to search for in `column`
  *
  * @return bool    If `value` is found in `column` true, else false.
  *---------------------------------------------------------------------------**/
