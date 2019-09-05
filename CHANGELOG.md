@@ -10,6 +10,7 @@
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2674 Add __contains__ for Index/Series/Column
 - PR #2722 Add Java bindings for NVTX ranges
+- PR #2702 Add make_bool to dataset generation functions
 - PR #2691 Row-wise reduction and scan operations via CuPy
 
 ## Improvements
