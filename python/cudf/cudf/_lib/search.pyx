@@ -55,3 +55,24 @@ def search_sorted(column, values, side):
     free_table(c_values)
 
     return gdf_column_to_column(&c_out_col)
+
+
+def contains (column, item):
+    """Check whether column contains the value
+
+    Parameters
+    ----------
+    column : NumericalColumn
+        Column to search in
+    item :
+        value to be searched
+    """
+    if (len(column) == 0 or item is None):
+        return False
+
+    cdef gdf_column* col = column_view_from_column(column)
+    cdef gdf_scalar* item_scalar = gdf_scalar_from_scalar(item)
+
+    cdef bool result = cpp_search.contains(col[0], item_scalar[0])
+
+    return result
