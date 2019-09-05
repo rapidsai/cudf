@@ -88,7 +88,7 @@ def test_series_binop_scalar(nelem, binop, obj_class):
 _bitwise_binops = [operator.and_, operator.or_, operator.xor]
 
 
-_int_types = ["int8", "int16", "int32", "int64"]
+_int_types = ["int8", "int16", "int32", "int64", "longlong"]
 
 
 @pytest.mark.parametrize("obj_class", ["Series", "Index"])
@@ -195,6 +195,7 @@ def test_series_compare(cmpop, obj_class, dtype):
         "float32",
         "float64",
         "datetime64[ms]",
+        "longlong",
     ],
 )
 def test_series_compare_scalar(nelem, cmpop, obj_class, dtype):
