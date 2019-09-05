@@ -293,23 +293,4 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
   return cudf::detail::slice(input_column, indices, num_indices);
 }
 
-
-std::vector<cudf::table> slice(cudf::table const &        input_table,
-                               gdf_index_type const*      slice_ranges,
-                               gdf_size_type              num_indices) {
-  std::vector<std::vector<gdf_column*> > sliced_columns; //cols, slices
-  for (auto const& input_column : input_table) {
-    sliced_columns.push_back(cudf::detail::slice(*input_column, slice_ranges, num_indices));
-  }
-  std::vector<cudf::table> output_tables;
-  for (gdf_size_type slice_num = 0; slice_num < num_indices/2; slice_num++) {
-    std::vector<gdf_column*> output_columns(sliced_columns.size());
-    std::transform(sliced_columns.begin(), sliced_columns.end(),
-      output_columns.begin(), [slice_num](auto sliced_col)
-      { return sliced_col[slice_num]; });
-    output_tables.push_back(cudf::table(output_columns));
-  }
-  return output_tables;
-}
-
 } // namespace cudf

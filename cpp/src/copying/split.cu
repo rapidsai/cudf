@@ -17,7 +17,6 @@
  */
 
 #include <cudf/types.hpp>
-#include <cudf/copying.hpp>
 #include "slice.hpp"
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/error_utils.hpp>
@@ -52,20 +51,5 @@ std::vector<gdf_column*> split(gdf_column const &         input_column,
           slice_indices.size());
     }
 }
-
-std::vector<cudf::table> split(cudf::table const &        input_table,
-                               gdf_index_type const*      splits,
-                               gdf_size_type              num_splits) {
-
-    if (num_splits == 0 || splits == nullptr){
-      return std::vector<cudf::table>();
-    } else {
-      rmm::device_vector<gdf_index_type> slice_indices =
-        splits_to_slice_indices(splits, num_splits, input_table.num_rows()); 
-      return cudf::slice(input_table, slice_indices.data().get(),
-          slice_indices.size());
-    }
-}
-
 
 } // namespace cudf
