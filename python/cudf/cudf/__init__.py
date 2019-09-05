@@ -1,4 +1,3 @@
-##################################
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 from importlib import import_module
