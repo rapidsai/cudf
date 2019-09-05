@@ -133,6 +133,7 @@ struct groupby {
    */
   index_vector const& group_labels();
 
+ private:
   /**
    * @brief Get the group labels for unsorted keys
    * 
