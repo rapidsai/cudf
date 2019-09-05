@@ -103,6 +103,9 @@ gdf_column upper_bound(table const& t,
  * @brief Find if the `value` is present in the `column` and dtype of both
  * `value` and `column` should match.
  *
+ * @throws cudf::logic_error
+ * If dtype of `column` and `value` doesn't match
+ *
  * @example:
  *
  *  Single Column:
