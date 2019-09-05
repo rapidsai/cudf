@@ -10,6 +10,7 @@ def setup_module(module):
     in tests.
     """
     import cudf
+
     module.allPossibleCudfNamespaceVars = cudf.__all__
     del cudf
     sys.modules.pop("cudf")
@@ -29,8 +30,13 @@ def __getVarsLoaded(module):
     lazy-loading mechanism.
     """
     extraVars = ["import_module", "numba"]
-    return set([k for k in module.__dict__.keys()
-                if not(k.startswith("__") or (k in extraVars))])
+    return set(
+        [
+            k
+            for k in module.__dict__.keys()
+            if not (k.startswith("__") or (k in extraVars))
+        ]
+    )
 
 
 ########################################
@@ -42,6 +48,7 @@ def test_import_package_module():
     """
     exceptionRaised = None
     import cudf
+
     try:
         cudf.core
         cudf.datasets
@@ -62,7 +69,8 @@ def test_from_import_star():
     fakeModuleFile.file.flush()
     spec = importlib.util.spec_from_file_location(
         path.splitext(path.basename(fakeModuleFile.name))[0],
-        fakeModuleFile.name)
+        fakeModuleFile.name,
+    )
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
 
@@ -87,6 +95,7 @@ def test_access_names():
     Ensure "import cudf;cudf.<name>" works as expected.
     """
     import cudf
+
     cudf.Index
     cudf.read_avro
     cudf.arcsin
@@ -105,7 +114,8 @@ def test_cuda_context_created():
     """
     import cudf  # noqa: F401
     import numba
-    try :
+
+    try:
         numba.cuda.current_context()
     # the "cuda" attr of the numba module will not exist if a CUDA context was
     # not created

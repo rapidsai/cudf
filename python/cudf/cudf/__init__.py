@@ -26,17 +26,14 @@ import numba.cuda
 #
 __namespaceVarModMap = {
     "rmm": ("librmm_cffi", "librmm"),
-
     "core": (None,),
     "datasets": (None,),
-
     "DataFrame": ("cudf.core",),
     "Index": ("cudf.core",),
     "MultiIndex": ("cudf.core",),
     "Series": ("cudf.core",),
     "from_pandas": ("cudf.core",),
     "merge": ("cudf.core",),
-
     "arccos": ("cudf.core.ops",),
     "arcsin": ("cudf.core.ops",),
     "arctan": ("cudf.core.ops",),
@@ -49,11 +46,9 @@ __namespaceVarModMap = {
     "sin": ("cudf.core.ops",),
     "sqrt": ("cudf.core.ops",),
     "tan": ("cudf.core.ops",),
-
     "concat": ("cudf.core.reshape",),
     "get_dummies": ("cudf.core.reshape",),
     "melt": ("cudf.core.reshape",),
-
     "from_dlpack": ("cudf.io",),
     "read_avro": ("cudf.io",),
     "read_csv": ("cudf.io",),
@@ -70,6 +65,7 @@ __locals = locals()
 
 # Unconditionally create a CUDA context at import-time
 numba.cuda.current_context()
+
 
 def __getattr__(var):
     """
@@ -92,6 +88,7 @@ def __getattr__(var):
     # special case: compute __version__
     elif var == "__version__":
         from cudf._version import get_versions  # isort:skip
+
         val = get_versions()["version"]
 
     else:
