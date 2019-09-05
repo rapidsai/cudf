@@ -3,6 +3,8 @@
 
 from importlib import import_module
 
+import numba.cuda
+
 # Define a mapping between cudf namespace variables and the corresponding
 # package/module they're imported from. Actual imports of names into this
 # namespace occur when the names are accessed (eg. "import cudf; cudf.<name>")
@@ -68,7 +70,6 @@ __all__ = list(__namespaceVarModMap.keys())
 __locals = locals()
 
 # Unconditionally create a CUDA context at import-time
-import numba.cuda
 numba.cuda.current_context()
 
 def __getattr__(var):
@@ -91,7 +92,7 @@ def __getattr__(var):
 
     # special case: compute __version__
     elif var == "__version__":
-        from cudf._version import get_versions
+        from cudf._version import get_versions  # isort:skip
         val = get_versions()["version"]
 
     else:

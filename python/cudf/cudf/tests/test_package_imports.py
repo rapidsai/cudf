@@ -1,7 +1,7 @@
-import tempfile
 import importlib
-from os import path
 import sys
+import tempfile
+from os import path
 
 
 def setup_module(module):
