@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set cuda_version='.'.join(environ.get('CUDA_VERSION', '9.2').split('.')[:2]) %}
@@ -20,6 +20,7 @@ build:
     - CXX
     - CUDAHOSTCXX
     - PARALLEL_LEVEL
+    - VERSION_SUFFIX
   run_exports:
     - {{ pin_subpackage("libcudf", max_pin="x.x") }}
 
