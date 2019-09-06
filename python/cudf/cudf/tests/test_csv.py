@@ -1268,6 +1268,20 @@ def test_csv_reader_partial_dtype(dtype):
     assert all(names_df.dtypes == ["int16", "int32"])
 
 
+def test_csv_writer_file_handle(tmpdir):
+
+    df = pd.DataFrame({"a": [1, 2, 3], "b": ["xxx", "yyyy", "zzzzz"]})
+    gdf = cudf.from_pandas(df)
+
+    gdf_df_fname = tmpdir.join("gdf_df_1.csv")
+    with open(gdf_df_fname, "w") as f:
+        gdf.to_csv(path=f, index=False)
+    assert os.path.exists(gdf_df_fname)
+
+    gdf2 = pd.read_csv(gdf_df_fname)
+    assert_eq(gdf, gdf2)
+
+
 @pytest.mark.parametrize("dtype", dtypes)
 @pytest.mark.parametrize("nelem", nelem)
 def test_csv_writer_numeric_data(dtype, nelem, tmpdir):

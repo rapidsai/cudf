@@ -36,10 +36,6 @@ requirements:
     - cython >=0.29,<0.30
     - dlpack
 
-test:
-  commands:
-    - python -c "import cudf"
-
 about:
   home: http://rapids.ai/
   license: Apache-2.0

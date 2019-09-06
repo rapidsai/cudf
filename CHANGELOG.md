@@ -23,6 +23,7 @@
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2729 Handle file-handle input in to_csv
 - PR #2733 Implemented a lazy import mechanism
 
 ## Bug Fixes
@@ -51,6 +52,7 @@
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 - PR #2731 Fix building of benchmarks
 - PR #2736 Pin Jitify branch to v0.10 version
+- PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 
 
 # cuDF 0.9.0 (Date TBD)
