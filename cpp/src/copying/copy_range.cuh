@@ -24,6 +24,8 @@
 
 #include <cub/cub.cuh>
 
+#include <vector>
+
 namespace {
 
 using bit_mask::bit_mask_t;
@@ -164,6 +166,58 @@ struct copy_range_dispatch {
 
     CHECK_STREAM(stream);
   }
+
+  template <typename T>
+  void operator()(gdf_column *column,
+                  std::vector<gdf_index_type> const& beginings,
+                  std::vector<gdf_index_type> const& ends,
+                  cudaStream_t stream = 0)
+  {
+    static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
+      "copy_range_kernel assumes bitmask element size in bits == warp size");
+
+    auto input = factory.template make<T>(0); // need to add new make overload that takes index
+    auto kernel = copy_range_kernel<T, decltype(input), false>;
+
+    gdf_size_type *null_count = nullptr;
+
+    if (cudf::is_nullable(*column)) {
+      RMM_ALLOC(&null_count, sizeof(gdf_size_type), stream);
+      CUDA_TRY(cudaMemcpyAsync(null_count, &column->null_count, 
+                               sizeof(gdf_size_type), 
+                               cudaMemcpyHostToDevice,
+                               stream));
+      kernel = copy_range_kernel<T, decltype(input), true>;
+    }
+
+    for (size_t i = 0; i < beginings.size(); ++i) {
+      input = factory.template make<T>(i);
+
+      gdf_size_type num_items =
+        warp_size * cudf::util::div_rounding_up_safe(ends[i] - beginings[i], warp_size);
+      
+      if (num_items == 0) continue;
+
+      constexpr int block_size = 256;
+
+      cudf::util::cuda::grid_config_1d grid{num_items, block_size, 1};
+
+      T * __restrict__ data = static_cast<T*>(column->data);
+      bit_mask_t * __restrict__ bitmask =
+        reinterpret_cast<bit_mask_t*>(column->valid);
+    
+      kernel<<<grid.num_blocks, block_size, 0, stream>>>
+        (data, bitmask, null_count, beginings[i], ends[i], input);
+    }
+
+    if (null_count != nullptr) {
+      CUDA_TRY(cudaMemcpyAsync(&column->null_count, null_count,
+                               sizeof(gdf_size_type), cudaMemcpyDefault, stream));
+      RMM_FREE(null_count, stream);
+    }
+
+    CHECK_STREAM(stream);
+  }
 };
 
 }; // namespace anonymous
@@ -199,6 +253,27 @@ void copy_range(gdf_column *out_column, InputFunctor input,
   cudf::type_dispatcher(out_column->dtype,
                         copy_range_dispatch<InputFunctor>{input},
                         out_column, begin, end);
+
+  // synchronize nvcategory after filtering
+  if (out_column->dtype == GDF_STRING_CATEGORY) {
+    CUDF_EXPECTS(
+    GDF_SUCCESS ==
+      nvcategory_gather(out_column,
+                        static_cast<NVCategory *>(out_column->dtype_info.category)),
+      "could not set nvcategory");
+  }
+}
+
+template <typename InputFunctor>
+void copy_ranges(gdf_column *out_column, InputFunctor input,
+                 std::vector<gdf_index_type> const& beginings,
+                 std::vector<gdf_index_type> const& ends)
+{
+  validate(out_column);
+
+  cudf::type_dispatcher(out_column->dtype,
+                        copy_range_dispatch<InputFunctor>{input},
+                        out_column, beginings, ends);
 
   // synchronize nvcategory after filtering
   if (out_column->dtype == GDF_STRING_CATEGORY) {

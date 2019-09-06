@@ -19,6 +19,8 @@
 
 #include "cudf.h"
 
+#include <vector>
+
 namespace cudf {
 
 /**
@@ -38,6 +40,10 @@ namespace cudf {
  */
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end);
+
+void fill(gdf_column *column, gdf_column const& values, 
+          std::vector<gdf_index_type> const& begin,
+          std::vector<gdf_index_type> const& end);
 
 }; // namespace cudf
 
