@@ -21,6 +21,8 @@
 class NVStrings;
 class custring_view;
 
+typedef custring_view** custring_view_array;
+
 // csv parser flags
 #define CSV_SORT_LENGTH    1
 #define CSV_SORT_NAME      2

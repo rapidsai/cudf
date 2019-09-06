@@ -11,6 +11,8 @@
 - PR #2674 Add __contains__ for Index/Series/Column
 - PR #2722 Add Java bindings for NVTX ranges
 - PR #2702 Add make_bool to dataset generation functions
+- PR #2394 Move `rapidsai/custrings` into `cudf`
+- PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
 
 ## Improvements
@@ -21,6 +23,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2747 Add missing Cython headers / cudftestutil lib to conda package for cuspatial build
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
@@ -51,11 +54,12 @@
 - PR #2672 Fix null and integer handling in round
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 - PR #2731 Fix building of benchmarks
+- PR #2738 Fix java to find new NVStrings locations
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 
 
-# cuDF 0.9.0 (Date TBD)
+# cuDF 0.9.0 (21 Aug 2019)
 
 ## New Features
 
@@ -101,7 +105,6 @@
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
 - PR #2536 Add _constructor properties to Series and DataFrame
-- PR #2394 Move `rapidsai/custrings` into `cudf`
 
 ## Improvements
 
@@ -161,7 +164,6 @@
 - PR #2432 Use pandas formatting for console, html, and latex output
 - PR #2573 Bump numba version to 0.45.1
 - PR #2606 Fix references to notebooks-contrib
-
 
 ## Bug Fixes
 
