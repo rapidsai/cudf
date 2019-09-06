@@ -53,7 +53,7 @@ setup(
     packages=find_packages(include=["cudf", "cudf.*"]),
     package_data={
         "cudf._lib": ["*.pxd"],
-        "cudf._lib.groupby": ["*.pxd"],
+        "cudf._lib.includes": ["*.pxd"],
         "cudf._lib.arrow": ["*.pxd"],
     },
     cmdclass=versioneer.get_cmdclass(),
