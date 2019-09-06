@@ -10,6 +10,7 @@
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2674 Add __contains__ for Index/Series/Column
 - PR #2722 Add Java bindings for NVTX ranges
+- PR #2724 Add libcudf support for __contains__
 
 ## Improvements
 
@@ -49,6 +50,7 @@
 - PR #2672 Fix null and integer handling in round
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 - PR #2731 Fix building of benchmarks
+- PR #2736 Pin Jitify branch to v0.10 version
 
 
 # cuDF 0.9.0 (Date TBD)
