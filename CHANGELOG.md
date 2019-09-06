@@ -6,6 +6,7 @@
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 
 ## Improvements
 
