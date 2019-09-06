@@ -313,6 +313,10 @@ add_library(libNVCategory
 
 add_library(libNVText
             custrings/text/NVText.cu
+            custrings/text/edit_distance.cu
+            custrings/text/ngram.cu
+            custrings/text/stemmer.cu
+            custrings/text/tokens.cu
             custrings/util.cu)
 
 add_library(cudf
