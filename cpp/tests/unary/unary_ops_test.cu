@@ -191,7 +191,7 @@ TEST_F(col_cast_test, usage_example) {
 
 
     // example for cudf::cast int64 to bool8
-    {
+	{
 		std::vector<int64_t> inputData = { 0x12345678, 0x12345600 };
 		auto inputCol = cudf::test::column_wrapper<int64_t>(inputData);
 		gdf_column output;
@@ -202,7 +202,7 @@ TEST_F(col_cast_test, usage_example) {
 		ASSERT_TRUE(out_data.size() == 2);
 		ASSERT_TRUE(out_data[0]);
 		ASSERT_TRUE(out_data[1]);
-    }
+	}
 
 	// example for cudf::cast generic to date32
 	{
