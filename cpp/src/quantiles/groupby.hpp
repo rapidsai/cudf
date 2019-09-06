@@ -49,6 +49,10 @@ struct groupby {
   /**
    * @brief Construct a new groupby object
    * 
+   * If `include_nulls == false`, then any row in `keys` containing a null value
+   * will effectively be discarded. I.e., any values corresponding to discarded
+   * rows in `keys` will not contribute to any aggregation. 
+   *
    * @param keys table to group by
    * @param include_nulls whether to include null keys in groupby
    * @param stream used for all the computation in this groupby object
@@ -61,16 +65,20 @@ struct groupby {
   , _stream(stream)
   {};
 
-  ~groupby() {}
+  ~groupby() = default;
+  groupby(groupby const&) = delete;
+  groupby& operator=(groupby const&) = delete;
+  groupby(groupby&&) = default;
+  groupby& operator=(groupby&&) = default;
 
   /**
-   * @brief Group and sort a column of values
+   * @brief Groups a column of values according to `keys` and sorts within each group.
    * 
-   * Sorts and groups the @p values where the groups are dictated by key table
-   * and the elements are sorted ascending within the groups. Calculates and
+   * Groups the @p values where the groups are dictated by key table
+   * and each group is sorted in ascending order, with NULL elements positioned at the end of each group. Calculates and
    * returns the number of valid values within each group. 
    * 
-   * @note Size of @p values should be equal to number of rows in keys
+   * @throws cudf::logic_error if `values.size != keys.num_rows()`
    * 
    * @param values The value column to group and sort
    * @return the sorted and grouped column and per-group valid count
@@ -139,7 +147,9 @@ struct groupby {
   /**
    * @brief Get the group labels for unsorted keys
    * 
-   * For each row in `keys`, the label is the group it would belong to after sorting.
+   * Returns the group label for every row in the original `keys` table. For a given unique key row,
+   * it's group label is equivalent to what is returned by `group_labels()`. However, 
+   * if a row contains a null value, and `include_nulls == false`, then it's label is NULL. 
    * 
    * Computes and stores unsorted labels on first invocation and returns stored
    * labels on subsequent calls.
@@ -150,6 +160,11 @@ struct groupby {
 
   /**
    * @brief Get the row bitmask for the `keys`
+   *
+   * Computes a bitmask corresponding to the rows of `keys` where if bit `i` is zero,
+   * then row `i` contains one or more null values. If bit `i` is one, then row `i` does not 
+   * contain null values. 
+   *
    * 
    * Computes and stores bitmask on first invocation and returns stored bitmask on
    * subsequent calls.

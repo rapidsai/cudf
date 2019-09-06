@@ -247,6 +247,8 @@ groupby::keys_row_bitmask() {
 
 std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
 groupby::sort_values(gdf_column const& values) {
+  CUDF_EXPECTS(values.size == _keys.num_rows(),
+    "Size mismatch between keys and values.");
   auto values_sort_order = gdf_col_pointer(
     new gdf_column(
       allocate_column(gdf_dtype_of<gdf_index_type>(),
