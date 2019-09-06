@@ -2662,6 +2662,8 @@ class DataFrame(object):
             result of applying func against the underlying column data, which
             may be garbage.
 
+        {params}
+
         Examples
         --------
         The user function should loop over the columns and set the output for
@@ -2735,6 +2737,9 @@ class DataFrame(object):
             null. If false, all outputs will be non-null, but will be the
             result of applying func against the underlying column data, which
             may be garbage.
+
+        {params}
+        {params_chunks}
 
         Examples
         --------
