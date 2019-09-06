@@ -3453,33 +3453,32 @@ class DataFrame(object):
     #
     # Stats
     #
-    def _prepare_for_rowwise_method(self, numeric_only=None):
-        """Prepare a dataframe for rowwise operations via CuPy.
+    def _as_common_dtype(self):
+        common_dtype = np.find_common_type(self.dtypes, [])
+        coerced = self._apply_support_method("astype", dtype=common_dtype)
+        return coerced
 
-        Returns
-        -------
-        CuPy NDArray
-        """
+    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
+        kwargs["axis"] = 1
 
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "Row-wise operations currently require CuPy. "
-                "Please install CuPy to use these operations."
+                " Please install CuPy to use these operations."
             )
             raise ImportError(msg)
 
         import cupy as cp
 
-        if any([col.null_count for col in self._columns]):
+        if any([col.has_null_mask for col in self._columns]):
             msg = (
                 "Row-wise operations do not currently support columns with "
-                "null values. Consider filtering or using .fillna() to "
-                "fill null values."
+                "null values. Consider using .fillna() to fill null values."
             )
             raise ValueError(msg)
 
         # Currently, we don't support row-wise operations on
-        # datetimes, strings, or categoricals.
+        # datetimes, strings, and categoricals.
         if numeric_only not in (None, True):
             msg = (
                 "Row-wise operations currently only support int, float, "
@@ -3488,20 +3487,16 @@ class DataFrame(object):
             raise TypeError(msg)
 
         filtered = self.select_dtypes(include=[np.number, np.bool])
-        common_dtype = np.find_common_type(filtered.dtypes, [])
-        coerced = filtered._apply_support_method("astype", dtype=common_dtype)
+        coerced = filtered._as_common_dtype()
         arr = cp.asarray(coerced.as_gpu_matrix())
-        return arr
-
-    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
-        kwargs["axis"] = 1
-        arr = self._prepare_for_rowwise_method(numeric_only=numeric_only)
         result = getattr(arr, op)(**kwargs)
 
         if len(result.shape) == 1:
             return Series(result, index=self.index)
         else:
-            return DataFrame.from_gpu_matrix(result).set_index(self.index)
+            result_df = DataFrame.from_gpu_matrix(result).set_index(self.index)
+            result_df.columns = filtered.columns
+            return result_df
 
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
