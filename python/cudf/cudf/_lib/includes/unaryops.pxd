@@ -56,6 +56,9 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         const gdf_column& input
     ) except +
 
+    cdef pair[bit_mask_t_ptr, gdf_size_type] nats_to_nulls(
+        const gdf_column& input
+    ) except +
 
 cdef extern from "cudf/unary.hpp" namespace "cudf" nogil:
 

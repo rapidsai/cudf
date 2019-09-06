@@ -82,10 +82,17 @@ class DatetimeColumn(column.TypedColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
+        mask, null_count = libcudf.unaryops.nats_to_nulls(Buffer(array))
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
-        return cls(data=Buffer(array), dtype=array.dtype)
+
+        return cls(
+            data=Buffer(array),
+            mask=Buffer(mask),
+            null_count=null_count,
+            dtype=array.dtype,
+        )
 
     @property
     def time_unit(self):

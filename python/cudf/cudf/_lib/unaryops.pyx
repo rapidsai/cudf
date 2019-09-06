@@ -161,3 +161,30 @@ def nans_to_nulls(py_col):
         )
 
     return mask
+
+
+def nats_to_nulls(py_col):
+    from cudf.core.column import as_column
+
+    py_col = as_column(py_col)
+
+    cdef gdf_column* c_col = column_view_from_column(py_col)
+
+    cdef pair[cpp_unaryops.bit_mask_t_ptr, gdf_size_type] result
+
+    with nogil:
+        result = cpp_unaryops.nats_to_nulls(c_col[0])
+
+    mask = None
+    null_count = 0
+    if result.first:
+        null_count = result.second
+        mask_ptr = int(<uintptr_t>result.first)
+        mask = rmm.device_array_from_ptr(
+            mask_ptr,
+            nelem=calc_chunk_size(len(py_col), mask_bitsize),
+            dtype=mask_dtype,
+            finalizer=rmm._make_finalizer(mask_ptr, 0)
+        )
+
+    return mask, null_count

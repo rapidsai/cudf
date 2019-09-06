@@ -53,6 +53,15 @@ gdf_column transform(const gdf_column &input,
 */
 std::pair<bit_mask::bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input);
 
+/**
+ * @brief Given a column with integer values(actually represent datetime), generate a bitmask where every NaT
+ * is indicated as the corresponding null bit.
+ *
+ * @param input The input column to generate bitmask from
+ * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
+*/
+std::pair<bit_mask::bit_mask_t*, gdf_size_type> nats_to_nulls(gdf_column const& input);
+
 }  // namespace cudf
 
 #endif
