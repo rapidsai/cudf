@@ -30,6 +30,17 @@
 #include "../util.h"
 
 //
+// This is the functor for the url_encode() method below.
+// Specific requirements are documented in custrings issue #321.
+// In summary it converts mostly non-ascii characters and control characters into UTF-8 hex characters
+// prefixed with '%'. For example, the space character must be converted to characters '%20' where the
+// '20' indicates the hex value for space in UTF-8. Likewise, multi-byte characters are converted to
+// multiple hex charactes. For example, the é character is converted to characters '%C3%A9' where 'C3A9'
+// is the UTF-8 bytes xc3a9 for this character.
+// Like other functors for NVStrings it is called twice.
+// First to calculate the output string allocation size (bcompute_size_only=true).
+// The 2nd call actually performs the encoding operation on the memory provided.
+// 
 struct url_encoder
 {
     custring_view_array d_strings;
@@ -38,6 +49,7 @@ struct url_encoder
     char* d_buffer{nullptr};
     custring_view_array d_results;
 
+    // utility to create 2-byte hex characters from single binary byte
     __device__ void byte_to_hex( unsigned char byte, char* hex )
     {
         hex[0] = '0';
@@ -50,6 +62,7 @@ struct url_encoder
         hex[1] = byte < 10 ? '0'+byte : 'A'+(byte-10);
     }
 
+    // main part of the functor the performs the url-encoding
     __device__ void operator()( unsigned int idx )
     {
         custring_view* dstr = d_strings[idx];
@@ -66,8 +79,8 @@ struct url_encoder
             if( ch < 128 )
             {
                 if( (ch>='0' && ch<='9') || // these are the characters
-                    (ch>='A' && ch<='Z') || // that are not to be url
-                    (ch>='a' && ch<='z') || // encoded -- just pass through
+                    (ch>='A' && ch<='Z') || // that are not to be url encoded
+                    (ch>='a' && ch<='z') || // reference: docs.python.org/3/library/urllib.parse.html#urllib.parse.quote
                     (ch=='.') || (ch=='_') || (ch=='~') || (ch=='-') )
                 {
                     nbytes++;
@@ -82,9 +95,9 @@ struct url_encoder
                     nbytes += 3;
                     if( !bcompute_size_only )
                     {
-                        copy_and_incr(optr,(char*)"%",1);
-                        byte_to_hex( (unsigned char)ch, hex);
-                        copy_and_incr(optr,hex,2);
+                        copy_and_incr(optr,(char*)"%",1);      // add the '%' prefix
+                        byte_to_hex( (unsigned char)ch, hex);  // convert to 2 hex chars
+                        copy_and_incr(optr,hex,2);             // add them to the output
                     }
                 }
             }
@@ -92,12 +105,13 @@ struct url_encoder
             {
                 unsigned char char_bytes[4]; // holds utf-8 bytes
                 unsigned int char_width = custring_view::Char_to_char(ch,(char*)char_bytes);
-                nbytes += char_width * 3; // '%' plus 2 hex chars -- per byte: é is %C3%A9
+                nbytes += char_width * 3; // '%' plus 2 hex chars per byte (example: é is %C3%A9)
+                // process each byte in this current character
                 for( unsigned int chidx=0; !bcompute_size_only && (chidx < char_width); chidx++ )
                 {
-                    copy_and_incr(optr,(char*)"%",1);     // add percent '%'
-                    byte_to_hex( char_bytes[chidx], hex); // convert to 2-char hex
-                    copy_and_incr(optr,hex,2);            // copy hex chars
+                    copy_and_incr(optr,(char*)"%",1);     // add '%' prefix
+                    byte_to_hex( char_bytes[chidx], hex); // convert to 2 hex chars
+                    copy_and_incr(optr,hex,2);            // add them to the output
                 }
             }
         }
@@ -111,7 +125,8 @@ struct url_encoder
     }
 };
 
-
+// This method url-encodes each string and returns them in a new instance.
+// See the functor above for detailed code logic executed for each string.
 NVStrings* NVStrings::url_encode()
 {
     auto execpol = rmm::exec_policy(0);
@@ -133,7 +148,6 @@ NVStrings* NVStrings::url_encode()
     {
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
             url_encoder{d_strings,d_offsets,(op==scan),d_buffer,d_results});
-
         if( op==operate )
             break;
         op = operate;
@@ -149,6 +163,19 @@ NVStrings* NVStrings::url_encode()
     return rtn;
 }
 
+//
+// This is the functor for the url_decode() method below.
+// Specific requirements are documented in custrings issue #321.
+// In summary it converts all character sequences starting with '%' into bytes
+// interpretting the following 2 characters as hex values to create the output byte.
+// For example, the sequence '%20' is converted into byte (0x20) which is a single
+// space character. Another example converts '%C3%A9' into 2 sequential bytes
+// (0xc3 and 0xa9 respectively). Overall, 3 characters are converted into one byte
+// whenever a '%' character is encountered in the string.
+// Like other functors for NVStrings it is called twice.
+// First to calculate the output string allocation size (bcompute_size_only=true).
+// The 2nd call actually performs the operation on the memory provided.
+// 
 struct url_decoder
 {
     custring_view_array d_strings;
@@ -157,6 +184,7 @@ struct url_decoder
     char* d_buffer;
     custring_view_array d_results;
 
+    // utility to convert 2 hex chars into a single byte
     __device__ char hex_to_byte( char ch1, char ch2 )
     {
         unsigned char result = 0;
@@ -176,6 +204,7 @@ struct url_decoder
         return (char)result;
     }
 
+    // main functor method executed on each string
     __device__ void operator()(unsigned int idx)
     {
         custring_view* dstr = d_strings[idx];
@@ -186,25 +215,18 @@ struct url_decoder
         unsigned int nbytes = 0, nchars = 0;
         char* sptr = dstr->data();
         char* send = sptr + dstr->size();
-        while( sptr < send )
+        while( sptr < send ) // walk through each byte
         {
             char ch = *sptr++;
-            if( ch != '%' )
-            {
-                ++nbytes;
-                ++nchars;
-                if( !bcompute_size_only )
-                    copy_and_incr(optr, &ch, 1);
-            }
-            else if( sptr+1 < send )
-            {
-                ++nbytes;
+            if( (ch == '%') && ((sptr+1) < send) )
+            {   // found '%', convert hex to byte
                 ch = *sptr++;
-                nchars += (ch & 0xC0 != 0x80);
                 ch = hex_to_byte( ch, *sptr++ );
-                if( !bcompute_size_only )
-                    copy_and_incr(optr, &ch, 1);
             }
+            ++nbytes; // keeping track of bytes and chars
+            nchars += int((((unsigned char)(ch)) & 0xC0) != 0x80); // utf8 ext byte
+            if( !bcompute_size_only )
+                copy_and_incr(optr, &ch, 1);
         }
         if( bcompute_size_only )
         {
@@ -216,6 +238,8 @@ struct url_decoder
     }
 };
 
+// This method url-decodes each string and returns them in a new instance.
+// See the functor above for the detailed code logic executed for each string.
 NVStrings* NVStrings::url_decode()
 {
     auto execpol = rmm::exec_policy(0);
@@ -237,7 +261,6 @@ NVStrings* NVStrings::url_decode()
     {
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
             url_decoder{d_strings,d_offsets,(op==scan),d_buffer,d_results});
-
         if( op==operate )
             break;
         op = operate;

@@ -477,7 +477,7 @@ int NVStrings::rsplit_record( const char* delimiter, int maxsplit, std::vector<N
     thrust::host_vector<int> h_totals(totals);
     thrust::host_vector<custring_view_array> h_splits(count,nullptr);
     thrust::host_vector<char*> h_buffers(count,nullptr);
-    for( int idx=0; idx < (int) count; ++idx )
+    for( unsigned int idx=0; idx < count; ++idx )
     {
         int splitCount = h_counts[idx];
         if( splitCount==0 )
@@ -611,7 +611,7 @@ int NVStrings::rsplit_record( int maxsplit, std::vector<NVStrings*>& results)
     thrust::host_vector<int> h_totals(totals);
     thrust::host_vector<custring_view_array> h_splits(count,nullptr);
     thrust::host_vector<char*> h_buffers(count,nullptr);
-    for( int idx=0; idx < (int) count; ++idx )
+    for( unsigned int idx=0; idx < count; ++idx )
     {
         int splitCount = h_counts[idx];
         if( splitCount==0 )
@@ -1200,7 +1200,7 @@ int NVStrings::partition( const char* delimiter, std::vector<NVStrings*>& result
     thrust::host_vector<int> h_totals(totals);
     thrust::host_vector<char*> h_buffers(count,nullptr);
     thrust::host_vector<custring_view_array> h_splits(count,nullptr);
-    for( int idx=0; idx < (int) count; ++idx )
+    for( unsigned int idx=0; idx < count; ++idx )
     {
         NVStrings* result = new NVStrings(3);
         results.push_back(result);
@@ -1304,7 +1304,7 @@ int NVStrings::rpartition( const char* delimiter, std::vector<NVStrings*>& resul
     thrust::host_vector<int> h_totals(totals);
     thrust::host_vector<char*> h_buffers(count,nullptr);
     thrust::host_vector<custring_view_array> h_splits(count,nullptr);
-    for( int idx=0; idx < (int) count; ++idx )
+    for( unsigned int idx=0; idx < count; ++idx )
     {
         NVStrings* result = new NVStrings(3);
         results.push_back(result);

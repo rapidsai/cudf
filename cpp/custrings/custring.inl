@@ -28,21 +28,21 @@ __device__ inline long stol( const char* str, unsigned int bytes )
     if( !ptr || !bytes )
         return 0; // probably should be an assert
     long value = 0;
-    int sign = 1, size = (int)bytes;
+    int sign = 1;
     if( *ptr == '-' || *ptr == '+' )
     {
         sign = (*ptr=='-' ? -1:1);
         ++ptr;
-        --size;
+        --bytes;
     }
-    for( int idx=0; idx < size; ++idx )
+    for( unsigned int idx=0; idx < bytes; ++idx )
     {
         char chr = *ptr++;
         if( chr < '0' || chr > '9' )
             break;
         value = (value * 10) + (long)(chr - '0');
     }
-    return value * sign;
+    return value * (long)sign;
 }
 
 __device__ inline int stoi( const char* str, unsigned int bytes )
@@ -56,8 +56,7 @@ __device__ inline unsigned long stoul( const char* str, unsigned int bytes )
     if( !ptr || !bytes )
         return 0; // probably should be an assert
     unsigned long value = 0;
-    int size = (int)bytes;
-    for( int idx=0; idx < size; ++idx )
+    for( unsigned int idx=0; idx < bytes; ++idx )
     {
         char chr = *ptr++;
         if( chr < '0' || chr > '9' )
@@ -72,7 +71,7 @@ __device__ inline double stod( const char* str, unsigned int bytes )
     char* ptr = (char*)str;
     if( !ptr || !bytes )
         return 0.0; // probably should be an assert
-    // special strings    
+    // special strings
     if( compare(str,bytes,"nan",3)==0 )
         return std::numeric_limits<double>::quiet_NaN();
     if( compare(str,bytes,"inf",3)==0 )
@@ -87,7 +86,7 @@ __device__ inline double stod( const char* str, unsigned int bytes )
         ++ptr;
     }
     unsigned long max_mantissa = 0x0FFFFFFFFFFFFF;
-    unsigned int digits = 0;
+    unsigned long digits = 0;
     int exp_off = 0;
     bool decimal = false;
     while( ptr < end )
@@ -159,8 +158,8 @@ __device__ inline float stof( const char* str, unsigned int bytes )
  * https://github.com/aappleby/smhasher/blob/master/src/MurmurHash3.cpp
  * and adapted from
  * https://github.com/rapidsai/cudf/cpp/src/io/csv/type_conversion.cuh
- * 
- * 
+ *
+ *
  */
 __device__ inline unsigned int hash( const char* str, unsigned int bytes )
 {
@@ -176,11 +175,11 @@ __device__ inline unsigned int hash( const char* str, unsigned int bytes )
       auto q = (const unsigned char*)(p + i);
       return q[0] | (q[1] << 8) | (q[2] << 16) | (q[3] << 24);
     };
-    
+
     auto rotl32 = [] __device__(unsigned int x, char r) -> unsigned int {
       return (x << r) | (x >> (32 - r));
     };
-    
+
     auto fmix32 = [] __device__(unsigned int h) -> unsigned int {
       h ^= h >> 16;
       h *= 0x85ebca6b;
@@ -189,7 +188,7 @@ __device__ inline unsigned int hash( const char* str, unsigned int bytes )
       h ^= h >> 16;
       return h;
     };
-    
+
     const int len = (int)bytes;
     const unsigned char* const data = (const unsigned char*)str;
     const int nblocks = len / 4;
@@ -232,78 +231,33 @@ __device__ inline unsigned int hash( const char* str, unsigned int bytes )
     return hash;
 }
 
-__device__ inline int compare(const char* src, unsigned int sbytes, const char* tgt, unsigned int tbytes )
+// This could possibly be optimized using vectorized loading on the character arrays.
+// 0	They compare equal
+// <0	Either the value of the first character of this string that does not match is lower in the arg string,
+//      or all compared characters match but the arg string is shorter.
+// >0	Either the value of the first character of this string that does not match is greater in the arg string,
+//      or all compared characters match but the arg string is longer.
+__device__ inline int compare(const char* src, unsigned int src_bytes, const char* tgt, unsigned int tgt_bytes )
 {
-    const char* ptr1 = src;
+    const unsigned char* ptr1 = reinterpret_cast<const unsigned char*>(src);
     if( !ptr1 )
         return -1;
-    const char* ptr2 = tgt;
+    const unsigned char* ptr2 = reinterpret_cast<const unsigned char*>(tgt);
     if( !ptr2 )
         return 1;
-    unsigned int len1 = sbytes;
-    unsigned int len2 = tbytes;
-    unsigned int idx;
-    for(idx = 0; (idx < len1) && (idx < len2); ++idx)
+    unsigned int idx = 0;
+    for(; (idx < src_bytes) && (idx < tgt_bytes); ++idx)
     {
-        if (*ptr1 != *ptr2)
-            return (unsigned int)*ptr1 - (unsigned int)*ptr2;
-        ptr1++;
-        ptr2++;
+        if(*ptr1 != *ptr2)
+            return (int)*ptr1 - (int)*ptr2;
+        ++ptr1;
+        ++ptr2;
     }
-    if( idx < len1 )
+    if( idx < src_bytes )
         return 1;
-    if( idx < len2 )
+    if( idx < tgt_bytes )
         return -1;
     return 0;
-}
-
-//
-__device__ inline int find( const char* sptr, unsigned int sz, const char* str, unsigned int bytes )
-{
-    if(!sptr || !str || (sz < bytes))
-        return -1;
-    unsigned int end = sz - bytes;
-    char* ptr1 = (char*)sptr;
-    char* ptr2 = (char*)str;
-    for(int idx=0; idx < end; ++idx)
-    {
-        bool match = true;
-        for( int jdx=0; jdx < bytes; ++jdx )
-        {
-            if(ptr1[jdx] == ptr2[jdx] )
-                continue;
-            match = false;
-            break;
-        }
-        if( match )
-            return idx; // chars_in_string(sptr,idx);
-        ptr1++;
-    }
-    return -1;
-}
-
-__device__ inline int rfind( const char* sptr, unsigned int sz, const char* str, unsigned int bytes )
-{
-    if(!sptr || !str || (sz < bytes) )
-        return -1;
-    unsigned end = sz - bytes;
-    char* ptr1 = (char*)sptr + end;
-    char* ptr2 = (char*)str;
-    for(int idx=0; idx < end; ++idx)
-    {
-        bool match = true;
-        for( int jdx=0; jdx < bytes; ++jdx )
-        {
-            if(ptr1[jdx] == ptr2[jdx] )
-                continue;
-            match = false;
-            break;
-        }
-        if( match )
-            return sz - bytes - idx; //chars_in_string(sptr,end - idx);
-        ptr1--; // go backwards
-    }
-    return -1;
 }
 
 //
@@ -312,4 +266,4 @@ __device__ inline void copy( char* dst, unsigned int bytes, const char* src )
     memcpy(dst,src,bytes);
 }
 
-}
+} // end of custr namespace

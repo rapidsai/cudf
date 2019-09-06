@@ -548,6 +548,7 @@ table reader::Impl::read()
       auto str_list = static_cast<str_pair *>(columns[i]->data);
       str_ptr str_data(NVStrings::create_from_index(str_list, columns[i]->size),
                        &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_TRY(RMM_FREE(columns[i]->data, 0));
 
       // PANDAS' default behavior of enabling doublequote for two consecutive
