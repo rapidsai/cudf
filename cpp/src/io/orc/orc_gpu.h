@@ -154,8 +154,10 @@ struct DictionaryChunk
  **/
 struct StripeDictionary
 {
+    const void *column_data_base;               // base ptr of column data (ptr,len pair)
     uint32_t *dict_data;                        // row indices of corresponding string (row from dictionary index)
     uint32_t *dict_index;                       // dictionary index from row index
+    uint32_t column_id;                         // real column id
     uint32_t start_chunk;                       // first chunk in stripe
     uint32_t num_chunks;                        // number of chunks in the stripe
     uint32_t num_strings;                       // number of unique strings in the dictionary
@@ -255,6 +257,21 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t
 
 
 /**
+ * @brief Launches kernel for encoding column dictionaries
+ *
+ * @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_string_columns Number of string columns
+ * @param[in] num_columns Number of columns
+ * @param[in] num_stripes Number of stripes
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_string_columns, uint32_t num_columns, uint32_t num_stripes, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
  * @brief Launches kernel for initializing dictionary chunks
  *
  * @param[in] chunks DictionaryChunk device array [rowgroup][column]
@@ -281,7 +298,7 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks, DictionaryChunk *chunks_host,
+cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks,
                                     uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, uint32_t max_chunks_in_stripe, cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu

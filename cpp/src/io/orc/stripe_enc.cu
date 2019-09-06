@@ -89,6 +89,7 @@ struct orcenc_state_s
         byterle_enc_state_s byterle;
         intrle_enc_state_s intrle;
         strdata_enc_state_s strenc;
+        StripeDictionary dict_stripe;
     } u;
     union {
         uint8_t u8[SCRATCH_BFRSZ];  // general scratch buffer
@@ -1052,6 +1053,103 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
 
 
 /**
+* @brief Encode column dictionaries
+*
+* @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+* @param[in] chunks EncChunk device array [rowgroup][column]
+* @param[in] num_columns Number of columns
+*
+**/
+// blockDim {512,1,1}
+extern "C" __global__ void __launch_bounds__(512)
+gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_columns)
+{
+    __shared__ __align__(16) orcenc_state_s state_g;
+
+    orcenc_state_s * const s = &state_g;
+    uint32_t stripe_id = blockIdx.x;
+    uint32_t cid = (blockIdx.y) ? CI_DICTIONARY : CI_DATA2;
+    uint32_t chunk_id;
+    int t = threadIdx.x;
+    const nvstrdesc_s *str_desc;
+    const uint32_t *dict_data;
+
+    if (t < sizeof(StripeDictionary) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&s->u.dict_stripe)[t] = ((const uint32_t *)&stripes[stripe_id])[t];
+    }
+    __syncthreads();
+    chunk_id = s->u.dict_stripe.start_chunk * num_columns + s->u.dict_stripe.column_id;
+    if (t < sizeof(EncChunk) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[chunk_id])[t];
+    }
+    if (t == 0)
+    {
+        s->strm_pos[cid] = 0;
+        s->numlengths = 0;
+        s->nrows = s->u.dict_stripe.num_strings;
+        s->cur_row = 0;
+    }
+    str_desc = reinterpret_cast<const nvstrdesc_s *>(s->u.dict_stripe.column_data_base);
+    dict_data = s->u.dict_stripe.dict_data;
+    __syncthreads();
+    if (s->chunk.encoding_kind != DICTIONARY_V2)
+    {
+        return; // This column isn't using dictionary encoding -> bail out
+    }
+
+    while (s->cur_row < s->nrows || s->numlengths != 0)
+    {
+        uint32_t numvals = min(s->nrows - s->cur_row, min(1024 - s->numlengths, 512));
+        uint32_t string_idx = (t < numvals) ? dict_data[s->cur_row + t] : 0;
+        if (cid == CI_DICTIONARY)
+        {
+            // Encoding string contents
+            const char *ptr = (t < numvals) ? str_desc[string_idx].ptr : 0;
+            uint32_t count = (t < numvals) ? static_cast<uint32_t>(str_desc[string_idx].count) : 0;
+            s->u.strenc.str_data[t] = ptr;
+            StoreStringData(s->chunk.streams[CI_DICTIONARY] + s->strm_pos[CI_DICTIONARY], &s->u.strenc, (ptr) ? count : 0, t);
+            if (!t)
+            {
+                s->strm_pos[CI_DICTIONARY] += s->u.strenc.char_count;
+            }
+        }
+        else
+        {
+            // Encoding string lengths
+            uint32_t count = (t < numvals) ? static_cast<uint32_t>(str_desc[string_idx].count) : 0;
+            uint32_t nz_idx = (s->cur_row + t) & 0x3ff;
+            if (t < numvals)
+                s->lengths.u32[nz_idx] = count;
+            __syncthreads();
+            if (s->numlengths + numvals > 0)
+            {
+                uint32_t flush = (s->cur_row + numvals == s->nrows) ? 1 : 0;
+                uint32_t n = IntegerRLE<CI_DATA2, uint32_t, false, 0x3ff>(s, s->lengths.u32, s->cur_row, s->numlengths + numvals, flush, t);
+                __syncthreads();
+                if (!t)
+                {
+                    s->numlengths += numvals;
+                    s->numlengths -= min(n, s->numlengths);
+                }
+            }
+        }
+        if (t == 0)
+        {
+            s->cur_row += numvals;
+        }
+        __syncthreads();
+    }
+    if (t == 0)
+    {
+        chunks[chunk_id].strm_len[cid] = s->strm_pos[cid];
+    }
+}
+
+
+
+/**
  * @brief Launches kernel for encoding column data
  *
  * @param[in] chunks EncChunk device array [rowgroup][column]
@@ -1066,6 +1164,27 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t
     dim3 dim_block(512, 1); // 512 threads per chunk
     dim3 dim_grid(num_columns, num_rowgroups);
     gpuEncodeOrcColumnData <<< dim_grid, dim_block, 0, stream >>>(chunks, num_columns, num_rowgroups);
+    return cudaSuccess;
+}
+
+
+/**
+* @brief Launches kernel for encoding column dictionaries
+*
+* @param[in] stripes Stripe dictionaries device array [stripe][string_column]
+* @param[in] chunks EncChunk device array [rowgroup][column]
+* @param[in] num_string_columns Number of string columns
+* @param[in] num_columns Number of columns
+* @param[in] num_stripes Number of stripes
+* @param[in] stream CUDA stream to use, default 0
+*
+* @return cudaSuccess if successful, a CUDA error code otherwise
+**/
+cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_string_columns, uint32_t num_columns, uint32_t num_stripes, cudaStream_t stream)
+{
+    dim3 dim_block(512, 1); // 512 threads per dictionary
+    dim3 dim_grid(num_string_columns * num_stripes, 2);
+    gpuEncodeStringDictionaries <<< dim_grid, dim_block, 0, stream >>>(stripes, chunks, num_columns);
     return cudaSuccess;
 }
 

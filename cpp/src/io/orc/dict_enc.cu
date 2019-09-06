@@ -304,7 +304,6 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
 
 struct build_state_s
 {
-    const nvstrdesc_s *str_data;
     uint32_t total_dupes;
     StripeDictionary stripe;
     volatile uint32_t scratch_red[32];
@@ -314,12 +313,13 @@ struct build_state_s
  * @brief Eliminate duplicates in-place and generate column dictionary index
  *
  * @param[in] stripes StripeDictionary device array [stripe][column]
+ * @param[in] num_columns Number of string columns
  *
  **/
 // NOTE: Prone to poor utilization on small datasets due to 1 block per dictionary
 // blockDim {1024,1,1}
 extern "C" __global__ void __launch_bounds__(1024)
-gpuBuildStripeDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, uint32_t num_columns)
+gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
 {
     __shared__ __align__(16) build_state_s state_g;
 
@@ -338,14 +338,13 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, u
     }
     if (t == 31 * 32)
     {
-        s->str_data = reinterpret_cast<const nvstrdesc_s *>(chunks[col_id].column_data_base);
         s->total_dupes = 0;
     }
     __syncthreads();
     num_strings = s->stripe.num_strings;
     dict_data = s->stripe.dict_data;
     dict_index = s->stripe.dict_index;
-    str_data = s->str_data;
+    str_data = reinterpret_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
     dict_char_count = 0;
     for (uint32_t i = 0; i < num_strings; i += 1024)
     {
@@ -365,7 +364,7 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, u
         }
         dict_char_count += (is_dupe) ? 0 : cur_len;
         dupe_mask = BALLOT(is_dupe);
-        dupes_before = s->total_dupes + __popc(dupe_mask & (0x7fffffffu >> (0x1fu - (t & 0x1f))));
+        dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
         if (!(t & 0x1f))
         {
             s->scratch_red[t >> 5] = __popc(dupe_mask);
@@ -469,7 +468,7 @@ struct nvstr_compare : public thrust::binary_function<uint32_t, uint32_t, bool>
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
-cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary *stripes_host, DictionaryChunk *chunks, DictionaryChunk *chunks_host,
+cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary *stripes_host, DictionaryChunk *chunks,
                                     uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, uint32_t max_chunks_in_stripe, cudaStream_t stream)
 {
     dim3 dim_block(1024, 1); // 1024 threads per chunk
@@ -481,7 +480,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary 
         for (uint32_t i = 0; i < num_columns; i++)
         {
             thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[j * num_columns + i].dict_data);
-            const nvstrdesc_s *str_data = reinterpret_cast<const nvstrdesc_s *>(chunks_host[i].column_data_base);
+            const nvstrdesc_s *str_data = reinterpret_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
         #if 1
             thrust::sort(thrust::device, p, p + stripes_host[j * num_columns + i].num_strings, nvstr_compare(str_data));
         #else
@@ -493,7 +492,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary 
         #endif
         }
     }
-    gpuBuildStripeDictionaries <<< dim_grid_build, dim_block, 0, stream >>>(stripes, chunks, num_columns);
+    gpuBuildStripeDictionaries <<< dim_grid_build, dim_block, 0, stream >>>(stripes, num_columns);
     return cudaSuccess;
 }
 
