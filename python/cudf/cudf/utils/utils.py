@@ -192,12 +192,10 @@ def get_null_series(size, dtype=np.bool):
     -------
     a null cudf series of provided `size` and `dtype`
     """
-    from cudf.utils import cudautils
-    from cudf.core import Series
+    from cudf.core import Series, column
 
-    device_array = cudautils.zeros(size, dtype=dtype)
-    mask = cudautils.zeros(len(device_array), dtype=np.uint8)
-    return Series(device_array).set_mask(mask, null_count=len(mask))
+    empty_col = column.column_empty(size, dtype, True)
+    return Series(empty_col)
 
 
 # taken from dask array

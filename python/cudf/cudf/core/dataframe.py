@@ -1701,28 +1701,28 @@ class DataFrame(object):
         # Currently we only support sort = False
         # Change below when we want to support sort = True
         # below functions as an ordered set
-
-        all_columns_list = []
-        all_columns_set = set()
-        for o in objs:
-            for col in o.columns:
-                if col not in all_columns_set:
-                    all_columns_list.append(col)
-                    all_columns_set.add(col)
+        all_columns_ls = [col for o in objs for col in o.columns]
+        unique_columns_ordered_ls = OrderedDict.fromkeys(
+            all_columns_ls, None
+        ).keys()
 
         # Concatenate cudf.series for all columns
-        data = []
 
-        for c in all_columns_list:
-            series_list = [
-                o[c]
-                if c in o.columns
-                else utils.get_null_series(size=len(o), dtype=np.bool)
-                for o in objs
-            ]
-            concatenated_series = Series._concat(series_list, index=index)
-            data.append((c, concatenated_series))
-
+        data = [
+            (
+                c,
+                Series._concat(
+                    [
+                        o[c]
+                        if c in o.columns
+                        else utils.get_null_series(size=len(o), dtype=np.bool)
+                        for o in objs
+                    ],
+                    index=index,
+                ),
+            )
+            for c in unique_columns_ordered_ls
+        ]
         out = cls(data)
         out._index = index
         libcudf.nvtx.nvtx_range_pop()
