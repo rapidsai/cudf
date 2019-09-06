@@ -13,8 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "cudf/copying.hpp"
+#include "cudf/rolling.hpp"
 
 #include "jni_utils.hpp"
 
@@ -374,6 +374,38 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_approxQuantile(JNIEnv
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_ColumnVector_rollingWindow(JNIEnv *env, jclass clazz,
+                                               jlong input_column,
+                                               jint window, jint min_periods,
+                                               jint forward_window, jint agg_type,
+                                               jlong window_col, jlong min_periods_col,
+                                               jlong forward_window_col) {
+
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  try {
+    gdf_column *n_input_column = reinterpret_cast<gdf_column *>(input_column);
+    gdf_column *n_window_col = reinterpret_cast<gdf_column *>(window_col);
+    gdf_column *n_min_periods_col = reinterpret_cast<gdf_column *>(min_periods_col);
+    gdf_column *n_forward_window_col = reinterpret_cast<gdf_column *>(forward_window_col);
+
+    gdf_column *result = cudf::rolling_window(
+                             *n_input_column,
+                             static_cast<gdf_size_type>(window),
+                             static_cast<gdf_size_type>(min_periods),
+                             static_cast<gdf_size_type>(forward_window),
+                             static_cast<gdf_agg_op>(agg_type),
+                             n_window_col == nullptr ? nullptr :
+                             reinterpret_cast<gdf_size_type *> (n_window_col->data),
+                             n_min_periods_col == nullptr ? nullptr :
+                             reinterpret_cast<gdf_size_type *> (n_min_periods_col->data),
+                             n_forward_window_col == nullptr ? nullptr :
+                             reinterpret_cast<gdf_size_type *> (n_forward_window_col->data));
+    return reinterpret_cast<jlong>(result);
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *env, jclass clazz,
