@@ -303,6 +303,7 @@ void reader::Impl::init_string_columns(const std::vector<gdf_column_wrapper> &co
       auto str_list = static_cast<str_pair *>(column->data);
       str_ptr str_data(NVStrings::create_from_index(str_list, column->size),
                        &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_FREE(std::exchange(column->data, str_data.release()), 0);
     }
   }
