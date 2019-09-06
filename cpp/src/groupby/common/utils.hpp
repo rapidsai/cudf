@@ -40,6 +40,7 @@
 
 namespace cudf {
 namespace groupby {
+
 /**---------------------------------------------------------------------------*
  * @brief Verifies the requested aggregation is valid for the type of the value
  * column.

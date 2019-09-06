@@ -22,6 +22,7 @@
 
 #include <utility>
 #include <vector>
+#include <algorithm>
 
 namespace cudf {
 namespace groupby {
@@ -50,6 +51,21 @@ using AggRequestType = std::pair<gdf_column*, operators>;
  * counter of how many times said operation is needed.
  *---------------------------------------------------------------------------**/
 using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
+
+
+static const std::vector<operators> simple_agg_list{SUM, MIN, MAX, COUNT};
+
+static const std::vector<operators> complex_agg_list{MEDIAN, QUANTILE};
+
+inline bool is_simple_agg(operators op) {
+  return std::any_of(simple_agg_list.begin(), simple_agg_list.end(),
+                     [&](operators test) { return test == op; });
+}
+
+inline bool is_complex_agg(operators op) {
+  return std::any_of(complex_agg_list.begin(), complex_agg_list.end(),
+                     [&](operators test) { return test == op; });
+}
 
 /**---------------------------------------------------------------------------*
  * @brief Converts a set of "compound" aggregation requests into a set of
