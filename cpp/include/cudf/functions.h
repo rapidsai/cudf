@@ -392,41 +392,6 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
 
-/**
- * @brief  Computes exact quantile
- * computes quantile as double. This function works with arithmetic colum.
- *
- * @param[in] input column
- * @param[in] precision: type of quantile method calculation
- * @param[in] requested quantile in [0,1]
- * @param[out] result the result as double. The type can be changed in future
- * @param[in] struct with additional info
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_quantile_exact(gdf_column* col_in,
-                            gdf_quantile_method prec,
-                            double q,
-                            gdf_scalar*  result,
-                            gdf_context* ctxt);
-
-/**
- * @brief  Computes approximate quantile
- * computes quantile with the same type as @p col_in.
- * This function works with arithmetic colum.
- *
- * @param[in] input column
- * @param[in] requested quantile in [0,1]
- * @param[out] result quantile, with the same type as @p col_in
- * @param[in] struct with additional info
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_quantile_approx(gdf_column* col_in,
-                              double q,
-                              gdf_scalar*  result,
-                              gdf_context* ctxt);
-
 
 /** 
  * @brief Sorts an array of gdf_column.

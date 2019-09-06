@@ -313,6 +313,10 @@ add_library(libNVCategory
 
 add_library(libNVText
             custrings/text/NVText.cu
+            custrings/text/edit_distance.cu
+            custrings/text/ngram.cu
+            custrings/text/stemmer.cu
+            custrings/text/tokens.cu
             custrings/util.cu)
 
 add_library(cudf
@@ -354,6 +358,8 @@ add_library(cudf
             src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
+            src/quantiles/group_quantiles.cu
+            src/quantiles/groupby.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
@@ -508,6 +514,10 @@ install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
 add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
+
+if(BUILD_TESTS)
+    add_dependencies(install_cudf cudftestutil)
+endif(BUILD_TESTS)
 
 add_custom_target(install_nvstrings
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"

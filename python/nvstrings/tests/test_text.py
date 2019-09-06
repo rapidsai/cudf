@@ -256,3 +256,24 @@ def test_ngrams():
     tokens = nvtext.tokenize(dstrings)
     outcome = nvtext.ngrams(tokens, N=3, sep="-")
     assert outcome.to_host() == expected
+
+
+def test_scatter_count():
+    # regular
+    strings = ["Dickens", "Einstein", "Christie"]
+    dstrings = nvstrings.to_device(strings)
+    expected = [
+        "Dickens",
+        "Einstein",
+        "Einstein",
+        "Christie",
+        "Christie",
+        "Christie",
+    ]
+    outcome = nvtext.scatter_count(dstrings, [1, 2, 3])
+    assert outcome.to_host() == expected
+
+    # with nulls
+    expected = ["Dickens", "Dickens"]
+    outcome = nvtext.scatter_count(dstrings, [2, 0, None])
+    assert outcome.to_host() == expected
