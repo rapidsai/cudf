@@ -201,6 +201,7 @@ set(SOURCE_FILES
     "src/CudfJni.cpp"
     "src/CudaJni.cpp"
     "src/ColumnVectorJni.cpp"
+    "src/NvtxRangeJni.cpp"
     "src/RmmJni.cpp"
     "src/TableJni.cpp")
 add_library(cudfjni SHARED ${SOURCE_FILES})
