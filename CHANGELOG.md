@@ -11,6 +11,7 @@
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2674 Add __contains__ for Index/Series/Column
 - PR #2722 Add Java bindings for NVTX ranges
+- PR #2702 Add make_bool to dataset generation functions
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
