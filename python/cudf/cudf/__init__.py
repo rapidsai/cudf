@@ -1,5 +1,5 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
-
+import sys
 from importlib import import_module
 
 import numba.cuda
@@ -99,3 +99,23 @@ def __getattr__(var):
     __locals[var] = val
 
     return val
+
+
+# Module-level __getattr__() support was not added prior to 3.7
+# Create a wrapper class to call __getattr__() and replace the system-wide cudf
+# module with an instance of it.
+if (sys.version_info.major == 3) and (sys.version_info.minor < 7):
+    import types
+
+    class CudfModule(types.ModuleType):
+        def __getattribute__(self, var):
+            try:
+                return getattr(__cudfModule__, var)
+            except AttributeError:
+                if var in __all__:
+                    return __getattr__(var)
+                else:
+                    return super(CudfModule, self).__getattribute__(var)
+
+    __cudfModule__ = sys.modules["cudf"]
+    sys.modules["cudf"] = CudfModule("cudf")

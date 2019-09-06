@@ -20,8 +20,11 @@ def teardown_function(function):
     """
     "unimport" cudf
     """
-    globals().pop("cudf", None)
-    sys.modules.pop("cudf", None)
+    allCudfSubMods = [m for m in sys.modules.keys() if m.startswith("cudf.")]
+    g = globals()
+    for m in ["cudf"] + allCudfSubMods:
+        g.pop(m, None)
+        sys.modules.pop(m, None)
 
 
 def __getVarsLoaded(module):
@@ -29,7 +32,7 @@ def __getVarsLoaded(module):
     Return the set of vars loaded in the module, minus "extra" vars used by the
     lazy-loading mechanism.
     """
-    extraVars = ["import_module", "numba"]
+    extraVars = ["import_module", "numba", "sys", "CudfModule", "types"]
     return set(
         [
             k
@@ -103,6 +106,20 @@ def test_access_names():
     # Only names explicitly imported above should be present
     varsLoaded = __getVarsLoaded(cudf)
     assert varsLoaded == set(["Index", "read_avro", "arcsin"])
+
+
+def test_bad_name():
+    """
+    Ensure an invalid namespace name raises an exception.
+    """
+    exceptionRaised = False
+    try:
+        from cudf import fffdddsssaaa  # noqa: F401
+    except Exception:
+        # FIXME: do not use a catch-all handler
+        exceptionRaised = True
+
+    assert exceptionRaised
 
 
 def test_cuda_context_created():
