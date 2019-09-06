@@ -53,7 +53,7 @@ char32_t* to_char32( const char* ca )
     char32_t* rtn = new char32_t[count+1];
     char32_t* optr = rtn;
     const char* iptr = ca;
-    for( int i=0; i < (int) size; ++i )
+    for( unsigned int i=0; i < size; ++i )
     {
         Char oc = 0;
         unsigned int cw = custring_view::char_to_Char(iptr,oc);

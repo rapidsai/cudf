@@ -120,7 +120,7 @@ NVStrings* NVStrings::replace_re( std::vector<const char*>& patterns, NVStrings&
     // compile regex's into device objects
     rmm::device_vector<dreprog*> progs;
     int regex_insts = 0;
-    for( int idx=0; idx < (int) patterns.size(); ++idx )
+    for( int idx=0; idx < (int)patterns.size(); ++idx )
     {
         const char* pattern = patterns[idx];
         if( !pattern )
