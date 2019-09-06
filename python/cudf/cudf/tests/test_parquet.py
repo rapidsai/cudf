@@ -2,7 +2,6 @@
 
 import os
 import random
-from distutils.version import LooseVersion
 from io import BytesIO
 from string import ascii_letters
 
@@ -224,7 +223,7 @@ def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
     if pandas_compat or columns is None or "b" in columns:
         assert got.index.name == "b"
     else:
-        assert got.index.name == None
+        assert got.index.name is None
     assert_eq(expect, got, check_categorical=False)
 
 
