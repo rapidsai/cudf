@@ -88,13 +88,11 @@ gdf_size_type groupby::num_keys() {
     return _num_keys;
 
   if (has_nulls(_keys)) {
-    auto keys_row_bitmask = row_bitmask(_keys, _stream);
-
     // The number of rows w/o null values `n` is indicated by number of valid bits
     // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
     // in the sorted order are considered for grouping. 
     CUDF_TRY(gdf_count_nonzero_mask(
-      reinterpret_cast<gdf_valid_type*>(keys_row_bitmask.data().get()),
+      reinterpret_cast<gdf_valid_type*>(keys_row_bitmask().data().get()),
       _keys.num_rows(),
       &_num_keys));
   } else {
@@ -125,14 +123,12 @@ gdf_column const& groupby::key_sort_order() {
                           _keys.num_columns(), _key_sorted_order.get(),
                           &context));
   } else {  // Pandas style
-    auto keys_row_bitmask = row_bitmask(_keys, _stream);
-
    // Temporarily replace the first column's bitmask with one that indicates the 
    // presence of a null value within a row.  This allows moving all rows that contain
    // a null value to the end of the sorted order. 
     gdf_column null_row_representative = *(_keys.get_column(0));
     null_row_representative.valid =
-        reinterpret_cast<gdf_valid_type*>(keys_row_bitmask.data().get());
+        reinterpret_cast<gdf_valid_type*>(keys_row_bitmask().data().get());
 
     cudf::table keys{_keys};
     std::vector<gdf_column*> modified_keys(keys.begin(), keys.end());
@@ -238,6 +234,16 @@ gdf_column const& groupby::unsorted_keys_labels() {
   return *_unsorted_keys_labels;
 }
 
+rmm::device_vector<bit_mask::bit_mask_t>&
+groupby::keys_row_bitmask() {
+  if (_keys_row_bitmask)
+    return *_keys_row_bitmask;
+
+  _keys_row_bitmask = 
+    bitmask_vec_pointer( new bitmask_vector(row_bitmask(_keys, _stream)));
+
+  return *_keys_row_bitmask;
+}
 
 std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
 groupby::sort_values(gdf_column const& values) {

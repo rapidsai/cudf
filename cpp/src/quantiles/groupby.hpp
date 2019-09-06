@@ -41,8 +41,10 @@ namespace detail {
  */
 struct groupby {
   using index_vector = rmm::device_vector<gdf_size_type>;
+  using bitmask_vector = rmm::device_vector<bit_mask::bit_mask_t>;
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
-  using index_vec_pointer = std::unique_ptr<rmm::device_vector<gdf_size_type>>;
+  using index_vec_pointer = std::unique_ptr<index_vector>;
+  using bitmask_vec_pointer = std::unique_ptr<bitmask_vector>;
 
   /**
    * @brief Construct a new groupby object
@@ -146,6 +148,14 @@ struct groupby {
    */
   gdf_column const& unsorted_keys_labels();
 
+  /**
+   * @brief Get the row bitmask for the `keys`
+   * 
+   * Computes and stores bitmask on first invocation and returns stored bitmask on
+   * subsequent calls.
+   */
+  bitmask_vector& keys_row_bitmask();
+
  private:
 
   gdf_col_pointer     _key_sorted_order;
@@ -160,6 +170,7 @@ struct groupby {
 
   cudaStream_t        _stream;
 
+  bitmask_vec_pointer _keys_row_bitmask;
 };
 
 } // namespace detail
