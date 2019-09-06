@@ -15,8 +15,8 @@ TEST(TestFind, Compare)
     thrust::device_vector<int> results(hstrs.size(),0);
     strs->compare("thesé",results.data().get());
 
-    int expected[] = { -44,0,-1,-51,-165,-1 };
-    for( int idx = 0; idx < (int) hstrs.size(); ++idx )
+    int expected[] = { -44,0,-1,-51,91,-1 };
+    for( unsigned int idx=0; idx<hstrs.size(); ++idx )
         EXPECT_EQ(results[idx],expected[idx]);
 
     NVStrings::destroy(strs);
