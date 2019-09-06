@@ -1039,25 +1039,25 @@ void Reprog::optimize1()
 // expand leading ORs to multiple startinst_ids
 void Reprog::optimize2()
 {
-	startinst_ids.clear();
-	std::vector<int> stack;
-	stack.push_back(startinst_id);
-	while(stack.size() > 0)
-	{
-		int id = *(stack.end() - 1);
-		stack.pop_back();
-		const Reinst& inst = insts[id];
-		if(inst.type == OR)
-		{
-			stack.push_back(inst.u2.left_id);
-			stack.push_back(inst.u1.right_id);
-		}
-		else
-		{
-			startinst_ids.push_back(id);
-		}
-	}
-	startinst_ids.push_back(-1); // terminator mark
+    startinst_ids.clear();
+    std::vector<int> stack;
+    stack.push_back(startinst_id);
+    while(stack.size() > 0)
+    {
+        int id = *(stack.end() - 1);
+        stack.pop_back();
+        const Reinst& inst = insts[id];
+        if(inst.type == OR)
+        {
+            stack.push_back(inst.u2.left_id);
+            stack.push_back(inst.u1.right_id);
+        }
+        else
+        {
+            startinst_ids.push_back(id);
+        }
+    }
+    startinst_ids.push_back(-1); // terminator mark
 }
 
 void Reprog::print()
@@ -1129,13 +1129,13 @@ void Reprog::print()
         }
         printf("\n");
     }
-    
+
     printf("startinst_id=%d\n", startinst_id);
     if( startinst_ids.size() > 0 )
     {
-	    printf("startinst_ids:");
-	    for (size_t i = 0; i < startinst_ids.size(); i++)
-		    printf(" %d", startinst_ids[i]);
+        printf("startinst_ids:");
+        for (size_t i = 0; i < startinst_ids.size(); i++)
+            printf(" %d", startinst_ids[i]);
         printf("\n");
     }
 

@@ -164,6 +164,23 @@ TEST(TestText, PorterStemmerMeasure)
 }
 
 
+TEST(TestText, ScatterCount)
+{
+    std::vector<const char*> names{ "Larry", "Curly", "Moe" };
+    NVStrings* strs = NVStrings::create_from_array(names.data(),names.size());
+    unsigned int hcounts[] = { 3,0,1 };
+    thrust::device_vector<unsigned int> counts(strs->size(),0);
+    for( unsigned int idx=0; idx < strs->size(); ++idx )
+        counts[idx] = hcounts[idx];
+    NVStrings* got = NVText::scatter_count(*strs,counts.data().get());
+
+    const char* expected[] = { "Larry", "Larry", "Larry", "Moe" };
+    EXPECT_TRUE( verify_strings(got,expected));
+
+    NVStrings::destroy(got);
+    NVStrings::destroy(strs);
+}
+
 int main( int argc, char** argv )
 {
     testing::InitGoogleTest(&argc,argv);

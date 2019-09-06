@@ -672,9 +672,14 @@ table reader::Impl::read()
 
   for (int i = 0; i < num_active_cols; ++i) {
     if (columns[i]->dtype == GDF_STRING) {
-      std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_data(
-        NVStrings::create_from_index(static_cast<string_pair *>(columns[i]->data), columns[i]->size), 
-        &NVStrings::destroy);
+
+      using str_pair = std::pair<const char *, size_t>;
+      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+
+      auto str_list = static_cast<str_pair *>(columns[i]->data);
+      str_ptr str_data(NVStrings::create_from_index(str_list, columns[i]->size),
+                       &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_TRY(RMM_FREE(columns[i]->data, 0));
 
       // PANDAS' default behavior of enabling doublequote for two consecutive

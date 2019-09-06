@@ -89,6 +89,7 @@ class gdf_column_wrapper {
       auto str_list = static_cast<str_pair *>(col->data);
       str_ptr str_data(NVStrings::create_from_index(str_list, col->size),
                        &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_FREE(std::exchange(col->data, str_data.release()), 0);
     }
   }
