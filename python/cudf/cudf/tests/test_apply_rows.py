@@ -20,6 +20,7 @@ def test_dataframe_apply_rows(dtype, has_nulls, pessimistic):
     gdf_series_c = gen_rand_series(dtype, count, has_nulls=has_nulls)
 
     if pessimistic:
+        # pessimistically combine the null masks
         gdf_series_expected = gdf_series_a * gdf_series_b
     else:
         # optimistically ignore the null masks

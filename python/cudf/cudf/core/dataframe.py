@@ -2656,7 +2656,11 @@ class DataFrame(object):
 
         Parameters
         ----------
-        {params}
+        pessimistic_nulls : bool
+            Whether or not apply_rows should output nulls when an input is
+            null. If false, all outputs will be non-null, but will be the
+            result of applying func against the underlying column data, which
+            may be garbage.
 
         Examples
         --------
@@ -2712,15 +2716,18 @@ class DataFrame(object):
 
     @applyutils.doc_applychunks()
     def apply_chunks(
-        self, func, incols, outcols, kwargs={}, chunks=None, tpb=1
+        self, func, incols, outcols, kwargs={}, pessimistic_nulls=True, chunks=None, tpb=1
     ):
         """
         Transform user-specified chunks using the user-provided function.
 
         Parameters
         ----------
-        {params}
-        {params_chunks}
+        pessimistic_nulls : bool
+            Whether or not apply_rows should output nulls when an input is
+            null. If false, all outputs will be non-null, but will be the
+            result of applying func against the underlying column data, which
+            may be garbage.
 
         Examples
         --------
@@ -2757,7 +2764,7 @@ class DataFrame(object):
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
-            self, func, incols, outcols, kwargs, chunks=chunks, tpb=tpb
+            self, func, incols, outcols, kwargs, pessimistic_nulls, chunks, tpb=tpb
         )
 
     def hash_columns(self, columns=None):
