@@ -3542,7 +3542,7 @@ class DataFrame(object):
             return self._apply_rowwise_op("cumprod", numeric_only=numeric_only)
         return self._apply_support_method("cumprod", **kwargs)
 
-    def mean(self, numeric_only=None, axis=0, **kwargs):
+    def mean(self, axis=0, numeric_only=None, **kwargs):
         """Return the mean of the values for the requested axis.
         Parameters
         ----------
