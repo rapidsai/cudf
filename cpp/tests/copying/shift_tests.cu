@@ -37,30 +37,8 @@
    );
  }
 
-//  template <typename ColumnType>
-//  void test(
-//    gdf_index_type period,
-//    scalar_wrapper<ColumnType> fill_value,
-//    column_wrapper<ColumnType> source_column,
-//    column_wrapper<ColumnType> expect_column
-//  )
-//  {
-//    cudf::table source{source_column.get()};
-//    cudf::table expect{expect_column.get()};
- 
-//    auto shifted = cudf::shift(source, period, fill_value);
- 
-//    auto actual_column = *shifted.get_column(0);
- 
-//    print_gdf_column(source_column.get());
-//    print_gdf_column(expect_column.get());
-//    print_gdf_column(&actual_column);
- 
-//    ASSERT_EQ(expect_column, *shifted.get_column(0));
-//  }
-
  template <typename ColumnType>
- void test_shift_column(
+ void test_shift(
    gdf_index_type period,
    scalar_wrapper<ColumnType> fill_value,
    column_wrapper<ColumnType> source_column,
@@ -91,7 +69,7 @@ TEST_F(ShiftTest, positive)
     {0, 0, 0, 1, 0, 1, 1, 1, 0}
   );
 
-  test_shift_column(
+  test_shift(
     2,
     scalar_wrapper<int32_t>(0, false),
     source_column,
@@ -111,7 +89,7 @@ TEST_F(ShiftTest, negative)
     {0, 1, 1, 1, 0, 1, 0, 0, 0}
   );
 
-  test_shift_column(-2, scalar_wrapper<int32_t>(0, false), source_column, expect_column);
+  test_shift(-2, scalar_wrapper<int32_t>(0, false), source_column, expect_column);
 }
 
 TEST_F(ShiftTest, valid_fill)
@@ -126,7 +104,7 @@ TEST_F(ShiftTest, valid_fill)
     {1, 1, 1, 0, 1, 0, 1, 1, 1}
   );
 
-  test_shift_column(3, scalar_wrapper<int32_t>{5, true}, source_column, expect_column);
+  test_shift(3, scalar_wrapper<int32_t>{5, true}, source_column, expect_column);
 }
 
 }

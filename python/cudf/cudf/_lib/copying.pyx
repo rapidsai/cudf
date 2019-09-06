@@ -10,7 +10,12 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
 import cudf.utils.utils as utils
-from cudf._lib.utils cimport columns_from_table, table_from_columns
+from cudf._lib.utils cimport (
+    columns_from_table,
+    table_from_columns,
+    table_from_dataframe,
+    table_to_dataframe
+)
 from librmm_cffi import librmm as rmm
 from cudf._lib.includes.copying cimport (
     copy as cpp_copy,
@@ -268,25 +273,50 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def shift_column(input_column, period, fill_value):
+def shift_table(df, period, fill_value):
     """
         Call cudf::shift
     """
-    cdef gdf_column* c_input_column = column_view_from_column(input_column)
+    cdef cudf_table* c_input_table = table_from_dataframe(df)
     cdef gdf_index_type c_period = period
     cdef gdf_scalar* c_fill_value = NULL
-    cdef gdf_column c_output_columncpp_shift
+    cdef cudf_table c_output_table
 
     if fill_value is not None:
         c_fill_value = gdf_scalar_from_scalar(fill_value)
 
     with nogil:
-        c_output_column = cpp_shift(
-            c_input_column[0],
+        c_output_table = cpp_shift(
+            c_input_table[0],
             c_period,
             c_fill_value
         )
 
-    free_column(c_input_column)
+    free_table(c_input_table)
 
-    return gdf_column_to_column(&c_output_column)
+    return table_to_dataframe(&c_output_table)
+
+def shift_column(column, period, fill_value):
+    """
+        Call cudf::shift
+    """
+    cdef cudf_table* c_input_table = table_from_columns([column])
+    cdef gdf_index_type c_period = period
+    cdef gdf_scalar* c_fill_value = NULL
+    cdef cudf_table c_output_table
+
+    if fill_value is not None:
+        c_fill_value = gdf_scalar_from_scalar(fill_value)
+
+    with nogil:
+        c_output_table = cpp_shift(
+            c_input_table[0],
+            c_period,
+            c_fill_value
+        )
+
+    columns = columns_from_table(&c_output_table)
+
+    free_table(c_input_table)
+
+    return columns[0]

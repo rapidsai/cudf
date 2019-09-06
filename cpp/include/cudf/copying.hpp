@@ -346,11 +346,9 @@ std::vector<gdf_column*> split(gdf_column const &          input_column,
 
 
 
-gdf_column shift(
-    gdf_column const& in_column,
-    gdf_index_type offset,
-    gdf_scalar const* fill_value
-);
+table shift(const table& in_table,
+            gdf_index_type period,
+            const gdf_scalar* fill_value);
 
 }  // namespace cudf
 
