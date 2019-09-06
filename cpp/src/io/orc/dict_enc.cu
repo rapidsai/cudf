@@ -41,35 +41,54 @@ namespace gpu {
 #define MAX_SHORT_DICT_ENTRIES      (10*1024)
 
 
-static inline bool __device__ nvstr_is_greater(const char *as, uint32_t alen, const char *bs, uint32_t blen)
+template<class T, const T lesser, const T greater, const T equal>
+inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs, uint32_t blen)
 {
     uint32_t len = min(alen, blen);
-    for (uint32_t i = 0; i < len; i++)
+    uint32_t i = 0;
+    if (len >= 4)
+    {
+        uint32_t align_a = 3 & reinterpret_cast<uintptr_t>(as);
+        uint32_t align_b = 3 & reinterpret_cast<uintptr_t>(bs);
+        const uint32_t *as32 = reinterpret_cast<const uint32_t *>(as - align_a);
+        const uint32_t *bs32 = reinterpret_cast<const uint32_t *>(bs - align_b);
+        uint32_t ofsa = align_a * 8;
+        uint32_t ofsb = align_b * 8;
+        do {
+            uint32_t a = *as32++;
+            uint32_t b = *bs32++;
+            if (ofsa)
+                a = __funnelshift_r(a, *as32, ofsa);
+            if (ofsb)
+                b = __funnelshift_r(b, *bs32, ofsb);
+            if (a != b)
+            {
+                return (lesser == greater || __byte_perm(a, 0, 0x0123) < __byte_perm(b, 0, 0x0123)) ? lesser : greater;
+            }
+            i += 4;
+        } while (i + 4 <= len);
+    }
+    while (i < len)
     {
         uint8_t a = as[i];
         uint8_t b = bs[i];
         if (a != b)
         {
-            return (a > b);
+            return (a < b) ? lesser : greater;
         }
+        ++i;
     }
-    return (alen > blen);
+    return (alen == blen) ? equal : (alen < blen) ? lesser : greater;
 }
 
+static inline bool __device__ nvstr_is_lesser(const char *as, uint32_t alen, const char *bs, uint32_t blen)
+{
+    return nvstr_compare<bool, true, false, false>(as, alen, bs, blen);
+}
 static inline bool __device__ nvstr_is_equal(const char *as, uint32_t alen, const char *bs, uint32_t blen)
 {
-    if (alen != blen)
-        return false;
-    for (uint32_t i = 0; i < alen; i++)
-    {
-        if (as[i] != bs[i])
-        {
-            return false;
-        }
-    }
-    return true;
+    return nvstr_compare<bool, false, false, true>(as, alen, bs, blen);
 }
-
 
 struct dictinit_state_s
 {
@@ -443,13 +462,13 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
 }
 
 
-struct nvstr_compare : public thrust::binary_function<uint32_t, uint32_t, bool>
+struct nvstr_compare_op : public thrust::binary_function<uint32_t, uint32_t, bool>
 {
     const nvstrdesc_s *str_data;
-    nvstr_compare(const nvstrdesc_s *str_data_) : str_data(str_data_) {}
+    nvstr_compare_op(const nvstrdesc_s *str_data_) : str_data(str_data_) {}
     inline __device__ bool operator()(const int a, const int b) const
     {
-        return nvstr_is_greater(str_data[a].ptr, (uint32_t)str_data[a].count, str_data[b].ptr, (uint32_t)str_data[b].count);
+        return nvstr_is_lesser(str_data[a].ptr, (uint32_t)str_data[a].count, str_data[b].ptr, (uint32_t)str_data[b].count);
     }
 };
 
@@ -482,12 +501,12 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary 
             thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[j * num_columns + i].dict_data);
             const nvstrdesc_s *str_data = reinterpret_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
         #if 1
-            thrust::sort(thrust::device, p, p + stripes_host[j * num_columns + i].num_strings, nvstr_compare(str_data));
+            thrust::sort(thrust::device, p, p + stripes_host[j * num_columns + i].num_strings, nvstr_compare_op(str_data));
         #else
             // Requires the --expt-extended-lambda nvcc flag (same perf as above)
             thrust::sort(p, p + stripes_host[j * num_columns + i].num_strings,
                 [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
-                return nvstr_is_greater(str_data[lhs].ptr, (uint32_t)str_data[lhs].count, str_data[rhs].ptr, (uint32_t)str_data[rhs].count);
+                return nvstr_is_lesser(str_data[lhs].ptr, (uint32_t)str_data[lhs].count, str_data[rhs].ptr, (uint32_t)str_data[rhs].count);
             });
         #endif
         }
