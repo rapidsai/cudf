@@ -16,6 +16,10 @@ add_library(cudftestutil STATIC
 
 target_link_libraries(cudftestutil cudf)
 
+install(TARGETS cudftestutil
+        DESTINATION lib
+        COMPONENT cudf)
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 

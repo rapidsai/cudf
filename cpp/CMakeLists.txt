@@ -510,6 +510,10 @@ add_custom_target(install_cudf
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS cudf)
 
+if(BUILD_TESTS)
+    add_dependencies(install_cudf cudftestutil)
+endif(BUILD_TESTS)
+
 add_custom_target(install_nvstrings
                   COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
                   DEPENDS nvstrings)
