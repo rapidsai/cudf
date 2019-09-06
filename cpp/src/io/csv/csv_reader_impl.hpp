@@ -69,6 +69,7 @@ private:
 
   // Intermediate data
   std::vector<gdf_dtype> dtypes;      ///< Array of dtypes (since gdf_columns are not created until end).
+  std::vector<gdf_dtype_extra_info> dtypes_extra_info; ///< Array of dtype_extra_info for each dtype.
   std::vector<std::string> col_names; ///< Array of column names.
   std::vector<char> header;           ///< Header row data, for parsing column names.
 

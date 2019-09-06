@@ -25,6 +25,9 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <iterator>
+#include <utility>
 
 #include <fcntl.h>
 #include <stdio.h>
@@ -712,25 +715,34 @@ void reader::Impl::setDataTypes() {
     });
     if (is_dict) {
       std::map<std::string, gdf_dtype> col_type_map;
+      std::map<std::string, gdf_dtype_extra_info> col_type_info_map;
       for (const auto &ts : args_.dtype) {
         const size_t colon_idx = ts.find(":");
         const std::string col_name(ts.begin(), ts.begin() + colon_idx);
         const std::string type_str(ts.begin() + colon_idx + 1, ts.end());
-        col_type_map[col_name] = convertStringToDtype(type_str);
+        std::tie(
+          col_type_map[col_name],
+          col_type_info_map[col_name]
+        ) = convertStringToDtype(type_str);
       }
 
       // Using the map here allows O(n log n) complexity
       for (size_t col = 0; col < args_.dtype.size(); ++col) {
         dtypes_.push_back(col_type_map[column_names_[col]]);
+        dtypes_extra_info_.push_back(col_type_info_map[column_names_[col]]);
       }
     } else {
+      auto dtype_ = std::back_inserter(dtypes_);
+      auto dtype_info_ = std::back_inserter(dtypes_extra_info_);
       for (size_t col = 0; col < args_.dtype.size(); ++col) {
-        dtypes_.push_back(convertStringToDtype(args_.dtype[col]));
+        std::tie(dtype_, dtype_info_) = convertStringToDtype(args_.dtype[col]);
       }
     }
   } else {
     CUDF_EXPECTS(rec_starts_.size() != 0, "No data available for data type inference.\n");
     const auto num_columns = column_names_.size();
+
+    dtypes_extra_info_ = std::vector<gdf_dtype_extra_info>(num_columns, gdf_dtype_extra_info{ TIME_UNIT_NONE });
 
     rmm::device_vector<ColumnInfo> d_column_infos(num_columns, ColumnInfo{});
     detectDataTypes(d_column_infos.data().get());
