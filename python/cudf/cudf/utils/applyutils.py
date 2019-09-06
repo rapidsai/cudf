@@ -67,7 +67,9 @@ def apply_rows(
 
 
 @doc_applychunks()
-def apply_chunks(df, func, incols, outcols, kwargs, pessimistic_nulls, chunks, tpb):
+def apply_chunks(
+    df, func, incols, outcols, kwargs, pessimistic_nulls, chunks, tpb
+):
     """Chunk-wise transformation
 
     Parameters

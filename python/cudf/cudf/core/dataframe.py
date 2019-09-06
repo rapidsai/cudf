@@ -2716,7 +2716,14 @@ class DataFrame(object):
 
     @applyutils.doc_applychunks()
     def apply_chunks(
-        self, func, incols, outcols, kwargs={}, pessimistic_nulls=True, chunks=None, tpb=1
+        self,
+        func,
+        incols,
+        outcols,
+        kwargs={},
+        pessimistic_nulls=True,
+        chunks=None,
+        tpb=1,
     ):
         """
         Transform user-specified chunks using the user-provided function.
@@ -2764,7 +2771,14 @@ class DataFrame(object):
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
-            self, func, incols, outcols, kwargs, pessimistic_nulls, chunks, tpb=tpb
+            self,
+            func,
+            incols,
+            outcols,
+            kwargs,
+            pessimistic_nulls,
+            chunks,
+            tpb=tpb,
         )
 
     def hash_columns(self, columns=None):
