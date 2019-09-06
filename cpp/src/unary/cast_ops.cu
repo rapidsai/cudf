@@ -52,6 +52,14 @@ struct DeviceCast {
     }
 };
 
+template<typename TypeFrom>
+struct DeviceCast<TypeFrom, cudf::bool8> {
+    __device__
+    cudf::bool8 apply(TypeFrom data) {
+        return static_cast<cudf::bool8>(static_cast<bool>(cudf::detail::unwrap(data)));
+    }
+};
+
 template<typename TypeFrom, typename TypeTo, int64_t units_factor>
 struct UpCasting {
     __device__
