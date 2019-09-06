@@ -48,7 +48,9 @@ doc_applychunks = docfmt_partial(
 
 
 @doc_apply()
-def apply_rows(df, func, incols, outcols, kwargs, cache_key):
+def apply_rows(
+    df, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
+):
     """Row-wise transformation
 
     Parameters
@@ -59,7 +61,7 @@ def apply_rows(df, func, incols, outcols, kwargs, cache_key):
 
     """
     applyrows = ApplyRowsCompiler(
-        func, incols, outcols, kwargs, cache_key=cache_key
+        func, incols, outcols, kwargs, pessimistic_nulls, cache_key=cache_key
     )
     return applyrows.run(df)
 
@@ -76,7 +78,7 @@ def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
     {params_chunks}
     """
     applyrows = ApplyChunksCompiler(
-        func, incols, outcols, kwargs, cache_key=None
+        func, incols, outcols, kwargs, pessimistic_nulls=False, cache_key=None
     )
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
@@ -102,13 +104,16 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
 
 
 class ApplyKernelCompilerBase(object):
-    def __init__(self, func, incols, outcols, kwargs, cache_key):
+    def __init__(
+        self, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
+    ):
         # Get signature of user function
         sig = pysignature(func)
         self.sig = sig
         self.incols = incols
         self.outcols = outcols
         self.kwargs = kwargs
+        self.pessimistic_nulls = pessimistic_nulls
         self.cache_key = cache_key
         self.kernel = self.compile(func, sig.parameters.keys(), kwargs.keys())
 
@@ -127,7 +132,10 @@ class ApplyKernelCompilerBase(object):
         # Launch kernel
         self.launch_kernel(df, bound.args, **launch_params)
         # Prepare pessimistic nullmask
-        out_mask = make_aggregate_nullmask(df)
+        if self.pessimistic_nulls:
+            out_mask = make_aggregate_nullmask(df, columns=self.incols)
+        else:
+            out_mask = None
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):

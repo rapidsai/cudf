@@ -2642,7 +2642,15 @@ class DataFrame(object):
         return result
 
     @applyutils.doc_apply()
-    def apply_rows(self, func, incols, outcols, kwargs, cache_key=None):
+    def apply_rows(
+        self,
+        func,
+        incols,
+        outcols,
+        kwargs,
+        pessimistic_nulls=True,
+        cache_key=None,
+    ):
         """
         Apply a row-wise user defined function.
 
@@ -2693,7 +2701,13 @@ class DataFrame(object):
         2    2    2    2  2.0 -4.0
         """
         return applyutils.apply_rows(
-            self, func, incols, outcols, kwargs, cache_key=cache_key
+            self,
+            func,
+            incols,
+            outcols,
+            kwargs,
+            pessimistic_nulls,
+            cache_key=cache_key,
         )
 
     @applyutils.doc_applychunks()
