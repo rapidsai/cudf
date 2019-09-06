@@ -1569,6 +1569,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
 
+  private static native long rollingWindow(long cudfColumnHandle, int window, int min_periods,
+                                           int forward_window, int agg_type, long window_col,
+                                           long min_periods_col, long forward_window_col);
+
   private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
 
   private static native long hash(long cudfColumnHandle, int nativeHashId) throws CudfException;
@@ -2136,6 +2140,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public Scalar approxQuantile(double quantile) {
     return approxQuantile(this.getNativeCudfColumnAddress(), quantile);
+  }
+
+  /**
+   * This function aggregates values in a window around each element i of the input
+   * column. Please refer to WindowsOptions for various options that can be passed.
+   * @param opts various window function arguments.
+   * @return Column containing aggregate function result.
+   */
+  public ColumnVector rollingWindow(WindowOptions opts) {
+    return new ColumnVector(
+        rollingWindow(this.getNativeCudfColumnAddress(),
+            opts.getWindow() >= 0 ? opts.getWindow() : 0,
+            opts.getMinPeriods() >= 0 ? opts.getMinPeriods() : 0,
+            opts.getForwardWindow() >=0 ? opts.getForwardWindow() : 0,
+            opts.getAggType().nativeId,
+            opts.getWindowCol() == null ? 0 : opts.getWindowCol().getNativeCudfColumnAddress(),
+            opts.getMinPeriodsCol() == null ? 0 : opts.getMinPeriodsCol().getNativeCudfColumnAddress(),
+            opts.getForwardWindowCol() == null ? 0 :
+            opts.getForwardWindowCol().getNativeCudfColumnAddress()));
   }
 
   /**

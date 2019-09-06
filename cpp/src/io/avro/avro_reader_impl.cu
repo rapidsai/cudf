@@ -188,8 +188,8 @@ table reader::Impl::read(int skip_rows, int num_rows) {
                (uint64_t)columns.back()->data, (uint64_t)columns.back()->valid);
   }
 
-  device_buffer<uint8_t> block_data(md_->total_data_size);
   if (md_->total_data_size > 0) {
+    device_buffer<uint8_t> block_data(md_->total_data_size);
     const auto buffer =
         source_->get_buffer(md_->block_list[0].offset, md_->total_data_size);
     CUDA_TRY(cudaMemcpyAsync(block_data.data(), buffer->data(), buffer->size(),
@@ -263,6 +263,10 @@ table reader::Impl::read(int skip_rows, int num_rows) {
     // Write out columns
     decode_data(block_data, dict, global_dictionary, total_dictionary_entries,
                 columns);
+
+    // Finalize string columns (can't be moved out of the block since the data may
+    // reference the dictionary)
+    init_string_columns(columns);
   } else {
     for (auto &column : columns) {
       CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
@@ -273,8 +277,20 @@ table reader::Impl::read(int skip_rows, int num_rows) {
             column->size * sizeof(std::pair<const char *, size_t>)));
       }
     }
+    init_string_columns(columns);
   }
 
+  // Transfer ownership to raw pointer output arguments
+  std::vector<gdf_column *> out_cols(columns.size());
+  for (size_t i = 0; i < columns.size(); ++i) {
+    out_cols[i] = columns[i].release();
+  }
+
+  return table(out_cols.data(), out_cols.size());
+}
+
+void reader::Impl::init_string_columns(const std::vector<gdf_column_wrapper> &columns)
+{
   // For string dtype, allocate an NvStrings container instance, deallocating
   // the original string list memory in the process.
   // This container takes a list of string pointers and lengths, and copies
@@ -285,19 +301,12 @@ table reader::Impl::read(int skip_rows, int num_rows) {
       using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
 
       auto str_list = static_cast<str_pair *>(column->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
+      str_ptr str_data(NVStrings::create_from_index(str_list, column->size),
                        &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_FREE(std::exchange(column->data, str_data.release()), 0);
     }
   }
-
-  // Transfer ownership to raw pointer output arguments
-  std::vector<gdf_column *> out_cols(columns.size());
-  for (size_t i = 0; i < columns.size(); ++i) {
-    out_cols[i] = columns[i].release();
-  }
-
-  return table(out_cols.data(), out_cols.size());
 }
 
 device_buffer<uint8_t> reader::Impl::decompress_data(
@@ -360,10 +369,10 @@ device_buffer<uint8_t> reader::Impl::decompress_data(
                              inflate_out.memory_size(), 0));
     if (md_->codec == "deflate") {
       CUDA_TRY(gpuinflate(inflate_in.device_ptr(), inflate_out.device_ptr(),
-                          inflate_in.memory_size(), 0, 0));
+                          inflate_in.size(), 0, 0));
     } else if (md_->codec == "snappy") {
       CUDA_TRY(gpu_unsnap(inflate_in.device_ptr(), inflate_out.device_ptr(),
-                          inflate_in.memory_size(), 0));
+                          inflate_in.size(), 0));
     } else {
       CUDF_FAIL("Unsupported compression codec\n");
     }

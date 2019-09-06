@@ -44,14 +44,16 @@ class NumericalColumn(column.TypedColumnBase):
         """
         Returns True if column contains item, else False.
         """
-        item_found = False
+        # Handles improper item types
+        # Fails if item is of type None, so the handler.
         try:
-            if self.find_first_value(item):
-                item_found = True
-        except ValueError:
-            """This means value not found"""
-
-        return item_found
+            if np.can_cast(item, self.data.mem.dtype):
+                item = self.data.mem.dtype.type(item)
+            else:
+                return False
+        except Exception:
+            return False
+        return libcudf.search.contains(self, item)
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
@@ -86,10 +88,10 @@ class NumericalColumn(column.TypedColumnBase):
         if isinstance(rhs, NumericalColumn) or np.isscalar(rhs):
             out_dtype = np.result_type(self.dtype, rhs.dtype)
             if binop in ["mod", "floordiv"]:
-                if (
+                if (tmp.dtype in int_dtypes) and (
                     (np.isscalar(tmp) and (0 == tmp))
                     or ((isinstance(tmp, NumericalColumn)) and (0.0 in tmp))
-                ) and (tmp.dtype in int_dtypes):
+                ):
                     out_dtype = np.dtype("float_")
             return _numeric_column_binop(
                 lhs=self,
@@ -254,6 +256,13 @@ class NumericalColumn(column.TypedColumnBase):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
+        if decimals < 0:
+            msg = "Decimal values < 0 are not yet supported."
+            raise NotImplementedError(msg)
+
+        if np.issubdtype(self.dtype, np.integer):
+            return self
+
         data = Buffer(cudautils.apply_round(self.data.mem, decimals))
         return self.replace(data=data)
 
