@@ -154,7 +154,7 @@ class StringMethods(object):
             If others is a StringMethods then
             raise an exception
             """
-            raise ValueError("series.str is an accessor," +\
+            raise ValueError("series.str is an accessor,"
                              " not an array-like of strings.")
         elif is_list_like(others) and others:
             """

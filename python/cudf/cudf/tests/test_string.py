@@ -412,7 +412,7 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
 @pytest.mark.xfail(raises=ValueError)
 @pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
 @pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
-def test_string_cat(ps_gs, sep, na_rep):
+def test_string_cat_str(ps_gs, sep, na_rep):
     ps, gs = ps_gs
 
     got = gs.str.cat(gs.str, sep=sep, na_rep=na_rep)
