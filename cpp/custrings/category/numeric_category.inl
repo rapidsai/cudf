@@ -708,8 +708,8 @@ numeric_category<T>* numeric_category<T>::set_keys( const T* items, size_t count
                     return lhs_null == rhs_null;
                 return (d_both_keys[lhs] == d_both_keys[rhs]);
             });
-    int copy_count = d_copy_end - d_map_indexes;
-    if( copy_count < (int) both_count )
+    size_t copy_count = d_copy_end - d_map_indexes;
+    if( copy_count < both_count )
     {   // if keys are removed, we need new keyset; the gather()s here will select the remaining keys
         rmm::device_vector<int> copy_indexes(copy_count);
         rmm::device_vector<int> copy_xvals(copy_count);
