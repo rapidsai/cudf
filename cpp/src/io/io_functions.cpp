@@ -153,6 +153,7 @@ table read_orc(orc_read_arg const &args) {
 table read_parquet(parquet_read_arg const &args) {
   auto reader = [&]() {
     parquet::reader_options options{args.columns, args.strings_to_categorical,
+                                    args.use_pandas_metadata,
                                     args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {

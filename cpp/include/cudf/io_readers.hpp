@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cudf.h"
@@ -371,6 +372,7 @@ namespace parquet {
 struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
+  bool use_pandas_metadata = false;
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
 
   reader_options() = default;
@@ -381,12 +383,14 @@ struct reader_options {
    *
    * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
+   * @param[in] read_pandas_indexes Whether to always load PANDAS index columns
    * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
   reader_options(std::vector<std::string> cols, bool strings_as_category,
-                 gdf_time_unit timestamp_time_unit)
+                 bool read_pandas_indexes, gdf_time_unit timestamp_time_unit)
       : columns(std::move(cols)),
         strings_to_categorical(strings_as_category),
+        use_pandas_metadata(read_pandas_indexes),
         timestamp_unit(timestamp_time_unit) {}
 };
 
@@ -417,7 +421,7 @@ class reader {
                   reader_options const &options);
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the index column derived from the dataset metadata.
+   * @brief Returns the PANDAS-specific index column derived from the metadata.
    *
    * @return std::string Name of the column if it exists.
    *---------------------------------------------------------------------------**/

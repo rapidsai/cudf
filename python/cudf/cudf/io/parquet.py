@@ -31,6 +31,7 @@ def read_parquet(
     skip_rows=None,
     num_rows=None,
     strings_to_categorical=False,
+    use_pandas_metadata=True,
     *args,
     **kwargs,
 ):
@@ -50,6 +51,7 @@ def read_parquet(
             skip_rows,
             num_rows,
             strings_to_categorical,
+            use_pandas_metadata,
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")
