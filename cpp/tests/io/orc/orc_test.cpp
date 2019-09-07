@@ -29,22 +29,29 @@ TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
     ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
 
 /**
- * @brief Base test fixture for ORC writer
+ * @brief Base test fixture for ORC reader/writer tests
  **/
-struct orc_writer_test : GdfTest {};
+struct OrcWriterTest : public GdfTest {};
 
 /**
- * @brief Typed test fixture for type-parameterized ORC writer tests
+ * @brief Typed test fixture for type-parameterized tests
  **/
 template <typename T>
-struct orc_writer_typed_test : orc_writer_test {};
+struct OrcWriterTypedParamTest : public OrcWriterTest {};
+
+/**
+ * @brief Test fixture for time-unit value-parameterized tests
+ **/
+struct OrcWriterValueParamTest
+    : public OrcWriterTest,
+      public testing::WithParamInterface<gdf_time_unit> {};
 
 /**
  * @brief cuDF types that can be written to ORC types
  **/
 using test_types = ::testing::Types<cudf::bool8, int8_t, int16_t, int32_t,
                                     int64_t, float, double>;
-TYPED_TEST_CASE(orc_writer_typed_test, test_types);
+TYPED_TEST_CASE(OrcWriterTypedParamTest, test_types);
 
 namespace {
 
@@ -93,11 +100,11 @@ void tables_are_equal(const cudf::table &left, const cudf::table &right) {
 
 }  // namespace
 
-TYPED_TEST(orc_writer_typed_test, SingleColumn) {
+TYPED_TEST(OrcWriterTypedParamTest, SingleColumn) {
   constexpr auto num_rows = 100;
   cudf::test::column_wrapper<TypeParam> col{random_values<TypeParam>(num_rows),
                                             [](size_t row) { return true; }};
-  column_set_name(col.get(), "col_" + std::string(typeid(TypeParam).name()));
+  column_set_name(col.get(), "col_" + std::string{typeid(TypeParam).name()});
 
   auto gdf_col = col.get();
   auto expected = cudf::table{&gdf_col, 1};
@@ -117,7 +124,7 @@ TYPED_TEST(orc_writer_typed_test, SingleColumn) {
   tables_are_equal(expected, result);
 }
 
-TYPED_TEST(orc_writer_typed_test, SingleColumnWithNulls) {
+TYPED_TEST(OrcWriterTypedParamTest, SingleColumnWithNulls) {
   constexpr auto num_rows = 100;
   auto nulls_threshold = 20;
   auto valids_func = [=](size_t row) {
@@ -125,7 +132,7 @@ TYPED_TEST(orc_writer_typed_test, SingleColumnWithNulls) {
   };
   cudf::test::column_wrapper<TypeParam> col{random_values<TypeParam>(num_rows),
                                             valids_func};
-  column_set_name(col.get(), "col_" + std::string(typeid(TypeParam).name()));
+  column_set_name(col.get(), "col_" + std::string{typeid(TypeParam).name()});
 
   auto gdf_col = col.get();
   auto expected = cudf::table{&gdf_col, 1};
@@ -146,7 +153,7 @@ TYPED_TEST(orc_writer_typed_test, SingleColumnWithNulls) {
   tables_are_equal(expected, result);
 }
 
-TEST_F(orc_writer_test, MultiColumn) {
+TEST_F(OrcWriterTest, MultiColumn) {
   constexpr auto num_rows = 100;
   auto valids_func = [](size_t row) { return true; };
   cudf::test::column_wrapper<cudf::bool8> col0{
@@ -191,7 +198,7 @@ TEST_F(orc_writer_test, MultiColumn) {
   tables_are_equal(expected, result);
 }
 
-TEST_F(orc_writer_test, MultiColumnWithNulls) {
+TEST_F(OrcWriterTest, MultiColumnWithNulls) {
   constexpr auto num_rows = 100;
 
   // Boolean column with valids only on every other row
@@ -246,3 +253,34 @@ TEST_F(orc_writer_test, MultiColumnWithNulls) {
 
   tables_are_equal(expected, result);
 }
+
+TEST_P(OrcWriterValueParamTest, Timestamps) {
+  constexpr auto num_rows = 100;
+  auto values_fn = [](size_t row) { return cudf::timestamp{std::rand() / 10}; };
+  auto valids_fn = [](size_t row) { return true; };
+
+  cudf::test::column_wrapper<cudf::timestamp> col{num_rows, values_fn,
+                                                  valids_fn};
+  column_set_name(col.get(), "col_timestamp");
+  col.get()->dtype_info.time_unit = GetParam();
+
+  auto gdf_col = col.get();
+  auto expected = cudf::table{&gdf_col, 1};
+  EXPECT_EQ(1, expected.num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcWriterTimestamps");
+
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
+  out_args.table = expected;
+  cudf::write_orc(out_args);
+
+  cudf::orc_read_arg in_args{cudf::source_info{filepath}};
+  in_args.use_index = false;
+  in_args.timestamp_unit = GetParam();
+  auto result = cudf::read_orc(in_args);
+
+  tables_are_equal(expected, result);
+}
+INSTANTIATE_TEST_CASE_P(OrcWriter, OrcWriterValueParamTest,
+                        testing::Values(TIME_UNIT_s, TIME_UNIT_ms, TIME_UNIT_us,
+                                        TIME_UNIT_ns));
