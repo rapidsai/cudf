@@ -36,8 +36,6 @@
 
 #include <thrust/host_vector.h>
 
-#include <nvstrings/NVStrings.h>
-
 #include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
@@ -351,8 +349,10 @@ void reader::Impl::convertDataToColumns() {
   const auto num_columns = dtypes_.size();
 
   for (size_t col = 0; col < num_columns; ++col) {
-    columns_.emplace_back(rec_starts_.size(), dtypes_[col], gdf_dtype_extra_info{TIME_UNIT_NONE}, column_names_[col]);
-    CUDF_EXPECTS(columns_.back().allocate() == GDF_SUCCESS, "Cannot allocate columns.\n");
+    columns_.emplace_back(rec_starts_.size(), dtypes_[col],
+                          gdf_dtype_extra_info{TIME_UNIT_NONE},
+                          column_names_[col]);
+    columns_.back().allocate();
   }
 
   thrust::host_vector<gdf_dtype> h_dtypes(num_columns);
@@ -379,14 +379,9 @@ void reader::Impl::convertDataToColumns() {
     columns_[i]->null_count = columns_[i]->size - h_valid_counts[i];
   }
 
-  // Handle string columns
+  // Perform any final column preparation (may reference decoded data)
   for (auto &column : columns_) {
-    if (column->dtype == GDF_STRING) {
-      auto str_list = static_cast<string_pair *>(column->data);
-      auto str_data = NVStrings::create_from_index(str_list, column->size);
-      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
-      RMM_FREE(std::exchange(column->data, str_data), 0);
-    }
+    column.finalize();
   }
 }
 

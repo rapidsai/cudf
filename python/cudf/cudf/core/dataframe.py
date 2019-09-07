@@ -35,6 +35,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
+    is_datetime_dtype,
     is_list_like,
     is_scalar,
 )
@@ -563,7 +564,11 @@ class DataFrame(object):
             )
         temp_mi_columns = output.columns
         for col in output._cols:
-            if self._cols[col].null_count > 0:
+            if (
+                self._cols[col].null_count > 0
+                and not self._cols[col].dtype == "O"
+                and not is_datetime_dtype(self._cols[col].dtype)
+            ):
                 output[col] = (
                     output._cols[col].astype("str").str.fillna("null")
                 )
@@ -575,7 +580,14 @@ class DataFrame(object):
 
     def __repr__(self):
         output = self.get_renderable_dataframe()
-        lines = output.to_pandas().__repr__().split("\n")
+        # the below is permissible: null in a datetime to_pandas() becomes
+        # NaT, which is then replaced with null in this processing step.
+        # It is not possible to have a mix of nulls and NaTs in datetime
+        # columns because we do not support NaT - pyarrow as_column
+        # preprocessing converts NaT input values from numpy or pandas into
+        # null.
+        output = output.to_pandas().__repr__().replace(" NaT", "null")
+        lines = output.split("\n")
         if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
