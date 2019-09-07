@@ -44,32 +44,17 @@ template <typename T>
 inline auto random_values(size_t size) {
   std::vector<T> values(size);
 
+  using T1 = cudf::detail::unwrapped_type_t<T>;
   using uniform_distribution = typename std::conditional_t<
-      std::is_same<T, bool>::value, std::bernoulli_distribution,
-      std::conditional_t<std::is_floating_point<T>::value,
-                         std::uniform_real_distribution<T>,
-                         std::uniform_int_distribution<T>>>;
+      std::is_same<T1, bool>::value, std::bernoulli_distribution,
+      std::conditional_t<std::is_floating_point<T1>::value,
+                         std::uniform_real_distribution<T1>,
+                         std::uniform_int_distribution<T1>>>;
 
   static constexpr auto seed = 0xf00d;
   static std::mt19937 engine{seed};
   static uniform_distribution dist{};
-  std::generate_n(values.begin(), size, [&]() { return dist(engine); });
-
-  return values;
-}
-
-/**
- * @brief Specialization that generates a vector of uniform random bools
- **/
-template <>
-inline auto random_values<cudf::bool8>(size_t size) {
-  std::vector<cudf::bool8> values(size);
-
-  static constexpr auto seed = 0xf00d;
-  static std::mt19937 engine{seed};
-  static std::bernoulli_distribution dist{};
-  std::generate_n(values.begin(), size,
-                  [&]() { return cudf::bool8{dist(engine)}; });
+  std::generate_n(values.begin(), size, [&]() { return T{dist(engine)}; });
 
   return values;
 }
