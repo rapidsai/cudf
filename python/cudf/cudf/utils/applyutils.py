@@ -14,6 +14,8 @@ from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
 
 _doc_applyparams = """
+df : DataFrame
+    The source dataframe.
 func : function
     The transformation function that will be executed on the CUDA GPU.
 incols: list
@@ -23,6 +25,11 @@ outcols: dict
 kwargs: dict
     name-value of extra arguments.  These values are passed
     directly into the function.
+pessimistic_nulls : bool
+    Whether or not apply_rows should output nulls when an input is
+    null. If false, all outputs will be non-null, but will be the
+    result of applying func against the underlying column data, which
+    may be garbage.
 """
 
 _doc_applychunkparams = """
@@ -55,10 +62,7 @@ def apply_rows(
 
     Parameters
     ----------
-    df : DataFrame
-        The source dataframe.
     {params}
-
     """
     applyrows = ApplyRowsCompiler(
         func, incols, outcols, kwargs, pessimistic_nulls, cache_key=cache_key
@@ -74,8 +78,6 @@ def apply_chunks(
 
     Parameters
     ----------
-    df : DataFrame
-        The source dataframe.
     {params}
     {params_chunks}
     """

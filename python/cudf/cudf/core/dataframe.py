@@ -2656,12 +2656,6 @@ class DataFrame(object):
 
         Parameters
         ----------
-        pessimistic_nulls : bool
-            Whether or not apply_rows should output nulls when an input is
-            null. If false, all outputs will be non-null, but will be the
-            result of applying func against the underlying column data, which
-            may be garbage.
-
         {params}
 
         Examples
@@ -2732,12 +2726,6 @@ class DataFrame(object):
 
         Parameters
         ----------
-        pessimistic_nulls : bool
-            Whether or not apply_rows should output nulls when an input is
-            null. If false, all outputs will be non-null, but will be the
-            result of applying func against the underlying column data, which
-            may be garbage.
-
         {params}
         {params_chunks}
 
