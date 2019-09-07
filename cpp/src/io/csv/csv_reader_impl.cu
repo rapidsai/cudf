@@ -637,7 +637,7 @@ table reader::Impl::read()
       columns.emplace_back(num_records, dtypes[active_col],
                            gdf_dtype_extra_info{time_unit},
                            col_names[col]);
-      CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      columns.back().allocate();
       active_col++;
     }
   }

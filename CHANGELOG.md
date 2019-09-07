@@ -24,6 +24,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2642 Improve null printing and testing
 - PR #2747 Add missing Cython headers / cudftestutil lib to conda package for cuspatial build
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
@@ -53,11 +54,13 @@
 - PR #2697 Ensure csv reader sets datetime column time units
 - PR #2698 Return RangeIndex from contiguous slice of RangeIndex
 - PR #2672 Fix null and integer handling in round
+- PR #2704 Parquet Reader: Fix crash when loading string column with nulls
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 - PR #2731 Fix building of benchmarks
 - PR #2738 Fix java to find new NVStrings locations
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
+- PR #2753 Fix java quantile API calls
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
 
 # cuDF 0.9.0 (21 Aug 2019)
