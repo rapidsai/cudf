@@ -110,12 +110,13 @@ if (sys.version_info.major == 3) and (sys.version_info.minor < 7):
     class CudfModule(types.ModuleType):
         def __getattribute__(self, var):
             try:
-                return getattr(__cudfModule__, var)
+                return getattr(__cudfModActual__, var)
             except AttributeError:
                 if var in __all__:
                     return __getattr__(var)
                 else:
-                    return super(CudfModule, self).__getattribute__(var)
+                    # Assume this is a submodule
+                    return import_module(".%s" % var, package="cudf")
 
-    __cudfModule__ = sys.modules["cudf"]
+    __cudfModActual__ = sys.modules["cudf"]
     sys.modules["cudf"] = CudfModule("cudf")

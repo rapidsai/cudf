@@ -6,27 +6,30 @@ from os import path
 
 def setup_module(module):
     """
-    Retrieve and save all public symbols in the cudf namespace for comparison
-    in tests.
+    Save the original set of imported modules for restoring later and retrieve
+    and all public symbols in the cudf namespace for comparison in tests.
     """
+    module.origSysMods = dict(sys.modules)
     import cudf
 
     module.allPossibleCudfNamespaceVars = cudf.__all__
-    del cudf
-    sys.modules.pop("cudf")
+    __unimportCudf()
 
 
 def teardown_function(function):
-    """
-    "unimport" cudf
-    """
-    allCudfSubMods = [m for m in sys.modules.keys() if m.startswith("cudf.")]
-    g = globals()
-    for m in ["cudf"] + allCudfSubMods:
-        g.pop(m, None)
-        sys.modules.pop(m, None)
+    __unimportCudf()
 
 
+def teardown_module(module):
+    """
+    Since pytest may have imported cudf modules during the collection phase,
+    restore the imports in sys.modules present prior to running these tests, to
+    ensure any references to cudf modules created during collection will work.
+    """
+    sys.modules.update(module.origSysMods)
+
+
+########################################
 def __getVarsLoaded(module):
     """
     Return the set of vars loaded in the module, minus "extra" vars used by the
@@ -40,6 +43,13 @@ def __getVarsLoaded(module):
             if not (k.startswith("__") or (k in extraVars))
         ]
     )
+
+
+def __unimportCudf():
+    import cudf
+    allCudfSubMods = [m for m in sys.modules.keys() if m.startswith("cudf.")]
+    for m in ["cudf"] + allCudfSubMods:
+        sys.modules.pop(m, None)
 
 
 ########################################
@@ -88,9 +98,13 @@ def test_from_import_names():
     from cudf import DataFrame, from_dlpack, arccos  # noqa: F401
     import cudf
 
-    # Only names explicitly imported above should be present
+    assert DataFrame
+    assert from_dlpack
+    assert arccos
+
     varsLoaded = __getVarsLoaded(cudf)
-    assert varsLoaded == set(["DataFrame", "from_dlpack", "arccos"])
+    assert set(["DataFrame", "from_dlpack", "arccos"]).issubset(varsLoaded)
+    assert varsLoaded != set(allPossibleCudfNamespaceVars)  # noqa: F821
 
 
 def test_access_names():
@@ -99,13 +113,13 @@ def test_access_names():
     """
     import cudf
 
-    cudf.Index
-    cudf.read_avro
-    cudf.arcsin
+    assert cudf.Index
+    assert cudf.read_avro
+    assert cudf.arcsin
 
-    # Only names explicitly imported above should be present
     varsLoaded = __getVarsLoaded(cudf)
-    assert varsLoaded == set(["Index", "read_avro", "arcsin"])
+    assert set(["Index", "read_avro", "arcsin"]).issubset(varsLoaded)
+    assert varsLoaded != set(allPossibleCudfNamespaceVars)  # noqa: F821
 
 
 def test_bad_name():
