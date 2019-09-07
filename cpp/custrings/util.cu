@@ -50,7 +50,7 @@ NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int 
     fseek(fp, 0, SEEK_END);
     size_t fileSize = (size_t)ftell(fp);
     fseek(fp, 0, SEEK_SET);
-    printf("File size = %lu bytes\n", fileSize);
+    //printf("File size = %lu bytes\n", fileSize);
     if( fileSize < 2 )
     {
         fclose(fp);
@@ -95,7 +95,7 @@ NVStrings* createFromCSV(std::string csvfile, unsigned int column, unsigned int 
     thrust::device_vector<size_t> offsets(lineOffsets);
     size_t* d_offsets = offsets.data().get();
     --linesCount;  // header line is skipped
-    printf("Processing %u lines\n",linesCount);
+    //printf("Processing %u lines\n",linesCount);
     // build empty output vector of string ptrs
     std::pair<const char*,size_t>* d_index = 0;
     cudaMalloc(&d_index, linesCount * sizeof(std::pair<const char*,size_t>));

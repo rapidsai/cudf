@@ -387,6 +387,7 @@ void reader::Impl::convertDataToColumns() {
     if (column->dtype == GDF_STRING) {
       auto str_list = static_cast<string_pair *>(column->data);
       auto str_data = NVStrings::create_from_index(str_list, column->size);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_FREE(std::exchange(column->data, str_data), 0);
     }
   }

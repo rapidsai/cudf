@@ -728,8 +728,8 @@ def test_dataframe_hash_partition_masked_keys(nrows):
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
-    df1 = pd.DataFrame(dict(x=np.arange(5).astype(dtype1)))
-    df2 = pd.DataFrame(dict(x=np.arange(5).astype(dtype2)))
+    df1 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype1)))
+    df2 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype2)))
     if dtype1 != dtype2 and "datetime" in dtype1 or "datetime" in dtype2:
         with pytest.raises(ValueError):
             gd.concat([df1, df2])

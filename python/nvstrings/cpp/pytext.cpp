@@ -22,7 +22,7 @@
 #include <nvstrings/NVText.h>
 
 // utility to deference NVStrings instance from nvstrings instance
-// caller should never dextroy the return object
+// caller should never destroy the return object
 NVStrings* strings_from_object(PyObject* pystrs)
 {
     if( pystrs == Py_None )
@@ -613,6 +613,42 @@ static PyObject* n_create_ngrams( PyObject* self, PyObject* args )
     return PyLong_FromVoidPtr((void*)strs);
 }
 
+static PyObject* n_scatter_count( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    unsigned int* counts = nullptr;
+    bool bdevmem = true;
+    PyObject* pycounts = PyTuple_GetItem(args,1);
+    std::string name = pycounts->ob_type->tp_name;
+    if( name.compare("list")==0 )
+    {
+        bdevmem = false;
+        unsigned int count = (unsigned int)PyList_Size(pycounts);
+        counts = new unsigned int[count];
+        for( unsigned int idx=0; idx < count; ++idx )
+        {
+            PyObject* pyidx = PyList_GetItem(pycounts,idx);
+            if( pyidx == Py_None )
+                counts[idx] = 0;
+            else
+                counts[idx] = (unsigned int)PyLong_AsLong(pyidx);
+        }
+    }
+
+    Py_BEGIN_ALLOW_THREADS
+    strs = NVText::scatter_count(*strs,counts,bdevmem);
+    Py_END_ALLOW_THREADS
+    if( !bdevmem )
+        delete counts;
+    if( strs==0 )
+        Py_RETURN_NONE;
+    return PyLong_FromVoidPtr((void*)strs);
+}
+
 //
 static PyMethodDef s_Methods[] = {
     { "n_tokenize", n_tokenize, METH_VARARGS, "" },
@@ -626,6 +662,7 @@ static PyMethodDef s_Methods[] = {
     { "n_normalize_spaces", n_normalize_spaces, METH_VARARGS, "" },
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
+    { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }
 };
 
