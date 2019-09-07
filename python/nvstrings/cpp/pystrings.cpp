@@ -3767,6 +3767,16 @@ static PyObject* n_is_empty( PyObject* self, PyObject* args )
     return ret;
 }
 
+static PyObject* n_device_memory( PyObject* self, PyObject* args )
+{
+    NVStrings* tptr = (NVStrings*)PyLong_AsVoidPtr(PyTuple_GetItem(args,0));
+    size_t mem_size  = 0;
+    Py_BEGIN_ALLOW_THREADS
+    mem_size = tptr->memsize();
+    Py_END_ALLOW_THREADS
+    return PyLong_FromLong(mem_size);
+}
+
 static PyObject* n_get_info( PyObject* self, PyObject* args )
 {
     NVStrings* tptr = (NVStrings*)PyLong_AsVoidPtr(PyTuple_GetItem(args,0));
@@ -3805,16 +3815,16 @@ static PyObject* n_get_info( PyObject* self, PyObject* args )
         unsigned int chr = stats.char_counts[idx].first;
         unsigned int num = stats.char_counts[idx].second;
         unsigned char out[5] = {0,0,0,0,0};
-        unsigned char* ptr = out + ((chr & 0xF0000000)==0xF0000000) + ((chr & 0xFFE00000)==0x00E00000) + ((chr & 0xFFFFC000)==0x0000C000);
-        //printf("%p,%p,%x,%d\n",out,ptr,(chr & 0xFFFF),(int)((chr & 0xFFFFC000)==0x0000C00000));
-        unsigned int cvt = chr;
-        while( cvt > 0 )
+        unsigned int chwidth = 1;
+        chwidth += (int)((chr & (unsigned)0x0000FF00) > 0);
+        chwidth += (int)((chr & (unsigned)0x00FF0000) > 0);
+        chwidth += (int)((chr & (unsigned)0xFF000000) > 0);
+        for(unsigned int idx = 0; idx < chwidth; ++idx)
         {
-            *ptr-- = (unsigned char)(cvt & 255);
-            cvt = cvt >> 8;
+            out[chwidth - idx - 1] = (char)chr & 0xFF;
+            chr = chr >> 8;
         }
         PyDict_SetItemString(pyhist,(const char*)out,PyLong_FromLong(num));
-        //printf("    [%s] 0x%04x = %u\n",out,chr,num);
     }
 
     PyDict_SetItemString(pydict,"chars_histogram",pyhist);
@@ -3947,6 +3957,7 @@ static PyMethodDef s_Methods[] = {
     { "n_islower", n_islower, METH_VARARGS, "" },
     { "n_isupper", n_isupper, METH_VARARGS, "" },
     { "n_is_empty", n_is_empty, METH_VARARGS, "" },
+    { "n_device_memory", n_device_memory, METH_VARARGS, "" },
     { "n_get_info", n_get_info, METH_VARARGS, "" },
     { "n_url_encode", n_url_encode, METH_VARARGS, "" },
     { "n_url_decode", n_url_decode, METH_VARARGS, "" },

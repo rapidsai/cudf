@@ -509,7 +509,7 @@ NVStrings* NVStrings::insert( const char* repl, int start )
             custring_view* dstr = d_strings[idx];
             if( !dstr )
                 return;
-            unsigned int len = dstr->size();
+            unsigned int len = dstr->alloc_size();
             if( start <= (int)dstr->chars_count() )
                 len = dstr->insert_size(d_repl,replen);
             len = ALIGN_SIZE(len);
