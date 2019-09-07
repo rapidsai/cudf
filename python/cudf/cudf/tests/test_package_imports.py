@@ -46,7 +46,6 @@ def __getVarsLoaded(module):
 
 
 def __unimportCudf():
-    import cudf
     allCudfSubMods = [m for m in sys.modules.keys() if m.startswith("cudf.")]
     for m in ["cudf"] + allCudfSubMods:
         sys.modules.pop(m, None)
