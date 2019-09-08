@@ -135,6 +135,15 @@ def test_bad_name():
     assert exceptionRaised
 
 
+def test_version():
+    """
+    Ensure __version__ is computed and returned
+    """
+    import cudf
+
+    assert cudf.__version__
+
+
 def test_cuda_context_created():
     """
     Ensure a CUDA context is created even from a lazy import.

@@ -101,7 +101,7 @@ def __getattr__(var):
     return val
 
 
-# Module-level __getattr__() support was not added prior to 3.7
+# Module-level __getattr__() support was not added before 3.7.
 # Create a wrapper class to call __getattr__() and replace the system-wide cudf
 # module with an instance of it.
 if (sys.version_info.major == 3) and (sys.version_info.minor < 7):
@@ -112,10 +112,10 @@ if (sys.version_info.major == 3) and (sys.version_info.minor < 7):
             try:
                 return getattr(__cudfModActual__, var)
             except AttributeError:
-                if var in __all__:
+                if (var in __all__) or (var == "__version__"):
                     return __getattr__(var)
                 else:
-                    # Assume this is a submodule
+                    # Assume this is a submodule of the cudf package
                     return import_module(".%s" % var, package="cudf")
 
     __cudfModActual__ = sys.modules["cudf"]
