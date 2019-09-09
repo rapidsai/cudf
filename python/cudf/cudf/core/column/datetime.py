@@ -83,14 +83,18 @@ class DatetimeColumn(column.TypedColumnBase):
                 % (array.dtype)
             )
         array_buffer = Buffer(array)
-        mask, null_count = libcudf.unaryops.nats_to_nulls(array_buffer)
+        print ("RGSL : ", array.dtype)
+        NaT = np.datetime64('NaT')
+        mask, null_count = libcudf.unaryops.nats_to_nulls(array_buffer, NaT.view(array.dtype))
+        if (mask != None):
+            mask = Buffer(mask)
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
 
         return cls(
             data=array_buffer,
-            mask=Buffer(mask),
+            mask=mask,
             null_count=null_count,
             dtype=array.dtype,
         )

@@ -20,6 +20,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/scalar_wrapper.cuh>
 #include "tests/utilities/compare_column_wrappers.cuh"
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
@@ -33,9 +34,11 @@
 #include <cudf/transform.hpp>
 
 using bit_mask::bit_mask_t;
+using cudf::test::scalar_wrapper;
 
 template <typename T>
 struct bitmask_test : GdfTest {};
+
 
 using test_types =
     ::testing::Types<cudf::date64, cudf::timestamp>;
@@ -47,6 +50,7 @@ TYPED_TEST(bitmask_test, nats_to_nulls_source_mask_valid) {
   cudf::test::column_wrapper<TypeParam> source_column{
       source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(LLONG_MIN); },
       [](gdf_index_type row) { return row % 3 != 1; }};
+  auto value = scalar_wrapper<TypeParam>{static_cast<TypeParam>(LLONG_MIN)};
 
   gdf_column* raw_source = source_column.get();
 
@@ -54,7 +58,8 @@ TYPED_TEST(bitmask_test, nats_to_nulls_source_mask_valid) {
   std::vector<bit_mask_t> result_mask_host(num_bytes);
 
   std::pair<bit_mask_t*, gdf_size_type> result;
-  EXPECT_NO_THROW(result = cudf::nats_to_nulls(*raw_source));
+  EXPECT_NO_THROW(result = cudf::nats_to_nulls(*raw_source, *value.get()));
+  std::cout<<"RGSL: After the call"<<std::endl;
   
   EXPECT_EQ(result.second, 2*(source_size/3 + 1));
 
@@ -81,6 +86,7 @@ TYPED_TEST(bitmask_test, nats_to_nulls_source_mask_null) {
   cudf::test::column_wrapper<TypeParam> source_column{
       source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(LLONG_MIN); }
   };
+  auto value = scalar_wrapper<TypeParam>{static_cast<TypeParam>(LLONG_MIN)};
 
   gdf_column* raw_source = source_column.get();
 
@@ -88,7 +94,7 @@ TYPED_TEST(bitmask_test, nats_to_nulls_source_mask_null) {
   std::vector<bit_mask_t> result_mask_host(num_bytes);
 
   std::pair<bit_mask_t*, gdf_size_type> result;
-  EXPECT_NO_THROW(result = cudf::nats_to_nulls(*raw_source));
+  EXPECT_NO_THROW(result = cudf::nats_to_nulls(*raw_source, *value.get()));
 
   EXPECT_EQ(result.second, source_size/3 + 1);
 
@@ -111,11 +117,12 @@ TYPED_TEST(bitmask_test, nats_to_nulls_source_mask_null) {
 
 TYPED_TEST(bitmask_test, nats_to_nulls_source_empty) {
  
-  gdf_column source{};
+  auto source = cudf::test::column_wrapper<TypeParam> {};
+  auto value = scalar_wrapper<TypeParam>{static_cast<TypeParam>(LLONG_MIN)};
 
   std::pair<bit_mask_t*, gdf_size_type> result;
 
-  EXPECT_NO_THROW(result = cudf::nats_to_nulls(source));
+  EXPECT_NO_THROW(result = cudf::nats_to_nulls(source, *value.get()));
 
   EXPECT_EQ(result.second, 0);
   EXPECT_EQ(result.first, nullptr);
@@ -131,10 +138,11 @@ TEST_F(GdfTest, nats_to_nulls_wrong_type) {
   cudf::test::column_wrapper<TypeParam> source_column{
       source_size, [](gdf_index_type row) { return row % 3 ? static_cast<TypeParam>(row) : static_cast<TypeParam>(LLONG_MIN); },
       [](gdf_index_type row) { return row % 3 != 1; }};
+  auto value = scalar_wrapper<long long>{static_cast<TypeParam>(LLONG_MIN)};
 
   gdf_column* raw_source = source_column.get();
 
   std::pair<bit_mask_t*, gdf_size_type> result;
-  EXPECT_THROW(result = cudf::nats_to_nulls(*raw_source), cudf::logic_error);
+  EXPECT_THROW(result = cudf::nats_to_nulls(*raw_source, *value.get()), cudf::logic_error);
   
 }

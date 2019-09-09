@@ -60,7 +60,7 @@ std::pair<bit_mask::bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& 
  * @param input The input column to generate bitmask from
  * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
 */
-std::pair<bit_mask::bit_mask_t*, gdf_size_type> nats_to_nulls(gdf_column const& input);
+std::pair<bit_mask::bit_mask_t*, gdf_size_type> nats_to_nulls(gdf_column const& input, gdf_scalar const& value);
 
 }  // namespace cudf
 
