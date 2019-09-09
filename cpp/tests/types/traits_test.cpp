@@ -89,3 +89,5 @@ TYPED_TEST(TypedTraitsTest, NotRelationallyComparable) {
   comparable = cudf::is_relationally_comparable<TypeParam, foo>();
   EXPECT_FALSE(comparable);
 }
+
+// TODO: Tests for is_compound/is_simple, is_fixed_width
