@@ -451,6 +451,14 @@ set(TRAITS_TEST_SRC
 
 ConfigureTest(TRAITS_TEST "${TRAITS_TEST_SRC}")
 
+###################################################################################################
+# - factories test -----------------------------------------------------------------------------------
+
+set(FACTORIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/factories_test.cpp")
+
+ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
+
 
 
 ###################################################################################################
