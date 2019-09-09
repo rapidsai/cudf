@@ -239,9 +239,9 @@ public class TimestampColumnVectorTest {
          ColumnVector THOU = ColumnVector.fromLongs(THOUSAND);
          ColumnVector s_expected = ColumnVector.fromLongs(TIMES_S).mul(THOU).asTimestamp(TimeUnit.MILLISECONDS);
          ColumnVector ms_expected = ColumnVector.timestampsFromLongs(TimeUnit.MILLISECONDS, TIMES_MS);
-         ColumnVector s_result = s_string_times.asTimestamp(TimeUnit.MILLISECONDS, "%Y-%m-%d %H:%M:%S");
+         ColumnVector s_result = s_string_times.asTimestamp(TimeUnit.NONE, "%Y-%m-%d %H:%M:%S");
          ColumnVector ms_result = ms_string_times.asTimestamp(TimeUnit.MILLISECONDS, "%Y-%m-%d %H:%M:%S.%f");
-         ColumnVector us_result = us_string_times.asTimestamp(TimeUnit.MILLISECONDS, "%Y-%m-%d %H:%M:%S.%f");
+         ColumnVector us_result = us_string_times.asTimestamp(TimeUnit.NONE, "%Y-%m-%d %H:%M:%S.%f");
          ColumnVector ns_result = ns_string_times.asTimestamp(TimeUnit.MILLISECONDS, "%Y-%m-%d %H:%M:%S.%f")) {
       assertColumnsAreEqual(s_expected, s_result);
       assertColumnsAreEqual(ms_expected, ms_result);
