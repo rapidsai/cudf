@@ -24,6 +24,8 @@
 #include "../fixture/benchmark_fixture.hpp"
 #include "../synchronization/synchronization.hpp"
 
+#include <random>
+
 class Search : public cudf::benchmark {};
 
 void BM_non_null_column(benchmark::State& state){
