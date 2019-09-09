@@ -15,6 +15,7 @@
  */
 
 #include <cudf/utilities/traits.hpp>
+#include <tests/utilities/typed_tests.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -40,29 +41,13 @@ class TraitsTest : public ::testing::Test {};
 template <typename T>
 class TypedTraitsTest : public TraitsTest {};
 
-using TestTypes =
-    ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-
-static constexpr std::array<cudf::data_type, 6> numeric_data_types{
-    cudf::data_type{cudf::INT8},    cudf::data_type{cudf::INT16},
-    cudf::data_type{cudf::INT32},   cudf::data_type{cudf::INT64},
-    cudf::data_type{cudf::FLOAT32}, cudf::data_type{cudf::FLOAT64}};
-
-static constexpr std::array<cudf::data_type, 6> non_numeric_data_types{
-    cudf::data_type{cudf::EMPTY},    cudf::data_type{cudf::BOOL8},
-    cudf::data_type{cudf::DATE32},   cudf::data_type{cudf::TIMESTAMP},
-    cudf::data_type{cudf::CATEGORY}, cudf::data_type{cudf::STRING}};
-
-static_assert(cudf::type_id::NUM_TYPE_IDS ==
-                  (non_numeric_data_types.size() + numeric_data_types.size()),
-              "Mismatch in number of types");
-
-TYPED_TEST_CASE(TypedTraitsTest, TestTypes);
+TYPED_TEST_CASE(TypedTraitsTest, cudf::test::AllTypes);
 
 TEST_F(TraitsTest, NumericDataTypesAreNumeric) {
+  using namespace cudf::test;
   EXPECT_TRUE(std::all_of(
       numeric_data_types.begin(), numeric_data_types.end(),
-      [](cudf::data_type dtype) { return cudf::is_numeric(dtype); }));
+      [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
 }
 
 /*
