@@ -630,10 +630,14 @@ table reader::Impl::read()
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
+      auto time_unit = TIME_UNIT_NONE;
+      if (dtypes[active_col] == GDF_DATE64 || dtypes[active_col] == GDF_TIMESTAMP) {
+        time_unit = TIME_UNIT_ms;
+      }
       columns.emplace_back(num_records, dtypes[active_col],
-                           gdf_dtype_extra_info{TIME_UNIT_NONE},
+                           gdf_dtype_extra_info{time_unit},
                            col_names[col]);
-      CUDF_EXPECTS(columns.back().allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      columns.back().allocate();
       active_col++;
     }
   }
@@ -668,9 +672,14 @@ table reader::Impl::read()
 
   for (int i = 0; i < num_active_cols; ++i) {
     if (columns[i]->dtype == GDF_STRING) {
-      std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)> str_data(
-        NVStrings::create_from_index(static_cast<string_pair *>(columns[i]->data), columns[i]->size), 
-        &NVStrings::destroy);
+
+      using str_pair = std::pair<const char *, size_t>;
+      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+
+      auto str_list = static_cast<str_pair *>(columns[i]->data);
+      str_ptr str_data(NVStrings::create_from_index(str_list, columns[i]->size),
+                       &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
       RMM_TRY(RMM_FREE(columns[i]->data, 0));
 
       // PANDAS' default behavior of enabling doublequote for two consecutive

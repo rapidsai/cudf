@@ -35,7 +35,7 @@ namespace{ // anonymous
   gdf_error select_quantile(T* devarr,
                           gdf_size_type n,
                           double quant, 
-                          gdf_quantile_method interpolation,
+                          cudf::interpolation interpolation,
                           RetT& result,
                           bool flag_sorted,
                           cudaStream_t stream)
@@ -45,7 +45,7 @@ namespace{ // anonymous
     if( quant >= 1.0 && !flag_sorted )
     {
       T* d_res = thrust::max_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      cudf::detail::singleMemcpy(hvalue, d_res);
+      hvalue = cudf::detail::get_array_value(d_res, 0);
       result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
@@ -53,7 +53,7 @@ namespace{ // anonymous
     if( quant <= 0.0 && !flag_sorted )
     {
       T* d_res = thrust::min_element(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
-      cudf::detail::singleMemcpy(hvalue, d_res);
+      hvalue = cudf::detail::get_array_value(d_res, 0);
       result = static_cast<RetT>( hvalue );
       return GDF_SUCCESS;
     }
@@ -63,10 +63,6 @@ namespace{ // anonymous
       thrust::sort(rmm::exec_policy(stream)->on(stream), devarr, devarr+n);
     }
 
-    CUDF_EXPECTS(interpolation < N_GDF_QUANT_METHODS &&
-                 interpolation >= 0,
-      "Invalid quantile interpolation method");
-
     result = cudf::detail::select_quantile(devarr, n, quant, interpolation);
     
     return GDF_SUCCESS;
@@ -75,7 +71,7 @@ namespace{ // anonymous
   template<typename ColType,
            typename RetT = double>
   gdf_error trampoline_exact(gdf_column*  col_in,
-                             gdf_quantile_method interpolation,
+                             cudf::interpolation interpolation,
                              double quant,
                              void* t_erased_res,
                              gdf_context* ctxt,
@@ -114,7 +110,7 @@ namespace{ // anonymous
     template <typename T,
               typename std::enable_if_t<!std::is_arithmetic<T>::value, int> = 0>
     gdf_error operator()(gdf_column* col_in,
-                         gdf_quantile_method interpolation,
+                         cudf::interpolation interpolation,
                          double              quant,
                          void*               t_erased_res,
                          gdf_context*        ctxt,
@@ -126,7 +122,7 @@ namespace{ // anonymous
     template <typename T,
               typename std::enable_if_t<std::is_arithmetic<T>::value, int> = 0>
     gdf_error operator()(gdf_column*  col_in,
-                         gdf_quantile_method interpolation,
+                         cudf::interpolation interpolation,
                          double              quant,
                          void*               t_erased_res,
                          gdf_context*        ctxt,
@@ -160,17 +156,19 @@ namespace{ // anonymous
                     gdf_context* ctxt,
                     cudaStream_t stream = NULL)
     {
-      return trampoline_exact<T, T>(col_in, GDF_QUANT_LOWER, quant, t_erased_res, ctxt, stream);
+      return trampoline_exact<T, T>(col_in, cudf::interpolation::LOWER, quant, t_erased_res, ctxt, stream);
     }
   };
 
 } // end of anonymous
 
-gdf_error gdf_quantile_exact( gdf_column*         col_in,       // input column
-                              gdf_quantile_method prec,         // interpolation method
-                              double              q,            // requested quantile in [0,1]
-                              gdf_scalar*         result,       // the result
-                              gdf_context*        ctxt)         // context info
+namespace cudf {
+
+gdf_error quantile_exact( gdf_column*         col_in,       // input column
+                          interpolation       prec,         // interpolation method
+                          double              q,            // requested quantile in [0,1]
+                          gdf_scalar*         result,       // the result
+                          gdf_context*        ctxt)         // context info
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
 
@@ -195,10 +193,10 @@ gdf_error gdf_quantile_exact( gdf_column*         col_in,       // input column
   return ret;
 }
 
-gdf_error gdf_quantile_approx(	gdf_column*  col_in,       // input column
-                                double       q,            // requested quantile in [0,1]
-                                gdf_scalar*  result,       // the result
-                                gdf_context* ctxt)         // context info
+gdf_error quantile_approx(	gdf_column*  col_in,       // input column
+                            double       q,            // requested quantile in [0,1]
+                            gdf_scalar*  result,       // the result
+                            gdf_context* ctxt)         // context info
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
   
@@ -223,3 +221,4 @@ gdf_error gdf_quantile_approx(	gdf_column*  col_in,       // input column
   return ret;
 }
 
+} // namespace cudf
