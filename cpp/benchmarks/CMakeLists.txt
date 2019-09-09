@@ -107,3 +107,11 @@ set(TD_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
+
+###################################################################################################
+# - order_by benchmark ------------------------------------------------------------------------------
+
+set(ORDERBY_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/orderby/orderby_benchmark.cu")
+
+ConfigureBench(ORDERBY_BENCH "${ORDERBY_BENCH_SRC}")
