@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utils/cuda.cuh>
+#include <cudf/utilities/cuda.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/release_assert.cuh>
 

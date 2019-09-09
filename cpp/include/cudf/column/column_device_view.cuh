@@ -17,7 +17,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utils/bit.cuh>
+#include <cudf/utilities/bit.cuh>
 
 namespace cudf {
 

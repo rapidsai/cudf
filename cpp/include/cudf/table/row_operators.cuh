@@ -19,8 +19,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utils/traits.hpp>
-#include <cudf/utils/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <utilities/release_assert.cuh>
 
 namespace cudf {

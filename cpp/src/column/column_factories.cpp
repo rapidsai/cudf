@@ -16,7 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/null_mask.hpp>
-#include <cudf/utils/traits.hpp>
+#include <cudf/utilities/traits.hpp>
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
