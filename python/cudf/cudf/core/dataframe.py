@@ -1702,9 +1702,7 @@ class DataFrame(object):
         # Change below when we want to support sort = True
         # below functions as an ordered set
         all_columns_ls = [col for o in objs for col in o.columns]
-        unique_columns_ordered_ls = OrderedDict.fromkeys(
-            all_columns_ls, None
-        ).keys()
+        unique_columns_ordered_ls = OrderedDict.fromkeys(all_columns_ls).keys()
 
         # Concatenate cudf.series for all columns
 
