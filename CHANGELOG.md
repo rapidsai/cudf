@@ -30,6 +30,7 @@
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
 - PR #2729 Handle file-handle input in to_csv
+- PR #2741 CSV Reader: Move kernel functions into its own file
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 
 ## Bug Fixes
@@ -51,15 +52,19 @@
 - PR #2669 AVRO reader: fix non-deterministic output
 - PR #2668 Update Java bindings to specify timestamp units for ORC and Parquet readers
 - PR #2679 AVRO reader: fix cuda errors when decoding compressed streams
+- PR #2692 Add concatenation for data-frame with different headers (empty and non-empty)
 - PR #2651 Remove nvidia driver installation from ci/cpu/build.sh
 - PR #2697 Ensure csv reader sets datetime column time units
 - PR #2698 Return RangeIndex from contiguous slice of RangeIndex
 - PR #2672 Fix null and integer handling in round
+- PR #2704 Parquet Reader: Fix crash when loading string column with nulls
 - PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
 - PR #2731 Fix building of benchmarks
 - PR #2738 Fix java to find new NVStrings locations
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
+- PR #2753 Fix java quantile API calls
+- PR #2762 Fix validity processing for time in java
 
 
 # cuDF 0.9.0 (21 Aug 2019)
