@@ -443,6 +443,14 @@ set(SEARCH_TEST_SRC
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 
+###################################################################################################
+# - traits test -----------------------------------------------------------------------------------
+
+set(TRAITS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/traits_test.cpp")
+
+ConfigureTest(TRAITS_TEST "${TRAITS_TEST_SRC}")
+
 
 
 ###################################################################################################
