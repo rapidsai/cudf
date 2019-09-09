@@ -470,6 +470,9 @@ class StringColumn(column.TypedColumnBase):
         self._nvcategory = None
         self._indices = None
 
+    def __contains__(self, item):
+        return True in self.str().contains(f"^{item}$")._column
+
     def __reduce__(self):
         cpumem = self.to_arrow()
         return column.as_column, (cpumem, False, np.dtype("object"))
