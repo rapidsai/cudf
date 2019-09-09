@@ -22,9 +22,17 @@
 #include <array>
 #include <tuple>
 
+/**---------------------------------------------------------------------------*
+ * @filename typed_tests.hpp
+ * @brief Provides centralized abstractions for use in Google Test
+ * type-parameterized and value-parameterized tests.
+ *
+ * These abstractions should be used for consistency across tests as well as
+ * future-proofing against the addition of any new types in the future.
+ *---------------------------------------------------------------------------**/
+
 namespace cudf {
 namespace test {
-
 namespace detail {
 
 template <typename Tuple, std::size_t... Indices>
@@ -107,12 +115,18 @@ using NumericTypes = detail::tuple_to_test_types<detail::NumericTypesTuple>;
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all numeric `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
 static constexpr auto numeric_data_types{
     detail::types_to_ids<detail::NumericTypesTuple>()};
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all non-numeric `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
 static constexpr auto non_numeric_data_types{
     cudf::data_type{cudf::EMPTY},    cudf::data_type{cudf::BOOL8},
