@@ -77,7 +77,9 @@ def test_write_csv(pdf, test_url):
     else:
         hd_fpath = "hdfs://{}/file.csv".format(basedir)
 
-    with pytest.raises(Exception):
+    with pytest.raises(
+        RuntimeError, match="write_csv: file could not be opened"
+    ):
         gdf.to_csv(hd_fpath)
 
 

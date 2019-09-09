@@ -83,7 +83,9 @@ def test_write_csv(pdf):
     fname = "file.csv"
     bname = "csv"
     gdf = cudf.from_pandas(pdf)
-    with pytest.raises(Exception):
+    with pytest.raises(
+        RuntimeError, match="write_csv: file could not be opened"
+    ):
         gdf.to_csv("s3://{}/{}".format(bname, fname))
 
 
