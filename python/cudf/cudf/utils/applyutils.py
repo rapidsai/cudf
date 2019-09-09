@@ -82,7 +82,7 @@ def apply_chunks(
     {params_chunks}
     """
     applyrows = ApplyChunksCompiler(
-        func, incols, outcols, kwargs, pessimistic_nulls=False, cache_key=None
+        func, incols, outcols, kwargs, pessimistic_nulls, cache_key=None
     )
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
