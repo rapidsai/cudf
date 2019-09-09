@@ -103,21 +103,25 @@ endif (RMM_INCLUDE AND RMM_LIBRARY)
 find_path(
     NVSTRINGS_INCLUDE "nvstrings"
     HINTS "$ENV{NVSTRINGS_ROOT}/include"
+          "../../../cpp/include" # allow building if nvstrings built locally but not installed
 )
 
 find_library(
     NVSTRINGS_LIBRARY "NVStrings"
     HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+          "$ENV{NVSTRINGS_ROOT}"
 )
 
 find_library(
     NVCATEGORY_LIBRARY "NVCategory"
     HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+          "$ENV{NVSTRINGS_ROOT}"
 )
 
 find_library(
     NVTEXT_LIBRARY "NVText"
     HINTS "$ENV{NVSTRINGS_ROOT}/lib"
+          "$ENV{NVSTRINGS_ROOT}"
 )
 
 message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
