@@ -347,7 +347,7 @@ std::vector<gdf_column*> split(gdf_column const &         input_column,
  *
  * Copies the rows from the input table to new
  * tables according to the table indices given by scatter map.
- * The number of output tables will be equal to n = (1 + maximum of scatter map
+ * The number of output tables is one more than the maximum value in @p scatter_map.
  * values)
  * If a value in [0,n] does not appear in scatter_map, then the corresponding
  * output table will be empty.
