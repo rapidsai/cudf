@@ -11,6 +11,7 @@ _np_pa_dtypes = {
     np.float64: pa.float64(),
     np.float32: pa.float32(),
     np.int64: pa.int64(),
+    np.longlong: pa.int64(),
     np.int32: pa.int32(),
     np.int16: pa.int16(),
     np.int8: pa.int8(),
@@ -51,6 +52,14 @@ def numeric_normalize_types(*args):
     """
     dtype = np.result_type(*[a.dtype for a in args])
     return [a.astype(dtype) for a in args]
+
+
+def is_datetime_dtype(obj):
+    if obj is None:
+        return False
+    if not hasattr(obj, "str"):
+        return False
+    return "M8" in obj.str
 
 
 def is_categorical_dtype(obj):

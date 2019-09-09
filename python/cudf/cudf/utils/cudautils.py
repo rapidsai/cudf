@@ -551,21 +551,18 @@ def gpu_round(in_col, out_col, decimal):
     round_val = 10 ** (-1.0 * decimal)
 
     if i < in_col.size:
-        if not in_col[i]:
-            out_col[i] = np.nan
-            return
+        current = in_col[i]
+        newval = current // round_val * round_val
+        remainder = fmod(current, round_val)
 
-        newval = in_col[i] // round_val * round_val
-        remainder = fmod(in_col[i], round_val)
-
-        if remainder != 0 and remainder > (0.5 * round_val) and in_col[i] > 0:
+        if remainder != 0 and remainder > (0.5 * round_val) and current > 0:
             newval = newval + round_val
             out_col[i] = newval
 
         elif (
             remainder != 0
             and abs(remainder) < (0.5 * round_val)
-            and in_col[i] < 0
+            and current < 0
         ):
             newval = newval + round_val
             out_col[i] = newval

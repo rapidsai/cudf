@@ -179,6 +179,25 @@ def compare_and_get_name(a, b):
     return None
 
 
+def get_null_series(size, dtype=np.bool):
+    """
+    Creates a null series of provided dtype and size
+
+    Parameters
+    ----------
+    size:  length of series
+    dtype: dtype of series to create; defaults to bool.
+
+    Returns
+    -------
+    a null cudf series of provided `size` and `dtype`
+    """
+    from cudf.core import Series, column
+
+    empty_col = column.column_empty(size, dtype, True)
+    return Series(empty_col)
+
+
 # taken from dask array
 # https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
 def _is_nep18_active():
