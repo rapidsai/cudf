@@ -22,3 +22,8 @@ cdef extern from "cudf/search.hpp" namespace "cudf" nogil:
         const cudf_table& values,
         vector[bool] c_desc_flags,
     ) except +
+
+    cdef bool contains(
+        const gdf_column& t,
+        const gdf_scalar& value
+    ) except +

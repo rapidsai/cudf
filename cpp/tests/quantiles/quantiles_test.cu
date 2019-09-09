@@ -24,6 +24,7 @@
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <quantiles/quantiles.hpp>
+#include <cudf/quantiles.hpp>
 #include <cudf/cudf.h>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -63,7 +64,7 @@ void f_quantile_tester(
   for(size_t j = 0; j<n_qs; ++j)
     {
       auto q = qvals[j];
-      gdf_error ret = gdf_quantile_approx(col_in, q, result_approx.get(), &ctxt);
+      gdf_error ret = cudf::quantile_approx(col_in, q, result_approx.get(), &ctxt);
       EXPECT_EQ( ret, expected_error) << "approx " << " returns unexpected failure\n";
       
       if( ret == GDF_SUCCESS ){
@@ -75,7 +76,7 @@ void f_quantile_tester(
 
       for(size_t i = 0;i<n_methods;++i)
         {
-          ret = gdf_quantile_exact(col_in, static_cast<gdf_quantile_method>(i), q, result_exact.get(), &ctxt);
+          ret = cudf::quantile_exact(col_in, static_cast<cudf::interpolation>(i), q, result_exact.get(), &ctxt);
           EXPECT_EQ( ret, expected_error) << "exact " << methods[i] << " returns unexpected failure\n";
 
           if( ret == GDF_SUCCESS ){

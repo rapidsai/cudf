@@ -21,10 +21,14 @@
 #include <utilities/error_utils.hpp>
 
 #include <cuda_runtime.h>
+#include <nvstrings/NVStrings.h>
 #include <rmm/rmm.h>
 
 #include <algorithm>
 #include <cstring>
+#include <memory>
+#include <string>
+#include <utility>
 
 /**
  * @brief A helper class that wraps a gdf_column and any associated memory.
@@ -34,10 +38,13 @@
  * unless ownership is transferred via releasing and assigning the raw pointer.
  **/
 class gdf_column_wrapper {
+  using str_pair = std::pair<const char *, size_t>;
+  using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+
  public:
   gdf_column_wrapper(gdf_size_type size, gdf_dtype dtype,
                      gdf_dtype_extra_info dtype_info, const std::string name) {
-    col = (gdf_column *)malloc(gdf_column_sizeof());
+    col = static_cast<gdf_column *>(malloc(gdf_column_sizeof()));
     gdf_column_view_augmented(col, nullptr, nullptr, size, dtype, 0, dtype_info,
                               name.c_str());
   }
@@ -49,26 +56,42 @@ class gdf_column_wrapper {
       free(col->col_name);
     }
     free(col);
-  };
+  }
 
   gdf_column_wrapper(const gdf_column_wrapper &other) = delete;
   gdf_column_wrapper(gdf_column_wrapper &&other) : col(other.col) {
     other.col = nullptr;
   }
 
-  gdf_error allocate() {
-    // For strings, just store the ptr + length. Eventually, column's data ptr
-    // is replaced with an NvString instance created from these pairs.
+  void allocate() {
     const auto num_rows = std::max(col->size, 1);
-    const auto column_byte_width = (col->dtype == GDF_STRING)
-                                       ? sizeof(std::pair<const char *, size_t>)
-                                       : cudf::byte_width(*col);
+    const auto valid_size = gdf_valid_allocation_size(num_rows);
 
-    RMM_TRY(RMM_ALLOC(&col->data, num_rows * column_byte_width, 0));
-    RMM_TRY(RMM_ALLOC(&col->valid, gdf_valid_allocation_size(num_rows), 0));
-    CUDA_TRY(cudaMemset(col->valid, 0, gdf_valid_allocation_size(num_rows)));
+    // For strings, just store the <ptr, length>. Eventually, the column's data
+    // ptr is replaced with an `NvString` instance created from these pairs.
+    // NvStrings does not use the valid mask so it expects invalid rows to be
+    // <nullptr, 0> initialized.
+    if (col->dtype == GDF_STRING) {
+      RMM_TRY(RMM_ALLOC(&col->data, num_rows * sizeof(str_pair), 0));
+      CUDA_TRY(cudaMemsetAsync(col->data, 0, num_rows * sizeof(str_pair)));
+    } else {
+      RMM_TRY(RMM_ALLOC(&col->data, num_rows * cudf::byte_width(*col), 0));
+    }
+    RMM_TRY(RMM_ALLOC(&col->valid, valid_size, 0));
+    CUDA_TRY(cudaMemsetAsync(col->valid, 0, valid_size));
+  }
 
-    return GDF_SUCCESS;
+  void finalize() {
+    // Create and initialize an `NvStrings` instance from <ptr, length> data.
+    // The container copies the string data to its internal memory so the source
+    // memory must not be released prior to calling this method.
+    if (col->dtype == GDF_STRING) {
+      auto str_list = static_cast<str_pair *>(col->data);
+      str_ptr str_data(NVStrings::create_from_index(str_list, col->size),
+                       &NVStrings::destroy);
+      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
+      RMM_FREE(std::exchange(col->data, str_data.release()), 0);
+    }
   }
 
   gdf_column *operator->() const noexcept { return col; }
