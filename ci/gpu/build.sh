@@ -42,7 +42,7 @@ nvidia-smi
 
 logger "Activate conda env..."
 source activate gdf
-conda install "rmm=$MINOR_VERSION.*" "nvstrings=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
+conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
               "feather-format" "cupy>=6.0.0" "arrow-cpp=0.14.1" "pyarrow=0.14.1" \
@@ -62,14 +62,15 @@ $CXX --version
 conda list
 
 ################################################################################
-# BUILD - Build libcudf and cuDF from source
+# BUILD - Build libnvstrings, nvstrings, libcudf, cuDF and dask_cudf from source
 ################################################################################
 
 logger "Build libcudf..."
-$WORKSPACE/build.sh clean libcudf cudf dask_cudf
+$WORKSPACE/build.sh clean libnvstrings nvstrings libcudf cudf dask_cudf
 
 ################################################################################
-# TEST - Run GoogleTest and py.tests for libcudf and cuDF
+# TEST - Run GoogleTest and py.tests for libnvstrings, nvstrings, libcudf, and
+# cuDF
 ################################################################################
 
 if hasArg --skip-tests; then
@@ -78,9 +79,13 @@ else
     logger "Check GPU usage..."
     nvidia-smi
 
+    logger "GoogleTest for libnvstrings..."
+    cd $WORKSPACE/cpp/build
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_nvstrings
+
     logger "GoogleTest for libcudf..."
     cd $WORKSPACE/cpp/build
-    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test
+    GTEST_OUTPUT="xml:${WORKSPACE}/test-results/" make -j${PARALLEL_LEVEL} test_cudf
 
     # set environment variable for numpy 1.16
     # will be enabled for later versions by default
@@ -90,11 +95,14 @@ else
       export NUMPY_EXPERIMENTAL_ARRAY_FUNCTION=1
     fi
 
+    cd $WORKSPACE/python/nvstrings
+    logger "Python py.test for nvstrings..."
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-nvstrings.xml -v --cov-config=.coveragerc --cov=nvstrings --cov-report=xml:${WORKSPACE}/python/nvstrings/nvstrings-coverage.xml --cov-report term
 
-    logger "Python py.test for cuDF..."
     cd $WORKSPACE/python/cudf
+    logger "Python py.test for cuDF..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-cudf.xml -v --cov-config=.coveragerc --cov=cudf --cov-report=xml:${WORKSPACE}/python/cudf/cudf-coverage.xml --cov-report term
-    
+
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term

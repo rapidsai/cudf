@@ -53,16 +53,7 @@ class NumericalColumn(column.TypedColumnBase):
                 return False
         except Exception:
             return False
-        # Issue with cudautils with bool araray, always returns True.
-        if self.data.mem.dtype == np.bool:
-            return (
-                cudautils.find_first(
-                    self.data.mem.view("int8"), item.view("int8")
-                )
-                != -1
-            )
-        else:
-            return cudautils.find_first(self.data.mem, item) != -1
+        return libcudf.search.contains(self, item)
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
@@ -265,6 +256,13 @@ class NumericalColumn(column.TypedColumnBase):
         return libcudf.reduce.reduce("sum_of_squares", self, dtype=dtype)
 
     def round(self, decimals=0):
+        if decimals < 0:
+            msg = "Decimal values < 0 are not yet supported."
+            raise NotImplementedError(msg)
+
+        if np.issubdtype(self.dtype, np.integer):
+            return self
+
         data = Buffer(cudautils.apply_round(self.data.mem, decimals))
         return self.replace(data=data)
 

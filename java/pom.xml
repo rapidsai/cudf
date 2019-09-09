@@ -456,6 +456,8 @@
                                     <directory>${native.cudf.path}</directory>
                                     <includes>
                                         <include>libcudf.so</include>
+                                        <include>libNVCategory.so</include>
+                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                                 <resource>
@@ -464,8 +466,6 @@
                                     <includes>
                                         <include>libboost_filesystem.so</include>
                                         <include>librmm.so</include>
-                                        <include>libNVCategory.so</include>
-                                        <include>libNVStrings.so</include>
                                     </includes>
                                 </resource>
                             </resources>

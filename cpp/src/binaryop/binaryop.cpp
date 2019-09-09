@@ -31,13 +31,14 @@
 
 #include <jit/launcher.h>
 #include <jit/type.h>
-#include <jit/types_h_jit.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 #include "jit/util/type.h"
 #include "jit/util/operator.h"
 #include <nvstrings/NVCategory.h>
 #include <cudf/datetime.hpp>
+
+#include <types.h.jit>
 
 namespace cudf {
 namespace binops {
