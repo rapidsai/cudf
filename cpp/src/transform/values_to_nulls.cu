@@ -22,7 +22,7 @@ namespace cudf {
 namespace detail {
 
 template <typename T>
-struct predicate_not_nat{
+struct predicate_not_value{
 
   CUDA_HOST_DEVICE_CALLABLE
 
@@ -34,13 +34,13 @@ struct predicate_not_nat{
 
   T value;
 
-  predicate_not_nat() = delete;
+  predicate_not_value() = delete;
 
-  predicate_not_nat(gdf_column const& input_, T const&  value_): input(input_), value(value_) {}
+  predicate_not_value(gdf_column const& input_, T const&  value_): input(input_), value(value_) {}
 
 };
 
-struct set_mask{
+struct replace_value_with_null{
   template <typename col_type>
   std::pair<bit_mask_t*, gdf_size_type> operator()(gdf_column const& input, 
                                                    gdf_scalar const& value)
@@ -48,26 +48,21 @@ struct set_mask{
       const bit_mask_t* source_mask = reinterpret_cast<bit_mask_t*>(input.valid);
       auto *val = reinterpret_cast<const col_type*>(&value.data);
 
-      return cudf::valid_if(source_mask, cudf::detail::predicate_not_nat<col_type>(input, *val), input.size); 
+      return cudf::valid_if(source_mask, cudf::detail::predicate_not_value<col_type>(input, *val), input.size); 
   }
 };
 
 } // namespace detail
 
-std::pair<bit_mask_t*, gdf_size_type> nats_to_nulls(gdf_column const& input, gdf_scalar const& value){
+std::pair<bit_mask_t*, gdf_size_type> values_to_nulls(gdf_column const& input, gdf_scalar const& value){
 
-  std::cout<<"RGSL : In the start : "<<value.dtype<<std::endl;
-  std::cout<<"RGSL : Input : "<<input.dtype<<std::endl;
   CUDF_EXPECTS(input.dtype == value.dtype, "DTYPE mismatch");
-  std::cout<<"RGSL : After check "<<std::endl;
     
   if(input.size == 0){
     return std::pair<bit_mask_t*, gdf_size_type>(nullptr, 0);
   }
-  std::cout<<"RGSL : innput size "<<std::endl;
 
-  std::cout <<"Just before the dispatcher"<<std::endl;
-  return cudf::type_dispatcher(input.dtype, cudf::detail::set_mask{}, input, value);
+  return cudf::type_dispatcher(input.dtype, cudf::detail::replace_value_with_null{}, input, value);
 }
 //
 } // namespace cudf

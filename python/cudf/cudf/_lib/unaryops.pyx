@@ -163,19 +163,18 @@ def nans_to_nulls(py_col):
     return mask
 
 
-def nats_to_nulls(py_col, val):
+def set_value_to_null(py_col, val):
     from cudf.core.column import as_column
 
     py_col = as_column(py_col)
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
     cdef gdf_scalar* c_val  = gdf_scalar_from_scalar(val)
-    print ("RGSL : ", c_val[0].dtype)
 
     cdef pair[cpp_unaryops.bit_mask_t_ptr, gdf_size_type] result
 
     with nogil:
-        result = cpp_unaryops.nats_to_nulls(c_col[0], c_val[0])
+        result = cpp_unaryops.values_to_nulls(c_col[0], c_val[0])
 
     mask = None
     null_count = 0
@@ -188,5 +187,7 @@ def nats_to_nulls(py_col, val):
             dtype=mask_dtype,
             finalizer=rmm._make_finalizer(mask_ptr, 0)
         )
+
+    free_column (c_col)
 
     return mask, null_count

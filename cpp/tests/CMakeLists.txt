@@ -162,12 +162,12 @@ ConfigureTest(NANS_TO_NULLS_TEST "${NANS_TO_NULLS_TEST_SRC}")
 
 
 ###################################################################################################
-# - nats_to_nulls tests ---------------------------------------------------------------------------
+# - values_to_nulls tests ---------------------------------------------------------------------------
 
-set(NATS_TO_NULLS_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/nats_to_nulls_tests.cu")
+set(VALUES_TO_NULLS_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/values_to_nulls_tests.cu")
 
-ConfigureTest(NATS_TO_NULLS_TEST "${NATS_TO_NULLS_TEST_SRC}")
+ConfigureTest(VALUES_TO_NULLS_TEST "${VALUES_TO_NULLS_TEST_SRC}")
 
 
 ###################################################################################################
