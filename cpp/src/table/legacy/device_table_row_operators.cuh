@@ -147,7 +147,8 @@ namespace
 template <bool nullable = true>
 struct typed_row_inequality_comparator
 {
-  template <typename ColType>
+  template <typename ColType,
+         typename std::enable_if_t<!std::is_floating_point<ColType>::value>* = nullptr>
   __device__
       State
       operator()(gdf_index_type lhs_row, gdf_index_type rhs_row,
@@ -187,6 +188,66 @@ struct typed_row_inequality_comparator
         return State::False;
     }
   }
+  //floating point
+  template <typename ColType,
+         typename std::enable_if_t<std::is_floating_point<ColType>::value>* = nullptr>
+  __device__
+      State
+      operator()(gdf_index_type lhs_row, gdf_index_type rhs_row,
+                 gdf_column const *lhs_column, gdf_column const *rhs_column,
+                 bool nulls_are_smallest)
+  {
+    const ColType lhs_data = static_cast<const ColType *>(lhs_column->data)[lhs_row];
+    const ColType rhs_data = static_cast<const ColType *>(rhs_column->data)[rhs_row];
+
+    if (nullable) {
+      const bool isValid1 = gdf_is_valid(lhs_column->valid, lhs_row);
+      const bool isValid2 = gdf_is_valid(rhs_column->valid, rhs_row);
+
+      if (!isValid2 && !isValid1)
+        return State::Undecided;
+      else if (isValid1 && isValid2)
+      {
+        const bool isNAN1 = isnan(lhs_data);
+        const bool isNAN2 = isnan(rhs_data);
+        if (isNAN2 && isNAN1)
+          return State::Undecided;
+        else if (isNAN2)
+          return State::False;
+        else if (isNAN1)
+          return State::True;
+
+        if (lhs_data < rhs_data)
+          return State::True;
+        else if (lhs_data == rhs_data)
+          return State::Undecided;
+        else
+          return State::False;
+      }
+      else if (!isValid1 && nulls_are_smallest)
+        return State::True;
+      else if (!isValid2 && !nulls_are_smallest)
+        return State::True;
+      else
+        return State::False;
+    } else {
+      const bool isNAN1 = isnan(lhs_data);
+      const bool isNAN2 = isnan(rhs_data);
+      if (isNAN2 && isNAN1)
+        return State::Undecided;
+      else if (isNAN2)
+        return State::True;
+      else if (isNAN1)
+        return State::False;
+
+      if (lhs_data < rhs_data)
+        return State::True;
+      else if (lhs_data == rhs_data)
+        return State::Undecided;
+      else
+        return State::False;
+    }
+  } 
 };
 } // namespace
 
