@@ -58,6 +58,10 @@ IO
     :members:
 .. automodule:: cudf.io.json
     :members:
+.. automodule:: cudf.io.avro
+    :members:
+.. automodule:: cudf.io.dlpack
+    :members:
 .. automodule:: cudf.io.feather
     :members:
 .. automodule:: cudf.io.hdf

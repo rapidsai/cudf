@@ -391,6 +391,7 @@ index : bool, default True
     Whether to include the index values in the JSON string. Not
     including the index (``index=False``) is only supported when
     orient is 'split' or 'table'.
+
 See Also
 --------
 .cudf.io.json.read_json
@@ -517,7 +518,7 @@ See Also
 --------
 cudf.io.hdf.read_hdf : Read from HDF file.
 cudf.io.parquet.to_parquet : Write a DataFrame to the binary parquet format.
-cudf.io.feather..to_feather : Write out feather-format for DataFrames.
+cudf.io.feather.to_feather : Write out feather-format for DataFrames.
 """
 doc_to_hdf = docfmt_partial(docstring=_docstring_to_hdf)
 
