@@ -115,10 +115,6 @@ def test_concat_errors():
     with pytest.raises(ValueError):
         gd.concat([gdf2, gdf3])
 
-    # Mismatched columns
-    with pytest.raises(ValueError):
-        gd.concat([gdf, gdf2])
-
 
 def test_concat_misordered_columns():
     df, df2, gdf, gdf2 = make_frames(False)
