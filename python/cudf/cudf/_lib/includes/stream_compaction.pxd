@@ -39,4 +39,8 @@ cdef extern from "cudf/stream_compaction.hpp" namespace "cudf" nogil:
         const duplicate_keep_option keep
     ) except +
 
-    cdef gdf_size_type unique_count(const gdf_column& input_column) except +
+    cdef gdf_size_type unique_count(
+        const gdf_column& input_column,
+        const bool dropna,
+        const bool nan_as_null
+    ) except +

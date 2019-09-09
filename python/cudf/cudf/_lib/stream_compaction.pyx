@@ -79,26 +79,23 @@ def drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     return (out_cols[:-1], out_cols[-1])
 
 
-def nunique(in_col):
+def nunique(in_col, dropna=True, nan_as_null=False):
     """
     get number of unique elements in the input column
 
     in_col: input column to check for unique element count
+    dropna: flag to ignore `NaN` & `null` in unique count if true.
+    nan_as_null: flag to consider `NaN==null` if true.
 
     out_count: number of unique elements in the input column
     """
-    in_col_null = in_col
-    # convert nans_to_nulls
-    if (in_col.dtype in [np.float16, np.float32, np.float64]):
-        in_col_null = in_col.set_mask(nans_to_nulls(in_col))
-    check_gdf_compatibility(in_col_null)
-    cdef gdf_column* c_in_col = column_view_from_column(in_col_null)
+    cdef bool c_dropna = dropna
+    cdef bool c_nan_as_null = nan_as_null
+    check_gdf_compatibility(in_col)
+    cdef gdf_column* c_in_col = column_view_from_column(in_col)
     cdef int count = 0
     with nogil:
-        count = cpp_unique_count(c_in_col[0])
-    # if null and nan both are present, increment count by 1
-    if in_col.null_count>0 and in_col_null.null_count > in_col.null_count:
-        count = count + 1
+        count = cpp_unique_count(c_in_col[0], c_dropna, c_nan_as_null)
     return count
 
 

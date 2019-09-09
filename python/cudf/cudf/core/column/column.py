@@ -801,10 +801,7 @@ class Column(object):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        count = cpp_unique_count(self)
-        if dropna is True and self.null_count > 0:
-            return count - 1
-        return count
+        return cpp_unique_count(self, dropna)
 
 
 class TypedColumnBase(Column):

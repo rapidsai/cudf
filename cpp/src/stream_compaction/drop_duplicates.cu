@@ -27,6 +27,7 @@
 #include <cudf/legacy/table.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
+#include <cudf/transform.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
@@ -235,12 +236,35 @@ rows in input table should be equal to number of rows in key colums table");
   return destination_table;
 }
 
-gdf_size_type unique_count(gdf_column const& input_column)
+gdf_size_type unique_count(gdf_column const& input_column,
+                           bool const dropna,
+                           bool const nan_as_null)
 {
   if (0 == input_column.size || input_column.null_count == input_column.size) {
     return 0;
   }
+  gdf_column col{input_column};
+  //TODO: remove after NaN support to equality operator is added
+  //if (nan_as_null)
+  if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64)) {
+    auto temp = nans_to_nulls(col);
+    col.valid = reinterpret_cast<gdf_valid_type*>(temp.first);
+    col.null_count = temp.second;
+  }
   
-  return detail::unique_count({const_cast<gdf_column*>(&input_column)}, true);
+  auto count = detail::unique_count({const_cast<gdf_column*>(&col)}, true);
+  if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64))
+    bit_mask::destroy_bit_mask(reinterpret_cast<bit_mask::bit_mask_t*>(col.valid));
+
+  //TODO: remove after NaN support to equality operator is added
+  if (not nan_as_null and 
+      input_column.null_count > 0 and col.null_count > input_column.null_count)
+    count = count + 1;
+
+  if (dropna)
+    return count-(input_column.null_count>0);
+  else
+    return count;
 }
+
 }  // namespace cudf
