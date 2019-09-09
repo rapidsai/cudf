@@ -26,8 +26,8 @@ kwargs: dict
     name-value of extra arguments.  These values are passed
     directly into the function.
 pessimistic_nulls : bool
-    Whether or not apply_rows should output nulls when an input is
-    null. If false, all outputs will be non-null, but will be the
+    Whether or not apply_rows output should be null when any corrosponding
+    input is null. If False, all outputs will be non-null, but will be the
     result of applying func against the underlying column data, which
     may be garbage.
 """
