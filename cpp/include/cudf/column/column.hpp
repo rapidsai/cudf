@@ -119,20 +119,20 @@ class column {
    * the next invocation of `null_count()` to recompute the null count from the
    * null mask.
    *
-   * @throws cudf::logic_error if `new_null_count > 0` but `nullable() == false`
+   * @throws cudf::logic_error if `new_null_count > 0 and nullable() == false`
    *
    * @param new_null_count The new null count.
    *---------------------------------------------------------------------------**/
   void set_null_count(size_type new_null_count);
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if it is possible for the column to contain null values,
+   * @brief Indicates whether it is possible for the column to contain null values,
    * i.e., it has an allocated null mask.
    *
    * This may return `false` iff `null_count() == 0`.
    *
-   * May return true if `null_count() == 0`. Indicates that the column has an
-   * allocated null mask, but all elements are valid.
+   * May return true even if `null_count() == 0`. This function simply indicates whether the column has an
+   * allocated null mask.
    *
    * @return true The column can hold null values
    * @return false The column cannot hold null values
@@ -140,10 +140,10 @@ class column {
   bool nullable() const noexcept { return (_null_mask.size() > 0); }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if the column contains null elements.
+   * @brief Indicates whether the column contains null elements.
    *
    * @return true One or more elements are null
-   * @return false All elements are valid
+   * @return false Zero elements are null
    *---------------------------------------------------------------------------**/
   bool has_nulls() const noexcept { return (null_count() > 0); }
 
@@ -184,7 +184,7 @@ class column {
    * @brief Implicit conversion operator to a `column_view`.
    *
    * This allows passing a `column` object directly into a function that
-   * requires a `column_view` and the conversion will happen automatically.
+   * requires a `column_view`. The conversion is automatic.
    *
    * @return column_view Immutable, non-owning `column_view`
    *---------------------------------------------------------------------------**/
@@ -194,10 +194,10 @@ class column {
    * @brief Creates a mutable, non-owning view of the column's data and
    * children.
    *
-   * @note Creating a mutable view of a `column` will invalidate the `column`'s
-   * `null_count()` by setting it to `UNKNOWN_NULL_COUNT`. This will require the
-   * user to either explicitly update the null count with `set_null_count()`,
-   * else, the null count to be recomputed on the next invocation of
+   * @note Creating a mutable view of a `column` invalidates the `column`'s
+   * `null_count()` by setting it to `UNKNOWN_NULL_COUNT`. The user can
+   * either explicitly update the null count with `set_null_count()`, or
+   * if not, the null count will be recomputed on the next invocation of
    *`null_count()`.
    *
    * @return mutable_column_view The mutable, non-owning view
@@ -208,9 +208,9 @@ class column {
    * @brief Implicit conversion operator to a `mutable_column_view`.
    *
    * This allows pasing a `column` object into a function that accepts a
-   *`mutable_column_view` and the conversion will happen automatically.
+   *`mutable_column_view`. The conversion is automatic.
 
-   * @note Creating a mutable view of a `column` will invalidate the `column`'s
+   * @note Creating a mutable view of a `column` invalidates the `column`'s
    * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. For best performance,
    * the user should explicitly update the null count with `set_null_count()`.
    * Otherwise, the null count will be recomputed on the next invocation of
