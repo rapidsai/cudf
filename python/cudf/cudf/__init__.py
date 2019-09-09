@@ -14,6 +14,7 @@ from cudf.dataframe import (
 )
 from cudf.io import (
     from_dlpack,
+    read_avro,
     read_csv,
     read_feather,
     read_hdf,
@@ -37,7 +38,6 @@ from cudf.ops import (
     tan,
 )
 from cudf.reshape import get_dummies, melt
-from cudf.settings import set_options
 
 __version__ = get_versions()["version"]
 del get_versions

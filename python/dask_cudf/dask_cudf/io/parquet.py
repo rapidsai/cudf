@@ -1,18 +1,60 @@
-from glob import glob
-
 import dask.dataframe as dd
-from dask.base import tokenize
-from dask.compatibility import apply
-from dask.utils import natural_sort_key
+from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
+
+
+class CudfEngine(ArrowEngine):
+    @staticmethod
+    def read_metadata(*args, **kwargs):
+        meta, stats, parts = ArrowEngine.read_metadata(*args, **kwargs)
+
+        # If `strings_to_categorical==True`, convert objects to int32
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
+        dtypes = {}
+        for col in meta.columns:
+            if meta[col].dtype == "O":
+                dtypes[col] = "int32" if strings_to_cats else "object"
+
+        meta = cudf.DataFrame.from_pandas(meta)
+        for col, dtype in dtypes.items():
+            meta[col] = meta[col].astype(dtype)
+
+        return (meta, stats, parts)
+
+    @staticmethod
+    def read_partition(
+        fs, piece, columns, index, categories=(), partitions=(), **kwargs
+    ):
+        if columns is not None:
+            columns = [c for c in columns]
+        if isinstance(index, list):
+            columns += index
+
+        strings_to_cats = kwargs.get("strings_to_categorical", False)
+        df = cudf.read_parquet(
+            piece.path,
+            engine="cudf",
+            columns=columns,
+            row_group=piece.row_group,
+            strings_to_categorical=strings_to_cats,
+            **kwargs.get("read", {}),
+        )
+
+        if index is not None and index[0] in df.columns:
+            df = df.set_index(index[0])
+
+        return df
 
 
 def read_parquet(path, **kwargs):
     """ Read parquet files into a Dask DataFrame
 
-    This calls the ``cudf.read_parquet`` function on many parquet files.
-    See that function for additional details.
+    Calls ``dask.dataframe.read_parquet`` to cordinate the execution of
+    ``cudf.read_parquet``, and ultimately read multiple partitions into a
+    single Dask dataframe. The Dask version must supply an ``ArrowEngine``
+    class to support full functionality.
+    See ``cudf.read_parquet`` and Dask documentation for further details.
 
     Examples
     --------
@@ -24,23 +66,7 @@ def read_parquet(path, **kwargs):
     cudf.read_parquet
     """
 
-    name = "read-parquet-" + tokenize(path, **kwargs)
-
-    paths = path
-    if isinstance(path, str):
-        paths = sorted(glob(str(path)))
-
-    # Ignore *_metadata files for now
-    paths = sorted(
-        [f for f in paths if not f.endswith("_metadata")], key=natural_sort_key
-    )
-
-    # Use 0th file to create meta
-    meta = cudf.read_parquet(paths[0], **kwargs)
-    graph = {
-        (name, i): (apply, cudf.read_parquet, [fn], kwargs)
-        for i, fn in enumerate(paths)
-    }
-    divisions = [None] * (len(paths) + 1)
-
-    return dd.core.new_dd_object(graph, name, meta, divisions)
+    columns = kwargs.pop("columns", None)
+    if isinstance(columns, str):
+        columns = [columns]
+    return dd.read_parquet(path, columns=columns, engine=CudfEngine, **kwargs)

@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.9.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.10.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -307,8 +307,8 @@ link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
-
-add_library(cudf SHARED
+option(BUILD_SHARED_LIBS "Build a shared library" ON)
+add_library(cudf 
             src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
@@ -316,25 +316,37 @@ add_library(cudf SHARED
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/predicates/is_sorted.cu
             src/sort/digitize.cu
             src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
             src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
+            src/rolling/jit/util/type.cpp
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/core/launcher.cpp
-            src/binaryop/jit/core/parser.cpp
-            src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
+            src/jit/type.cpp
+            src/jit/types_h_jit.cpp
+            src/jit/parser.cpp
+            src/jit/cache.cpp
+            src/jit/launcher.cpp
+            src/transform/transform.cpp
+            src/transform/jit/code/kernel.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/stream_compaction.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/reductions/reductions.cu
@@ -353,10 +365,12 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
+            src/io/io_functions.cpp
             src/io/convert/csr/cudf_to_csr.cu
-            src/io/utilities/parsing_utils.cu
-            src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro_gpu.cu
+            src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
             src/io/json/json_reader_impl.cu
@@ -375,7 +389,8 @@ add_library(cudf SHARED
             src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
-            src/io/io_functions.cpp
+            src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
@@ -389,6 +404,7 @@ add_library(cudf SHARED
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
+            src/search/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu
@@ -399,6 +415,7 @@ add_library(cudf SHARED
             src/bitmask/null_mask.cpp
             src/sort/sort.cu
             src/column/legacy/interop.cpp)
+            )
 
 #Override RPATH for cudf
 SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")

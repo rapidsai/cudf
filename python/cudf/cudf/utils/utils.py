@@ -9,6 +9,8 @@ from numba import njit
 
 from librmm_cffi import librmm as rmm
 
+from cudf.utils.dtypes import is_categorical_dtype
+
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8
 mask_byte_padding = 64
@@ -72,6 +74,8 @@ def require_writeable_array(arr):
 
 def scalar_broadcast_to(scalar, shape, dtype):
     from cudf.utils.cudautils import fill_value
+
+    scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
 
     if not isinstance(shape, tuple):
         shape = (shape,)
@@ -150,10 +154,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
             _get_dtype_from_object as infer_dtype_from_object,
         )
 
-    if (
-        pd.api.types.pandas_dtype(dtype).type
-        is pd.core.dtypes.dtypes.CategoricalDtypeType
-    ):
+    if is_categorical_dtype(dtype):
         pass
     elif np.issubdtype(dtype, np.datetime64):
         dtype = np.datetime64
@@ -161,14 +162,39 @@ def cudf_dtype_from_pydata_dtype(dtype):
     return infer_dtype_from_object(dtype)
 
 
-def is_single_value(val):
+def is_scalar(val):
     return (
-        isinstance(val, str)
+        val is None
+        or isinstance(val, str)
         or isinstance(val, numbers.Number)
         or np.isscalar(val)
         or isinstance(val, pd.Timestamp)
         or isinstance(val, pd.Categorical)
     )
+
+
+def to_cudf_compatible_scalar(val, dtype=None):
+    """
+    Converts the value `val` to a numpy/Pandas scalar,
+    optionally casting to `dtype`.
+
+    If `val` is None, returns None.
+    """
+    if val is None:
+        return val
+
+    if not is_scalar(val):
+        raise ValueError(
+            f"Cannot convert value of type {type(val).__name__} "
+            " to cudf scalar"
+        )
+
+    val = pd.api.types.pandas_dtype(type(val)).type(val)
+
+    if dtype is not None:
+        val = val.astype(dtype)
+
+    return val
 
 
 def is_list_like(obj):

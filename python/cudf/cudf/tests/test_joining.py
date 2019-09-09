@@ -682,3 +682,24 @@ def test_merge_sort(kwargs, hows):
     pd_merge = left.merge(right, **kwargs)
     if pd_merge.empty:
         assert gd_merge.empty
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_join_datetimes_index(dtype):
+    datetimes = pd.Series(pd.date_range("20010101", "20010102", freq="12h"))
+    pdf_lhs = pd.DataFrame(index=[1, 0, 1, 2, 0, 0, 1])
+    pdf_rhs = pd.DataFrame({"d": datetimes})
+    gdf_lhs = DataFrame.from_pandas(pdf_lhs)
+    gdf_rhs = DataFrame.from_pandas(pdf_rhs)
+
+    gdf_rhs["d"] = gdf_rhs["d"].astype(dtype)
+
+    pdf = pdf_lhs.join(pdf_rhs, sort=True)
+    gdf = gdf_lhs.join(gdf_rhs, sort=True)
+
+    assert gdf["d"].dtype == np.dtype(dtype)
+
+    assert_eq(pdf, gdf)

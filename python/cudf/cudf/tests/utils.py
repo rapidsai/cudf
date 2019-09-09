@@ -2,7 +2,20 @@ import numpy as np
 import pandas as pd
 import pandas.util.testing as tm
 
+from cudf import Series
 from cudf.utils import utils
+
+supported_numpy_dtypes = [
+    "bool",
+    "int8",
+    "int16",
+    "int32",
+    "int64",
+    "float32",
+    "float64",
+    "datetime64[ms]",
+    "datetime64[us]",
+]
 
 
 def random_bitmask(size):
@@ -52,7 +65,12 @@ def assert_eq(a, b, **kwargs):
     elif isinstance(a, (pd.Index, pd.MultiIndex)):
         tm.assert_index_equal(a, b, **kwargs)
     elif isinstance(a, np.ndarray) and isinstance(b, np.ndarray):
-        assert np.allclose(a, b, equal_nan=True)
+        if np.issubdtype(a.dtype, np.floating) and np.issubdtype(
+            b.dtype, np.floating
+        ):
+            assert np.allclose(a, b, equal_nan=True)
+        else:
+            assert np.array_equal(a, b)
     else:
         if a == b:
             return True
@@ -95,3 +113,11 @@ def gen_rand(dtype, size, **kwargs):
         high = kwargs.get("high", 1)
         return np.random.randint(low=low, high=high, size=size).astype(np.bool)
     raise NotImplementedError("dtype.kind={}".format(dtype.kind))
+
+
+def gen_rand_series(dtype, size, **kwargs):
+    values = gen_rand(dtype, size, **kwargs)
+    if kwargs.get("has_nulls", False):
+        return Series(values)
+
+    return Series.from_masked_array(values, random_bitmask(size))

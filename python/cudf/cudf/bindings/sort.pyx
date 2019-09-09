@@ -173,7 +173,7 @@ class SegmentedRadixSortPlan(object):
         cdef gdf_column* c_col_keys = column_view_from_column(col_keys)
         cdef gdf_column* c_col_vals = column_view_from_column(col_vals)
 
-        seg_dtype = np.uint32
+        seg_dtype = np.int32
         segsize_limit = 2 ** 16 - 1
 
         d_fullsegs = rmm.device_array(segments.size + 1, dtype=seg_dtype)
@@ -182,7 +182,9 @@ class SegmentedRadixSortPlan(object):
 
         # Note: .astype is required below because .copy_to_device
         #       is just a plain memcpy
-        d_begins.copy_to_device(cudautils.astype(segments, dtype=seg_dtype))
+        from cudf.dataframe import columnops
+        col = columnops.as_column(segments).astype(seg_dtype)
+        d_begins.copy_to_device(col.data.mem)
         d_ends[-1:].copy_to_device(np.require([self.nelem], dtype=seg_dtype))
 
         cdef uintptr_t c_plan = self.plan
@@ -209,5 +211,5 @@ class SegmentedRadixSortPlan(object):
                 )
 
         self.plan = int(c_plan)
-        free(c_col_keys)
-        free(c_col_vals)
+        free_column(c_col_keys)
+        free_column(c_col_vals)

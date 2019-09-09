@@ -28,6 +28,7 @@ from cudf.dataframe.categorical import CategoricalColumn
 from cudf.utils.cudautils import zeros
 from cudf.bindings.nvtx import nvtx_range_pop
 from cudf.bindings.utils cimport *
+from cudf.bindings.utils import *
 cimport cudf.bindings.groupby.hash as hash_groupby
 
 

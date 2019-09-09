@@ -159,12 +159,51 @@ public class ColumnVectorTest {
   }
 
   @Test
-  void testFromScalarInteger() {
+  void testFromNullScalarInteger() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT32), 6);
          ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
       assertEquals(input.getNullCount(), expected.getNullCount());
       assertColumnsAreEqual(input, expected);
+    }
+  }
+
+  @Test
+  void testSetToNullScalarInteger() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromInt(123), 6);
+         ColumnVector expected = ColumnVector.fromBoxedInts(null, null, null, null, null, null)) {
+      input.fill(Scalar.fromNull(DType.INT32));
+      assertEquals(input.getNullCount(), expected.getNullCount());
+      assertColumnsAreEqual(input, expected);
+    }
+  }
+
+  @Test
+  void testSetToNullScalarByte() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    int numNulls = 3000;
+    try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT8), numNulls)) {
+      assertEquals(input.getNullCount(), numNulls);
+      input.ensureOnHost();
+      for (int i = 0; i < numNulls; i++){
+        assertTrue(input.isNull(i));
+      }
+    }
+  }
+
+  @Test
+  void testSetToNullThenBackScalarByte() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    int numNulls = 3000;
+    try (ColumnVector input = ColumnVector.fromScalar(Scalar.fromNull(DType.INT8), numNulls)) {
+      assertEquals(input.getNullCount(), numNulls);
+      input.fill(Scalar.fromByte((byte)5));
+      assertEquals(input.getNullCount(), 0);
+      input.ensureOnHost();
+      for (int i = 0; i < numNulls; i++){
+        assertFalse(input.isNull(i));
+      }
     }
   }
 
@@ -402,5 +441,203 @@ public class ColumnVectorTest {
       assertEquals("", cv.getJavaString(2));
       assertTrue(cv.isNull(3));
     }
+  }
+
+  @Test
+  void testStringLengths() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", null, "123", "1234");
+      ColumnVector lengths = cv.getLengths()) {
+      lengths.ensureOnHost();
+      assertEquals(5, lengths.getRowCount());
+      for (int i = 0 ; i < lengths.getRowCount() ; i++) {
+        if (cv.isNull(i)) {
+          assertTrue(lengths.isNull(i));
+        } else {
+          assertEquals(cv.getJavaString(i).length(), lengths.getInt(i));
+        }
+      }
+    }
+  }
+
+  @Test
+  void testGetByteCount() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
+         ColumnVector byteLengthVector = cv.getByteCount()) {
+      byteLengthVector.ensureOnHost();
+      assertEquals(5, byteLengthVector.getRowCount());
+      for (int i = 0; i < byteLengthVector.getRowCount(); i++) {
+        if (cv.isNull(i)) {
+          assertTrue(byteLengthVector.isNull(i));
+        } else {
+          assertEquals(cv.getJavaString(i).length(), byteLengthVector.getInt(i));
+
+        }
+      }
+    }
+  }
+
+  @Test
+  void testStringHash() {
+    try (ColumnVector cv = ColumnVector.fromStrings("1", "12", "123", null, "1234");
+         ColumnVector hash = cv.hash();
+         // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+         ColumnVector expected = ColumnVector.fromBoxedInts(-891545012, -1810825095, 766007851, null, 1762063109)) {
+      assertColumnsAreEqual(expected, hash);
+    }
+  }
+
+  @Test
+  void testStringCatHash() {
+    try (ColumnVector cv = ColumnVector.categoryFromStrings("1", "12", "123", null, "1234", "1", "12", "123", "1234");
+         ColumnVector hash = cv.hash();
+         // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+         ColumnVector expected = ColumnVector.fromBoxedInts(-891545012, -1810825095, 766007851, null, 1762063109, -891545012, -1810825095, 766007851, 1762063109)) {
+      assertColumnsAreEqual(expected, hash);
+    }
+  }
+
+  @Test
+  void testLongHash() {
+    try (ColumnVector cv = ColumnVector.fromBoxedLongs(1L, 12L, 123L, null, 1234L)) {
+      try (ColumnVector hash = cv.hash();
+           // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+           ColumnVector expected = ColumnVector.fromBoxedInts(-247539971, -723809619, -817019373, null, -342640100)) {
+        assertColumnsAreEqual(expected, hash, "HASH");
+      }
+
+      try (ColumnVector hash = cv.murmur3();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-247539971, -723809619, -817019373, null, -342640100)) {
+        assertColumnsAreEqual(expected, hash, "MURMUR3");
+      }
+
+      try (ColumnVector hash = cv.identityHash();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1640531526, -1640531515, -1640531404, null, -1640530293)) {
+        assertColumnsAreEqual(expected, hash, "IDENTITY");
+      }
+    }
+  }
+
+  @Test
+  void testIntHash() {
+    try (ColumnVector cv = ColumnVector.fromBoxedInts(1, 12, 123, null, 1234)) {
+      try (ColumnVector hash = cv.hash();
+           // The exact values don't matter too much, because it is not a specific hash algorithm we are using.
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1708607005, -1142878741, -699442385, null, 166579513)) {
+        assertColumnsAreEqual(expected, hash, "HASH");
+      }
+
+      try (ColumnVector hash = cv.murmur3();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1708607005, -1142878741, -699442385, null, 166579513)) {
+        assertColumnsAreEqual(expected, hash, "MURMUR3");
+      }
+
+      try (ColumnVector hash = cv.identityHash();
+           ColumnVector expected = ColumnVector.fromBoxedInts(-1640531526, -1640531515, -1640531404, null, -1640530293)) {
+        assertColumnsAreEqual(expected, hash, "IDENTITY");
+      }
+    }
+  }
+
+  @Test
+  void testEmptyStringColumnOpts() {
+    try (ColumnVector cv = ColumnVector.fromStrings()) {
+      try (ColumnVector emptyCats = cv.asStringCategories()) {
+        assertEquals(0, emptyCats.getRowCount());
+      }
+
+      try (ColumnVector len = cv.getLengths()) {
+        assertEquals(0, len.getRowCount());
+      }
+
+      try (ColumnVector len = cv.getByteCount()) {
+        assertEquals(0, len.getRowCount());
+      }
+
+      try (ColumnVector hash = cv.hash()) {
+        assertEquals(0, hash.getRowCount());
+      }
+
+      try (ColumnVector lower = cv.lower();
+           ColumnVector upper = cv.upper()) {
+        assertColumnsAreEqual(cv, lower);
+        assertColumnsAreEqual(cv, upper);
+      }
+    }
+  }
+
+  @Test
+  void testEmptyStringCatColumnOpts() {
+    try (ColumnVector cv = ColumnVector.categoryFromStrings()) {
+      try (ColumnVector empty = cv.asStrings()) {
+        assertEquals(0, empty.getRowCount());
+      }
+
+      Scalar index = cv.getCategoryIndex(Scalar.fromString("TEST"));
+      assertEquals(-1, index.getInt());
+
+      try (ColumnVector mask = ColumnVector.fromBoxedBooleans();
+        Table filtered = new Table(cv).filter(mask)) {
+        assertEquals(0, filtered.getColumn(0).getRowCount());
+      }
+
+      try (ColumnVector hash = cv.hash()) {
+        assertEquals(0, hash.getRowCount());
+      }
+    }
+  }
+
+  @Test
+  void testNVStringManipulationWithNulls() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    // Special characters in order of usage, capital and small cyrillic koppa
+    // Latin A with macron, and cyrillic komi de
+    // \ud720 and \ud721 are UTF-8 characters without corresponding upper and lower characters
+    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+                                                   "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+                                                   "kl m", "Nop1", "\\qRs2", null,
+                                                   "3tuV\'", "wX4Yz", "\ud720\ud721");
+         ColumnVector e_lower = ColumnVector.fromStrings("a", "b", "cd", "\u0481\u0481", "e\tf",
+                                                         "g\nh", "ij\"\u0101\u0101\u0501\u0501",
+                                                         "kl m", "nop1", "\\qrs2", null,
+                                                         "3tuv\'", "wx4yz", "\ud720\ud721");
+         ColumnVector e_upper = ColumnVector.fromStrings("A", "B", "CD", "\u0480\u0480", "E\tF",
+                                                         "G\nH", "IJ\"\u0100\u0100\u0500\u0500",
+                                                         "KL M", "NOP1", "\\QRS2", null,
+                                                         "3TUV\'", "WX4YZ", "\ud720\ud721");
+         ColumnVector lower = v.lower();
+         ColumnVector upper = v.upper()) {
+      assertColumnsAreEqual(lower, e_lower);
+      assertColumnsAreEqual(upper, e_upper);
+    }
+  }
+
+  @Test
+  void testNVStringManipulation() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector v = ColumnVector.fromStrings("a", "B", "cd", "\u0480\u0481", "E\tf",
+                                                   "g\nH", "IJ\"\u0100\u0101\u0500\u0501",
+                                                   "kl m", "Nop1", "\\qRs2", "3tuV\'",
+                                                   "wX4Yz", "\ud720\ud721");
+         ColumnVector e_lower = ColumnVector.fromStrings("a", "b", "cd", "\u0481\u0481", "e\tf",
+                                                         "g\nh", "ij\"\u0101\u0101\u0501\u0501",
+                                                         "kl m", "nop1", "\\qrs2", "3tuv\'",
+                                                         "wx4yz", "\ud720\ud721");
+         ColumnVector e_upper = ColumnVector.fromStrings("A", "B", "CD", "\u0480\u0480", "E\tF",
+                                                         "G\nH", "IJ\"\u0100\u0100\u0500\u0500",
+                                                         "KL M", "NOP1", "\\QRS2", "3TUV\'",
+                                                         "WX4YZ", "\ud720\ud721");
+         ColumnVector lower = v.lower();
+         ColumnVector upper = v.upper()) {
+      assertColumnsAreEqual(lower, e_lower);
+      assertColumnsAreEqual(upper, e_upper);
+    }
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
+           ColumnVector lower = cv.lower()) {}
+    });
+    assertThrows(AssertionError.class, () -> {
+      try (ColumnVector cv = ColumnVector.fromInts(1, 2, 3, 4);
+           ColumnVector upper = cv.upper()) {}
+    });
   }
 }
