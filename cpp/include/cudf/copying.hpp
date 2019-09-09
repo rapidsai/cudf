@@ -287,7 +287,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * of the input column.
  * @param[in] num_indices   Number of indices in the indices array
  * @return  A std::vector of gdf_column*, each of which may have a different
- * number of rows. a different number of rows that are equal to the difference
+ * number of rows. The number of rows in each column is equal to the difference
  * of two consecutive indices in the indices array.
  */
 std::vector<gdf_column*> slice(gdf_column const &          input_column,
