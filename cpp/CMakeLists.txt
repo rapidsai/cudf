@@ -415,12 +415,17 @@ add_library(cudf
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
-            src/search/search.cu)
-
-# Override RPATH for nvstrings
-set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
+            src/search/search.cu
+            src/column/column.cu
+            src/column/column_view.cpp
+            src/column/column_device_view.cu
+            src/column/column_factories.cpp
+            src/table/table_view.cpp
+            src/table/table_device_view.cu
+            src/table/table.cpp
+            src/bitmask/null_mask.cpp
+            src/sort/sort.cu
+            src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -429,6 +434,11 @@ set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
 
 # Override RPATH for cudf
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+# Override RPATH for nvstrings
+set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
