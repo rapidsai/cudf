@@ -63,6 +63,7 @@
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 - PR #2753 Fix java quantile API calls
+- PR #2762 Fix validity processing for time in java
 
 
 # cuDF 0.9.0 (21 Aug 2019)
