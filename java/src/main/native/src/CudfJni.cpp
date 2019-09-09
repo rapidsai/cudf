@@ -365,7 +365,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfExtractDatetimeYear(JNIEnv *
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
-    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->null_count != 0);
+    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->valid != nullptr);
     JNI_GDF_TRY(env, 0, gdf_extract_datetime_year(input, output.get()));
     return reinterpret_cast<jlong>(output.release());
   }
@@ -377,7 +377,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfExtractDatetimeMonth(JNIEnv 
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
-    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->null_count != 0);
+    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->valid != nullptr);
     JNI_GDF_TRY(env, 0, gdf_extract_datetime_month(input, output.get()));
     return reinterpret_cast<jlong>(output.release());
   }
@@ -389,7 +389,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfExtractDatetimeDay(JNIEnv *e
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
-    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->null_count != 0);
+    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->valid != nullptr);
     JNI_GDF_TRY(env, 0, gdf_extract_datetime_day(input, output.get()));
     return reinterpret_cast<jlong>(output.release());
   }
@@ -401,7 +401,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfExtractDatetimeHour(JNIEnv *
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
-    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->null_count != 0);
+    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->valid != nullptr);
     JNI_GDF_TRY(env, 0, gdf_extract_datetime_hour(input, output.get()));
     return reinterpret_cast<jlong>(output.release());
   }
@@ -413,7 +413,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfExtractDatetimeMinute(JNIEnv
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
-    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->null_count != 0);
+    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->valid != nullptr);
     JNI_GDF_TRY(env, 0, gdf_extract_datetime_minute(input, output.get()));
     return reinterpret_cast<jlong>(output.release());
   }
@@ -425,7 +425,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cudf_gdfExtractDatetimeSecond(JNIEnv
   JNI_NULL_CHECK(env, input_ptr, "input is null", 0);
   try {
     gdf_column *input = reinterpret_cast<gdf_column *>(input_ptr);
-    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->null_count != 0);
+    cudf::jni::gdf_column_wrapper output(input->size, GDF_INT16, input->valid != nullptr);
     JNI_GDF_TRY(env, 0, gdf_extract_datetime_second(input, output.get()));
     return reinterpret_cast<jlong>(output.release());
   }

@@ -328,7 +328,6 @@ TEST(gdf_csv_test, Timestamps)
         ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
         ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ms );
         auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
-        std::cerr << "Time Unit= " << df.get_column(0)->dtype_info.time_unit;
 
         gdf_column output;
         gdf_dtype_extra_info info{};
