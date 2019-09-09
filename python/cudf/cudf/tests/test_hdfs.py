@@ -45,7 +45,7 @@ def pdf(scope="module"):
 
 
 @pytest.mark.parametrize("test_url", [False, True])
-def test_csv(tmpdir, pdf, hdfs, test_url):
+def test_read_csv(tmpdir, pdf, hdfs, test_url):
     fname = tmpdir.mkdir("csv").join("file.csv")
     # Write to local file system
     pdf.to_csv(fname)
@@ -67,6 +67,18 @@ def test_csv(tmpdir, pdf, hdfs, test_url):
         expect = pd.read_csv(f)
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize("test_url", [False, True])
+def test_write_csv(pdf, test_url):
+    gdf = cudf.from_pandas(pdf)
+    if test_url:
+        hd_fpath = "hdfs://{}:{}{}/file.csv".format(host, port, basedir)
+    else:
+        hd_fpath = "hdfs://{}/file.csv".format(basedir)
+
+    with pytest.raises(Exception):
+        gdf.to_csv(hd_fpath)
 
 
 @pytest.mark.parametrize("test_url", [False, True])

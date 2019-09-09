@@ -67,7 +67,7 @@ def pdf(scope="module"):
     return df
 
 
-def test_csv(pdf):
+def test_read_csv(pdf):
     # Write to buffer
     fname = "file.csv"
     bname = "csv"
@@ -76,6 +76,15 @@ def test_csv(pdf):
         got = cudf.read_csv("s3://{}/{}".format(bname, fname))
 
     assert_eq(pdf, got)
+
+
+def test_write_csv(pdf):
+    # Write to buffer
+    fname = "file.csv"
+    bname = "csv"
+    gdf = cudf.from_pandas(pdf)
+    with pytest.raises(Exception):
+        gdf.to_csv("s3://{}/{}".format(bname, fname))
 
 
 def test_parquet(pdf):
