@@ -220,6 +220,8 @@ struct reader_options {
   quote_style   quoting = QUOTE_MINIMAL;    ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
   bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
 
+  gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< Defines the output resolution for date32, date64, and timestamp columns
+
   reader_options() = default;
 };
 

@@ -121,7 +121,7 @@ public:
    *
    * @return std::vector<gdf_dtype> List of column dtypes
    **/
-  std::vector<gdf_dtype> gather_column_dtypes();
+  std::pair<std::vector<gdf_dtype>, std::vector<gdf_dtype_extra_info>> gather_column_dtypes();
 
   /**
    * @brief Converts the row-column data and outputs to gdf_columns
