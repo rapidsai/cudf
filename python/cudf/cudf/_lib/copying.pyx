@@ -51,9 +51,7 @@ def clone_columns_with_size(in_cols, row_size):
 
 def _normalize_maps(maps, size):
     from cudf.core.column import column
-
     maps = column.as_column(maps).astype("int32")
-    maps = maps.binary_operator("mod", np.int32(size))
     maps = maps.data.mem
     return maps
 

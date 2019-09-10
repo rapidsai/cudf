@@ -26,7 +26,9 @@
 #include <algorithm>
 
 #include <table/legacy/device_table.cuh>
+#include <thrust/functional.h>
 #include <thrust/gather.h>
+#include <thrust/iterator/transform_iterator.h>
 
 #include <cub/cub.cuh>
 #include <nvstrings/NVCategory.h>
@@ -129,6 +131,7 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
   }
 }
 
+
 /**---------------------------------------------------------------------------*
  * @brief Function object for gathering a type-erased
  * gdf_column. To be used with the cudf::type_dispatcher.
@@ -191,14 +194,21 @@ struct column_gatherer {
       destination_data = in_place_buffer.data().get();
     }
 
+    auto source_column_size = source_column->size;
+    auto gather_map_iterator = thrust::make_transform_iterator(
+	gather_map,
+	[source_column_size] __device__ (gdf_index_type in) -> gdf_index_type {
+	  return ((in % source_column_size) + source_column_size) % source_column_size;
+	});
+							       
     if (check_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
                         gather_map + num_destination_rows, gather_map,
                         source_data, destination_data,
                         bounds_checker{0, source_column->size});
     } else {
-      thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
-                     gather_map + num_destination_rows, source_data,
+      thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map_iterator,
+                     gather_map_iterator+num_destination_rows, source_data,
                      destination_data);
     }
 
