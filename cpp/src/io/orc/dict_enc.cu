@@ -16,9 +16,12 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
+#define USE_THRUST_SORT     1
+#if USE_THRUST_SORT
 #include <thrust/execution_policy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
+#endif
 
 namespace cudf {
 namespace io {
@@ -106,6 +109,114 @@ static inline bool __device__ nvstr_is_equal(const char *as, uint32_t alen, cons
     return nvstr_compare<bool, false, false, true>(as, alen, bs, blen);
 }
 
+#if !USE_THRUST_SORT
+static inline __device__ void nvstr_conditional_swap(
+    const nvstrdesc_s *str_base,
+    uint32_t *keys_first,
+    const unsigned int i,
+    const unsigned int end)
+{
+    if (i + 1 < end)
+    {
+        uint32_t xi = keys_first[i];
+        uint32_t xj = keys_first[i + 1];
+        // swap if xj sorts before xi
+        if (nvstr_is_lesser(str_base[xj].ptr, str_base[xj].count, str_base[xi].ptr, str_base[xi].count))
+        {
+            keys_first[i] = xj;
+            keys_first[i + 1] = xi;
+        }
+    }
+}
+
+
+static inline __device__ uint32_t nvstr_lower_bound_n(const nvstrdesc_s * str_base, const uint32_t *first, uint32_t n, uint32_t val)
+{
+    uint32_t start = 0, i;
+    while (start < n)
+    {
+        i = (start + n) / 2;
+        uint32_t key2 = first[i];
+        if (nvstr_is_lesser(str_base[key2].ptr, str_base[key2].count, str_base[val].ptr, str_base[val].count))
+        {
+            start = i + 1;
+        }
+        else
+        {
+            n = i;
+        }
+    } // end while
+    return start;
+}
+
+
+static inline __device__ uint32_t nvstr_upper_bound_n(const nvstrdesc_s * str_base, const uint32_t *first, uint32_t n, uint32_t val)
+{
+    uint32_t start = 0, i;
+    while (start < n)
+    {
+        i = (start + n) / 2;
+        uint32_t key2 = first[i];
+        if (nvstr_is_lesser(str_base[val].ptr, str_base[val].count, str_base[key2].ptr, str_base[key2].count))
+        {
+            n = i;
+        }
+        else
+        {
+            start = i + 1;
+        }
+    } // end while
+    return start;
+}
+
+
+inline __device__ void nvstr_merge(
+    const nvstrdesc_s * str_base,
+    uint32_t *keys_first,
+    const unsigned int i,
+    const unsigned int n,
+    unsigned int begin,
+    unsigned int end,
+    unsigned int h)
+{
+    // INVARIANT: Every element i resides within a sequence [begin,end)
+    //            of length h which is already sorted
+    while (h<n)
+    {
+        h *= 2;
+
+        unsigned int new_begin = i&(~(h - 1));
+        unsigned int new_end = min(n, new_begin + h);
+        uint32_t key;
+        unsigned int rank = i - begin;
+
+        // prevent out-of-bounds access
+        if (i < new_end)
+        {
+            key = keys_first[i];
+
+            if (begin == new_begin)  // in the left side of merging pair
+            {
+                rank += nvstr_lower_bound_n(str_base, keys_first + end, new_end - end, key);
+            }
+            else                  // in the right side of merging pair
+            {
+                rank += nvstr_upper_bound_n(str_base, keys_first + new_begin, begin - new_begin, key);
+            }
+        }
+        __syncthreads();
+
+        if (i < new_end)
+        {
+            keys_first[new_begin + rank] = key;
+        }
+        __syncthreads();
+
+        begin = new_begin;
+        end = new_end;
+    }
+}
+#endif // !USE_THRUST_SORT
 
 struct dictinit_state_s
 {
@@ -238,7 +349,7 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
     nnz = s->nnz;
     dict_data = s->chunk.dict_data;
     start_row = s->chunk.start_row;
-    ck_data = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
+    ck_data = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;   
     for (uint32_t i = 0; i < nnz; i += 512)
     {
         uint32_t ck_row = 0, len = 0, hash;
@@ -524,6 +635,92 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
 }
 
 
+#if !USE_THRUST_SORT
+struct sort_state_s
+{
+    StripeDictionary stripe;
+    volatile uint32_t scratch_red[32];
+    uint32_t dict[4*1024];
+};
+
+
+/**
+ * @brief Sort strings in the dictionary
+ *
+ * @param[in] stripes StripeDictionary device array [stripe][column]
+ *
+**/
+extern "C" __global__ void __launch_bounds__(1024, 1)
+gpuSortStripeDictionaries(StripeDictionary *stripes)
+{
+    __shared__ __align__(16) sort_state_s state_g;
+
+    sort_state_s * const s = &state_g;
+    const nvstrdesc_s *str_data;
+    uint32_t *dict_data;
+    uint32_t num_strings;
+    int t = threadIdx.x;
+
+    if (t < sizeof(StripeDictionary) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&s->stripe)[t] = ((const uint32_t *)&stripes[blockIdx.x])[t];
+    }
+    __syncthreads();
+    str_data = reinterpret_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
+    num_strings = s->stripe.num_strings;
+    dict_data = s->stripe.dict_data;
+    if (!dict_data)
+        return;
+    for (uint32_t j = 0; j < num_strings; j += 1024)
+    {
+        uint32_t h = 8;
+        uint32_t n, i, begin, end;
+        uint32_t *dict = &s->dict[j & 0xfff];
+        // Phase 1: Sort subsequences of length 32 using odd-even transposition sort.
+        if (!(j & 1024))
+        {
+            n = min(num_strings - j, 2048);
+            begin = (t & ~((h-1)>>1)) * 2;
+            i = (t & ((h-1)>>1)) * 2;
+            if (j + t < num_strings)
+            {
+                dict[t] = dict_data[j + t];
+                if (j + t + 1024 < num_strings)
+                    dict[t + 1024] = dict_data[j + t + 1024];
+            }
+            __syncthreads();
+            for (uint32_t round = h>>1; round>0; --round)
+            {
+                // ODDS
+                nvstr_conditional_swap(str_data, dict, begin + i + 1, min(begin + h, n));
+                __syncthreads();
+                // EVENS
+                nvstr_conditional_swap(str_data, dict, begin + i + 0, min(begin + h, n));
+                __syncthreads();
+            }
+        }
+        // Phase 2: Apply merge tree to produce final sorted results
+        i = t;
+        n = min(num_strings - j, 1024);
+        begin = i&(~(h-1));
+        end = min(n, begin + h);
+        nvstr_merge(str_data, dict, i, n, begin, end, h);
+        // Store to output (TODO: needs further sorting)
+        if ((j & 0xfff) == 0xc00 || j + 1024 >= num_strings)
+        {
+            for (uint32_t k = 0; k < min(num_strings, 4096); k+=1024)
+            {
+                uint32_t dst_ofs = (j & ~0xfff) + k + t;
+                if (dst_ofs < num_strings)
+                    dict_data[dst_ofs] = s->dict[dst_ofs & 0xfff];
+                __syncthreads();
+            }
+        }
+    }
+}
+#endif // !USE_THRUST_SORT
+
+
 struct build_state_s
 {
     uint32_t total_dupes;
@@ -655,6 +852,18 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
 }
 
 
+#if USE_THRUST_SORT
+struct nvstr_compare_op : public thrust::binary_function<uint32_t, uint32_t, bool>
+{
+    const nvstrdesc_s *str_data;
+    nvstr_compare_op(const nvstrdesc_s *str_data_) : str_data(str_data_) {}
+    inline __device__ bool operator()(const int a, const int b) const
+    {
+        return nvstr_is_lesser(str_data[a].ptr, (uint32_t)str_data[a].count, str_data[b].ptr, (uint32_t)str_data[b].count);
+    }
+};
+#endif // USE_THRUST_SORT
+
 /**
  * @brief Launches kernel for building stripe dictionaries
  *
@@ -676,19 +885,28 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary 
     dim3 dim_grid_compact(max_chunks_in_stripe, num_columns, num_stripes);
     dim3 dim_grid_build(num_columns, num_stripes);
     gpuCompactChunkDictionaries <<< dim_grid_compact, dim_block, 0, stream >>>(stripes, chunks, num_columns);
+#if USE_THRUST_SORT
     for (uint32_t i = 0; i < num_stripes * num_columns; i++)
     {
         if (stripes_host[i].dict_data != nullptr)
         {
             thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[i].dict_data);
             const nvstrdesc_s *str_data = reinterpret_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
-            // NOTE: Requires the --expt-extended-lambda nvcc flag
+        #if 1
+            thrust::sort(thrust::device, p, p + stripes_host[i].num_strings, nvstr_compare_op(str_data));
+        #else
+            // Requires the --expt-extended-lambda nvcc flag (same perf as above)
             thrust::sort(p, p + stripes_host[i].num_strings,
                 [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
                 return nvstr_is_lesser(str_data[lhs].ptr, (uint32_t)str_data[lhs].count, str_data[rhs].ptr, (uint32_t)str_data[rhs].count);
             });
+        #endif
         }
     }
+#else
+    dim3 dim_grid_sort(num_columns * num_stripes, 1);
+    gpuSortStripeDictionaries <<< dim_grid_sort, dim_block, 0, stream >>>(stripes);
+#endif
     gpuBuildStripeDictionaries <<< dim_grid_build, dim_block, 0, stream >>>(stripes, num_columns);
     return cudaSuccess;
 }

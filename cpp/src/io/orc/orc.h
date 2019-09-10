@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <memory>
 
-#include <io/comp/io_uncomp.h>
+#include "io/comp/io_uncomp.h"
 #include "orc_common.h"
 
 namespace cudf {

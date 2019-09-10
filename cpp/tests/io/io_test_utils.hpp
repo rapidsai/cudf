@@ -27,6 +27,9 @@
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
 
+// Forward declarations
+class NVStrings;
+
 /**---------------------------------------------------------------------------*
  * @brief Checks if a file exists.
  *---------------------------------------------------------------------------**/
@@ -82,3 +85,8 @@ public:
 private:
   std::vector<T> m_hostdata;
 };
+
+/**
+ * @brief Returns list of strings from an NVString instance
+ **/
+std::vector<std::string> nvstrings_to_strings(NVStrings* nvstr);
