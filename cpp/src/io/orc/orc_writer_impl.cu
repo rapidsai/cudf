@@ -84,7 +84,7 @@ size_t gather_stripe_stream(uint8_t *dst, const gpu::EncChunk *chunks,
       CUDA_TRY(cudaMemcpyAsync(dst + dst_pos, ck->streams[strm_type], chunk_len,
                                cudaMemcpyDeviceToHost));
     } else {
-      memset(ck->streams[strm_type], 0, chunk_len);
+      memset(dst + dst_pos, 0, chunk_len);
     }
     dst_pos += chunk_len;
   }
