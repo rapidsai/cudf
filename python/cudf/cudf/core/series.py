@@ -1843,7 +1843,7 @@ class Series(object):
 
     def kurtosis(self, axis=None, skipna=True, numeric_only=True):
         """
-        Calculates Fisher's unbiased kurtosis of a sample population.
+        Calculates Fisher's unbiased kurtosis of a sample.
         """
         assert axis in (None, 0) and skipna in (None, True)
 
