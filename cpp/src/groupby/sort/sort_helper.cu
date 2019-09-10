@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "groupby.hpp"
+#include "sort_helper.hpp"
 
 #include <copying/scatter.hpp>
 #include <table/legacy/device_table.cuh>
@@ -80,10 +80,11 @@ struct permuted_row_equality_comparator {
 
 
 namespace cudf {
+namespace groupby {
+namespace sort {
+namespace detail { 
 
-namespace detail {
-
-gdf_size_type groupby::num_keys() {
+gdf_size_type helper::num_keys() {
   if (_num_keys > -1)
     return _num_keys;
 
@@ -102,7 +103,7 @@ gdf_size_type groupby::num_keys() {
   return _num_keys; 
 }
 
-gdf_column const& groupby::key_sort_order() {
+gdf_column const& helper::key_sort_order() {
   if (_key_sorted_order)
     return *_key_sorted_order;
 
@@ -160,7 +161,7 @@ gdf_column const& groupby::key_sort_order() {
   return *_key_sorted_order;
 }
 
-rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
+rmm::device_vector<gdf_size_type> const& helper::group_offsets() {
   if (_group_offsets)
     return *_group_offsets;
 
@@ -191,7 +192,7 @@ rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
   return *_group_offsets;
 }
 
-rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
+rmm::device_vector<gdf_size_type> const& helper::group_labels() {
   if (_group_labels)
     return *_group_labels;
 
@@ -214,7 +215,7 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
   return group_labels;
 }
 
-gdf_column const& groupby::unsorted_keys_labels() {
+gdf_column const& helper::unsorted_keys_labels() {
   if (_unsorted_keys_labels)
     return *_unsorted_keys_labels;
 
@@ -246,7 +247,7 @@ gdf_column const& groupby::unsorted_keys_labels() {
 }
 
 rmm::device_vector<bit_mask::bit_mask_t>&
-groupby::keys_row_bitmask() {
+helper::keys_row_bitmask() {
   if (_keys_row_bitmask)
     return *_keys_row_bitmask;
 
@@ -257,7 +258,7 @@ groupby::keys_row_bitmask() {
 }
 
 std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
-groupby::sort_values(gdf_column const& values) {
+helper::sort_values(gdf_column const& values) {
   CUDF_EXPECTS(values.size == _keys.num_rows(),
     "Size mismatch between keys and values.");
   auto values_sort_order = gdf_col_pointer(
@@ -311,7 +312,7 @@ groupby::sort_values(gdf_column const& values) {
   return std::make_pair(sorted_values, val_group_sizes);
 }
 
-cudf::table groupby::unique_keys() {
+cudf::table helper::unique_keys() {
   cudf::table unique_keys = allocate_like(_keys, 
                                           (gdf_size_type)num_groups(),
                                           true,
@@ -332,6 +333,7 @@ cudf::table groupby::unique_keys() {
 }
 
 
-} // namespace detail
-  
-} // namespace cudf
+}  // namespace detail
+}  // namespace sort
+}  // namespace groupby
+}  // namespace cudf

@@ -26,8 +26,9 @@
 
 
 namespace cudf {
-
-namespace detail {
+namespace groupby {
+namespace sort {
+namespace detail { 
 
 /**
  * @brief Helper class for computing sort-based groupby
@@ -40,7 +41,7 @@ namespace detail {
  * 3. Group valid sizes: The number of valid values in each group in a sorted
  *   value column
  */
-struct groupby {
+struct helper {
   using index_vector = rmm::device_vector<gdf_size_type>;
   using bitmask_vector = rmm::device_vector<bit_mask::bit_mask_t>;
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
@@ -50,7 +51,7 @@ struct groupby {
 
 
   /**
-   * @brief Construct a new groupby object
+   * @brief Construct a new helper object
    * 
    * If `include_nulls == false`, then any row in `keys` containing a null value
    * will effectively be discarded. I.e., any values corresponding to discarded
@@ -60,9 +61,9 @@ struct groupby {
    * @param include_nulls whether to include null keys in groupby
    * @param null_sort_behavior whether to put nulls before valid values or after
    * @param keys_pre_sorted if the keys are already sorted
-   * @param stream used for all the computation in this groupby object
+   * @param stream used for all the computation in this helper object
    */
-  groupby(cudf::table const& keys, bool include_nulls = false,
+  helper(cudf::table const& keys, bool include_nulls = false,
           null_order null_sort_behavior = null_order::AFTER,
           bool keys_pre_sorted = false,
           cudaStream_t stream = 0)
@@ -74,11 +75,11 @@ struct groupby {
   , _stream(stream)
   {};
 
-  ~groupby() = default;
-  groupby(groupby const&) = delete;
-  groupby& operator=(groupby const&) = delete;
-  groupby(groupby&&) = default;
-  groupby& operator=(groupby&&) = default;
+  ~helper() = default;
+  helper(helper const&) = delete;
+  helper& operator=(helper const&) = delete;
+  helper(helper&&) = default;
+  helper& operator=(helper&&) = default;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each group.
@@ -199,6 +200,7 @@ struct groupby {
   bitmask_vec_pointer _keys_row_bitmask;
 };
 
-} // namespace detail
-  
-} // namespace cudf
+}  // namespace detail
+}  // namespace sort
+}  // namespace groupby
+}  // namespace cudf

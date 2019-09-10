@@ -37,8 +37,8 @@
 #include "../common/utils.hpp"
 #include "groupby.hpp"
 #include "groupby_kernels.cuh"
+#include "sort_helper.hpp"
 
-#include <quantiles/groupby.hpp>
 #include <quantiles/quantiles.hpp>
 
 namespace cudf {
@@ -107,7 +107,7 @@ struct quantiles_functor {
  * @return vector of columns satisfying each of the original requests
  *---------------------------------------------------------------------------**/
 std::vector<gdf_column*>  process_remaining_complex_request(
-    cudf::detail::groupby &groupby,
+    detail::helper &groupby,
     std::vector<AggRequestType> const& original_requests,
      std::vector<operation_args*> const& input_ops_args,
     cudf::table current_output_values,
@@ -179,7 +179,7 @@ std::vector<gdf_column*>  process_remaining_complex_request(
 template <bool keys_have_nulls, bool values_have_nulls>
 cudf::table compute_simple_request(const cudf::table &input_keys,
                                const Options &options,
-                               cudf::detail::groupby &groupby,
+                               detail::helper &groupby,
                                const std::vector<gdf_column *> &simple_values_columns,
                                const std::vector<operators> &simple_operators,
                                cudaStream_t &stream) {
@@ -221,7 +221,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                           Options options,
                           cudaStream_t stream) {
   auto include_nulls = not options.ignore_null_keys;
-  auto groupby = cudf::detail::groupby(input_keys, include_nulls, options.null_sort_behavior, options.input_sorted);
+  auto groupby = detail::helper(input_keys, include_nulls, options.null_sort_behavior, options.input_sorted);
 
   if (groupby.num_groups() == 0) {
     cudf::table output_values(0, target_dtypes(column_dtypes(input_values), input_ops), column_dtype_infos(input_values));

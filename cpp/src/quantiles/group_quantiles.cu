@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 
-#include "groupby.hpp"
-
 #include <utilities/cuda_utils.hpp>
 #include <quantiles/quantiles.hpp>
+#include <groupby/sort/sort_helper.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
@@ -88,7 +87,7 @@ group_quantiles(cudf::table const& keys,
                 cudf::interpolation interpolation,
                 bool include_nulls)
 {
-  detail::groupby gb_obj(keys, include_nulls);
+  groupby::sort::detail::helper gb_obj(keys, include_nulls);
   auto group_offsets = gb_obj.group_offsets();
 
   rmm::device_vector<double> dv_quantiles(quantiles);
