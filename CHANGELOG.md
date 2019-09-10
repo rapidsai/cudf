@@ -72,6 +72,8 @@
 - PR #2769 Fix link to API docs in README.md
 - PR #2772 Handle multiindex pandas Series #2772
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
+- PR #2752 CSV Reader: Fix exception when there's no rows to process
+
 
 
 # cuDF 0.9.0 (21 Aug 2019)
