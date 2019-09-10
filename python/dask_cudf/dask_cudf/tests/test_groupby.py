@@ -129,3 +129,34 @@ def test_groupby_multi_column(func):
     b = func(ddf).compute().to_pandas()
 
     dd.assert_eq(a, b)
+
+
+def test_reset_index_multiindex():
+    df = cudf.DataFrame()
+    df["id_1"] = ["a", "a", "b"]
+    df["id_2"] = [0, 0, 1]
+    df["val"] = [1, 2, 3]
+
+    df_lookup = cudf.DataFrame()
+    df_lookup["id_1"] = ["a", "b"]
+    df_lookup["metadata"] = [0, 1]
+
+    gddf = dask_cudf.from_cudf(df, npartitions=2)
+    gddf_lookup = dask_cudf.from_cudf(df_lookup, npartitions=2)
+
+    # uses the cudf dfs created in repro snippet above
+    ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
+    ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
+
+    # 'id_2' has wrong type (object) until after compute for dask_cudf??
+    dd.assert_eq(
+        gddf.groupby(by=["id_1", "id_2"])
+        .val.sum()
+        .reset_index()
+        .merge(gddf_lookup, on="id_1")
+        .compute(),
+        ddf.groupby(by=["id_1", "id_2"])
+        .val.sum()
+        .reset_index()
+        .merge(ddf_lookup, on="id_1"),
+    )

@@ -134,7 +134,20 @@ class Series(object):
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
-        return cls(s, nan_as_null=nan_as_null)
+        if not isinstance(s, pd.Series):
+            raise TypeError("not a pandas.Series")
+
+        # Deal with multiindex
+        if isinstance(s.index, pd.MultiIndex):
+            import cudf
+
+            index = cudf.from_pandas(s.index)
+        else:
+            index = s.index
+        result = cls(s.values, nan_as_null=nan_as_null).set_index(index)
+        result.name = s.name
+
+        return result
 
     @property
     def values(self):
