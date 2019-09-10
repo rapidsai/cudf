@@ -1867,7 +1867,6 @@ class Series(object):
         term_one_section_two = m4_numerator / (V ** 2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
-
         return kurt
 
     def skew(self, axis=None, skipna=True, numeric_only=True):
@@ -1893,7 +1892,7 @@ class Series(object):
             return 0
 
         unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
-        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
+        skew = unbiased_coef * m3 / (m2 ** (1.5))
         return skew
 
     def isin(self, test):
