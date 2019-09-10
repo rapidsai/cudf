@@ -421,15 +421,6 @@ testdata = [
         ),
         False,
     ),
-    (
-        Series(
-            pa.array(
-                [0, np.iinfo("int64").min, np.iinfo("int64").max, None],
-                type=pa.timestamp("ns"),
-            )
-        ),
-        True,
-    ),
 ]
 
 
@@ -440,6 +431,20 @@ def test_datetime_has_null_test(data, expected):
     expected_count = 0
     if False in count.keys():
         expected_count = count[False]
+
+    assert_eq(expected, data.has_null_mask)
+    assert_eq(expected_count, data.null_count)
+
+
+def test_datetime_has_null_test_pyarrow():
+    data = Series(
+        pa.array(
+            [0, np.iinfo("int64").min, np.iinfo("int64").max, None],
+            type=pa.timestamp("ns"),
+        )
+    )
+    expected = True
+    expected_count = 1
 
     assert_eq(expected, data.has_null_mask)
     assert_eq(expected_count, data.null_count)

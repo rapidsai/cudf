@@ -52,10 +52,6 @@ cdef extern from "cudf/transform.hpp" namespace "cudf" nogil:
         bool is_ptx
     ) except +
 
-    cdef pair[bit_mask_t_ptr, gdf_size_type] nans_to_nulls(
-        const gdf_column& input
-    ) except +
-
     cdef pair[bit_mask_t_ptr, gdf_size_type] values_to_nulls(
         const gdf_column& input,
         const gdf_scalar& val

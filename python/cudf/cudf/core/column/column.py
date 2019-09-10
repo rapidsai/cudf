@@ -1192,7 +1192,10 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             and arbitrary.size > 0
         ):
             if nan_as_null:
-                mask = libcudf.unaryops.nans_to_nulls(data)
+                nan = np.float_(np.nan)
+                mask, _ = libcudf.unaryops.set_value_to_null(
+                    data, nan.astype(data.dtype)
+                )
                 data = data.set_mask(mask)
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):

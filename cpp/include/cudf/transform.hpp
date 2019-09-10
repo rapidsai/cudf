@@ -45,22 +45,13 @@ gdf_column transform(const gdf_column &input,
                      gdf_dtype output_type, bool is_ptx);
 
 /**
- * @brief Given a column with floating point values, generate a bitmask where every NaN
- * is indicated as the corresponding null bit.
- * 
- * @param input The input column to generate bitmask from
- * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
-*/
-std::pair<bit_mask::bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input);
-
-/**
  * @brief Given a column, creates a bitmask where a null bit is generated for every element equal to `value`.
  *
  * @throws cudf::logic
  * If dtype mismatch with `input` and `value` 
  *
  * @param input The input column to generate bitmask from
- * @param value The scalar value whose bit mask to be reset
+ * @param value The scalar value, which needs to be set to null in `input`
  *
  * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
 */
