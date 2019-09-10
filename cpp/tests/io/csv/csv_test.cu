@@ -312,7 +312,7 @@ TEST(gdf_csv_test, Timestamps)
     const std::string fname = temp_env->get_temp_dir()+"CsvTimestamps.csv";
 
     std::ofstream outfile(fname, std::ofstream::out);
-    outfile << "true,334.0,2014-02-01T12:30:23.000-06:00\n";
+    outfile << "1288508400000\n988873200000\n782636400000\n656233200000\n28800000\n1462003323000\n1391279423000\n";
     outfile.close();
     ASSERT_TRUE( checkFile(fname) );
 
@@ -328,13 +328,250 @@ TEST(gdf_csv_test, Timestamps)
         ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
         ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ms );
         auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(1288508400000, 988873200000, 782636400000,
+                                 656233200000, 28800000, 1462003323000, 1391279423000) );
 
-        gdf_column output;
-        gdf_dtype_extra_info info{};
-        info.time_unit = TIME_UNIT_us;
-        output = cudf::cast(*df.get_column(0), GDF_TIMESTAMP, info);
-        ASSERT_EQ( output.dtype, GDF_TIMESTAMP );
-        ASSERT_EQ( output.dtype_info.time_unit, TIME_UNIT_us );
+    }
+}
+
+TEST(gdf_csv_test, TimestampSeconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CsvTimestampSeconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "1288508400\n988873200\n782636400\n656233200\n28800\n1462003323\n1391279423\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "timestamp[s]" };
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_s );
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(1288508400, 988873200, 782636400,
+                                 656233200, 28800, 1462003323, 1391279423) );
+
+    }
+}
+
+TEST(gdf_csv_test, TimestampMilliseconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CsvTimestampMilliseconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "1288508400000\n988873200000\n782636400000\n656233200000\n28800000\n1462003323000\n1391279423000\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "timestamp[ms]" };
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ms );
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(1288508400000, 988873200000, 782636400000,
+                                 656233200000, 28800000, 1462003323000, 1391279423000) );
+
+    }
+}
+
+TEST(gdf_csv_test, TimestampMicroseconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CsvTimestampMicroseconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "1288508400000000\n988873200000000\n782636400000000\n656233200000000\n28800000000\n1462003323000000\n1391279423000000\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "timestamp[us]" };
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_us );
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(1288508400000000, 988873200000000, 782636400000000,
+                                 656233200000000, 28800000000, 1462003323000000, 1391279423000000) );
+
+    }
+}
+
+TEST(gdf_csv_test, TimestampNanoseconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CsvTimestampNanoseconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "1288508400000000000\n988873200000000000\n782636400000000000\n656233200000000000\n28800000000000\n1462003323000000000\n1391279423000000000\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "timestamp[ns]" };
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ns );
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(1288508400000000000, 988873200000000000, 782636400000000000,
+                                 656233200000000000, 28800000000000, 1462003323000000000, 1391279423000000000) );
+
+    }
+}
+
+TEST(gdf_csv_test, DatesCastToTimestampSeconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CastToTimestampSeconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
+    outfile << "18/04/1995\n14/07/1994\n07/06/2006 11:20:30.400\n";
+    outfile << "16/09/2005T1:2:30.400PM\n2/2/1970\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "date" };
+        args.out_time_unit = TIME_UNIT_s;
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_s );
+
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(983750400, 1288483200, 782611200,
+                       656208000, 0, 798163200, 774144000,
+                       1149679230, 1126875750, 2764800) );
+    }
+}
+
+TEST(gdf_csv_test, DatesCastToTimestampMilliseconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CastToTimestampMilliseconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
+    outfile << "18/04/1995\n14/07/1994\n07/06/2006 11:20:30.400\n";
+    outfile << "16/09/2005T1:2:30.400PM\n2/2/1970\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "date" };
+        args.out_time_unit = TIME_UNIT_ms;
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ms );
+
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
+                       656208000000, 0, 798163200000, 774144000000,
+                       1149679230400, 1126875750400, 2764800000) );
+    }
+}
+
+TEST(gdf_csv_test, DatesCastToTimestampMicroseconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CastToTimestampMicroseconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
+    outfile << "18/04/1995\n14/07/1994\n07/06/2006 11:20:30.400\n";
+    outfile << "16/09/2005T1:2:30.400PM\n2/2/1970\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "date" };
+        args.out_time_unit = TIME_UNIT_us;
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_us );
+
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(983750400000000, 1288483200000000, 782611200000000,
+                       656208000000000, 0, 798163200000000, 774144000000000,
+                       1149679230400000, 1126875750400000, 2764800000000) );
+    }
+}
+
+TEST(gdf_csv_test, DatesCastToTimestampNanoseconds)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CastToTimestampNanoseconds.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "05/03/2001\n31/10/2010\n20/10/1994\n18/10/1990\n1/1/1970\n";
+    outfile << "18/04/1995\n14/07/1994\n07/06/2006 11:20:30.400\n";
+    outfile << "16/09/2005T1:2:30.400PM\n2/2/1970\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "date" };
+        args.out_time_unit = TIME_UNIT_ns;
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ns );
+
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+        EXPECT_THAT( ACol.hostdata(),
+          ::testing::ElementsAre(983750400000000000, 1288483200000000000, 782611200000000000,
+                       656208000000000000, 0, 798163200000000000, 774144000000000000,
+                       1149679230400000000, 1126875750400000000, 2764800000000000) );
     }
 }
 

@@ -9,6 +9,7 @@
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 - PR #2559 Add Series.tolist()
 - PR #2653 Add Java bindings for rolling window operations
+- PR #2480 Merge `custreamz` codebase into `cudf` repo
 - PR #2674 Add __contains__ for Index/Series/Column
 - PR #2722 Add Java bindings for NVTX ranges
 - PR #2702 Add make_bool to dataset generation functions
@@ -31,6 +32,7 @@
 - PR #2703 move dask serialization dispatch into cudf
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
+- PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 
 ## Bug Fixes
 
