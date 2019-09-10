@@ -148,7 +148,7 @@ def test_reset_index_multiindex():
     ddf = dd.from_pandas(df.to_pandas(), npartitions=2)
     ddf_lookup = dd.from_pandas(df_lookup.to_pandas(), npartitions=2)
 
-    # 'id_2' has wrong type (object) until after compute for dask_cudf??
+    # TODO: 'id_2' has wrong type (object) until after compute
     dd.assert_eq(
         gddf.groupby(by=["id_1", "id_2"])
         .val.sum()

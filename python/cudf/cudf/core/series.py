@@ -92,7 +92,12 @@ class Series(object):
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
-            index = as_index(data.index)
+            if isinstance(data.index, pd.MultiIndex):
+                import cudf
+
+                index = cudf.from_pandas(data.index)
+            else:
+                index = as_index(data.index)
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
@@ -134,20 +139,7 @@ class Series(object):
 
     @classmethod
     def from_pandas(cls, s, nan_as_null=True):
-        if not isinstance(s, pd.Series):
-            raise TypeError("not a pandas.Series")
-
-        # Deal with multiindex
-        if isinstance(s.index, pd.MultiIndex):
-            import cudf
-
-            index = cudf.from_pandas(s.index)
-        else:
-            index = s.index
-        result = cls(s.values, nan_as_null=nan_as_null).set_index(index)
-        result.name = s.name
-
-        return result
+        return cls(s, nan_as_null=nan_as_null)
 
     @property
     def values(self):

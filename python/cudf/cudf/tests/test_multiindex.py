@@ -170,7 +170,7 @@ def test_from_pandas(pdf, pdfIndex):
     assert_eq(pdf, gdf)
 
 
-def test_from_pandas_2():
+def test_from_pandas_series():
     pdf = pd.DataFrame(
         {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
     ).set_index(["a", "b"])
