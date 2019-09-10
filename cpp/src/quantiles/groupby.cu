@@ -87,7 +87,7 @@ gdf_size_type groupby::num_keys() {
   if (_num_keys > -1)
     return _num_keys;
 
-  if (has_nulls(_keys)) {
+  if (not _include_nulls and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
     // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
     // in the sorted order are considered for grouping. 
@@ -115,10 +115,24 @@ gdf_column const& groupby::key_sort_order() {
                       _stream)),
     [](gdf_column* col) { gdf_column_free(col); });
 
+  if (_keys_pre_sorted) {
+    auto d_key_sorted_order = static_cast<gdf_index_type*>(_key_sorted_order->data);
+
+    thrust::sequence(rmm::exec_policy(_stream)->on(_stream), 
+                     d_key_sorted_order,
+                     d_key_sorted_order + _key_sorted_order->size, 0);
+
+    return *_key_sorted_order;
+  }
+  
+  gdf_context context{};
+  context.flag_groupby_include_nulls = _include_nulls;
+  context.flag_null_sort_behavior = (_null_sort_behavior == null_order::AFTER)
+                                  ? GDF_NULL_AS_LARGEST
+                                  : GDF_NULL_AS_SMALLEST;
+
   if (_include_nulls ||
       !cudf::has_nulls(_keys)) {  // SQL style
-    gdf_context context{};
-    context.flag_groupby_include_nulls = true;
     CUDF_TRY(gdf_order_by(_keys.begin(), nullptr,
                           _keys.num_columns(), _key_sorted_order.get(),
                           &context));
@@ -136,12 +150,9 @@ gdf_column const& groupby::key_sort_order() {
     cudf::table modified_keys_table(modified_keys.data(),
                                     modified_keys.size());
 
-    gdf_context temp_ctx;
-    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-
     CUDF_TRY(gdf_order_by(modified_keys_table.begin(), nullptr,
                           modified_keys_table.num_columns(),
-                          _key_sorted_order.get(), &temp_ctx));
+                          _key_sorted_order.get(), &context));
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }

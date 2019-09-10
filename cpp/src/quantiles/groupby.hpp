@@ -20,6 +20,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/groupby.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -45,6 +46,8 @@ struct groupby {
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
   using index_vec_pointer = std::unique_ptr<index_vector>;
   using bitmask_vec_pointer = std::unique_ptr<bitmask_vector>;
+  using null_order = cudf::groupby::sort::null_order;
+
 
   /**
    * @brief Construct a new groupby object
@@ -55,13 +58,19 @@ struct groupby {
    *
    * @param keys table to group by
    * @param include_nulls whether to include null keys in groupby
+   * @param null_sort_behavior whether to put nulls before valid values or after
+   * @param keys_pre_sorted if the keys are already sorted
    * @param stream used for all the computation in this groupby object
    */
   groupby(cudf::table const& keys, bool include_nulls = false,
+          null_order null_sort_behavior = null_order::AFTER,
+          bool keys_pre_sorted = false,
           cudaStream_t stream = 0)
   : _keys(keys)
   , _num_keys(-1)
   , _include_nulls(include_nulls)
+  , _null_sort_behavior(null_sort_behavior)
+  , _keys_pre_sorted(keys_pre_sorted)
   , _stream(stream)
   {};
 
@@ -181,7 +190,9 @@ struct groupby {
   index_vec_pointer   _group_labels;
 
   gdf_size_type       _num_keys;
+  bool                _keys_pre_sorted;
   bool                _include_nulls;
+  null_order          _null_sort_behavior;
 
   cudaStream_t        _stream;
 
