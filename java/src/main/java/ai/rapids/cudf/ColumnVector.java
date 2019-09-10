@@ -1,4 +1,4 @@
-1427,8/*
+/*
  *
  *  Copyright (c) 2019, NVIDIA CORPORATION.
  *
@@ -1405,7 +1405,18 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Timestamp - ColumnVector
-   * This method takes the value provided by the ColumnVector and casts to timestamp
+   * This method takes the value provided by the ColumnVectoor and casts to timestamp. Timestamp
+   * casting usually requires a time unit to be given as an argument, this defaults the
+   * argument to millisecond.
+   * @return A new vector allocoated on the GPU
+   */
+  public ColumnVector asTimestamp() {
+    return castTo(TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Cast to Timestamp - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to timestamp.
    * When used to convert strings to timestamp, "%Y-%m-%dT%H:%M:%SZ%f" is the format string used to
    * parse the time -- see NVString documentation for symbol meaning and alternative format options.
    * https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
@@ -1455,7 +1466,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                   "for .timestampToLong() operation";
     assert format != null : "Format string may not be NULL";
     if (unit == TimeUnit.NONE) {
-      unit == TimeUnit.MILLISECONDS;
+      unit = TimeUnit.MILLISECONDS;
     }
     return new ColumnVector(stringTimestampToTimestamp(getNativeCudfColumnAddress(),
                                                        unit.getNativeId(), format));
