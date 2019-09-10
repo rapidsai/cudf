@@ -220,7 +220,9 @@ def test_misc_quantiles(data, q):
         Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         Series([]),
         Series([-3]),
-        randomdata(nrows=1000, dtypes={"a": float, "b": int, "c": float}),
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
@@ -250,7 +252,9 @@ def test_kurtosis(data, null_flag):
         Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         Series([]),
         Series([-3]),
-        randomdata(nrows=1000, dtypes={"a": float, "b": int, "c": float}),
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
     ],
 )
 @pytest.mark.parametrize("null_flag", [False, True])
