@@ -61,8 +61,8 @@ __global__ void aggregate_all_rows(
     gdf_size_type num_rows, 
     device_table input_values,
     device_table output_values,
-    gdf_size_type* key_sorted_order, 
-    gdf_size_type* group_labels, 
+    gdf_size_type const* key_sorted_order, 
+    gdf_size_type const* group_labels, 
     bool skip_null_keys,
     operators* ops,
     bit_mask::bit_mask_t const* const __restrict__ row_bitmask) {
