@@ -38,6 +38,7 @@ dependencies:
   - pre_commit
   - dask>=2.1.0
   - distributed>=2.1.0
+  - streamz
   - dlpack
   - arrow-cpp=0.14.1
   - boost-cpp
@@ -49,3 +50,4 @@ dependencies:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git
       - git+https://github.com/dask/distributed.git
+      - git+https://github.com/python-streamz/streamz.git

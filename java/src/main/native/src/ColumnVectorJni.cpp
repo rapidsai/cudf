@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 #include "cudf/copying.hpp"
+#include "cudf/quantiles.hpp"
 #include "cudf/rolling.hpp"
 
 #include "jni_utils.hpp"
@@ -352,11 +353,11 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_exactQuantile(JNIEnv 
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   try {
     gdf_column *n_input_column = reinterpret_cast<gdf_column *>(input_column);
-    gdf_quantile_method n_quantile_method = static_cast<gdf_quantile_method>(quantile_method);
+    cudf::interpolation n_quantile_method = static_cast<cudf::interpolation>(quantile_method);
     gdf_context ctxt{0, GDF_SORT, 0, 0};
     gdf_scalar result{};
     JNI_GDF_TRY(env, NULL,
-                gdf_quantile_exact(n_input_column, n_quantile_method, quantile, &result, &ctxt));
+                cudf::quantile_exact(n_input_column, n_quantile_method, quantile, &result, &ctxt));
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);
@@ -370,7 +371,7 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_approxQuantile(JNIEnv
     gdf_column *n_input_column = reinterpret_cast<gdf_column *>(input_column);
     gdf_context ctxt{0, GDF_SORT, 0, 0};
     gdf_scalar result{};
-    JNI_GDF_TRY(env, NULL, gdf_quantile_approx(n_input_column, quantile, &result, &ctxt));
+    JNI_GDF_TRY(env, NULL, cudf::quantile_approx(n_input_column, quantile, &result, &ctxt));
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);

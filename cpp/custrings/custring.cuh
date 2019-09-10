@@ -29,8 +29,6 @@ namespace custr
 
     //
     __device__ inline int compare(const char* src, unsigned int sbytes, const char* tgt, unsigned int tbytes );
-    __device__ inline int find( const char* src, unsigned int sbytes, const char* tgt, unsigned int tbytes );
-    __device__ inline int rfind( const char* src, unsigned int sbytes, const char* tgt, unsigned int tbytes );
     //
     __device__ inline void copy( char* dst, unsigned int bytes, const char* src );
 

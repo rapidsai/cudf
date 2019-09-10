@@ -81,6 +81,7 @@ table read_csv(csv_read_arg const &args) {
     options.quotechar = args.quotechar;
     options.quoting = static_cast<csv::quote_style>(args.quoting);
     options.doublequote = args.doublequote;
+    options.out_time_unit = args.out_time_unit;
 
     return std::make_unique<csv::reader>(options);
   }();
