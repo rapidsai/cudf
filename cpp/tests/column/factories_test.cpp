@@ -16,10 +16,30 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <tests/utilities/typed_tests.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
-class ColumnFactoryTest : public ::testing::Test {};
+class ColumnFactoryTest : public ::testing::Test {
+  cudf::size_type _size{1000};
 
-TEST_F(ColumnFactoryTest, First) {}
+ public:
+  cudf::size_type size() { return _size; }
+};
+
+template <typename T>
+class TypedColumnFactoryTest : public ColumnFactoryTest {};
+
+TYPED_TEST_CASE(TypedColumnFactoryTest, cudf::test::NumericTypes);
+
+/* TYPED_TEST(TypedColumnFactoryTest, NumericDefaultMask) {
+  auto column = cudf::make_numeric_column(
+      cudf::data_type{cudf::exp::type_to_id<TypeParam>()}, this->size());
+
+  EXPECT_EQ(column->type(),
+            cudf::data_type{cudf::exp::type_to_id<TypeParam>()});
+  EXPECT_EQ(column->size(), this->size());
+} */
