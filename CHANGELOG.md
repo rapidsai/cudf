@@ -11,6 +11,7 @@
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2480 Merge `custreamz` codebase into `cudf` repo
 - PR #2674 Add __contains__ for Index/Series/Column
+- PR #2635 Add support to read from remote and cloud sources like s3, gcs, hdfs
 - PR #2722 Add Java bindings for NVTX ranges
 - PR #2702 Add make_bool to dataset generation functions
 - PR #2394 Move `rapidsai/custrings` into `cudf`
