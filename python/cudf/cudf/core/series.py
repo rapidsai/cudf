@@ -1841,7 +1841,7 @@ class Series(object):
             dtype=self.dtype,
         )
 
-    def kurtosis(self, axis=None, skipna=True):
+    def kurtosis(self, axis=None, skipna=True, numeric_only=True):
         """
         Calculates Fisher's unbiased kurtosis of a sample population.
         """
@@ -1863,11 +1863,11 @@ class Series(object):
         if V == 0:
             return 0
 
-        first_term = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        second_term = m4 / (V ** 2)
-        third_term = ((n - 1) ** 2) / ((n - 2) * (n - 3))
+        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
+        term_one_section_two = m4 / (V ** 2)
+        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
 
-        return first_term * second_term - 3 * third_term
+        return term_one_section_one * term_one_section_two - 3 * term_two
 
     def isin(self, test):
 
