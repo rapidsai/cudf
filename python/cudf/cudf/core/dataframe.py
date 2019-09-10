@@ -3552,6 +3552,14 @@ class DataFrame(object):
         self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method("kurtosis", **kwargs)
 
+    def skew(self, numeric_only=None, **kwargs):
+        if numeric_only not in (None, True):
+            msg = "Skew only supports int, float, and bool dtypes."
+            raise TypeError(msg)
+
+        self = self.select_dtypes(include=[np.number, np.bool])
+        return self._apply_support_method("skew", **kwargs)
+
     def all(self, bool_only=None, **kwargs):
         if bool_only:
             return self.select_dtypes(include="bool")._apply_support_method(
