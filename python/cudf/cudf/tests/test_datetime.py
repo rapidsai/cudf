@@ -3,6 +3,7 @@ import datetime as dt
 import numpy as np
 import pandas as pd
 import pytest
+import pyarrow as pa
 from pandas.util.testing import (
     assert_frame_equal,
     assert_index_equal,
@@ -419,6 +420,11 @@ testdata = [
             dtype="datetime64[ms]",
         ),
         False,
+    ),
+    (
+        Series(pa.array([0, np.iinfo('int64').min, np.iinfo('int64').max, None], type=pa.timestamp('ns'))
+        ),
+        True,
     ),
 ]
 
