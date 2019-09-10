@@ -15,6 +15,7 @@
  */
 
 #include <cudf/cudf.h>
+#include <cudf/unary.hpp>
 #include <nvstrings/NVStrings.h>
 
 #include <gtest/gtest.h>
@@ -303,6 +304,37 @@ TEST(gdf_csv_test, Dates)
           ::testing::ElementsAre(983750400000, 1288483200000, 782611200000,
                        656208000000, 0, 798163200000, 774144000000,
                        1149679230400, 1126875750400, 2764800000) );
+    }
+}
+
+TEST(gdf_csv_test, Timestamps)
+{
+    const std::string fname = temp_env->get_temp_dir()+"CsvTimestamps.csv";
+
+    std::ofstream outfile(fname, std::ofstream::out);
+    outfile << "true,334.0,2014-02-01T12:30:23.000-06:00\n";
+    outfile.close();
+    ASSERT_TRUE( checkFile(fname) );
+
+    {
+        cudf::csv_read_arg args(cudf::source_info{fname});
+        args.names = { "A" };
+        args.dtype = { "timestamp" };
+        args.dayfirst = true;
+        args.header = -1;
+        const auto df = cudf::read_csv(args);
+
+        EXPECT_EQ( df.num_columns(), static_cast<int>(args.names.size()) );
+        ASSERT_EQ( df.get_column(0)->dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( df.get_column(0)->dtype_info.time_unit, TIME_UNIT_ms );
+        auto ACol = gdf_host_column<uint64_t>(df.get_column(0));
+
+        gdf_column output;
+        gdf_dtype_extra_info info{};
+        info.time_unit = TIME_UNIT_us;
+        output = cudf::cast(*df.get_column(0), GDF_TIMESTAMP, info);
+        ASSERT_EQ( output.dtype, GDF_TIMESTAMP );
+        ASSERT_EQ( output.dtype_info.time_unit, TIME_UNIT_us );
     }
 }
 

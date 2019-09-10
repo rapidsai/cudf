@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from io import BytesIO, StringIO
+from io import BytesIO, IOBase, StringIO
 
 import cudf._lib as libcudf
 from cudf.utils import ioutils
@@ -106,6 +106,9 @@ def to_csv(
                 columns.insert(0, df.index.name)
         df = df.reset_index()
     rows_per_chunk = chunksize if chunksize else len(df)
+
+    if isinstance(path, IOBase):
+        path = path.name
 
     return libcudf.csv.write_csv(
         cols=df._cols,

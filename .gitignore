@@ -25,6 +25,7 @@ python/cudf/*/_lib/**/*.h
 python/cudf/*/_lib/.nfs*
 python/cudf/*.ipynb
 python/cudf/.ipynb_checkpoints
+python/*/record.txt
 .Python
 env/
 develop-eggs/
