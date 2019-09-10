@@ -3544,7 +3544,12 @@ class DataFrame(object):
     def var(self, **kwargs):
         return self._apply_support_method("var", **kwargs)
 
-    def kurtosis(self, **kwargs):
+    def kurtosis(self, numeric_only=None, **kwargs):
+        if numeric_only not in (None, True):
+            msg = "Kurtosis only supports int, float, and bool dtypes."
+            raise TypeError(msg)
+
+        self = self.select_dtypes(include=[np.number, np.bool])
         return self._apply_support_method("kurtosis", **kwargs)
 
     def all(self, bool_only=None, **kwargs):
