@@ -15,6 +15,7 @@
  */
 #include "orc_common.h"
 #include "orc_gpu.h"
+
 #include <thrust/execution_policy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
@@ -38,9 +39,24 @@ namespace gpu {
 #define BALLOT(v)       __ballot(v)
 #endif
 
+#define WARP_REDUCE_SUM_2(sum)      sum += SHFL_XOR(sum, 1)
+#define WARP_REDUCE_SUM_4(sum)      WARP_REDUCE_SUM_2(sum); sum += SHFL_XOR(sum, 2)
+#define WARP_REDUCE_SUM_8(sum)      WARP_REDUCE_SUM_4(sum); sum += SHFL_XOR(sum, 4)
+#define WARP_REDUCE_SUM_16(sum)     WARP_REDUCE_SUM_8(sum); sum += SHFL_XOR(sum, 8)
+#define WARP_REDUCE_SUM_32(sum)     WARP_REDUCE_SUM_16(sum); sum += SHFL_XOR(sum, 16)
+
+#define WARP_REDUCE_POS_2(pos, tmp, t)  tmp = SHFL(pos, t & 0x1e); pos += (t & 1) ? tmp : 0;
+#define WARP_REDUCE_POS_4(pos, tmp, t)  WARP_REDUCE_POS_2(pos, tmp, t); tmp = SHFL(pos, (t & 0x1c) | 1); pos += (t & 2) ? tmp : 0;
+#define WARP_REDUCE_POS_8(pos, tmp, t)  WARP_REDUCE_POS_4(pos, tmp, t); tmp = SHFL(pos, (t & 0x18) | 3); pos += (t & 4) ? tmp : 0;
+#define WARP_REDUCE_POS_16(pos, tmp, t) WARP_REDUCE_POS_8(pos, tmp, t); tmp = SHFL(pos, (t & 0x10) | 7); pos += (t & 8) ? tmp : 0;
+#define WARP_REDUCE_POS_32(pos, tmp, t) WARP_REDUCE_POS_16(pos, tmp, t); tmp = SHFL(pos, 0xf); pos += (t & 16) ? tmp : 0;
+
 #define MAX_SHORT_DICT_ENTRIES      (10*1024)
+#define INIT_HASH_BITS              12
 
-
+/**
+ * @brief Compares two strings
+ */
 template<class T, const T lesser, const T greater, const T equal>
 inline __device__ T nvstr_compare(const char *as, uint32_t alen, const char *bs, uint32_t blen)
 {
@@ -90,13 +106,35 @@ static inline bool __device__ nvstr_is_equal(const char *as, uint32_t alen, cons
     return nvstr_compare<bool, false, false, true>(as, alen, bs, blen);
 }
 
+
 struct dictinit_state_s
 {
     uint32_t nnz;
+    uint32_t total_dupes;
     DictionaryChunk chunk;
     volatile uint32_t scratch_red[32];
     uint16_t dict[MAX_SHORT_DICT_ENTRIES];
+    union {
+        uint16_t u16[1 << (INIT_HASH_BITS)];
+        uint32_t u32[1 << (INIT_HASH_BITS - 1)];
+    } map;
 };
+
+
+/**
+ * @brief Return a 12-bit hash from a byte sequence
+ */
+static inline __device__ uint32_t nvstr_init_hash(const uint8_t *ptr, uint32_t len)
+{
+    if (len != 0)
+    {
+        return (ptr[0] + (ptr[len - 1] << 5) + (len << 10)) & ((1 << INIT_HASH_BITS) - 1);
+    }
+    else
+    {
+        return 0;
+    }
+}
 
 
 /**
@@ -139,12 +177,8 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
         if (t < 32)
         {
             uint32_t nnz = s->scratch_red[16 + (t & 0xf)];
-            uint32_t nnz_pos = nnz;
-            for (uint32_t n = 1; n<16; n <<= 1)
-            {
-                uint32_t tmp = SHFL(nnz_pos, (t & ~n) | (n - 1));
-                nnz_pos += (t & n) ? tmp : 0;
-            }
+            uint32_t nnz_pos = nnz, tmp;
+            WARP_REDUCE_POS_16(nnz_pos, tmp, t);
             if (t == 0xf)
             {
                 s->nnz += nnz_pos;
@@ -161,6 +195,7 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
     }
 }
 
+
 /**
  * @brief Gather all non-NULL string rows and compute total character data size
  *
@@ -169,22 +204,27 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
  *
  **/
 // blockDim {512,1,1}
-extern "C" __global__ void __launch_bounds__(512)
+extern "C" __global__ void __launch_bounds__(512, 3)
 gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 {
     __shared__ __align__(16) dictinit_state_s state_g;
 
-    volatile dictinit_state_s * const s = &state_g;
+    dictinit_state_s * const s = &state_g;
     uint32_t col_id = blockIdx.x;
     uint32_t group_id = blockIdx.y;
     const nvstrdesc_s *ck_data;
     uint32_t *dict_data;
-    uint32_t nnz, start_row;
+    uint32_t nnz, start_row, dict_char_count;
     int t = threadIdx.x;
 
     if (t < sizeof(DictionaryChunk) / sizeof(uint32_t))
     {
         ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[group_id * num_columns + col_id])[t];
+    }
+    for (uint32_t i = 0; i < sizeof(s->map) / sizeof(uint32_t); i += 512)
+    {
+        if (i + t < sizeof(s->map) / sizeof(uint32_t))
+            s->map.u32[i + t] = 0;
     }
     __syncthreads();
     // First, take care of NULLs, and count how many strings we have (TODO: bypass this step when there are no nulls)
@@ -193,42 +233,213 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
     if (t == 0)
     {
         s->chunk.string_char_count = 0;
+        s->total_dupes = 0;
     }
     nnz = s->nnz;
     dict_data = s->chunk.dict_data;
     start_row = s->chunk.start_row;
     ck_data = reinterpret_cast<const nvstrdesc_s *>(s->chunk.column_data_base) + start_row;
-    for (uint32_t i = 0; i < s->nnz; i += 512)
+    for (uint32_t i = 0; i < nnz; i += 512)
     {
-        uint32_t ck_row = (i + t < nnz) ? s->dict[i + t] : 0;
-        uint32_t len = (i + t < nnz) ? ck_data[ck_row].count : 0;
-        len += SHFL_XOR(len, 1);
-        len += SHFL_XOR(len, 2);
-        len += SHFL_XOR(len, 4);
-        len += SHFL_XOR(len, 8);
+        uint32_t ck_row = 0, len = 0, hash;
+        const uint8_t *ptr = 0;
+        if (i + t < nnz)
+        {
+            ck_row = s->dict[i + t];
+            ptr = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
+            len = ck_data[ck_row].count;
+            hash = nvstr_init_hash(ptr, len);
+        }
+        WARP_REDUCE_SUM_16(len);
         s->scratch_red[t >> 4] = len;
         __syncthreads();
         if (t < 32)
         {
             len = s->scratch_red[t];
-            len += SHFL_XOR(len, 1);
-            len += SHFL_XOR(len, 2);
-            len += SHFL_XOR(len, 4);
-            len += SHFL_XOR(len, 8);
-            len += SHFL_XOR(len, 16);
+            WARP_REDUCE_SUM_32(len);
             if (t == 0)
                 s->chunk.string_char_count += len;
         }
         if (i + t < nnz)
         {
+            atomicAdd(&s->map.u32[hash >> 1], 1 << ((hash & 1) ? 16 : 0));
             dict_data[i + t] = start_row + ck_row;
         }
         __syncthreads();
+    }
+    // Reorder the 16-bit local indices according to the hash value of the strings
+#if (INIT_HASH_BITS != 12)
+#error "Hardcoded for INIT_HASH_BITS=12"
+#endif
+    {
+        // Cumulative sum of hash map counts
+        uint32_t count01 = s->map.u32[t * 4 + 0];
+        uint32_t count23 = s->map.u32[t * 4 + 1];
+        uint32_t count45 = s->map.u32[t * 4 + 2];
+        uint32_t count67 = s->map.u32[t * 4 + 3];
+        uint32_t sum01 = count01 + (count01 << 16);
+        uint32_t sum23 = count23 + (count23 << 16);
+        uint32_t sum45 = count45 + (count45 << 16);
+        uint32_t sum67 = count67 + (count67 << 16);
+        uint32_t sum_w, tmp;
+        sum23 += (sum01 >> 16) * 0x10001;
+        sum45 += (sum23 >> 16) * 0x10001;
+        sum67 += (sum45 >> 16) * 0x10001;
+        sum_w = sum67 >> 16;
+        WARP_REDUCE_POS_16(sum_w, tmp, t);
+        if ((t & 0xf) == 0xf)
+        {
+            s->scratch_red[t >> 4] = sum_w;
+        }
+        __syncthreads();
+        if (t < 32)
+        {
+            uint32_t sum_b = s->scratch_red[t];
+            WARP_REDUCE_POS_32(sum_b, tmp, t);
+            s->scratch_red[t] = sum_b;
+        }
+        __syncthreads();
+        tmp = (t >= 16) ? s->scratch_red[(t >> 4) - 1] : 0;
+        sum_w = (sum_w - (sum67 >> 16) + tmp) * 0x10001;
+        s->map.u32[t * 4 + 0] = sum_w + sum01 - count01;
+        s->map.u32[t * 4 + 1] = sum_w + sum23 - count23;
+        s->map.u32[t * 4 + 2] = sum_w + sum45 - count45;
+        s->map.u32[t * 4 + 3] = sum_w + sum67 - count67;
+        __syncthreads();
+    }
+    // Put the indices back in hash order
+    for (uint32_t i = 0; i < nnz; i += 512)
+    {
+        uint32_t ck_row = 0, pos = 0, hash = 0, pos_old, pos_new, sh, colliding_row;
+        bool collision;
+        if (i + t < nnz)
+        {
+            const uint8_t *ptr;
+            uint32_t len;
+            ck_row = dict_data[i + t] - start_row;
+            ptr = reinterpret_cast<const uint8_t *>(ck_data[ck_row].ptr);
+            len = (uint32_t)ck_data[ck_row].count;
+            hash = nvstr_init_hash(ptr, len);
+            sh = (hash & 1) ? 16 : 0;
+            pos_old = s->map.u16[hash];
+        }
+        // The isolation of the atomicAdd, along with pos_old/pos_new is to guarantee deterministic behavior for the
+        // first row in the hash map that will be used for early duplicate detection
+        // The lack of 16-bit atomicMin makes this a bit messy...
+        __syncthreads();
+        if (i + t < nnz)
+        {
+            pos = (atomicAdd(&s->map.u32[hash >> 1], 1 << sh) >> sh) & 0xffff;
+            s->dict[pos] = ck_row;
+        }
+        __syncthreads();
+        collision = false;
+        if (i + t < nnz)
+        {
+            pos_new = s->map.u16[hash];
+            collision = (pos != pos_old && pos_new > pos_old + 1);
+            if (collision)
+            {
+                colliding_row = s->dict[pos_old];
+            }
+        }
+        __syncthreads();
+        // evens
+        if (collision && !(pos_old & 1))
+        {
+            uint32_t *dict32 = reinterpret_cast<uint32_t *>(&s->dict[pos_old]);
+            atomicMin(dict32, (dict32[0] & 0xffff0000) | ck_row);
+        }
+        __syncthreads();
+        // odds
+        if (collision && (pos_old & 1))
+        {
+            uint32_t *dict32 = reinterpret_cast<uint32_t *>(&s->dict[pos_old-1]);
+            atomicMin(dict32, (dict32[0] & 0x0000ffff) | (ck_row << 16));
+        }
+        __syncthreads();
+        // Resolve collision
+        if (collision && ck_row == s->dict[pos_old])
+        {
+            s->dict[pos] = colliding_row;
+        }
+    }
+    __syncthreads();
+    // Now that the strings are ordered by hash, compare every string with the first entry in the hash map,
+    // the position of the first string can be inferred from the hash map counts
+    dict_char_count = 0;
+    for (uint32_t i = 0; i < nnz; i += 512)
+    {
+        uint32_t ck_row = 0, ck_row_ref = 0, is_dupe = 0, dupe_mask, dupes_before;
+        if (i + t < nnz)
+        {
+            const char *str1, *str2;
+            uint32_t len1, len2, hash;
+            ck_row = s->dict[i + t];
+            str1 = ck_data[ck_row].ptr;
+            len1 = (uint32_t)ck_data[ck_row].count;
+            hash = nvstr_init_hash(reinterpret_cast<const uint8_t *>(str1), len1);
+            ck_row_ref = s->dict[(hash > 0) ? s->map.u16[hash - 1] : 0];
+            if (ck_row_ref != ck_row)
+            {
+                str2 = ck_data[ck_row_ref].ptr;
+                len2 = (uint32_t)ck_data[ck_row_ref].count;
+                is_dupe = nvstr_is_equal(str1, len1, str2, len2);
+                dict_char_count += (is_dupe) ? 0 : len1;
+            }
+        }
+        dupe_mask = BALLOT(is_dupe);
+        dupes_before = s->total_dupes + __popc(dupe_mask & ((2 << (t & 0x1f)) - 1));
+        if (!(t & 0x1f))
+        {
+            s->scratch_red[t >> 5] = __popc(dupe_mask);
+        }
+        __syncthreads();
+        if (t < 32)
+        {
+            uint32_t warp_dupes = (t < 16) ? s->scratch_red[t] : 0;
+            uint32_t warp_pos = warp_dupes, tmp;
+            WARP_REDUCE_POS_16(warp_pos, tmp, t);
+            if (t == 0xf)
+            {
+                s->total_dupes += warp_pos;
+            }
+            if (t < 16)
+            {
+                s->scratch_red[t] = warp_pos - warp_dupes;
+            }
+        }
+        __syncthreads();
+        if (i + t < nnz)
+        {
+            if (!is_dupe)
+            {
+                dupes_before += s->scratch_red[t >> 5];
+                dict_data[i + t - dupes_before] = ck_row + start_row;
+            }
+            else
+            {
+                s->chunk.dict_index[ck_row + start_row] = (ck_row_ref + start_row) | (1u << 31);
+            }
+        }
+    }
+    WARP_REDUCE_SUM_32(dict_char_count);
+    if (!(t & 0x1f))
+    {
+        s->scratch_red[t >> 5] = dict_char_count;
+    }
+    __syncthreads();
+    if (t < 32)
+    {
+        dict_char_count = (t < 16) ? s->scratch_red[t] : 0;
+        WARP_REDUCE_SUM_16(dict_char_count);
     }
     if (!t)
     {
         chunks[group_id * num_columns + col_id].num_strings = nnz;
         chunks[group_id * num_columns + col_id].string_char_count = s->chunk.string_char_count;
+        chunks[group_id * num_columns + col_id].num_dict_strings = nnz - s->total_dupes;
+        chunks[group_id * num_columns + col_id].dict_char_count = dict_char_count;
     }
 }
 
@@ -270,7 +481,7 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
         ((volatile uint32_t *)&s->stripe)[t] = ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
     }
     __syncthreads();
-    if (chunk_id >= s->stripe.num_chunks)
+    if (chunk_id >= s->stripe.num_chunks || !s->stripe.dict_data)
     {
         return;
     }
@@ -278,25 +489,17 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
     {
         ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[(s->stripe.start_chunk + chunk_id) * num_columns + col_id])[t];
     }
-    chunk_len = (t < chunk_id) ? chunks[(s->stripe.start_chunk + t) * num_columns + col_id].num_strings : 0;
+    chunk_len = (t < chunk_id) ? chunks[(s->stripe.start_chunk + t) * num_columns + col_id].num_dict_strings : 0;
     if (chunk_id != 0)
     {
-        chunk_len += SHFL_XOR(chunk_len, 1);
-        chunk_len += SHFL_XOR(chunk_len, 2);
-        chunk_len += SHFL_XOR(chunk_len, 4);
-        chunk_len += SHFL_XOR(chunk_len, 8);
-        chunk_len += SHFL_XOR(chunk_len, 16);
+        WARP_REDUCE_SUM_32(chunk_len);
         if (!(t & 0x1f))
             s->scratch_red[t >> 5] = chunk_len;
         __syncthreads();
         if (t < 32)
         {
             chunk_len = s->scratch_red[t];
-            chunk_len += SHFL_XOR(chunk_len, 1);
-            chunk_len += SHFL_XOR(chunk_len, 2);
-            chunk_len += SHFL_XOR(chunk_len, 4);
-            chunk_len += SHFL_XOR(chunk_len, 8);
-            chunk_len += SHFL_XOR(chunk_len, 16);
+            WARP_REDUCE_SUM_32(chunk_len);
         }
     }
     if (!t)
@@ -304,7 +507,7 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
         s->stripe_data = s->stripe.dict_data + chunk_len;
     }
     __syncthreads();
-    chunk_len = s->chunk.num_strings;
+    chunk_len = s->chunk.num_dict_strings;
     src = s->chunk.dict_data;
     dst = s->stripe_data;
     if (src != dst)
@@ -362,6 +565,8 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
     __syncthreads();
     num_strings = s->stripe.num_strings;
     dict_data = s->stripe.dict_data;
+    if (!dict_data)
+        return;
     dict_index = s->stripe.dict_index;
     str_data = reinterpret_cast<const nvstrdesc_s *>(s->stripe.column_data_base);
     dict_char_count = 0;
@@ -392,12 +597,8 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
         if (t < 32)
         {
             uint32_t warp_dupes = s->scratch_red[t];
-            uint32_t warp_pos = warp_dupes;
-            for (uint32_t n = 1; n<32; n <<= 1)
-            {
-                uint32_t tmp = SHFL(warp_pos, (t & ~n) | (n - 1));
-                warp_pos += (t & n) ? tmp : 0;
-            }
+            uint32_t warp_pos = warp_dupes, tmp;
+            WARP_REDUCE_POS_32(warp_pos, tmp, t);
             if (t == 0x1f)
             {
                 s->total_dupes += warp_pos;
@@ -416,11 +617,7 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
         }
         __syncthreads();
     }
-    dict_char_count += SHFL_XOR(dict_char_count, 1);
-    dict_char_count += SHFL_XOR(dict_char_count, 2);
-    dict_char_count += SHFL_XOR(dict_char_count, 4);
-    dict_char_count += SHFL_XOR(dict_char_count, 8);
-    dict_char_count += SHFL_XOR(dict_char_count, 16);
+    WARP_REDUCE_SUM_32(dict_char_count);
     if (!(t & 0x1f))
     {
         s->scratch_red[t >> 5] = dict_char_count;
@@ -429,11 +626,7 @@ gpuBuildStripeDictionaries(StripeDictionary *stripes, uint32_t num_columns)
     if (t < 32)
     {
         dict_char_count = s->scratch_red[t];
-        dict_char_count += SHFL_XOR(dict_char_count, 1);
-        dict_char_count += SHFL_XOR(dict_char_count, 2);
-        dict_char_count += SHFL_XOR(dict_char_count, 4);
-        dict_char_count += SHFL_XOR(dict_char_count, 8);
-        dict_char_count += SHFL_XOR(dict_char_count, 16);
+        WARP_REDUCE_SUM_32(dict_char_count);
     }
     if (t == 0)
     {
@@ -462,17 +655,6 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
 }
 
 
-struct nvstr_compare_op : public thrust::binary_function<uint32_t, uint32_t, bool>
-{
-    const nvstrdesc_s *str_data;
-    nvstr_compare_op(const nvstrdesc_s *str_data_) : str_data(str_data_) {}
-    inline __device__ bool operator()(const int a, const int b) const
-    {
-        return nvstr_is_lesser(str_data[a].ptr, (uint32_t)str_data[a].count, str_data[b].ptr, (uint32_t)str_data[b].count);
-    }
-};
-
-
 /**
  * @brief Launches kernel for building stripe dictionaries
  *
@@ -494,21 +676,17 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary 
     dim3 dim_grid_compact(max_chunks_in_stripe, num_columns, num_stripes);
     dim3 dim_grid_build(num_columns, num_stripes);
     gpuCompactChunkDictionaries <<< dim_grid_compact, dim_block, 0, stream >>>(stripes, chunks, num_columns);
-    for (uint32_t j = 0; j < num_stripes; j++)
+    for (uint32_t i = 0; i < num_stripes * num_columns; i++)
     {
-        for (uint32_t i = 0; i < num_columns; i++)
+        if (stripes_host[i].dict_data != nullptr)
         {
-            thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[j * num_columns + i].dict_data);
+            thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[i].dict_data);
             const nvstrdesc_s *str_data = reinterpret_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
-        #if 1
-            thrust::sort(thrust::device, p, p + stripes_host[j * num_columns + i].num_strings, nvstr_compare_op(str_data));
-        #else
-            // Requires the --expt-extended-lambda nvcc flag (same perf as above)
-            thrust::sort(p, p + stripes_host[j * num_columns + i].num_strings,
+            // NOTE: Requires the --expt-extended-lambda nvcc flag
+            thrust::sort(p, p + stripes_host[i].num_strings,
                 [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
                 return nvstr_is_lesser(str_data[lhs].ptr, (uint32_t)str_data[lhs].count, str_data[rhs].ptr, (uint32_t)str_data[rhs].count);
             });
-        #endif
         }
     }
     gpuBuildStripeDictionaries <<< dim_grid_build, dim_block, 0, stream >>>(stripes, num_columns);

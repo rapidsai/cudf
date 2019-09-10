@@ -913,7 +913,10 @@ gpuEncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t num_rowg
                 case STRING:
                     if (s->chunk.encoding_kind == DICTIONARY_V2)
                     {
-                        s->vals.u32[nz_idx] = reinterpret_cast<const uint32_t *>(base)[row];
+                        uint32_t dict_idx = reinterpret_cast<const uint32_t *>(base)[row];
+                        if (dict_idx > 0x7fffffffu)
+                            dict_idx = reinterpret_cast<const uint32_t *>(base)[dict_idx & 0x7fffffffu];
+                        s->vals.u32[nz_idx] = dict_idx;
                     }
                     else
                     {

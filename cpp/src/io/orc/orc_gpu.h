@@ -142,10 +142,13 @@ struct DictionaryChunk
     const uint32_t *valid_map_base;             // base ptr of input valid bit map
     const void *column_data_base;               // base ptr of column data (ptr,len pair)
     uint32_t *dict_data;                        // dictionary data (index of non-null rows)
+    uint32_t *dict_index;                       // row indices of corresponding string (row from dictionary index)
     uint32_t start_row;                         // start row of this chunk
     uint32_t num_rows;                          // num rows in this chunk
     uint32_t num_strings;                       // number of strings in this chunk
     uint32_t string_char_count;                 // total size of string data (NOTE: assumes less than 4G bytes per chunk)
+    uint32_t num_dict_strings;                  // number of strings in dictionary
+    uint32_t dict_char_count;                   // size of dictionary string data for this chunk
 };
 
 
