@@ -21,7 +21,7 @@ requirements:
     - python
   run:
     - python
-    - streamz 
+    - streamz
     - cudf {{ version }}
     - dask >=2.1.0
     - distributed >=2.1.0
@@ -29,7 +29,6 @@ requirements:
 
 test:
   imports:
-    - cudf
     - streamz
 
 about:
