@@ -1857,14 +1857,14 @@ class Series(object):
 
         n = len(self)
         miu = self.mean()
-        m4 = ((self - miu) ** 4).sum()
+        m4_numerator = ((self - miu) ** 4).sum()
         V = self.var()
 
         if V == 0:
             return 0
 
         term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
-        term_one_section_two = m4 / (V ** 2)
+        term_one_section_two = m4_numerator / (V ** 2)
         term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
 
         return term_one_section_one * term_one_section_two - 3 * term_two
