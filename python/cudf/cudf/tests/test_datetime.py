@@ -2,8 +2,8 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
-import pytest
 import pyarrow as pa
+import pytest
 from pandas.util.testing import (
     assert_frame_equal,
     assert_index_equal,
@@ -422,7 +422,11 @@ testdata = [
         False,
     ),
     (
-        Series(pa.array([0, np.iinfo('int64').min, np.iinfo('int64').max, None], type=pa.timestamp('ns'))
+        Series(
+            pa.array(
+                [0, np.iinfo("int64").min, np.iinfo("int64").max, None],
+                type=pa.timestamp("ns"),
+            )
         ),
         True,
     ),

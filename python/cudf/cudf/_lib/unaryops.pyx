@@ -169,7 +169,7 @@ def set_value_to_null(py_col, val):
     py_col = as_column(py_col)
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
-    cdef gdf_scalar* c_val  = gdf_scalar_from_scalar(val)
+    cdef gdf_scalar* c_val = gdf_scalar_from_scalar(val)
 
     cdef pair[cpp_unaryops.bit_mask_t_ptr, gdf_size_type] result
 
