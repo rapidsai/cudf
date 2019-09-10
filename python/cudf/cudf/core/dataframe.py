@@ -3544,6 +3544,9 @@ class DataFrame(object):
     def var(self, **kwargs):
         return self._apply_support_method("var", **kwargs)
 
+    def kurtosis(self, **kwargs):
+        return self._apply_support_method("kurtosis", **kwargs)
+
     def all(self, bool_only=None, **kwargs):
         if bool_only:
             return self.select_dtypes(include="bool")._apply_support_method(

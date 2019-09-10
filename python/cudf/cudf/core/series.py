@@ -1841,6 +1841,34 @@ class Series(object):
             dtype=self.dtype,
         )
 
+    def kurtosis(self, axis=None, skipna=True):
+        """
+        Calculates Fisher's unbiased kurtosis of a sample population.
+        """
+        assert axis in (None, 0) and skipna in (None, True)
+
+        if self.empty:
+            return np.nan
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 4:
+            return np.nan
+
+        n = len(self)
+        miu = self.mean()
+        m4 = ((self - miu) ** 4).sum()
+        V = self.var()
+
+        if V == 0:
+            return 0
+
+        first_term = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
+        second_term = m4 / (V ** 2)
+        third_term = ((n - 1) ** 2) / ((n - 2) * (n - 3))
+
+        return first_term * second_term - 3 * third_term
+
     def isin(self, test):
 
         from cudf import DataFrame

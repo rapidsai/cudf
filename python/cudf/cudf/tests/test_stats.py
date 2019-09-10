@@ -5,6 +5,7 @@ import pandas as pd
 import pytest
 
 from cudf.core import Series
+from cudf.datasets import randomdata
 
 params_dtypes = [np.int32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -203,3 +204,33 @@ def test_misc_quantiles(data, q):
     expected = pdf_series.quantile(q)
     actual = gdf_series.quantile(q)
     utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        Series(np.random.normal(-100, 100, 1000)),
+        Series(np.random.randint(-50, 50, 1000)),
+        Series(np.zeros(100)),
+        Series(np.repeat(np.nan, 100)),
+        Series(np.array([1.123, 2.343, np.nan, 0.0])),
+        Series(
+            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
+        ),
+        Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
+        Series([]),
+        Series([-3]),
+        randomdata(nrows=1000, dtypes={"a": float, "b": int, "c": float}),
+    ],
+)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_kurtosis(data, null_flag):
+    pdata = data.to_pandas()
+
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
+
+    got = data.kurtosis()
+    expected = pdata.kurtosis()
+    np.testing.assert_array_almost_equal(got, expected)
