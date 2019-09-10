@@ -19,6 +19,7 @@
 
 #include "cudf.h"
 #include "types.hpp"
+#include <cudf/quantiles.hpp>
 
 #include <tuple>
 #include <vector>
@@ -123,9 +124,9 @@ struct operation_args {};
 
 struct quantile_args : operation_args {
   std::vector<double> quantiles;
-  gdf_quantile_method interpolation;
+  cudf::interpolation interpolation;
   
-  quantile_args(const std::vector<double> &_quantiles,  gdf_quantile_method _interpolation)
+  quantile_args(const std::vector<double> &_quantiles,  cudf::interpolation _interpolation)
   : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
   {}
 };

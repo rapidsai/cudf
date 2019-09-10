@@ -190,9 +190,9 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
   auto& group_labels = *_group_labels;
   auto exec = rmm::exec_policy(_stream)->on(_stream);
   thrust::scatter(exec,
-    thrust::make_constant_iterator(1, decltype(num_groups())(0)), 
+    thrust::make_constant_iterator(1, decltype(num_groups())(1)), 
     thrust::make_constant_iterator(1, num_groups()), 
-    group_offsets().begin(), 
+    group_offsets().begin() + 1, 
     group_labels.begin());
  
   thrust::inclusive_scan(exec,

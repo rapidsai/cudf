@@ -61,7 +61,7 @@ TYPED_TEST(SingleColumnQuantile, TestQuantile0) {
   using T = Key;
   using R = ResultValue;
   std::vector<double> quantiles = {0.5};
-  auto method = gdf_quantile_method::GDF_QUANT_LINEAR;
+  auto method = cudf::interpolation::LINEAR;
   cudf::groupby::sort::operation operation_with_args {op,  std::make_unique<quantile_args>(quantiles, method)}; 
       
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
@@ -78,7 +78,7 @@ TYPED_TEST(SingleColumnQuantile, TestQuantile1) {
   using T = Key;
   using R = ResultValue;
   std::vector<double> quantiles ={0.25, 0.75};
-  auto method = gdf_quantile_method::GDF_QUANT_LINEAR;
+  auto method = cudf::interpolation::LINEAR;
   cudf::groupby::sort::operation operation_with_args {op,  std::make_unique<quantile_args>(quantiles, method)}; 
       
   cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),

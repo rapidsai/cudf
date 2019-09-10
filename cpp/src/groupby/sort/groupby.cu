@@ -54,15 +54,15 @@ struct quantiles_functor {
   template <typename T>
   std::enable_if_t<std::is_arithmetic<T>::value, void >
   operator()(gdf_column const& values_col,
-             rmm::device_vector<gdf_size_type> const& group_indices,
+             rmm::device_vector<gdf_size_type> const& group_offsets,
              rmm::device_vector<gdf_size_type> const& group_sizes,
              gdf_column& result_col, rmm::device_vector<double> const& quantile,
-             gdf_quantile_method interpolation)
+             cudf::interpolation interpolation)
   {
     // prepare args to be used by lambda below
     auto result = reinterpret_cast<double*>(result_col.data);
     auto values = reinterpret_cast<T*>(values_col.data);
-    auto grp_id = group_indices.data().get();
+    auto grp_id = group_offsets.data().get();
     auto grp_size = group_sizes.data().get();
     auto d_quants = quantile.data().get();
     auto num_qnts = quantile.size();
@@ -70,7 +70,7 @@ struct quantiles_functor {
     // For each group, calculate quantile
     thrust::for_each_n(thrust::device,
       thrust::make_counting_iterator(0),
-      group_indices.size(),
+      group_offsets.size(),
       [=] __device__ (gdf_size_type i) {
         gdf_size_type segment_size = grp_size[i];
 
@@ -118,18 +118,18 @@ std::vector<gdf_column*>  process_remaining_complex_request(
     output_value[i] = current_output_values.get_column(i);
   }
 
-  rmm::device_vector<gdf_size_type> group_indices = groupby.group_indices();
+  rmm::device_vector<gdf_size_type> group_offsets = groupby.group_offsets();
   index_vector group_labels = groupby.group_labels();
 
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
     if (is_complex_agg(element.second)) {
       std::vector<double> quantiles;
-      gdf_quantile_method interpolation;
+      cudf::interpolation interpolation;
 
       if (element.second == MEDIAN) {
         quantiles.push_back(0.5);
-        interpolation = GDF_QUANT_LINEAR;
+        interpolation = cudf::interpolation::LINEAR;
       } else if (element.second == QUANTILE){
         quantile_args * args = static_cast<quantile_args*>(input_ops_args[i]);
         quantiles = args->quantiles;
@@ -146,7 +146,7 @@ std::vector<gdf_column*>  process_remaining_complex_request(
       rmm::device_vector<double> dv_quantiles(quantiles);
 
       cudf::type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                          sorted_values, group_indices, group_sizes, 
+                          sorted_values, group_offsets, group_sizes, 
                           *result_col,
                           dv_quantiles, interpolation);
       output_value[i] = result_col;
