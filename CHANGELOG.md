@@ -32,6 +32,7 @@
 - PR #2703 move dask serialization dispatch into cudf
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
+- PR #2771 Stopgap alias for to_gpu_matrix()
 
 ## Bug Fixes
 
