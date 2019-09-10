@@ -35,6 +35,7 @@
 - PR #2741 CSV Reader: Move kernel functions into its own file
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
+- PR #2771 Stopgap alias for to_gpu_matrix()
 
 ## Bug Fixes
 

@@ -3428,6 +3428,12 @@ class DataFrame(object):
         -------
         numba gpu ndarray
         """
+        warnings.warn(
+            "The to_gpu_matrix method will be deprecated"
+            "in the future. use as_gpu_matrix instead.",
+            DeprecationWarning,
+        )
+        return self.as_gpu_matrix()
 
     def _from_columns(cols, index=None, columns=None):
         """
