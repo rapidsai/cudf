@@ -46,13 +46,15 @@ conda install "rmm=$MINOR_VERSION.*" "cudatoolkit=$CUDA_REL" \
               "dask>=2.1.0" "distributed>=2.1.0" "numpy>=1.16" "double-conversion" \
               "rapidjson" "flatbuffers" "boost-cpp" "fsspec>=0.3.3" "dlpack" \
               "feather-format" "cupy>=6.0.0" "arrow-cpp=0.14.1" "pyarrow=0.14.1" \
-              "fastavro>=0.22.0" "pandas>=0.24.2,<0.25" "hypothesis"
+              "fastavro>=0.22.0" "pandas>=0.24.2,<0.25" "hypothesis" "streamz"
 
-# Install the master version of dask and distributed
+# Install the master version of dask, distributed, and streamz
 logger "pip install git+https://github.com/dask/distributed.git --upgrade --no-deps" 
 pip install "git+https://github.com/dask/distributed.git" --upgrade --no-deps
 logger "pip install git+https://github.com/dask/dask.git --upgrade --no-deps"
 pip install "git+https://github.com/dask/dask.git" --upgrade --no-deps
+logger "pip install git+https://github.com/python-streamz/streamz.git --upgrade --no-deps"
+pip install "git+https://github.com/python-streamz/streamz.git" --upgrade --no-deps
 
 logger "Check versions..."
 python --version
@@ -105,4 +107,9 @@ else
     cd $WORKSPACE/python/dask_cudf
     logger "Python py.test for dask-cudf..."
     py.test --cache-clear --junitxml=${WORKSPACE}/junit-dask-cudf.xml -v --cov-config=.coveragerc --cov=dask_cudf --cov-report=xml:${WORKSPACE}/python/dask_cudf/dask-cudf-coverage.xml --cov-report term
+
+    cd $WORKSPACE/python/custreamz
+    logger "Python py.test for cuStreamz..."
+    py.test --cache-clear --junitxml=${WORKSPACE}/junit-custreamz.xml -v --cov-config=.coveragerc --cov=custreamz --cov-report=xml:${WORKSPACE}/python/custreamz/custreamz-coverage.xml --cov-report term
+
 fi
