@@ -16,39 +16,47 @@
 
 #include "cuio_common.hpp"
 
+#include <utility>
 #include <algorithm>
 
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
 
-gdf_dtype convertStringToDtype(const std::string &dtype) {
+std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::string &dtype) {
   if (dtype == "str")
-    return GDF_STRING;
-  if (dtype == "timestamp")
-    return GDF_TIMESTAMP;
+    return std::make_pair(GDF_STRING, gdf_dtype_extra_info{ TIME_UNIT_NONE });
+  if (dtype == "timestamp[s]")
+    return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ TIME_UNIT_s });
+  // backwards compat: "timestamp" defaults to milliseconds
+  if (dtype == "timestamp[ms]" || dtype == "timestamp")
+    return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ TIME_UNIT_ms });
+  if (dtype == "timestamp[us]")
+    return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ TIME_UNIT_us });
+  if (dtype == "timestamp[ns]")
+    return std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ TIME_UNIT_ns });
   if (dtype == "category")
-    return GDF_CATEGORY;
+    return std::make_pair(GDF_CATEGORY, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "date32")
-    return GDF_DATE32;
+    return std::make_pair(GDF_DATE32, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "bool" || dtype == "boolean")
-    return GDF_BOOL8;
+    return std::make_pair(GDF_BOOL8, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "date" || dtype == "date64")
-    return GDF_DATE64;
+    return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "float" || dtype == "float32")
-    return GDF_FLOAT32;
+    return std::make_pair(GDF_FLOAT32, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "double" || dtype == "float64")
-    return GDF_FLOAT64;
+    return std::make_pair(GDF_FLOAT64, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "byte" || dtype == "int8")
-    return GDF_INT8;
+    return std::make_pair(GDF_INT8, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "short" || dtype == "int16")
-    return GDF_INT16;
+    return std::make_pair(GDF_INT16, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "int" || dtype == "int32")
-    return GDF_INT32;
+    return std::make_pair(GDF_INT32, gdf_dtype_extra_info{ TIME_UNIT_NONE });
   if (dtype == "long" || dtype == "int64")
-    return GDF_INT64;
+    return std::make_pair(GDF_INT64, gdf_dtype_extra_info{ TIME_UNIT_NONE });
 
-  return GDF_invalid;
+  return std::make_pair(GDF_invalid, gdf_dtype_extra_info{ TIME_UNIT_NONE });
 }
 
 /**---------------------------------------------------------------------------*
