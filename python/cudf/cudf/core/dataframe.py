@@ -1698,12 +1698,9 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
-        if len(set(frozenset(o.columns) for o in objs)) != 1:
-            what = set(frozenset(o.columns) for o in objs)
-            raise ValueError("columns mismatch: {}".format(what))
 
-        objs = [o for o in objs]
+        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
+
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         elif isinstance(objs[0].index, cudf.core.multiindex.MultiIndex):
@@ -1712,9 +1709,29 @@ class DataFrame(object):
             )
         else:
             index = Index._concat([o.index for o in objs])
+
+        # Currently we only support sort = False
+        # Change below when we want to support sort = True
+        # below functions as an ordered set
+        all_columns_ls = [col for o in objs for col in o.columns]
+        unique_columns_ordered_ls = OrderedDict.fromkeys(all_columns_ls).keys()
+
+        # Concatenate cudf.series for all columns
+
         data = [
-            (c, Series._concat([o[c] for o in objs], index=index))
-            for c in objs[0].columns
+            (
+                c,
+                Series._concat(
+                    [
+                        o[c]
+                        if c in o.columns
+                        else utils.get_null_series(size=len(o), dtype=np.bool)
+                        for o in objs
+                    ],
+                    index=index,
+                ),
+            )
+            for c in unique_columns_ordered_ls
         ]
         out = cls(data)
         out._index = index
