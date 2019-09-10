@@ -39,7 +39,7 @@
 #include "groupby_kernels.cuh"
 #include "sort_helper.hpp"
 
-#include <quantiles/quantiles.hpp>
+#include <quantiles/group_quantiles.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -48,47 +48,6 @@ namespace sort {
 using index_vector = rmm::device_vector<gdf_size_type>;
 
 namespace {
- 
-struct quantiles_functor {
-
-  template <typename T>
-  std::enable_if_t<std::is_arithmetic<T>::value, void >
-  operator()(gdf_column const& values_col,
-             rmm::device_vector<gdf_size_type> const& group_offsets,
-             rmm::device_vector<gdf_size_type> const& group_sizes,
-             gdf_column& result_col, rmm::device_vector<double> const& quantile,
-             cudf::interpolation interpolation)
-  {
-    // prepare args to be used by lambda below
-    auto result = reinterpret_cast<double*>(result_col.data);
-    auto values = reinterpret_cast<T*>(values_col.data);
-    auto grp_id = group_offsets.data().get();
-    auto grp_size = group_sizes.data().get();
-    auto d_quants = quantile.data().get();
-    auto num_qnts = quantile.size();
-
-    // For each group, calculate quantile
-    thrust::for_each_n(thrust::device,
-      thrust::make_counting_iterator(0),
-      group_offsets.size(),
-      [=] __device__ (gdf_size_type i) {
-        gdf_size_type segment_size = grp_size[i];
-
-        for (gdf_size_type j = 0; j < num_qnts; j++) {
-          gdf_size_type k = i * num_qnts + j;
-          result[k] = cudf::detail::select_quantile(values + grp_id[i], segment_size,
-                                              d_quants[j], interpolation);
-        }
-      }
-    );
-  }
-
-  template <typename T, typename... Args>
-  std::enable_if_t<!std::is_arithmetic<T>::value, void >
-  operator()(Args&&... args) {
-    CUDF_FAIL("Only arithmetic types are supported in quantile");
-  }
-};
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the remaining original requests which were skipped in a previous  
@@ -143,12 +102,10 @@ std::vector<gdf_column*>  process_remaining_complex_request(
       gdf_column* result_col = new gdf_column;
       *result_col = cudf::allocate_column(
           GDF_FLOAT64, quantiles.size() * groupby.num_groups(), false);
-      rmm::device_vector<double> dv_quantiles(quantiles);
 
-      cudf::type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                          sorted_values, group_offsets, group_sizes, 
-                          *result_col,
-                          dv_quantiles, interpolation);
+      cudf::detail::group_quantiles(sorted_values, group_offsets, group_sizes,
+                                    result_col, quantiles, interpolation, stream);
+
       output_value[i] = result_col;
       gdf_column_free(&sorted_values);
     }
@@ -205,12 +162,12 @@ cudf::table compute_simple_request(const cudf::table &input_keys,
 
   //Aggregate all rows for simple requests using the key sorted order (indices) and the group labels
   cudf::groupby::sort::aggregate_all_rows<keys_have_nulls, values_have_nulls><<<
-      grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
+    grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
       input_keys.num_rows(), *d_input_values, *d_output_values,
       static_cast<gdf_index_type const*>(key_sorted_order.data),
-          group_labels.data().get(), options.ignore_null_keys,
-          d_ops.data().get(), row_bitmask.data().get());
-
+      group_labels.data().get(), options.ignore_null_keys,
+      d_ops.data().get(), row_bitmask.data().get());
+  
   return simple_output_values;
 }
 
