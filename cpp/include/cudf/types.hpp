@@ -17,7 +17,6 @@
 #pragma once
 
 #include "cudf.h"
-#include <limits>
 
 /**---------------------------------------------------------------------------*
  * @file types.hpp
