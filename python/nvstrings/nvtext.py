@@ -346,3 +346,27 @@ def scatter_count(strs, counts):
     if rtn is not None:
         rtn = nvs.nvstrings(rtn)
     return rtn
+
+
+def porter_stemmer_measure(strs, devptr=0):
+    """
+    Calculates porter stemmer measure of each string
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation
+    devptr : GPU memory pointer
+        Must be able to hold at least strs.size() of int32 values.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["hello","goodbye",""])
+    >>> n = nvtext.porter_stemmer_measure(s)
+    >>> print(n)
+
+    """
+
+    rtn = pyniNVText.n_porter_stemmer_measure(strs, devptr)
+    return rtn
