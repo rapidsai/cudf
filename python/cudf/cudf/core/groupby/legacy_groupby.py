@@ -79,7 +79,7 @@ _dfsegs_pack = namedtuple("_dfsegs_pack", ["df", "segs"])
 
 
 class Groupby(object):
-    """Groupby object returned by cudf.DataFrame.groupby().
+    """Groupby object returned by cudf.DataFrame.groupby(method="cudf").
     """
 
     _NAMED_FUNCTIONS = {
@@ -313,9 +313,6 @@ class Groupby(object):
         Returns
         -------
         result : DataFrame
-
-        Notes
-        -----
         """
 
         def _get_function(x):

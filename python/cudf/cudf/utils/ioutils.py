@@ -245,6 +245,7 @@ orient : string,
     Compatible JSON strings can be produced by ``to_json()`` with a
     corresponding orient value.
     The set of possible orients is:
+
     - ``'split'`` : dict like
       ``{index -> [index], columns -> [columns], data -> [values]}``
     - ``'records'`` : list like
@@ -252,13 +253,17 @@ orient : string,
     - ``'index'`` : dict like ``{index -> {column -> value}}``
     - ``'columns'`` : dict like ``{column -> {index -> value}}``
     - ``'values'`` : just the values array
+
     The allowed and default values depend on the value
     of the `typ` parameter.
+
     * when ``typ == 'series'``,
+
       - allowed orients are ``{'split','records','index'}``
       - default is ``'index'``
       - The Series index must be unique for orient ``'index'``.
     * when ``typ == 'frame'``,
+
       - allowed orients are ``{'split','records','index',
         'columns','values', 'table'}``
       - default is ``'columns'``
@@ -266,7 +271,6 @@ orient : string,
         ``'columns'``.
       - The DataFrame columns must be unique for orients ``'index'``,
         ``'columns'``, and ``'records'``.
-       'table' as an allowed value for the ``orient`` argument
 typ : type of object to recover (series or frame), default 'frame'
     With cudf engine, only frame output is supported.
 dtype : boolean or dict, default True
@@ -277,6 +281,7 @@ convert_axes : boolean, default True
 convert_dates : boolean, default True
     List of columns to parse for dates (pandas engine only); If True, then try
     to parse datelike columns default is True; a column label is datelike if
+
     * it ends with ``'_at'``,
     * it ends with ``'_time'``,
     * it begins with ``'timestamp'``,
@@ -343,24 +348,25 @@ path_or_buf : string or file handle, optional
     File path or object. If not specified, the result is returned as a string.
 orient : string
     Indication of expected JSON string format.
+
     * Series
         - default is 'index'
         - allowed values are: {'split','records','index','table'}
     * DataFrame
         - default is 'columns'
         - allowed values are:
-        {'split','records','index','columns','values','table'}
+          {'split','records','index','columns','values','table'}
     * The format of the JSON string
         - 'split' : dict like {'index' -> [index],
-        'columns' -> [columns], 'data' -> [values]}
+          'columns' -> [columns], 'data' -> [values]}
         - 'records' : list like
-        [{column -> value}, ... , {column -> value}]
+          [{column -> value}, ... , {column -> value}]
         - 'index' : dict like {index -> {column -> value}}
         - 'columns' : dict like {column -> {index -> value}}
         - 'values' : just the values array
         - 'table' : dict like {'schema': {schema}, 'data': {data}}
-        describing the data, and the data component is
-        like ``orient='records'``.
+          describing the data, and the data component is
+          like ``orient='records'``.
 date_format : {None, 'epoch', 'iso'}
     Type of date conversion. 'epoch' = epoch milliseconds,
     'iso' = ISO8601. The default depends on the `orient`. For
@@ -444,6 +450,7 @@ Returns
 -------
 item : object
     The selected object. Return type depends on the object stored.
+
 See Also
 --------
 cudf.io.hdf.to_hdf : Write a HDF file from a DataFrame.
@@ -482,10 +489,10 @@ format : {'fixed', 'table'}, default 'fixed'
     Possible values:
 
     - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
-    nor searchable.
+      nor searchable.
     - 'table': Table format. Write as a PyTables Table structure
-    which may perform worse but allow more flexible operations
-    like searching / selecting subsets of the data.
+      which may perform worse but allow more flexible operations
+      like searching / selecting subsets of the data.
 append : bool, default False
     For Table formats, append the input data to the existing.
 data_columns :  list of columns or True, optional
