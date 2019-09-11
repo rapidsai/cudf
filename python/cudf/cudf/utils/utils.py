@@ -275,7 +275,7 @@ def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     """
     Set the GPU memory allocator. This function should be run only once,
     before any cudf objects are created.
-    
+
     allocator : {"default", "managed"}
         "default": use default allocator.
         "managed": use managed memory allocator.
