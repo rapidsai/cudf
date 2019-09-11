@@ -179,35 +179,34 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 *
 */
 TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
-  for(gdf_size_type table_n_cols : {1}) {
-    for(gdf_size_type table_n_rows : {0, 1}) {
-      for(gdf_size_type scatter_size : {0, 1}) {
-        //std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
+  gdf_size_type table_n_cols=1;
+  for(gdf_size_type table_n_rows : {0, 1}) {
+    for(gdf_size_type scatter_size : {0, 1}) {
+      //std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
 
-        //data
-        std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
-            table_n_cols, {table_n_rows,
-              [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-              [](gdf_index_type row) { return false; }});
-        std::vector<gdf_column *> v_cols(table_n_cols);
-        for (size_t i = 0; i < v_colwrap.size(); i++)
-          v_cols[i] = v_colwrap[i].get();
+      //data
+      std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
+          table_n_cols, {table_n_rows,
+          [](gdf_index_type row) { return static_cast<TypeParam>(row); },
+          [](gdf_index_type row) { return false; }});
+      std::vector<gdf_column *> v_cols(table_n_cols);
+      for (size_t i = 0; i < v_colwrap.size(); i++)
+        v_cols[i] = v_colwrap[i].get();
 
-        //input datatypes
-        cudf::table input_table{v_cols};
-        cudf::test::column_wrapper<gdf_index_type> scatter_map(scatter_size,
+      //input datatypes
+      cudf::table input_table{v_cols};
+      cudf::test::column_wrapper<gdf_index_type> scatter_map(scatter_size,
           [](gdf_index_type row) { return row; }, false);
-        std::vector<cudf::table> output_tables;
-        if (table_n_cols == 0) table_n_rows=0;
-        if(scatter_size != table_n_rows) {
-          CUDF_EXPECT_THROW_MESSAGE(
+      std::vector<cudf::table> output_tables;
+      if (table_n_cols == 0) table_n_rows=0;
+      if(scatter_size != table_n_rows) {
+        CUDF_EXPECT_THROW_MESSAGE(
             output_tables = cudf::scatter_to_tables(input_table, scatter_map),
             "scatter_map length is not equal to number of rows in input table.");
-        } else {
-          EXPECT_NO_THROW(
+      } else {
+        EXPECT_NO_THROW(
             output_tables = cudf::scatter_to_tables(input_table, scatter_map));
-            EXPECT_EQ(size_t(scatter_size), output_tables.size());
-        }
+        EXPECT_EQ(size_t(scatter_size), output_tables.size());
       }
     }
   }
