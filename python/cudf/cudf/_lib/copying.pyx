@@ -272,7 +272,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def scatter_to_tables(source, maps):
+def scatter_to_frames(source, maps):
     """
     Scatters rows to 'n' tables according to maps
 
