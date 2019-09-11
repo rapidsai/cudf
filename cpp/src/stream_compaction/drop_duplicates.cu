@@ -251,6 +251,7 @@ gdf_size_type unique_count(gdf_column const& input_column,
     col.valid = reinterpret_cast<gdf_valid_type*>(temp.first);
     col.null_count = temp.second;
   }
+  bool const has_nans{col.null_count > input_column.null_count};
   
   auto count = detail::unique_count({const_cast<gdf_column*>(&col)}, true);
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64))
