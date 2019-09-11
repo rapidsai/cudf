@@ -77,10 +77,10 @@ struct wrapper
   using value_type = T;                                          ///< The underlying fundamental type of the wrapper
   value_type value;                                              ///< The wrapped value
 
-  template <typename from_type, gdf_dtype dtype = type_id,
+  template <gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype != GDF_BOOL8)> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE
-  constexpr explicit wrapper(from_type v) : value{static_cast<value_type>(v)} {}
+  constexpr explicit wrapper(value_type v) : value{v} {}
 
   template <typename from_type, gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
