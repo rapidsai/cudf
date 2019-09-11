@@ -288,6 +288,9 @@ def scatter_to_frames(source, maps):
     from cudf.core.column import column
 
     in_cols = source
+    col_count=len(in_cols)
+    if col_count == 0:
+        return []
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
 
@@ -297,8 +300,6 @@ def scatter_to_frames(source, maps):
         in_size = in_cols[0].data.size
 
     maps = column.as_column(maps).astype("int32")
-
-    col_count=len(in_cols)
     gather_count = len(maps)
     assert(gather_count == in_size)
 
@@ -307,9 +308,8 @@ def scatter_to_frames(source, maps):
     cdef gdf_column* c_maps = column_view_from_column(maps)
     cdef vector[cudf_table] c_out_tables
 
-    if gather_count != 0:
-        with nogil:
-            c_out_tables = cpp_scatter_to_tables(c_in_table[0], c_maps[0])
+    with nogil:
+        c_out_tables = cpp_scatter_to_tables(c_in_table[0], c_maps[0])
 
     out_tables = []
     for tab in c_out_tables:
