@@ -54,6 +54,14 @@ def numeric_normalize_types(*args):
     return [a.astype(dtype) for a in args]
 
 
+def is_datetime_dtype(obj):
+    if obj is None:
+        return False
+    if not hasattr(obj, "str"):
+        return False
+    return "M8" in obj.str
+
+
 def is_categorical_dtype(obj):
     """Infer whether a given pandas, numpy, or cuDF Column, Series, or dtype
     is a pandas CategoricalDtype.

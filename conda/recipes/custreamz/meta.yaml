@@ -1,4 +1,4 @@
-# Copyright (c) 2018, NVIDIA CORPORATION.
+# Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 {% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
@@ -6,7 +6,7 @@
 {% set py_version=environ.get('CONDA_PY', 36) %}
 
 package:
-  name: cudf
+  name: custreamz
   version: {{ version }}
 
 source:
@@ -17,33 +17,24 @@ build:
   string: py{{ py_version }}_{{ git_revision_count }}
 
 requirements:
-  build:
+  host:
     - python
-    - cython >=0.29,<0.30
-    - setuptools
-    - numba >=0.45.1
-    - dlpack
-    - pyarrow 0.14.1.*
-    - libcudf {{ version }}
   run:
     - python
-    - pandas>=0.24.2,<0.25
-    - numba >=0.45.1
-    - pyarrow 0.14.1.*
-    - fastavro >=0.22.0
-    - rmm {{ minor_version }}.*
-    - nvstrings {{ minor_version }}.*
-    - cython >=0.29,<0.30
-    - dlpack
-    - fsspec>=0.3.3
+    - streamz 
+    - cudf {{ version }}
+    - dask >=2.1.0
+    - distributed >=2.1.0
+    - python-confluent-kafka
 
 test:
-  commands:
-    - python -c "import cudf"
+  imports:
+    - cudf
+    - streamz
 
 about:
   home: http://rapids.ai/
   license: Apache-2.0
   license_family: Apache
   license_file: LICENSE
-  summary: cuDF GPU DataFrame core library
+  summary: cuStreamz library
