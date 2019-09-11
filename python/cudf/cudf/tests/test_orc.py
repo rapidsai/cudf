@@ -236,17 +236,26 @@ def test_orc_reader_uncompressed_block(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
-def test_orc_writer(datadir, tmpdir):
-    columns = [
-        "boolean1",
-        "byte1",
-        "short1",
-        "int1",
-        "long1",
-        "float1",
-        "double1",
-    ]
-    pdf_fname = datadir / "TestOrcFile.test1.orc"
+@pytest.mark.parametrize(
+    "reference_file, columns",
+    [
+        (
+            "TestOrcFile.test1.orc",
+            [
+                "boolean1",
+                "byte1",
+                "short1",
+                "int1",
+                "long1",
+                "float1",
+                "double1",
+            ],
+        ),
+        ("demo-11-none.orc", ["_col1", "_col3"]),
+    ],
+)
+def test_orc_writer(datadir, tmpdir, reference_file, columns):
+    pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("gdf.orc")
 
     try:

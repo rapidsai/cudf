@@ -16,6 +16,8 @@
 #include "orc_common.h"
 #include "orc_gpu.h"
 
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <thrust/execution_policy.h>
 #include <thrust/device_ptr.h>
 #include <thrust/sort.h>
@@ -156,14 +158,21 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
         uint32_t is_valid, nz_map, nz_pos;
         if (t < 16)
         {
-            uint32_t row = s->chunk.start_row + i + t * 32;
-            uint32_t v = (row < s->chunk.start_row + s->chunk.num_rows) ? valid_map[row >> 5] : 0;
-            if (row & 0x1f)
+            if (!valid_map)
             {
-                uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows) ? valid_map[(row >> 5) + 1] : 0;
-                v = __funnelshift_r(v, v1, row & 0x1f);
+                s->scratch_red[t] = 0xffffffffu;
             }
-            s->scratch_red[t] = v;
+            else
+            {
+                uint32_t row = s->chunk.start_row + i + t * 32;
+                uint32_t v = (row < s->chunk.start_row + s->chunk.num_rows) ? valid_map[row >> 5] : 0;
+                if (row & 0x1f)
+                {
+                    uint32_t v1 = (row + 32 < s->chunk.start_row + s->chunk.num_rows) ? valid_map[(row >> 5) + 1] : 0;
+                    v = __funnelshift_r(v, v1, row & 0x1f);
+                }
+                s->scratch_red[t] = v;
+            }
         }
         __syncthreads();
         is_valid = (i + t < s->chunk.num_rows) ? (s->scratch_red[t >> 5] >> (t & 0x1f)) & 1 : 0;
@@ -184,7 +193,9 @@ static __device__ void LoadNonNullIndices(volatile dictinit_state_s *s, int t)
                 s->nnz += nnz_pos;
             }
             if (t <= 0xf)
+            {
                 s->scratch_red[t] = nnz_pos - nnz;
+            }
         }
         __syncthreads();
         if (is_valid)
@@ -683,7 +694,7 @@ cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary 
             thrust::device_ptr<uint32_t> p = thrust::device_pointer_cast(stripes_host[i].dict_data);
             const nvstrdesc_s *str_data = reinterpret_cast<const nvstrdesc_s *>(stripes_host[i].column_data_base);
             // NOTE: Requires the --expt-extended-lambda nvcc flag
-            thrust::sort(p, p + stripes_host[i].num_strings,
+            thrust::sort(rmm::exec_policy(stream)->on(stream), p, p + stripes_host[i].num_strings,
                 [str_data] __device__(const uint32_t &lhs, const uint32_t &rhs) {
                 return nvstr_is_lesser(str_data[lhs].ptr, (uint32_t)str_data[lhs].count, str_data[rhs].ptr, (uint32_t)str_data[rhs].count);
             });
