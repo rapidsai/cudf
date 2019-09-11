@@ -128,7 +128,7 @@ static constexpr auto numeric_data_types{
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr auto non_numeric_data_types{
+static constexpr std::array<cudf::data_type, 6> non_numeric_data_types{
     cudf::data_type{cudf::EMPTY},    cudf::data_type{cudf::BOOL8},
     cudf::data_type{cudf::DATE32},   cudf::data_type{cudf::TIMESTAMP},
     cudf::data_type{cudf::CATEGORY}, cudf::data_type{cudf::STRING}};
