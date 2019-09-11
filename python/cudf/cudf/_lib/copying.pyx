@@ -274,7 +274,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
 
 def scatter_to_frames(source, maps):
     """
-    Scatters rows to 'n' tables according to maps
+    Scatters rows to 'n' dataframes according to maps
 
     Parameters
     ----------
@@ -314,5 +314,8 @@ def scatter_to_frames(source, maps):
     out_tables = []
     for tab in c_out_tables:
         out_tables.append(table_to_dataframe(&tab, int_col_names=False))
+
+    free_table(c_in_table, c_in_cols)
+    free_column(c_maps)
 
     return out_tables

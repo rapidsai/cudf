@@ -37,6 +37,6 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     ) except +
 
     cdef vector[cudf_table] scatter_to_tables(
-        const cudf_table& input_table,
+        const cudf_table& input,
         const gdf_column& scatter_map
     ) except +
