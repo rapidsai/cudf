@@ -618,7 +618,7 @@ static __device__ uint32_t IntegerRLE(orcenc_state_s *s, const T *inbuf, uint32_
         {
             if (t == literal_run)
             {
-                int64_t delta = v1 - v0;
+                int64_t delta = (int64_t)v1 - (int64_t)v0;
                 uint64_t delta_base = (is_signed) ? (sizeof(T) > 4) ? zigzag64(v0) : zigzag32(v0) : v0;
                 if (delta == 0 && delta_run >= 3 && delta_run <= 10)
                 {
