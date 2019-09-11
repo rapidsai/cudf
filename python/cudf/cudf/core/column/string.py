@@ -114,7 +114,7 @@ class StringMethods(object):
 
         Parameters
         ----------
-            others : Series, StringMethods or List of str
+            others : Series or List of str
                 Strings to be appended.
                 The number of strings must match size() of this instance.
                 This must be either a Series of string dtype or a Python
