@@ -18,6 +18,7 @@
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
 - PR #2685 Add cudf::scatter_to_tables and cython binding
+- PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 
 ## Improvements
 
@@ -27,6 +28,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2682 Add cudf.set_allocator() function for easier allocator init
 - PR #2642 Improve null printing and testing
 - PR #2747 Add missing Cython headers / cudftestutil lib to conda package for cuspatial build
 - PR #2706 Compute CSV format in device code to speedup performance
@@ -74,7 +76,7 @@
 - PR #2772 Handle multiindex pandas Series #2772
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
-
+- PR #2716 Added Exception for `StringMethods` in string methods
 
 
 # cuDF 0.9.0 (21 Aug 2019)
