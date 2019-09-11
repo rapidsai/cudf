@@ -153,12 +153,12 @@ set(LEGACY_BITMASK_TEST_SRC
 ConfigureTest(LEGACY_BITMASK_TEST "${LEGACY_BITMASK_TEST_SRC}")
 
 ###################################################################################################
-# - values_to_nulls tests ---------------------------------------------------------------------------
+# - nans_to_nulls tests ---------------------------------------------------------------------------
 
-set(VALUES_TO_NULLS_TEST_SRC
-  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/values_to_nulls_tests.cu")
+set(NANS_TO_NULLS_TEST_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/nans_to_nulls_tests.cu")
 
-ConfigureTest(VALUES_TO_NULLS_TEST "${VALUES_TO_NULLS_TEST_SRC}")
+ConfigureTest(NANS_TO_NULLS_TEST "${NANS_TO_NULLS_TEST_SRC}")
 
 
 ###################################################################################################

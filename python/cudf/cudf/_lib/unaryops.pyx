@@ -10,7 +10,6 @@ import numba.cuda
 import numba.numpy_support
 import numpy as np
 
-from libc.stdlib cimport free
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.string cimport string
@@ -139,23 +138,20 @@ def apply_dt_extract_op(incol, outcol, op):
     check_gdf_error(result)
 
 
-def set_value_to_null(py_col, val):
+def nans_to_nulls(py_col):
     from cudf.core.column import as_column
 
     py_col = as_column(py_col)
 
     cdef gdf_column* c_col = column_view_from_column(py_col)
-    cdef gdf_scalar* c_val = gdf_scalar_from_scalar(val)
 
     cdef pair[cpp_unaryops.bit_mask_t_ptr, gdf_size_type] result
 
     with nogil:
-        result = cpp_unaryops.values_to_nulls(c_col[0], c_val[0])
+        result = cpp_unaryops.nans_to_nulls(c_col[0])
 
     mask = None
-    null_count = 0
     if result.first:
-        null_count = result.second
         mask_ptr = int(<uintptr_t>result.first)
         mask = rmm.device_array_from_ptr(
             mask_ptr,
@@ -164,7 +160,4 @@ def set_value_to_null(py_col, val):
             finalizer=rmm._make_finalizer(mask_ptr, 0)
         )
 
-    free_column(c_col)
-    free(c_val)
-
-    return mask, null_count
+    return mask

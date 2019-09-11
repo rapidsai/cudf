@@ -1278,10 +1278,7 @@ class Series(object):
         """
         if self.dtype.kind == "f":
             sr = self.fillna(np.nan)
-            nan = np.float_(np.nan)
-            newmask, _ = libcudf.unaryops.set_value_to_null(
-                sr._column, nan.astype(sr._column.dtype)
-            )
+            newmask = libcudf.unaryops.nans_to_nulls(sr._column)
             return sr.set_mask(newmask)
         return self
 

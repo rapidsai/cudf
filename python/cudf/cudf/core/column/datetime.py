@@ -5,10 +5,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import as_column, column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
@@ -82,22 +83,19 @@ class DatetimeColumn(column.TypedColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
-        NaT = np.datetime64("NaT")
-        mask, null_count = libcudf.unaryops.set_value_to_null(
-            Buffer(array), NaT.view(array.dtype)
+        null = cudf.Series(np.array([None]))
+        col = libcudf.replace.replace(
+            as_column(Buffer(array)),
+            as_column(
+                Buffer(np.array([np.datetime64("NaT")], dtype=array.dtype))
+            ),
+            null._column.astype(array.dtype),
         )
-        if mask is not None:
-            mask = Buffer(mask)
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
 
-        return cls(
-            data=Buffer(array),
-            mask=mask,
-            null_count=null_count,
-            dtype=array.dtype,
-        )
+        return cls(data=Buffer(array), mask=col.mask, dtype=array.dtype)
 
     @property
     def time_unit(self):
