@@ -26,6 +26,17 @@
 namespace cudf {
 namespace detail {
 
+/**
+ * @brief Internal API to calculate groupwise quantiles
+ * 
+ * @param values Grouped and sorted (within group) values to get quantiles from
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param group_sizes Number of valid elements per group
+ * @param result Pre-allocated column to put output of this operation into
+ * @param quantiles List of quantiles q where q lies in [0,1]
+ * @param interpolation Method to use when desired value lies between data points
+ * @param stream Stream to perform computation in
+ */
 void group_quantiles(gdf_column const& values,
                      rmm::device_vector<gdf_size_type> const& group_offsets,
                      rmm::device_vector<gdf_size_type> const& group_sizes,
@@ -33,6 +44,21 @@ void group_quantiles(gdf_column const& values,
                      std::vector<double> const& quantiles,
                      cudf::interpolation interpolation,
                      cudaStream_t stream = 0);
+
+/**
+ * @brief Internal API to calculate groupwise medians
+ * 
+ * @param values Grouped and sorted (within group) values to get medians from
+ * @param group_offsets Offsets of groups' starting points within @p values
+ * @param group_sizes Number of valid elements per group
+ * @param result Pre-allocated column to put output of this operation into
+ * @param stream Stream to perform computation in
+ */
+void group_medians(gdf_column const& values,
+                   rmm::device_vector<gdf_size_type> const& group_offsets,
+                   rmm::device_vector<gdf_size_type> const& group_sizes,
+                   gdf_column * result,
+                   cudaStream_t stream = 0);
 
 } // namespace detail
 } // namespace cudf

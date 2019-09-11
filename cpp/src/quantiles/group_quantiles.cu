@@ -97,6 +97,22 @@ void group_quantiles(gdf_column const& values,
                   dv_quantiles, interpolation, stream);
 }
 
+void group_medians(gdf_column const& values,
+                   rmm::device_vector<gdf_size_type> const& group_offsets,
+                   rmm::device_vector<gdf_size_type> const& group_sizes,
+                   gdf_column * result,
+                   cudaStream_t stream)
+{
+  std::vector<double> quantiles{0.5};
+  cudf::interpolation interpolation = cudf::interpolation::LINEAR;
+
+  rmm::device_vector<double> dv_quantiles(quantiles);
+
+  type_dispatcher(values.dtype, quantiles_functor{},
+                  values, group_offsets, group_sizes, result,
+                  dv_quantiles, interpolation, stream);
+}
+
 } // namespace detail
 
 // TODO: add optional check for is_sorted. Use context.flag_sorted

@@ -68,7 +68,7 @@ namespace {
 std::vector<gdf_column*>  process_remaining_complex_request(
     detail::helper &groupby,
     std::vector<AggRequestType> const& original_requests,
-     std::vector<operation_args*> const& input_ops_args,
+    std::vector<operation_args*> const& input_ops_args,
     cudf::table current_output_values,
     cudaStream_t stream) {
 
@@ -77,36 +77,42 @@ std::vector<gdf_column*>  process_remaining_complex_request(
     output_value[i] = current_output_values.get_column(i);
   }
 
-  rmm::device_vector<gdf_size_type> group_offsets = groupby.group_offsets();
-  index_vector group_labels = groupby.group_labels();
-
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
     if (is_complex_agg(element.second)) {
-      std::vector<double> quantiles;
-      cudf::interpolation interpolation;
-
-      if (element.second == MEDIAN) {
-        quantiles.push_back(0.5);
-        interpolation = cudf::interpolation::LINEAR;
-      } else if (element.second == QUANTILE){
-        quantile_args * args = static_cast<quantile_args*>(input_ops_args[i]);
-        quantiles = args->quantiles;
-        interpolation = args->interpolation;
-      }
       gdf_column * value_col = element.first;
       gdf_column sorted_values;
       rmm::device_vector<gdf_size_type> group_sizes;
 
       std::tie(sorted_values, group_sizes) = groupby.sort_values(*value_col);
-      gdf_column* result_col = new gdf_column;
-      *result_col = cudf::allocate_column(
-          GDF_FLOAT64, quantiles.size() * groupby.num_groups(), false);
+      auto result_col = new gdf_column;
 
-      cudf::detail::group_quantiles(sorted_values, group_offsets, group_sizes,
-                                    result_col, quantiles, interpolation, stream);
+      switch (element.second) {
+      case MEDIAN: {
+        *result_col = cudf::allocate_column(
+          GDF_FLOAT64, groupby.num_groups(), false);
 
+        cudf::detail::group_medians(sorted_values, groupby.group_offsets(),
+                                    group_sizes, result_col, stream);
+        break;
+      }
+      case QUANTILE: {
+        quantile_args * args = static_cast<quantile_args*>(input_ops_args[i]);
+
+        *result_col = cudf::allocate_column(
+          GDF_FLOAT64, args->quantiles.size() * groupby.num_groups(), false);
+
+        cudf::detail::group_quantiles(sorted_values, groupby.group_offsets(),
+                                      group_sizes, result_col,
+                                      args->quantiles, args->interpolation,
+                                      stream);
+        break;
+      }
+      default:
+        break;
+      }
       output_value[i] = result_col;
+
       gdf_column_free(&sorted_values);
     }
   }
