@@ -180,23 +180,23 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 }
 
 inline bool validate_scatter_map(gdf_column const& scatter_map,
-                          cudf::table const& input_table) {
+                          cudf::table const& input) {
   CUDF_EXPECTS(scatter_map.dtype == GDF_INT32,
       "scatter_map is not GDF_INT32 column.");
   CUDF_EXPECTS(not cudf::has_nulls(scatter_map),
       "Scatter map cannot contain null elements.");
-  CUDF_EXPECTS(scatter_map.size == input_table.num_rows(),
+  CUDF_EXPECTS(scatter_map.size == input.num_rows(),
       "scatter_map length is not equal to number of rows in input table.");
   if (scatter_map.size == 0 ||
-      input_table.num_columns() == 0 ||
-      input_table.num_rows() == 0)
+      input.num_columns() == 0 ||
+      input.num_rows() == 0)
     return false;
   return true;
 }
 
 template<typename InputIterator>
 std::vector<cudf::table>
-ordered_scatter_to_tables(cudf::table const& input_table,
+ordered_scatter_to_tables(cudf::table const& input,
                           gdf_index_type const* scatter_array,
                           InputIterator const order_first,
                           InputIterator const order_last) {
@@ -206,29 +206,12 @@ ordered_scatter_to_tables(cudf::table const& input_table,
   for (auto iter=order_first; iter<order_last; iter++) {
     auto groupid = *iter; 
     output_tables.push_back(
-        detail::copy_if(input_table,
+        detail::copy_if(input,
           [scatter_array, groupid] __device__ (gdf_index_type row)
           { return groupid==scatter_array[row];
           }));
   }
   return output_tables;
-}
-
-std::vector<cudf::table>
-scatter_to_tables(cudf::table const& input_table,
-                  gdf_column const& scatter_map) {
-  if(not validate_scatter_map(scatter_map, input_table)) 
-    return std::vector<cudf::table>();
-
-  gdf_index_type* scatter_array =
-    static_cast<gdf_index_type*>(scatter_map.data);
-
-  gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
-  gdf_index_type num_groups = max_elem.data.si32 + 1;
-  return ordered_scatter_to_tables(input_table,
-                    scatter_array,
-                    thrust::counting_iterator<gdf_index_type>(0),
-                    thrust::counting_iterator<gdf_index_type>(num_groups));
 }
 
 }  // namespace detail
@@ -285,8 +268,19 @@ table scatter(std::vector<gdf_scalar> const& source,
 }
 
 std::vector<cudf::table>
-scatter_to_tables(cudf::table const& input_table, gdf_column const& scatter_map) {
-  return detail::scatter_to_tables(input_table, scatter_map);
+scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map) {
+  if(not detail::validate_scatter_map(scatter_map, input)) 
+    return std::vector<cudf::table>();
+
+  gdf_index_type* scatter_array =
+    static_cast<gdf_index_type*>(scatter_map.data);
+
+  gdf_scalar max_elem = cudf::reduction::max(scatter_map, scatter_map.dtype);
+  gdf_index_type num_groups = max_elem.data.si32 + 1;
+  return detail::ordered_scatter_to_tables(input,
+                    scatter_array,
+                    thrust::counting_iterator<gdf_index_type>(0),
+                    thrust::counting_iterator<gdf_index_type>(num_groups));
 }
 
 }  // namespace cudf

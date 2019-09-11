@@ -171,7 +171,7 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 * o/p = number of output tables
 *
 * c r sm  RESULT
-* 0 * *   seg fault
+* 0 * *   seg fault (zero columns is not allowed)
 * 1 0 0   pass  (o/p=0)
 * 1 0 1   throw (r!=sm)
 * 1 1 0   throw (r!=sm)
@@ -179,8 +179,8 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 *
 */
 TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
-  for(gdf_size_type table_n_cols : {1}) //0 seg fault
-    for(gdf_size_type table_n_rows : {0, 1})
+  for(gdf_size_type table_n_cols : {1}) {
+    for(gdf_size_type table_n_rows : {0, 1}) {
       for(gdf_size_type scatter_size : {0, 1}) {
         //std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
 
@@ -209,6 +209,8 @@ TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
             EXPECT_EQ(size_t(scatter_size), output_tables.size());
         }
       }
+    }
+  }
 }
 
 template <typename T>
@@ -247,15 +249,15 @@ auto scatter_columns(
       output_cols_data[g].push_back(output_col_data);
       output_cols_bitmask[g].push_back(output_col_bitmask);
       output_cols_null_count[g].push_back(nullc);
-      assert(n_output == j);
+      EXPECT_EQ(n_output, j) << "Reference solution calculation failure\n";
     }
-    assert(num_cols == output_cols_data[g].size());
-    assert(num_cols == output_cols_bitmask[g].size());
-    assert(num_cols == output_cols_null_count[g].size());
+    EXPECT_EQ(num_cols, output_cols_data[g].size()) << "Reference solution calculation failure\n";
+    EXPECT_EQ(num_cols, output_cols_bitmask[g].size()) << "Reference solution calculation failure\n";
+    EXPECT_EQ(num_cols, output_cols_null_count[g].size()) << "Reference solution calculation failure\n";
   }
-  assert(max+1 == output_cols_data.size());
-  assert(max+1 == output_cols_bitmask.size());
-  assert(max+1 == output_cols_null_count.size());
+  EXPECT_EQ(size_t(max+1), output_cols_data.size()) << "Reference solution calculation failure\n";
+  EXPECT_EQ(size_t(max+1), output_cols_bitmask.size()) << "Reference solution calculation failure\n";
+  EXPECT_EQ(size_t(max+1), output_cols_null_count.size()) << "Reference solution calculation failure\n";
   return std::make_tuple(output_cols_data,
                          output_cols_bitmask,
                          output_cols_null_count);
