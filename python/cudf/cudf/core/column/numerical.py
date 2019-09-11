@@ -394,7 +394,9 @@ class NumericalColumn(column.TypedColumnBase):
             if self.has_null_mask:
                 self._is_monotonic_increasing = False
             else:
-                self._is_monotonic_increasing = libcudf.issorted.issorted ([self])
+                self._is_monotonic_increasing = libcudf.issorted.issorted(
+                    [self]
+                )
         return self._is_monotonic_increasing
 
     @property
@@ -403,7 +405,9 @@ class NumericalColumn(column.TypedColumnBase):
             if self.has_null_mask:
                 self._is_monotonic_decreasing = False
             else:
-                self._is_monotonic_decreasing = libcudf.issorted.issorted ([self], [1])
+                self._is_monotonic_decreasing = libcudf.issorted.issorted(
+                    [self], [1]
+                )
         return self._is_monotonic_decreasing
 
 

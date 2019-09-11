@@ -282,27 +282,13 @@ def test_get_slice_bound_missing_str(label, side):
 
 testdata = [
     (
-        Series(["2018-01-01", "2019-01-31", None],
-            dtype="datetime64[ms]",
-        ),
+        Series(["2018-01-01", "2019-01-31", None], dtype="datetime64[ms]"),
         False,
     ),
-    (
-        Series([1, 2, 3, None]),
-        False,
-    ),
-    (
-        Series([None, 1, 2, 3]),
-        False,
-    ),
-    (
-        Series(['a', 'b', 'c', None]),
-        False,
-    ),
-    (
-        Series([None, 'a', 'b', 'c']),
-        False,
-    ),
+    (Series([1, 2, 3, None]), False),
+    (Series([None, 1, 2, 3]), False),
+    (Series(["a", "b", "c", None]), False),
+    (Series([None, "a", "b", "c"]), False),
 ]
 
 
