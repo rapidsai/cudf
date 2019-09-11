@@ -323,7 +323,7 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
  * size), the outcome is undefined.
  * When the indices array is empty, an empty vector of columns is returned.
  *
- * The size of each of the columns can be of different value. The number of
+ * The input columns may have different sizes. The number of
  * columns must be equal to the number of indices in the array plus one. 
  *
  * Example:
