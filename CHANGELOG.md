@@ -14,6 +14,7 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2781 Add issorted to is_monotonic
 
 ## Improvements
 
