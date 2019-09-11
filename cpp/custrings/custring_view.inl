@@ -17,6 +17,8 @@
 #include <memory.h>
 #include <cmath>
 
+#include "./custring.cuh"
+
 // 8-byte boundary
 #define ALIGN_SIZE(v) (((v + 7) / 8) * 8)
 // convenient byte type
@@ -429,40 +431,14 @@ __device__ inline unsigned int custring_view::byte_offset_for(unsigned int pos) 
     return offset_for_char_pos(pos);
 }
 
-// Rui Lan has a more optimized version of this using vectorized loads and shared memory.
-// 0	They compare equal
-// <0	Either the value of the first character of this string that does not match is lower in the arg string,
-//      or all compared characters match but the arg string is shorter.
-// >0	Either the value of the first character of this string that does not match is greater in the arg string,
-//      or all compared characters match but the arg string is longer.
 __device__ inline int custring_view::compare(const custring_view& in) const
 {
     return compare(in.data(), in.size());
 }
 
-__device__ inline int custring_view::compare(const char* data, unsigned int bytes) const
+__device__ inline int custring_view::compare(const char* tgt, unsigned int bytes) const
 {
-    char* ptr1 = (char*)this->data();
-    if(!ptr1)
-        return -1;
-    char* ptr2 = (char*)data;
-    if(!ptr2)
-        return 1;
-    unsigned int len1 = size();
-    unsigned int len2 = bytes;
-    unsigned int idx;
-    for(idx = 0; (idx < len1) && (idx < len2); ++idx)
-    {
-        if(*ptr1 != *ptr2)
-            return (int)*ptr1 - (int)*ptr2;
-        ptr1++;
-        ptr2++;
-    }
-    if(idx < len1)
-        return 1;
-    if(idx < len2)
-        return -1;
-    return 0;
+    return custr::compare(data(),size(),tgt,bytes);
 }
 
 __device__ inline bool custring_view::operator==(const custring_view& rhs)
@@ -1624,139 +1600,27 @@ __device__ inline unsigned int custring_view::rstrip_size(const char* tgts) cons
 // these expect only numbers (ascii charset)
 __device__ inline int custring_view::stoi() const
 {
-    return (int)stol();
+    return custr::stoi(data(),size());
 }
 
 __device__ inline long custring_view::stol() const
 {
-    char* ptr = (char*)data();
-    if(!ptr)
-        return 0; // probably should be an assert
-    long value = 0;
-    int sign = 1;
-    unsigned int sz = size();
-    if(*ptr == '-' || *ptr == '+')
-    {
-        sign = (*ptr == '-' ? -1 : 1);
-        ++ptr;
-        --sz;
-    }
-    for(unsigned int idx = 0; idx < sz; ++idx)
-    {
-        char ch = *ptr++;
-        if(ch < '0' || ch > '9')
-            break;
-        value = (value * 10L) + (long)(ch - '0');
-    }
-    return value * (long)sign;
+    return custr::stol(data(),size());
 }
 
 __device__ inline unsigned long custring_view::stoul() const
 {
-    char* ptr = (char*)data();
-    if(!ptr)
-        return 0; // probably should be an assert
-
-    unsigned long value = 0;
-    unsigned int sz = size();
-    for(unsigned int idx = 0; idx < sz; ++idx)
-    {
-        char ch = *ptr++;
-        if(ch < '0' || ch > '9')
-            break;
-        value = (value * 10) + (unsigned long)(ch - '0');
-    }
-    return value;
+    return custr::stoul(data(),size());
 }
 
 __device__ inline float custring_view::stof() const
 {
-    return (float)stod();
+    return custr::stof(data(),size());
 }
 
 __device__ inline double custring_view::stod() const
 {
-    char* ptr = (char*)data();
-    if(!ptr)
-        return 0.0; // probably should be an assert
-    unsigned int sz = size();
-    if( sz==0 )
-        return 0.0;
-    if( compare("nan",3)==0 )
-        return std::numeric_limits<double>::quiet_NaN();
-    if( compare("inf",3)==0 )
-        return std::numeric_limits<double>::infinity();
-    if( compare("-inf",4)==0 )
-        return -std::numeric_limits<double>::infinity();
-    char* end = ptr + sz;
-    double sign = 1.0;
-    if(*ptr == '-' || *ptr == '+')
-    {
-        sign = (*ptr == '-' ? -1 : 1);
-        ++ptr;
-    }
-    unsigned long max_mantissa = 0x0FFFFFFFFFFFFF;
-    unsigned long digits = 0;
-    int exp_off = 0;
-    bool decimal = false;
-    while( ptr < end )
-    {
-        char ch = *ptr;
-        if(ch == '.')
-        {
-            decimal = true;
-            ++ptr;
-            continue;
-        }
-        if(ch < '0' || ch > '9')
-            break;
-        if( digits > max_mantissa )
-            exp_off += (int)!decimal;
-        else
-        {
-            digits = (digits * 10L) + (unsigned long)(ch-'0');
-            if( digits > max_mantissa )
-            {
-                digits = digits / 10L;
-                exp_off += (int)!decimal;
-            }
-            else
-                exp_off -= (int)decimal;
-        }
-        ++ptr;
-    }
-
-    // check for exponent char
-    int exp10 = 0;
-    int exp_sign = 1;
-    if( ptr < end )
-    {
-        char ch = *ptr++;
-        if( ch=='e' || ch=='E' )
-        {
-            if( ptr < end )
-            {
-                ch = *ptr++;
-                if( ch=='-' || ch=='+' )
-                    exp_sign = (ch=='-' ? -1 : 1);
-                while( ptr < end )
-                {
-                    ch = *ptr++;
-                    if(ch < '0' || ch > '9')
-                        break;
-                    exp10 = (exp10 * 10) + (int)(ch-'0');
-                }
-            }
-        }
-    }
-    exp10 *= exp_sign;
-    exp10 += exp_off;
-    if( exp10 > 308 )
-        return sign > 0 ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
-    else if( exp10 < -308 )
-        return 0.0;
-    double value = (double)digits * pow(10.0,(double)exp10);
-    return (value * sign);
+    return custr::stod(data(),size());
 }
 
 __device__ inline custring_view* custring_view::ltos( long value, void* mem )

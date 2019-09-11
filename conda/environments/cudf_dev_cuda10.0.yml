@@ -16,6 +16,7 @@ dependencies:
   - fastavro>=0.22.0
   - notebook>=0.5.0
   - cython>=0.29,<0.30
+  - fsspec>=0.3.3
   - pytest
   - sphinx
   - sphinx_rtd_theme
@@ -27,17 +28,14 @@ dependencies:
   - pandoc=<2.0.0
   - cudatoolkit=10.0
   - pip
-  - s3fs
   - partd
-  - moto
-  - boto3
-  - httpretty
   - flake8
   - black
   - isort
   - pre_commit
   - dask>=2.1.0
   - distributed>=2.1.0
+  - streamz
   - dlpack
   - arrow-cpp=0.14.1
   - boost-cpp
@@ -49,3 +47,4 @@ dependencies:
       - sphinx-markdown-tables
       - git+https://github.com/dask/dask.git
       - git+https://github.com/dask/distributed.git
+      - git+https://github.com/python-streamz/streamz.git

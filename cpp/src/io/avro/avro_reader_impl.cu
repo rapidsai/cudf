@@ -19,10 +19,6 @@
 #include "avro_reader_impl.hpp"
 
 #include "io/comp/gpuinflate.h"
-
-#include <cudf/cudf.h>
-#include <nvstrings/NVStrings.h>
-
 #include <cuda_runtime.h>
 
 #include <inttypes.h>
@@ -209,13 +205,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
     size_t dictionary_data_size = 0;
     std::vector<std::pair<uint32_t, uint32_t>> dict(columns.size());
     for (size_t i = 0; i < columns.size(); ++i) {
-      CUDF_EXPECTS(columns[i].allocate() == GDF_SUCCESS, "Cannot allocate columns");
-      if (columns[i]->dtype == GDF_STRING) {
-        // Kernel doesn't init invalid entries but NvStrings expects zero length
-        CUDA_TRY(cudaMemsetAsync(
-            columns[i]->data, 0,
-            columns[i]->size * sizeof(std::pair<const char *, size_t>)));
-      }
+      columns[i].allocate();
       size_t valid_bytes = columns[i]->size >> 3;
       size_t valid_size = gdf_valid_allocation_size(columns[i]->size);
       uint8_t *valid = reinterpret_cast<uint8_t *>(columns[i]->valid);
@@ -264,20 +254,15 @@ table reader::Impl::read(int skip_rows, int num_rows) {
     decode_data(block_data, dict, global_dictionary, total_dictionary_entries,
                 columns);
 
-    // Finalize string columns (can't be moved out of the block since the data may
-    // reference the dictionary)
-    init_string_columns(columns);
+    // Perform any final column preparation (may reference decoded data)
+    for (auto &column : columns) {
+      column.finalize();
+    }
   } else {
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-      if (column->dtype == GDF_STRING) {
-        // Kernel doesn't init invalid entries but NvStrings expects zero length
-        CUDA_TRY(cudaMemsetAsync(
-            column->data, 0,
-            column->size * sizeof(std::pair<const char *, size_t>)));
-      }
+      column.allocate();
+      column.finalize();
     }
-    init_string_columns(columns);
   }
 
   // Transfer ownership to raw pointer output arguments
@@ -286,26 +271,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
     out_cols[i] = columns[i].release();
   }
 
-  return table(out_cols.data(), out_cols.size());
-}
-
-void reader::Impl::init_string_columns(const std::vector<gdf_column_wrapper> &columns)
-{
-  // For string dtype, allocate an NvStrings container instance, deallocating
-  // the original string list memory in the process.
-  // This container takes a list of string pointers and lengths, and copies
-  // into its own memory so the source memory must not be released yet.
-  for (auto &column : columns) {
-    if (column->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
-
-      auto str_list = static_cast<str_pair *>(column->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, column->size),
-                       &NVStrings::destroy);
-      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
-    }
-  }
+  return cudf::table(out_cols.data(), out_cols.size());
 }
 
 device_buffer<uint8_t> reader::Impl::decompress_data(

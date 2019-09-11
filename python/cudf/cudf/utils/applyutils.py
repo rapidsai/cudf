@@ -14,6 +14,8 @@ from cudf.utils import cudautils, utils
 from cudf.utils.docutils import docfmt_partial
 
 _doc_applyparams = """
+df : DataFrame
+    The source dataframe.
 func : function
     The transformation function that will be executed on the CUDA GPU.
 incols: list
@@ -23,6 +25,11 @@ outcols: dict
 kwargs: dict
     name-value of extra arguments.  These values are passed
     directly into the function.
+pessimistic_nulls : bool
+    Whether or not apply_rows output should be null when any corresponding
+    input is null. If False, all outputs will be non-null, but will be the
+    result of applying func against the underlying column data, which
+    may be garbage.
 """
 
 _doc_applychunkparams = """
@@ -48,35 +55,34 @@ doc_applychunks = docfmt_partial(
 
 
 @doc_apply()
-def apply_rows(df, func, incols, outcols, kwargs, cache_key):
+def apply_rows(
+    df, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
+):
     """Row-wise transformation
 
     Parameters
     ----------
-    df : DataFrame
-        The source dataframe.
     {params}
-
     """
     applyrows = ApplyRowsCompiler(
-        func, incols, outcols, kwargs, cache_key=cache_key
+        func, incols, outcols, kwargs, pessimistic_nulls, cache_key=cache_key
     )
     return applyrows.run(df)
 
 
 @doc_applychunks()
-def apply_chunks(df, func, incols, outcols, kwargs, chunks, tpb):
+def apply_chunks(
+    df, func, incols, outcols, kwargs, pessimistic_nulls, chunks, tpb
+):
     """Chunk-wise transformation
 
     Parameters
     ----------
-    df : DataFrame
-        The source dataframe.
     {params}
     {params_chunks}
     """
     applyrows = ApplyChunksCompiler(
-        func, incols, outcols, kwargs, cache_key=None
+        func, incols, outcols, kwargs, pessimistic_nulls, cache_key=None
     )
     return applyrows.run(df, chunks=chunks, tpb=tpb)
 
@@ -102,13 +108,16 @@ def make_aggregate_nullmask(df, columns=None, op="and"):
 
 
 class ApplyKernelCompilerBase(object):
-    def __init__(self, func, incols, outcols, kwargs, cache_key):
+    def __init__(
+        self, func, incols, outcols, kwargs, pessimistic_nulls, cache_key
+    ):
         # Get signature of user function
         sig = pysignature(func)
         self.sig = sig
         self.incols = incols
         self.outcols = outcols
         self.kwargs = kwargs
+        self.pessimistic_nulls = pessimistic_nulls
         self.cache_key = cache_key
         self.kernel = self.compile(func, sig.parameters.keys(), kwargs.keys())
 
@@ -127,7 +136,10 @@ class ApplyKernelCompilerBase(object):
         # Launch kernel
         self.launch_kernel(df, bound.args, **launch_params)
         # Prepare pessimistic nullmask
-        out_mask = make_aggregate_nullmask(df)
+        if self.pessimistic_nulls:
+            out_mask = make_aggregate_nullmask(df, columns=self.incols)
+        else:
+            out_mask = None
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
