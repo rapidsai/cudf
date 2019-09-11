@@ -52,7 +52,6 @@ def clone_columns_with_size(in_cols, row_size):
 def _normalize_maps(maps, size):
     from cudf.core.column import column
     maps = column.as_column(maps).astype("int32")
-    maps = maps.data.mem
     return maps
 
 
@@ -116,8 +115,7 @@ def gather(source, maps, dest=None):
         c_out_cols = cols_view_from_cols(out_cols)
         c_out_table = new cudf_table(c_out_cols, col_count)
 
-    cdef uintptr_t c_maps_ptr
-    cdef gdf_index_type* c_maps
+    cdef gdf_column* c_maps = column_view_from_column(maps)
     if gather_count != 0:
         if out_cols[0].dtype == np.dtype("object"):
             out_size = out_cols[0].data.size()
@@ -125,11 +123,8 @@ def gather(source, maps, dest=None):
             out_size = out_cols[0].data.size
         assert gather_count == out_size
 
-        c_maps_ptr = get_ctype_ptr(maps)
-        c_maps = <gdf_index_type*>c_maps_ptr
-
         with nogil:
-            cpp_gather(c_in_table, c_maps, c_out_table)
+            cpp_gather(c_in_table, c_maps[0], c_out_table)
 
     for i, col in enumerate(out_cols):
         col._update_null_count(c_out_cols[i].null_count)
@@ -141,6 +136,7 @@ def gather(source, maps, dest=None):
     if is_same_input is False:
         free_table(c_out_table, c_out_cols)
 
+    free_column(c_maps)
     free_table(c_in_table, c_in_cols)
 
     if dest is not None:

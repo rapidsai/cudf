@@ -64,9 +64,13 @@ namespace detail {
  * performed. 
  * @return gdf_error
  *---------------------------------------------------------------------------**/
+void gather(table const* source_table, gdf_column const gather_map,
+	    table * destination_table, bool check_bounds = false,
+	    bool sync_nvstring_category = false);
+
 void gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table, bool check_bounds = false, 
-                 bool sync_nvstring_category = false);
+	    table* destination_table, bool check_bounds = false,
+	    bool sync_nvstring_category = false);
 
 }  // namespace detail
 }  // namespace cudf

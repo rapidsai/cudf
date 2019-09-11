@@ -254,6 +254,9 @@ table scatter(std::vector<gdf_scalar> const& source,
 void gather(table const* source_table, gdf_index_type const gather_map[],
                  table* destination_table);
 
+void gather(table const* source_table, gdf_column const gather_map,
+	    table* destination_table);
+
 /**
  * @brief Slices a column (including null values) into a set of columns
  * according to a set of indices.

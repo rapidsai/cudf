@@ -153,13 +153,15 @@ struct column_gatherer {
    *---------------------------------------------------------------------------**/
   template <typename ColumnType>
   void operator()(gdf_column const *source_column,
-                  gdf_index_type const gather_map[],
+                  gdf_column const *gather_map,
                   gdf_column *destination_column, bool check_bounds,
                   cudaStream_t stream, bool sync_nvstring_category = false) {
     ColumnType const *source_data{
         static_cast<ColumnType const *>(source_column->data)};
     ColumnType *destination_data{
         static_cast<ColumnType *>(destination_column->data)};
+    gdf_index_type *gather_map_data{
+        static_cast<gdf_index_type *>(gather_map->data)};
 
     gdf_size_type const num_destination_rows{destination_column->size};
 
@@ -196,14 +198,15 @@ struct column_gatherer {
 
     auto source_column_size = source_column->size;
     auto gather_map_iterator = thrust::make_transform_iterator(
-	gather_map,
+	gather_map_data,
 	[source_column_size] __device__ (gdf_index_type in) -> gdf_index_type {
 	  return ((in % source_column_size) + source_column_size) % source_column_size;
 	});
 							       
     if (check_bounds) {
-      thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
-                        gather_map + num_destination_rows, gather_map,
+      // TODO: needs to be updated to use gather_map_iterator
+      thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map_data,
+                        gather_map_data + num_destination_rows, gather_map_data,
                         source_data, destination_data,
                         bounds_checker{0, source_column->size});
     } else {
@@ -228,7 +231,7 @@ struct column_gatherer {
   }
 };
 
-void gather(table const *source_table, gdf_index_type const gather_map[],
+void gather(table const *source_table, gdf_column const gather_map,
             table *destination_table, bool check_bounds,
             bool sync_nvstring_category) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
@@ -240,7 +243,8 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
     return;
   }
 
-  CUDF_EXPECTS(nullptr != gather_map, "gather_map is null");
+  CUDF_EXPECTS(nullptr != gather_map.data, "gather_map data is null");
+  CUDF_EXPECTS(cudf::has_nulls(gather_map) == false, "gather_map contains nulls");
   CUDF_EXPECTS(source_table->num_columns() == destination_table->num_columns(),
                "Mismatched number of columns");
   const gdf_size_type n_cols = source_table->num_columns();
@@ -259,7 +263,7 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
 
     // The data gather for n columns will be put on the first n streams
     cudf::type_dispatcher(src_col->dtype, column_gatherer{}, src_col,
-                          gather_map, dest_col, check_bounds, v_stream[i],
+                          &gather_map, dest_col, check_bounds, v_stream[i],
                           sync_nvstring_category);
 
     if (cudf::has_nulls(*src_col)) {
@@ -304,7 +308,8 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
       &gather_grid_size, &gather_block_size, bitmask_kernel));
 
   bitmask_kernel<<<gather_grid_size, gather_block_size>>>(
-      source_bitmasks.data().get(), source_table->num_rows(), gather_map,
+      source_bitmasks.data().get(), source_table->num_rows(),
+      static_cast<gdf_index_type const *>(gather_map.data),
       destination_bitmasks.data().get(), destination_table->num_rows(),
       null_counts.data().get(), n_cols);
 
@@ -331,10 +336,29 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
   }
 }
 
+void gather(table const *source_table, gdf_index_type const gather_map[],
+	    table *destination_table, bool check_bounds,
+	    bool sync_nvstring_category) {
+  gdf_column gather_map_column{};
+  gdf_column_view(&gather_map_column,
+		  const_cast<gdf_index_type*>(gather_map),
+		  nullptr,
+		  destination_table->num_rows(),
+		  gdf_dtype_of<gdf_index_type>());
+  gather(source_table, gather_map_column, destination_table, check_bounds, sync_nvstring_category);
+}
+
+
 } // namespace detail
 
+void gather(table const *source_table, gdf_column const gather_map,
+	    table *destination_table) {
+  detail::gather(source_table, gather_map, destination_table, false, false);
+  nvcategory_gather_table(*source_table, *destination_table);
+}
+
 void gather(table const *source_table, gdf_index_type const gather_map[],
-            table *destination_table) {
+	    table *destination_table) {
   detail::gather(source_table, gather_map, destination_table, false, false);
   nvcategory_gather_table(*source_table, *destination_table);
 }

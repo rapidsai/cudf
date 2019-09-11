@@ -12,7 +12,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
     cdef void gather(
         const cudf_table * source_table,
-        const gdf_index_type* gather_map,
+        const gdf_column gather_map,
         cudf_table* destination_table
     ) except +
 
