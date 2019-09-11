@@ -26,6 +26,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2682 Add cudf.set_allocator() function for easier allocator init
 - PR #2642 Improve null printing and testing
 - PR #2747 Add missing Cython headers / cudftestutil lib to conda package for cuspatial build
 - PR #2706 Compute CSV format in device code to speedup performance
