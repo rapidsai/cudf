@@ -261,7 +261,7 @@ gdf_size_type unique_count(gdf_column const& input_column,
       input_column.null_count > 0 and col.null_count > input_column.null_count)
     count = count + 1;
 
-  if (dropna)
+  if (dropna and cudf::has_nulls(input_column))
     return count-(input_column.null_count>0);
   else
     return count;
