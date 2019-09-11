@@ -194,17 +194,13 @@ inline bool validate_scatter_map(gdf_column const& scatter_map,
   return true;
 }
 
-template<typename InputIterator>
 std::vector<cudf::table>
 ordered_scatter_to_tables(cudf::table const& input,
                           gdf_index_type const* scatter_array,
-                          InputIterator const order_first,
-                          InputIterator const order_last) {
-  size_t num_groups = thrust::distance(order_first, order_last);
+                          gdf_index_type num_groups) {
   std::vector<cudf::table> output_tables;
   output_tables.reserve(num_groups);
-  for (auto iter=order_first; iter<order_last; iter++) {
-    auto groupid = *iter; 
+  for (gdf_index_type groupid = 0; groupid < num_groups; groupid++) {
     output_tables.push_back(
         detail::copy_if(input,
           [scatter_array, groupid] __device__ (gdf_index_type row)
@@ -279,8 +275,7 @@ scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map) {
   gdf_index_type num_groups = max_elem.data.si32 + 1;
   return detail::ordered_scatter_to_tables(input,
                     scatter_array,
-                    thrust::counting_iterator<gdf_index_type>(0),
-                    thrust::counting_iterator<gdf_index_type>(num_groups));
+                    num_groups);
 }
 
 }  // namespace cudf
