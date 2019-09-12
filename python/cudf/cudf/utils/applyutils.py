@@ -123,7 +123,10 @@ class ApplyKernelCompilerBase(object):
 
     def run(self, df, **launch_params):
         # Get input columns
-        inputs = {k: df[k].data.mem for k in self.incols}
+        if isinstance(self.incols, dict):
+            inputs = {v: df[k].data.mem for (k, v) in self.incols.items()}
+        else:
+            inputs = {k: df[k].data.mem for k in self.incols}
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
