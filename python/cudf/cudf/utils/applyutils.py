@@ -18,8 +18,10 @@ df : DataFrame
     The source dataframe.
 func : function
     The transformation function that will be executed on the CUDA GPU.
-incols: list
-    A list of names of input columns.
+incols: list or dict
+    A list of names of input columns that match the function arguments.
+    Or, a dictionary mapping input column names to their corresponding
+    function arguments such as {'col1': 'arg1'}.
 outcols: dict
     A dictionary of output column names and their dtype.
 kwargs: dict
