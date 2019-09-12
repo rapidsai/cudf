@@ -143,9 +143,14 @@ cudf::table drop_duplicates(const cudf::table& input,
  * @brief Count the unique elements in the column
  *
  * Given an input column, number of unique elements in this column is returned
- * 
+ *
+ * If both `ignore_nulls` and `nan_as_null` are true, both `NaN` and `null`
+ * values are ignored.
+ * If `ignored_nulls` is true and `nan_as_null` is false, only `null` is
+ * ignored, `NaN` is considered in unique count.
+ *
  * @param[in] input         The column whose unique elements will be counted.
- * @param[in] ignore_nulls  flag to ignore `NaN` & `null` in unique count if true.
+ * @param[in] ignore_nulls  flag to ignore `null` in unique count if true, 
  * @param[in] nan_as_null   flag to consider `NaN==null` if true.
  *
  * @return number of unique elements
