@@ -18,8 +18,8 @@ ARGS=$*
 # script, and that this script resides in the repo dir!
 REPODIR=$(cd $(dirname $0); pwd)
 
-VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf -v -g -n -h"
-HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
+VALIDARGS="clean libnvstrings nvstrings libcudf cudf dask_cudf benchmarks -v -g -n -h"
+HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [benchmarks] [-v] [-g] [-n] [-h]
    clean        - remove all existing build artifacts and configuration (start
                   over)
    libnvstrings - build the nvstrings C++ code only
@@ -27,6 +27,7 @@ HELP="$0 [clean] [libcudf] [cudf] [dask_cudf] [-v] [-g] [-n] [-h]
    libcudf      - build the cudf C++ code only
    cudf         - build the cudf Python package
    dask_cudf    - build the dask_cudf Python package
+   benchmarks   - build benchmarks
    -v           - verbose build mode
    -g           - build for debug
    -n           - no install step
@@ -82,6 +83,11 @@ fi
 if hasArg -n; then
     INSTALL_TARGET=""
 fi
+if hasArg benchmarks; then
+    BENCHMARKS="ON"
+else
+    BENCHMARKS="OFF"
+fi
 
 # If clean given, run it prior to any other steps
 if hasArg clean; then
@@ -131,6 +137,7 @@ if (( ${NUMARGS} == 0 )) || hasArg libcudf; then
     cd ${LIBCUDF_BUILD_DIR}
     cmake -DCMAKE_INSTALL_PREFIX=${INSTALL_PREFIX} \
           -DCMAKE_CXX11_ABI=ON \
+          -DBUILD_BENCHMARKS=${BENCHMARKS} \
           -DCMAKE_BUILD_TYPE=${BUILD_TYPE} ..
     if [[ ${INSTALL_TARGET} != "" ]]; then
         make -j${PARALLEL_LEVEL} install_cudf VERBOSE=${VERBOSE}
