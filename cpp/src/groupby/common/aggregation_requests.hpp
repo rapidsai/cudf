@@ -56,7 +56,7 @@ using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
 
 static constexpr std::array<operators, 4> simple_agg_list = {SUM, MIN, MAX, COUNT};
 
-static constexpr std::array<operators, 2> complex_agg_list = {MEDIAN, QUANTILE};
+static constexpr std::array<operators, 3> complex_agg_list = {MEDIAN, QUANTILE, VARIANCE};
 
 inline bool is_simple_agg(operators op) {
   return std::any_of(simple_agg_list.begin(), simple_agg_list.end(),

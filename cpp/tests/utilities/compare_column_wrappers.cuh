@@ -59,6 +59,24 @@ enum : bool {
     dont_print_unequal_pairs = false,
 };
 
+template<class T>
+typename std::enable_if_t<std::is_floating_point<T>::value, 
+bool> almost_equal(T x, T y, int ulp)
+{
+  // the machine epsilon has to be scaled to the magnitude of the values used
+  // and multiplied by the desired precision in ULPs (units in the last place)
+  return std::abs(x-y) <= std::numeric_limits<T>::epsilon() * std::abs(x+y) * ulp
+    // unless the result is subnormal
+    || std::abs(x-y) < std::numeric_limits<T>::min();
+}
+
+template<class T>
+typename std::enable_if_t<!std::is_floating_point<T>::value, 
+bool> almost_equal(T x, T y, int)
+{
+  return x == y;
+}
+
 /**
  * @note Currently ignoring the extra type info, i.e. assuming it's the same for both columns, or can be ignored
  */
@@ -88,7 +106,7 @@ void expect_column_values_are_equal(
     } else {
       auto elements_are_equal =
           (lhs_element_is_valid == rhs_element_is_valid and
-           lhs_data_on_host[i] == rhs_data_on_host[i]);
+           almost_equal(lhs_data_on_host[i], rhs_data_on_host[i], 2));
       EXPECT_TRUE(elements_are_equal)
           << std::left << std::setw(max_name_length) << lhs_name << std::right
           << '[' << i << "] = "

@@ -40,6 +40,7 @@
 #include "sort_helper.hpp"
 
 #include <quantiles/group_quantiles.hpp>
+#include <reductions/group_reductions.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -97,7 +98,7 @@ std::vector<gdf_column*>  process_remaining_complex_request(
         break;
       }
       case QUANTILE: {
-        quantile_args * args = static_cast<quantile_args*>(input_ops_args[i]);
+        auto args = static_cast<quantile_args*>(input_ops_args[i]);
 
         *result_col = cudf::allocate_column(
           GDF_FLOAT64, args->quantiles.size() * groupby.num_groups(), false);
@@ -106,6 +107,17 @@ std::vector<gdf_column*>  process_remaining_complex_request(
                                       group_sizes, result_col,
                                       args->quantiles, args->interpolation,
                                       stream);
+        break;
+      }
+      case VARIANCE: {
+        auto args = static_cast<std_args*>(input_ops_args[i]);
+
+        *result_col = cudf::allocate_column(
+          GDF_FLOAT64, groupby.num_groups());
+
+        cudf::detail::group_var(sorted_values, groupby.group_labels(),
+                                group_sizes, result_col,
+                                args->ddof, stream);
         break;
       }
       default:
