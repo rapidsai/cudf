@@ -47,6 +47,7 @@ BUILD_DIRS="${LIBNVSTRINGS_BUILD_DIR} ${NVSTRINGS_BUILD_DIR} ${LIBCUDF_BUILD_DIR
 VERBOSE=""
 BUILD_TYPE=Release
 INSTALL_TARGET=install
+BENCHMARKS=OFF
 
 # Set defaults for vars that may not have been defined externally
 #  FIXME: if INSTALL_PREFIX is not set, check PREFIX, then check
@@ -85,8 +86,6 @@ if hasArg -n; then
 fi
 if hasArg benchmarks; then
     BENCHMARKS="ON"
-else
-    BENCHMARKS="OFF"
 fi
 
 # If clean given, run it prior to any other steps
