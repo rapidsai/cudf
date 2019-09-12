@@ -17,6 +17,7 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2777 Add python bindings for porter stemmer measure functionality
 
 ## Improvements
 
