@@ -18,6 +18,7 @@
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
+- PR #2785 Add nvstrings Python docs
 
 ## Improvements
 
