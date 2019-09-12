@@ -49,12 +49,6 @@ def clone_columns_with_size(in_cols, row_size):
     return out_cols
 
 
-def _normalize_maps(maps, size):
-    from cudf.core.column import column
-    maps = column.as_column(maps).astype("int32")
-    return maps
-
-
 def gather(source, maps, dest=None):
     """
     Gathers elements from source into dest (if given) using the gathermap maps.
@@ -91,7 +85,7 @@ def gather(source, maps, dest=None):
     else:
         in_size = in_cols[0].data.size
 
-    maps = _normalize_maps(maps, in_size)
+    maps = column.as_column(maps)
 
     col_count=len(in_cols)
     gather_count = len(maps)
