@@ -324,7 +324,7 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
-            src/string/nvcategory_util.cpp
+            src/strings/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
             src/predicates/is_sorted.cu
@@ -425,6 +425,8 @@ add_library(cudf
             src/table/table.cpp
             src/bitmask/null_mask.cpp
             src/sort/sort.cu
+            src/strings/strings_column_factories.cu
+            src/strings/strings_column_handler.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding

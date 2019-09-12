@@ -226,7 +226,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`source_view` available in device memory.
    *---------------------------------------------------------------------------**/
   static auto create(column_view source_view, cudaStream_t stream = 0);
-
+  
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
    *
@@ -244,6 +244,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
                                      ///< may contain additional data
   size_type _num_children{};         ///< The number of child columns
 
+public:
   /**---------------------------------------------------------------------------*
    * @brief Construct's a `column_device_view` from a `column_view` populating
    * all but the children.
@@ -254,6 +255,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *---------------------------------------------------------------------------**/
   column_device_view(column_view source);
 
+protected:
   /**---------------------------------------------------------------------------*
    * @brief Destroy the `device_column_view` object.
    *
