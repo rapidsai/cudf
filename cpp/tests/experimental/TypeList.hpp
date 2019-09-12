@@ -41,7 +41,8 @@ namespace util {
 //      constexpr auto VALUE = GetValue<TypeParam,1>; // second value element
 // }
 //
-// You can compose complicated type/value arguments using Concat and CrossJoin and RemoveIf
+// You can compose complicated type/value arguments using Concat and CrossJoin
+// and RemoveIf
 //
 // using Types = CrossJoin<Types<int,float>,Values<0,4>>;
 // creates the parameters <int,0> <int,4> <float,0> <float,4>
@@ -50,7 +51,8 @@ namespace util {
 //
 // using Types = Concat<CrossJoin<Types<int,float>,ValueType<0>>,
 //                      CrossJoin<Types<char,double>,ValueType<1,2>>>;
-// creates the parameters <int,0> <float,0> <char,1> <char,2> <double,1> <double,2>
+// creates the parameters <int,0> <float,0> <char,1> <char,2> <double,1>
+// <double,2>
 //
 // RemoveIf can be used to remove some parameters that match a given predicate:
 //
@@ -61,140 +63,152 @@ namespace util {
 
 using ::testing::Types;
 
-template<class T, int D>
-struct GetTypeImpl
-{
-    static_assert(D == 0, "Out of bounds");
-    using type = T;
+template <class T, int D>
+struct GetTypeImpl {
+  static_assert(D == 0, "Out of bounds");
+  using type = T;
 };
 
-template<class... T, int D>
-struct GetTypeImpl<Types<T...>, D>
-{
-    static_assert(D < sizeof...(T), "Out of bounds");
+template <class... T, int D>
+struct GetTypeImpl<Types<T...>, D> {
+  static_assert(D < sizeof...(T), "Out of bounds");
 
-    using type = typename GetTypeImpl<typename Types<T...>::Tail, D - 1>::type;
+  using type = typename GetTypeImpl<typename Types<T...>::Tail, D - 1>::type;
 };
 
-template<class... ARGS>
-struct GetTypeImpl<Types<ARGS...>, 0>
-{
-    static_assert(sizeof...(ARGS) > 0, "Out of bounds");
+template <class... ARGS>
+struct GetTypeImpl<Types<ARGS...>, 0> {
+  static_assert(sizeof...(ARGS) > 0, "Out of bounds");
 
-    using type = typename Types<ARGS...>::Head;
+  using type = typename Types<ARGS...>::Head;
 };
 
-template<class TUPLE, int D>
+template <class TUPLE, int D>
 using GetType = typename GetTypeImpl<TUPLE, D>::type;
 
 // GetSize -------------------------------
 // returns the size (number of elements) of the type list
 
-template<class TUPLE>
+template <class TUPLE>
 struct GetSizeImpl;
 
-template<class... TYPES>
-struct GetSizeImpl<Types<TYPES...>>
-{
-    static constexpr auto value = sizeof...(TYPES);
+template <class... TYPES>
+struct GetSizeImpl<Types<TYPES...>> {
+  static constexpr auto value = sizeof...(TYPES);
 };
 
-template<class TUPLE>
+template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
 // Values -----------------------------------------
+/**---------------------------------------------------------------------------*
+ * @brief A compile time list of values of the same type:
+ *
+ * Example:
+ * ```
+ * using MyValues = Values<int32_t, 0, 42, 137>;
+ * ```
+ *---------------------------------------------------------------------------**/
 
-
-template<class T, T V>
-struct ValueImpl
-{
-    static constexpr auto value = V;
+template <class T, T V>
+struct ValueImpl {
+  static constexpr auto value = V;
 };
 
-template<class T, T... ARGS>
-struct ValuesImpl
-{
-    using type = Types<ValueImpl<decltype(ARGS), ARGS>...>;
+template <class T, T... ARGS>
+struct ValuesImpl {
+  using type = Types<ValueImpl<decltype(ARGS), ARGS>...>;
 };
 
-template<class T, T... ARGS>
+template <class T, T... ARGS>
 using Values = typename ValuesImpl<T, ARGS...>::type;
 
-template<class TUPLE, int D>
+template <class TUPLE, int D>
 constexpr auto GetValue = GetType<TUPLE, D>::value;
 
-
 // Concat -----------------------------------------
+/**---------------------------------------------------------------------------*
+ * @brief Concantenates compile-time lists of types into a single type list.
+ *
+ * Example:
+ * ```
+ * using MyTypes = Concat< Types<int, float>, Types<char, double>>
+ * // MyTypes == Types<int, float, char, double>;
+ * ```
+ *---------------------------------------------------------------------------**/
 
 namespace detail {
-template<class A, class B>
+template <class A, class B>
 struct Concat2;
 
-template<class... T, class... U>
-struct Concat2<Types<T...>, Types<U...>>
-{
-    using type = Types<T..., U...>;
+template <class... T, class... U>
+struct Concat2<Types<T...>, Types<U...>> {
+  using type = Types<T..., U...>;
 };
-} // namespace detail
+}  // namespace detail
 
-template<class... T>
+template <class... T>
 struct ConcatImpl;
 
-template<class HEAD1, class HEAD2, class... TAIL>
-struct ConcatImpl<HEAD1, HEAD2, TAIL...>
-{
-    using type = typename ConcatImpl<typename detail::Concat2<HEAD1, HEAD2>::type, TAIL...>::type;
+template <class HEAD1, class HEAD2, class... TAIL>
+struct ConcatImpl<HEAD1, HEAD2, TAIL...> {
+  using type = typename ConcatImpl<typename detail::Concat2<HEAD1, HEAD2>::type,
+                                   TAIL...>::type;
 };
 
-template<class A>
-struct ConcatImpl<A>
-{
-    using type = A;
+template <class A>
+struct ConcatImpl<A> {
+  using type = A;
 };
 
-template<class... A>
-struct ConcatImpl<Types<A...>>
-{
-    using type = Types<A...>;
+template <class... A>
+struct ConcatImpl<Types<A...>> {
+  using type = Types<A...>;
 };
 
-template<>
-struct ConcatImpl<>
-{
-    using type = Types<>;
+template <>
+struct ConcatImpl<> {
+  using type = Types<>;
 };
 
-template<class... T>
+template <class... T>
 using Concat = typename ConcatImpl<T...>::type;
 
-/*
-
 // Flatten -----------------------------------------
-
-template<class T>
+/**---------------------------------------------------------------------------*
+ * @brief Flattens nested compile-time lists of types into a single list of
+ *types.
+ * 
+ * Example:
+ * ```
+ * // Flatten< Types< int, Types< double, Types<char> > > == Types<int, double, char>
+ * static_assert(std::is_same<Flatten<Types<Types<int, Types<double>>, float>>,
+ * Types<int, double, float>>::value, "");
+ * ```
+ *---------------------------------------------------------------------------**/
+template <class T>
 struct FlattenImpl;
 
-template<>
-struct FlattenImpl<Types<>>
-{
-    using type = Types<>;
+template <>
+struct FlattenImpl<Types<>> {
+  using type = Types<>;
 };
 
-template<class HEAD, class... TAIL>
-struct FlattenImpl<Types<HEAD, TAIL...>>
-{
-    using type = Concat<Types<HEAD>, typename FlattenImpl<Types<TAIL...>>::type>;
+template <class HEAD, class... TAIL>
+struct FlattenImpl<Types<HEAD, TAIL...>> {
+  using type = Concat<Types<HEAD>, typename FlattenImpl<Types<TAIL...>>::type>;
 };
 
-template<class... HEAD, class... TAIL>
-struct FlattenImpl<Types<Types<HEAD...>, TAIL...>>
-{
-    using type = typename FlattenImpl<Types<HEAD..., TAIL...>>::type;
+template <class... HEAD, class... TAIL>
+struct FlattenImpl<Types<Types<HEAD...>, TAIL...>> {
+  using type = typename FlattenImpl<Types<HEAD..., TAIL...>>::type;
 };
 
-template<class T>
+template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
+
+/*
 // CrossJoin -----------------------------------------
 
 namespace detail {
@@ -243,7 +257,8 @@ struct CrossJoinImpl<Types<ARGS...>>
 template<class... AARGS, class... TAIL>
 struct CrossJoinImpl<Types<AARGS...>, TAIL...>
 {
-    using type = Concat<typename detail::Prepend<AARGS, typename CrossJoinImpl<TAIL...>::type>::type...>;
+    using type = Concat<typename detail::Prepend<AARGS, typename
+CrossJoinImpl<TAIL...>::type>::type...>;
 };
 
 // to make it easy for the user when there's only one element to be joined
@@ -312,7 +327,8 @@ struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type
 
 // next one doesn't match
 template<class NEEDLE, class HEAD, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE, Types<TAIL...>>
+struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE,
+Types<TAIL...>>
 {
 };
 
@@ -342,8 +358,9 @@ struct RemoveIfImpl<PRED, Types<>>
 template<class PRED, class HEAD, class... TAIL>
 struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>>
 {
-    using type = Concat<typename std::conditional<PRED::template Call<HEAD>::value, Types<>, Types<HEAD>>::type,
-                        typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
+    using type = Concat<typename std::conditional<PRED::template
+Call<HEAD>::value, Types<>, Types<HEAD>>::type, typename RemoveIfImpl<PRED,
+Types<TAIL...>>::type>;
 };
 
 template<class PRED, class TUPLE>
@@ -432,7 +449,8 @@ struct Remove<Types<HEAD, TAIL...>, CUR, IDXHEAD, IDXTAIL...>
     static_assert(sizeof...(TAIL) + 1 > IDXHEAD - CUR, "Index out of bounds");
 
     // add current item to output and recurse into the remaining items
-    using type = Concat<Types<HEAD>, typename Remove<Types<TAIL...>, CUR + 1, IDXHEAD, IDXTAIL...>::type>;
+    using type = Concat<Types<HEAD>, typename Remove<Types<TAIL...>, CUR + 1,
+IDXHEAD, IDXTAIL...>::type>;
 };
 } // namespace detail
 
@@ -461,7 +479,8 @@ template<class HEAD, class... TAIL>
 struct Unique<HEAD, TAIL...>
 {
     using type =
-        Concat<std::conditional_t<Exists<HEAD, Types<TAIL...>>, Types<>, Types<HEAD>>, typename Unique<TAIL...>::type>;
+        Concat<std::conditional_t<Exists<HEAD, Types<TAIL...>>, Types<>,
+Types<HEAD>>, typename Unique<TAIL...>::type>;
 };
 } // namespace detail
 
@@ -518,6 +537,6 @@ constexpr bool Contains(Types<Value(HEAD), Value(TAIL)...>, T needle)
 }
 */
 
-} // namespace util
+}  // namespace util
 
-#endif // NV_VPI_TEST_UTIL_TYPELIST_HPP
+#endif  // NV_VPI_TEST_UTIL_TYPELIST_HPP
