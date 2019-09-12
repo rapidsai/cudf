@@ -48,7 +48,7 @@ struct WrappersTest : public ::testing::Test {
   }
 };
 
-using WrappersTestBool8 = WrappersTest<cudf::bool8>;
+using WrappersTestBool8ArithmeticTest = WrappersTest<cudf::bool8>;
 
 // These structs enable specializing the underlying type to use in testing
 // comparisons. For example, we specialize cudf::bool8 to map to bool. This
@@ -72,6 +72,9 @@ struct TypeToUse<cudf::detail::wrapper<T, dtype>>{
 template <typename T>
 using WrappersNoBoolTest = WrappersTest<T>;
 
+template <typename T>
+using WrappersBoolTest = WrappersTest<T>;
+
 using WrappersNoBool = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
                                         cudf::date64>;
 
@@ -80,6 +83,7 @@ using Wrappers = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
 
 TYPED_TEST_CASE(WrappersTest, Wrappers);
 TYPED_TEST_CASE(WrappersNoBoolTest, WrappersNoBool);
+TYPED_TEST_CASE(WrappersBoolTest, Wrappers);
 
 /**
  * @brief The number of test trials for each operator
@@ -209,8 +213,8 @@ TYPED_TEST(WrappersNoBoolTest, BooleanOperators)
 }
 
 // Ensure bool8 constructor is correctly casting the input type to a bool
-TEST_F(WrappersTestBool8, BooleanConstructor) {
-  using UnderlyingType = cudf::bool8::value_type;
+TYPED_TEST(WrappersBoolTest, BooleanConstructor) {
+  using UnderlyingType = typename TypeToUse<TypeParam>::type;
   for (int i = 0; i < NUM_TRIALS; ++i) {
     UnderlyingType t{this->rand()};
     cudf::bool8 const w{t};
@@ -219,15 +223,19 @@ TEST_F(WrappersTestBool8, BooleanConstructor) {
 }
 
 // Just for booleans
-TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
+TYPED_TEST(WrappersBoolTest, BooleanOperatorsBool8)
 {
+    using UnderlyingType = typename TypeToUse<TypeParam>::type;
     for(int i = 0; i < NUM_TRIALS; ++i)
     {
-        bool const t0{this->rand()};
-        bool const t1{this->rand()};
+        UnderlyingType v0{this->rand()};
+        UnderlyingType v1{this->rand()};
+        
+        bool const t0{v0};
+        bool const t1{v1};
 
-        cudf::bool8 const w0{t0};
-        cudf::bool8 const w1{t1};
+        cudf::bool8 const w0{v0};
+        cudf::bool8 const w1{v1};
 
         EXPECT_EQ(t0 > t1, w0 > w1);
         EXPECT_EQ(t0 < t1, w0 < w1);
@@ -280,7 +288,7 @@ TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
 // This ensures that casting cudf::bool8 to int, doing arithmetic, and casting
 // the result to bool results in the right answer. If the arithmetic is done
 // on random underlying values you can get the wrong answer.
-TEST_F(WrappersTestBool8, CastArithmeticTest)
+TEST_F(WrappersTestBool8ArithmeticTest, CastArithmeticTest)
 {
     cudf::bool8 w1{42};
     cudf::bool8 w2{static_cast<char>(-42)};
