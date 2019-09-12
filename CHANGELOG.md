@@ -9,12 +9,15 @@
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
 - PR #2559 Add Series.tolist()
 - PR #2653 Add Java bindings for rolling window operations
+- PR #2480 Merge `custreamz` codebase into `cudf` repo
 - PR #2674 Add __contains__ for Index/Series/Column
+- PR #2635 Add support to read from remote and cloud sources like s3, gcs, hdfs
 - PR #2722 Add Java bindings for NVTX ranges
 - PR #2702 Add make_bool to dataset generation functions
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 
 ## Improvements
 
@@ -24,6 +27,7 @@
 - PR #2648 Cython/Python reorg
 - PR #2588 Update Series.append documentation
 - PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2682 Add cudf.set_allocator() function for easier allocator init
 - PR #2642 Improve null printing and testing
 - PR #2747 Add missing Cython headers / cudftestutil lib to conda package for cuspatial build
 - PR #2706 Compute CSV format in device code to speedup performance
@@ -31,6 +35,9 @@
 - PR #2703 move dask serialization dispatch into cudf
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
+- PR #2766 Improve nvstrings python cmake flexibility
+- PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
+- PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2645 libcudf unique_count for Series.nunique 
 
 ## Bug Fixes
@@ -64,6 +71,12 @@
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 - PR #2753 Fix java quantile API calls
+- PR #2762 Fix validity processing for time in java
+- PR #2769 Fix link to API docs in README.md
+- PR #2772 Handle multiindex pandas Series #2772
+- PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
+- PR #2752 CSV Reader: Fix exception when there's no rows to process
+- PR #2716 Added Exception for `StringMethods` in string methods
 
 
 # cuDF 0.9.0 (21 Aug 2019)

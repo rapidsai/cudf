@@ -30,6 +30,9 @@
 #include <numeric>
 #include <string>
 #include <vector>
+#include <tuple>
+#include <utility>
+#include <iterator>
 #include <memory>
 #include <unordered_map>
 #include <cstring>
@@ -54,6 +57,7 @@
 #include "datetime_parser.cuh"
 
 #include <cudf/cudf.h>
+#include <cudf/unary.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/trie.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
@@ -111,16 +115,21 @@ namespace csv {
  *
  * @return std::pair<gdf_dtype, column_parse::flags> Tuple of dtype and flags
  */
-std::pair<gdf_dtype, column_parse::flags> get_dtype_info(
+std::tuple<gdf_dtype, gdf_dtype_extra_info, column_parse::flags> get_dtype_info(
     const std::string &dtype) {
+
   if (dtype == "hex" || dtype == "hex64") {
-    return std::make_pair(GDF_INT64, column_parse::as_hexadecimal);
+    return std::make_tuple(GDF_INT64, gdf_dtype_extra_info{ TIME_UNIT_NONE }, column_parse::as_hexadecimal);
   }
   if (dtype == "hex32") {
-    return std::make_pair(GDF_INT32, column_parse::as_hexadecimal);
+    return std::make_tuple(GDF_INT32, gdf_dtype_extra_info{ TIME_UNIT_NONE }, column_parse::as_hexadecimal);
   }
 
-  return std::make_pair(convertStringToDtype(dtype), column_parse::as_default);
+  gdf_dtype out_dtype;
+  gdf_dtype_extra_info out_info{};
+  std::tie(out_dtype, out_info) = convertStringToDtype(dtype);
+
+  return std::make_tuple(out_dtype, out_info, column_parse::as_default);
 }
 
 /**
@@ -155,10 +164,14 @@ void reader::Impl::setColumnNamesFromCsv() {
 		// If file only contains one row, recStart[1] is not valid
 		if (num_records > 1) {
 			CUDA_TRY(cudaMemcpy(&first_row_len, recStart.data() + 1, sizeof(uint64_t), cudaMemcpyDefault));
-		}
-		else {
-			// File has one row - use the file size for the row size
+		} else {
+			// There is a single row, so use source data size
 			first_row_len = num_bytes / sizeof(char);
+
+			// If there is only a single character then it would be the terminator
+			if (first_row_len <= 1) {
+				return;
+			}
 		}
 		first_row.resize(first_row_len);
 		CUDA_TRY(cudaMemcpy(first_row.data(), data.data(), first_row_len * sizeof(char), cudaMemcpyDefault));
@@ -517,18 +530,21 @@ table reader::Impl::read()
     }
   }
 
-  const std::vector<gdf_dtype> dtypes = gather_column_dtypes();
+  // Return empty table rather than exception if nothing to load
+  if (num_active_cols == 0) {
+    return cudf::table{};
+  }
+
+  std::vector<gdf_dtype> dtypes{};
+  std::vector<gdf_dtype_extra_info> dtypes_extra_info{};
+  std::tie(dtypes, dtypes_extra_info) = gather_column_dtypes();
 
   // Alloc output; columns' data memory is still expected for empty dataframe
   std::vector<gdf_column_wrapper> columns;
   for (int col = 0, active_col = 0; col < num_actual_cols; ++col) {
     if (h_column_flags[col] & column_parse::enabled) {
-      auto time_unit = TIME_UNIT_NONE;
-      if (dtypes[active_col] == GDF_DATE64 || dtypes[active_col] == GDF_TIMESTAMP) {
-        time_unit = TIME_UNIT_ms;
-      }
       columns.emplace_back(num_records, dtypes[active_col],
-                           gdf_dtype_extra_info{time_unit},
+                           dtypes_extra_info[active_col],
                            col_names[col]);
       columns.back().allocate();
       active_col++;
@@ -566,7 +582,32 @@ table reader::Impl::read()
 
   // Transfer ownership to raw pointer output arguments
   std::vector<gdf_column *> out_cols(columns.size());
+
+  auto maybe_cast_datetimes = args_.out_time_unit != TIME_UNIT_NONE;
+
   for (size_t i = 0; i < columns.size(); ++i) {
+    if (maybe_cast_datetimes) {
+
+      auto is_datetime = columns[i]->dtype == GDF_DATE32 ||
+                         columns[i]->dtype == GDF_DATE64 ||
+                         columns[i]->dtype == GDF_TIMESTAMP;
+
+      if (is_datetime && columns[i]->dtype_info.time_unit != args_.out_time_unit) {
+        // Cast the datetime-like column to the desired out_time_unit
+        auto col = columns[i].get();
+        gdf_dtype_extra_info dtype_info{args_.out_time_unit};
+        auto res = cudf::cast(*col, GDF_TIMESTAMP, dtype_info);
+        // Now free the original device memory
+        gdf_column_free(col);
+        // Assign the cast result to the output column
+        col->size = res.size;
+        col->data = res.data;
+        col->valid = res.valid;
+        col->dtype = res.dtype;
+        col->dtype_info = res.dtype_info;
+        col->null_count = res.null_count;
+      }
+    }
     out_cols[i] = columns[i].release();
   }
 
@@ -655,40 +696,44 @@ void reader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp
     num_records = h_rec_starts.size();
   }
 
-  CUDF_EXPECTS(num_records > 0, "No data available for parsing");
+  if (num_records > 0) {
+    const auto start_offset = h_rec_starts.front();
+    const auto end_offset = h_rec_starts.back();
+    num_bytes = end_offset - start_offset;
+    assert(num_bytes <= h_uncomp_size);
+    num_bits = (num_bytes + 63) / 64;
 
-  const auto start_offset = h_rec_starts.front();
-  const auto end_offset = h_rec_starts.back();
-  num_bytes = end_offset - start_offset;
-  assert(num_bytes <= h_uncomp_size);
-  num_bits = (num_bytes + 63) / 64;
+    // Resize and upload the rows of interest
+    recStart.resize(num_records);
+    CUDA_TRY(cudaMemcpy(recStart.data(), h_rec_starts.data(),
+                        sizeof(uint64_t) * num_records,
+                        cudaMemcpyHostToDevice));
 
-  // Resize and upload the rows of interest
-  recStart.resize(num_records);
-  CUDA_TRY(cudaMemcpy(recStart.data(), h_rec_starts.data(),
-                      sizeof(uint64_t) * num_records,
-                      cudaMemcpyDefault));
+    // Upload the raw data that is within the rows of interest
+    data = device_buffer<char>(num_bytes);
+    CUDA_TRY(cudaMemcpy(data.data(), h_uncomp_data + start_offset, num_bytes,
+                        cudaMemcpyHostToDevice));
 
-  // Upload the raw data that is within the rows of interest
-  data = device_buffer<char>(num_bytes);
-  CUDA_TRY(cudaMemcpy(data.data(), h_uncomp_data + start_offset,
-                      num_bytes, cudaMemcpyHostToDevice));
+    // Adjust row start positions to account for the data subcopy
+    thrust::transform(rmm::exec_policy()->on(0), recStart.data(),
+                      recStart.data() + num_records,
+                      thrust::make_constant_iterator(start_offset),
+                      recStart.data(), thrust::minus<uint64_t>());
 
-  // Adjust row start positions to account for the data subcopy
-  thrust::transform(rmm::exec_policy()->on(0), recStart.data(),
-                    recStart.data() + num_records,
-                    thrust::make_constant_iterator(start_offset),
-                    recStart.data(), thrust::minus<uint64_t>());
-
-  // The array of row offsets includes EOF
-  // reduce the number of records by one to exclude it from the row count
-  num_records--;
+    // The array of row offsets includes EOF
+    // reduce the number of records by one to exclude it from the row count
+    num_records--;
+  }
 }
 
-std::vector<gdf_dtype> reader::Impl::gather_column_dtypes() {
+std::pair<std::vector<gdf_dtype>, std::vector<gdf_dtype_extra_info>> reader::Impl::gather_column_dtypes() {
+
   std::vector<gdf_dtype> dtypes;
+  std::vector<gdf_dtype_extra_info> dtypes_extra_info;
 
   if (args_.dtype.empty()) {
+    // If no input dtypes, default to info with TIME_UNIT_NONE
+    dtypes_extra_info = vector<gdf_dtype_extra_info>(num_active_cols, gdf_dtype_extra_info{ TIME_UNIT_NONE });
     if (num_records == 0) {
       dtypes.resize(num_active_cols, GDF_STRING);
     } else {
@@ -740,21 +785,29 @@ std::vector<gdf_dtype> reader::Impl::gather_column_dtypes() {
     if (!is_dict) {
       if (args_.dtype.size() == 1) {
         // If it's a single dtype, assign that dtype to all active columns
-        const auto dtype_info = get_dtype_info(args_.dtype[0]);
-        dtypes.resize(num_active_cols, dtype_info.first);
+        gdf_dtype dtype_;
+        gdf_dtype_extra_info dtype_info_;
+        column_parse::flags col_flags_;
+        std::tie(dtype_, dtype_info_, col_flags_) = get_dtype_info(args_.dtype[0]);
+        dtypes.resize(num_active_cols, dtype_);
+        dtypes_extra_info.resize(num_active_cols, dtype_info_);
         for (int col = 0; col < num_actual_cols; col++) {
-          h_column_flags[col] |= dtype_info.second;
+          h_column_flags[col] |= col_flags_;
         }
         CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
       } else {
         // If it's a list, assign dtypes to active columns in the given order
         CUDF_EXPECTS(static_cast<int>(args_.dtype.size()) >= num_actual_cols,
                      "Must specify data types for all columns");
+
+        auto dtype_ = std::back_inserter(dtypes);
+        auto dtype_info_ = std::back_inserter(dtypes_extra_info);
+
         for (int col = 0; col < num_actual_cols; col++) {
           if (h_column_flags[col] & column_parse::enabled) {
-            const auto dtype_info = get_dtype_info(args_.dtype[col]);
-            dtypes.push_back(dtype_info.first);
-            h_column_flags[col] |= dtype_info.second;
+            column_parse::flags col_flags_;
+            std::tie(dtype_, dtype_info_, col_flags_) = get_dtype_info(args_.dtype[col]);
+            h_column_flags[col] |= col_flags_;
             CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
           }
         }
@@ -770,20 +823,23 @@ std::vector<gdf_dtype> reader::Impl::gather_column_dtypes() {
         col_type_map[name] = dtype;
       }
 
+      auto dtype_ = std::back_inserter(dtypes);
+      auto dtype_info_ = std::back_inserter(dtypes_extra_info);
+
       for (int col = 0; col < num_actual_cols; col++) {
         if (h_column_flags[col] & column_parse::enabled) {
           CUDF_EXPECTS(col_type_map.find(col_names[col]) != col_type_map.end(),
                        "Must specify data types for all active columns");
-          const auto dtype_info = get_dtype_info(col_type_map[col_names[col]]);
-          dtypes.push_back(dtype_info.first);
-          h_column_flags[col] |= dtype_info.second;
+          column_parse::flags col_flags_;
+          std::tie(dtype_, dtype_info_, col_flags_) = get_dtype_info(col_type_map[col_names[col]]);
+          h_column_flags[col] |= col_flags_;
           CUDF_EXPECTS(dtypes.back() != GDF_invalid, "Unsupported data type");
         }
       }
     }
   }
 
-  return dtypes;
+  return std::make_pair(dtypes, dtypes_extra_info);
 }
 
 void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
