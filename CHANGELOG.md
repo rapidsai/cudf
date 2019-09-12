@@ -57,6 +57,7 @@
 - PR #2738 Fix java to find new NVStrings locations
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
+- PR #2787 Fix Broadcasting `None` to `cudf-series`
 
 
 # cuDF 0.9.0 (21 Aug 2019)
