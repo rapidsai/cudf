@@ -18,6 +18,7 @@
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
+- PR #2785 Add nvstrings Python docs
 
 ## Improvements
 
@@ -38,6 +39,7 @@
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
+- PR #2645 libcudf unique_count for Series.nunique 
 
 ## Bug Fixes
 
