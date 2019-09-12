@@ -455,15 +455,6 @@ gpuInitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns)
 }
 
 
-struct compact_state_s
-{
-    uint32_t *stripe_data;
-    StripeDictionary stripe;
-    DictionaryChunk chunk;
-    volatile uint32_t scratch_red[32];
-};
-
-
 /**
  * @brief In-place concatenate dictionary data for all chunks in each stripe
  *
@@ -476,12 +467,13 @@ struct compact_state_s
 extern "C" __global__ void __launch_bounds__(1024)
 gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, uint32_t num_columns)
 {
-    __shared__ __align__(16) compact_state_s state_g;
+    __shared__ __align__(16) StripeDictionary stripe_g;
+    __shared__ __align__(16) DictionaryChunk chunk_g;
+    __shared__ const uint32_t* volatile ck_curptr_g;
+    __shared__ uint32_t volatile ck_curlen_g;
 
-    volatile compact_state_s * const s = &state_g;
-    uint32_t chunk_id = blockIdx.x;
-    uint32_t col_id = blockIdx.y;
-    uint32_t stripe_id = blockIdx.z;
+    uint32_t col_id = blockIdx.x;
+    uint32_t stripe_id = blockIdx.y;
     uint32_t chunk_len;
     int t = threadIdx.x;
     const uint32_t *src;
@@ -489,48 +481,39 @@ gpuCompactChunkDictionaries(StripeDictionary *stripes, DictionaryChunk *chunks, 
 
     if (t < sizeof(StripeDictionary) / sizeof(uint32_t))
     {
-        ((volatile uint32_t *)&s->stripe)[t] = ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
+        ((volatile uint32_t *)&stripe_g)[t] = ((const uint32_t *)&stripes[stripe_id * num_columns + col_id])[t];
     }
     __syncthreads();
-    if (chunk_id >= s->stripe.num_chunks || !s->stripe.dict_data)
-    {
-        return;
-    }
     if (t < sizeof(DictionaryChunk) / sizeof(uint32_t))
     {
-        ((volatile uint32_t *)&s->chunk)[t] = ((const uint32_t *)&chunks[(s->stripe.start_chunk + chunk_id) * num_columns + col_id])[t];
-    }
-    chunk_len = (t < chunk_id) ? chunks[(s->stripe.start_chunk + t) * num_columns + col_id].num_dict_strings : 0;
-    if (chunk_id != 0)
-    {
-        WARP_REDUCE_SUM_32(chunk_len);
-        if (!(t & 0x1f))
-            s->scratch_red[t >> 5] = chunk_len;
-        __syncthreads();
-        if (t < 32)
-        {
-            chunk_len = s->scratch_red[t];
-            WARP_REDUCE_SUM_32(chunk_len);
-        }
-    }
-    if (!t)
-    {
-        s->stripe_data = s->stripe.dict_data + chunk_len;
+        ((volatile uint32_t *)&chunk_g)[t] = ((const uint32_t *)&chunks[stripe_g.start_chunk * num_columns + col_id])[t];
     }
     __syncthreads();
-    chunk_len = s->chunk.num_dict_strings;
-    src = s->chunk.dict_data;
-    dst = s->stripe_data;
-    if (src != dst)
+    dst = stripe_g.dict_data + chunk_g.num_dict_strings;
+    for (uint32_t g = 1; g < stripe_g.num_chunks; g++)
     {
-        for (uint32_t i = 0; i < chunk_len; i += 1024)
+        if (!t)
         {
-            uint32_t idx = (i + t < chunk_len) ? src[i + t] : 0;
-            __syncthreads();
-            if (i + t < chunk_len)
-                dst[i + t] = idx;
-            __syncthreads();
+            src = chunks[(stripe_g.start_chunk + g) * num_columns + col_id].dict_data;
+            chunk_len = chunks[(stripe_g.start_chunk + g) * num_columns + col_id].num_dict_strings;
+            ck_curptr_g = src;
+            ck_curlen_g = chunk_len;
         }
+        __syncthreads();
+        src = ck_curptr_g;
+        chunk_len = ck_curlen_g;
+        if (src != dst)
+        {
+            for (uint32_t i = 0; i < chunk_len; i += 1024)
+            {
+                uint32_t idx = (i + t < chunk_len) ? src[i + t] : 0;
+                __syncthreads();
+                if (i + t < chunk_len)
+                    dst[i + t] = idx;
+            }
+        }
+        dst += chunk_len;
+        __syncthreads();
     }
 }
 
@@ -675,18 +658,16 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
- * @param[in] max_chunks_in_stripe Maximum number of rowgroups per stripe
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t BuildStripeDictionaries(StripeDictionary *stripes, StripeDictionary *stripes_host, DictionaryChunk *chunks,
-                                    uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, uint32_t max_chunks_in_stripe, cudaStream_t stream)
+                                    uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, cudaStream_t stream)
 {
     dim3 dim_block(1024, 1); // 1024 threads per chunk
-    dim3 dim_grid_compact(max_chunks_in_stripe, num_columns, num_stripes);
     dim3 dim_grid_build(num_columns, num_stripes);
-    gpuCompactChunkDictionaries <<< dim_grid_compact, dim_block, 0, stream >>>(stripes, chunks, num_columns);
+    gpuCompactChunkDictionaries <<< dim_grid_build, dim_block, 0, stream >>>(stripes, chunks, num_columns);
     for (uint32_t i = 0; i < num_stripes * num_columns; i++)
     {
         if (stripes_host[i].dict_data != nullptr)

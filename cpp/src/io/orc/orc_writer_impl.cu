@@ -263,7 +263,6 @@ void writer::Impl::write(const cudf::table& table) {
     hostdevice_vector<gpu::StripeDictionary> stripe_dict(num_stripe_dict);
     if (num_dict_chunks != 0)
     {
-        uint32_t max_chunks_in_stripe = 1;
         for (size_t i = 0; i < num_string_columns; i++)
         {
             size_t direct_cost = 0, dictionary_cost = 0;
@@ -286,7 +285,6 @@ void writer::Impl::write(const cudf::table& table) {
                 }
                 dictionary_cost += sd->num_strings;
                 sd->dict_char_count = 0;
-                max_chunks_in_stripe = std::max(max_chunks_in_stripe, num_chunks);
                 g += num_chunks;
             }
             // Early decision to disable dictionary if it doesn't look good at the chunk level
@@ -302,7 +300,7 @@ void writer::Impl::write(const cudf::table& table) {
         CUDA_TRY(BuildStripeDictionaries(
             stripe_dict.device_ptr(), stripe_dict.host_ptr(), dict.device_ptr(),
             (uint32_t)num_stripes, (uint32_t)num_rowgroups,
-            (uint32_t)num_string_columns, max_chunks_in_stripe));
+            (uint32_t)num_string_columns));
         CUDA_TRY(
             cudaMemcpyAsync(stripe_dict.host_ptr(), stripe_dict.device_ptr(),
                             stripe_dict.memory_size(), cudaMemcpyDeviceToHost));
@@ -339,7 +337,7 @@ void writer::Impl::write(const cudf::table& table) {
             break;
         case FLOAT:
             // Pass through if no nulls (no RLE encoding for floating point)
-            data_stream_size = (columns[i]->null_count) ? ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 4 + 2) : -1;
+            data_stream_size = (columns[i]->null_count) ? ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 4 + 2) : INT64_C(-1);
             break;
         case INT:
         case DATE:
@@ -348,7 +346,7 @@ void writer::Impl::write(const cudf::table& table) {
             break;
         case DOUBLE:
             // Pass through if no nulls (no RLE encoding for floating point)
-            data_stream_size = (columns[i]->null_count) ? ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 8 + 2) : -1;
+            data_stream_size = (columns[i]->null_count) ? ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 8 + 2) : INT64_C(-1);
             break;
         case LONG:
             data_stream_size = ((ff.rowIndexStride + 0x1ff) >> 9) * (512 * 8 + 2);

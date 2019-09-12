@@ -296,13 +296,12 @@ cudaError_t InitDictionaryIndices(DictionaryChunk *chunks, uint32_t num_columns,
  * @param[in] num_stripes Number of stripes
  * @param[in] num_rowgroups Number of row groups
  * @param[in] num_columns Number of columns
- * @param[in] max_chunks_in_stripe Maximum number of rowgroups per stripe
  * @param[in] stream CUDA stream to use, default 0
  *
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t BuildStripeDictionaries(StripeDictionary *stripes_dev, StripeDictionary *stripes_host, DictionaryChunk *chunks,
-                                    uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, uint32_t max_chunks_in_stripe, cudaStream_t stream = (cudaStream_t)0);
+                                    uint32_t num_stripes, uint32_t num_rowgroups, uint32_t num_columns, cudaStream_t stream = (cudaStream_t)0);
 
 } // namespace gpu
 } // namespace orc
