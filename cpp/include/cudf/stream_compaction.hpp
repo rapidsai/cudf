@@ -144,14 +144,14 @@ cudf::table drop_duplicates(const cudf::table& input_table,
  *
  * Given an input column, number of unique elements in this column is returned
  * 
- * @param[in] input_column The column whose unique elements will be counted.
- * @param[in] dropna flag to ignore `NaN` & `null` in unique count if true.
- * @param[in] nan_as_null flag to consider `NaN==null` if true.
+ * @param[in] input_column  The column whose unique elements will be counted.
+ * @param[in] ignore_nulls  flag to ignore `NaN` & `null` in unique count if true.
+ * @param[in] nan_as_null   flag to consider `NaN==null` if true.
  *
  * @return number of unique elements
  */
 gdf_size_type unique_count(gdf_column const& input_column,
-                           bool const dropna,
+                           bool const ignore_nulls,
                            bool const nan_as_null);
 }  // namespace cudf
 

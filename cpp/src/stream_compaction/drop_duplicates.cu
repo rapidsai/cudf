@@ -237,7 +237,7 @@ rows in input table should be equal to number of rows in key colums table");
 }
 
 gdf_size_type unique_count(gdf_column const& input_column,
-                           bool const dropna,
+                           bool const ignore_nulls,
                            bool const nan_as_null)
 {
   if (0 == input_column.size || input_column.null_count == input_column.size) {
@@ -258,11 +258,11 @@ gdf_size_type unique_count(gdf_column const& input_column,
     bit_mask::destroy_bit_mask(reinterpret_cast<bit_mask::bit_mask_t*>(col.valid));
 
   //TODO: remove after NaN support to equality operator is added
-  if (not nan_as_null and 
-     has_nans)
+  // if nan is counted as null when null is already present.
+  if (not nan_as_null and has_nans and cudf::has_nulls(input_column))
     ++count;
 
-  if (dropna and cudf::has_nulls(input_column))
+  if (ignore_nulls and cudf::has_nulls(input_column))
     return --count;
   else
     return count;
