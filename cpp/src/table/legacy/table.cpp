@@ -27,6 +27,7 @@
 namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
+  CUDF_EXPECTS(_columns.size() != 0, "Cannot construct table with zero columns");
   std::for_each(_columns.begin(), _columns.end(),
                 [this](gdf_column* col) {
                   CUDF_EXPECTS(nullptr != col, "Null input column");
