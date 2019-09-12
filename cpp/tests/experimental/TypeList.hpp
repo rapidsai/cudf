@@ -11,8 +11,7 @@
 #ifndef NV_VPI_TEST_UTIL_TYPELIST_HPP
 #define NV_VPI_TEST_UTIL_TYPELIST_HPP
 
-#include <common/Compiler.hpp>
-#include <common/Size2D.hpp>
+#include "Compiler.hpp"
 #include "GTest.hpp"
 
 namespace util {
@@ -105,32 +104,6 @@ constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
 // Values -----------------------------------------
 
-// NOTE: be aware that gcc-7.x has a bug where V's type will be
-// wrong if the value was already instantiated with another type.
-// gcc-8.0 fixes it. clang-6.0.0 doesn't have this bug.
-// decltype(GetValue<Values<1,3ul,1>>) == 'const int' instead of 'const unsigned long'
-// Ref: https://gcc.gnu.org/bugzilla/show_bug.cgi?id=79092
-// Our WAR involves defining Value without using auto, i.e.
-// Value<class T, T V>, and creating a macro that uses decltype
-// to define 'class T', so that we don't have to write the type
-// ourselves.
-
-#if VPI_GCC_VERSION >= 80000 || VPI_CLANG_VERSION >= 60000
-template<auto V>
-struct ValueImpl
-{
-    static constexpr auto value = V;
-};
-
-template<auto... ARGS>
-struct ValuesImpl
-{
-    using type = Types<ValueImpl<ARGS>...>;
-};
-
-#define Value(V) ValueImpl<V>
-
-#else
 
 template<class T, T V>
 struct ValueImpl
@@ -138,21 +111,18 @@ struct ValueImpl
     static constexpr auto value = V;
 };
 
-#define Value(V) ValueImpl<decltype(V), V>
-
-template<auto... ARGS>
+template<class T, T... ARGS>
 struct ValuesImpl
 {
-    using type = Types<Value(ARGS)...>;
+    using type = Types<ValueImpl<decltype(ARGS), ARGS>...>;
 };
 
-#endif
-
-template<auto... ARGS>
-using Values = typename ValuesImpl<ARGS...>::type;
+template<class T, T... ARGS>
+using Values = typename ValuesImpl<T, ARGS...>::type;
 
 template<class TUPLE, int D>
 constexpr auto GetValue = GetType<TUPLE, D>::value;
+
 
 // Concat -----------------------------------------
 
@@ -196,6 +166,8 @@ struct ConcatImpl<>
 
 template<class... T>
 using Concat = typename ConcatImpl<T...>::type;
+
+/*
 
 // Flatten -----------------------------------------
 
@@ -523,15 +495,6 @@ using Unique = typename UniqueImpl<TYPES>::type;
     using TEST##INSTNAME##_Types = __VA_ARGS__;                 \
     INSTANTIATE_TYPED_TEST_SUITE_P(INSTNAME, TEST, TEST##INSTNAME##_Types)
 
-// With C++17 we still can't have POD as non-type template parameters,
-// so we need this little helper to create a type argument list of
-// sizes. C++20 will support it though.
-template<int W, int H>
-struct Size2D
-{
-    static constexpr nv::vpi::priv::Size2D value = nv::vpi::priv::Size2D{W, H};
-};
-
 // Contains ------------------------------
 // check if value is in util::Values container
 
@@ -539,19 +502,6 @@ template<class T>
 constexpr bool Contains(Types<>, T size)
 {
     return false;
-}
-
-template<int HEAD_W, int... TAIL_W, int HEAD_H, int... TAIL_H>
-constexpr bool Contains(Types<Size2D<HEAD_W, HEAD_H>, Size2D<TAIL_W, TAIL_H>...>, nv::vpi::priv::Size2D size)
-{
-    if (HEAD_W == size.w && HEAD_H == size.h)
-    {
-        return true;
-    }
-    else
-    {
-        return Contains(Types<Size2D<TAIL_W, TAIL_H>...>(), size);
-    }
 }
 
 template<class T, auto HEAD, auto... TAIL>
@@ -566,6 +516,7 @@ constexpr bool Contains(Types<Value(HEAD), Value(TAIL)...>, T needle)
         return Contains(Types<Value(TAIL)...>(), needle);
     }
 }
+*/
 
 } // namespace util
 

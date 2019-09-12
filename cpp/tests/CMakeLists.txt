@@ -459,6 +459,14 @@ set(FACTORIES_TEST_SRC
 
 ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
 
+###################################################################################################
+# - experiment test -----------------------------------------------------------------------------------
+
+set(EXPERIMENTAL_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/experimental/experimental_tests.cpp")
+
+ConfigureTest(EXPERIMENTAL_TEST "${EXPERIMENTAL_TEST_SRC}")
+
 
 
 ###################################################################################################

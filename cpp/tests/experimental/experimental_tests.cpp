@@ -23,7 +23,7 @@
 
 class ExperiementalTest : public ::testing::Test {
 
-}
+};
 
 
 
