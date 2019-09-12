@@ -18,11 +18,13 @@
 
 #include <io/comp/gpuinflate.h>
 #include <cuda_runtime.h>
-#include <nvstrings/NVStrings.h>
+
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <algorithm>
 #include <array>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -698,31 +700,22 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       page_data.clear();
       page_data.push_back(std::move(decomp_page_data));
     }
+
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      column.allocate();
     }
+
     decode_page_data(chunks, pages, chunk_map, skip_rows, num_rows);
+
+    // Perform any final column preparation (may reference decoded data)
+    for (auto &column : columns) {
+      column.finalize();
+    }
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-    }
-  }
-
-  // For string dtype, allocate an NvStrings container instance, deallocating
-  // the original string list memory in the process.
-  // This container takes a list of string pointers and lengths, and copies
-  // into its own memory so the source memory must not be released yet.
-  for (auto &column : columns) {
-    if (column->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
-
-      auto str_list = static_cast<str_pair *>(column->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
-                       &NVStrings::destroy);
-      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
-      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+      column.allocate();
+      column.finalize();
     }
   }
 
@@ -732,7 +725,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     out_cols[i] = columns[i].release();
   }
 
-  return table(out_cols.data(), out_cols.size());
+  return cudf::table(out_cols.data(), out_cols.size());
 }
 
 reader::reader(std::string filepath, reader_options const &options)

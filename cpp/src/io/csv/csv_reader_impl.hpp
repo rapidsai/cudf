@@ -18,6 +18,8 @@
 
 #include <cudf/cudf.h>
 
+#include "csv_common.h"
+
 #include <string>
 #include <vector>
 
@@ -28,18 +30,6 @@
 namespace cudf {
 namespace io {
 namespace csv {
-
-struct column_data_t {
-  gdf_size_type countFloat;
-  gdf_size_type countDateAndTime;
-  gdf_size_type countString;
-  gdf_size_type countBool;
-  gdf_size_type countInt8;
-  gdf_size_type countInt16;
-  gdf_size_type countInt32;
-  gdf_size_type countInt64;
-  gdf_size_type countNULL;
-};
 
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns
@@ -68,7 +58,6 @@ private:
   rmm::device_vector<SerialTrieNode> d_naTrie;    ///< device: serialized trie of NA values
 
   // Intermediate data
-  std::vector<gdf_dtype> dtypes;      ///< Array of dtypes (since gdf_columns are not created until end).
   std::vector<std::string> col_names; ///< Array of column names.
   std::vector<char> header;           ///< Header row data, for parsing column names.
 
@@ -78,15 +67,6 @@ private:
   gdf_size_type nrows = -1;     ///< Number of rows to read. -1 for all rows.
   gdf_size_type skiprows = 0;   ///< Number of rows to skip from the start.
   gdf_size_type skipfooter = 0; ///< Number of rows to skip from the end.
-
-
-  void setColumnNamesFromCsv();
-  void countRecordsAndQuotes(const char *h_data, size_t h_size);
-  void setRecordStarts(const char *h_data, size_t h_size);
-  void uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size);
-
-  void launch_dataConvertColumns(void **d_gdf, gdf_valid_type **valid, gdf_dtype *d_dtypes, gdf_size_type *num_valid);
-  void launch_dataTypeDetection(column_data_t *d_columnData);
 
 public:
   /**---------------------------------------------------------------------------*
@@ -129,8 +109,28 @@ public:
   table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows);
 
   auto getArgs() const { return args_; }
+
+ private:
+  void setColumnNamesFromCsv();
+  void countRecordsAndQuotes(const char *h_data, size_t h_size);
+  void setRecordStarts(const char *h_data, size_t h_size);
+  void uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size);
+
+  /**
+   * @brief Returns a detected or parsed list of column dtypes
+   *
+   * @return std::vector<gdf_dtype> List of column dtypes
+   **/
+  std::pair<std::vector<gdf_dtype>, std::vector<gdf_dtype_extra_info>> gather_column_dtypes();
+
+  /**
+   * @brief Converts the row-column data and outputs to gdf_columns
+   *
+   * @param[in,out] columns List of gdf_columns
+   **/
+  void decode_data(const std::vector<gdf_column_wrapper> &columns);
 };
 
-} // namespace csv
-} // namespace io
-} // namespace cudf
+}  // namespace csv
+}  // namespace io
+}  // namespace cudf

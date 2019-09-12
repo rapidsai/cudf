@@ -117,7 +117,6 @@ def parquet_path_or_buf(datadir):
 
 
 @pytest.mark.filterwarnings("ignore:Using CPU")
-@pytest.mark.filterwarnings("ignore:Strings are not yet supported")
 @pytest.mark.parametrize("engine", ["pyarrow", "cudf"])
 @pytest.mark.parametrize(
     "columns",
@@ -147,12 +146,15 @@ def test_parquet_reader_basic(parquet_file, columns, engine):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.parametrize("has_null", [False, True])
 @pytest.mark.parametrize("strings_to_categorical", [False, True, None])
-def test_parquet_reader_strings(tmpdir, strings_to_categorical):
+def test_parquet_reader_strings(tmpdir, strings_to_categorical, has_null):
     df = pd.DataFrame(
         [(1, "aaa", 9.0), (2, "bbb", 8.0), (3, "ccc", 7.0)],
         columns=pd.Index(list("abc")),
     )
+    if has_null:
+        df.at[1, "b"] = None
     fname = tmpdir.join("test_pq_reader_strings.parquet")
     df.to_parquet(fname)
     assert os.path.exists(fname)
@@ -165,7 +167,10 @@ def test_parquet_reader_strings(tmpdir, strings_to_categorical):
         gdf = cudf.read_parquet(fname, engine="cudf")
 
     if strings_to_categorical:
-        hash_ref = [989983842, 429364346, 1169108191]
+        if has_null:
+            hash_ref = [989983842, None, 1169108191]
+        else:
+            hash_ref = [989983842, 429364346, 1169108191]
         assert gdf["b"].dtype == np.dtype("int32")
         assert list(gdf["b"]) == list(hash_ref)
     else:
