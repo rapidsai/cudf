@@ -708,7 +708,7 @@ class Column(object):
         """
         from cudf.core.column import column_empty_like
 
-        indices = Buffer(indices).to_gpu_array()
+        indices = Buffer(indices)
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
