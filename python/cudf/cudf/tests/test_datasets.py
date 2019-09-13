@@ -1,3 +1,4 @@
+import numpy as np
 import pandas as pd
 
 import cudf as gd
@@ -43,3 +44,12 @@ def test_dataset_timeseries():
     assert gdf["a"].head().dtype == int
     assert gdf["b"].head().dtype == float
     assert len(gdf) == 20
+
+
+def test_make_bool():
+    n = 10
+    state = np.random.RandomState(12)
+    arr = gd.datasets.make_bool(n, state)
+    assert np.alltrue(np.isin(arr, [True, False]))
+    assert arr.size == n
+    assert arr.dtype == bool

@@ -35,6 +35,7 @@ from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     cudf_dtype_from_pydata_dtype,
     is_categorical_dtype,
+    is_datetime_dtype,
     is_list_like,
     is_scalar,
 )
@@ -563,7 +564,11 @@ class DataFrame(object):
             )
         temp_mi_columns = output.columns
         for col in output._cols:
-            if self._cols[col].null_count > 0:
+            if (
+                self._cols[col].null_count > 0
+                and not self._cols[col].dtype == "O"
+                and not is_datetime_dtype(self._cols[col].dtype)
+            ):
                 output[col] = (
                     output._cols[col].astype("str").str.fillna("null")
                 )
@@ -575,7 +580,14 @@ class DataFrame(object):
 
     def __repr__(self):
         output = self.get_renderable_dataframe()
-        lines = output.to_pandas().__repr__().split("\n")
+        # the below is permissible: null in a datetime to_pandas() becomes
+        # NaT, which is then replaced with null in this processing step.
+        # It is not possible to have a mix of nulls and NaTs in datetime
+        # columns because we do not support NaT - pyarrow as_column
+        # preprocessing converts NaT input values from numpy or pandas into
+        # null.
+        output = output.to_pandas().__repr__().replace(" NaT", "null")
+        lines = output.split("\n")
         if lines[-1].startswith("["):
             lines = lines[:-1]
             lines.append(
@@ -1686,12 +1698,9 @@ class DataFrame(object):
 
     @classmethod
     def _concat(cls, objs, axis=0, ignore_index=False):
-        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
-        if len(set(frozenset(o.columns) for o in objs)) != 1:
-            what = set(frozenset(o.columns) for o in objs)
-            raise ValueError("columns mismatch: {}".format(what))
 
-        objs = [o for o in objs]
+        libcudf.nvtx.nvtx_range_push("CUDF_CONCAT", "orange")
+
         if ignore_index:
             index = RangeIndex(sum(map(len, objs)))
         elif isinstance(objs[0].index, cudf.core.multiindex.MultiIndex):
@@ -1700,9 +1709,29 @@ class DataFrame(object):
             )
         else:
             index = Index._concat([o.index for o in objs])
+
+        # Currently we only support sort = False
+        # Change below when we want to support sort = True
+        # below functions as an ordered set
+        all_columns_ls = [col for o in objs for col in o.columns]
+        unique_columns_ordered_ls = OrderedDict.fromkeys(all_columns_ls).keys()
+
+        # Concatenate cudf.series for all columns
+
         data = [
-            (c, Series._concat([o[c] for o in objs], index=index))
-            for c in objs[0].columns
+            (
+                c,
+                Series._concat(
+                    [
+                        o[c]
+                        if c in o.columns
+                        else utils.get_null_series(size=len(o), dtype=np.bool)
+                        for o in objs
+                    ],
+                    index=index,
+                ),
+            )
+            for c in unique_columns_ordered_ls
         ]
         out = cls(data)
         out._index = index
@@ -2642,7 +2671,15 @@ class DataFrame(object):
         return result
 
     @applyutils.doc_apply()
-    def apply_rows(self, func, incols, outcols, kwargs, cache_key=None):
+    def apply_rows(
+        self,
+        func,
+        incols,
+        outcols,
+        kwargs,
+        pessimistic_nulls=True,
+        cache_key=None,
+    ):
         """
         Apply a row-wise user defined function.
 
@@ -2693,12 +2730,25 @@ class DataFrame(object):
         2    2    2    2  2.0 -4.0
         """
         return applyutils.apply_rows(
-            self, func, incols, outcols, kwargs, cache_key=cache_key
+            self,
+            func,
+            incols,
+            outcols,
+            kwargs,
+            pessimistic_nulls,
+            cache_key=cache_key,
         )
 
     @applyutils.doc_applychunks()
     def apply_chunks(
-        self, func, incols, outcols, kwargs={}, chunks=None, tpb=1
+        self,
+        func,
+        incols,
+        outcols,
+        kwargs={},
+        pessimistic_nulls=True,
+        chunks=None,
+        tpb=1,
     ):
         """
         Transform user-specified chunks using the user-provided function.
@@ -2743,7 +2793,14 @@ class DataFrame(object):
         if chunks is None:
             raise ValueError("*chunks* must be defined")
         return applyutils.apply_chunks(
-            self, func, incols, outcols, kwargs, chunks=chunks, tpb=tpb
+            self,
+            func,
+            incols,
+            outcols,
+            kwargs,
+            pessimistic_nulls,
+            chunks,
+            tpb=tpb,
         )
 
     def hash_columns(self, columns=None):
@@ -3371,6 +3428,12 @@ class DataFrame(object):
         -------
         numba gpu ndarray
         """
+        warnings.warn(
+            "The to_gpu_matrix method will be deprecated"
+            "in the future. use as_gpu_matrix instead.",
+            DeprecationWarning,
+        )
+        return self.as_gpu_matrix()
 
     def _from_columns(cols, index=None, columns=None):
         """
