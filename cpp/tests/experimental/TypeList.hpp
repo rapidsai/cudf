@@ -83,6 +83,18 @@ struct GetTypeImpl<Types<ARGS...>, 0> {
   using type = typename Types<ARGS...>::Head;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Gives the specified type from a type list
+ * 
+ * Example:
+ * ```
+ * using T = GetType< Types<int, float, char, void*>, 2>
+ * // T == char
+ * ```
+ * 
+ * @tparam TUPLE The type list
+ * @tparam D Index of the desired type
+*---------------------------------------------------------------------------**/
 template <class TUPLE, int D>
 using GetType = typename GetTypeImpl<TUPLE, D>::type;
 
@@ -97,6 +109,14 @@ struct GetSizeImpl<Types<TYPES...>> {
   static constexpr auto value = sizeof...(TYPES);
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Returns the size (number of elements) in a type list
+ * 
+ * Example:
+ * ```
+ * GetSize< Types<int, float, double, void*> == 4
+ * ```
+*---------------------------------------------------------------------------**/
 template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
@@ -127,15 +147,6 @@ template <class TUPLE, int D>
 constexpr auto GetValue = GetType<TUPLE, D>::value;
 
 // Concat -----------------------------------------
-/**---------------------------------------------------------------------------*
- * @brief Concantenates compile-time lists of types into a single type list.
- *
- * Example:
- * ```
- * using MyTypes = Concat< Types<int, float>, Types<char, double>>
- * // MyTypes == Types<int, float, char, double>;
- * ```
- *---------------------------------------------------------------------------**/
 
 namespace detail {
 template <class A, class B>
@@ -171,21 +182,19 @@ struct ConcatImpl<> {
   using type = Types<>;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Concantenates compile-time lists of types into a single type list.
+ *
+ * Example:
+ * ```
+ * using MyTypes = Concat< Types<int, float>, Types<char, double>>
+ * // MyTypes == Types<int, float, char, double>;
+ * ```
+ *---------------------------------------------------------------------------**/
 template <class... T>
 using Concat = typename ConcatImpl<T...>::type;
 
 // Flatten -----------------------------------------
-/**---------------------------------------------------------------------------*
- * @brief Flattens nested compile-time lists of types into a single list of
- *types.
- * 
- * Example:
- * ```
- * // Flatten< Types< int, Types< double, Types<char> > > == Types<int, double, char>
- * static_assert(std::is_same<Flatten<Types<Types<int, Types<double>>, float>>,
- * Types<int, double, float>>::value, "");
- * ```
- *---------------------------------------------------------------------------**/
 template <class T>
 struct FlattenImpl;
 
@@ -204,136 +213,158 @@ struct FlattenImpl<Types<Types<HEAD...>, TAIL...>> {
   using type = typename FlattenImpl<Types<HEAD..., TAIL...>>::type;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Flattens nested compile-time lists of types into a single list of
+ *types.
+ *
+ * Example:
+ * ```
+ * // Flatten< Types< int, Types< double, Types<char> > > == Types<int, double,
+ *char> static_assert(std::is_same<Flatten<Types<Types<int, Types<double>>,
+ *float>>, Types<int, double, float>>::value, "");
+ * ```
+ *---------------------------------------------------------------------------**/
 template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
-
-/*
 // CrossJoin -----------------------------------------
 
 namespace detail {
 // prepend T in TUPLE
-template<class T, class TUPLE>
+template <class T, class TUPLE>
 struct Prepend1;
 
-template<class T, class... ARGS>
-struct Prepend1<T, Types<ARGS...>>
-{
-    using type = Flatten<Types<T, ARGS...>>;
+template <class T, class... ARGS>
+struct Prepend1<T, Types<ARGS...>> {
+  using type = Flatten<Types<T, ARGS...>>;
 };
 
-template<class T, class TUPLES>
+template <class T, class TUPLES>
 struct Prepend;
 
 // Prepend T in all TUPLES
-template<class T, class... TUPLES>
-struct Prepend<T, Types<TUPLES...>>
-{
-    using type = Types<typename Prepend1<T, TUPLES>::type...>;
+template <class T, class... TUPLES>
+struct Prepend<T, Types<TUPLES...>> {
+  using type = Types<typename Prepend1<T, TUPLES>::type...>;
 };
 
 // skip empty tuples
-template<class T, class... TUPLES>
-struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>>
-{
-};
-} // namespace detail
+template <class T, class... TUPLES>
+struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {};
+}  // namespace detail
 
-template<class... ARGS>
+template <class... ARGS>
 struct CrossJoinImpl;
 
-template<>
-struct CrossJoinImpl<>
-{
-    using type = Types<>;
+template <>
+struct CrossJoinImpl<> {
+  using type = Types<>;
 };
 
-template<class... ARGS>
-struct CrossJoinImpl<Types<ARGS...>>
-{
-    using type = Types<Types<ARGS>...>;
+template <class... ARGS>
+struct CrossJoinImpl<Types<ARGS...>> {
+  using type = Types<Types<ARGS>...>;
 };
 
-template<class... AARGS, class... TAIL>
-struct CrossJoinImpl<Types<AARGS...>, TAIL...>
-{
-    using type = Concat<typename detail::Prepend<AARGS, typename
-CrossJoinImpl<TAIL...>::type>::type...>;
+template <class... AARGS, class... TAIL>
+struct CrossJoinImpl<Types<AARGS...>, TAIL...> {
+  using type = Concat<typename detail::Prepend<
+      AARGS, typename CrossJoinImpl<TAIL...>::type>::type...>;
 };
 
 // to make it easy for the user when there's only one element to be joined
-template<class T, class... TAIL>
-struct CrossJoinImpl<T, TAIL...> : CrossJoinImpl<Types<T>, TAIL...>
-{
-};
+template <class T, class... TAIL>
+struct CrossJoinImpl<T, TAIL...> : CrossJoinImpl<Types<T>, TAIL...> {};
 
-template<class... ARGS>
+/**---------------------------------------------------------------------------*
+ * @brief Creates a new type list from the cross product (cartesian product) of
+ * two type lists.
+ *
+ * Example:
+ * ```
+ * using Types = CrossJoin<Types<int,float>, Types<char, double>>;
+ * // Types == Types< Types<int, char>, Types<int, double>, Types<float, char>,
+ * Types<float, double> >
+ * ```
+ *---------------------------------------------------------------------------**/
+template <class... ARGS>
 using CrossJoin = typename CrossJoinImpl<ARGS...>::type;
 
 // AllSame -----------------------------------------
 
 namespace detail {
-template<class... ITEMS>
-struct AllSame : std::false_type
-{
-};
+template <class... ITEMS>
+struct AllSame : std::false_type {};
 
 // degenerate case
-template<class A>
-struct AllSame<A> : std::true_type
-{
-};
+template <class A>
+struct AllSame<A> : std::true_type {};
 
-template<class A>
-struct AllSame<A, A> : std::true_type
-{
-};
+template <class A>
+struct AllSame<A, A> : std::true_type {};
 
-template<class HEAD, class... TAIL>
-struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...>
-{
-};
+template <class HEAD, class... TAIL>
+struct AllSame<HEAD, HEAD, TAIL...> : AllSame<HEAD, TAIL...> {};
 
-template<class... ITEMS>
-struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...>
-{
-};
+template <class... ITEMS>
+struct AllSame<Types<ITEMS...>> : AllSame<ITEMS...> {};
 
-} // namespace detail
+}  // namespace detail
 
-struct AllSame
-{
-    template<class... ITEMS>
-    using Call = detail::AllSame<ITEMS...>;
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if all types in a list are identical.
+ *
+ * This is useful as a predicate for for `RemoveIf`.
+ *
+ * Example:
+ * ```
+ * // AllSame::Call<Types<int, int, int>> == true_type
+ * // AllSame::Call<Types<float, bool>> == false_type
+ *
+ * // Used as a predicate
+ * RemoveIf<AllSame, Types<Types<int, int, int>>> ==  Types<>
+ * RemoveIf<AllSame, Types<Types<int, float, int>>> ==  Types<Types<int, float,
+ *int>>
+ * ```
+ *---------------------------------------------------------------------------**/
+struct AllSame {
+  template <class... ITEMS>
+  using Call = detail::AllSame<ITEMS...>;
 };
 
 // Exists ---------------------------------
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if a type exists within a type list.
+ *
+ * Example:
+ * ```
+ * // Exists<int, Types<float, double, int>> == true_type
+ * // Exists<char, Types<int, float, void*>> == false_type
+ * ```
+ *
+ *---------------------------------------------------------------------------**/
 
 // Do a linear search to find NEEDLE in HAYSACK
-template<class NEEDLE, class HAYSACK>
+template <class NEEDLE, class HAYSACK>
 struct ExistsImpl;
 
 // end case, no more types to check
-template<class NEEDLE>
-struct ExistsImpl<NEEDLE, Types<>> : std::false_type
-{
-};
+template <class NEEDLE>
+struct ExistsImpl<NEEDLE, Types<>> : std::false_type {};
 
 // next one matches
-template<class NEEDLE, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type
-{
-};
+template <class NEEDLE, class... TAIL>
+struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {};
 
 // next one doesn't match
-template<class NEEDLE, class HEAD, class... TAIL>
-struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>> : ExistsImpl<NEEDLE,
-Types<TAIL...>>
-{
-};
+template <class NEEDLE, class HEAD, class... TAIL>
+struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>>
+    : ExistsImpl<NEEDLE, Types<TAIL...>> {};
 
-template<class NEEDLE, class HAYSACK>
+template <class NEEDLE, class HAYSACK>
 constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
+
+/*
 
 // ContainedIn -----------------------------------------
 
