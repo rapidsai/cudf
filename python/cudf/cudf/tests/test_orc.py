@@ -251,7 +251,7 @@ def test_orc_reader_uncompressed_block(datadir):
                 "double1",
             ],
         ),
-        ("demo-11-none.orc", ["_col1", "_col3"]),
+        ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
     ],
 )
 def test_orc_writer(datadir, tmpdir, reference_file, columns):

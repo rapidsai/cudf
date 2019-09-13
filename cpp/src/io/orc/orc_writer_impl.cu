@@ -183,7 +183,7 @@ void writer::Impl::write(const cudf::table& table) {
             for (int g = 0; g < (int)num_rowgroups; g++)
             {
                 gpu::DictionaryChunk *ck = &dict[g * num_string_columns + i];
-                ck->valid_map_base = reinterpret_cast<const uint32_t *>(col->valid);
+                ck->valid_map_base = (col->null_count != 0) ? reinterpret_cast<const uint32_t *>(col->valid) : nullptr;
                 ck->column_data_base = str_indices[i].data();
                 ck->dict_data = dict_data.data() + i * ff.numberOfRows + g * ff.rowIndexStride;
                 ck->dict_index = dict_index.data() + i * ff.numberOfRows; // Indexed by absolute row
