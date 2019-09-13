@@ -221,24 +221,36 @@ struct column_gatherer {
   }
 };
 
+/**---------------------------------------------------------------------------*
+* @brief Function object for applying a transformation on the gathermap
+* that converts negative indices to positive indices
+*---------------------------------------------------------------------------**/
 template <typename MapType>
-struct index_map : public thrust::unary_function<MapType,MapType>
+struct map_transform : public thrust::unary_function<MapType,MapType>
 {
-  index_map(gdf_size_type source_n_rows) : source_n_rows(source_n_rows){}
+  map_transform(gdf_size_type n_rows, bool transform_negative_indices)
+    : n_rows(n_rows), transform_negative_indices(transform_negative_indices){}
+
   __device__
   MapType operator()(MapType in) const
   {
-    return ((in % source_n_rows) + source_n_rows) % source_n_rows;
+    if (transform_negative_indices)
+      return ((in % n_rows) + n_rows) % n_rows;
+    else
+      return in;
   }
-  gdf_size_type source_n_rows;
+  gdf_size_type n_rows;
+  bool transform_negative_indices;
 };
+
 
 struct dispatch_map_type {
 
   template <typename MapType, std::enable_if_t<std::is_integral<MapType>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column gather_map,
 		  table *destination_table, bool check_bounds,
-		  bool sync_nvstring_category = false) {
+		  bool sync_nvstring_category = false,
+		  bool transform_negative_indices = false) {
 
     auto source_n_cols = source_table->num_columns();
     auto source_n_rows = source_table->num_rows();
@@ -249,7 +261,7 @@ struct dispatch_map_type {
 
     auto gather_map_iterator = thrust::make_transform_iterator(
 	typed_gather_map,
-	index_map<MapType>{source_n_rows});
+	map_transform<MapType>{source_n_rows, transform_negative_indices});
 
     for (gdf_size_type i = 0; i < source_n_cols; i++) {
       // Perform sanity checks
@@ -339,7 +351,8 @@ struct dispatch_map_type {
   template <typename MapType, std::enable_if_t<not std::is_integral<MapType>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column const gather_map,
                   table *destination_table, bool check_bounds,
-                  bool sync_nvstring_category = false) {
+                  bool sync_nvstring_category = false,
+		  bool transform_negative_indices = false) {
    CUDF_FAIL("Gather map must be an integral type.");
   }
 };
@@ -347,7 +360,7 @@ struct dispatch_map_type {
 
 void gather(table const *source_table, gdf_column const gather_map,
             table *destination_table, bool check_bounds,
-            bool sync_nvstring_category) {
+            bool sync_nvstring_category, bool transform_negative_indices) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -364,19 +377,20 @@ void gather(table const *source_table, gdf_column const gather_map,
 
   cudf::type_dispatcher(gather_map.dtype, dispatch_map_type{},
 			source_table, gather_map, destination_table, check_bounds,
-			sync_nvstring_category);
+			sync_nvstring_category, transform_negative_indices);
 }
 
 void gather(table const *source_table, gdf_index_type const gather_map[],
 	    table *destination_table, bool check_bounds,
-	    bool sync_nvstring_category) {
+	    bool sync_nvstring_category, bool transform_negative_indices) {
   gdf_column gather_map_column{};
   gdf_column_view(&gather_map_column,
 		  const_cast<gdf_index_type*>(gather_map),
 		  nullptr,
 		  destination_table->num_rows(),
 		  gdf_dtype_of<gdf_index_type>());
-  gather(source_table, gather_map_column, destination_table, check_bounds, sync_nvstring_category);
+  gather(source_table, gather_map_column, destination_table, check_bounds, sync_nvstring_category,
+	 transform_negative_indices);
 }
 
 
@@ -384,13 +398,13 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
 
 void gather(table const *source_table, gdf_column const gather_map,
 	    table *destination_table) {
-  detail::gather(source_table, gather_map, destination_table, false, false);
+  detail::gather(source_table, gather_map, destination_table, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);
 }
 
 void gather(table const *source_table, gdf_index_type const gather_map[],
 	    table *destination_table) {
-  detail::gather(source_table, gather_map, destination_table, false, false);
+  detail::gather(source_table, gather_map, destination_table, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);
 }
 
