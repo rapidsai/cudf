@@ -73,11 +73,16 @@ class StringMethods(object):
                         )
                     return ret
 
+                wrapper.__doc__ = passed_attr.__doc__
                 return wrapper
             else:
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def __dir__(self):
+        keys = dir(type(self))
+        return set(keys + dir(self._parent._data))
 
     def len(self):
         """
