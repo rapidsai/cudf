@@ -37,24 +37,28 @@ struct editdistance_levenshtein_algorithm
     custring_view** d_tgts;    // or these
     short* d_buffer;           // compute buffer
     size_t* d_offsets;         // locate sub-buffer
+    bool is_matrix;            // indicating True if invoked from edit_distance_matrix
+    unsigned int curr_idx;     // index of current string [only in edit distance matrix]
     unsigned int* d_results;   // edit-distances
 
     // single string
-    editdistance_levenshtein_algorithm( custring_view** strings, custring_view* tgt, short* buffer, size_t* offsets, unsigned int* results )
-    : d_strings(strings), d_tgt(tgt), d_tgts(0), d_buffer(buffer), d_offsets(offsets), d_results(results) {}
+    editdistance_levenshtein_algorithm( custring_view** strings, custring_view* tgt, short* buffer, size_t* offsets, bool is_matrix, unsigned int curr_idx, unsigned int* results )
+    : d_strings(strings), d_tgt(tgt), d_tgts(0), d_buffer(buffer), d_offsets(offsets), is_matrix(is_matrix), curr_idx(curr_idx), d_results(results) {}
 
     // multiple strings
     editdistance_levenshtein_algorithm( custring_view** strings, custring_view** tgts, short* buffer, size_t* offsets, unsigned int* results )
-    : d_strings(strings), d_tgt(0), d_tgts(tgts), d_buffer(buffer), d_offsets(offsets), d_results(results) {}
+    : d_strings(strings), d_tgt(0), d_tgts(tgts), d_buffer(buffer), d_offsets(offsets), is_matrix(false), curr_idx(0), d_results(results) {}
 
     __device__ void operator() (unsigned int idx)
     {
-        custring_view* dstr = d_strings[idx];
-        short* buf = (short*)d_buffer + d_offsets[idx];
-        custring_view* dtgt = d_tgt;
-        if( !d_tgt )
-            dtgt = d_tgts[idx];
-        d_results[idx] = compute_distance(dstr,dtgt,buf);
+        if( !is_matrix || (is_matrix && curr_idx < idx) ){        // only calculate the upper diagonal distance if matrix
+            custring_view* dstr = d_strings[idx];
+            short* buf = (short*)d_buffer + d_offsets[idx];
+            custring_view* dtgt = d_tgt;
+            if( !d_tgt )
+                dtgt = d_tgts[idx];
+            d_results[idx] = compute_distance(dstr,dtgt,buf);
+        }
     }
 
     __device__ unsigned int compute_distance( custring_view* dstr, custring_view* dtgt, short* buf )
@@ -158,7 +162,7 @@ unsigned int NVText::edit_distance( distance_type algo, NVStrings& strs, const c
     thrust::exclusive_scan(execpol->on(0), sizes.begin(), sizes.end(), offsets.begin() );
     // compute edit distance
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        editdistance_levenshtein_algorithm(d_strings, d_target, d_buffer, d_offsets, d_rtn));
+        editdistance_levenshtein_algorithm(d_strings, d_target, d_buffer, d_offsets, false, 0, d_rtn));
     //
     if( !bdevmem )
     {
@@ -272,8 +276,16 @@ unsigned int NVText::edit_distance_matrix( distance_type algo, NVStrings& strs, 
         thrust::exclusive_scan(execpol->on(0), sizes.begin(), sizes.end(), offsets.begin() );
         // compute edit distance
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-            editdistance_levenshtein_algorithm(d_strings, d_target, d_buffer, d_offsets, d_rtn+count*k));
-        //
+            editdistance_levenshtein_algorithm(d_strings, d_target, d_buffer, d_offsets, true, k, d_rtn+count*k));
+
+
+        //populate the lower diagonal
+        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count*count,
+            [d_rtn, k, count] __device__(unsigned int idx){
+            if(k < idx){
+                    d_rtn[idx*count + k] = d_rtn[k*count + idx]
+                }
+            });
 
     }
     if( !bdevmem )
