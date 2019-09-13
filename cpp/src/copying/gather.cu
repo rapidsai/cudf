@@ -396,6 +396,15 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
 
 } // namespace detail
 
+table gather(table const *source_table, gdf_column const gather_map) {
+  table destination_table = cudf::allocate_like(*source_table,
+						gather_map.size);
+  detail::gather(source_table, gather_map, &destination_table,
+		 false, false, true);
+  nvcategory_gather_table(*source_table, destination_table);
+  return destination_table;
+}
+
 void gather(table const *source_table, gdf_column const gather_map,
 	    table *destination_table) {
   detail::gather(source_table, gather_map, destination_table, false, false, true);

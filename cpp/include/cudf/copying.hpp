@@ -257,6 +257,8 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 void gather(table const* source_table, gdf_column const gather_map,
 	    table* destination_table);
 
+table gather(table const* source_table, gdf_column const gather_map);
+
 /**
  * @brief Slices a column (including null values) into a set of columns
  * according to a set of indices.
