@@ -77,14 +77,15 @@ struct target_type<SourceType, SUM,
   using type = int64_t;
 };
 
-// Always use `double` for MEDIAN. It is because it involves 
-// division ((a+b)/2) for cases where the number of rows is even.  
-template <typename SourceType>
-struct target_type<SourceType, MEDIAN> { using type = double; };
-
-// Always use `double` for QUANTILES 
+// Always use `double` for quantile 
 template <typename SourceType>
 struct target_type<SourceType, QUANTILE> { using type = double; };
+
+// MEDIAN is Just and special case of a QUANTILE  
+template <typename SourceType>
+struct target_type<SourceType, MEDIAN> {
+   using type = target_type<SourceType, QUANTILE>; 
+};
 
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>

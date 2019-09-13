@@ -54,17 +54,29 @@ using AggRequestType = std::pair<gdf_column*, operators>;
 using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
 
 
-static constexpr std::array<operators, 4> simple_agg_list = {SUM, MIN, MAX, COUNT};
+static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
 
-static constexpr std::array<operators, 2> complex_agg_list = {MEDIAN, QUANTILE};
+static constexpr std::array<operators, 2> complex_aggregations = {MEDIAN, QUANTILE};
 
-inline bool is_simple_agg(operators op) {
-  return std::any_of(simple_agg_list.begin(), simple_agg_list.end(),
+
+/**---------------------------------------------------------------------------*
+ * @brief  To verify that the input operator is part of simple_aggregations list.
+ * Note that in this kind of aggregators can be computed in a single pass scan.
+ * In the other hand compound aggregation like AVG need to be computed by simple
+ * ones (SUM and COUNT).
+ *---------------------------------------------------------------------------**/
+inline bool is_simple(operators op) {
+  return std::any_of(simple_aggregations.begin(), simple_aggregations.end(),
                      [&](operators test) { return test == op; });
 }
 
-inline bool is_complex_agg(operators op) {
-  return std::any_of(complex_agg_list.begin(), complex_agg_list.end(),
+/**---------------------------------------------------------------------------*
+ * @brief  To verify that the input operator is part of  complex_aggregations list.
+ * Complex aggregation is used to identify other ones like MEDIUM and  QUANTILE,
+ * which cannot be represented as a combination of single-pass aggregations. 
+ *---------------------------------------------------------------------------**/
+inline bool is_complex(operators op) {
+  return std::any_of(complex_aggregations.begin(), complex_aggregations.end(),
                      [&](operators test) { return test == op; });
 }
 

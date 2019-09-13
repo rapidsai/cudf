@@ -51,7 +51,7 @@ std::vector<SimpleAggRequestCounter> compound_to_simple(
         if (op == MEAN) {
           columns_to_ops[col].insert(COUNT);
           columns_to_ops[col].insert(SUM);
-        } else if (is_simple_agg(op)) {
+        } else if (is_simple(op)) {
           columns_to_ops[col].insert(op);
         }
       });

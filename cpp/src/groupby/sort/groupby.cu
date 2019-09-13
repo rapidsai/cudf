@@ -79,7 +79,7 @@ std::vector<gdf_column*>  process_remaining_complex_request(
 
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
-    if (is_complex_agg(element.second)) {
+    if (is_complex(element.second)) {
       gdf_column * value_col = element.first;
       gdf_column sorted_values;
       rmm::device_vector<gdf_size_type> group_sizes;
@@ -190,7 +190,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
     cudf::table output_values(0, target_dtypes(column_dtypes(input_values), input_ops), column_dtype_infos(input_values));
     return std::make_pair(
         cudf::empty_like(input_keys),
-        output_values.get_columns()
+        std::vector<gdf_column*>{output_values.begin(), output_values.end()}
         );
   }
   // An "aggregation request" is the combination of a `gdf_column*` to a column
@@ -315,7 +315,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
     cudf::table output_values(0, target_dtypes(column_dtypes(values), optype_list), column_dtype_infos(values));
     return std::make_pair(
         cudf::empty_like(keys),
-        output_values.get_columns()
+        std::vector<gdf_column*>{output_values.begin(), output_values.end()}
         );
   }
 
