@@ -272,7 +272,7 @@ unsigned int NVText::edit_distance_matrix( distance_type algo, NVStrings& strs, 
         thrust::exclusive_scan(execpol->on(0), sizes.begin(), sizes.end(), offsets.begin() );
         // compute edit distance
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-            editdistance_levenshtein_algorithm(d_strings, d_target, sd_buffer, d_offsets, d_rtn+count*k));
+            editdistance_levenshtein_algorithm(d_strings, d_target, d_buffer, d_offsets, d_rtn+count*k));
         //
 
     }

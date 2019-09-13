@@ -127,6 +127,21 @@ TEST(TestText, EditDistance)
     NVStrings::destroy(strs);
 }
 
+TEST(TestText, EditDistanceMatrix)
+{
+    std::vector<const char*> hstrs{ "dog", nullptr, "cat", "mouse",
+                                    "pup", "", "puppy" };
+    NVStrings* strs = NVStrings::create_from_array(hstrs.data(),hstrs.size());
+
+    thrust::device_vector<unsigned int> results(hstrs.size()*hstrs.size(),0);
+
+//    NVText::edit_distance_matrix(NVText::levenshtein,*strs,results.data().get());
+//    unsigned int expected[] = { 5,5,5,5,2,5,0 };
+//    for( int idx = 0; idx < (int) hstrs.size()*hstrs.size(); ++idx )
+//        EXPECT_EQ(results[idx],expected[idx]);
+    NVStrings::destroy(strs);
+}
+
 TEST(TestText, NGrams)
 {
     NVStrings* strs = NVStrings::create_from_array(tstrs.data(),tstrs.size());
