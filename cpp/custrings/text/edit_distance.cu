@@ -55,7 +55,7 @@ struct editdistance_levenshtein_algorithm
             custring_view* dstr = d_strings[idx];
             short* buf = (short*)d_buffer + d_offsets[idx];
             custring_view* dtgt = d_tgt;
-            if( !d_tgt )
+            if( !d_tgt && d_tgts)
                 dtgt = d_tgts[idx];
             d_results[idx] = compute_distance(dstr,dtgt,buf);
         }
@@ -280,10 +280,10 @@ unsigned int NVText::edit_distance_matrix( distance_type algo, NVStrings& strs, 
 
 
         //populate the lower diagonal
-        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count*count,
+        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
             [d_rtn, k, count] __device__(unsigned int idx){
             if(k < idx){
-                    d_rtn[idx*count + k] = d_rtn[k*count + idx]
+                    d_rtn[idx*count + k] = d_rtn[k*count + idx];
                 }
             });
 
