@@ -256,7 +256,7 @@ unsigned int NVText::edit_distance_matrix( distance_type algo, NVStrings& strs, 
         thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
             [d_strings, d_target, d_sizes] __device__(unsigned int idx){
                 custring_view* dstr = d_strings[idx];
-                if( !dstr )
+                if( !dstr || !d_target)
                     return;
                 int len = dstr->chars_count();
                 if( d_target->chars_count() < len )
