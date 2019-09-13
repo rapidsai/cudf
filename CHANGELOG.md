@@ -2,56 +2,131 @@
 
 ## New Features
 
+- PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2607 Add Java bindings for parsing JSON
+- PR #2629 Add dropna= parameter to groupby
+- PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2559 Add Series.tolist()
+- PR #2653 Add Java bindings for rolling window operations
+- PR #2480 Merge `custreamz` codebase into `cudf` repo
+- PR #2674 Add __contains__ for Index/Series/Column
+- PR #2635 Add support to read from remote and cloud sources like s3, gcs, hdfs
+- PR #2722 Add Java bindings for NVTX ranges
+- PR #2702 Add make_bool to dataset generation functions
+- PR #2394 Move `rapidsai/custrings` into `cudf`
+- PR #2734 Final sync of custrings source into cudf
+- PR #2724 Add libcudf support for __contains__
+- PR #2781 Add issorted to is_monotonic
+- PR #2685 Add cudf::scatter_to_tables and cython binding
+- PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
+- PR #2785 Add nvstrings Python docs
+- PR #2786 Add benchmarks option to root build.sh
 
 ## Improvements
 
+- PR #2578 Update legacy_groupby to use libcudf group_by_without_aggregation
+- PR #2581 Removed `managed` allocator from hash map classes.
+- PR #2571 Remove unnecessary managed memory from gdf_column_concat
+- PR #2648 Cython/Python reorg
+- PR #2588 Update Series.append documentation
+- PR #2632 Replace dask-cudf set_index code with upstream
+- PR #2682 Add cudf.set_allocator() function for easier allocator init
+- PR #2642 Improve null printing and testing
+- PR #2747 Add missing Cython headers / cudftestutil lib to conda package for cuspatial build
+- PR #2706 Compute CSV format in device code to speedup performance
+- PR #2673 Add support for np.longlong type
+- PR #2703 move dask serialization dispatch into cudf
+- PR #2729 Handle file-handle input in to_csv
+- PR #2741 CSV Reader: Move kernel functions into its own file
+- PR #2766 Improve nvstrings python cmake flexibility
+- PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
+- PR #2771 Stopgap alias for to_gpu_matrix()
+- PR #2645 libcudf unique_count for Series.nunique 
+
 ## Bug Fixes
 
+- PR #2584 ORC Reader: fix parsing of `DECIMAL` index positions
+- PR #2619 Fix groupby serialization/deserialization
+- PR #2614 Update Java version to match
+- PR #2601 Fixes nlargest(1) issue in Series and Dataframe
+- PR #2610 Fix a bug in index serialization (properly pass DeviceNDArray)
+- PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
+- PR #2611 Types Test: fix static casting from negative int to string
+- PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
+- PR #2615 fix string category partitioning in java API
+- PR #2641 fix string category and timeunit concat in the java API
+- PR #2658 Fix astype() for null categorical columns
+- PR #2660 fix column string category and timeunit concat in the java API
+- PR #2664 ORC reader: fix `skip_rows` larger than first stripe
+- PR #2654 Allow Java gdfOrderBy to work with string categories
+- PR #2669 AVRO reader: fix non-deterministic output
+- PR #2668 Update Java bindings to specify timestamp units for ORC and Parquet readers
+- PR #2679 AVRO reader: fix cuda errors when decoding compressed streams
+- PR #2692 Add concatenation for data-frame with different headers (empty and non-empty)
+- PR #2651 Remove nvidia driver installation from ci/cpu/build.sh
+- PR #2697 Ensure csv reader sets datetime column time units
+- PR #2698 Return RangeIndex from contiguous slice of RangeIndex
+- PR #2672 Fix null and integer handling in round
+- PR #2704 Parquet Reader: Fix crash when loading string column with nulls
+- PR #2725 Fix Jitify issue with running on Turing using CUDA version < 10
+- PR #2731 Fix building of benchmarks
+- PR #2738 Fix java to find new NVStrings locations
+- PR #2736 Pin Jitify branch to v0.10 version
+- PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
+- PR #2753 Fix java quantile API calls
+- PR #2762 Fix validity processing for time in java
+- PR #2769 Fix link to API docs in README.md
+- PR #2772 Handle multiindex pandas Series #2772
+- PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
+- PR #2752 CSV Reader: Fix exception when there's no rows to process
+- PR #2716 Added Exception for `StringMethods` in string methods
+- PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
 
 
-# cuDF 0.9.0 (Date TBD)
+# cuDF 0.9.0 (21 Aug 2019)
 
 ## New Features
 
+- PR #1993 Add CUDA-accelerated series aggregations: mean, var, std
 - PR #2111 IO Readers: Support memory buffer, file-like object, and URL inputs
 - PR #2012 Add `reindex()` to DataFrame and Series
 - PR #2097 Add GPU-accelerated AVRO reader
-- PR #2098 Align DataFrame and Series indices before executing binary ops
+- PR #2098 Support binary ops on DFs and Series with mismatched indices
 - PR #2160 Merge `dask-cudf` codebase into `cudf` repo
 - PR #2149 CSV Reader: Add `hex` dtype for explicit hexadecimal parsing
 - PR #2156 Add `upper_bound()` and `lower_bound()` for libcudf tables and `searchsorted()` for cuDF Series
 - PR #2158 CSV Reader: Support single, non-list/dict argument for `dtype`
 - PR #2177 CSV Reader: Add `parse_dates` parameter for explicit date inference
-- PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #1744 cudf::apply_boolean_mask and cudf::drop_nulls support for cudf::table inputs (multi-column)
 - PR #2196 Add `DataFrame.dropna()`
+- PR #2197 CSV Writer: add `chunksize` parameter for `to_csv`
 - PR #2215 `type_dispatcher` benchmark
-- PR #2179 Added Java quantiles
+- PR #2179 Add Java quantiles
 - PR #2157 Add __array_function__ to DataFrame and Series
 - PR #2212 Java support for ORC reader
-- PR #2304 gdf_group_by_without_aggregations returns gdf_column
-- PR #2105 Add google benchmark for hash-based join
-- PR #2293 Improve `compute_join_output_size` performance
-- PR #2316 Unique, nunique, and value_counts for datetime columns
+- PR #2224 Add DataFrame isna, isnull, notna functions
+- PR #2236 Add Series.drop_duplicates
+- PR #2105 Add hash-based join benchmark
+- PR #2316 Add unique, nunique, and value_counts for datetime columns
 - PR #2337 Add Java support for slicing a ColumnVector
-- PR #2049 Implemented merge functionality
+- PR #2049 Add cudf::merge (sorted merge)
 - PR #2368 Full cudf+dask Parquet Support
 - PR #2380 New cudf::is_sorted checks whether cudf::table is sorted
 - PR #2356 Java column vector standard deviation support
-- PR #2221 MultiIndex Full Indexing - Support iloc and wildcards for loc
-- PR #2429 Java column vector: added support for getting length of strings in a ColumnVector
-- PR #2415 Revamp `value_counts` to use groupby count series of any type
+- PR #2221 MultiIndex full indexing - Support iloc and wildcards for loc
+- PR #2429 Java support for getting length of strings in a ColumnVector
+- PR #2415 Add `value_counts` for series of any type
 - PR #2446 Add __array_function__ for index
 - PR #2437 ORC reader: Add 'use_np_dtypes' option
 - PR #2382 Add CategoricalAccessor add, remove, rename, and ordering methods
 - PR #2464 Native implement `__cuda_array_interface__` for Series/Index/Column objects
-- PR #2425 Allow rolling window to accept array-based user-defined functions
+- PR #2425 Rolling window now accepts array-based user-defined functions
 - PR #2442 Add __setitem__
-- PR #2449 Java column vector: added support for getting byte count of strings in a ColumnVector
+- PR #2449 Java support for getting byte count of strings in a ColumnVector
 - PR #2492 Add groupby.size() method
-- PR #2358 Add the function to convert column of floating points with `nan`s into `bitmask`
+- PR #2358 Add cudf::nans_to_nulls: convert floating point column into bitmask
 - PR #2489 Add drop argument to set_index
 - PR #2491 Add Java bindings for ORC reader 'use_np_dtypes' option
 - PR #2213 Support s/ms/us/ns DatetimeColumn time unit resolutions
@@ -69,29 +144,28 @@
 - PR #2131 Chunk rows logic added to csv_writer
 - PR #2129 Add functions in the Java API to support nullable column filtering
 - PR #2165 made changes to get_dummies api for it to be available in MethodCache
+- PR #2171 Add CodeCov integration, fix doc version, make --skip-tests work when invoking with source
 - PR #2184 handle remote orc files for dask-cudf
 - PR #2186 Add `getitem` and `getattr` style access to Rolling objects
 - PR #2168 Use cudf.Column for CategoricalColumn's categories instead of a tuple
-- PR #2193 Added more docuemtnation to `type_dispatcher` for specializing dispatched functors
-- PR #2197 CSV Writer: Expose `chunksize` as a parameter for `to_csv`
+- PR #2193 DOC: cudf::type_dispatcher documentation for specializing dispatched functors
 - PR #2199 Better java support for appending strings
 - PR #2176 Added column dtype support for datetime, int8, int16 to csv_writer
 - PR #2209 Matching `get_dummies` & `select_dtypes` behavior to pandas
 - PR #2217 Updated Java bindings to use the new groupby API
 - PR #2214 DOC: Update doc instructions to build/install `cudf` and `dask-cudf`
-- PR #1993 Add iterator driven reduction for mean, var, std
 - PR #2220 Update Java bindings for reduction rename
-- PR #2224 implement isna, isnull, notna as dataframe functions
 - PR #2232 Move CodeCov upload from build script to Jenkins
-- PR #2236 Implement drop_duplicates for Series
 - PR #2225 refactor to use libcudf for gathering columns in dataframes
+- PR #2293 Improve join performance (faster compute_join_output_size)
 - PR #2300 Create separate dask codeowners for dask-cudf codebase
+- PR #2304 gdf_group_by_without_aggregations returns gdf_column
 - PR #2309 Java readers: remove redundant copy of result pointers
 - PR #2307 Add `black` and `isort` to style checker script
 - PR #2345 Restore removal of old groupby implementation
 - PR #2342 Improve `astype()` to operate all ways
 - PR #2329 using libcudf cudf::copy for column deep copy
-- PR #2344 Add docs on how code formatting works for contributors
+- PR #2344 DOC: docs on code formatting for contributors
 - PR #2376 Add inoperative axis= and win_type= arguments to Rolling()
 - PR #2378 remove dask for (de-)serialization of cudf objects
 - PR #2353 Bump Arrow and Dask versions
@@ -114,6 +188,8 @@
 - PR #2490 Java api: support multiple aggregates for the same column
 - PR #2510 Java api: uses table based apply_boolean_mask
 - PR #2432 Use pandas formatting for console, html, and latex output
+- PR #2573 Bump numba version to 0.45.1
+- PR #2606 Fix references to notebooks-contrib
 
 ## Bug Fixes
 
@@ -180,6 +256,8 @@
 - PR #2560 Remove duplicate `dlpack` definition in conda recipe
 - PR #2567 Fix ColumnVector.fromScalar issues while dealing with null scalars
 - PR #2565 Orc reader: fix incorrect data decoding of int64 data types
+- PR #2577 Fix search benchmark compilation error by adding necessary header
+- PR #2604 Fix a bug in copying.pyx:_normalize_types that upcasted int32 to int64
 
 
 # cuDF 0.8.0 (27 June 2019)

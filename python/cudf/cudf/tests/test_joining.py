@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame
 from cudf.tests.utils import assert_eq
 
 

@@ -16,9 +16,9 @@
 
 #pragma once
 
+#include <memory>
 #include <string>
 #include <vector>
-#include <memory>
 
 #include "cudf.h"
 #include <cudf/legacy/table.hpp>
@@ -66,7 +66,7 @@ class reader {
   explicit reader(const char *buffer, size_t length,
                   reader_options const &options);
 
- /**---------------------------------------------------------------------------*
+  /**---------------------------------------------------------------------------*
    * @brief Constructor for an Arrow file source
    *---------------------------------------------------------------------------**/
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
@@ -92,7 +92,7 @@ class reader {
   ~reader();
 };
 
-} // namespace avro
+}  // namespace avro
 
 namespace json {
 /**---------------------------------------------------------------------------*
@@ -220,6 +220,8 @@ struct reader_options {
   quote_style   quoting = QUOTE_MINIMAL;    ///< Defines reader's quoting behavior; default is QUOTE_MINIMAL.
   bool          doublequote = true;         ///< Indicates whether to interpret two consecutive quotechar inside a field as a single quotechar; true by default.
 
+  gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< Defines the output resolution for date32, date64, and timestamp columns
+
   reader_options() = default;
 };
 
@@ -286,6 +288,7 @@ struct reader_options {
   std::vector<std::string> columns;
   bool use_index = true;
   bool use_np_dtypes = true;
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -293,12 +296,17 @@ struct reader_options {
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
    *
-   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] use_index_lookup Whether to use row index for faster scanning
    * @param[in] np_compat Whether to use numpy-compatible dtypes
+   * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
-  reader_options(std::vector<std::string> cols, bool use_index_lookup, bool np_compat)
-      : columns(std::move(cols)), use_index(use_index_lookup), use_np_dtypes(np_compat) {}
+  reader_options(std::vector<std::string> cols, bool use_index_lookup,
+                 bool np_compat, gdf_time_unit timestamp_time_unit)
+      : columns(std::move(cols)),
+        use_index(use_index_lookup),
+        use_np_dtypes(np_compat),
+        timestamp_unit(timestamp_time_unit) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -365,6 +373,7 @@ namespace parquet {
 struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
 
   reader_options() = default;
   reader_options(reader_options const &) = default;
@@ -372,13 +381,15 @@ struct reader_options {
   /**---------------------------------------------------------------------------*
    * @brief Constructor to populate reader options.
    *
-   * @param[in] columns List of columns to read. If empty, all columns are read
+   * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
+   * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
-  reader_options(std::vector<std::string> cols,
-                       bool strings_as_category)
+  reader_options(std::vector<std::string> cols, bool strings_as_category,
+                 gdf_time_unit timestamp_time_unit)
       : columns(std::move(cols)),
-        strings_to_categorical(strings_as_category) {}
+        strings_to_categorical(strings_as_category),
+        timestamp_unit(timestamp_time_unit) {}
 };
 
 /**---------------------------------------------------------------------------*
@@ -401,7 +412,7 @@ class reader {
   explicit reader(const char *buffer, size_t length,
                   reader_options const &options);
 
- /**---------------------------------------------------------------------------*
+  /**---------------------------------------------------------------------------*
    * @brief Constructor for an Arrow file source
    *---------------------------------------------------------------------------**/
   explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
@@ -443,6 +454,6 @@ class reader {
   ~reader();
 };
 
-} // namespace parquet
-} // namespace io
-} // namespace cudf
+}  // namespace parquet
+}  // namespace io
+}  // namespace cudf

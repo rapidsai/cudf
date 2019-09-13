@@ -19,6 +19,7 @@
 #include <string>
 #include <vector>
 #include <memory>
+#include <utility>
 
 #include "cudf.h"
 
@@ -142,6 +143,7 @@ struct csv_read_arg {
 
   size_t byte_range_offset = 0;             ///< Bytes to skip from the start
   size_t byte_range_size = 0;               ///< Bytes to read; always reads complete rows
+  gdf_time_unit out_time_unit = TIME_UNIT_NONE; ///< The output resolution for date32, date64, and timestamp columns
 
   explicit csv_read_arg(const source_info& src) : source(src) {}
 };
@@ -194,6 +196,7 @@ struct orc_read_arg {
 
   bool use_index = false;                   ///< Whether to use row index to speed-up reading
   bool use_np_dtypes = true;                ///< Whether to use numpy-compatible dtypes
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit orc_read_arg(const source_info& src) : source(src) {}
 };
@@ -211,8 +214,9 @@ struct parquet_read_arg {
   int num_rows = -1;                        ///< Rows to read; -1 is all
 
   bool strings_to_categorical = false;      ///< Whether to store string data as GDF_CATEGORY
+  gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit parquet_read_arg(const source_info& src) : source(src) {}
 };
 
-} // namespace cudf
+}  // namespace cudf

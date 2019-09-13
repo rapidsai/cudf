@@ -332,8 +332,6 @@ cudf::table construct_join_output_df(
         left_columns_in_common[i] = columns_in_common[i].first;
         right_columns_in_common[i] = columns_in_common[i].second;
     }
-    std::vector <gdf_size_type> tmp_left_join_indices = left_columns_in_common;
-    std::vector <gdf_size_type> tmp_right_join_indices = right_columns_in_common;
   
     // Gathering the indices that are not in common
     std::vector<gdf_size_type> left_non_common_indices =
@@ -356,7 +354,7 @@ cudf::table construct_join_output_df(
     bool const check_bounds{ join_type != JoinType::INNER_JOIN };
 
     // Construct the left columns
-    if (0 != left_non_common_indices.size()) {
+    if (not left_non_common_indices.empty()) {
       cudf::table left_source_table = left.select(left_non_common_indices);
       cudf::table left_destination_table = result.select(left_non_common_indices);
 
@@ -369,7 +367,7 @@ cudf::table construct_join_output_df(
     }
 
     // Construct the right columns
-    if (0 != right_non_common_indices.size()) {
+    if (not right_non_common_indices.empty()) {
       std::vector<gdf_size_type> result_right_non_common_indices (right_non_common_indices.size());
       std::iota(std::begin(result_right_non_common_indices),
                 std::end(result_right_non_common_indices), left.num_columns());
@@ -384,7 +382,7 @@ cudf::table construct_join_output_df(
     }
 
     // Construct the joined columns
-    if (columns_in_common.size() > 0) {
+    if (not columns_in_common.empty()) {
 
       // Gather the columns which join into single column from joined columns
       cudf::table join_source_table = left.select(left_columns_in_common);
@@ -478,24 +476,24 @@ cudf::table join_call_compute_df(
   std::vector <gdf_size_type> right_non_common_indices = non_common_column_indices(right.num_columns(),
                                                                          right_columns_in_common);;
   cudf::table tmp_right_table = empty_right.select(right_non_common_indices);
-  cudf::table tmp_table = cudf::concat_tables (empty_left, tmp_right_table);
+  cudf::table tmp_table = cudf::concat(empty_left, tmp_right_table);
   
   // If there is nothing to join, then send empty table with all columns
-  if (0 == left_on.size() || 0 == right_on.size() || left_on.size() != right_on.size())
+  if (left_on.empty() || right_on.empty() || left_on.size() != right_on.size())
   {
-      return cudf::empty_like(tmp_table);
+      return tmp_table;
   }
 
   // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
   // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
   // If the inputs are empty, immediately return
   if ((0 == left.num_rows()) && (0 == right.num_rows())) {
-      return cudf::empty_like(tmp_table);
+      return tmp_table;
   }
 
   // If left join and the left table is empty, return immediately
   if ((JoinType::LEFT_JOIN == join_type) && (0 == left.num_rows())) {
-      return cudf::empty_like(tmp_table);
+      return tmp_table;
   }
 
   // If Inner Join and either table is empty, return immediately

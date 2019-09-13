@@ -27,17 +27,12 @@
 namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
-  if (cols.size() != 0)
-  {
-      CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-      gdf_size_type num_rows = cols[0]->size;
-
-      std::for_each(_columns.begin(), _columns.end(),
-                    [this, num_rows](gdf_column* col) {
-                      CUDF_EXPECTS(nullptr != col, "Null input column");
-                      CUDF_EXPECTS(num_rows == col->size, "Column size mismatch");
-                    });
-  }
+  CUDF_EXPECTS(_columns.size() != 0, "Cannot construct table with zero columns");
+  std::for_each(_columns.begin(), _columns.end(),
+                [this](gdf_column* col) {
+                  CUDF_EXPECTS(nullptr != col, "Null input column");
+                  CUDF_EXPECTS(_columns.front()->size == col->size, "Column size mismatch");
+                });
 }
 
 table::table(std::initializer_list<gdf_column*> list)
@@ -97,20 +92,13 @@ void table::destroy(void) {
   }
 }
 
-table table::select(std::vector<gdf_size_type> const& column_indices){
-    CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
-    std::vector<gdf_column*> desired_columns;
-    for(auto index : column_indices){
-        desired_columns.push_back(get_column(index));
-    }
-    return table{desired_columns};
-}
-
 table table::select(std::vector<gdf_size_type> const& column_indices) const {
+    if (column_indices.empty())
+        return table{};
     CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
     std::vector<gdf_column*> desired_columns;
     for(auto index : column_indices){
-        desired_columns.push_back(const_cast<gdf_column*>(get_column(index)));
+        desired_columns.push_back(_columns[index]);
     }
     return table{desired_columns};
 }
@@ -137,7 +125,7 @@ bool has_nulls(cudf::table const& table) {
   });
 }
 
-table concat_tables(cudf::table const& table1, cudf::table const&table2) {
+table concat(cudf::table const& table1, cudf::table const&table2) {
     if ((table1.num_columns() == 0) and (table2.num_columns() == 0))
         return table{};
     if (table1.num_columns() == 0)

@@ -149,16 +149,7 @@ struct table {
    * @param column_indices Indices of the desired columns
    * @return table New table containing only the desired columns
    *---------------------------------------------------------------------------**/
-  table select(std::vector<gdf_size_type> const& column_indices);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Returns a new `table` containing the set of specified columns.
-   *
-   * @param column_indices Indices of the desired columns
-   * @return table New table containing only the desired columns
-   *---------------------------------------------------------------------------**/
   table select(std::vector<gdf_size_type> const& column_indices) const;
-
 
   /**---------------------------------------------------------------------------*
    * @brief Destroys the `gdf_column`s in the table.
@@ -205,7 +196,7 @@ bool has_nulls(cudf::table const& table);
  * @return A single table having all the columns from `table1` and `table2`
  * respectively in the same order.
  *---------------------------------------------------------------------------**/
-table concat_tables(cudf::table const& table1, cudf::table const&table2);
+table concat(cudf::table const& table1, cudf::table const&table2);
 
 }  // namespace cudf
 
