@@ -78,6 +78,7 @@
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
 - PR #2716 Added Exception for `StringMethods` in string methods
+- PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
 
 
 # cuDF 0.9.0 (21 Aug 2019)
