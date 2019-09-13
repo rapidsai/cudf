@@ -164,10 +164,14 @@ void reader::Impl::setColumnNamesFromCsv() {
 		// If file only contains one row, recStart[1] is not valid
 		if (num_records > 1) {
 			CUDA_TRY(cudaMemcpy(&first_row_len, recStart.data() + 1, sizeof(uint64_t), cudaMemcpyDefault));
-		}
-		else {
-			// File has one row - use the file size for the row size
+		} else {
+			// There is a single row, so use source data size
 			first_row_len = num_bytes / sizeof(char);
+
+			// If there is only a single character then it would be the terminator
+			if (first_row_len <= 1) {
+				return;
+			}
 		}
 		first_row.resize(first_row_len);
 		CUDA_TRY(cudaMemcpy(first_row.data(), data.data(), first_row_len * sizeof(char), cudaMemcpyDefault));
@@ -526,6 +530,11 @@ table reader::Impl::read()
     }
   }
 
+  // Return empty table rather than exception if nothing to load
+  if (num_active_cols == 0) {
+    return cudf::table{};
+  }
+
   std::vector<gdf_dtype> dtypes{};
   std::vector<gdf_dtype_extra_info> dtypes_extra_info{};
   std::tie(dtypes, dtypes_extra_info) = gather_column_dtypes();
@@ -687,34 +696,34 @@ void reader::Impl::uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp
     num_records = h_rec_starts.size();
   }
 
-  CUDF_EXPECTS(num_records > 0, "No data available for parsing");
+  if (num_records > 0) {
+    const auto start_offset = h_rec_starts.front();
+    const auto end_offset = h_rec_starts.back();
+    num_bytes = end_offset - start_offset;
+    assert(num_bytes <= h_uncomp_size);
+    num_bits = (num_bytes + 63) / 64;
 
-  const auto start_offset = h_rec_starts.front();
-  const auto end_offset = h_rec_starts.back();
-  num_bytes = end_offset - start_offset;
-  assert(num_bytes <= h_uncomp_size);
-  num_bits = (num_bytes + 63) / 64;
+    // Resize and upload the rows of interest
+    recStart.resize(num_records);
+    CUDA_TRY(cudaMemcpy(recStart.data(), h_rec_starts.data(),
+                        sizeof(uint64_t) * num_records,
+                        cudaMemcpyHostToDevice));
 
-  // Resize and upload the rows of interest
-  recStart.resize(num_records);
-  CUDA_TRY(cudaMemcpy(recStart.data(), h_rec_starts.data(),
-                      sizeof(uint64_t) * num_records,
-                      cudaMemcpyDefault));
+    // Upload the raw data that is within the rows of interest
+    data = device_buffer<char>(num_bytes);
+    CUDA_TRY(cudaMemcpy(data.data(), h_uncomp_data + start_offset, num_bytes,
+                        cudaMemcpyHostToDevice));
 
-  // Upload the raw data that is within the rows of interest
-  data = device_buffer<char>(num_bytes);
-  CUDA_TRY(cudaMemcpy(data.data(), h_uncomp_data + start_offset,
-                      num_bytes, cudaMemcpyHostToDevice));
+    // Adjust row start positions to account for the data subcopy
+    thrust::transform(rmm::exec_policy()->on(0), recStart.data(),
+                      recStart.data() + num_records,
+                      thrust::make_constant_iterator(start_offset),
+                      recStart.data(), thrust::minus<uint64_t>());
 
-  // Adjust row start positions to account for the data subcopy
-  thrust::transform(rmm::exec_policy()->on(0), recStart.data(),
-                    recStart.data() + num_records,
-                    thrust::make_constant_iterator(start_offset),
-                    recStart.data(), thrust::minus<uint64_t>());
-
-  // The array of row offsets includes EOF
-  // reduce the number of records by one to exclude it from the row count
-  num_records--;
+    // The array of row offsets includes EOF
+    // reduce the number of records by one to exclude it from the row count
+    num_records--;
+  }
 }
 
 std::pair<std::vector<gdf_dtype>, std::vector<gdf_dtype_extra_info>> reader::Impl::gather_column_dtypes() {

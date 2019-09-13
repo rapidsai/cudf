@@ -27,13 +27,11 @@
 namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
-  CUDF_EXPECTS(nullptr != cols[0], "Null input column");
-  gdf_size_type num_rows = cols[0]->size;
-
+  CUDF_EXPECTS(_columns.size() != 0, "Cannot construct table with zero columns");
   std::for_each(_columns.begin(), _columns.end(),
-                [this, num_rows](gdf_column* col) {
+                [this](gdf_column* col) {
                   CUDF_EXPECTS(nullptr != col, "Null input column");
-                  CUDF_EXPECTS(num_rows == col->size, "Column size mismatch");
+                  CUDF_EXPECTS(_columns.front()->size == col->size, "Column size mismatch");
                 });
 }
 

@@ -92,7 +92,12 @@ class Series(object):
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
-            index = as_index(data.index)
+            if isinstance(data.index, pd.MultiIndex):
+                import cudf
+
+                index = cudf.from_pandas(data.index)
+            else:
+                index = as_index(data.index)
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
