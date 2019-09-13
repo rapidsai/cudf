@@ -135,6 +135,22 @@ struct EncChunk
 
 
 /**
+ * @brief Struct to describe a column stream within a stripe
+ **/
+struct StripeStream
+{
+    size_t bfr_offset;                          // Offset of this stream in compressed buffer
+    uint32_t stream_size;                       // Size of stream in bytes
+    uint32_t first_chunk_id;                    // First chunk of the stripe
+    uint32_t num_chunks;                        // Number of chunks in the stripe
+    uint32_t column_id;                         // column index
+    uint32_t first_block;                       // First compressed block
+    uint8_t strm_type;                          // Stream index type
+    uint8_t pad[3];
+};
+
+
+/**
  * @brief Struct to describe a dictionary chunk
  **/
 struct DictionaryChunk
@@ -272,6 +288,40 @@ cudaError_t EncodeOrcColumnData(EncChunk *chunks, uint32_t num_columns, uint32_t
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_t num_string_columns, uint32_t num_columns, uint32_t num_stripes, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel for compacting chunked column data prior to compression
+ *
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] num_columns Number of columns
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t CompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_stripe_streams, uint32_t num_columns, cudaStream_t stream = (cudaStream_t)0);
+
+
+/**
+ * @brief Launches kernel(s) for compressing data streams
+ *
+ * @param[in] compressed_data Output compressed blocks
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[out] comp_in Per-block compression input parameters
+ * @param[out] comp_out Per-block compression status
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] compression Type of compression
+ * @param[in] num_compressed_blocks Total number of compressed blocks
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t CompressOrcDataStreams(uint8_t *compressed_data, StripeStream *strm_desc, EncChunk *chunks, gpu_inflate_input_s *comp_in,
+        gpu_inflate_status_s *comp_out, uint32_t num_stripe_streams, uint32_t num_compressed_blocks, CompressionKind compression,
+        uint32_t comp_blk_size, cudaStream_t stream = (cudaStream_t)0);
 
 
 /**

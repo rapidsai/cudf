@@ -1151,6 +1151,219 @@ gpuEncodeStringDictionaries(StripeDictionary *stripes, EncChunk *chunks, uint32_
 }
 
 
+/**
+ * @brief Merge chunked column data into a single contiguous stream
+ *
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] num_columns Number of columns
+ *
+ **/
+// blockDim {1024,1,1}
+extern "C" __global__ void __launch_bounds__(1024)
+gpuCompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_columns)
+{
+    __shared__ __align__(16) StripeStream ss;
+    __shared__ __align__(16) EncChunk ck0;
+    __shared__ uint8_t * volatile ck_curptr_g;
+    __shared__ uint32_t volatile ck_curlen_g;
+
+    uint32_t strm_id = blockIdx.x;
+    uint32_t ck0_id, cid;
+    uint32_t t = threadIdx.x;
+    uint8_t *dst_ptr;
+
+    if (t < sizeof(StripeStream) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+    }
+    __syncthreads();
+    ck0_id = ss.first_chunk_id;
+    if (t < sizeof(EncChunk) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&ck0)[t] = ((const uint32_t *)&chunks[ck0_id])[t];
+    }
+    __syncthreads();
+    cid = ss.strm_type;
+    dst_ptr = ck0.streams[cid] + ck0.strm_len[cid];
+    for (uint32_t g = 1; g < ss.num_chunks; g++)
+    {
+        uint8_t *src_ptr;
+        uint32_t len;
+        if (t == 0)
+        {
+            src_ptr = chunks[ck0_id + g * num_columns].streams[cid];
+            len = chunks[ck0_id + g * num_columns].strm_len[cid];
+            if (src_ptr != dst_ptr)
+            {
+                chunks[ck0_id + g * num_columns].streams[cid] = dst_ptr;
+            }
+            ck_curptr_g = src_ptr;
+            ck_curlen_g = len;
+        }
+        __syncthreads();
+        src_ptr = ck_curptr_g;
+        len = ck_curlen_g;
+        if (len > 0 && src_ptr != dst_ptr)
+        {
+            for (uint32_t i = 0; i < len; i += 1024)
+            {
+                uint8_t v = (i + t < len) ? src_ptr[i + t] : 0;
+                __syncthreads();
+                if (i + t < len)
+                {
+                    dst_ptr[i + t] = v;
+                }
+            }
+        }
+        dst_ptr += len;
+        __syncthreads();
+    }
+    if (!t)
+    {
+        strm_desc[strm_id].stream_size = dst_ptr - ck0.streams[cid];
+    }
+}
+
+
+/**
+ * @brief Initializes compression input/output structures
+ *
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[out] comp_in Per-block compression input parameters
+ * @param[out] comp_out Per-block compression status
+ * @param[in] compressed_bfr Compression output buffer
+ * @param[in] comp_blk_size Compression block size
+ *
+ **/
+// blockDim {256,1,1}
+extern "C" __global__ void __launch_bounds__(256)
+gpuInitCompressionBlocks(StripeStream *strm_desc, EncChunk *chunks, gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, uint8_t *compressed_bfr, uint32_t comp_blk_size)
+{
+    __shared__ __align__(16) StripeStream ss;
+    __shared__ uint8_t * volatile uncomp_base_g;
+
+    uint32_t strm_id = blockIdx.x;
+    uint32_t t = threadIdx.x;
+    uint32_t num_blocks;
+    uint8_t *src, *dst;
+
+    if (t < sizeof(StripeStream) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+    }
+    __syncthreads();
+    if (t == 0)
+    {
+        uncomp_base_g = chunks[ss.first_chunk_id].streams[ss.strm_type];
+    }
+    __syncthreads();
+    src = uncomp_base_g;
+    dst = compressed_bfr + ss.bfr_offset;
+    num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 1;
+    for (uint32_t b = t; b < num_blocks; b += 256)
+    {
+        gpu_inflate_input_s *blk_in = &comp_in[ss.first_block + b];
+        gpu_inflate_status_s *blk_out = &comp_out[ss.first_block + b];
+        uint32_t blk_size = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
+        blk_in->srcDevice = src + b * comp_blk_size;
+        blk_in->srcSize = blk_size;
+        blk_in->dstDevice = dst + b * (3 + comp_blk_size) + 3;
+        blk_in->dstSize = blk_size + 3;
+        blk_out->bytes_written = blk_size;
+        blk_out->status = 1;
+        blk_out->reserved = 0;
+    }
+}
+
+
+/**
+ * @brief Compacts compressed blocks in a single contiguous stream, and update 3-byte block length fields
+ *
+ * @param[in,out] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] comp_in Per-block compression input parameters
+ * @param[in] comp_out Per-block compression status
+ * @param[in] compressed_bfr Compression output buffer
+ * @param[in] comp_blk_size Compression block size
+ *
+ **/
+// blockDim {1024,1,1}
+extern "C" __global__ void __launch_bounds__(1024)
+gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, uint8_t *compressed_bfr, uint32_t comp_blk_size)
+{
+    __shared__ __align__(16) StripeStream ss;
+    __shared__ uint8_t * volatile comp_src_g;
+    __shared__ uint32_t volatile comp_len_g;
+
+    uint32_t strm_id = blockIdx.x;
+    uint32_t t = threadIdx.x;
+    uint32_t num_blocks, b, blk_size;
+    uint8_t *src, *dst;
+
+    if (t < sizeof(StripeStream) / sizeof(uint32_t))
+    {
+        ((volatile uint32_t *)&ss)[t] = ((const uint32_t *)&strm_desc[strm_id])[t];
+    }
+    __syncthreads();
+    num_blocks = (ss.stream_size > 0) ? (ss.stream_size - 1) / comp_blk_size + 1 : 0;
+    dst = compressed_bfr + ss.bfr_offset;
+    b = 0;
+    do
+    {
+        if (t == 0)
+        {
+            gpu_inflate_input_s *blk_in = &comp_in[ss.first_block + b];
+            gpu_inflate_status_s *blk_out = &comp_out[ss.first_block + b];
+            uint32_t src_len = min(comp_blk_size, ss.stream_size - min(b * comp_blk_size, ss.stream_size));
+            uint32_t dst_len = (blk_out->status == 0) ? blk_out->bytes_written : src_len;
+            uint32_t blk_size24;
+            if (dst_len >= src_len)
+            {
+                // Copy from uncompressed source
+                src = reinterpret_cast<uint8_t *>(blk_in->srcDevice);
+                dst_len = src_len;
+                blk_size24 = dst_len * 2 + 1;
+            }
+            else
+            {
+                // Compressed block
+                src = reinterpret_cast<uint8_t *>(blk_in->dstDevice);
+                blk_size24 = dst_len * 2 + 0;
+            }
+            dst[0] = static_cast<uint8_t>(blk_size24 >> 0);
+            dst[1] = static_cast<uint8_t>(blk_size24 >> 8);
+            dst[2] = static_cast<uint8_t>(blk_size24 >> 16);
+            comp_src_g = src;
+            comp_len_g = dst_len;
+        }
+        __syncthreads();
+        src = comp_src_g;
+        blk_size = comp_len_g;
+        dst += 3; // skip over length written by thread0
+        if (src != dst)
+        {
+            for (uint32_t i = 0; i < blk_size; i += 1024)
+            {
+                uint8_t v = (i + t < blk_size) ? src[i + t] : 0;
+                __syncthreads();
+                if (i + t < blk_size)
+                {
+                    dst[i + t] = v;
+                }
+            }
+        }
+        dst += blk_size;
+    } while (++b < num_blocks);
+    // Update stripe stream with the compressed size
+    if (t == 0)
+    {
+        strm_desc[strm_id].stream_size = static_cast<uint32_t>(dst - (compressed_bfr + ss.bfr_offset));
+    }
+}
+
 
 /**
  * @brief Launches kernel for encoding column data
@@ -1190,6 +1403,56 @@ cudaError_t EncodeStripeDictionaries(StripeDictionary *stripes, EncChunk *chunks
     gpuEncodeStringDictionaries <<< dim_grid, dim_block, 0, stream >>>(stripes, chunks, num_columns);
     return cudaSuccess;
 }
+
+
+/**
+ * @brief Launches kernel for compacting chunked column data prior to compression
+ *
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] num_columns Number of columns
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t CompactOrcDataStreams(StripeStream *strm_desc, EncChunk *chunks, uint32_t num_stripe_streams, uint32_t num_columns, cudaStream_t stream)
+{
+    dim3 dim_block(1024, 1);
+    dim3 dim_grid(num_stripe_streams, 1);
+    gpuCompactOrcDataStreams <<< dim_grid, dim_block, 0, stream >>>(strm_desc, chunks, num_columns);
+    return cudaSuccess;
+}
+
+
+/**
+ * @brief Launches kernel(s) for compressing data streams
+ *
+ * @param[in] compressed_data Output compressed blocks
+ * @param[in] strm_desc StripeStream device array [stripe][stream]
+ * @param[in] chunks EncChunk device array [rowgroup][column]
+ * @param[out] comp_in Per-block compression input parameters
+ * @param[out] comp_out Per-block compression status
+ * @param[in] num_stripe_streams Total number of streams
+ * @param[in] num_compressed_blocks Total number of compressed blocks
+ * @param[in] compression Type of compression
+ * @param[in] comp_blk_size Compression block size
+ * @param[in] stream CUDA stream to use, default 0
+ *
+ * @return cudaSuccess if successful, a CUDA error code otherwise
+ **/
+cudaError_t CompressOrcDataStreams(uint8_t *compressed_data, StripeStream *strm_desc, EncChunk *chunks, gpu_inflate_input_s *comp_in,
+    gpu_inflate_status_s *comp_out, uint32_t num_stripe_streams, uint32_t num_compressed_blocks, CompressionKind compression, uint32_t comp_blk_size, cudaStream_t stream)
+{
+    dim3 dim_block_init(256, 1);
+    dim3 dim_grid(num_stripe_streams, 1);
+    gpuInitCompressionBlocks <<< dim_grid, dim_block_init, 0, stream >>>(strm_desc, chunks, comp_in, comp_out, compressed_data, comp_blk_size);
+    // TODO: Actually do some compression here
+    dim3 dim_block_compact(1024, 1);
+    gpuCompactCompressedBlocks <<< dim_grid, dim_block_compact, 0, stream >>>(strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
+    return cudaSuccess;
+}
+
 
 
 } // namespace gpu
