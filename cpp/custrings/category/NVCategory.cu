@@ -760,7 +760,10 @@ int NVCategory::get_value(unsigned int index)
     int* d_map = pImpl->getMapPtr();
     int rtn = -1;
     if( d_map )
+    {
         CUDA_TRY(cudaMemcpyAsync(&rtn,d_map+index,sizeof(int),cudaMemcpyDeviceToHost))
+        CUDA_TRY(cudaStreamSynchronize(0))
+    }
     return rtn;
 }
 
@@ -857,6 +860,7 @@ std::pair<int,int> NVCategory::get_value_bounds(const char* str)
     //
     int first = 0; // get the position back into host memory
     CUDA_TRY(cudaMemcpyAsync(&first,keys.data().get(),sizeof(int),cudaMemcpyDeviceToHost))
+    CUDA_TRY(cudaStreamSynchronize(0))
     rtn.first = first-1; // range is always
     rtn.second = first;  // position and previous one
     if( d_str )
