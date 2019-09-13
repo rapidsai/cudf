@@ -144,6 +144,16 @@ public:
     static unsigned int edit_distance( distance_type algo, NVStrings& strs1, NVStrings& strs2, unsigned int* results, bool devmem=true );
 
     /**
+     * @brief Compute the edit distance between each pair of strings
+     * @param algo The edit distance algorithm to use for the computation.
+     * @param strs Strings to process.
+     * @param[in,out] results Array of distances, one per string.
+     * @param devmem True if results in device memory.
+     * @return 0 if successful.
+     */
+    static unsigned int edit_distance_matrix( distance_type algo, NVStrings& strs, unsigned int* results, bool devmem=true );
+
+    /**
      * @brief Converts tokenized list of strings into instance with ngrams.
      * @param strs Tokens to make into ngrams.
      * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.

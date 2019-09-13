@@ -227,3 +227,60 @@ unsigned int NVText::edit_distance( distance_type algo, NVStrings& strs1, NVStri
     return 0;
 }
 
+unsigned int NVText::edit_distance_matrix( distance_type algo, NVStrings& strs, unsigned int* results, bool bdevmem )
+{
+    if( algo != levenshtein || results==0 )
+        throw std::invalid_argument("invalid algorithm");
+    unsigned int count = strs.size();
+    if( count==0 )
+        return 0; // nothing to do
+    auto execpol = rmm::exec_policy(0);
+    // custring_view* d_target = custring_from_host(target);
+
+    // setup results vector
+    unsigned int* d_rtn = results;
+    if( !bdevmem )
+        d_rtn = device_alloc<unsigned int>(count*count,0);
+
+    // get the string pointers
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    for (unsigned int k = 0; k < count; k++)
+    {
+        // calculate the size of the compute-buffer: 6 * length of string
+        rmm::device_vector<size_t> sizes(count,0);
+        size_t* d_sizes = sizes.data().get();
+        custring_view* d_target = strings[k];
+        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+            [d_strings, d_target, d_sizes] __device__(unsigned int idx){
+                custring_view* dstr = d_strings[idx];
+                if( !dstr )
+                    return;
+                int len = dstr->chars_count();
+                if( d_target->chars_count() < len )
+                    len = d_target->chars_count();
+                d_sizes[idx] = len * 3;
+            });
+        //
+        size_t bufsize = thrust::reduce(execpol->on(0), d_sizes, d_sizes+count );
+        rmm::device_vector<short> buffer(bufsize,0);
+        short* d_buffer = buffer.data().get();
+        rmm::device_vector<size_t> offsets(count,0);
+        size_t* d_offsets = offsets.data().get();
+        thrust::exclusive_scan(execpol->on(0), sizes.begin(), sizes.end(), offsets.begin() );
+        // compute edit distance
+        thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+            editdistance_levenshtein_algorithm(d_strings, d_target, sd_buffer, d_offsets, d_rtn+count*k));
+        //
+
+    }
+    if( !bdevmem )
+    {
+        CUDA_TRY( cudaMemcpyAsync(results,d_rtn,count*count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
+        RMM_FREE(d_rtn,0);
+    }
+    // RMM_FREE(d_target,0);
+    return 0;
+}

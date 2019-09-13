@@ -287,6 +287,35 @@ def edit_distance(strs, tgt, algo=0, devptr=0):
     return rtn
 
 
+def edit_distance_matrix(strs, algo=0, devptr=0):
+    """
+    Compute the edit-distance between each pair of strings in strs .
+    Edit distance is how many character changes between strings.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings for this operation.
+    algo: int
+        0 = Levenshtein
+    devptr : GPU memory pointer
+        Must be able to hold at least strs.size() of int32 values.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> s = nvstrings.to_device(["honda","hyundai","suzuki"])
+    >>> n = nvtext.edit_distance_matrix(s)
+    >>> print(n)
+    [[0, 3, 6],
+     [3, 0, 5],
+     [6, 5, 0]]
+
+    """
+    rtn = pyniNVText.n_edit_distance_matrix(strs, algo, devptr)
+    return rtn
+
+
 def ngrams(tokens, N=2, sep="_"):
     """
     Generate the n-grams from a set of tokens.
