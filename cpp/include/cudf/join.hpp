@@ -47,17 +47,14 @@ namespace cudf {
  * @param[out] * @returns joined_indices Optional, if not `nullptr`, on return, will
  * contain two non-nullable, `GDF_INT32` columns containing the indices of
  * matching rows between `left_on` and `right_on`. The first column corresponds to
- * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
- * indicates that the corresponding row in `left_on` has no match. It is the caller's
+ * rows in `left_on`, and the second to `right_on`. It is the caller's
  * responsibility to free these columns.
  * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
- * `left` and then joined columns of `right`. For any "common" columns indicated
- * by `columns_in_common`, only a single output column is produced and the order of the
- * columns will be same as `left` and then `right`.
+ * `left(including common columns)+right(excluding common columns)`.
  */
 cudf::table inner_join(
                          cudf::table const& left,
@@ -102,9 +99,7 @@ cudf::table inner_join(
  * 
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
- * `left` and then joined columns of `right`. For any "common" columns indicated
- * by `columns_in_common`, only a single output column is produced and the order of the
- * columns will be same as `left` and then `right`.
+ * `left(including common columns)+right(excluding common columns)`.
  */
 cudf::table left_join(
                          cudf::table const& left,
@@ -120,9 +115,9 @@ cudf::table left_join(
  * specified columns of two tables (left, right)
  * 
  * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, a:{1,2,5} And column 'a' of TableB joins
+ *          TableB b:{1,2,3}, c:{1,2,5} And column 'b' of TableB joins
  *          column 'a' of TableA.
- * The result would be Table-res a:{0, 1, 2, 5}, b:{NULL, 1, 2, 3}
+ * The result would be Table-res a:{0, 1, 2, NULL}, b:{NULL, 1, 2, 3}, c:{NULL, 1, 2, 5}
  * Result is union of column 'a' from Table A and column 'a' from Table B
  *
  * @throws cudf::logic_error
@@ -144,16 +139,15 @@ cudf::table left_join(
  * contain two non-nullable, `GDF_INT32` columns containing the indices of
  * matching rows between `left_on` and `right_on`. The first column corresponds to
  * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
- * indicates that the corresponding row in `left_on` has no match. It is the caller's
- * responsibility to free these columns.
+ * indicates that the corresponding row in `left_on` has no match. And similarly `-1` in
+ * first column indicates that the corresponding row in `right_on` has no match.
+ * It is the caller's responsibility to free these columns.
  * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
  * 
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
- * `left` and then joined columns of `right`. For any "common" columns indicated
- * by `columns_in_common`, only a single output column is produced and the order of the
- * columns will be same as `left` and then `right`.
+ * `left(including common columns)+right(excluding common columns)`.
  */
 cudf::table full_join(
                          cudf::table const& left,

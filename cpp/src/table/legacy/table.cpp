@@ -97,6 +97,24 @@ void table::destroy(void) {
   }
 }
 
+table table::select(std::vector<gdf_size_type> const& column_indices){
+    CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
+    std::vector<gdf_column*> desired_columns;
+    for(auto index : column_indices){
+        desired_columns.push_back(get_column(index));
+    }
+    return table{desired_columns};
+}
+
+table table::select(std::vector<gdf_size_type> const& column_indices) const {
+    CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
+    std::vector<gdf_column*> desired_columns;
+    for(auto index : column_indices){
+        desired_columns.push_back(const_cast<gdf_column*>(get_column(index)));
+    }
+    return table{desired_columns};
+}
+
 std::vector<gdf_dtype> column_dtypes(cudf::table const& table) {
   std::vector<gdf_dtype> dtypes(table.num_columns());
 
@@ -117,6 +135,24 @@ bool has_nulls(cudf::table const& table) {
   return std::any_of(table.begin(), table.end(), [](gdf_column const* col) {
     return (nullptr != col->valid) and (col->null_count > 0);
   });
+}
+
+table concat_tables(cudf::table const& table1, cudf::table const&table2) {
+    if ((table1.num_columns() == 0) and (table2.num_columns() == 0))
+        return table{};
+    if (table1.num_columns() == 0)
+        return table{table2};
+    if (table2.num_columns() == 0)
+        return table{table1};
+    CUDF_EXPECTS(table1.num_rows() == table2.num_rows(), "Number of rows mismatch");
+
+    std::vector<gdf_column*> columns(table1.num_columns()+table2.num_columns());
+    std::transform (std::cbegin(table1), std::cend(table1),
+                  std::begin(columns), [](auto col) { return const_cast<gdf_column*>(col); });
+    std::transform (std::cbegin(table2), std::cend(table2),
+                  std::begin(columns)+table1.num_columns(), [](auto col) { return const_cast<gdf_column*>(col); });
+
+    return table{columns};
 }
 
 }  // namespace cudf

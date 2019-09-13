@@ -248,6 +248,38 @@ void join_call(cudf::table const& left, cudf::table const& right,
   POP_RANGE();
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Returns a vector with non-common indices which is set difference
+ * between `[0, num_columns)` and index values in common_column_indices
+ *
+ * @param num_columns The number of columns , which represents column indices
+ * from `[0, num_columns)` in a table
+ * @param common_column_indices A vector of common indices which needs to be
+ * excluded from `[0, num_columns)`
+ * @return vector A vector containing only the indices which are not present in
+ * `common_column_indices`
+ *---------------------------------------------------------------------------**/
+
+auto non_common_column_indices(
+    gdf_size_type num_columns,
+    std::vector<gdf_size_type> const& common_column_indices) {
+  CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
+               "Too many columns in common");
+  std::vector<gdf_size_type> all_column_indices(num_columns);
+  std::iota(std::begin(all_column_indices), std::end(all_column_indices), 0);
+  std::vector<gdf_size_type> sorted_common_column_indices{
+      common_column_indices};
+  std::sort(std::begin(sorted_common_column_indices),
+            std::end(sorted_common_column_indices));
+  std::vector<gdf_size_type> non_common_column_indices(num_columns -
+                                                common_column_indices.size());
+  std::set_difference(std::cbegin(all_column_indices),
+                      std::cend(all_column_indices),
+                      std::cbegin(sorted_common_column_indices),
+                      std::cend(sorted_common_column_indices), std::begin(non_common_column_indices));
+   return non_common_column_indices;
+}
+
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Gathers rows indicated by `left_indices` and `right_indices` from
@@ -264,18 +296,21 @@ void join_call(cudf::table const& left, cudf::table const& right,
  * @param[in] left   The left table
  * @param[in] right  the right table
  * @param[in] columns_in_common is a vector of pairs of column indices
- * from tables `left` and `right` respectively, which are supposed to be joined onto,
- * that are "in common". For "common" columns, only a single output column will
- * be produced. Depending on type of join, the values will be gathered.
+ * from tables `left` and `right` respectively, that are "in common".
+ * For "common" columns, only a single output column will be produced.
+ * For an inner or left join, the result will be gathered from the column in
+ * `left`. For a full join, the result will be gathered from both common
+ * columns in `left` and `right`.
  * @param[in] left_indices Row indices from `left` to gather. If any row index
  * is out of bounds, the contribution in the output `table` will be NULL.
  * @param[in] right_indicess  Row indices from `right` to gather. If any row
  * index is out of bounds, the contribution in the output `table` will be NULL.
  * 
- * @returns Result of joining `left` and `right` tables as per `left_indices` and
- * `right_indices`. For any "common" columns indicated by `columns_in_common`,
- * only a single output column is produced. The resulting table will be joined
- * columns of `left` and then joined columns of `right` in the same order.
+ * @returns `table` containing the concatenation of rows from `left` and
+ * `right` specified by `left_indices` and `right_indices`, respectively.
+ * For any columns indicated by `columns_in_common`, only the corresponding
+ * column in `left` will be included in the result. Final form would look like
+ * `left(including common columns)+right(excluding common columns)`.
  */
 /* ----------------------------------------------------------------------------*/
 
@@ -289,79 +324,41 @@ cudf::table construct_join_output_df(
 
     PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
     //create left and right input table with columns not joined on
-    std::vector<gdf_size_type> left_column_indices(left.num_columns());
-    std::vector<gdf_size_type> right_column_indices(right.num_columns());
     std::vector<gdf_size_type> left_columns_in_common (columns_in_common.size());
     std::vector<gdf_size_type> right_columns_in_common (columns_in_common.size());
-    std::vector<gdf_size_type> left_nonjoin_indices (left.num_columns() - left_columns_in_common.size());
-    std::vector<gdf_size_type> right_nonjoin_indices (right.num_columns() - right_columns_in_common.size());
 
     for (unsigned int i = 0; i < columns_in_common.size(); ++i)
     {
         left_columns_in_common[i] = columns_in_common[i].first;
         right_columns_in_common[i] = columns_in_common[i].second;
     }
-    
     std::vector <gdf_size_type> tmp_left_join_indices = left_columns_in_common;
     std::vector <gdf_size_type> tmp_right_join_indices = right_columns_in_common;
   
-    std::iota(std::begin(left_column_indices), std::end(left_column_indices), 0);
-    std::iota(std::begin(right_column_indices), std::end(right_column_indices), 0);
-    std::sort(std::begin(tmp_left_join_indices), std::end(tmp_left_join_indices));
-    std::sort(std::begin(tmp_right_join_indices), std::end(tmp_right_join_indices));
-
-    // Gathering the indices that are not in join
-    if (left_nonjoin_indices.size() > 0)
-        std::set_difference(std::cbegin(left_column_indices), std::cend(left_column_indices),
-                                 std::cbegin(tmp_left_join_indices), std::cend(tmp_left_join_indices),
-                                 std::begin(left_nonjoin_indices));
-    
-    if (right_nonjoin_indices.size() > 0)
-        std::set_difference(std::cbegin(right_column_indices), std::cend(right_column_indices),
-                                 std::cbegin(tmp_right_join_indices), std::cend(tmp_right_join_indices),
-                                 std::begin(right_nonjoin_indices));
+    // Gathering the indices that are not in common
+    std::vector<gdf_size_type> left_non_common_indices =
+                                    non_common_column_indices(left.num_columns(), left_columns_in_common);
+    std::vector<gdf_size_type> right_non_common_indices =
+                                     non_common_column_indices(right.num_columns(), right_columns_in_common);
 
     gdf_size_type join_size = left_indices->size;
     // Update first set of type and type infos from left
-    std::vector <gdf_dtype> rdtypes = cudf::column_dtypes(left);
-    std::vector <gdf_dtype_extra_info> rdtype_infos = cudf::column_dtype_infos(left);
-    std::vector<gdf_column*> left_nonjoin_column(left_nonjoin_indices.size());
-    std::vector<gdf_column*> right_nonjoin_column;
+    std::vector<gdf_dtype> result_dtypes = cudf::column_dtypes(left);
+    std::vector<gdf_dtype_extra_info> result_dtype_infos = cudf::column_dtype_infos(left);
 
-    // Gathering all the left table columns not in joining indices 
-    std::transform(std::cbegin(left_nonjoin_indices), std::cend(left_nonjoin_indices),
-                   std::begin(left_nonjoin_column), [&](auto index) { return const_cast<gdf_column*>(left.get_column(index)); });
     // Gathering all the right table columns not in joining indices
-    for (auto index: right_nonjoin_indices){
-        right_nonjoin_column.push_back(const_cast<gdf_column*>(right.get_column(index)));
-        rdtypes.push_back(right.get_column(index)->dtype);
-        rdtype_infos.push_back(right.get_column(index)->dtype_info);
+    for (auto index: right_non_common_indices){
+        result_dtypes.push_back(right.get_column(index)->dtype);
+        result_dtype_infos.push_back(right.get_column(index)->dtype_info);
     }
 
-    cudf::table result(join_size, rdtypes, rdtype_infos, true);
-
-    std::vector<gdf_column*> result_left_nonjoin_column (left_nonjoin_indices.size());
-    std::vector<gdf_column*> result_right_nonjoin_column (result.num_columns() - left.num_columns());
-    std::vector<gdf_column*> result_join_column(left_columns_in_common.size());
-
-    // Gather the left non-join col of result
-    std::transform(std::cbegin(left_nonjoin_indices), std::cend(left_nonjoin_indices),
-                   std::begin(result_left_nonjoin_column), [&](auto index) { return const_cast<gdf_column*>(result.get_column(index)); });
-
-    // Gather join-col of result
-    std::transform(std::cbegin(left_columns_in_common), std::cend(left_columns_in_common),
-                   std::begin(result_join_column),  [&](auto index) { return const_cast<gdf_column*>(result.get_column(index)); });
-
-    // Gather the right non-join col of result, starts from end of left
-    std::transform(std::cbegin(result)+left.num_columns(), std::cend(result),
-                   std::begin(result_right_nonjoin_column), [](auto col) { return const_cast<gdf_column*>(col); });
-
+    cudf::table result(join_size, result_dtypes, result_dtype_infos, true);
     bool const check_bounds{ join_type != JoinType::INNER_JOIN };
 
     // Construct the left columns
-    if (0 != left_nonjoin_column.size()) {
-      cudf::table left_source_table(left_nonjoin_column);
-      cudf::table left_destination_table(result_left_nonjoin_column);
+    if (0 != left_non_common_indices.size()) {
+      cudf::table left_source_table = left.select(left_non_common_indices);
+      cudf::table left_destination_table = result.select(left_non_common_indices);
 
       cudf::detail::gather(&left_source_table,
                            static_cast<index_type const *>(left_indices->data),
@@ -372,9 +369,12 @@ cudf::table construct_join_output_df(
     }
 
     // Construct the right columns
-    if (0 != right_nonjoin_column.size()) {
-      cudf::table right_source_table(right_nonjoin_column);
-      cudf::table right_destination_table(result_right_nonjoin_column);
+    if (0 != right_non_common_indices.size()) {
+      std::vector<gdf_size_type> result_right_non_common_indices (right_non_common_indices.size());
+      std::iota(std::begin(result_right_non_common_indices),
+                std::end(result_right_non_common_indices), left.num_columns());
+      cudf::table right_source_table = right.select(right_non_common_indices);
+      cudf::table right_destination_table = result.select(result_right_non_common_indices);
 
       cudf::detail::gather(&right_source_table,
                            static_cast<index_type const *>(right_indices->data),
@@ -386,24 +386,14 @@ cudf::table construct_join_output_df(
     // Construct the joined columns
     if (columns_in_common.size() > 0) {
 
-      std::vector <gdf_column *> left_join (left_columns_in_common.size());
-      std::vector <gdf_column *> right_join (right_columns_in_common.size());
       // Gather the columns which join into single column from joined columns
-      std::transform(std::cbegin(left_columns_in_common), std::cend(left_columns_in_common),
-                     std::begin(left_join), [&](auto index) { return const_cast<gdf_column*>(left.get_column(index)); });
-
-      if (JoinType::FULL_JOIN == join_type)
-      {
-          std::transform(std::cbegin(right_columns_in_common), std::cend(right_columns_in_common),
-                         std::begin(right_join), [&](auto index) { return const_cast<gdf_column*>(right.get_column(index)); });
-      }
-      cudf::table join_source_table(left_join);
-      cudf::table join_destination_table(result_join_column);
+      cudf::table join_source_table = left.select(left_columns_in_common);
+      cudf::table join_destination_table = result.select(left_columns_in_common);
 
       // Gather valid rows from the right table
       // TODO: Revisit this, because it probably can be done more efficiently
       if (JoinType::FULL_JOIN == join_type) {
-        cudf::table right_source_table(right_join);
+        cudf::table right_source_table = right.select(right_columns_in_common);
 
         cudf::detail::gather(
             &right_source_table,
@@ -449,16 +439,15 @@ cudf::table construct_join_output_df(
  * contain two non-nullable, `GDF_INT32` columns containing the indices of
  * matching rows between `left_on` and `right_on`. The first column corresponds to
  * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
- * indicates that the corresponding row in `left_on` has no match. It is the caller's
- * responsibility to free these columns.
+ * indicates that the corresponding row in `left_on` has no match. And similarly `-1` in
+ * first column indicates that the corresponding row in `right_on` has no match.
+ * It is the caller's responsibility to free these columns.
  * @param[in] join_context The context to use to control how
  * the join is performed,e.g., sort vs hash based implementation
  *
  * @returns Result of joining `left` and `right` tables on the columns
  * specified by `left_on` and `right_on`. The resulting table will be joined columns of
- * `left` and then joined columns of `right`. For any "common" columns indicated
- * by `columns_in_common`, only a single output column is produced and the order of the
- * columns will be same as `left` and then `right`.
+ * `left(including common columns)+right(excluding common columns)`.
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename index_type>
@@ -486,27 +475,10 @@ cudf::table join_call_compute_df(
 
   cudf::table empty_left = cudf::empty_like(left);
   cudf::table empty_right = cudf::empty_like(right);
-  std::vector<int> right_column_indices(right.num_columns());
-  std::iota(std::begin(right_column_indices), std::end(right_column_indices), 0);
-  std::sort(std::begin(right_columns_in_common), std::end(right_columns_in_common));
-  std::vector <int> right_nonjoin_indices (right.num_columns() - right_columns_in_common.size());
-
-  // Gathering the indices that are not in join 
-  std::set_difference(std::cbegin(right_column_indices), std::cend(right_column_indices),
-                      std::cbegin(right_columns_in_common), std::cend(right_columns_in_common),
-                      std::begin(right_nonjoin_indices));
-
-  std::vector <gdf_column*> tmp_cols(empty_left.num_columns() + right_nonjoin_indices.size());
-
-  // [0 to len(left)) columns are copied
-  std::transform (std::cbegin(empty_left), std::cend(empty_left),
-                  std::begin(tmp_cols), [](auto col) { return const_cast<gdf_column*>(col); });
-
-  // [len(left) to end) columns are copied
-  std::transform (std::cbegin(right_nonjoin_indices), std::cend(right_nonjoin_indices),
-                  std::begin(tmp_cols) + empty_left.num_columns(), [&](auto index) { return const_cast<gdf_column*>(empty_right.get_column(index)); });
-
-  cudf::table tmp_table = (tmp_cols.size()>0)? cudf::table (tmp_cols) : cudf::table{};
+  std::vector <gdf_size_type> right_non_common_indices = non_common_column_indices(right.num_columns(),
+                                                                         right_columns_in_common);;
+  cudf::table tmp_right_table = empty_right.select(right_non_common_indices);
+  cudf::table tmp_table = cudf::concat_tables (empty_left, tmp_right_table);
   
   // If there is nothing to join, then send empty table with all columns
   if (0 == left_on.size() || 0 == right_on.size() || left_on.size() != right_on.size())
@@ -629,13 +601,8 @@ cudf::table join_call_compute_df(
   }
 
   //get column pointers to join on
-  std::vector<gdf_column*> ljoincol(left_on.size());
-  std::vector<gdf_column*> rjoincol(right_on.size());
-  std::transform (std::cbegin(left_on), std::cend(left_on),
-                  std::begin(ljoincol), [&](auto index) { return const_cast<gdf_column*>(updated_left_table.get_column(index)); });
-  std::transform (std::cbegin(right_on), std::cend(right_on),
-                  std::begin(rjoincol), [&](auto index) { return const_cast<gdf_column*>(updated_right_table.get_column(index)); });
-  join_call<join_type>(cudf::table(ljoincol), cudf::table(rjoincol),
+  join_call<join_type>(updated_left_table.select(left_on),
+            updated_right_table.select(right_on),
             left_index_out, right_index_out,
             join_context);
 
