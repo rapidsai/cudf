@@ -170,6 +170,19 @@ def test_from_pandas(pdf, pdfIndex):
     assert_eq(pdf, gdf)
 
 
+def test_from_pandas_series():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    ).set_index(["a", "b"])
+
+    result = cudf.from_pandas(pdf)
+    assert_eq(pdf, result)
+
+    test_pdf = pdf["c"]
+    result = cudf.from_pandas(test_pdf)
+    assert_eq(test_pdf, result)
+
+
 def test_series_multiindex(pdfIndex):
     ps = pd.Series(np.random.rand(7))
     gs = cudf.from_pandas(ps)

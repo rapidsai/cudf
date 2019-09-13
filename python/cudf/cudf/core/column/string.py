@@ -155,6 +155,13 @@ class StringMethods(object):
             """
             assert others.dtype == np.dtype("object")
             others = others.data
+        elif isinstance(others, StringMethods):
+            """
+            If others is a StringMethods then
+            raise an exception
+            """
+            msg = "series.str is an accessor, not an array-like of strings."
+            raise ValueError(msg)
         elif is_list_like(others) and others:
             """
             If others is a list-like object (in our case lists & tuples)
