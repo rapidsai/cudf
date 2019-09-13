@@ -17,7 +17,11 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2781 Add issorted to is_monotonic
+- PR #2685 Add cudf::scatter_to_tables and cython binding
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
+- PR #2785 Add nvstrings Python docs
+- PR #2786 Add benchmarks option to root build.sh
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
 
 ## Improvements
@@ -39,6 +43,7 @@
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
+- PR #2645 libcudf unique_count for Series.nunique 
 
 ## Bug Fixes
 
@@ -77,6 +82,7 @@
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
 - PR #2716 Added Exception for `StringMethods` in string methods
+- PR #2795 Fix java build/cast error
 
 
 # cuDF 0.9.0 (21 Aug 2019)
