@@ -17,6 +17,7 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2781 Add issorted to is_monotonic
 - PR #2685 Add cudf::scatter_to_tables and cython binding
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 - PR #2785 Add nvstrings Python docs
@@ -80,6 +81,7 @@
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
 - PR #2716 Added Exception for `StringMethods` in string methods
+- PR #2795 Fix java build/cast error
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
 
 
