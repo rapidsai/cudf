@@ -1841,11 +1841,15 @@ class Series(object):
             dtype=self.dtype,
         )
 
-    def kurtosis(self, axis=None, skipna=True, numeric_only=True):
+    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+        """Calculates Fisher's unbiased kurtosis of a sample.
         """
-        Calculates Fisher's unbiased kurtosis of a sample.
-        """
-        assert axis in (None, 0) and skipna in (None, True)
+        assert (
+            axis in (None, 0)
+            and skipna in (None, True)
+            and level in (None,)
+            and numeric_only in (None, True)
+        )
 
         if self.empty:
             return np.nan
@@ -1869,11 +1873,15 @@ class Series(object):
         kurt = term_one_section_one * term_one_section_two - 3 * term_two
         return kurt
 
-    def skew(self, axis=None, skipna=True, numeric_only=True):
+    def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
+        """Calculates the unbiased Fisher-Pearson skew of a sample.
         """
-        Calculates the unbiased Fisher-Pearson skew of a sample.
-        """
-        assert axis in (None, 0) and skipna in (None, True)
+        assert (
+            axis in (None, 0)
+            and skipna in (None, True)
+            and level in (None,)
+            and numeric_only in (None, True)
+        )
 
         if self.empty:
             return np.nan
@@ -1892,7 +1900,7 @@ class Series(object):
             return 0
 
         unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
-        skew = unbiased_coef * m3 / (m2 ** (1.5))
+        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
         return skew
 
     def isin(self, test):
