@@ -18,42 +18,64 @@ template <class T, class U>
 constexpr bool is_same_v = std::is_same<T, U>::value;
 }
 
-// GetType -----------------------------------------------------
-static_assert(std::is_same<GetType<int, 0>, int>::value, "");
-static_assert(std::is_same<GetType<Types<int, float, double>, 0>, int>::value, "");
-static_assert(std::is_same<GetType<Types<int, float, double>, 1>, float>::value, "");
-static_assert(std::is_same<GetType<Types<int, float, double>, 2>, double>::value, "");
+namespace{
+// Work around to remove paranthesis surrounding a type
+template<typename T> struct argument_type;
+template<typename T, typename U> struct argument_type<T(U)> { using type = U; };
+}
+/**---------------------------------------------------------------------------*
+ * @brief Performs a compile-time check that two types are equivalent.
+ *
+ * @note In order to work around commas in macros, any type containing commas
+ * should be wrapped in paranthesis.
+ * 
+ * Example:
+ * ```
+ * EXPECT_SAME_TYPE(int, int);
+ * 
+ * EXPECT_SAME_TYPE(int, float); // compile error
+ * 
+ * // Paranthesis around types with commas
+ * EXPECT_SAME_TYPE((std::map<int, float), (std::map<int, float>));
+ * ```
+ *---------------------------------------------------------------------------**/
+#define EXPECT_SAME_TYPE(expected, actual)                          \
+  static_assert(std::is_same_v<argument_type<void(expected)>::type, \
+                               argument_type<void(actual)>::type>,  \
+                "");
 
-// Our tests above will run at compile time.
-// Let's just create a dummy test here to appear
-// in the test run output. This will make us sure that
-// this file was compiled.
-TEST(TypeList, GetType) {}
+TEST(TypeList, GetType) {
+  EXPECT_SAME_TYPE((GetType<int, 0>), int);
+  EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 0>), int);
+  EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 1>), float);
+  EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 2>), double);
+}
 
-// Concat -----------------------------------------------------
-static_assert(std::is_same<Concat<>, Types<>>::value, "");
+TEST(TypeList, Concat) {
+  EXPECT_SAME_TYPE(Concat<>, Types<>);
+  EXPECT_SAME_TYPE((Concat<Types<long, void *, char *>>),
+                   (Types<long, void *, char *>));
 
-static_assert(std::is_same<Concat<Types<long, void *, char *>>, Types<long, void *, char *>>::value, "");
+  EXPECT_SAME_TYPE(
+      (Concat<Types<long, void *, char *>, Types<float, char, double>>),
+      (Types<long, void *, char *, float, char, double>));
 
-static_assert(std::is_same<Concat<Types<long, void *, char *>, Types<float, char, double>>,
-                           Types<long, void *, char *, float, char, double>>::value,
-              "");
+  EXPECT_SAME_TYPE(
+      (Concat<Types<long, void *, char *>, Types<float, char, double>,
+              Types<int *, long *, unsigned>>),
+      (Types<long, void *, char *, float, char, double, int *, long *,
+             unsigned>));
+}
 
-static_assert(
-    std::is_same<Concat<Types<long, void *, char *>, Types<float, char, double>, Types<int *, long *, unsigned>>,
-                 Types<long, void *, char *, float, char, double, int *, long *, unsigned>>::value,
-    "");
-
-TEST(TypeList, Concat) {}
-
-// Flatten -----------------------------------------------------
-static_assert(std::is_same<Flatten<Types<>>, Types<>>::value, "");
-static_assert(std::is_same<Flatten<Types<int>>, Types<int>>::value, "");
-static_assert(std::is_same<Flatten<Types<int, double>>, Types<int, double>>::value, "");
-static_assert(std::is_same<Flatten<Types<Types<int, double>, float>>, Types<int, double, float>>::value, "");
-static_assert(std::is_same<Flatten<Types<Types<int, Types<double>>, float>>, Types<int, double, float>>::value, "");
-
-TEST(TypeList, Flatten) {}
+TEST(TypeList, Flatten) {
+  EXPECT_SAME_TYPE(Flatten<Types<>>, Types<>);
+  EXPECT_SAME_TYPE(Flatten<Types<int>>, Types<int>);
+  EXPECT_SAME_TYPE((Flatten<Types<int, double>>), (Types<int, double>));
+  EXPECT_SAME_TYPE((Flatten<Types<Types<int, double>, float>>),
+                   (Types<int, double, float>));
+  EXPECT_SAME_TYPE((Flatten<Types<Types<int, Types<double>>, float>>),
+                   (Types<int, double, float>));
+}
 
 // CrossJoin -----------------------------------------------------
 static_assert(std::is_same<CrossJoin<>, Types<>>::value, "");
