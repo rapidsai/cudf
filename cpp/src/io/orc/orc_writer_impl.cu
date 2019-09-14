@@ -37,6 +37,19 @@ namespace io {
 namespace orc {
 
 /**
+ * @brief Function that translates GDF compression to ORC compression
+ **/
+constexpr CompressionKind to_orckind(compression_type compression) {
+  switch (compression) {
+    case compression_type::snappy:
+      return SNAPPY;
+    case compression_type::none:
+    default:
+      return NONE;
+  }
+}
+
+/**
  * @brief Function that translates GDF dtype to ORC datatype
  **/
 constexpr TypeKind to_orckind(gdf_dtype dtype) {
@@ -70,8 +83,9 @@ constexpr TypeKind to_orckind(gdf_dtype dtype) {
   }
 }
 
+writer::Impl::Impl(std::string filepath, writer_options const &options) {
+  compression_ = options.compression;
 
-writer::Impl::Impl(std::string filepath, writer_options const& options) {
   outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
   CUDF_EXPECTS(outfile_.is_open(), "Cannot open output file");
 }
@@ -98,7 +112,7 @@ void writer::Impl::write(const cudf::table& table) {
     uint32_t num_compressed_blocks = 0;
 
     // PostScript
-    ps.compression = NONE;
+    ps.compression = to_orckind(compression_);
     ps.compressionBlockSize = 256 * 1024; // TODO: Pick smaller values if too few compression blocks
     ps.version = {0,12};
     ps.metadataLength = 0; // TODO: Write stripe statistics

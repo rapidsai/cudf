@@ -52,6 +52,7 @@ class writer::Impl {
   void write(const cudf::table& table);
 
  private:
+  compression_type compression_ = compression_type::none;
   std::ofstream outfile_;
 };
 

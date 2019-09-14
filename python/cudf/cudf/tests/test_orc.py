@@ -236,6 +236,7 @@ def test_orc_reader_uncompressed_block(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+@pytest.mark.parametrize("compression", [None, "snappy"])
 @pytest.mark.parametrize(
     "reference_file, columns",
     [
@@ -254,7 +255,7 @@ def test_orc_reader_uncompressed_block(datadir):
         ("TestOrcFile.demo-12-zlib.orc", ["_col1", "_col3", "_col5"]),
     ],
 )
-def test_orc_writer(datadir, tmpdir, reference_file, columns):
+def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     pdf_fname = datadir / reference_file
     gdf_fname = tmpdir.join("gdf.orc")
 
@@ -267,7 +268,7 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns):
             print(type(excpr).__name__)
 
     expect = orcfile.read(columns=columns).to_pandas()
-    cudf.from_pandas(expect).to_orc(gdf_fname.strpath)
+    cudf.from_pandas(expect).to_orc(gdf_fname.strpath, compression=compression)
     got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
 
     assert_eq(expect, got)
