@@ -17,14 +17,9 @@
 namespace util {
 
 // Utilities for creating parameters for typed tests on GoogleTest
-// We support both typed and (constexpr) value parameters. In order to work them
-// seamslessly, we wrap the value into type Value
 //
 // Types is used to define type list, it's just an alias to ::testing::Types:
 // using Types = util::Types<int,char,float>;
-//
-// Values is used to define compile-time value lists
-// using Values = util::Values<'c',3.0,100>;
 //
 // You can declare your tests using a template fixture:
 //
@@ -37,22 +32,20 @@ namespace util {
 //
 // TEST(TestFixture, mytest)
 // {
-//      using MEM = GetType<TypeParam,0>; // the first type element
-//      constexpr auto VALUE = GetValue<TypeParam,1>; // second value element
+//      using Type0 = GetType<TypeParam,0>; // the first type element
 // }
 //
-// You can compose complicated type/value arguments using Concat and CrossJoin
+// You can compose complicated type arguments using Concat and CrossJoin
 // and RemoveIf
 //
-// using Types = CrossJoin<Types<int,float>,Values<0,4>>;
-// creates the parameters <int,0> <int,4> <float,0> <float,4>
+// using Types = CrossJoin<Types<int,float>,Types<char, void*>>;
+// creates the parameters <int,char> <int,void*> <float,char> <float,void*>
 //
 // Concat is useful to concatenate parameter lists created with CrossJoin
 //
-// using Types = Concat<CrossJoin<Types<int,float>,ValueType<0>>,
-//                      CrossJoin<Types<char,double>,ValueType<1,2>>>;
-// creates the parameters <int,0> <float,0> <char,1> <char,2> <double,1>
-// <double,2>
+// using Types = Concat<CrossJoin<Types<int,float>,Types<char>>,
+//                      CrossJoin<Types<char,double>,ValueType<void*,short>>>;
+// creates the parameters <int,char> <float,char> <char,void*> <char,short> <double,void*> <double,short>
 //
 // RemoveIf can be used to remove some parameters that match a given predicate:
 //
@@ -60,7 +53,6 @@ namespace util {
 // creates the parameters <int,char>,<char,int>
 
 // Types -----------------------------------------
-
 using ::testing::Types;
 
 template <class T, int D>
@@ -99,8 +91,6 @@ template <class TUPLE, int D>
 using GetType = typename GetTypeImpl<TUPLE, D>::type;
 
 // GetSize -------------------------------
-// returns the size (number of elements) of the type list
-
 template <class TUPLE>
 struct GetSizeImpl;
 
@@ -120,34 +110,7 @@ struct GetSizeImpl<Types<TYPES...>> {
 template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
-// Values -----------------------------------------
-/**---------------------------------------------------------------------------*
- * @brief A compile time list of values of the same type:
- *
- * Example:
- * ```
- * using MyValues = Values<int32_t, 0, 42, 137>;
- * ```
- *---------------------------------------------------------------------------**/
-
-template <class T, T V>
-struct ValueImpl {
-  static constexpr auto value = V;
-};
-
-template <class T, T... ARGS>
-struct ValuesImpl {
-  using type = Types<ValueImpl<decltype(ARGS), ARGS>...>;
-};
-
-template <class T, T... ARGS>
-using Values = typename ValuesImpl<T, ARGS...>::type;
-
-template <class TUPLE, int D>
-constexpr auto GetValue = GetType<TUPLE, D>::value;
-
 // Concat -----------------------------------------
-
 namespace detail {
 template <class A, class B>
 struct Concat2;
@@ -228,7 +191,6 @@ template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
 // CrossJoin -----------------------------------------
-
 namespace detail {
 // prepend T in TUPLE
 template <class T, class TUPLE>
@@ -291,7 +253,6 @@ template <class... ARGS>
 using CrossJoin = typename CrossJoinImpl<ARGS...>::type;
 
 // AllSame -----------------------------------------
-
 namespace detail {
 template <class... ITEMS>
 struct AllSame : std::false_type {};
@@ -333,17 +294,6 @@ struct AllSame {
 };
 
 // Exists ---------------------------------
-/**---------------------------------------------------------------------------*
- * @brief Indicates if a type exists within a type list.
- *
- * Example:
- * ```
- * // Exists<int, Types<float, double, int>> == true_type
- * // Exists<char, Types<int, float, void*>> == false_type
- * ```
- *
- *---------------------------------------------------------------------------**/
-
 // Do a linear search to find NEEDLE in HAYSACK
 template <class NEEDLE, class HAYSACK>
 struct ExistsImpl;
@@ -360,7 +310,17 @@ struct ExistsImpl<NEEDLE, Types<NEEDLE, TAIL...>> : std::true_type {};
 template <class NEEDLE, class HEAD, class... TAIL>
 struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>>
     : ExistsImpl<NEEDLE, Types<TAIL...>> {};
-
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if a type exists within a type list.
+ *
+ * Example:
+ * ```
+ * // Exists<int, Types<float, double, int>> == true_type
+ * // Exists<char, Types<int, float, void*>> == false_type
+ * ```
+ * @tparam NEEDLE The type to search for
+ * @tparam HAYSACK The list to search in
+ *---------------------------------------------------------------------------**/
 template <class NEEDLE, class HAYSACK>
 constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
 
