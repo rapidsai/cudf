@@ -40,7 +40,7 @@ struct argument_type<T(U)> {
  * EXPECT_SAME_TYPE(int, float); // compile error
  *
  * // Paranthesis around types with commas
- * EXPECT_SAME_TYPE((std::map<int, float), (std::map<int, float>));
+ * EXPECT_SAME_TYPE((std::map<int, float>), (std::map<int, float>));
  * ```
  *---------------------------------------------------------------------------**/
 #define EXPECT_SAME_TYPE(expected, actual)                          \
@@ -186,29 +186,39 @@ TEST(TypeList, RemoveIf) {
       (Types<Types<char, char>, Types<int, int>>));
 }
 
+TEST(TypeList, Transform) {
+  EXPECT_SAME_TYPE((Transform<Repeat<2>, Types<int, float>>),
+                   (Types<Types<int, int>, Types<float, float>>));
+
+  EXPECT_SAME_TYPE((Transform<Repeat<1>, Types<int, float>>),
+                   (Types<Types<int>, Types<float>>));
+  EXPECT_SAME_TYPE((Transform<Repeat<0>, Types<int, float>>),
+                   (Types<Types<>, Types<>>));
+  EXPECT_SAME_TYPE((Transform<Repeat<2>, Types<int>>),
+                   (Types<Types<int, int>>));
+  EXPECT_SAME_TYPE((Transform<Repeat<1>, Types<int>>), Types<Types<int>>);
+  EXPECT_SAME_TYPE((Transform<Repeat<0>, Types<>>), Types<>);
+}
+
+TEST(TypeList, Append) {
+  EXPECT_SAME_TYPE(Append<Types<>>, Types<>);
+  EXPECT_SAME_TYPE((Append<Types<>, int>), Types<int>);
+  EXPECT_SAME_TYPE(Append<Types<int>>, Types<int>);
+  EXPECT_SAME_TYPE((Append<Types<int>, float>), (Types<int, float>));
+  EXPECT_SAME_TYPE((Append<Types<int>, float, char>),
+                   (Types<int, float, char>));
+}
+
+TEST(TypeList, Remove) {
+  EXPECT_SAME_TYPE((Remove<Types<int, float, char>, 1>), (Types<int, char>));
+  EXPECT_SAME_TYPE((Remove<Types<int, float, char>, 0, 2>), Types<float>);
+  EXPECT_SAME_TYPE((Remove<Types<int, char>>), (Types<int, char>));
+  EXPECT_SAME_TYPE((Remove<Types<int>, 0>), Types<>);
+  EXPECT_SAME_TYPE((Remove<Types<int, char>, 0, 1>), Types<>);
+  EXPECT_SAME_TYPE(Remove<Types<>>, Types<>);
+}
+
 /*
-// Transform -----------------------------------------------------
-static_assert(std::is_same_v<Transform<Rep<2>, Types<int, float>>,
-Types<Types<int, int>, Types<float, float>>>);
-static_assert(std::is_same_v<Transform<Rep<1>, Types<int, float>>,
-Types<Types<int>, Types<float>>>);
-static_assert(std::is_same_v<Transform<Rep<0>, Types<int, float>>,
-Types<Types<>, Types<>>>); static_assert(std::is_same_v<Transform<Rep<2>,
-Types<int>>, Types<Types<int, int>>>);
-static_assert(std::is_same_v<Transform<Rep<1>, Types<int>>, Types<Types<int>>>);
-static_assert(std::is_same_v<Transform<Rep<0>, Types<>>, Types<>>);
-
-TEST(TypeList, Transform) {}
-
-// Append -----------------------------------------------------
-static_assert(std::is_same_v<Append<Types<>>, Types<>>);
-static_assert(std::is_same_v<Append<Types<>, int>, Types<int>>);
-static_assert(std::is_same_v<Append<Types<int>>, Types<int>>);
-static_assert(std::is_same_v<Append<Types<int>, float>, Types<int, float>>);
-static_assert(std::is_same_v<Append<Types<int>, float, char>, Types<int, float,
-char>>);
-
-TEST(TypeList, Append) {}
 
 // Unique -----------------------------------------------------
 static_assert(std::is_same_v<Unique<Types<>>, Types<>>);
@@ -232,16 +242,6 @@ static_assert(!Contains(Types<>(), nv::vpi::priv::Size2D{1, 3}));
 
 TEST(TypeList, Contains) {}
 
-// Remove ---------------------------------------------------
-
-static_assert(std::is_same<Remove<Types<int, float, char>, 1>, Types<int,
-char>>::value); static_assert(std::is_same<Remove<Types<int, float, char>, 0,
-2>, Types<float>>::value); static_assert(std::is_same<Remove<Types<int, char>>,
-Types<int, char>>::value); static_assert(std::is_same<Remove<Types<int>, 0>,
-Types<>>::value); static_assert(std::is_same<Remove<Types<int, char>, 0, 1>,
-Types<>>::value); static_assert(std::is_same<Remove<Types<>>, Types<>>::value);
-
-TEST(TypeList, Remove) {}
 
 // GetSize ------------------------------------------------
 
