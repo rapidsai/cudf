@@ -573,26 +573,4 @@ struct UniqueImpl<Types<ITEMS...>> {
 template <class TYPES>
 using Unique = typename UniqueImpl<TYPES>::type;
 
-
-/*
-// Helper to be able to define typed test cases by defining the
-// types inline (no worries about commas in macros)
-
-#define VPI_TYPED_TEST_SUITE_F(TEST, ...) \
-    using TEST##_Types = __VA_ARGS__;     \
-    TYPED_TEST_SUITE(TEST, TEST##_Types)
-
-#define VPI_TYPED_TEST_SUITE(TEST, ...) \
-    template<class T>                   \
-    class TEST : public ::testing::Test \
-    {                                   \
-    };                                  \
-    VPI_TYPED_TEST_SUITE_F(TEST, __VA_ARGS__)
-
-#define VPI_INSTANTIATE_TYPED_TEST_SUITE_P(INSTNAME, TEST, ...) \
-    using TEST##INSTNAME##_Types = __VA_ARGS__;                 \
-    INSTANTIATE_TYPED_TEST_SUITE_P(INSTNAME, TEST, TEST##INSTNAME##_Types)
-
-*/
-
 }  // namespace util
