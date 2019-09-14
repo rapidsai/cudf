@@ -355,9 +355,7 @@ struct ContainedIn {
   using Call = ExistsImpl<NEEDLE, HAYSACK>;
 };
 
-/*
 // RemoveIf -----------------------------------------
-
 template<class PRED, class TUPLE>
 struct RemoveIfImpl;
 
@@ -375,8 +373,28 @@ Call<HEAD>::value, Types<>, Types<HEAD>>::type, typename RemoveIfImpl<PRED,
 Types<TAIL...>>::type>;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Removes types from a type list that satisfy a predicate
+ * 
+ * Possible predicates: `AllSame`, `ContainedIn`
+ * 
+ * Example:
+ * ```
+ * RemoveIf<AllSame, Types<Types<int, int, int>>> ==  Types<>
+ * RemoveIf<AllSame, Types<Types<int, float, int>>> ==  Types<Types<int, float, int>>
+ * 
+ * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>,
+ *                                      Types<Types<char, char>, Types<float,int>>> 
+ * // MyTypes == Types<float, int>
+ * ```
+ *
+ * @tparam PRED The predicate
+ * @tparam TUPLE The list of types on which to apply the predicate
+ *---------------------------------------------------------------------------**/
 template<class PRED, class TUPLE>
 using RemoveIf = typename RemoveIfImpl<PRED, TUPLE>::type;
+
+/*
 
 // Transform --------------------------------
 
