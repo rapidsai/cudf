@@ -394,7 +394,6 @@ Types<TAIL...>>::type>;
 template<class PRED, class TUPLE>
 using RemoveIf = typename RemoveIfImpl<PRED, TUPLE>::type;
 
-/*
 
 // Transform --------------------------------
 
@@ -407,34 +406,65 @@ struct TransformImpl<XFORM, Types<ITEMS...>>
     using type = Types<typename XFORM::template Call<ITEMS>...>;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Applies a transformation to every type in a type list
+ * 
+ * Possible transformations: Repeat
+ * 
+ * Example:
+ * ```
+ * // Repeat transformation repeats each type for a specified count
+ * using MyTypes = Transform<Repeat<2>, Types<int, float>>;
+ * // MyTypes == Types< Types<int, int>, Types<float, float>>);
+ * ```
+ * 
+ * @tparam XFORM The transformation to apply
+ * @tparam TYPES The list of types to transform
+*---------------------------------------------------------------------------**/
 template<class XFORM, class TYPES>
 using Transform = typename TransformImpl<XFORM, TYPES>::type;
 
-// Rep --------------------------------
+
+// Repeat --------------------------------
 
 namespace detail {
 template<class T, int N, class RES>
-struct Rep;
+struct Repeat;
 
 template<class T, int N, class... ITEMS>
-struct Rep<T, N, Types<ITEMS...>>
+struct Repeat<T, N, Types<ITEMS...>>
 {
-    using type = typename Rep<T, N - 1, Types<T, ITEMS...>>::type;
+    using type = typename Repeat<T, N - 1, Types<T, ITEMS...>>::type;
 };
 
 template<class T, class... ITEMS>
-struct Rep<T, 0, Types<ITEMS...>>
+struct Repeat<T, 0, Types<ITEMS...>>
 {
     using type = Types<ITEMS...>;
 };
 } // namespace detail
 
+/**---------------------------------------------------------------------------*
+ * @brief Transformation that repeats a type for a specified count.
+ * 
+ * Used in Transform.
+ * 
+ * Example:
+ * ```
+ * // Repeat transformation repeats each type for a specified count
+ * using MyTypes = Transform<Repeat<2>, Types<int, float>>;
+ * // MyTypes == Types< Types<int, int>, Types<float, float>>);
+ * ```
+ * 
+ * @tparam N The number of times to repeat the type
+*---------------------------------------------------------------------------**/
 template<int N>
-struct Rep
+struct Repeat
 {
     template<class T>
-    using Call = typename detail::Rep<T, N, Types<>>::type;
+    using Call = typename detail::Repeat<T, N, Types<>>::type;
 };
+
 
 // Append --------------------------------
 
@@ -447,6 +477,18 @@ struct AppendImpl<Types<HEAD...>, TAIL...>
     using type = Types<HEAD..., TAIL...>;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Appends types to a type list
+ *
+ * Example:
+ * ```
+ * using MyTypes = Append<Types<int>, float, char>;
+ * MyTypes ==  Types<int, float, char>;
+ * ```
+ *
+ * @tparam TYPES The type list to append to
+ * @tparam ITEMS The types to append
+ *---------------------------------------------------------------------------**/
 template<class TYPES, class... ITEMS>
 using Append = typename AppendImpl<TYPES, ITEMS...>::type;
 
@@ -490,8 +532,16 @@ struct RemoveImpl
     using type = typename detail::Remove<TUPLE, 0, IDXs...>::type;
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Removes types at specified indices from a type list.
+ * 
+ * @tparam TUPLE Type list to remove types from
+ * @tparam IDXs Indices of types to remove
+*---------------------------------------------------------------------------**/
 template<class TUPLE, int... IDXs>
 using Remove = typename RemoveImpl<TUPLE, IDXs...>::type;
+
+/*
 
 // Unique --------------------------------
 
