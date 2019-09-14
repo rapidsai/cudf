@@ -137,7 +137,7 @@ struct table {
    *
    *---------------------------------------------------------------------------**/
   gdf_size_type num_rows() const {
-    if (this->get_column(0) != nullptr) {
+    if (not _columns.empty()) {
       return this->get_column(0)->size;
     }
     return 0;

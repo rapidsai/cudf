@@ -27,12 +27,12 @@
 namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
-  CUDF_EXPECTS(_columns.size() != 0, "Cannot construct table with zero columns");
-  std::for_each(_columns.begin(), _columns.end(),
-                [this](gdf_column* col) {
-                  CUDF_EXPECTS(nullptr != col, "Null input column");
-                  CUDF_EXPECTS(_columns.front()->size == col->size, "Column size mismatch");
-                });
+  if (not cols.empty())
+    std::for_each(_columns.begin(), _columns.end(),
+                  [this](gdf_column* col) {
+                    CUDF_EXPECTS(nullptr != col, "Null input column");
+                    CUDF_EXPECTS(_columns.front()->size == col->size, "Column size mismatch");
+                  });
 }
 
 table::table(std::initializer_list<gdf_column*> list)
@@ -93,9 +93,8 @@ void table::destroy(void) {
 }
 
 table table::select(std::vector<gdf_size_type> const& column_indices) const {
-    if (column_indices.empty())
-        return table{};
     CUDF_EXPECTS(column_indices.size() <= num_columns(), "Requested too many columns.");
+
     std::vector<gdf_column*> desired_columns;
     for(auto index : column_indices){
         desired_columns.push_back(_columns[index]);
@@ -126,12 +125,6 @@ bool has_nulls(cudf::table const& table) {
 }
 
 table concat(cudf::table const& table1, cudf::table const&table2) {
-    if ((table1.num_columns() == 0) and (table2.num_columns() == 0))
-        return table{};
-    if (table1.num_columns() == 0)
-        return table{table2};
-    if (table2.num_columns() == 0)
-        return table{table1};
     CUDF_EXPECTS(table1.num_rows() == table2.num_rows(), "Number of rows mismatch");
 
     std::vector<gdf_column*> columns(table1.num_columns()+table2.num_columns());
