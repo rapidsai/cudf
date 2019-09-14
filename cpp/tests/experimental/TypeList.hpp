@@ -332,12 +332,14 @@ constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
  *
  * Example:
  * ```
- * ContainedIn<Types<Types<int, char>>>::Call<Types<int, char>>::value == true_type
- * ContainedIn<Types<Types<int, char>>>::Call<Types<int, float>>::value == false_type
+ * ContainedIn<Types<Types<int, char>>>::Call<Types<int, char>>::value ==
+ *true_type ContainedIn<Types<Types<int, char>>>::Call<Types<int, float>>::value
+ *== false_type
  *
  * // Used as a predicate
  * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>,
- *                                      Types<Types<char, char>, Types<float,int>>> 
+ *                                      Types<Types<char, char>,
+ *Types<float,int>>>
  * // MyTypes == Types<float, int>
  *
  * ```
@@ -356,125 +358,118 @@ struct ContainedIn {
 };
 
 // RemoveIf -----------------------------------------
-template<class PRED, class TUPLE>
+template <class PRED, class TUPLE>
 struct RemoveIfImpl;
 
-template<class PRED>
-struct RemoveIfImpl<PRED, Types<>>
-{
-    using type = Types<>;
+template <class PRED>
+struct RemoveIfImpl<PRED, Types<>> {
+  using type = Types<>;
 };
 
-template<class PRED, class HEAD, class... TAIL>
-struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>>
-{
-    using type = Concat<typename std::conditional<PRED::template
-Call<HEAD>::value, Types<>, Types<HEAD>>::type, typename RemoveIfImpl<PRED,
-Types<TAIL...>>::type>;
+template <class PRED, class HEAD, class... TAIL>
+struct RemoveIfImpl<PRED, Types<HEAD, TAIL...>> {
+  using type =
+      Concat<typename std::conditional<PRED::template Call<HEAD>::value,
+                                       Types<>, Types<HEAD>>::type,
+             typename RemoveIfImpl<PRED, Types<TAIL...>>::type>;
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Removes types from a type list that satisfy a predicate
- * 
+ *
  * Possible predicates: `AllSame`, `ContainedIn`
- * 
+ *
  * Example:
  * ```
  * RemoveIf<AllSame, Types<Types<int, int, int>>> ==  Types<>
- * RemoveIf<AllSame, Types<Types<int, float, int>>> ==  Types<Types<int, float, int>>
- * 
+ * RemoveIf<AllSame, Types<Types<int, float, int>>> ==  Types<Types<int, float,
+ *int>>
+ *
  * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>,
- *                                      Types<Types<char, char>, Types<float,int>>> 
+ *                                      Types<Types<char, char>,
+ *Types<float,int>>>
  * // MyTypes == Types<float, int>
  * ```
  *
  * @tparam PRED The predicate
  * @tparam TUPLE The list of types on which to apply the predicate
  *---------------------------------------------------------------------------**/
-template<class PRED, class TUPLE>
+template <class PRED, class TUPLE>
 using RemoveIf = typename RemoveIfImpl<PRED, TUPLE>::type;
-
 
 // Transform --------------------------------
 
-template<class XFORM, class TYPES>
+template <class XFORM, class TYPES>
 struct TransformImpl;
 
-template<class XFORM, class... ITEMS>
-struct TransformImpl<XFORM, Types<ITEMS...>>
-{
-    using type = Types<typename XFORM::template Call<ITEMS>...>;
+template <class XFORM, class... ITEMS>
+struct TransformImpl<XFORM, Types<ITEMS...>> {
+  using type = Types<typename XFORM::template Call<ITEMS>...>;
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Applies a transformation to every type in a type list
- * 
+ *
  * Possible transformations: Repeat
- * 
+ *
  * Example:
  * ```
  * // Repeat transformation repeats each type for a specified count
  * using MyTypes = Transform<Repeat<2>, Types<int, float>>;
  * // MyTypes == Types< Types<int, int>, Types<float, float>>);
  * ```
- * 
+ *
  * @tparam XFORM The transformation to apply
  * @tparam TYPES The list of types to transform
-*---------------------------------------------------------------------------**/
-template<class XFORM, class TYPES>
+ *---------------------------------------------------------------------------**/
+template <class XFORM, class TYPES>
 using Transform = typename TransformImpl<XFORM, TYPES>::type;
-
 
 // Repeat --------------------------------
 
 namespace detail {
-template<class T, int N, class RES>
+template <class T, int N, class RES>
 struct Repeat;
 
-template<class T, int N, class... ITEMS>
-struct Repeat<T, N, Types<ITEMS...>>
-{
-    using type = typename Repeat<T, N - 1, Types<T, ITEMS...>>::type;
+template <class T, int N, class... ITEMS>
+struct Repeat<T, N, Types<ITEMS...>> {
+  using type = typename Repeat<T, N - 1, Types<T, ITEMS...>>::type;
 };
 
-template<class T, class... ITEMS>
-struct Repeat<T, 0, Types<ITEMS...>>
-{
-    using type = Types<ITEMS...>;
+template <class T, class... ITEMS>
+struct Repeat<T, 0, Types<ITEMS...>> {
+  using type = Types<ITEMS...>;
 };
-} // namespace detail
+}  // namespace detail
 
 /**---------------------------------------------------------------------------*
  * @brief Transformation that repeats a type for a specified count.
- * 
+ *
  * Used in Transform.
- * 
+ *
  * Example:
  * ```
  * // Repeat transformation repeats each type for a specified count
  * using MyTypes = Transform<Repeat<2>, Types<int, float>>;
  * // MyTypes == Types< Types<int, int>, Types<float, float>>);
  * ```
- * 
+ *
  * @tparam N The number of times to repeat the type
-*---------------------------------------------------------------------------**/
-template<int N>
-struct Repeat
-{
-    template<class T>
-    using Call = typename detail::Repeat<T, N, Types<>>::type;
+ *---------------------------------------------------------------------------**/
+template <int N>
+struct Repeat {
+  template <class T>
+  using Call = typename detail::Repeat<T, N, Types<>>::type;
 };
-
 
 // Append --------------------------------
 
-template<class TYPES, class... ITEMS>
+template <class TYPES, class... ITEMS>
 struct AppendImpl;
 
-template<class... HEAD, class... TAIL>
-struct AppendImpl<Types<HEAD...>, TAIL...>
-{
-    using type = Types<HEAD..., TAIL...>;
+template <class... HEAD, class... TAIL>
+struct AppendImpl<Types<HEAD...>, TAIL...> {
+  using type = Types<HEAD..., TAIL...>;
 };
 
 /**---------------------------------------------------------------------------*
@@ -489,93 +484,97 @@ struct AppendImpl<Types<HEAD...>, TAIL...>
  * @tparam TYPES The type list to append to
  * @tparam ITEMS The types to append
  *---------------------------------------------------------------------------**/
-template<class TYPES, class... ITEMS>
+template <class TYPES, class... ITEMS>
 using Append = typename AppendImpl<TYPES, ITEMS...>::type;
 
 // Remove -------------------------------------------
 // remove items from tuple given by their indices
 
 namespace detail {
-template<class TUPLE, int CUR, int... IDXs>
+template <class TUPLE, int CUR, int... IDXs>
 struct Remove;
 
 // nothing else to do?
-template<class... ITEMS, int CUR>
-struct Remove<Types<ITEMS...>, CUR>
-{
-    using type = Types<ITEMS...>;
+template <class... ITEMS, int CUR>
+struct Remove<Types<ITEMS...>, CUR> {
+  using type = Types<ITEMS...>;
 };
 
 // index match current item?
-template<class HEAD, class... TAIL, int CUR, int... IDXTAIL>
-struct Remove<Types<HEAD, TAIL...>, CUR, CUR, IDXTAIL...>
-{
-    // remove it, and recurse into the remaining items
-    using type = typename Remove<Types<TAIL...>, CUR + 1, IDXTAIL...>::type;
+template <class HEAD, class... TAIL, int CUR, int... IDXTAIL>
+struct Remove<Types<HEAD, TAIL...>, CUR, CUR, IDXTAIL...> {
+  // remove it, and recurse into the remaining items
+  using type = typename Remove<Types<TAIL...>, CUR + 1, IDXTAIL...>::type;
 };
 
 // index doesn't match current item?
-template<class HEAD, class... TAIL, int CUR, int IDXHEAD, int... IDXTAIL>
-struct Remove<Types<HEAD, TAIL...>, CUR, IDXHEAD, IDXTAIL...>
-{
-    static_assert(sizeof...(TAIL) + 1 > IDXHEAD - CUR, "Index out of bounds");
+template <class HEAD, class... TAIL, int CUR, int IDXHEAD, int... IDXTAIL>
+struct Remove<Types<HEAD, TAIL...>, CUR, IDXHEAD, IDXTAIL...> {
+  static_assert(sizeof...(TAIL) + 1 > IDXHEAD - CUR, "Index out of bounds");
 
-    // add current item to output and recurse into the remaining items
-    using type = Concat<Types<HEAD>, typename Remove<Types<TAIL...>, CUR + 1,
-IDXHEAD, IDXTAIL...>::type>;
+  // add current item to output and recurse into the remaining items
+  using type = Concat<Types<HEAD>, typename Remove<Types<TAIL...>, CUR + 1,
+                                                   IDXHEAD, IDXTAIL...>::type>;
 };
-} // namespace detail
+}  // namespace detail
 
-template<class TUPLE, int... IDXs>
-struct RemoveImpl
-{
-    using type = typename detail::Remove<TUPLE, 0, IDXs...>::type;
+template <class TUPLE, int... IDXs>
+struct RemoveImpl {
+  using type = typename detail::Remove<TUPLE, 0, IDXs...>::type;
 };
 
 /**---------------------------------------------------------------------------*
  * @brief Removes types at specified indices from a type list.
- * 
+ *
  * @tparam TUPLE Type list to remove types from
  * @tparam IDXs Indices of types to remove
-*---------------------------------------------------------------------------**/
-template<class TUPLE, int... IDXs>
+ *---------------------------------------------------------------------------**/
+template <class TUPLE, int... IDXs>
 using Remove = typename RemoveImpl<TUPLE, IDXs...>::type;
-
-/*
 
 // Unique --------------------------------
 
 namespace detail {
-template<class... ITEMS>
+template <class... ITEMS>
 struct Unique;
 
-template<>
-struct Unique<>
-{
-    using type = Types<>;
+template <>
+struct Unique<> {
+  using type = Types<>;
 };
 
-template<class HEAD, class... TAIL>
-struct Unique<HEAD, TAIL...>
-{
-    using type =
-        Concat<std::conditional_t<Exists<HEAD, Types<TAIL...>>, Types<>,
-Types<HEAD>>, typename Unique<TAIL...>::type>;
+template <class HEAD, class... TAIL>
+struct Unique<HEAD, TAIL...> {
+  using type = Concat<
+      std::conditional_t<Exists<HEAD, Types<TAIL...>>, Types<>, Types<HEAD>>,
+      typename Unique<TAIL...>::type>;
 };
-} // namespace detail
+}  // namespace detail
 
-template<class TYPES>
+template <class TYPES>
 struct UniqueImpl;
 
-template<class... ITEMS>
-struct UniqueImpl<Types<ITEMS...>>
-{
-    using type = typename detail::Unique<ITEMS...>::type;
+template <class... ITEMS>
+struct UniqueImpl<Types<ITEMS...>> {
+  using type = typename detail::Unique<ITEMS...>::type;
 };
 
-template<class TYPES>
+/**---------------------------------------------------------------------------*
+ * @brief Removes duplicate types from a type list
+ * 
+ * Example:
+ * ```
+ * using MyTypes = Unique<Types<int, float, int, float>>; 
+ * MyTypes == Types<int, float>)
+ * ```
+ *
+ * @tparam TYPES The type list from which to remove duplicates
+ *---------------------------------------------------------------------------**/
+template <class TYPES>
 using Unique = typename UniqueImpl<TYPES>::type;
 
+
+/*
 // Helper to be able to define typed test cases by defining the
 // types inline (no worries about commas in macros)
 
@@ -594,28 +593,6 @@ using Unique = typename UniqueImpl<TYPES>::type;
     using TEST##INSTNAME##_Types = __VA_ARGS__;                 \
     INSTANTIATE_TYPED_TEST_SUITE_P(INSTNAME, TEST, TEST##INSTNAME##_Types)
 
-// Contains ------------------------------
-// check if value is in util::Values container
-
-template<class T>
-constexpr bool Contains(Types<>, T size)
-{
-    return false;
-}
-
-template<class T, auto HEAD, auto... TAIL>
-constexpr bool Contains(Types<Value(HEAD), Value(TAIL)...>, T needle)
-{
-    if (HEAD == needle)
-    {
-        return true;
-    }
-    else
-    {
-        return Contains(Types<Value(TAIL)...>(), needle);
-    }
-}
 */
 
 }  // namespace util
-

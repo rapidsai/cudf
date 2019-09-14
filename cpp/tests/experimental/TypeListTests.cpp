@@ -48,6 +48,31 @@ struct argument_type<T(U)> {
                                argument_type<void(actual)>::type>,  \
                 "");
 
+/**---------------------------------------------------------------------------*
+ * @brief Return a string of the demangled name of a type `T`
+ *
+ * This is useful for debugging Type list utilities.
+ *
+ * @tparam T The type whose name is returned as a string
+ * @return std::string The demangled name of `T`
+ *---------------------------------------------------------------------------**/
+template <typename T>
+std::string type_name() {
+  int status;
+  char *realname;
+  realname = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
+  std::string name{realname};
+  free(realname);
+  return name;
+}
+
+TEST(TypeList, GetSize) {
+  static_assert(GetSize<Types<>> == 0, "");
+  static_assert(GetSize<Types<int>> == 1, "");
+  static_assert(GetSize<Types<int, int>> == 2, "");
+  static_assert(GetSize<Types<int, void>> == 2, "");
+}
+
 TEST(TypeList, GetType) {
   EXPECT_SAME_TYPE((GetType<int, 0>), int);
   EXPECT_SAME_TYPE((GetType<Types<int, float, double>, 0>), int);
@@ -218,38 +243,15 @@ TEST(TypeList, Remove) {
   EXPECT_SAME_TYPE(Remove<Types<>>, Types<>);
 }
 
-/*
-
-// Unique -----------------------------------------------------
-static_assert(std::is_same_v<Unique<Types<>>, Types<>>);
-static_assert(std::is_same_v<Unique<Types<int, char, float>>, Types<int, char,
-float>>); static_assert(std::is_same_v<Unique<Types<int, int, float>>,
-Types<int, float>>); static_assert(std::is_same_v<Unique<Types<int, char, char,
-float>>, Types<int, char, float>>);
-static_assert(std::is_same_v<Unique<Types<int, char, float, float>>, Types<int,
-char, float>>);
-
-TEST(TypeList, Unique) {}
-
-// Contains -------------------------------------------------
-
-static_assert(Contains(Types<Size2D<1, 3>>(), nv::vpi::priv::Size2D{1, 3}));
-static_assert(Contains(Types<Size2D<5, 2>, Size2D<3, 5>, Size2D<1, 3>>(),
-nv::vpi::priv::Size2D{1, 3})); static_assert(!Contains(Types<Size2D<5, 2>,
-Size2D<3, 5>, Size2D<1, 3>>(), nv::vpi::priv::Size2D{1, 7}));
-static_assert(!Contains(Types<Size2D<1, 4>>(), nv::vpi::priv::Size2D{1, 3}));
-static_assert(!Contains(Types<>(), nv::vpi::priv::Size2D{1, 3}));
-
-TEST(TypeList, Contains) {}
-
-
-// GetSize ------------------------------------------------
-
-static_assert(GetSize<Types<>> == 0);
-static_assert(GetSize<Types<int>> == 1);
-static_assert(GetSize<Types<int, int>> == 2);
-static_assert(GetSize<Types<int, void>> == 2);
-
-TEST(TypeList, GetSize) {}
-
-*/
+TEST(TypeList, Unique) {
+  EXPECT_SAME_TYPE(Unique<Types<>>, Types<>);
+  EXPECT_SAME_TYPE((Unique<Types<int, char, float>>),
+                   (Types<int, char, float>));
+  EXPECT_SAME_TYPE((Unique<Types<int, int, float>>), (Types<int, float>));
+  EXPECT_SAME_TYPE((Unique<Types<int, char, char, float>>),
+                   (Types<int, char, float>));
+  EXPECT_SAME_TYPE((Unique<Types<int, char, float, float>>),
+                   (Types<int, char, float>));
+  EXPECT_SAME_TYPE((Unique<Types<int, float, int, float>>),
+                   (Types<int, float>));
+}
