@@ -76,6 +76,7 @@
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 - PR #2753 Fix java quantile API calls
 - PR #2762 Fix validity processing for time in java
+- PR #2796 Fix handling string slicing and other nvstrings delegated methods with dask
 - PR #2769 Fix link to API docs in README.md
 - PR #2772 Handle multiindex pandas Series #2772
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
