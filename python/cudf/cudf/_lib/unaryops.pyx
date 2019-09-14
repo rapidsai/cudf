@@ -116,6 +116,11 @@ def apply_dt_extract_op(incol, outcol, op):
                 <gdf_column*>c_incol,
                 <gdf_column*>c_outcol
             )
+        elif op == 'weekday':
+            result = cpp_unaryops.gdf_extract_datetime_weekday(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
         elif op == 'hour':
             result = cpp_unaryops.gdf_extract_datetime_hour(
                 <gdf_column*>c_incol,
