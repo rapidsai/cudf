@@ -39,6 +39,8 @@ namespace cudf {
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end);
 
+gdf_column repeat(const gdf_column &in, const gdf_column& count);
+
 }; // namespace cudf
 
 #endif // FILLING_HPP
