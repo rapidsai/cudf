@@ -45,7 +45,8 @@ namespace util {
 //
 // using Types = Concat<CrossJoin<Types<int,float>,Types<char>>,
 //                      CrossJoin<Types<char,double>,ValueType<void*,short>>>;
-// creates the parameters <int,char> <float,char> <char,void*> <char,short> <double,void*> <double,short>
+// creates the parameters <int,char> <float,char> <char,void*> <char,short>
+// <double,void*> <double,short>
 //
 // RemoveIf can be used to remove some parameters that match a given predicate:
 //
@@ -77,16 +78,16 @@ struct GetTypeImpl<Types<ARGS...>, 0> {
 
 /**---------------------------------------------------------------------------*
  * @brief Gives the specified type from a type list
- * 
+ *
  * Example:
  * ```
  * using T = GetType< Types<int, float, char, void*>, 2>
  * // T == char
  * ```
- * 
+ *
  * @tparam TUPLE The type list
  * @tparam D Index of the desired type
-*---------------------------------------------------------------------------**/
+ *---------------------------------------------------------------------------**/
 template <class TUPLE, int D>
 using GetType = typename GetTypeImpl<TUPLE, D>::type;
 
@@ -101,12 +102,12 @@ struct GetSizeImpl<Types<TYPES...>> {
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the size (number of elements) in a type list
- * 
+ *
  * Example:
  * ```
  * GetSize< Types<int, float, double, void*> == 4
  * ```
-*---------------------------------------------------------------------------**/
+ *---------------------------------------------------------------------------**/
 template <class TUPLE>
 constexpr auto GetSize = GetSizeImpl<TUPLE>::value;
 
@@ -324,17 +325,38 @@ struct ExistsImpl<NEEDLE, Types<HEAD, TAIL...>>
 template <class NEEDLE, class HAYSACK>
 constexpr bool Exists = ExistsImpl<NEEDLE, HAYSACK>::value;
 
-/*
-
 // ContainedIn -----------------------------------------
-
-template<class HAYSACK>
-struct ContainedIn
-{
-    template<class NEEDLE>
-    using Call = ExistsImpl<NEEDLE, HAYSACK>;
+/**---------------------------------------------------------------------------*
+ * @brief Indicates if a type exists within a type list.
+ *
+ * Used as a predicate for RemoveIf
+ *
+ * Example:
+ * ```
+ * ContainedIn<Types<Types<int, char>>>::Call<Types<int, char>>::value == true_type
+ * ContainedIn<Types<Types<int, char>>>::Call<Types<int, float>>::value == false_type
+ *
+ * // Used as a predicate
+ * using MyTypes = RemoveIf<ContainedIn<Types<Types<char, char>>,
+ *                                      Types<Types<char, char>, Types<float,int>>> 
+ * // MyTypes == Types<float, int>
+ *
+ * ```
+ *
+ * @tparam HAYSACK The type list to search
+ *---------------------------------------------------------------------------**/
+template <class HAYSACK>
+struct ContainedIn {
+  /**---------------------------------------------------------------------------*
+   * @brief Invoked as predicate for RemoveIf
+   *
+   * @tparam NEEDLE The type to search for
+   *---------------------------------------------------------------------------**/
+  template <class NEEDLE>
+  using Call = ExistsImpl<NEEDLE, HAYSACK>;
 };
 
+/*
 // RemoveIf -----------------------------------------
 
 template<class PRED, class TUPLE>
