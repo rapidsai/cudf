@@ -138,7 +138,7 @@ TEST(TestText, EditDistanceMatrix)
     NVText::edit_distance_matrix(NVText::levenshtein,*strs,results.data().get());
     unsigned int expected[] = { 0,3,3,4,3,3,5,  3,0,3,5,3,0,5, 3,3,0,5,3,3,5,
                 4,5,5,0,4,5,5, 3,3,3,4,0,3,2, 3,0,3,5,3,0,5, 5,5,5,5,2,5,0};
-    for( int idx = 0; idx < (int) hstrs.size()*hstrs.size(); ++idx )
+    for( int idx = 0; idx < (int) (hstrs.size()*hstrs.size()); ++idx )
         EXPECT_EQ(results[idx],expected[idx]);
     NVStrings::destroy(strs);
 }
