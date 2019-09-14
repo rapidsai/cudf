@@ -1360,6 +1360,7 @@ gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in
             }
         }
         dst += blk_size;
+        __syncthreads();
     } while (++b < num_blocks);
     // Update stripe stream with the compressed size
     if (t == 0)
