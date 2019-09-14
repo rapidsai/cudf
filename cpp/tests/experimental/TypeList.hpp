@@ -8,8 +8,7 @@
  * license agreement from NVIDIA Corporation is strictly prohibited.
  */
 
-#ifndef NV_VPI_TEST_UTIL_TYPELIST_HPP
-#define NV_VPI_TEST_UTIL_TYPELIST_HPP
+#pragma once
 
 #include "Compiler.hpp"
 #include "GTest.hpp"
@@ -552,4 +551,3 @@ constexpr bool Contains(Types<Value(HEAD), Value(TAIL)...>, T needle)
 
 }  // namespace util
 
-#endif  // NV_VPI_TEST_UTIL_TYPELIST_HPP
