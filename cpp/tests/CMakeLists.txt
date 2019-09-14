@@ -16,6 +16,10 @@ add_library(cudftestutil STATIC
 
 target_link_libraries(cudftestutil cudf)
 
+install(TARGETS cudftestutil
+        DESTINATION lib
+        COMPONENT cudf)
+
 ###################################################################################################
 # - compiler function -----------------------------------------------------------------------------
 
@@ -195,6 +199,7 @@ ConfigureTest(HASH_MAP_TEST "${HASH_MAP_TEST_SRC}")
 # - quantiles tests -------------------------------------------------------------------------------
 
 set(QUANTILES_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_test.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/quantiles_test.cu")
 
 ConfigureTest(QUANTILES_TEST "${QUANTILES_TEST_SRC}")
@@ -325,6 +330,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 

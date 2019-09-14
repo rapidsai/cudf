@@ -37,6 +37,7 @@ requirements:
     - nvstrings {{ minor_version }}.*
     - cython >=0.29,<0.30
     - dlpack
+    - fsspec>=0.3.3
 
 test:
   commands:

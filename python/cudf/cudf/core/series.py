@@ -20,6 +20,7 @@ from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.docutils import copy_docstring
 from cudf.utils.dtypes import (
     is_categorical_dtype,
+    is_datetime_dtype,
     is_list_like,
     is_scalar,
     min_scalar_type,
@@ -91,7 +92,12 @@ class Series(object):
         if isinstance(data, pd.Series):
             if name is None:
                 name = data.name
-            index = as_index(data.index)
+            if isinstance(data.index, pd.MultiIndex):
+                import cudf
+
+                index = cudf.from_pandas(data.index)
+            else:
+                index = as_index(data.index)
         elif isinstance(data, pd.Index):
             name = data.name
             data = data.values
@@ -505,6 +511,7 @@ class Series(object):
             preprocess.has_null_mask
             and not preprocess.dtype == "O"
             and not is_categorical_dtype(preprocess.dtype)
+            and not is_datetime_dtype(preprocess.dtype)
         ):
             output = (
                 preprocess.astype("O").fillna("null").to_pandas().__repr__()
@@ -512,6 +519,14 @@ class Series(object):
         else:
             output = preprocess.to_pandas().__repr__()
         lines = output.split("\n")
+        if is_categorical_dtype(preprocess.dtype):
+            for idx, value in enumerate(preprocess):
+                if value is None:
+                    lines[idx] = lines[idx].replace(" NaN", "null")
+        if is_datetime_dtype(preprocess.dtype):
+            for idx, value in enumerate(preprocess):
+                if value is None:
+                    lines[idx] = lines[idx].replace(" NaT", "null")
         if is_categorical_dtype(preprocess.dtype):
             category_memory = lines[-1]
             lines = lines[:-1]
@@ -1830,6 +1845,68 @@ class Series(object):
             index=self.index,
             dtype=self.dtype,
         )
+
+    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
+        assert (
+            axis in (None, 0)
+            and skipna in (None, True)
+            and level in (None,)
+            and numeric_only in (None, True)
+        )
+
+        if self.empty:
+            return np.nan
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 4:
+            return np.nan
+
+        n = len(self)
+        miu = self.mean()
+        m4_numerator = ((self - miu) ** 4).sum()
+        V = self.var()
+
+        if V == 0:
+            return 0
+
+        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
+        term_one_section_two = m4_numerator / (V ** 2)
+        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
+        kurt = term_one_section_one * term_one_section_two - 3 * term_two
+        return kurt
+
+    def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
+        """Calculates the unbiased Fisher-Pearson skew of a sample.
+        """
+        assert (
+            axis in (None, 0)
+            and skipna in (None, True)
+            and level in (None,)
+            and numeric_only in (None, True)
+        )
+
+        if self.empty:
+            return np.nan
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 3:
+            return np.nan
+
+        n = len(self)
+        miu = self.mean()
+        m3 = ((self - miu) ** 3).sum() / n
+        m2 = self.var(ddof=0)
+
+        if m2 == 0:
+            return 0
+
+        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
+        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
+        return skew
 
     def isin(self, test):
 
