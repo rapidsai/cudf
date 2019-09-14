@@ -70,28 +70,6 @@ constexpr TypeKind to_orckind(gdf_dtype dtype) {
   }
 }
 
-/**
- * @brief Function that copies all chunks belonging to a stream
- **/
-size_t gather_stripe_stream(uint8_t *dst, const gpu::EncChunk *chunks,
-                            gpu::StreamIndexType strm_type,
-                            size_t num_rowgroups, size_t num_columns) {
-  size_t dst_pos = 0;
-  for (size_t g = 0; g < num_rowgroups; g++) {
-    const gpu::EncChunk *ck = &chunks[g * num_columns];
-    uint32_t chunk_len = ck->strm_len[strm_type];
-    if (ck->streams[strm_type]) {
-      CUDA_TRY(cudaMemcpyAsync(dst + dst_pos, ck->streams[strm_type], chunk_len,
-                               cudaMemcpyDeviceToHost));
-    } else {
-      memset(dst + dst_pos, 0, chunk_len);
-    }
-    dst_pos += chunk_len;
-  }
-  CUDA_TRY(cudaStreamSynchronize(0));
-
-  return dst_pos;
-}
 
 writer::Impl::Impl(std::string filepath, writer_options const& options) {
   outfile_.open(filepath, std::ios::out | std::ios::binary | std::ios::trunc);
@@ -115,8 +93,9 @@ void writer::Impl::write(const cudf::table& table) {
     std::vector<uint32_t> stripe_list;
     size_t num_rowgroups, num_chunks, num_string_columns, num_dict_chunks, rleout_bfr_size, strdata_bfr_size;
     bool has_timestamp_column = false;
-    int32_t max_stream_size;
+    size_t max_stream_size, num_stripe_streams, num_data_streams, compressed_bfr_size;
     pinned_buffer<uint8_t> stream_io_buf{nullptr, cudaFreeHost};
+    uint32_t num_compressed_blocks = 0;
 
     // PostScript
     ps.compression = NONE;
@@ -575,55 +554,116 @@ void writer::Impl::write(const cudf::table& table) {
           (uint32_t)num_string_columns, (uint32_t)num_columns,
           (uint32_t)stripe_list.size()));
     }
+    num_data_streams = sf.streams.size() - (num_columns + 1); // Exclude index streams
+    num_stripe_streams = stripe_list.size() * num_data_streams;
+    hostdevice_vector<gpu::StripeStream> strm_desc(num_stripe_streams);
     // Encode column data
     CUDA_TRY(EncodeOrcColumnData(chunks.device_ptr(), (uint32_t)num_columns,
                                  (uint32_t)num_rowgroups));
-    CUDA_TRY(cudaMemcpyAsync(chunks.host_ptr(), chunks.device_ptr(),
-                             chunks.memory_size(), cudaMemcpyDeviceToHost));
     CUDA_TRY(cudaStreamSynchronize(0));
     // Initialize stripe data in file footer
     ff.stripes.resize(stripe_list.size());
     for (size_t group = 0, stripe_id = 0, stripe_start = 0; stripe_id < stripe_list.size(); stripe_id++)
     {
-        size_t stripe_data_length = 0, stripe_end;
-        for (uint32_t g = 0; g < stripe_list[stripe_id]; g++)
+        size_t stripe_group_end = group + stripe_list[stripe_id], stripe_end;
+        for (int i = 0; i < num_columns; i++)
         {
-            for (int i = 0; i < num_columns; i++)
+            gpu::EncChunk *ck = &chunks[group * num_columns + i];
+            for (int k = 0; k <= gpu::CI_DICTIONARY; k++)
             {
-                gpu::EncChunk *ck = &chunks[group * num_columns + i];
-                for (int k = 0; k < gpu::CI_NUM_STREAMS; k++)
+                int32_t strm_id = ck->strm_id[k];
+                if (strm_id >= num_columns + 1)
                 {
-                    stripe_data_length += ck->strm_len[k];
+                    gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + strm_id - (num_columns + 1)];
+                    ss->stream_size = 0;
+                    ss->first_chunk_id = (uint32_t)(group * num_columns + i);
+                    ss->num_chunks = (uint32_t)(stripe_group_end - group);
+                    ss->column_id = i;
+                    ss->strm_type = (uint8_t)k;
                 }
             }
-            group++;
         }
+        group = stripe_group_end;
         stripe_end = std::min((uint64_t)group * ff.rowIndexStride, ff.numberOfRows);
-        ff.stripes[stripe_id].dataLength = stripe_data_length;
         ff.stripes[stripe_id].numberOfRows = (uint32_t)(stripe_end - stripe_start);
         stripe_start = stripe_end;
     }
-
+    CUDA_TRY(cudaMemcpyAsync(strm_desc.device_ptr(), strm_desc.host_ptr(),
+                             strm_desc.memory_size(), cudaMemcpyHostToDevice));
+    CUDA_TRY(CompactOrcDataStreams(strm_desc.device_ptr(), chunks.device_ptr(),
+                                   (uint32_t)num_stripe_streams, num_columns));
+    CUDA_TRY(cudaMemcpyAsync(strm_desc.host_ptr(), strm_desc.device_ptr(),
+                             strm_desc.memory_size(), cudaMemcpyDeviceToHost));
+    CUDA_TRY(cudaMemcpyAsync(
+        chunks.host_ptr(), chunks.device_ptr(), chunks.memory_size(),
+        cudaMemcpyDeviceToHost));  // NOTE: Only needed for debug
+    CUDA_TRY(cudaStreamSynchronize(0));
+    max_stream_size = 0;
+    num_compressed_blocks = 0; 
+    compressed_bfr_size = 0;
+    for (size_t stripe_id = 0; stripe_id < stripe_list.size(); stripe_id++)
+    {
+        for (size_t i = 0; i < num_data_streams; i++)
+        {
+            gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + i];
+            size_t stream_size = ss->stream_size;
+            if (ps.compression != NONE)
+            {
+                uint32_t num_blocks = std::max<uint32_t>(static_cast<uint32_t>((stream_size + ps.compressionBlockSize - 1) / ps.compressionBlockSize), 1);
+                stream_size += num_blocks * 3;
+                ss->first_block = num_compressed_blocks;
+                ss->bfr_offset = compressed_bfr_size;
+                num_compressed_blocks += num_blocks;
+                compressed_bfr_size += stream_size;
+            }
+            max_stream_size = std::max<size_t>(max_stream_size, stream_size);
+        }
+    }
+    // Compress the data streams
+    device_buffer<uint8_t> compressed_data(compressed_bfr_size);
+    hostdevice_vector<gpu_inflate_status_s> comp_out(num_compressed_blocks);
+    hostdevice_vector<gpu_inflate_input_s> comp_in(num_compressed_blocks);
+    if (ps.compression != NONE)
+    {
+      CUDA_TRY(cudaMemcpyAsync(strm_desc.device_ptr(), strm_desc.host_ptr(),
+                               strm_desc.memory_size(),
+                               cudaMemcpyHostToDevice));
+      CUDA_TRY(CompressOrcDataStreams(
+          compressed_data.data(), strm_desc.device_ptr(), chunks.device_ptr(),
+          comp_in.device_ptr(), comp_out.device_ptr(),
+          (uint32_t)num_stripe_streams, num_compressed_blocks, ps.compression,
+          ps.compressionBlockSize));
+      CUDA_TRY(cudaMemcpyAsync(strm_desc.host_ptr(), strm_desc.device_ptr(),
+                               strm_desc.memory_size(),
+                               cudaMemcpyDeviceToHost));
+      CUDA_TRY(cudaMemcpyAsync(comp_out.host_ptr(), comp_out.device_ptr(),
+                               comp_out.memory_size(), cudaMemcpyDeviceToHost));
+      CUDA_TRY(cudaStreamSynchronize(0));
+    }
     // Write file header
     outfile_.write(ps.magic.c_str(), ps.magic.length());
-
     // Write stripe data
-    max_stream_size = 0;
+    stream_io_buf =
+        pinned_buffer<uint8_t>{[](size_t size) {
+                                 uint8_t *ptr = nullptr;
+                                 CUDA_TRY(cudaMallocHost(&ptr, size));
+                                 return ptr;
+                               }(max_stream_size),
+                               cudaFreeHost};
     for (size_t stripe_id = 0, group = 0; stripe_id < ff.stripes.size(); stripe_id++)
     {
         size_t groups_in_stripe = (ff.stripes[stripe_id].numberOfRows + ff.rowIndexStride - 1) / ff.rowIndexStride;
-        int max_size = 0;
         ff.stripes[stripe_id].offset = outfile_.tellp();
         // Write index streams
         ff.stripes[stripe_id].indexLength = 0;
         for (size_t strm = 0; strm <= (size_t)num_columns; strm++)
         {
             TypeKind kind = ff.types[strm].kind;
-            int32_t present_blk = -1, present_pos = -1, present_size = 0;
-            int32_t data_blk = -1, data_pos = -1, data_size = 0;
-            int32_t data2_blk = -1, data2_pos = -1, data2_size = 0;
+            int32_t present_blk = -1, present_pos = -1, present_comp_pos = -1, present_comp_sz = -1;
+            int32_t data_blk = -1, data_pos = -1, data_comp_pos = -1, data_comp_sz = -1;
+            int32_t data2_blk = -1, data2_pos = -1, data2_comp_pos = -1, data2_comp_sz = -1;
 
-            buf.resize(0);
+            buf.resize((ps.compression != NONE) ? 3 : 0);
             // TBD: Not sure we need an empty index stream for record column 0
             if (strm != 0)
             {
@@ -631,16 +671,36 @@ void writer::Impl::write(const cudf::table& table) {
                 if (ck->strm_id[gpu::CI_PRESENT] > 0)
                 {
                     present_pos = 0;
+                    if (ps.compression != NONE)
+                    {
+                        const gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + ck->strm_id[gpu::CI_PRESENT] - (num_columns + 1)];
+                        present_blk = ss->first_block;
+                        present_comp_pos = 0;
+                        present_comp_sz = ss->stream_size;
+                    }
                 }
                 if (ck->strm_id[gpu::CI_DATA] > 0)
                 {
                     data_pos = 0;
+                    if (ps.compression != NONE)
+                    {
+                        const gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + ck->strm_id[gpu::CI_DATA] - (num_columns + 1)];
+                        data_blk = ss->first_block;
+                        data_comp_pos = 0;
+                        data_comp_sz = ss->stream_size;
+                    }
                 }
                 if (ck->strm_id[gpu::CI_DATA2] > 0)
                 {
                     data2_pos = 0;
+                    if (ps.compression != NONE)
+                    {
+                        const gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + ck->strm_id[gpu::CI_DATA2] - (num_columns + 1)];
+                        data2_blk = ss->first_block;
+                        data2_comp_pos = 0;
+                        data2_comp_sz = ss->stream_size;
+                    }
                 }
-                max_size = std::max(max_size, (int)chunks[group * num_columns + strm - 1].strm_len[gpu::CI_DICTIONARY]);
             }
             if (kind == STRING && sf.columns[strm].kind == DICTIONARY_V2)
             {
@@ -648,91 +708,103 @@ void writer::Impl::write(const cudf::table& table) {
             }
             for (size_t g = group; g < group + groups_in_stripe; g++)
             {
-                pbw.put_row_index_entry(present_blk, present_pos, data_blk, data_pos, data2_blk, data2_pos, kind);
+                pbw.put_row_index_entry(present_comp_pos, present_pos, data_comp_pos, data_pos, data2_comp_pos, data2_pos, kind);
                 if (strm != 0)
                 {
                     gpu::EncChunk *ck = &chunks[g * num_columns + strm - 1];
                     if (present_pos >= 0)
                     {
                         present_pos += ck->strm_len[gpu::CI_PRESENT];
-                        present_size += ck->strm_len[gpu::CI_PRESENT];
+                        while (present_blk >= 0 && (size_t)present_pos >= ps.compressionBlockSize && present_comp_pos + 3 + comp_out[present_blk].bytes_written < (size_t)present_comp_sz)
+                        {
+                            present_pos -= ps.compressionBlockSize;
+                            present_comp_pos += 3 + comp_out[present_blk].bytes_written;
+                            present_blk++;
+                        }
                     }
                     if (data_pos >= 0)
                     {
                         data_pos += ck->strm_len[gpu::CI_DATA];
-                        data_size += ck->strm_len[gpu::CI_DATA];
+                        while (data_blk >= 0 && (size_t)data_pos >= ps.compressionBlockSize && data_comp_pos + 3 + comp_out[data_blk].bytes_written < (size_t)data_comp_sz)
+                        {
+                            data_pos -= ps.compressionBlockSize;
+                            data_comp_pos += 3 + comp_out[data_blk].bytes_written;
+                            data_blk++;
+                        }
                     }
                     if (data2_pos >= 0)
                     {
                         data2_pos += ck->strm_len[gpu::CI_DATA2];
-                        data2_size += ck->strm_len[gpu::CI_DATA2];
+                        while (data2_blk >= 0 && (size_t)data2_pos >= ps.compressionBlockSize && data2_comp_pos + 3 + comp_out[data2_blk].bytes_written < (size_t)data2_comp_sz)
+                        {
+                            data2_pos -= ps.compressionBlockSize;
+                            data2_comp_pos += 3 + comp_out[data2_blk].bytes_written;
+                            data2_blk++;
+                        }
                     }
                 }
             }
-            max_size = std::max(max_size, present_size);
-            max_size = std::max(max_size, data_size);
-            max_size = std::max(max_size, data2_size);
             sf.streams[strm].length = buf.size();
+            if (ps.compression != NONE)
+            {
+                uint32_t uncomp_ix_len = (uint32_t)(sf.streams[strm].length - 3) * 2 + 1;
+                buf[0] = static_cast<uint8_t>(uncomp_ix_len >> 0);
+                buf[1] = static_cast<uint8_t>(uncomp_ix_len >> 8);
+                buf[2] = static_cast<uint8_t>(uncomp_ix_len >> 16);
+            }
             outfile_.write(reinterpret_cast<char*>(buf.data()), buf.size());
             ff.stripes[stripe_id].indexLength += buf.size();
         }
-        if (max_size > max_stream_size)
-        {
-            max_stream_size = max_size;
-            stream_io_buf =
-                pinned_buffer<uint8_t>{[](size_t size) {
-                                         uint8_t *ptr = nullptr;
-                                         CUDA_TRY(cudaMallocHost(&ptr, size));
-                                         return ptr;
-                                       }(max_stream_size),
-                                       cudaFreeHost};
-        }
         // Write data streams
         ff.stripes[stripe_id].dataLength = 0;
-        for (int i = 0; i < num_columns; i++)
+        for (size_t i = 0; i < num_data_streams; i++)
         {
-            gpu::EncChunk *ck = &chunks[group * num_columns + i];
-            if (ck->strm_id[gpu::CI_PRESENT] > 0)
+            const gpu::StripeStream *ss = &strm_desc[stripe_id * num_data_streams + i];
+            const gpu::EncChunk *ck = &chunks[group * num_columns + ss->column_id];
+            size_t len = ss->stream_size;
+            sf.streams[ck->strm_id[ss->strm_type]].length = len;
+            if (len > 0)
             {
-                size_t len = gather_stripe_stream(stream_io_buf.get(), ck, gpu::CI_PRESENT, groups_in_stripe, num_columns);
+                uint8_t *strm_dev = (ps.compression == NONE) ? ck->streams[ss->strm_type] : (compressed_data.data() + ss->bfr_offset);
+                CUDA_TRY(cudaMemcpyAsync(stream_io_buf.get(), strm_dev, len, cudaMemcpyDeviceToHost, 0));
+                CUDA_TRY(cudaStreamSynchronize(0));
                 outfile_.write(reinterpret_cast<char*>(stream_io_buf.get()), len);
                 ff.stripes[stripe_id].dataLength += len;
-                sf.streams[ck->strm_id[gpu::CI_PRESENT]].length = len;
             }
-            if (ck->strm_id[gpu::CI_DATA] > 0)
+            if (ck->encoding_kind == DICTIONARY_V2)
             {
-                size_t len = gather_stripe_stream(stream_io_buf.get(), ck, gpu::CI_DATA, groups_in_stripe, num_columns);
-                outfile_.write(reinterpret_cast<char*>(stream_io_buf.get()), len);
-                ff.stripes[stripe_id].dataLength += len;
-                sf.streams[ck->strm_id[gpu::CI_DATA]].length = len;
+                uint32_t column_id = ss->column_id;
+                sf.columns[1 + column_id].dictionarySize = stripe_dict[stripe_id * num_string_columns + str_col_map[column_id]].num_strings;
             }
-            if (ck->strm_id[gpu::CI_DATA2] > 0)
-            {
-                size_t len = gather_stripe_stream(stream_io_buf.get(), ck, gpu::CI_DATA2, groups_in_stripe, num_columns);
-                outfile_.write(reinterpret_cast<char*>(stream_io_buf.get()), len);
-                ff.stripes[stripe_id].dataLength += len;
-                sf.streams[ck->strm_id[gpu::CI_DATA2]].length = len;
-            }
-            if (ck->strm_id[gpu::CI_DICTIONARY] > 0)
-            {
-                size_t len = gather_stripe_stream(stream_io_buf.get(), ck, gpu::CI_DICTIONARY, groups_in_stripe, num_columns);
-                outfile_.write(reinterpret_cast<char*>(stream_io_buf.get()), len);
-                ff.stripes[stripe_id].dataLength += len;
-                sf.streams[ck->strm_id[gpu::CI_DICTIONARY]].length = len;
-            }
-            sf.columns[1 + i].dictionarySize = (sf.columns[1 + i].kind == DICTIONARY_V2) ? stripe_dict[stripe_id * num_string_columns + str_col_map[i]].num_strings : 0;
         }
         // Write stripe footer
-        buf.resize(0);
-        ff.stripes[stripe_id].footerLength = (uint32_t)pbw.write(&sf);
+        buf.resize((ps.compression != NONE) ? 3 : 0);
+        pbw.write(&sf);
+        ff.stripes[stripe_id].footerLength = (uint32_t)buf.size();
+        if (ps.compression != NONE)
+        {
+            uint32_t uncomp_sf_len = (ff.stripes[stripe_id].footerLength - 3) * 2 + 1;
+            buf[0] = static_cast<uint8_t>(uncomp_sf_len >> 0);
+            buf[1] = static_cast<uint8_t>(uncomp_sf_len >> 8);
+            buf[2] = static_cast<uint8_t>(uncomp_sf_len >> 16);
+        }
         outfile_.write(reinterpret_cast<char*>(buf.data()), ff.stripes[stripe_id].footerLength);
         group += groups_in_stripe;
     }
 
     // TBD: We may want to add pandas or spark column metadata strings here
     ff.contentLength = outfile_.tellp();
-    buf.resize(0);
-    ps.footerLength = pbw.write(&ff);
+    buf.resize((ps.compression != NONE) ? 3 : 0);
+    pbw.write(&ff);
+    ps.footerLength = buf.size();
+    if (ps.compression != NONE)
+    {
+        // TODO: If the file footer ends up larger than the compression block size, we'll need to insert additional 3-byte block headers
+        uint32_t uncomp_ff_len = (uint32_t)(ps.footerLength - 3) * 2 + 1;
+        buf[0] = static_cast<uint8_t>(uncomp_ff_len >> 0);
+        buf[1] = static_cast<uint8_t>(uncomp_ff_len >> 8);
+        buf[2] = static_cast<uint8_t>(uncomp_ff_len >> 16);
+    }
     ps_length = pbw.write(&ps);
     buf.push_back((uint8_t)ps_length);
 
