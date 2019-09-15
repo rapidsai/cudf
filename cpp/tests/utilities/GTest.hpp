@@ -17,7 +17,7 @@
 #pragma once
 
 #ifdef GTEST_INCLUDE_GTEST_GTEST_H_
-#error "Don't include gtest/gtest.h directly, include util/GTest.hpp instead"
+#error "Don't include gtest/gtest.h directly, include GTest.hpp instead"
 #endif
 
 /**---------------------------------------------------------------------------*
@@ -31,11 +31,11 @@
  * redefines them properly.
  *---------------------------------------------------------------------------**/
 
-#define Types NV_VPI_Types_NOT_USED
-#define Types0 NV_VPI_Types0_NOT_USED
-#define TypeList NV_VPI_TypeList_NOT_USED
-#define Templates NV_VPI_Templates_NOT_USED
-#define Templates0 NV_VPI_Templates0_NOT_USED
+#define Types Types_NOT_USED
+#define Types0 Types0_NOT_USED
+#define TypeList TypeList_NOT_USED
+#define Templates Templates_NOT_USED
+#define Templates0 Templates0_NOT_USED
 #include <gtest/internal/gtest-type-util.h>
 #undef Types
 #undef Types0

@@ -15,10 +15,10 @@
  */
 #pragma once
 
-#include "Compiler.hpp"
 #include "GTest.hpp"
 
-namespace util {
+namespace cudf {
+namespace test {
 
 // Utilities for creating parameters for typed tests on GoogleTest
 //
@@ -566,10 +566,10 @@ struct UniqueImpl<Types<ITEMS...>> {
 
 /**---------------------------------------------------------------------------*
  * @brief Removes duplicate types from a type list
- * 
+ *
  * Example:
  * ```
- * using MyTypes = Unique<Types<int, float, int, float>>; 
+ * using MyTypes = Unique<Types<int, float, int, float>>;
  * MyTypes == Types<int, float>)
  * ```
  *
@@ -578,4 +578,6 @@ struct UniqueImpl<Types<ITEMS...>> {
 template <class TYPES>
 using Unique = typename UniqueImpl<TYPES>::type;
 
-}  // namespace util
+}  // namespace test
+
+}  // namespace cudf

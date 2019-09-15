@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include "GTest.hpp"
-#include "TypeList.hpp"
+#include <tests/utilities/GTest.hpp>
+#include <tests/utilities/TypeList.hpp>
 
-using namespace util;  // this will make reading code way easier
+using namespace cudf::test;  // this will make reading code way easier
 
 namespace std {
 template <class T, class U>

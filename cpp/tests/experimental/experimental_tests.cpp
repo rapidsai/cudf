@@ -14,16 +14,34 @@
  * limitations under the License.
  */
 
-#include "TypeList.hpp"
-#include "GTest.hpp"
+#include <tests/utilities/GTest.hpp>
+#include <tests/utilities/TypeList.hpp>
 
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
 
+#include <cxxabi.h>
+#include <iostream>
+#include <typeinfo>
 
-class ExperiementalTest : public ::testing::Test {
+using namespace cudf::test;
 
-};
+template <typename T>
+class ExperiementalTest : public ::testing::Test {};
 
+using TestTypes = CrossJoin<Types<int, float>, Types<char, double> >;
 
+TYPED_TEST_CASE(ExperiementalTest, TestTypes);
 
+template <typename T>
+std::string type_name() {
+  int status;
+  char *realname;
+  realname = abi::__cxa_demangle(typeid(T).name(), 0, 0, &status);
+  std::string name{realname};
+  free(realname);
+  return name;
+}
+
+TYPED_TEST(ExperiementalTest, PrintTypes) {
+  std::cout << "typename: " << type_name<TypeParam>() << std::endl;
+}
