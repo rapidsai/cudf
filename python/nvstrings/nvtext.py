@@ -299,7 +299,7 @@ def edit_distance_matrix(strs, algo=0, devptr=0):
     algo: int
         0 = Levenshtein
     devptr : GPU memory pointer
-        Must be able to hold at least strs.size() of int32 values.
+        Must be able to hold at least strs.size()*strs.size() of int32 values.
 
     Examples
     --------

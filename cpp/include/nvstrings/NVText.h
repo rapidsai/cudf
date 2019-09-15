@@ -144,10 +144,9 @@ public:
     static unsigned int edit_distance( distance_type algo, NVStrings& strs1, NVStrings& strs2, unsigned int* results, bool devmem=true );
 
     /**
-     * @brief Compute the edit distance between each pair of strings
+     * @brief Compute the edit distance between each pair of strings in given nvstrings object
      * @param algo The edit distance algorithm to use for the computation.
      * @param strs Strings to process.
-     * @param[in,out] results Array of distances, one per string.
      * @param devmem True if results in device memory.
      * @return 0 if successful.
      */
