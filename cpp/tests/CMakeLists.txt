@@ -350,7 +350,8 @@ set(NVSTRING_SCATTER_TEST_SRC
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
@@ -463,8 +464,7 @@ ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
 # - experiment test -----------------------------------------------------------------------------------
 
 set(EXPERIMENTAL_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/experimental/experimental_tests.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/experimental/TypeListTests.cpp")
+    "${CMAKE_CURRENT_SOURCE_DIR}/experimental/experimental_tests.cpp")
 
 ConfigureTest(EXPERIMENTAL_TEST "${EXPERIMENTAL_TEST_SRC}")
 
