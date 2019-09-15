@@ -265,7 +265,6 @@ unsigned int NVText::edit_distance_matrix( distance_type algo, NVStrings& strs, 
     if( count==0 )
         return 0; // nothing to do
     auto execpol = rmm::exec_policy(0);
-    // custring_view* d_target = custring_from_host(target);
 
     // setup results vector
     unsigned int* d_rtn = results;
