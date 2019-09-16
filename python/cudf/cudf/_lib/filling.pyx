@@ -33,7 +33,7 @@ def repeat(input, repeats):
         c_result_column = cpp_repeat(
             c_input_col[0],
             c_repeats_col[0])
-    
+
     free_column(c_input_col)
     free_column(c_repeats_col)
 
