@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utils/cuda.cuh>
+#include <cudf/utilities/cuda.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/release_assert.cuh>
 
@@ -29,10 +29,10 @@
 namespace cudf {
 namespace exp {
 /**---------------------------------------------------------------------------*
- * @brief Maps a C++ type to it's corresponding `cudf::type` id
+ * @brief Maps a C++ type to it's corresponding `cudf::type_id`
  *
  * When explicitly passed a template argument of a given type, returns the
- * appropriate `type` enum for the specified C++ type.
+ * appropriate `type_id` enum for the specified C++ type.
  *
  * For example:
  *
@@ -40,7 +40,7 @@ namespace exp {
  * return cudf::type_to_idk<int32_t>();        // Returns INT32
  * ```
  *
- * @tparam T The type to map to a `cudf::type`
+ * @tparam T The type to map to a `cudf::type_id`
  *---------------------------------------------------------------------------**/
 template <typename T>
 inline constexpr type_id type_to_id() {
@@ -60,8 +60,8 @@ struct id_to_type_impl {
  * ```
  * @tparam t The `cudf::type_id` to map
  *---------------------------------------------------------------------------**/
-template <cudf::type_id t>
-using id_to_type = typename id_to_type_impl<t>::type;
+template <cudf::type_id Id>
+using id_to_type = typename id_to_type_impl<Id>::type;
 
 /**---------------------------------------------------------------------------*
  * @brief Macro used to define a mapping between a concrete C++ type and a

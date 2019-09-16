@@ -17,7 +17,7 @@
 
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utils/bit.cuh>
+#include <cudf/utilities/bit.cuh>
 
 namespace cudf {
 
@@ -69,6 +69,34 @@ class alignas(16) column_device_view_base {
   __host__ __device__ T const* data() const noexcept {
     return head<T>() + _offset;
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns reference to element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  __device__ T const& element(size_type element_index) const noexcept {
+    return data<T>()[element_index];
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns `string_view` to the string element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @param element_index Position of the desired string
+   *---------------------------------------------------------------------------**/
+  /*
+    template <>
+    __device__ string_view const& element<string_view>(
+        size_type element_index) const noexcept {
+      // Fill this in
+    }
+    */
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
@@ -164,9 +192,9 @@ class alignas(16) column_device_view_base {
    * false`.
    *
    * @param element_index
-   * @return __device__ get_element
+   * @return __device__ get_mask_element
    *---------------------------------------------------------------------------**/
-  __device__ bitmask_type get_element(size_type element_index) const noexcept {
+  __device__ bitmask_type get_mask_element(size_type element_index) const noexcept {
     return null_mask()[element_index];
   }
 
@@ -336,6 +364,34 @@ class alignas(16) mutable_column_device_view
   }
 
   /**---------------------------------------------------------------------------*
+   * @brief Returns reference to element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  __device__ T& element(size_type element_index) noexcept {
+    return data<T>()[element_index];
+  }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns `string_view` to the string element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @param element_index Position of the desired string
+   *---------------------------------------------------------------------------**/
+  /*
+    template <>
+    __device__ string_view& element<string_view>(
+        size_type element_index) noexcept {
+      // Fill this in
+    }
+    */
+
+  /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
    *
    * @note This function does *not* account for the `offset()`.
@@ -393,18 +449,18 @@ class alignas(16) mutable_column_device_view
    * @param element_index The index of the element to update
    * @param new_element The new bitmask element
    *---------------------------------------------------------------------------**/
-  __device__ void set_element(size_type element_index,
+  __device__ void set_mask_element(size_type element_index,
                               bitmask_type new_element) const noexcept {
     null_mask()[element_index] = new_element;
   }
 
  private:
   mutable_column_device_view*
-      mutable_children{};  ///< Array of `mutable_column_device_view`
-                           ///< objects in device memory.
-                           ///< Based on element type, children
-                           ///< may contain additional data
-  size_type num_children{}; ///< The number of child columns
+      mutable_children{};    ///< Array of `mutable_column_device_view`
+                             ///< objects in device memory.
+                             ///< Based on element type, children
+                             ///< may contain additional data
+  size_type num_children{};  ///< The number of child columns
 
   /**---------------------------------------------------------------------------*
    * @brief Construct's a `mutable_column_device_view` from a

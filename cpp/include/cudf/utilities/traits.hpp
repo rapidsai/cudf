@@ -17,7 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
-#include <cudf/utils/type_dispatcher.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 
 #include <type_traits>
 

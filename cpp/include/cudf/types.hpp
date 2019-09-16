@@ -63,21 +63,20 @@ using size_type = int32_t;
 using bitmask_type = uint32_t;
 
 enum type_id {
-  EMPTY = 0,     ///< Always null with no underlying data
-  INT8,          ///< 1 byte signed integer
-  INT16,         ///< 2 byte signed integer
-  INT32,         ///< 4 byte signed integer
-  INT64,         ///< 8 byte signed integer
-  FLOAT32,       ///< 4 byte floating point
-  FLOAT64,       ///< 8 byte floating point
-  BOOL8,         ///< Boolean using one byte per value, 0 == false, else true
-  DATE32,        ///< days since Unix Epoch in int32
-  TIMESTAMP_NS,  ///< nanoseconds since Unix Epoch in int64
-  TIMESTAMP_US,  ///< microseconds since Unix Epoch in int64
-  TIMESTAMP_MS,  ///< milliseconds since Unix Epoch in int64
-  TIMESTAMP_S,   ///< seconds since Unix Epoch in int64
-  CATEGORY,      ///< Categorial/Dictionary type
-  STRING,        ///< String elements
+  EMPTY = 0,  ///< Always null with no underlying data
+  INT8,       ///< 1 byte signed integer
+  INT16,      ///< 2 byte signed integer
+  INT32,      ///< 4 byte signed integer
+  INT64,      ///< 8 byte signed integer
+  FLOAT32,    ///< 4 byte floating point
+  FLOAT64,    ///< 8 byte floating point
+  BOOL8,      ///< Boolean using one byte per value, 0 == false, else true
+  DATE32,     ///< days since Unix Epoch in int32
+  TIMESTAMP,  ///< duration of specified resolution since Unix Epoch in int64
+  CATEGORY,   ///< Categorial/Dictionary type
+  STRING,     ///< String elements
+  // `NUM_TYPE_IDS` must be last!
+  NUM_TYPE_IDS  ///< Total number of type ids
 };
 
 /**---------------------------------------------------------------------------*
@@ -95,7 +94,7 @@ class data_type {
   data_type& operator=(data_type const&) = default;
   data_type& operator=(data_type&&) = default;
 
-  explicit data_type(type_id id) : _id{id} {}
+  explicit constexpr data_type(type_id id) : _id{id} {}
 
   type_id id() const noexcept { return _id; }
 

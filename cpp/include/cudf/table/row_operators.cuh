@@ -19,8 +19,8 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/sorting.hpp>
 #include <cudf/table/table_device_view.cuh>
-#include <cudf/utils/traits.hpp>
-#include <cudf/utils/type_dispatcher.hpp>
+#include <cudf/utilities/traits.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include <utilities/release_assert.cuh>
 
 namespace cudf {
@@ -84,8 +84,8 @@ struct element_relational_comparator {
       }
     }
 
-    Element const lhs_element = lhs.data<Element>()[lhs_element_index];
-    Element const rhs_element = rhs.data<Element>()[rhs_element_index];
+    Element const lhs_element = lhs.element<Element>(lhs_element_index);
+    Element const rhs_element = rhs.element<Element>(rhs_element_index);
 
     if (lhs_element < rhs_element) {
       return weak_ordering::LESS;
@@ -147,6 +147,7 @@ class row_lexicographic_comparator {
         _rhs{rhs},
         _null_precedence{null_precedence},
         _column_order{column_order} {
+    // Add check for types to be the same. 
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
                  "Mismatched number of columns.");
   }
