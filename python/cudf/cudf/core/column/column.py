@@ -1002,6 +1002,20 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     return column_empty(row_count, dtype, masked, categories=categories)
 
 
+def column_empty_like_same_mask(column, dtype):
+    """Create a new empty Column with the same length and the same mask.
+
+    Parameters
+    ----------
+    dtype : np.dtype like
+        The dtype of the data buffer.
+    """
+    result = column_empty_like(column, dtype)
+    if column.has_null_mask:
+        result.set_mask(column.mask)
+    return result
+
+
 def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
@@ -1035,21 +1049,6 @@ def column_empty(row_count, dtype, masked, categories=None):
     from cudf.core.column import build_column
 
     return build_column(data, dtype, mask, categories)
-
-
-def column_empty_like_same_mask(column, dtype):
-    """Create a new empty Column with the same length and the same mask.
-
-    Parameters
-    ----------
-    dtype : np.dtype like
-        The dtype of the data buffer.
-    """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
-    params = dict(data=Buffer(data))
-    if column.has_null_mask:
-        params.update(mask=column.nullmask)
-    return Column(**params)
 
 
 def column_select_by_boolmask(column, boolmask):
@@ -1161,15 +1160,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         name = arbitrary.name
 
     if isinstance(arbitrary, Column):
-        categories = None
-        if hasattr(arbitrary, "categories"):
-            categories = arbitrary.categories
-        data = build_column(
-            arbitrary.data,
-            arbitrary.dtype,
-            mask=arbitrary.mask,
-            categories=categories,
-        )
+        return arbitrary
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column
