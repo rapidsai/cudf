@@ -27,7 +27,6 @@
 namespace cudf {
 
 table::table(std::vector<gdf_column*> const& cols) : _columns{cols} {
-  if (not cols.empty())
     std::for_each(_columns.begin(), _columns.end(),
                   [this](gdf_column* col) {
                     CUDF_EXPECTS(nullptr != col, "Null input column");
@@ -97,7 +96,7 @@ table table::select(std::vector<gdf_size_type> const& column_indices) const {
 
     std::vector<gdf_column*> desired_columns;
     for(auto index : column_indices){
-        desired_columns.push_back(_columns[index]);
+        desired_columns.push_back(_columns.at(index));
     }
     return table{desired_columns};
 }

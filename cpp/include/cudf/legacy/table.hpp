@@ -146,6 +146,11 @@ struct table {
   /**---------------------------------------------------------------------------*
    * @brief Returns a new `table` containing the set of specified columns.
    *
+   * @throws cudf::logic_error
+   * If columns requested exceeds number of columns exist
+   * @throws std::out_of_range
+   * If the index of the column exceeds max column index in table
+   *
    * @param column_indices Indices of the desired columns
    * @return table New table containing only the desired columns
    *---------------------------------------------------------------------------**/
@@ -190,6 +195,9 @@ bool has_nulls(cudf::table const& table);
 
 /**---------------------------------------------------------------------------*
  * @brief `table1` and `table2` are concatenated to return single table
+ *
+ * @throws cudf::logic_error
+ * If number of rows mismatch
  *
  * @param table1 The table to be concatenated with `table2`
  * @param table2 The table to be concatenated with `table1`

@@ -23,11 +23,19 @@ namespace cudf {
  * @brief  Performs an inner join on the specified columns of two
  * tables (left, right)
  *
- * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, a:{1,2,5} And column 'a' from TableB
- *          joins column 'a' from TableA.
- * The result would be Table-res a:{1, 2}, b:{1, 2}
- * Result is intersection of column 'a' from A and column 'a' from B
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, a: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {1}
+ *          columns_in_common: { {0, 1} }
+ * Result: { a: {1, 2}, b: {1, 2} }
+ *
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {0}
+ *          columns_in_common: { }
+ * Result: { a: {1, 2}, b: {1, 2}, c: {1, 2} }
  *
  * @throws cudf::logic_error 
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
@@ -68,11 +76,20 @@ cudf::table inner_join(
  * @brief  Performs a left join (also known as left outer join) on the
  * specified columns of two tables (left, right)
  *
- * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, a:{1,2,5} And column 'a' from TableB
- *          joins column 'a' from TableA.
- * The result would be Table-res a:{0, 1, 2}, b:{NULL, 1, 2}
- * Result is left of column 'a' from Table A only
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, a: {1 ,2 ,5}
+ *          left_on: {0}
+ *          right_on: {1}
+ *          columns_in_common: { {0, 1} }
+ * Result: { a: {0, 1, 2}, b: {NULL, 1, 2} }
+ *
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {0}
+ *          columns_in_common: { }
+ * Result: { a: {0, 1, 2}, b: {NULL, 1, 2}, c: {NULL, 1, 2} }
+ *
  * @throws cudf::logic_error
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
  *
@@ -114,11 +131,19 @@ cudf::table left_join(
  * @brief  Performs a full join (also known as full outer join) on the
  * specified columns of two tables (left, right)
  * 
- * @example TableA a:{0,1,2}
- *          TableB b:{1,2,3}, c:{1,2,5} And column 'b' of TableB joins
- *          column 'a' of TableA.
- * The result would be Table-res a:{0, 1, 2, NULL}, b:{NULL, 1, 2, 3}, c:{NULL, 1, 2, 5}
- * Result is union of column 'a' from Table A and column 'a' from Table B
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {1}
+ *          columns_in_common: { {0, 1} }
+ * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
+ *
+ * @example TableA a: {0, 1, 2}
+ *          TableB b: {1, 2, 3}, c: {1, 2, 5}
+ *          left_on: {0}
+ *          right_on: {0}
+ *          columns_in_common: { }
+ * Result: { a: {0, 1, 2, NULL}, b: {NULL, 1, 2, 3}, c: {NULL, 1, 2, 5} }
  *
  * @throws cudf::logic_error
  * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
