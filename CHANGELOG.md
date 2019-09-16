@@ -23,6 +23,7 @@
 - PR #2785 Add nvstrings Python docs
 - PR #2786 Add benchmarks option to root build.sh
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
+- PR #2807 Add scatter_by_map to DataFrame python API
 
 ## Improvements
 
