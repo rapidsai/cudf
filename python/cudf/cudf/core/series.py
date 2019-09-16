@@ -1194,17 +1194,7 @@ class Series(object):
         to_replace = self._column.apply_boolean_mask(~cond & self.notna())
         if is_scalar(other):
             all_nan = other is None
-            if all_nan:
-                new_value = [other] * len(to_replace)
-            else:
-                # pre-determining the dtype to match the pandas's output
-                typ = to_replace.dtype
-                if np.dtype(type(other)).kind in "f" and typ.kind in "i":
-                    typ = np.int64 if other == int(other) else np.float64
-
-                new_value = utils.scalar_broadcast_to(
-                    other, (len(to_replace),), np.dtype(typ)
-                )
+            new_value = [other] * len(to_replace)
         else:
             raise NotImplementedError(
                 "Replacement arg of {} is not supported.".format(type(other))
@@ -1527,14 +1517,7 @@ class Series(object):
         if not is_scalar(to_replace):
             if is_scalar(replacement):
                 all_nan = replacement is None
-                if all_nan:
-                    replacement = [replacement] * len(to_replace)
-                else:
-                    replacement = utils.scalar_broadcast_to(
-                        replacement,
-                        (len(to_replace),),
-                        np.dtype(type(replacement)),
-                    )
+                replacement = [replacement] * len(to_replace)
         else:
             if not is_scalar(replacement):
                 raise TypeError(

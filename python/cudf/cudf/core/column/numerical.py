@@ -17,6 +17,8 @@ from cudf.core.buffer import Buffer
 from cudf.core.column import column
 from cudf.utils import cudautils, utils
 from cudf.utils.dtypes import (
+    is_scalar,
+    min_numeric_column_type,
     min_signed_type,
     np_to_pa_dtype,
     numeric_normalize_types,
@@ -320,6 +322,36 @@ class NumericalColumn(column.TypedColumnBase):
         replacement_col = column.as_column(
             replacement, dtype=replacement_dtype
         )
+
+        # If to_replace is a python list or scalar, check mininum viable dtype
+        if isinstance(to_replace, list) or is_scalar(to_replace):
+            to_replace_dtype = min_numeric_column_type(to_replace_col)
+        else:
+            to_replace_dtype = to_replace.dtype
+        if to_replace_dtype > self.dtype or (
+            np.issubdtype(self.dtype, np.number)
+            and np.issubdtype(to_replace_dtype, np.floating)
+        ):
+            raise TypeError(
+                "Dtype of `to_replace`: {} should be <= dtype"
+                "of the series: {}".format(to_replace_dtype, self.dtype)
+            )
+        # If replacement is a python list or scalar, check mininum viable dtype
+        if isinstance(replacement, list) or is_scalar(replacement):
+            replacement_dtype = min_numeric_column_type(replacement_col)
+        else:
+            replacement_dtype = replacement.dtype
+        if replacement_dtype > self.dtype or (
+            np.issubdtype(self.dtype, np.number)
+            and np.issubdtype(replacement_dtype, np.floating)
+        ):
+            raise TypeError(
+                "Dtype of `replacement`: {} should be <= dtype"
+                "of the series: {}".format(replacement_dtype, self.dtype)
+            )
+        to_replace_col = to_replace_col.astype(self.dtype)
+        replacement_col = replacement_col.astype(self.dtype)
+
         replaced = self.copy()
         to_replace_col, replacement_col, replaced = numeric_normalize_types(
             to_replace_col, replacement_col, replaced
