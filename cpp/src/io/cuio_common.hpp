@@ -19,6 +19,7 @@
 #include <map>
 #include <string>
 #include <vector>
+#include <utility>
 
 #include <cudf/cudf.h>
 
@@ -29,7 +30,7 @@ namespace cudf {
  *
  * Returns GDF_invalid if the input string is not a valid dtype string
  */
-gdf_dtype convertStringToDtype(const std::string &dtype);
+std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::string &dtype);
 
 /**---------------------------------------------------------------------------*
  * @brief Infer the compression type from the compression parameter and

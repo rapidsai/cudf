@@ -26,6 +26,7 @@
 #include <utilities/bit_util.cuh>
 
 #include <cudf/cudf.h>
+#include <cudf/join.hpp>
 
 #include <rmm/rmm.h>
 
@@ -413,62 +414,55 @@ struct JoinTest : public GdfTest
     gdf_column right_result{};
     left_result.size = 0;
     right_result.size = 0;
+    std::vector<gdf_size_type> range;
+    std::vector<std::pair<int, int>> columns_in_common (num_columns);
 
-    gdf_error result_error{GDF_SUCCESS};
+    for (int i = 0; i < num_columns; ++i) 
+    {
+        range.push_back(i);
+        columns_in_common[i].first = i;
+        columns_in_common[i].second = i;
+    }
 
-    gdf_column ** left_gdf_columns = gdf_raw_left_columns.data();
-    gdf_column ** right_gdf_columns = gdf_raw_right_columns.data();
-    std::vector<int> range;
-    for (int i = 0; i < num_columns; ++i) {range.push_back(i);}
+    // Both left and right col join indexes are same
+
+    std::vector <gdf_column *> result_idx_cols = {&left_result, &right_result};
+    cudf::table left_gdf_columns(gdf_raw_left_columns);
+    cudf::table right_gdf_columns(gdf_raw_right_columns);
+    cudf::table result_idx_table (result_idx_cols);
+    cudf::table result;
+
     switch(op)
     {
       case join_op::LEFT:
         {
-          result_error = gdf_left_join(
-                                       left_gdf_columns, num_columns, range.data(),
-                                       right_gdf_columns, num_columns, range.data(),
-                                       num_columns,
-                                       0, nullptr,
-                                       &left_result, &right_result,
-                                       &ctxt);
+          cudf::left_join(
+                                       left_gdf_columns, right_gdf_columns,
+                                       range, range, columns_in_common,
+                                       &result_idx_table, &ctxt);
           break;
         }
       case join_op::INNER:
         {
-          result_error =  gdf_inner_join(
-                                         left_gdf_columns, num_columns, range.data(),
-                                         right_gdf_columns, num_columns, range.data(),
-                                         num_columns,
-                                         0, nullptr,
-                                         &left_result, &right_result,
-                                         &ctxt);
+          cudf::inner_join(
+                                       left_gdf_columns, right_gdf_columns,
+                                       range, range, columns_in_common,
+                                       &result_idx_table, &ctxt);
           break;
         }
       case join_op::FULL:
         {
-          result_error =  gdf_full_join(
-                                         left_gdf_columns, num_columns, range.data(),
-                                         right_gdf_columns, num_columns, range.data(),
-                                         num_columns,
-                                         0, nullptr,
-                                         &left_result, &right_result,
-                                         &ctxt);
+          cudf::full_join(
+                                       left_gdf_columns, right_gdf_columns,
+                                       range, range, columns_in_common,
+                                       &result_idx_table, &ctxt);
           break;
         }
       default:
         std::cout << "Invalid join method" << std::endl;
         EXPECT_TRUE(false);
     }
-   
-    EXPECT_EQ(expected_result, result_error) << "The gdf join function did not complete successfully";
-
-    // If the expected result was not GDF_SUCCESS, then this test was testing for a
-    // specific error condition, in which case we return imediately and do not do
-    // any further work on the output
-    if(GDF_SUCCESS != expected_result){
-      return std::vector<result_type>();
-    }
-
+  
     EXPECT_EQ(left_result.size, right_result.size) << "Join output size mismatch";
     // The output is an array of size `n` where the first n/2 elements are the
     // left_indices and the last n/2 elements are the right indices
@@ -773,7 +767,7 @@ TYPED_TEST(JoinValidTest, ReportValidMaskError)
                      100,100,
                      false, 1);
 
-  std::vector<result_type> gdf_result = this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED);
+  CUDF_EXPECT_THROW_MESSAGE (this->compute_gdf_result(false, true, GDF_VALIDITY_UNSUPPORTED), "GDF Validity is unsupported by sort_join");
 }
 
 
@@ -804,9 +798,7 @@ TYPED_TEST(MaxJoinTest, InputTooLarge)
     // We expect the function to fail when the input is this large
     const gdf_error expected_error{GDF_COLUMN_SIZE_TOO_BIG};
 
-    std::vector<result_type> gdf_result = this->compute_gdf_result(print_result, 
-                                                                   sort_result, 
-                                                                   expected_error);
+    CUDF_EXPECT_THROW_MESSAGE ( this->compute_gdf_result(print_result, sort_result, expected_error), "right column size is too big");
 }
 
 // These tests will only fail on a non-release build where `assert`s are enabled
