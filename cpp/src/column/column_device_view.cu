@@ -32,21 +32,33 @@ column_device_view::column_device_view(column_view source)
 
 // Free device memory allocated for children
 void column_device_view::destroy() {
-  // TODO Implement once support for children is added
+  // TODO Needs to handle grand-children
+  if( d_children )
+    RMM_FREE(d_children,0);
+  delete this;
 }
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
-auto column_device_view::create(column_view source, cudaStream_t stream) {
+std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
   size_type num_descendants{count_descendants(source)};
-  if (num_descendants > 0) {
-    CUDF_FAIL("Columns with children are not currently supported.");
-  }
-
+  //if( num_descendants > 0 )   {
+  //  CUDF_FAIL("Columns with children are not currently supported.");
+  // }
   auto deleter = [](column_device_view* v) { v->destroy(); };
-
   std::unique_ptr<column_device_view, decltype(deleter)> p{
       new column_device_view(source), deleter};
-
+  if( num_descendants > 0 )
+  {
+    // ignore grand-children right now
+    RMM_ALLOC(&p->d_children, sizeof(column_device_view)*num_descendants, stream);
+    for( size_type idx=0; idx < num_descendants; ++idx )
+    {
+      column_device_view child(source.child(idx));
+      cudaMemcpyAsync(p->d_children+idx, &child, sizeof(column_device_view), cudaMemcpyHostToDevice, stream);
+    }
+    p->_num_children = num_descendants;
+    cudaStreamSynchronize(stream);
+  }
   return p;
 }
 

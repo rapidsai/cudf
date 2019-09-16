@@ -171,4 +171,5 @@ public:
       * @return New strings instance with appropriate scattered elements.
       */
      static NVStrings* scatter_count( NVStrings& strs, unsigned int* counts, bool devmem=true );
+     static unsigned int code_points( NVStrings& strs, unsigned int* results );
 };

@@ -15,9 +15,11 @@
  */
 #pragma once
 
+#include <cuda_runtime.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.cuh>
+#include <cudf/strings/string_view.cuh>
 
 namespace cudf {
 
@@ -69,34 +71,6 @@ class alignas(16) column_device_view_base {
   __host__ __device__ T const* data() const noexcept {
     return head<T>() + _offset;
   }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Returns reference to element at the specified index.
-   *
-   * This function accounts for the offset.
-   *
-   * @tparam T The element type
-   * @param element_index Position of the desired element
-   *---------------------------------------------------------------------------**/
-  template <typename T>
-  __device__ T const& element(size_type element_index) const noexcept {
-    return data<T>()[element_index];
-  }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Returns `string_view` to the string element at the specified index.
-   *
-   * This function accounts for the offset.
-   *
-   * @param element_index Position of the desired string
-   *---------------------------------------------------------------------------**/
-  /*
-    template <>
-    __device__ string_view const& element<string_view>(
-        size_type element_index) const noexcept {
-      // Fill this in
-    }
-    */
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of elements in the column
@@ -253,8 +227,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return A `unique_ptr` to a `column_device_view` that makes the data from
    *`source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static auto create(column_view source_view, cudaStream_t stream = 0);
+  static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(column_view source_view, cudaStream_t stream = 0);
   
+  /**---------------------------------------------------------------------------*
+   * @brief Returns reference to element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  __device__ T const element(size_type element_index) const noexcept {
+    return data<T>()[element_index];
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
    *
@@ -272,7 +259,6 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
                                      ///< may contain additional data
   size_type _num_children{};         ///< The number of child columns
 
-public:
   /**---------------------------------------------------------------------------*
    * @brief Construct's a `column_device_view` from a `column_view` populating
    * all but the children.
@@ -283,7 +269,6 @@ public:
    *---------------------------------------------------------------------------**/
   column_device_view(column_view source);
 
-protected:
   /**---------------------------------------------------------------------------*
    * @brief Destroy the `device_column_view` object.
    *
@@ -372,24 +357,9 @@ class alignas(16) mutable_column_device_view
    * @param element_index Position of the desired element
    *---------------------------------------------------------------------------**/
   template <typename T>
-  __device__ T& element(size_type element_index) noexcept {
+  __device__ T element(size_type element_index) noexcept {
     return data<T>()[element_index];
   }
-
-  /**---------------------------------------------------------------------------*
-   * @brief Returns `string_view` to the string element at the specified index.
-   *
-   * This function accounts for the offset.
-   *
-   * @param element_index Position of the desired string
-   *---------------------------------------------------------------------------**/
-  /*
-    template <>
-    __device__ string_view& element<string_view>(
-        size_type element_index) noexcept {
-      // Fill this in
-    }
-    */
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -480,5 +450,30 @@ class alignas(16) mutable_column_device_view
    *---------------------------------------------------------------------------**/
   void destroy();
 };
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns `string_view` to the string element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @param element_index Position of the desired string
+   *---------------------------------------------------------------------------**/
+  
+  template <>
+  __device__ inline string_view const column_device_view::element<string_view>(
+      size_type element_index) const noexcept {
+        size_type index = element_index + _offset; // account for this view's _offset
+        const int32_t* d_offsets = d_children[0].data<int32_t>();
+        const char* d_strings = d_children[1].data<char>();
+        size_type offset = index ? d_offsets[index-1] : 0;
+        return string_view{d_strings + offset, d_offsets[index] - offset};
+  }
+
+  //template <>
+  //__device__ inline string_view mutable_column_device_view::element<string_view>(
+  //    size_type element_index) noexcept {
+  //      return string_view{};
+  //}
+
 
 }  // namespace cudf

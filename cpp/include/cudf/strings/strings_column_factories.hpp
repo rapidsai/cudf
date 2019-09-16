@@ -17,7 +17,9 @@
 
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include "../column/column.hpp"
+
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/column/column.hpp>
 
 namespace cudf {
 /**---------------------------------------------------------------------------*

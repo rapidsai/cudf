@@ -170,3 +170,45 @@ NVStrings* NVText::scatter_count( NVStrings& strs, unsigned int* counts, bool bd
     // build strings object from elements
     return NVStrings::create_from_index((std::pair<const char*,size_t>*)d_results,total_count);
 }
+
+//
+unsigned int NVText::code_points( NVStrings& strs, unsigned int* results )
+{
+    unsigned int count = strs.size();
+    if( count==0 || results==nullptr )
+        return 0;
+
+    //
+    auto execpol = rmm::exec_policy(0);
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    // get all the lengths to build the offsets
+    // offsets point to each individual range
+    rmm::device_vector<size_t> offsets(count,0);
+    size_t* d_offsets = offsets.data().get();
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        [d_strings, d_offsets] __device__(unsigned int idx){
+            custring_view* dstr = d_strings[idx];
+            if( dstr )
+                d_offsets[idx] = dstr->chars_count();
+        });
+    thrust::inclusive_scan( execpol->on(0), offsets.begin(), offsets.end(), offsets.begin() );
+
+    // now set the ranges
+    auto d_results = results;
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        [d_strings, d_offsets, d_results] __device__(unsigned int idx){
+            custring_view* dstr = d_strings[idx];
+            if( !dstr )
+                return;
+            auto offset = (idx ? d_offsets[idx-1] : 0);
+            auto result = d_results + offset;
+            for( auto itr = dstr->begin(); itr != dstr->end(); ++itr )
+                *result++ = (unsigned int)*itr;
+        });
+    //
+    unsigned int rtn = offsets[count-1];
+    return rtn;
+}
