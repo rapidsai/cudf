@@ -72,7 +72,7 @@ def gather(source, maps):
     -------
     Column or list of Columns, or None if dest is given
     """
-    from cudf.core.column import column
+    from cudf.core.column import column, CategoricalColumn
 
     if isinstance(source, (list, tuple)):
         in_cols = source
@@ -105,6 +105,14 @@ def gather(source, maps):
             c_out_table = cpp_gather(c_in_table, c_maps[0])
 
     out_cols = columns_from_table(&c_out_table)
+
+    for i, in_col in enumerate(in_cols):
+        if isinstance(in_col, CategoricalColumn):
+            out_cols[i] = CategoricalColumn(
+                data=out_cols[i].data,
+                mask=out_cols[i].mask,
+                categories=in_col.cat().categories,
+                ordered=in_col.cat().ordered)
     
     free_column(c_maps)
     free_table(c_in_table)
