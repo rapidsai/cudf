@@ -1411,7 +1411,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocoated on the GPU
    */
   public ColumnVector asTimestamp() {
-    return castTo(TimeUnit.MILLISECONDS);
+    return asTimestamp(TimeUnit.MILLISECONDS);
   }
 
   /**

@@ -3578,6 +3578,34 @@ class DataFrame(object):
     def var(self, **kwargs):
         return self._apply_support_method("var", **kwargs)
 
+    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+        if numeric_only not in (None, True):
+            msg = "Kurtosis only supports int, float, and bool dtypes."
+            raise TypeError(msg)
+
+        self = self.select_dtypes(include=[np.number, np.bool])
+        return self._apply_support_method(
+            "kurtosis",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+        )
+
+    def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
+        if numeric_only not in (None, True):
+            msg = "Skew only supports int, float, and bool dtypes."
+            raise TypeError(msg)
+
+        self = self.select_dtypes(include=[np.number, np.bool])
+        return self._apply_support_method(
+            "skew",
+            axis=axis,
+            skipna=skipna,
+            level=level,
+            numeric_only=numeric_only,
+        )
+
     def all(self, bool_only=None, **kwargs):
         if bool_only:
             return self.select_dtypes(include="bool")._apply_support_method(
