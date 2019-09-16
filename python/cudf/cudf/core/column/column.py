@@ -1012,7 +1012,7 @@ def column_empty_like_same_mask(column, dtype):
     """
     result = column_empty_like(column, dtype)
     if column.has_null_mask:
-        result.set_mask(column.mask)
+        result = result.set_mask(column.mask)
     return result
 
 
