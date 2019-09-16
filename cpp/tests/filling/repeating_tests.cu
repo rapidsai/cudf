@@ -84,3 +84,52 @@ TYPED_TEST(RepeatTest, SetRanges)
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
                               << "Expected:" << expected.to_str();
 }
+
+TYPED_TEST(RepeatTest, SetRangesNullable)
+{
+  using T = TypeParam;
+
+  // Making the ranges that will be filled
+  gdf_size_type num_ranges = 10;
+  gdf_size_type max_range_size = 10;
+
+  std::vector<gdf_size_type> range_sizes(num_ranges);
+  std::transform(range_sizes.begin(), range_sizes.end(), range_sizes.begin(),
+    [&](gdf_size_type i) { return random_int(0, max_range_size); });
+  
+  std::vector<gdf_size_type> range_offsets(num_ranges);
+  std::partial_sum(range_sizes.begin(), range_sizes.end(), range_offsets.begin());
+
+  std::vector<int> values_data(num_ranges);
+  std::iota(values_data.begin(), values_data.end(), 0);
+  std::transform(values_data.begin(), values_data.end(), values_data.begin(),
+    [](gdf_size_type i) { return i * 2; });
+
+  // set your expectations
+  gdf_size_type column_size = std::accumulate(range_sizes.begin(), range_sizes.end(), 0);
+  std::vector<int> expect_vals;
+  for (size_t i = 0; i < range_sizes.size(); i++) {
+    for (gdf_size_type j = 0; j < range_sizes[i]; j++) {
+      expect_vals.push_back(values_data[i]);
+    }
+  }
+
+  cudf::test::column_wrapper_factory<T> factory;
+
+  column_wrapper<T> values = factory.make(num_ranges,
+    [&](gdf_size_type i) { return values_data[i]; },
+    [&](gdf_size_type i) { return i % 2; });
+
+  column_wrapper<gdf_size_type> counts(range_sizes);
+
+  column_wrapper<T> expected = factory.make(column_size,
+    [&](gdf_index_type row) { return expect_vals[row]; },
+    [&](gdf_index_type row) { 
+      auto corresponding_value_it = std::upper_bound(range_offsets.begin(), range_offsets.end(), row);
+      return (corresponding_value_it - range_offsets.begin()) % 2; });
+
+  column_wrapper<T> actual(cudf::repeat(*values.get(), *counts.get()));
+
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
+                              << "Expected:" << expected.to_str();
+}
