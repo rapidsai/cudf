@@ -17,13 +17,16 @@
 #pragma once
 
 #ifdef GTEST_INCLUDE_GTEST_GTEST_H_
-#error "Don't include gtest/gtest.h directly, include GTest.hpp instead"
+#error "Don't include gtest/gtest.h directly, include cudf_gtest.hpp instead"
 #endif
 
 /**---------------------------------------------------------------------------*
  * @file GTest.hpp
  * @brief Work around for GTests emulation of variadic templates in
  * ::Testing::Types.
+ *
+ * @note Instead of including `gtest/gtest.h`, all libcudf test files should
+ * include `cudf_gtest.hpp` instead.
  *
  * Removes the 50 type limit in a type-parameterized test list.
  *
