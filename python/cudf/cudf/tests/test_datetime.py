@@ -10,6 +10,8 @@ from pandas.util.testing import (
     assert_series_equal,
 )
 
+from librmm_cffi import librmm as rmm
+
 import cudf
 from cudf.core import DataFrame, Series
 from cudf.core.index import DatetimeIndex
@@ -420,6 +422,16 @@ testdata = [
             dtype="datetime64[ms]",
         ),
         False,
+    ),
+    (
+        Series(
+            rmm.to_device(
+                np.array(
+                    ["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]"
+                )
+            )
+        ),
+        True,
     ),
 ]
 
