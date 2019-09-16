@@ -23,6 +23,7 @@
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
+#include <copying/column_range_factory.cuh>
 
 #include <cub/cub.cuh>
 
@@ -174,36 +175,6 @@ struct copy_range_dispatch {
 namespace cudf {
 
 namespace detail {
-
-struct column_range_factory {
-  gdf_column column;
-  gdf_index_type begin;
-
-  template <typename T>
-  struct column_range {
-    T const * column_data;
-    bit_mask_t const * bitmask;
-    gdf_index_type begin;
-
-    __device__
-    T data(gdf_index_type index) { 
-      return column_data[begin + index]; }
-
-    __device__
-    bool valid(gdf_index_type index) {
-      return bit_mask::is_valid(bitmask, begin + index);
-    }
-  };
-
-  template <typename T>
-  column_range<T> make() {
-    return column_range<T>{
-      static_cast<T*>(column.data),
-      reinterpret_cast<bit_mask_t*>(column.valid),
-      begin
-    };
-  }
-};
 
 /**
  * @brief Copies a range of values from a functor to a column
