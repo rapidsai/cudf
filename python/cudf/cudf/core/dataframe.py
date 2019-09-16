@@ -1406,7 +1406,7 @@ class DataFrame(object):
             data, forceindex=forceindex, name=name
         )
 
-    def drop(self, labels, axis=None, errors="raise"):
+    def drop(self, labels, axis=None, columns=None, errors="raise"):
         """Drop column(s)
 
         Parameters
@@ -1415,6 +1415,7 @@ class DataFrame(object):
             Name of column(s) to be dropped.
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Only axis=1 is currently supported.
+        columns: Ignored.
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
 
