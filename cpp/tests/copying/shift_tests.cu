@@ -26,12 +26,12 @@
  {
 
  template <typename ColumnType>
- cudf::test::column_wrapper<ColumnType> make_column_wrapper(
+ column_wrapper<ColumnType> make_column_wrapper(
    std::vector<ColumnType> data,
    std::vector<gdf_valid_type> mask
  )
  {
-   return cudf::test::column_wrapper<ColumnType>(
+   return column_wrapper<ColumnType>(
      data,
      [mask](gdf_size_type row){ return mask[row]; }
    );

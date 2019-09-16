@@ -20,7 +20,7 @@
 #include <cudf/filling.hpp>
 
 #include <copying/copy_range.cuh>
-#include <filling/fill.cuh>
+#include <filling/scalar_factory.cuh>
 
 #include <vector>
 
@@ -65,9 +65,6 @@ table shift(
 )
 {
   table out_table = allocate_like(in_table, MaskAlloc::ALWAYS);
-
-  // TODO(cwharris): assert in / out same row count
-  auto num_rows = out_table.num_rows();
 
   for (gdf_index_type i = 0; i < out_table.num_columns(); i++)
   {

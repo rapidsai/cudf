@@ -57,7 +57,7 @@ struct column_range_factory {
     };
   }
 };
-    
-}
 
-}
+} // namespace cudf
+
+} // namespace detail

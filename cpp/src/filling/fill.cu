@@ -16,7 +16,7 @@
 
 #include <copying/copy_range.cuh>
 
-#include "fill.cuh"
+#include "scalar_factory.cuh"
 
 namespace cudf {
 
