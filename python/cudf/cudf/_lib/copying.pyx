@@ -100,9 +100,8 @@ def gather(source, maps):
 
     cdef gdf_column* c_maps = column_view_from_column(maps)
     
-    if gather_count != 0:
-        with nogil:
-            c_out_table = cpp_gather(c_in_table, c_maps[0])
+    with nogil:
+        c_out_table = cpp_gather(c_in_table, c_maps[0])
 
     out_cols = columns_from_table(&c_out_table)
 
