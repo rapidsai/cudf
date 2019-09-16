@@ -182,15 +182,15 @@ struct gdf_extract_weekday_from_unixtime_op : public thrust::unary_function<int6
 		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
 		const unsigned mp = (5*doy + 2)/153;
-		int m = mp + (mp < 10 ? 3 : -9);
 		const unsigned d =  doy - (153*mp+2)/5 + 1;
-
+		int m = mp + (mp < 10 ? 3 : -9);
 		int y = static_cast<int>(yoe) + era * 400;
+
+		// apply Zeller's algorithm		
 		if (m <= 2) {
 			y += 1;
 		}
 
-		// apply Zeller's algorithm
 		if (m == 1) {
 			m = 13;
 			y -= 1;
@@ -201,10 +201,9 @@ struct gdf_extract_weekday_from_unixtime_op : public thrust::unary_function<int6
 			y-= 1;
 		}
 
-		const unsigned q = d;
 		const unsigned k = y % 100;
 		const unsigned j = y / 100;
-		const unsigned h = (q + 13*(m+1)/5 + k + k/4 + j/4 + 5*j) % 7; 
+		const unsigned h = (d + 13*(m+1)/5 + k + k/4 + j/4 + 5*j) % 7; 
 
 		return (h - 2 + 7) % 7; // pandas convention Monday = 0
 
@@ -374,12 +373,13 @@ struct gdf_extract_weekday_from_date32_op : public thrust::unary_function<int32_
 		const unsigned mp = (5*doy + 2)/153;
 		const unsigned d = doy - (153*mp+2)/5 + 2;
 		int m = mp + (mp < 10 ? 3 : -9);
-
 		int y = static_cast<int>(yoe) + era * 400;
+
+		// apply Zeller's algorithm
 		if (m <= 2) {
 			y += 1;
 		}
-		// apply Zeller's algorithm
+
 		if (m == 1) {
 			m = 13;
 			y -= 1;
@@ -390,10 +390,9 @@ struct gdf_extract_weekday_from_date32_op : public thrust::unary_function<int32_
 			y-= 1;
 		}
 
-		const unsigned q = d;
 		const unsigned k = y % 100;
 		const unsigned j = y / 100;
-		const unsigned h = (q + 13*(m+1)/5 + k + k/4 + j/4 + 5*j) % 7; 
+		const unsigned h = (d + 13*(m+1)/5 + k + k/4 + j/4 + 5*j) % 7; 
 
 		return (h - 2 + 7) % 7; // pandas convention Monday = 0
 
