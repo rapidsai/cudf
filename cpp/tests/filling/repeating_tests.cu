@@ -133,3 +133,18 @@ TYPED_TEST(RepeatTest, SetRangesNullable)
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
                               << "Expected:" << expected.to_str();
 }
+
+TYPED_TEST(RepeatTest, ZeroSizeInput)
+{
+  using T = TypeParam;
+
+  auto values = column_wrapper<T>{};
+  auto counts = column_wrapper<gdf_size_type>{};
+
+  auto expected = column_wrapper<T>{};
+
+  column_wrapper<T> actual(cudf::repeat(*values.get(), *counts.get()));
+
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
+                              << "Expected:" << expected.to_str();
+}

@@ -56,16 +56,20 @@ namespace detail {
 gdf_column repeat(const gdf_column &in, const gdf_column& count, cudaStream_t stream = 0) {
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
     "Count column should be of index type");
-  CUDF_EXPECTS(count.null_count == 0, "Couns cannot be null");
+  CUDF_EXPECTS(in.size == count.size, "in and count must have equal size");
+  CUDF_EXPECTS(count.null_count == 0, "count cannot contain nulls");
+
+  if (in.size == 0) {
+    return cudf::empty_like(in);
+  }
   
   auto exec_policy = rmm::exec_policy(stream)->on(stream);
   rmm::device_vector<gdf_size_type> offset(count.size);
   auto count_data = static_cast <gdf_size_type*> (count.data);
   
   thrust::inclusive_scan(exec_policy, count_data, count_data + count.size, offset.begin());
-  // print(offset);
 
-  gdf_size_type output_size = offset[count.size - 1];
+  gdf_size_type output_size = offset.back();
 
   rmm::device_vector<gdf_size_type> indices(output_size);
   thrust::upper_bound(exec_policy,
