@@ -1,11 +1,15 @@
 from __future__ import division, print_function
 
 import numpy as np
+import pandas as pd
+import pytest
 
 from librmm_cffi import librmm as rmm
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core.column import column
+from cudf.tests.utils import assert_eq
 
 
 def test_gather_single_col():
@@ -46,3 +50,18 @@ def test_gather_string_col():
     gather_map = column.as_column([0, 2, 3], dtype="int32").data.mem
     result = libcudf.copying.gather(col, gather_map)
     assert result.data.to_host() == ["a", None, "d"]
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["bool", "int8", "int16", "int32", "int64", "float32", "float64", "str"],
+)
+def test_repeat(dtype):
+    arr = np.random.rand(10) * 10
+    repeats = np.random.randint(10, size=10)
+    psr = pd.Series(arr).astype(dtype)
+    gsr = cudf.from_pandas(psr)
+    assert_eq(psr, gsr)
+
+    assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
+    pass

@@ -2535,6 +2535,12 @@ class Series(object):
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
+    def repeat(self, repeats):
+        a = column.as_column(self)
+        repeats = column.as_column(repeats).astype("int32")
+        col = libcudf.filling.repeat(a, repeats)
+        return Series(data=col)
+
 
 truediv_int_dtype_corrections = {
     "int16": "float32",
