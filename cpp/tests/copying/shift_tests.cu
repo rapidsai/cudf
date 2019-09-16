@@ -39,13 +39,13 @@
 
  template <typename ColumnType>
  void test_shift(
-   gdf_index_type period,
+   gdf_index_type periods,
    scalar_wrapper<ColumnType> fill_value,
    column_wrapper<ColumnType> source_column,
    column_wrapper<ColumnType> expect_column
  )
  {
-   auto actual_column = cudf::shift(source_column, period, fill_value);
+   auto actual_column = cudf::shift(source_column, periods, fill_value);
  
    print_gdf_column(source_column.get());
    print_gdf_column(expect_column.get());

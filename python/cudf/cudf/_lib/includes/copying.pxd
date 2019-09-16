@@ -38,7 +38,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
     cdef cudf_table shift(
         const cudf_table& in_column,
-        gdf_index_type offset,
+        gdf_index_type periods,
         const gdf_scalar* fill_value
     ) except +
 

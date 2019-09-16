@@ -24,17 +24,47 @@
 
 #include <vector>
 
-#include "shift.cuh"
-
 namespace cudf {
+
+namespace detail {
+
+  void shift(
+    gdf_column *out_column,
+    gdf_column const &in_column,
+    gdf_index_type periods,
+    gdf_scalar const *fill_value
+  )
+  {
+    gdf_index_type in_start = 0;
+    gdf_index_type out_start = periods;
+    gdf_index_type out_end = out_column->size;
+    gdf_index_type fill_start = 0;
+    gdf_index_type fill_end = out_start;
+  
+    if (periods < 0) {
+      in_start = -periods;
+      out_start = 0;
+      out_end = out_column->size + periods;
+      fill_start = out_end;
+      fill_end = out_column->size;
+    }
+
+    detail::copy_range(out_column, detail::column_range_factory{in_column, in_start}, out_start, out_end);
+
+    if (fill_value != nullptr) {
+      detail::copy_range(out_column, detail::scalar_factory{*fill_value}, fill_start, fill_end);
+    }
+  }
+
+}; // namespace detail
 
 table shift(
   const table& in_table,
-  gdf_index_type period,
+  gdf_index_type periods,
   const gdf_scalar* fill_value
 )
 {
-  cudf::table out_table = cudf::copy(in_table);
+  table out_table = allocate_like(in_table, MaskAlloc::ALWAYS);
 
   // TODO(cwharris): assert in / out same row count
   auto num_rows = out_table.num_rows();
@@ -44,7 +74,7 @@ table shift(
       auto out_column = const_cast<gdf_column*>(out_table.get_column(i));
       auto in_column = const_cast<gdf_column*>(in_table.get_column(i));
 
-      detail::shift(out_column, *in_column, period, fill_value);
+      detail::shift(out_column, *in_column, periods, fill_value);
   }
 
   return out_table;

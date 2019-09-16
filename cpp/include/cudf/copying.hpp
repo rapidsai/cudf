@@ -349,7 +349,7 @@ std::vector<gdf_column*> split(gdf_column const &         input,
                                gdf_size_type              num_splits);
 
 table shift(const table& in_table,
-            gdf_index_type period,
+            gdf_index_type periods,
             const gdf_scalar* fill_value);
 
 /**

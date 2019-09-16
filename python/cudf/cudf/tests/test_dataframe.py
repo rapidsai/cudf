@@ -2006,7 +2006,7 @@ def test_dataframe_reindex_10(copy):
 
 @pytest.mark.parametrize("copy", [True, False])
 def test_dataframe_reindex_change_dtype(copy):
-    index = pd.date_range("12/29/2009", periods=10, freq="D")
+    index = pd.date_range("12/29/2009", periodss=10, freq="D")
     columns = ["a", "b", "c", "d", "e"]
     gdf = gd.datasets.randomdata(
         nrows=6, dtypes={"a": "category", "c": float, "d": str}
@@ -2419,8 +2419,8 @@ def test_get_numeric_data():
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-def test_shift(dtype, period):
+@pytest.mark.parametrize("periods", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_shift(dtype, periods):
     if dtype == np.int8:
         # to keep data in range
         data = gen_rand(dtype, 100000, low=-2, high=2)
@@ -2430,16 +2430,16 @@ def test_shift(dtype, period):
     gdf = DataFrame({"a": data})
     pdf = pd.DataFrame({"a": data})
 
-    shifted_outcome = gdf.a.shift(period, fill_value=-1)
-    expected_outcome = pdf.a.shift(period).fillna(-1).astype(dtype)
+    shifted_outcome = gdf.a.shift(periods, fill_value=-1)
+    expected_outcome = pdf.a.shift(periods).fillna(-1).astype(dtype)
 
     assert_eq(shifted_outcome, expected_outcome)
 
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.parametrize("period", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
-def test_diff(dtype, period):
+@pytest.mark.parametrize("periods", [-1, -5, -10, -20, 0, 1, 5, 10, 20])
+def test_diff(dtype, periods):
     if dtype == np.int8:
         # to keep data in range
         data = gen_rand(dtype, 100000, low=-2, high=2)
@@ -2449,8 +2449,8 @@ def test_diff(dtype, period):
     gdf = DataFrame({"a": data})
     pdf = pd.DataFrame({"a": data})
 
-    diffed_outcome = gdf.a.diff(period)
-    expected_outcome = pdf.a.diff(period).fillna(-1).astype(dtype)
+    diffed_outcome = gdf.a.diff(periods)
+    expected_outcome = pdf.a.diff(periods).fillna(-1).astype(dtype)
     assert_eq(diffed_outcome, expected_outcome)
 
 

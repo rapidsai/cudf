@@ -274,12 +274,12 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def shift_table(df, period, fill_value):
+def shift_table(df, periods, fill_value):
     """
         Call cudf::shift
     """
     cdef cudf_table* c_input_table = table_from_dataframe(df)
-    cdef gdf_index_type c_period = period
+    cdef gdf_index_type c_periods = periods
     cdef gdf_scalar* c_fill_value = NULL
     cdef cudf_table c_output_table
 
@@ -289,7 +289,7 @@ def shift_table(df, period, fill_value):
     with nogil:
         c_output_table = cpp_shift(
             c_input_table[0],
-            c_period,
+            c_periods,
             c_fill_value
         )
 
@@ -297,12 +297,12 @@ def shift_table(df, period, fill_value):
 
     return table_to_dataframe(&c_output_table)
 
-def shift_column(column, period, fill_value):
+def shift_column(column, periods, fill_value):
     """
         Call cudf::shift
     """
     cdef cudf_table* c_input_table = table_from_columns([column])
-    cdef gdf_index_type c_period = period
+    cdef gdf_index_type c_periods = periods
     cdef gdf_scalar* c_fill_value = NULL
     cdef cudf_table c_output_table
 
@@ -312,7 +312,7 @@ def shift_column(column, period, fill_value):
     with nogil:
         c_output_table = cpp_shift(
             c_input_table[0],
-            c_period,
+            c_periods,
             c_fill_value
         )
 
