@@ -11,10 +11,12 @@ from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 
 from cudf._lib.copying import clone_columns_with_size
+from cudf._lib.unaryops import nans_to_nulls
 
 from cudf._lib.includes.stream_compaction cimport (
     duplicate_keep_option,
     drop_duplicates as cpp_drop_duplicates,
+    unique_count as cpp_unique_count,
     drop_nulls as cpp_drop_nulls,
     apply_boolean_mask as cpp_apply_boolean_mask
 )
@@ -75,6 +77,26 @@ def drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     out_cols = columns_from_table(&c_out_table)
 
     return (out_cols[:-1], out_cols[-1])
+
+
+def nunique(in_col, dropna=True, nan_as_null=False):
+    """
+    get number of unique elements in the input column
+
+    in_col: input column to check for unique element count
+    dropna: flag to ignore `NaN` & `null` in unique count if true.
+    nan_as_null: flag to consider `NaN==null` if true.
+
+    out_count: number of unique elements in the input column
+    """
+    cdef bool c_dropna = dropna
+    cdef bool c_nan_as_null = nan_as_null
+    check_gdf_compatibility(in_col)
+    cdef gdf_column* c_in_col = column_view_from_column(in_col)
+    cdef int count = 0
+    with nogil:
+        count = cpp_unique_count(c_in_col[0], c_dropna, c_nan_as_null)
+    return count
 
 
 def apply_boolean_mask(cols, mask):
