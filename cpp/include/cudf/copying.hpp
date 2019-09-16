@@ -26,6 +26,12 @@ typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 
+enum MaskAlloc {
+    RETAIN,
+    NEVER,
+    ALWAYS
+};
+
 /*
  * Initializes and returns gdf_column of the same type as the input.
  * 
@@ -38,22 +44,22 @@ gdf_column empty_like(gdf_column const& input);
  * @brief Allocates a new column of the same size and type as the input.
  *
  * @param input The input column to emulate
- * @param allocate_mask_if_exists Optional whether or not to allocate bitmask if it exists in input
+ * @param mask_alloc Optional whether or not to allocate bitmask if it exists in input
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+gdf_column allocate_like(gdf_column const& input, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
 
 /**
  * @brief Allocates a new column of the specified size and same type as the input.
  *
  * @param input The input column to emulate
  * @param size The size of the column to allocate in rows
- * @param allocate_mask_if_exists Optional whether or not to allocate bitmask if it exists in input
+ * @param mask_alloc Optional whether or not to allocate bitmask if it exists in input
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+gdf_column allocate_like(gdf_column const& input, gdf_size_type size, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
 
 
 /**
@@ -91,11 +97,11 @@ table empty_like(table const& t);
  * in the new table.
  *
  * @param t The table to emulate
- * @param allocate_mask_if_exists Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
+ * @param mask_alloc Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type and allocation size as input
  */
-table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+table allocate_like(table const& t, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
 
 /**
  * @brief Creates a table of columns with the specified size and same type as
@@ -110,11 +116,11 @@ table allocate_like(table const& t, bool allocate_mask_if_exists = true, cudaStr
  *
  * @param t The table to emulate
  * @param size The size of the columns to allocate
- * @param allocate_mask_if_exists Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
+ * @param mask_alloc Optional whether or not to allocate the bitmask for each column if it exists in the corresponding input column
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type as @p t and specified @p size
  */
-table allocate_like(table const& t, gdf_size_type size, bool allocate_mask_if_exists = true, cudaStream_t stream = 0);
+table allocate_like(table const& t, gdf_size_type size, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
 
 
 /**
