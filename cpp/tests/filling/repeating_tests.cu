@@ -21,6 +21,7 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 
 #include <numeric>
+#include <random>
 
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
