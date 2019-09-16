@@ -39,6 +39,23 @@ namespace cudf {
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end);
 
+/**
+ * @brief Repeat elements of a Column
+ * 
+ * Creates a new column by repeating the values of @p in. The number of 
+ * repetitions of each element is defined by the value at the corresponding 
+ * index of @p count
+ * Example:
+ * ```
+ * in = [4,5,6]
+ * count = [1,2,3]
+ * return = [4,5,5,6,6,6]
+ * ```
+ * 
+ * @param in Input column
+ * @param count Non-nullable column of type `GDF_INT32`
+ * @return gdf_column The result column containing the repetitions
+ */
 gdf_column repeat(const gdf_column &in, const gdf_column& count);
 
 }; // namespace cudf

@@ -27,28 +27,6 @@
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>
 
-template <typename T>
-void print(rmm::device_vector<T> const& d_vec, std::string label = "") {
-  thrust::host_vector<T> h_vec = d_vec;
-  printf("%s \t", label.c_str());
-  for (auto &&i : h_vec)  std::cout << i << " ";
-  printf("\n");
-}
-
-struct printer
-{
-  template <typename T>
-  void operator()(gdf_column const& col, std::string label = "") {
-    auto col_data = reinterpret_cast<T*>(col.data);
-    auto d_vec = rmm::device_vector<T>(col_data, col_data+col.size);
-    print(d_vec, label);
-  }
-};
-
-void print(gdf_column const& col, std::string label = "") {
-  cudf::type_dispatcher(col.dtype, printer{}, col, label);
-}
-
 namespace cudf {
 
 namespace detail {
@@ -77,15 +55,12 @@ gdf_column repeat(const gdf_column &in, const gdf_column& count, cudaStream_t st
                       thrust::make_counting_iterator(0),
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
-  // print(indices);
 
-  // Allocate `output` with output_size elements
   gdf_column output = cudf::allocate_like(in, output_size);
 
   cudf::table in_table{const_cast<gdf_column*>(&in)};
   cudf::table out_table{&output};
   cudf::gather(&in_table, indices.data().get(), &out_table);
-  // print(output);
 
   return output;
 }
