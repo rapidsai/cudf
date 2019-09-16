@@ -3764,6 +3764,22 @@ class DataFrame(object):
         )
 
     def scatter_by_map(self, map_index, map_size=None):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
 
         # map_index might be a column name or array,
         # make it a Series
