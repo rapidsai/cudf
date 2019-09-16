@@ -45,6 +45,7 @@
 - PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2783 Support mapping input columns to function arguments in apply kernels
 - PR #2645 libcudf unique_count for Series.nunique 
+- PR #2810 cudf::allocate_like can optionally always allocate a mask.
 
 ## Bug Fixes
 
