@@ -5,7 +5,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-import cudf
 import cudf._lib as libcudf
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
@@ -83,13 +82,13 @@ class DatetimeColumn(column.TypedColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
-        null = cudf.Series(np.array([None]))
+        null = as_column(np.array([None]))
         col = libcudf.replace.replace(
             as_column(Buffer(array)),
             as_column(
                 Buffer(np.array([np.datetime64("NaT")], dtype=array.dtype))
             ),
-            null._column.astype(array.dtype),
+            null.as_datetime_column(array.dtype),
         )
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
