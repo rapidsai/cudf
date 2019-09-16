@@ -1846,6 +1846,68 @@ class Series(object):
             dtype=self.dtype,
         )
 
+    def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
+        """Calculates Fisher's unbiased kurtosis of a sample.
+        """
+        assert (
+            axis in (None, 0)
+            and skipna in (None, True)
+            and level in (None,)
+            and numeric_only in (None, True)
+        )
+
+        if self.empty:
+            return np.nan
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 4:
+            return np.nan
+
+        n = len(self)
+        miu = self.mean()
+        m4_numerator = ((self - miu) ** 4).sum()
+        V = self.var()
+
+        if V == 0:
+            return 0
+
+        term_one_section_one = (n * (n + 1)) / ((n - 1) * (n - 2) * (n - 3))
+        term_one_section_two = m4_numerator / (V ** 2)
+        term_two = ((n - 1) ** 2) / ((n - 2) * (n - 3))
+        kurt = term_one_section_one * term_one_section_two - 3 * term_two
+        return kurt
+
+    def skew(self, axis=None, skipna=None, level=None, numeric_only=None):
+        """Calculates the unbiased Fisher-Pearson skew of a sample.
+        """
+        assert (
+            axis in (None, 0)
+            and skipna in (None, True)
+            and level in (None,)
+            and numeric_only in (None, True)
+        )
+
+        if self.empty:
+            return np.nan
+
+        self = self.nans_to_nulls().dropna()
+
+        if len(self) < 3:
+            return np.nan
+
+        n = len(self)
+        miu = self.mean()
+        m3 = ((self - miu) ** 3).sum() / n
+        m2 = self.var(ddof=0)
+
+        if m2 == 0:
+            return 0
+
+        unbiased_coef = ((n * (n - 1)) ** 0.5) / (n - 2)
+        skew = unbiased_coef * m3 / (m2 ** (3 / 2))
+        return skew
+
     def isin(self, test):
 
         from cudf import DataFrame
