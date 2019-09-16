@@ -1,5 +1,6 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import functools
 import pickle
 import warnings
 
@@ -63,8 +64,9 @@ class StringMethods(object):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
 
+                @functools.wraps(passed_attr)
                 def wrapper(*args, **kwargs):
-                    ret = getattr(self._parent._data, attr)(*args, **kwargs)
+                    ret = passed_attr(*args, **kwargs)
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
                             column.as_column(ret),
@@ -78,6 +80,10 @@ class StringMethods(object):
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def __dir__(self):
+        keys = dir(type(self))
+        return set(keys + dir(self._parent._data))
 
     def len(self):
         """
