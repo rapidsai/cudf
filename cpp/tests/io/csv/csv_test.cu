@@ -30,7 +30,18 @@
 #include <string>
 
 TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
-   ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+
+/**
+ * @brief Base test fixture for CSV reader/writer tests
+ **/
+struct CsvTest : public GdfTest {};
+
+/**
+ * @brief Test fixture for source content parameterized tests
+ **/
+struct CsvValueParamTest : public CsvTest,
+                           public testing::WithParamInterface<const char*> {};
 
 MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
 {
@@ -38,7 +49,7 @@ MATCHER_P(FloatNearPointwise, tolerance, "Out of range")
             std::get<0>(arg)<std::get<1>(arg)+tolerance) ;
 }
 
-TEST(gdf_csv_test, DetectColumns)
+TEST_F(CsvTest, DetectColumns)
 {
     const std::string fname	= temp_env->get_temp_dir()+"DetectColumnsTest.csv";
 
@@ -68,7 +79,7 @@ TEST(gdf_csv_test, DetectColumns)
     }
 }
 
-TEST(gdf_csv_test, UseColumns)
+TEST_F(CsvTest, UseColumns)
 {
     const std::string fname	= temp_env->get_temp_dir()+"UseColumnsTest.csv";
 
@@ -97,7 +108,7 @@ TEST(gdf_csv_test, UseColumns)
     }
 }
 
-TEST(gdf_csv_test, Numbers) {
+TEST_F(CsvTest, Numbers) {
   const std::string fname = temp_env->get_temp_dir() + "CsvNumbersTest.csv";
 
   constexpr int num_rows = 4;
@@ -147,7 +158,7 @@ TEST(gdf_csv_test, Numbers) {
   }
 }
 
-TEST(gdf_csv_test, MortPerf)
+TEST_F(CsvTest, MortPerf)
 {
     const std::string fname = "Performance_2000Q1.txt";
     if (checkFile(fname))
@@ -158,7 +169,7 @@ TEST(gdf_csv_test, MortPerf)
     }
 }
 
-TEST(gdf_csv_test, Strings)
+TEST_F(CsvTest, Strings)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvStringsTest.csv";
     std::vector<std::string> names{"line", "verse"};
@@ -185,7 +196,7 @@ TEST(gdf_csv_test, Strings)
     }
 }
 
-TEST(gdf_csv_test, QuotedStrings)
+TEST_F(CsvTest, QuotedStrings)
 {
     const std::string fname	= temp_env->get_temp_dir()+"CsvQuotedStringsTest.csv";
     std::vector<std::string> names{ "line", "verse" };
@@ -212,7 +223,7 @@ TEST(gdf_csv_test, QuotedStrings)
     }
 }
 
-TEST(gdf_csv_test, IgnoreQuotes)
+TEST_F(CsvTest, IgnoreQuotes)
 {
     const std::string fname	= temp_env->get_temp_dir()+"CsvIgnoreQuotesTest.csv";
     std::vector<std::string> names{ "line", "verse" };
@@ -240,7 +251,7 @@ TEST(gdf_csv_test, IgnoreQuotes)
     }
 }
 
-TEST(gdf_csv_test, Booleans)
+TEST_F(CsvTest, Booleans)
 {
     const std::string fname = temp_env->get_temp_dir() + "CsvBooleansTest.csv";
 
@@ -277,7 +288,7 @@ TEST(gdf_csv_test, Booleans)
     }
 }
 
-TEST(gdf_csv_test, Dates)
+TEST_F(CsvTest, Dates)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvDatesTest.csv";
 
@@ -307,7 +318,7 @@ TEST(gdf_csv_test, Dates)
     }
 }
 
-TEST(gdf_csv_test, Timestamps)
+TEST_F(CsvTest, Timestamps)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvTimestamps.csv";
 
@@ -575,7 +586,7 @@ TEST(gdf_csv_test, DatesCastToTimestampNanoseconds)
     }
 }
 
-TEST(gdf_csv_test, FloatingPoint)
+TEST_F(CsvTest, FloatingPoint)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvFloatingPoint.csv";
 
@@ -602,7 +613,7 @@ TEST(gdf_csv_test, FloatingPoint)
     }
 }
 
-TEST(gdf_csv_test, Category)
+TEST_F(CsvTest, Category)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvCategory.csv";
 
@@ -628,7 +639,7 @@ TEST(gdf_csv_test, Category)
     }
 }
 
-TEST(gdf_csv_test, SkiprowsNrows)
+TEST_F(CsvTest, SkiprowsNrows)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvSkiprowsNrows.csv";
 
@@ -655,7 +666,7 @@ TEST(gdf_csv_test, SkiprowsNrows)
     }
 }
 
-TEST(gdf_csv_test, ByteRange)
+TEST_F(CsvTest, ByteRange)
 {
     const std::string fname = temp_env->get_temp_dir()+"CsvByteRange.csv";
 
@@ -681,7 +692,7 @@ TEST(gdf_csv_test, ByteRange)
     }
 }
 
-TEST(gdf_csv_test, BlanksAndComments)
+TEST_F(CsvTest, BlanksAndComments)
 {
     const std::string fname = temp_env->get_temp_dir()+"BlanksAndComments.csv";
 
@@ -706,7 +717,22 @@ TEST(gdf_csv_test, BlanksAndComments)
     }
 }
 
-TEST(gdf_csv_test, Writer)
+TEST_P(CsvValueParamTest, EmptySource) {
+  const std::string fname = temp_env->get_temp_dir() + "EmptySource.csv";
+
+  std::ofstream outfile{fname, std::ofstream::out};
+  outfile << GetParam();
+  outfile.close();
+  ASSERT_TRUE(checkFile(fname));
+
+  cudf::csv_read_arg args(cudf::source_info{fname});
+  const auto df = cudf::read_csv(args);
+  EXPECT_EQ(0, df.num_columns());
+}
+INSTANTIATE_TEST_CASE_P(CsvReader, CsvValueParamTest,
+                        testing::Values("", "\n"));
+
+TEST_F(CsvTest, Writer)
 {
     const std::string fname	= temp_env->get_temp_dir()+"CsvWriteTest.csv";
 
