@@ -25,7 +25,7 @@ import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
-from cudf.core.column import CategoricalColumn
+from cudf.core.column import CategoricalColumn, StringColumn
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -3762,6 +3762,44 @@ class DataFrame(object):
             line_terminator,
             chunksize,
         )
+
+    def scatter_by_map(self, map_index, map_size=None):
+
+        # map_index might be a column name or array,
+        # make it a Series
+        if isinstance(map_index, str):
+            map_index = self[map_index]
+        else:
+            map_index = Series(map_index)
+
+        # Convert float to integer
+        if map_index.dtype == np.float:
+            map_index = map_index.astype(np.int64)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index._column, StringColumn):
+            map_index = Series(
+                map_index._column.as_categorical_column(np.int64).as_numerical
+            )
+        elif isinstance(map_index._column, CategoricalColumn):
+            map_index = Series(map_index._column.as_numerical)
+
+        # scatter_to_frames wants a list of Series/columns
+        source = [self[col] for col in self.columns]
+        tables = libcudf.copying.scatter_to_frames(source, map_index)
+
+        if map_size:
+            # Make sure map_size is >= the number of uniques in map_index
+            if len(tables) > map_size:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (len(tables), map_size)
+                )
+
+            # Append empty dataframes if map_size > len(tables)
+            for i in range(map_size - len(tables)):
+                tables.append(self.iloc[[]])
+        return tables
 
 
 def from_pandas(obj):
