@@ -61,12 +61,12 @@ class Column(object):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
             elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
-                    data=Column(Buffer.null(np.dtype("int8"))),
+                    data=as_column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
                     ordered=False,
                 )
             else:
-                return Column(Buffer.null(dtype))
+                return as_column(Buffer.null(dtype))
 
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
