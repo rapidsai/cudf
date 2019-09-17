@@ -10,9 +10,10 @@ from cudf._lib.cudf cimport *
 
 cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
-    cudf_table gather(
+    cdef cudf_table gather(
         const cudf_table * source_table,
-        const gdf_column gather_map
+        const gdf_column gather_map,
+        bool check_bounds
     ) except +
 
     cdef gdf_column copy(

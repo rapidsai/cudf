@@ -75,9 +75,9 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 
   detail::invert_map<<<invert_grid_size, block_size>>>(v_gather_map.data().get(), num_destination_rows, scatter_map, num_source_rows);
   
-  // We want to check bounds for scatter since it is possible that
+  // We want to ignore out of bounds indices for scatter since it is possible that
   // some elements of the destination column are not modified. 
-  detail::gather(source_table, v_gather_map.data().get(), destination_table, true, true);    
+  detail::gather(source_table, v_gather_map.data().get(), destination_table, false, true, true);
 }
 
 template<bool mark_true>
@@ -114,8 +114,6 @@ struct scalar_scatterer {
    * @param scatter_map Array of indices that maps the source element to destination
    * elements
    * @param destination_column The column to gather into
-   * @param check_bounds Optionally perform bounds checking on the values of
-   * `gather_map`
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
   template <typename ColumnType>

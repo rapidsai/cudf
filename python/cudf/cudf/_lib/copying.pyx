@@ -58,7 +58,7 @@ def _normalize_maps(maps, size):
     return maps
 
 
-def gather(source, maps):
+def gather(source, maps, bounds_check=True):
     """
     Gathers elements from source into dest (if given) using the gathermap maps.
     If dest is not given, it is allocated inside the function and returned.
@@ -95,13 +95,12 @@ def gather(source, maps):
     cdef cudf_table* c_in_table = table_from_columns(in_cols)
     cdef cudf_table c_out_table
 
-    # check out_cols == in_cols and out_cols=None cases
-    cdef bool is_same_input = False
-
     cdef gdf_column* c_maps = column_view_from_column(maps)
+
+    cdef bool c_bounds_check = bounds_check
     
     with nogil:
-        c_out_table = cpp_gather(c_in_table, c_maps[0])
+        c_out_table = cpp_gather(c_in_table, c_maps[0], c_bounds_check)
 
     out_cols = columns_from_table(&c_out_table)
 

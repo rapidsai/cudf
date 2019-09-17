@@ -23,10 +23,13 @@
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+
 #include <algorithm>
 
 #include <table/legacy/device_table.cuh>
 #include <thrust/functional.h>
+#include <thrust/logical.h>
 #include <thrust/gather.h>
 #include <thrust/iterator/transform_iterator.h>
 
@@ -48,19 +51,21 @@ namespace detail {
  * end).
  *
  *---------------------------------------------------------------------------**/
+template <typename MapType>
 struct bounds_checker {
-  gdf_index_type const begin;
-  gdf_index_type const end;
+  gdf_index_type begin;
+  gdf_index_type end;
 
   __device__ bounds_checker(gdf_index_type begin_, gdf_index_type end_)
       : begin{begin_}, end{end_} {}
 
-  __device__ __forceinline__ bool operator()(gdf_index_type const index) {
+  __device__ __forceinline__ bool operator()(MapType const index) {
     return ((index >= begin) && (index < end));
   }
 };
 
-template <bool check_bounds, typename MapIterator>
+
+template <bool ignore_out_of_bounds, typename MapIterator>
 __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
                                       gdf_size_type num_source_rows,
                                       MapIterator gather_map,
@@ -91,7 +96,7 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
             __ballot_sync(0xffffffff, thread_active);
 
         bool source_bit_is_valid;
-        if (check_bounds) {
+        if (ignore_out_of_bounds) {
           if (0 <= source_row && source_row < num_source_rows) {
             source_bit_is_valid =
                 src_has_nulls ? bit_mask::is_valid(source_valid_col, source_row)
@@ -149,12 +154,14 @@ struct column_gatherer {
    * @param destination_column The column to gather into
    * @param check_bounds Optionally perform bounds checking on the values of
    * `gather_map`
+   * @param ignore_out_of_bounds Ignore values in `gather_map` that are
+   * out of bounds
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
   template <typename ColumnType, typename MapIterator>
   void operator()(gdf_column const *source_column,
 		  MapIterator gather_map,
-		  gdf_column *destination_column, bool check_bounds,
+		  gdf_column *destination_column, bool ignore_out_of_bounds,
 		  cudaStream_t stream, bool sync_nvstring_category = false) {
     ColumnType const *source_data{
       static_cast<ColumnType const *>(source_column->data)};
@@ -194,11 +201,12 @@ struct column_gatherer {
       destination_data = in_place_buffer.data().get();
     }
 
-    if (check_bounds) {
+
+    if (ignore_out_of_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
 			gather_map + num_destination_rows, gather_map,
 			source_data, destination_data,
-			bounds_checker{0, source_column->size});
+			bounds_checker<decltype(*gather_map)>{0, source_column->size});
     } else {
       thrust::gather(rmm::exec_policy(stream)->on(stream), gather_map,
 		     gather_map+num_destination_rows, source_data,
@@ -249,7 +257,7 @@ struct dispatch_map_type {
   template <typename MapType, std::enable_if_t<std::is_integral<MapType>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column gather_map,
 		  table *destination_table, bool check_bounds,
-		  bool sync_nvstring_category = false,
+		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
 		  bool transform_negative_indices = false) {
 
     auto source_n_cols = source_table->num_columns();
@@ -258,6 +266,16 @@ struct dispatch_map_type {
     std::vector<util::cuda::scoped_stream> v_stream(source_n_cols);
 
     MapType const * typed_gather_map = static_cast<MapType const*>(gather_map.data);
+
+    if (check_bounds) {
+      gdf_index_type begin = (transform_negative_indices) ? -source_n_rows : 0;
+      CUDF_EXPECTS(thrust::all_of(rmm::exec_policy()->on(0),
+				  typed_gather_map,
+				  typed_gather_map + destination_table->num_rows(),
+				  bounds_checker<MapType>{begin, source_n_rows}),
+		   "Index out of bounds.");
+    }
+
 
     auto gather_map_iterator = thrust::make_transform_iterator(
 	typed_gather_map,
@@ -275,7 +293,7 @@ struct dispatch_map_type {
       // The data gather for n columns will be put on the first n streams
       cudf::type_dispatcher(src_col->dtype, column_gatherer{}, src_col,
 			    gather_map_iterator, dest_col,
-			    check_bounds, v_stream[i],
+			    ignore_out_of_bounds, v_stream[i],
 			    sync_nvstring_category);
 
       if (cudf::has_nulls(*src_col)) {
@@ -312,7 +330,7 @@ struct dispatch_map_type {
     rmm::device_vector<bit_mask_t*> destination_bitmasks(destination_bitmasks_host);
 
     auto bitmask_kernel =
-      check_bounds ? gather_bitmask_kernel<true, decltype(gather_map_iterator)> : gather_bitmask_kernel<false, decltype(gather_map_iterator)>;
+      ignore_out_of_bounds ? gather_bitmask_kernel<true, decltype(gather_map_iterator)> : gather_bitmask_kernel<false, decltype(gather_map_iterator)>;
 
     int gather_grid_size;
     int gather_block_size;
@@ -351,7 +369,7 @@ struct dispatch_map_type {
   template <typename MapType, std::enable_if_t<not std::is_integral<MapType>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column const gather_map,
                   table *destination_table, bool check_bounds,
-                  bool sync_nvstring_category = false,
+		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
 		  bool transform_negative_indices = false) {
    CUDF_FAIL("Gather map must be an integral type.");
   }
@@ -359,7 +377,7 @@ struct dispatch_map_type {
 
 
 void gather(table const *source_table, gdf_column const gather_map,
-            table *destination_table, bool check_bounds,
+            table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
             bool sync_nvstring_category, bool transform_negative_indices) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
@@ -377,11 +395,12 @@ void gather(table const *source_table, gdf_column const gather_map,
 
   cudf::type_dispatcher(gather_map.dtype, dispatch_map_type{},
 			source_table, gather_map, destination_table, check_bounds,
+			ignore_out_of_bounds,
 			sync_nvstring_category, transform_negative_indices);
 }
 
 void gather(table const *source_table, gdf_index_type const gather_map[],
-	    table *destination_table, bool check_bounds,
+	    table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
 	    bool sync_nvstring_category, bool transform_negative_indices) {
   gdf_column gather_map_column{};
   gdf_column_view(&gather_map_column,
@@ -389,32 +408,34 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
 		  nullptr,
 		  destination_table->num_rows(),
 		  gdf_dtype_of<gdf_index_type>());
-  gather(source_table, gather_map_column, destination_table, check_bounds, sync_nvstring_category,
+  gather(source_table, gather_map_column, destination_table, check_bounds,
+	 ignore_out_of_bounds, sync_nvstring_category,
 	 transform_negative_indices);
 }
 
 
 } // namespace detail
 
-table gather(table const *source_table, gdf_column const gather_map) {
+table gather(table const *source_table, gdf_column const gather_map, bool check_bounds) {
   table destination_table = cudf::allocate_like(*source_table,
 						gather_map.size);
   detail::gather(source_table, gather_map, &destination_table,
-		 false, false, true);
+		 check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, destination_table);
   return destination_table;
 }
 
 void gather(table const *source_table, gdf_column const gather_map,
-	    table *destination_table) {
-  detail::gather(source_table, gather_map, destination_table, false, false, true);
+	    table *destination_table, bool check_bounds) {
+  detail::gather(source_table, gather_map, destination_table, check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);
 }
 
 void gather(table const *source_table, gdf_index_type const gather_map[],
-	    table *destination_table) {
-  detail::gather(source_table, gather_map, destination_table, false, false, true);
+	    table *destination_table, bool check_bounds) {
+  detail::gather(source_table, gather_map, destination_table, check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);
 }
 
 } // namespace cudf
+

@@ -58,6 +58,8 @@ namespace detail {
  * gather).
  * @param check_bounds Optionally perform bounds checking on the values of
  * `gather_map`
+ * @param ignore_out_of_bounds Ignore values in `gather_map` that are
+ * out of bounds. Independent of `check_bounds`.
  * @param merge_nvstring_category If set to true and both the source column and its
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
  * `nvstring_category` objects of these will be synchronizeded before gather is 
@@ -66,11 +68,13 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 void gather(table const* source_table, gdf_column const gather_map,
 	    table * destination_table, bool check_bounds = false,
-	    bool sync_nvstring_category = false, bool transform_negative_indices = false);
+	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
+	    bool transform_negative_indices = false);
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
 	    table* destination_table, bool check_bounds = false,
-	    bool sync_nvstring_category = false, bool transform_negative_indices = false);
+	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
+	    bool transform_negative_indices = false);
 
 }  // namespace detail
 }  // namespace cudf
