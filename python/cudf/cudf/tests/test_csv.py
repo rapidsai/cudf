@@ -1228,24 +1228,38 @@ def test_csv_blank_first_row(line_terminator):
     assert all(cu_df.columns == ["colA", "colB"])
 
 
-def test_csv_empty_input(tmpdir):
-    fname = tmpdir.mkdir("gdf_csv").join("tmp_csvreader_file20.csv")
-    # create an empty file
-    open(fname, "a").close()
+@pytest.mark.parametrize("contents", ["", "\n"])
+def test_csv_empty_file(tmpdir, contents):
+    fname = tmpdir.mkdir("gdf_csv").join("test_csv_empty_file.csv")
+    with open(fname, "w") as f:
+        f.write(contents)
 
     col_names = ["col1", "col2", "col3", "col4"]
     in_dtypes = ["int", "str", "float", "short"]
     out_dtypes = ["int32", "object", "float32", "int16"]
 
+    # Empty dataframe if no columns names specified or inferred
     df = read_csv(str(fname))
     assert len(df.columns) == 0
+
+    # No row dataframe if columns names are specified or inferred
     df = read_csv(str(fname), dtype=in_dtypes, names=col_names)
     assert all(df.columns == col_names)
     assert list(df.dtypes) == out_dtypes
 
-    df = read_csv(StringIO(""))
+
+@pytest.mark.parametrize("contents", ["", "\n"])
+def test_csv_empty_buffer(tmpdir, contents):
+    col_names = ["col1", "col2", "col3", "col4"]
+    in_dtypes = ["int", "str", "float", "short"]
+    out_dtypes = ["int32", "object", "float32", "int16"]
+
+    # Empty dataframe if no columns names specified or inferred
+    df = read_csv(StringIO(contents))
     assert len(df.columns) == 0
-    df = read_csv(StringIO(""), dtype=in_dtypes, names=col_names)
+
+    # No row dataframe if columns names are specified or inferred
+    df = read_csv(StringIO(contents), dtype=in_dtypes, names=col_names)
     assert all(df.columns == col_names)
     assert list(df.dtypes) == out_dtypes
 
