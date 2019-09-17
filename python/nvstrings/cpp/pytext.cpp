@@ -659,11 +659,18 @@ static PyObject* n_porter_stemmer_measure( PyObject* self, PyObject* args )
      if( strs==0 )
         Py_RETURN_NONE;
 
-    const char * vowels = "aeiou" ;
+    const char* vowels = "aeiou";
+    PyObject* argVowels = PyTuple_GetItem(args,1);
+    if( argVowels != Py_None )
+        vowels = PyUnicode_AsUTF8(argVowels);
 
-    const char *  y_char = "y";
+    const char* y_char  = "y";
+    PyObject* argYChar = PyTuple_GetItem(args,2);
+    if( argYChar != Py_None )
+        const char * y_char = PyUnicode_AsUTF8(argYChar);
 
-    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,1));
+    // get device pointer
+    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,3));
 
     if( devptr )
     {
@@ -708,8 +715,6 @@ static PyMethodDef s_Methods[] = {
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
     { "n_porter_stemmer_measure", n_porter_stemmer_measure, METH_VARARGS, "" },
-
-
     { NULL, NULL, 0, NULL }
 };
 

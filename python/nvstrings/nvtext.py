@@ -348,7 +348,7 @@ def scatter_count(strs, counts):
     return rtn
 
 
-def porter_stemmer_measure(strs, devptr=0):
+def porter_stemmer_measure(strs, vowels="aeiou", y_char="y", devptr=0):
     """
     Calculates porter stemmer measure of each string
 
@@ -356,17 +356,28 @@ def porter_stemmer_measure(strs, devptr=0):
     ----------
     strs : nvstrings
         The strings for this operation
+
+    vowels: str
+     chars to consider as vowels
+     Default are 'aeiou'
+
+    y_char: str
+     characters to treat as 'y_char'
+     Default is 'y'
+
     devptr : GPU memory pointer
         Must be able to hold at least strs.size() of int32 values.
 
     Examples
     --------
     >>> import nvstrings, nvtext
-    >>> s = nvstrings.to_device(["hello","goodbye",""])
+    >>> s = nvstrings.to_device(["tr","trouble", "troubles"])
     >>> n = nvtext.porter_stemmer_measure(s)
     >>> print(n)
-
+    >>> [0, 1, 2]
     """
+    if not isinstance(strs, nvs.nvstrings):
+        raise ValueError("strs must be nvstrings object")
 
-    rtn = pyniNVText.n_porter_stemmer_measure(strs, devptr)
+    rtn = pyniNVText.n_porter_stemmer_measure(strs, vowels, y_char, devptr)
     return rtn
