@@ -4,7 +4,7 @@
 # Usage: 
 # "./print_env.sh" - prints to stdout
 # "./print_env.sh > env.txt" - prints to file "env.txt"
-
+# test2
 print_env() {
 echo "**git***"
 if [ "$(git rev-parse --is-inside-work-tree 2>/dev/null)" == "true" ]; then
