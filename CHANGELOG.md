@@ -91,6 +91,7 @@
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
 - PR #2765 Fix Java inequality comparisons for string category
+- PR #2818 Fix java join API to use new C++ join API
 
 
 # cuDF 0.9.0 (21 Aug 2019)
