@@ -43,9 +43,9 @@
  * char, float`.
  *
  * Instead of using `::testing::Types` directly, we provide
- * `cudf::testing::Types`. This is a drop in replacement for GTest's
+ * `cudf::test::Types`. This is a drop in replacement for GTest's
  * `::testing::Types`. In lieu of including `gtest/gtest.h`, include
- * `cudf_gtest.hpp` to ensure `cudf::testing::Types` is used.
+ * `cudf_gtest.hpp` to ensure `cudf::test::Types` is used.
  *
  * Using the utilities in this file, you can compose complex type lists.
  *
