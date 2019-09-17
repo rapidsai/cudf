@@ -214,6 +214,7 @@ struct parquet_read_arg {
   int num_rows = -1;                        ///< Rows to read; -1 is all
 
   bool strings_to_categorical = false;      ///< Whether to store string data as GDF_CATEGORY
+  bool use_pandas_metadata = true;          ///< Whether to always load PANDAS index columns
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit parquet_read_arg(const source_info& src) : source(src) {}
