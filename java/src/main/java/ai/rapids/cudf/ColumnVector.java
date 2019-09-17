@@ -184,20 +184,23 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       } else {
         offHeap.setDeviceData(new BufferEncapsulator(null, validityBuffer, null));
       }
-      // In the case of STRING and STRING_CATEGORY the gdf_column holds references
-      // to the device data that the java code does not, so we will not be lazy about
-      // creating the gdf_column instance.
-      offHeap.nativeCudfColumnHandle = allocateCudfColumn();
 
-      cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
-          dataBuffer.getAddress(),
-          false,
-          offsetBuffer.getAddress(),
-          resetOffsetsFromFirst,
-          nullCount > 0 ? offHeap.getDeviceData().valid.getAddress() : 0,
-          offHeap.getDeviceData().data == null ? 0 : offHeap.getDeviceData().data.getAddress(),
-          (int) rows, type.nativeId,
-          (int) getNullCount());
+      try (NvtxRange stringOps = new NvtxRange("cudfColumnViewStrings", NvtxColor.ORANGE)) {
+        // In the case of STRING and STRING_CATEGORY the gdf_column holds references
+        // to the device data that the java code does not, so we will not be lazy about
+        // creating the gdf_column instance.
+        offHeap.nativeCudfColumnHandle = allocateCudfColumn();
+
+        cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
+            dataBuffer.getAddress(),
+            false,
+            offsetBuffer.getAddress(),
+            resetOffsetsFromFirst,
+            nullCount > 0 ? offHeap.getDeviceData().valid.getAddress() : 0,
+            offHeap.getDeviceData().data == null ? 0 : offHeap.getDeviceData().data.getAddress(),
+            (int) rows, type.nativeId,
+            (int) getNullCount());
+      }
       dataBuffer.close();
       offsetBuffer.close();
     } else {
@@ -415,55 +418,59 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
       if (type == DType.STRING || type == DType.STRING_CATEGORY) {
         assert (offHeap.getHostData().offsets != null);
       }
-      DeviceMemoryBuffer deviceDataBuffer = null;
-      DeviceMemoryBuffer deviceValidityBuffer = null;
+      try (NvtxRange toDev = new NvtxRange("ensureOnDevice", NvtxColor.BLUE)) {
+        DeviceMemoryBuffer deviceDataBuffer = null;
+        DeviceMemoryBuffer deviceValidityBuffer = null;
 
-      // for type == DType.STRING the data buffer in the string is an instance of NVStrings
-      // and is allocated/populated later in the call to cudfColumnViewStrings
-      if (type == DType.STRING_CATEGORY) {
-        // The data buffer holds the indexes into the strings dictionary which is
-        // allocated in the call to cudfColumnViewStrings.
-        deviceDataBuffer = DeviceMemoryBuffer.allocate(rows * type.sizeInBytes);
-      } else if (type != DType.STRING) {
-        deviceDataBuffer = DeviceMemoryBuffer.allocate(offHeap.getHostData().data.getLength());
-      }
-
-      boolean needsCleanup = true;
-      try {
-        if (hasNulls()) {
-          deviceValidityBuffer = DeviceMemoryBuffer.allocate(offHeap.getHostData().valid.getLength());
+        // for type == DType.STRING the data buffer in the string is an instance of NVStrings
+        // and is allocated/populated later in the call to cudfColumnViewStrings
+        if (type == DType.STRING_CATEGORY) {
+          // The data buffer holds the indexes into the strings dictionary which is
+          // allocated in the call to cudfColumnViewStrings.
+          deviceDataBuffer = DeviceMemoryBuffer.allocate(rows * type.sizeInBytes);
+        } else if (type != DType.STRING) {
+          deviceDataBuffer = DeviceMemoryBuffer.allocate(offHeap.getHostData().data.getLength());
         }
-        offHeap.setDeviceData(new BufferEncapsulator(deviceDataBuffer, deviceValidityBuffer, null));
-        needsCleanup = false;
-      } finally {
-        if (needsCleanup) {
-          if (deviceDataBuffer != null) {
-            deviceDataBuffer.close();
+
+        boolean needsCleanup = true;
+        try {
+          if (hasNulls()) {
+            deviceValidityBuffer = DeviceMemoryBuffer.allocate(offHeap.getHostData().valid.getLength());
           }
-          if (deviceValidityBuffer != null) {
-            deviceValidityBuffer.close();
+          offHeap.setDeviceData(new BufferEncapsulator(deviceDataBuffer, deviceValidityBuffer, null));
+          needsCleanup = false;
+        } finally {
+          if (needsCleanup) {
+            if (deviceDataBuffer != null) {
+              deviceDataBuffer.close();
+            }
+            if (deviceValidityBuffer != null) {
+              deviceValidityBuffer.close();
+            }
           }
         }
-      }
 
-      if (offHeap.getDeviceData().valid != null) {
-        offHeap.getDeviceData().valid.copyFromHostBuffer(offHeap.getHostData().valid);
-      }
+        if (offHeap.getDeviceData().valid != null) {
+          offHeap.getDeviceData().valid.copyFromHostBuffer(offHeap.getHostData().valid);
+        }
 
-      if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-        // In the case of STRING and STRING_CATEGORY the gdf_column holds references
-        // to the device data that the java code does not, so we will not be lazy about
-        // creating the gdf_column instance.
-        offHeap.nativeCudfColumnHandle = allocateCudfColumn();
-        cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
-            offHeap.getHostData().data.getAddress(),
-            true, offHeap.getHostData().offsets.getAddress(),
-            false, offHeap.getHostData().valid == null ? 0 : offHeap.getDeviceData().valid.getAddress(),
-            offHeap.getDeviceData().data == null ? 0 : offHeap.getDeviceData().data.getAddress(),
-            (int) rows, type.nativeId,
-            (int) getNullCount());
-      } else {
-        offHeap.getDeviceData().data.copyFromHostBuffer(offHeap.getHostData().data);
+        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+          try (NvtxRange stringOps = new NvtxRange("cudfColumnViewStrings", NvtxColor.ORANGE)) {
+            // In the case of STRING and STRING_CATEGORY the gdf_column holds references
+            // to the device data that the java code does not, so we will not be lazy about
+            // creating the gdf_column instance.
+            offHeap.nativeCudfColumnHandle = allocateCudfColumn();
+            cudfColumnViewStrings(offHeap.nativeCudfColumnHandle,
+                offHeap.getHostData().data.getAddress(),
+                true, offHeap.getHostData().offsets.getAddress(),
+                false, offHeap.getHostData().valid == null ? 0 : offHeap.getDeviceData().valid.getAddress(),
+                offHeap.getDeviceData().data == null ? 0 : offHeap.getDeviceData().data.getAddress(),
+                (int) rows, type.nativeId,
+                (int) getNullCount());
+          }
+        } else {
+          offHeap.getDeviceData().data.copyFromHostBuffer(offHeap.getHostData().data);
+        }
       }
     }
   }
@@ -475,40 +482,44 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     if (offHeap.getHostData() == null && rows != 0) {
       checkHasDeviceData();
 
-      HostMemoryBuffer hostDataBuffer = null;
-      HostMemoryBuffer hostValidityBuffer = null;
-      HostMemoryBuffer hostOffsetsBuffer = null;
-      boolean needsCleanup = true;
-      try {
-        if (offHeap.getDeviceData().valid != null) {
-          hostValidityBuffer = HostMemoryBuffer.allocate(offHeap.getDeviceData().valid.getLength());
-        }
-        if (type == DType.STRING || type == DType.STRING_CATEGORY) {
-          long[] vals = getStringDataAndOffsetsBack(getNativeCudfColumnAddress());
-          hostDataBuffer = new HostMemoryBuffer(vals[0], vals[1]);
-          hostOffsetsBuffer = new HostMemoryBuffer(vals[2], vals[3]);
-        } else {
-          hostDataBuffer = HostMemoryBuffer.allocate(offHeap.getDeviceData().data.getLength());
-        }
+      try (NvtxRange toHost = new NvtxRange("ensureOnHost", NvtxColor.BLUE)) {
+        HostMemoryBuffer hostDataBuffer = null;
+        HostMemoryBuffer hostValidityBuffer = null;
+        HostMemoryBuffer hostOffsetsBuffer = null;
+        boolean needsCleanup = true;
+        try {
+          if (offHeap.getDeviceData().valid != null) {
+            hostValidityBuffer = HostMemoryBuffer.allocate(offHeap.getDeviceData().valid.getLength());
+          }
+          if (type == DType.STRING || type == DType.STRING_CATEGORY) {
+            try (NvtxRange range = new NvtxRange("getStringDataAndOffsetsBack", NvtxColor.ORANGE)) {
+              long[] vals = getStringDataAndOffsetsBack(getNativeCudfColumnAddress());
+              hostDataBuffer = new HostMemoryBuffer(vals[0], vals[1]);
+              hostOffsetsBuffer = new HostMemoryBuffer(vals[2], vals[3]);
+            }
+          } else {
+            hostDataBuffer = HostMemoryBuffer.allocate(offHeap.getDeviceData().data.getLength());
+          }
 
-        offHeap.setHostData(new BufferEncapsulator(hostDataBuffer, hostValidityBuffer,
-            hostOffsetsBuffer));
-        needsCleanup = false;
-      } finally {
-        if (needsCleanup) {
-          if (hostDataBuffer != null) {
-            hostDataBuffer.close();
-          }
-          if (hostValidityBuffer != null) {
-            hostValidityBuffer.close();
+          offHeap.setHostData(new BufferEncapsulator(hostDataBuffer, hostValidityBuffer,
+              hostOffsetsBuffer));
+          needsCleanup = false;
+        } finally {
+          if (needsCleanup) {
+            if (hostDataBuffer != null) {
+              hostDataBuffer.close();
+            }
+            if (hostValidityBuffer != null) {
+              hostValidityBuffer.close();
+            }
           }
         }
-      }
-      if (type != DType.STRING && type != DType.STRING_CATEGORY) {
-        offHeap.getHostData().data.copyFromDeviceBuffer(offHeap.getDeviceData().data);
-      }
-      if (offHeap.getHostData().valid != null) {
-        offHeap.getHostData().valid.copyFromDeviceBuffer(offHeap.getDeviceData().valid);
+        if (type != DType.STRING && type != DType.STRING_CATEGORY) {
+          offHeap.getHostData().data.copyFromDeviceBuffer(offHeap.getDeviceData().data);
+        }
+        if (offHeap.getHostData().valid != null) {
+          offHeap.getHostData().valid.copyFromDeviceBuffer(offHeap.getDeviceData().valid);
+        }
       }
     }
   }
