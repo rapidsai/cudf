@@ -15,7 +15,6 @@
  */
 
 #include "../single_column_groupby_test.cuh"
-#include "../type_info.hpp"
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
