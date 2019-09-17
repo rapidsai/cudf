@@ -8,6 +8,13 @@ import fsspec
 
 from cudf.utils.docutils import docfmt_partial
 
+_docstring_remote_sources = """
+- Cudf supports a variety of data stores. For more information on working
+  with different data sources and configuration options refer to:
+  `Remote data services
+  <https://docs.dask.org/en/latest/remote-data-services.html>`_
+"""
+
 _docstring_read_avro = """
 Load an Avro dataset into a DataFrame
 
@@ -18,7 +25,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
-engine : { 'cudf', 'fastavro' }, default 'cudf'
+engine : {{ 'cudf', 'fastavro' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
@@ -30,6 +37,10 @@ num_rows : int, default None
 Returns
 -------
 DataFrame
+
+Notes
+-----
+{remote_data_sources}
 
 Examples
 --------
@@ -45,7 +56,9 @@ See Also
 --------
 cudf.io.csv.read_csv
 cudf.io.json.read_json
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_avro = docfmt_partial(docstring=_docstring_read_avro)
 
 _docstring_read_parquet_metadata = """
@@ -92,7 +105,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
-engine : { 'cudf', 'pyarrow' }, default 'cudf'
+engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read.
@@ -106,6 +119,10 @@ num_rows : int, default None
 Returns
 -------
 DataFrame
+
+Notes
+-----
+{remote_data_sources}
 
 Examples
 --------
@@ -122,7 +139,9 @@ See Also
 cudf.io.parquet.read_parquet_metadata
 cudf.io.parquet.to_parquet
 cudf.io.orc.read_orc
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_parquet = docfmt_partial(docstring=_docstring_read_parquet)
 
 _docstring_to_parquet = """
@@ -192,7 +211,7 @@ filepath_or_buffer : str, path object, bytes, or file-like object
     `py._path.local.LocalPath`), URL (including http, ftp, and S3 locations),
     Python bytes of raw binary data, or any object with a `read()` method
     (such as builtin `open()` file handler function or `BytesIO`).
-engine : { 'cudf', 'pyarrow' }, default 'cudf'
+engine : {{ 'cudf', 'pyarrow' }}, default 'cudf'
     Parser engine to use.
 columns : list, default None
     If not None, only these columns will be read from the file.
@@ -210,6 +229,10 @@ Returns
 -------
 DataFrame
 
+Notes
+-----
+{remote_data_sources}
+
 Examples
 --------
 >>> import cudf
@@ -224,7 +247,9 @@ See Also
 --------
 cudf.io.parquet.read_parquet
 cudf.io.parquet.to_parquet
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 
 _docstring_read_json = """
@@ -620,7 +645,7 @@ names : list of str, default None
 dtype : type, list of types, or dict of column -> type, default None
     Data type(s) for data or columns. If list, types are applied in the same
     order as the column names. If dict, types are mapped to the column names.
-    E.g. {‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}
+    E.g. {{‘a’: np.float64, ‘b’: int32, ‘c’: ‘float’}}
     If `None`, dtypes are inferred from the dataset. Use `str` to preserve data
     and not infer or interpret to dtype.
 quotechar : char, default '"'
@@ -647,7 +672,7 @@ skiprows : int, default 0
     Number of rows to be skipped from the start of file.
 skipfooter : int, default 0
     Number of rows to be skipped at the bottom of file.
-compression : {'infer', 'gzip', 'zip', None}, default 'infer'
+compression : {{'infer', 'gzip', 'zip', None}}, default 'infer'
     For on-the-fly decompression of on-disk data. If ‘infer’, then detect
     compression from the following extensions: ‘.gz’,‘.zip’ (otherwise no
     decompression). If using ‘zip’, the ZIP file must contain only one
@@ -697,6 +722,10 @@ Returns
 -------
 GPU ``DataFrame`` object.
 
+Notes
+-----
+{remote_data_sources}
+
 Examples
 --------
 
@@ -724,7 +753,9 @@ Read the file with ``cudf.read_csv``
 See Also
 --------
 cudf.io.csv.to_csv
-"""
+""".format(
+    remote_data_sources=_docstring_remote_sources
+)
 doc_read_csv = docfmt_partial(docstring=_docstring_read_csv)
 
 _docstring_to_csv = """

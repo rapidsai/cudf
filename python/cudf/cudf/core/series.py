@@ -1698,7 +1698,7 @@ class Series(object):
           likely complex numbers.
 
         * These five functions in `math` are not supported since numba
-          generatesmultiple PTX functions from them
+          generates multiple PTX functions from them
 
           * math.sin()
           * math.cos()
@@ -2266,6 +2266,7 @@ class Series(object):
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
+
         Notes
         -----
         Diff currently only supports float and integer dtype columns with
