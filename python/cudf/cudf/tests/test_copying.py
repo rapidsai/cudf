@@ -8,6 +8,7 @@ from librmm_cffi import librmm as rmm
 
 import cudf
 import cudf._lib as libcudf
+from cudf.core import Series
 from cudf.core.column import column
 from cudf.tests.utils import assert_eq
 
@@ -64,7 +65,6 @@ def test_repeat(dtype):
     assert_eq(psr, gsr)
 
     assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
-    pass
 
 
 @pytest.mark.parametrize(
@@ -78,4 +78,9 @@ def test_repeat_scalar(dtype):
     assert_eq(psr, gsr)
 
     assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
-    pass
+
+
+def test_null_copy():
+    col = Series(np.arange(2049))
+    col[:] = None
+    assert len(col) == 2049

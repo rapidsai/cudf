@@ -17,11 +17,13 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2781 Add issorted to is_monotonic
 - PR #2685 Add cudf::scatter_to_tables and cython binding
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 - PR #2785 Add nvstrings Python docs
 - PR #2786 Add benchmarks option to root build.sh
 - PR #2802 Add `cudf::repeat()` and `cudf.Series.repeat()`
+- PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 
 ## Improvements
 
@@ -37,11 +39,13 @@
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2728 Add YYMMDD to version tag for nightly conda packages
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
+- PR #2783 Support mapping input columns to function arguments in apply kernels
 - PR #2645 libcudf unique_count for Series.nunique 
 
 ## Bug Fixes
@@ -76,11 +80,16 @@
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
 - PR #2753 Fix java quantile API calls
 - PR #2762 Fix validity processing for time in java
+- PR #2796 Fix handling string slicing and other nvstrings delegated methods with dask
 - PR #2769 Fix link to API docs in README.md
 - PR #2772 Handle multiindex pandas Series #2772
 - PR #2749 Fix apply_rows/apply_chunks pessimistic null mask to use in_cols null masks only
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
 - PR #2716 Added Exception for `StringMethods` in string methods
+- PR #2787 Fix Broadcasting `None` to `cudf-series`
+- PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
+- PR #2795 Fix java build/cast error
+- PR #2496 Fix improper merge of two dataframes when names differ
 
 
 # cuDF 0.9.0 (21 Aug 2019)
