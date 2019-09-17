@@ -13,8 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 #include "cudf/copying.hpp"
+#include "cudf/quantiles.hpp"
+#include "cudf/rolling.hpp"
 
 #include "jni_utils.hpp"
 
@@ -206,6 +207,64 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
   CATCH_STD(env, );
 }
 
+NVStrings::timestamp_units translateTimestampUnit(gdf_time_unit time_unit) {
+  switch (time_unit) {
+    case TIME_UNIT_s: return NVStrings::seconds;
+    case TIME_UNIT_ms: return NVStrings::ms;
+    case TIME_UNIT_us: return NVStrings::us;
+    case TIME_UNIT_ns: return NVStrings::ns;
+  }
+  throw std::logic_error("UNSUPPORTED COLUMN VECTOR TIMESTAMP UNIT");
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimestamp(JNIEnv *env,
+                                                                                    jobject j_object,
+                                                                                    jlong handle,
+                                                                                    jint time_unit,
+                                                                                    jstring formatObj) {
+  JNI_NULL_CHECK(env, handle, "column is null", 0);
+  if (formatObj == NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "must pass a timestamp format string", 0)
+  }
+
+  try {
+    cudf::jni::native_jstring format(env, formatObj);
+
+    gdf_column *column = reinterpret_cast<gdf_column *>(handle);
+
+    if (column->dtype == GDF_STRING) {
+      cudf::jni::gdf_column_wrapper output(column->size, gdf_dtype::GDF_TIMESTAMP,
+                                           column->null_count != 0);
+      output->dtype_info.time_unit = (gdf_time_unit)time_unit;
+
+      if (column->size > 0) {
+        NVStrings *strings = static_cast<NVStrings *>(column->data);
+        JNI_ARG_CHECK(env, column->size == strings->size(),
+                      "NVStrings size and gdf_column size mismatch", 0);
+        int result = strings->timestamp2long(format.get(),
+                                             translateTimestampUnit(output->dtype_info.time_unit),
+                                             static_cast<unsigned long *>(output->data));
+        if (result == -1) {
+          throw std::logic_error("timestamp2long returned with errors");
+        }
+        if (column->null_count > 0) {
+          CUDA_TRY(cudaMemcpy(output->valid, column->valid,
+                              gdf_num_bitmask_elements(column->size),
+                              cudaMemcpyDeviceToDevice));
+          output->null_count = column->null_count;
+        }
+      }
+      return reinterpret_cast<jlong>(output.release());
+    } else {
+      throw std::logic_error("ONLY STRING TYPES ARE SUPPORTED...");
+    }
+  }
+  CATCH_STD(env, 0);
+
+  return 0;
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *env,
                                                                       jobject j_object,
                                                                       jlong handle) {
@@ -335,8 +394,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
                                       "resulting column is too large");
     }
-    cudf::jni::gdf_column_wrapper outcol(total_size, columns[0]->dtype, need_validity);
+    cudf::jni::gdf_column_wrapper outcol(total_size, columns[0]->dtype, need_validity, true);
     JNI_GDF_TRY(env, 0, gdf_column_concat(outcol.get(), columns.data(), columns.size()));
+    if (outcol->dtype == GDF_TIMESTAMP) {
+      outcol->dtype_info.time_unit = columns[0]->dtype_info.time_unit;
+    }
     return reinterpret_cast<jlong>(outcol.release());
   }
   CATCH_STD(env, 0);
@@ -349,11 +411,11 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_exactQuantile(JNIEnv 
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   try {
     gdf_column *n_input_column = reinterpret_cast<gdf_column *>(input_column);
-    gdf_quantile_method n_quantile_method = static_cast<gdf_quantile_method>(quantile_method);
+    cudf::interpolation n_quantile_method = static_cast<cudf::interpolation>(quantile_method);
     gdf_context ctxt{0, GDF_SORT, 0, 0};
     gdf_scalar result{};
     JNI_GDF_TRY(env, NULL,
-                gdf_quantile_exact(n_input_column, n_quantile_method, quantile, &result, &ctxt));
+                cudf::quantile_exact(n_input_column, n_quantile_method, quantile, &result, &ctxt));
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);
@@ -367,10 +429,42 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_approxQuantile(JNIEnv
     gdf_column *n_input_column = reinterpret_cast<gdf_column *>(input_column);
     gdf_context ctxt{0, GDF_SORT, 0, 0};
     gdf_scalar result{};
-    JNI_GDF_TRY(env, NULL, gdf_quantile_approx(n_input_column, quantile, &result, &ctxt));
+    JNI_GDF_TRY(env, NULL, cudf::quantile_approx(n_input_column, quantile, &result, &ctxt));
     return cudf::jni::jscalar_from_scalar(env, result, n_input_column->dtype_info.time_unit);
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL
+Java_ai_rapids_cudf_ColumnVector_rollingWindow(JNIEnv *env, jclass clazz,
+                                               jlong input_column,
+                                               jint window, jint min_periods,
+                                               jint forward_window, jint agg_type,
+                                               jlong window_col, jlong min_periods_col,
+                                               jlong forward_window_col) {
+
+  JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
+  try {
+    gdf_column *n_input_column = reinterpret_cast<gdf_column *>(input_column);
+    gdf_column *n_window_col = reinterpret_cast<gdf_column *>(window_col);
+    gdf_column *n_min_periods_col = reinterpret_cast<gdf_column *>(min_periods_col);
+    gdf_column *n_forward_window_col = reinterpret_cast<gdf_column *>(forward_window_col);
+
+    gdf_column *result = cudf::rolling_window(
+                             *n_input_column,
+                             static_cast<gdf_size_type>(window),
+                             static_cast<gdf_size_type>(min_periods),
+                             static_cast<gdf_size_type>(forward_window),
+                             static_cast<gdf_agg_op>(agg_type),
+                             n_window_col == nullptr ? nullptr :
+                             reinterpret_cast<gdf_size_type *> (n_window_col->data),
+                             n_min_periods_col == nullptr ? nullptr :
+                             reinterpret_cast<gdf_size_type *> (n_min_periods_col->data),
+                             n_forward_window_col == nullptr ? nullptr :
+                             reinterpret_cast<gdf_size_type *> (n_forward_window_col->data));
+    return reinterpret_cast<jlong>(result);
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *env, jclass clazz,
