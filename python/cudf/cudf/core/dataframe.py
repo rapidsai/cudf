@@ -3560,22 +3560,30 @@ class DataFrame(object):
 
     def min(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("min", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "min", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("min", **kwargs)
 
     def max(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("max", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "max", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("max", **kwargs)
 
     def sum(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("sum", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "sum", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("sum", **kwargs)
 
     def product(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("prod", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "prod", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("product", **kwargs)
 
     def prod(self, axis=0, numeric_only=None, **kwargs):
@@ -3589,14 +3597,18 @@ class DataFrame(object):
     def cummax(self, **kwargs):
         return self._apply_support_method("cummax", **kwargs)
 
-    def cumsum(self, axis=0, numeric_only=None, **kwargs):
+    def cumsum(self, axis=0, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("cumsum", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "cumsum", numeric_only=None, **kwargs
+            )
         return self._apply_support_method("cumsum", **kwargs)
 
-    def cumprod(self, axis=0, numeric_only=None, **kwargs):
+    def cumprod(self, axis=0, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("cumprod", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "cumprod", numeric_only=None, **kwargs
+            )
         return self._apply_support_method("cumprod", **kwargs)
 
     def mean(self, axis=0, numeric_only=None, **kwargs):
@@ -3621,17 +3633,23 @@ class DataFrame(object):
         mean : Series or DataFrame (if level specified)
         """
         if axis == 1:
-            return self._apply_rowwise_op("mean", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "mean", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("mean", **kwargs)
 
     def std(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("std", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "std", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("std", **kwargs)
 
     def var(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op("var", numeric_only=numeric_only)
+            return self._apply_rowwise_op(
+                "var", numeric_only=numeric_only, **kwargs
+            )
         return self._apply_support_method("var", **kwargs)
 
     def kurtosis(self, axis=None, skipna=None, level=None, numeric_only=None):
