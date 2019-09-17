@@ -2597,7 +2597,8 @@ class Series(object):
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
-    def repeat(self, repeats):
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
         col = libcudf.filling.repeat(self, repeats)
         return Series(data=col)
 
