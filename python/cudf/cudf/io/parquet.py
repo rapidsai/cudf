@@ -31,13 +31,14 @@ def read_parquet(
     skip_rows=None,
     num_rows=None,
     strings_to_categorical=False,
+    use_pandas_metadata=True,
     *args,
     **kwargs,
 ):
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, None
+        filepath_or_buffer, None, **kwargs
     )
     if compression is not None:
         ValueError("URL content-encoding decompression is not supported")
@@ -50,6 +51,7 @@ def read_parquet(
             skip_rows,
             num_rows,
             strings_to_categorical,
+            use_pandas_metadata,
         )
     else:
         warnings.warn("Using CPU via PyArrow to read Parquet dataset.")

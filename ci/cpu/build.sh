@@ -24,6 +24,11 @@ cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
 export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
 
+# If nightly build, append current YYMMDD to version
+if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
+  export VERSION_SUFFIX=`date +%y%m%d`
+fi
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -62,6 +67,8 @@ source ci/cpu/cudf/build_cudf.sh
 logger "Build conda pkg for dask-cudf..."
 source ci/cpu/dask-cudf/build_dask_cudf.sh
 
+logger "Build conda pkg for custreamz..."
+source ci/cpu/custreamz/build_custreamz.sh
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################

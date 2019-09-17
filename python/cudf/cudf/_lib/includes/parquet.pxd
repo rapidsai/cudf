@@ -16,12 +16,16 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::parquet" nogil:
     cdef cppclass reader_options:
         vector[string] columns
         bool strings_to_categorical
+        bool use_pandas_metadata
+        gdf_time_unit timestamp_unit
 
         reader_options() except +
 
         reader_options(
             vector[string] columns,
-            bool strings_as_category
+            bool strings_as_category,
+            bool use_pandas_metadata,
+            gdf_time_unit timestamp_unit
         ) except +
 
     cdef cppclass reader:
