@@ -649,28 +649,6 @@ static PyObject* n_scatter_count( PyObject* self, PyObject* args )
     return PyLong_FromVoidPtr((void*)strs);
 }
 
-static PyObject* n_code_points( PyObject* self, PyObject* args )
-{
-    PyObject* pystrs = PyTuple_GetItem(args,0);
-    NVStrings* strs = strings_from_object(pystrs);
-    if( strs==0 )
-        Py_RETURN_NONE;
-
-    PyObject* pyresults = PyTuple_GetItem(args,1);
-    std::string name = pyresults->ob_type->tp_name;
-    if( name.compare("int")!=0 )
-    {
-        printf("results must be device pointer\n");
-        Py_RETURN_NONE;
-    }
-    unsigned int* results = (unsigned int*)PyLong_AsVoidPtr(pyresults);
-
-    Py_BEGIN_ALLOW_THREADS
-    NVText::code_points(*strs,results);
-    Py_END_ALLOW_THREADS
-    Py_RETURN_NONE;
-}
-
 //
 static PyMethodDef s_Methods[] = {
     { "n_tokenize", n_tokenize, METH_VARARGS, "" },
@@ -685,7 +663,6 @@ static PyMethodDef s_Methods[] = {
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
-    { "n_code_points", n_code_points, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }
 };
 

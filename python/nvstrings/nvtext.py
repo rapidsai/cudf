@@ -346,9 +346,3 @@ def scatter_count(strs, counts):
     if rtn is not None:
         rtn = nvs.nvstrings(rtn)
     return rtn
-
-def code_points(strs, results):
-    if results is None:
-        raise ValueError("results must be device pointer")
-    pyniNVText.n_code_points(strs, results)
-
