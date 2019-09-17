@@ -1452,7 +1452,10 @@ cudaError_t CompressOrcDataStreams(uint8_t *compressed_data, StripeStream *strm_
     dim3 dim_block_init(256, 1);
     dim3 dim_grid(num_stripe_streams, 1);
     gpuInitCompressionBlocks <<< dim_grid, dim_block_init, 0, stream >>>(strm_desc, chunks, comp_in, comp_out, compressed_data, comp_blk_size);
-    // TODO: Actually do some compression here
+    if (compression == SNAPPY)
+    {
+        gpu_snap(comp_in, comp_out, num_compressed_blocks, stream);
+    }
     dim3 dim_block_compact(1024, 1);
     gpuCompactCompressedBlocks <<< dim_grid, dim_block_compact, 0, stream >>>(strm_desc, comp_in, comp_out, compressed_data, comp_blk_size);
     return cudaSuccess;

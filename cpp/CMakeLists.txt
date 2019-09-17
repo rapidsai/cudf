@@ -402,6 +402,7 @@ add_library(cudf
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
             src/io/comp/debrotli.cu
+            src/io/comp/snap.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/utilities/datasource.cpp
