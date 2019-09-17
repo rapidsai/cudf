@@ -23,28 +23,33 @@
 
 namespace cudf {
 /**---------------------------------------------------------------------------*
- * @brief Construct strings column given an array of pointer/size pairs.
- * Use the strings_column_handler class to perform strings operations on
- * this type of column.
- * 
+ * @brief Construct STRING type column given an array of pointer/size pairs.
+ * The total number of char bytes must not exceed the maximum size of size_type.
+ * This column contains 2 or more children to manage its variable width data
+ * elements. Use the strings_column_handler class to perform strings operations
+ * on this type of column. The string characters are expected to be UTF-8
+ * encoded sequence of char bytes.
+ *
  * @note `null_count()` and `null_bitmask` are determined if a pair contains
- * a null pointer. Otherwise, it is considered an empty string and not null.
+ * a null string. That is, for each pair, if `.first` is null, that string
+ * is considered null. Likewise, a string is considered empty (not null)
+ * if `.first` is not null and `.second` is 0. Otherwise the `.first` member
+ * must be a valid device address pointing to `.second` consecutive bytes.
  *
  * @throws std::bad_alloc if device memory allocation fails
- * @throws cudf::logic_error if pointers are invalid
+ * @throws cudf::logic_error if pointers or sizes are invalid
  *
- * @param[in] strs The pointer/size pair arrays.
- *                 Each pointer must be valid device memory address.
- *                 The size must be the number of bytes.
- * @param[in] count The number of elements in the strs array.
- * @param[in] stream Optional stream on which to issue all memory allocation and device
- * kernels
+ * @param[in] strings The pointer/size pair arrays.
+ *                    Each pointer must be a valid device memory address.
+ *                    The size must be the number of bytes.
+ * @param[in] stream Optional stream for use with all memory allocation
+ *                   and device kernels
  * @param[in] mr Optional resource to use for device memory
- * allocation of the column's `data` and `null_mask`.
+ *               allocation of the column's `null_mask` and children.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> make_strings_column(
-    std::pair<const char*,size_t>* strs, size_type count,
+    const rmm::device_vector<thrust::pair<const char*,size_t>>& strings,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
-    
+
 }  // namespace cudf

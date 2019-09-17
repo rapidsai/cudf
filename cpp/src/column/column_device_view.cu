@@ -54,6 +54,7 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     for( size_type idx=0; idx < num_descendants; ++idx )
     {
       column_device_view child(source.child(idx));
+      CUDF_EXPECTS( child._num_children==0, "column grand-children not currently supported");
       cudaMemcpyAsync(p->d_children+idx, &child, sizeof(column_device_view), cudaMemcpyHostToDevice, stream);
     }
     p->_num_children = num_descendants;
