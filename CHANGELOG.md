@@ -38,6 +38,7 @@
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2728 Add YYMMDD to version tag for nightly conda packages
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
 - PR #2766 Improve nvstrings python cmake flexibility
