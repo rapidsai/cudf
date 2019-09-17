@@ -292,6 +292,8 @@ namespace detail {
                  "Nulls are in values_to_replace column.");
 
     gdf_column output = cudf::allocate_like(input_col, true, stream);
+    if (output.valid)
+      CUDA_TRY(cudaMemset(output.valid, 0x00, gdf_valid_allocation_size(output.size)));
 
     if (nullptr == input_col.valid && replacement_values.valid != nullptr) {
       gdf_valid_type *valid = nullptr;

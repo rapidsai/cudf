@@ -351,3 +351,14 @@ def test_series_with_nulls_where(fill_value):
     expect = psr.where(psr == 0, fill_value)
     got = sr.where(sr == 0, fill_value)
     assert_eq(expect, got)
+
+
+def test_series_multiple_times_with_nulls():
+    sr = Series([1, 2, 3, None])
+    expected = Series([None, None, None, None], dtype=np.int64)
+
+    for i in range(10):
+        got = sr.replace([1, 2, 3], None)
+        # This print is required as it will fail only if there is print
+        print(got)
+        assert_eq(expected, got)
