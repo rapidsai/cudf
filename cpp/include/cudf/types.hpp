@@ -107,8 +107,16 @@ class data_type {
   data_type& operator=(data_type const&) = default;
   data_type& operator=(data_type&&) = default;
 
+  /**---------------------------------------------------------------------------*
+   * @brief Construct a new `data_type` object
+   *
+   * @param id The type's identifier
+   *---------------------------------------------------------------------------**/
   explicit constexpr data_type(type_id id) : _id{id} {}
 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns the type identifier
+   *---------------------------------------------------------------------------**/
   type_id id() const noexcept { return _id; }
 
  private:
@@ -116,6 +124,22 @@ class data_type {
   // Store additional type specific metadata, timezone, decimal precision and
   // scale, etc.
 };
+
+/**---------------------------------------------------------------------------*
+ * @brief Compares two `data_type` objects for equality.
+ *
+ * // TODO Define exactly what it means for two `data_type`s to be equal. e.g.,
+ * are two timestamps with different resolutions equal? How about decimals with
+ * different scale/precision?
+ *
+ * @param lhs The first `data_type` to compare
+ * @param rhs The second `data_type` to compare
+ * @return true `lhs` is equal to `rhs`
+ * @return false `lhs` is not equal to `rhs`
+ *---------------------------------------------------------------------------**/
+inline bool operator==(data_type const& lhs, data_type const& rhs) {
+  return lhs.id() == rhs.id();
+}
 
 /**---------------------------------------------------------------------------*
  * @brief Indicates an unknown null count.
