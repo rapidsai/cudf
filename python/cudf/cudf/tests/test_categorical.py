@@ -5,8 +5,8 @@ import pandas as pd
 import pytest
 
 import cudf as gd
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import as_index
+from cudf.core import DataFrame, Series
+from cudf.core.index import as_index
 from cudf.tests.utils import assert_eq
 
 
@@ -62,8 +62,8 @@ def test_categorical_integer():
     string = str(sr)
     expect_str = """
 0 a
-1 NaN
-2 NaN
+1 null
+2 null
 3 c
 4 a
 dtype: category

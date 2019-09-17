@@ -573,7 +573,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
         throw new IllegalArgumentException(src + " is not a supported buffer type.");
     }
 
-    assert srcOffset + length <= srcBuffer.length;
+    assert srcOffset + length <= srcBuffer.length : "would copy off end of buffer "
+        + srcOffset + " + " + length + " > " + srcBuffer.length;
     UnsafeMemoryAccessor.getBytes(dst, dstOffset,
         srcBuffer.getAddress() + srcOffset, length);
   }
@@ -1404,11 +1405,71 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Cast to Timestamp - ColumnVector
-   * This method takes the value provided by the ColumnVector and casts to timestamp
+   * This method takes the value provided by the ColumnVectoor and casts to timestamp. Timestamp
+   * casting usually requires a time unit to be given as an argument, this defaults the
+   * argument to millisecond.
+   * @return A new vector allocoated on the GPU
+   */
+  public ColumnVector asTimestamp() {
+    return asTimestamp(TimeUnit.MILLISECONDS);
+  }
+
+  /**
+   * Cast to Timestamp - ColumnVector
+   * This method takes the value provided by the ColumnVector and casts to timestamp.
+   * When used to convert strings to timestamp, "%Y-%m-%dT%H:%M:%SZ%f" is the format string used to
+   * parse the time -- see NVString documentation for symbol meaning and alternative format options.
+   * https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   * Strings that fail to parse will default to 0, corresponding to 1970-01-01 00:00:00.000.
+   * @param unit time unit to parse the timestamp into.
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestamp(TimeUnit unit) {
+    if (type == DType.STRING) {
+      return asTimestamp(unit, "%Y-%m-%dT%H:%M:%SZ%f");
+    }
     return castTo(DType.TIMESTAMP, unit);
+  }
+
+  /**
+   * Native method to parse and convert a NVString column vector to unix timestamp. A unix
+   * timestamp is a long value representing how many units since 1970-01-01 00:00:00.000 in either
+   * positive or negative direction. This mirrors the functionality spark sql's to_unix_timestamp.
+   * Strings that fail to parse will default to 0. Supported time units are second, millisecond,
+   * microsecond, and nanosecond. Larger time units for column vectors are not supported yet in cudf.
+   * @param cudfColumnHandle native handle of the gdf_column being operated on.
+   * @param unit integer native ID of the time unit to parse the timestamp into.
+   * @param format strptime format specifier string of the timestamp. Used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   *               for full parsing format specification and documentation.
+   * @return native handle of the resulting cudf column, used to construct the Java column vector
+   *         by the timestampToLong method.
+   */
+  private static native long stringTimestampToTimestamp(long cudfColumnHandle, int unit, String format);
+
+  /**
+   * Wrap static native string timestamp to long conversion method. Retrieves the column vector's
+   * cudf native handle and uses it to invoke the native function that calls NVStrings'
+   * timestamp2long method. Strings that fail to parse will default to 0, corresponding
+   * to 1970-01-01 00:00:00.000.
+   * @param unit time unit to parse the timestamp into.
+   * @param format strptime format specifier string of the timestamp. Used to parse and convert
+   *               the timestamp with. Supports %Y,%y,%m,%d,%H,%I,%p,%M,%S,%f,%z format specifiers.
+   *               See https://github.com/rapidsai/custrings/blob/branch-0.10/docs/source/datetime.md
+   *               for full parsing format specification and documentation.
+   * @return A new ColumnVector containing the long representations of the timestamps in the
+   *         original column vector.
+   */
+  public ColumnVector asTimestamp(TimeUnit unit, String format) {
+    assert type == DType.STRING : "A column of type string is required " +
+                                  "for .timestampToLong() operation";
+    assert format != null : "Format string may not be NULL";
+    if (unit == TimeUnit.NONE) {
+      unit = TimeUnit.MILLISECONDS;
+    }
+    return new ColumnVector(stringTimestampToTimestamp(getNativeCudfColumnAddress(),
+                                                       unit.getNativeId(), format));
   }
 
   /**
@@ -1542,7 +1603,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Wrap static native string capitilization methods, retrieves the column vectors cudf native
-   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does
+   * handle and uses it to invoke the native function that calls NVStrings' upper method. Does not
    * support String categories yet.
    * @return A new ColumnVector containing the upper case versions of the strings in the original
    *         column vector.
@@ -1554,7 +1615,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
 
   /**
    * Wrap static native string capitilization methods, retrieves the column vectors cudf native
-   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does
+   * handle and uses it to invoke the native function that calls NVStrings' lower method. Does not
    * support String categories yet.
    * @return A new ColumnVector containing the lower case versions of the strings in the original
    *         column vector.
@@ -1567,6 +1628,10 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   private native Scalar exactQuantile(long cudfColumnHandle, int quantileMethod, double quantile) throws CudfException;
 
   private native Scalar approxQuantile(long cudfColumnHandle, double quantile) throws CudfException;
+
+  private static native long rollingWindow(long cudfColumnHandle, int window, int min_periods,
+                                           int forward_window, int agg_type, long window_col,
+                                           long min_periods_col, long forward_window_col);
 
   private static native long cudfLengths(long cudfColumnHandle) throws CudfException;
 
@@ -2135,6 +2200,25 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    */
   public Scalar approxQuantile(double quantile) {
     return approxQuantile(this.getNativeCudfColumnAddress(), quantile);
+  }
+
+  /**
+   * This function aggregates values in a window around each element i of the input
+   * column. Please refer to WindowsOptions for various options that can be passed.
+   * @param opts various window function arguments.
+   * @return Column containing aggregate function result.
+   */
+  public ColumnVector rollingWindow(WindowOptions opts) {
+    return new ColumnVector(
+        rollingWindow(this.getNativeCudfColumnAddress(),
+            opts.getWindow() >= 0 ? opts.getWindow() : 0,
+            opts.getMinPeriods() >= 0 ? opts.getMinPeriods() : 0,
+            opts.getForwardWindow() >=0 ? opts.getForwardWindow() : 0,
+            opts.getAggType().nativeId,
+            opts.getWindowCol() == null ? 0 : opts.getWindowCol().getNativeCudfColumnAddress(),
+            opts.getMinPeriodsCol() == null ? 0 : opts.getMinPeriodsCol().getNativeCudfColumnAddress(),
+            opts.getForwardWindowCol() == null ? 0 :
+            opts.getForwardWindowCol().getNativeCudfColumnAddress()));
   }
 
   /**

@@ -1,5 +1,4 @@
-import numbers
-from collections import namedtuple
+import functools
 from math import ceil, isinf, isnan
 
 import numpy as np
@@ -7,9 +6,7 @@ import pandas as pd
 import pyarrow as pa
 from numba import njit
 
-from librmm_cffi import librmm as rmm
-
-from cudf.utils.dtypes import is_categorical_dtype
+from librmm_cffi import librmm as rmm, librmm_config as rmm_cfg
 
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -20,19 +17,6 @@ def calc_chunk_size(size, chunksize):
     return mask_byte_padding * ceil(
         ((size + chunksize - 1) // chunksize) / mask_byte_padding
     )
-
-
-_TypeMinMax = namedtuple("_TypeMinMax", "min,max")
-
-
-def get_numeric_type_info(dtype):
-    if dtype.kind in "iu":
-        info = np.iinfo(dtype)
-        return _TypeMinMax(info.min, info.max)
-    elif dtype.kind in "f":
-        return _TypeMinMax(dtype.type("-inf"), dtype.type("+inf"))
-    else:
-        raise TypeError(dtype)
 
 
 @njit
@@ -74,6 +58,7 @@ def require_writeable_array(arr):
 
 def scalar_broadcast_to(scalar, shape, dtype):
     from cudf.utils.cudautils import fill_value
+    from cudf.utils.dtypes import to_cudf_compatible_scalar
 
     scalar = to_cudf_compatible_scalar(scalar, dtype=dtype)
 
@@ -82,7 +67,7 @@ def scalar_broadcast_to(scalar, shape, dtype):
 
     if np.dtype(dtype) == np.dtype("object"):
         import nvstrings
-        from cudf.dataframe.string import StringColumn
+        from cudf.core.column import StringColumn
         from cudf.utils.cudautils import zeros
 
         gather_map = zeros(shape[0], dtype="int32")
@@ -109,7 +94,7 @@ list_types_tuple = (list, np.array)
 
 
 def buffers_from_pyarrow(pa_arr, dtype=None):
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.buffer import Buffer
     from cudf.utils.cudautils import copy_array
 
     buffers = pa_arr.buffers()
@@ -139,102 +124,6 @@ def buffers_from_pyarrow(pa_arr, dtype=None):
     else:
         padata = Buffer(np.empty(0, dtype=new_dtype))
     return (pamask, padata)
-
-
-def cudf_dtype_from_pydata_dtype(dtype):
-    """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
-        Python dtype.
-    """
-    try:
-        # pd 0.24.X
-        from pandas.core.dtypes.common import infer_dtype_from_object
-    except ImportError:
-        # pd 0.23.X
-        from pandas.core.dtypes.common import (
-            _get_dtype_from_object as infer_dtype_from_object,
-        )
-
-    if is_categorical_dtype(dtype):
-        pass
-    elif np.issubdtype(dtype, np.datetime64):
-        dtype = np.datetime64
-
-    return infer_dtype_from_object(dtype)
-
-
-def is_scalar(val):
-    return (
-        val is None
-        or isinstance(val, str)
-        or isinstance(val, numbers.Number)
-        or np.isscalar(val)
-        or isinstance(val, pd.Timestamp)
-        or isinstance(val, pd.Categorical)
-    )
-
-
-def to_cudf_compatible_scalar(val, dtype=None):
-    """
-    Converts the value `val` to a numpy/Pandas scalar,
-    optionally casting to `dtype`.
-
-    If `val` is None, returns None.
-    """
-    if val is None:
-        return val
-
-    if not is_scalar(val):
-        raise ValueError(
-            f"Cannot convert value of type {type(val).__name__} "
-            " to cudf scalar"
-        )
-
-    val = pd.api.types.pandas_dtype(type(val)).type(val)
-
-    if dtype is not None:
-        val = val.astype(dtype)
-
-    return val
-
-
-def is_list_like(obj):
-    """
-    This function checks if the given `obj`
-    is a list-like (list, tuple, Series...)
-    type or not.
-
-    Parameters
-    ----------
-    obj : object of any type which needs to be validated.
-
-    Returns
-    -------
-    Boolean: True or False depending on whether the
-    input `obj` is like-like or not.
-    """
-    from collections.abc import Sequence
-
-    if isinstance(obj, (Sequence,)) and not isinstance(obj, (str, bytes)):
-        return True
-    else:
-        return False
-
-
-def min_scalar_type(a, min_size=8):
-    return min_signed_type(a, min_size=min_size)
-
-
-def min_signed_type(x, min_size=8):
-    """
-    Return the smallest *signed* integer dtype
-    that can represent the integer ``x``
-    """
-    for int_dtype in np.sctypes["int"]:
-        if (np.dtype(int_dtype).itemsize * 8) >= min_size:
-            if np.iinfo(int_dtype).min <= x <= np.iinfo(int_dtype).max:
-                return int_dtype
-    # resort to using `int64` and let numpy raise appropriate exception:
-    return np.int64(x).dtype
 
 
 def get_result_name(left, right):
@@ -291,6 +180,42 @@ def compare_and_get_name(a, b):
     return None
 
 
+def initfunc(f):
+    """
+    Decorator for initialization functions that should
+    be run exactly once.
+    """
+
+    @functools.wraps(f)
+    def wrapper(*args, **kwargs):
+        if wrapper.initialized:
+            return
+        wrapper.initialized = True
+        return f(*args, **kwargs)
+
+    wrapper.initialized = False
+    return wrapper
+
+
+def get_null_series(size, dtype=np.bool):
+    """
+    Creates a null series of provided dtype and size
+
+    Parameters
+    ----------
+    size:  length of series
+    dtype: dtype of series to create; defaults to bool.
+
+    Returns
+    -------
+    a null cudf series of provided `size` and `dtype`
+    """
+    from cudf.core import Series, column
+
+    empty_col = column.column_empty(size, dtype, True)
+    return Series(empty_col)
+
+
 # taken from dask array
 # https://github.com/dask/dask/blob/master/dask/array/utils.py#L352-L363
 def _is_nep18_active():
@@ -305,3 +230,60 @@ def _is_nep18_active():
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
+
+
+def _set_rmm_config(
+    use_managed_memory=False,
+    use_pool_allocator=False,
+    initial_pool_size=None,
+    enable_logging=False,
+):
+    """
+    Parameters
+    ----------
+    use_managed_memory : bool, optional
+        If ``True``, use cudaMallocManaged as underlying allocator.
+        If ``False`` (default), use  cudaMalloc.
+    use_pool_allocator : bool
+        If ``True``, enable pool mode.
+        If ``False`` (default), disable pool mode.
+    initial_pool_size : int, optional
+        If ``use_pool_allocator=True``, sets initial pool size.
+        If ``None``, us
+es 1/2 of total GPU memory.
+    enable_logging : bool, optional
+        Enable logging (default ``False``).
+        Enabling this option will introduce performance overhead.
+    """
+    rmm.finalize()
+    rmm_cfg.use_managed_memory = use_managed_memory
+    if use_pool_allocator:
+        rmm_cfg.use_pool_allocator = use_pool_allocator
+        if initial_pool_size is None:
+            initial_pool_size = 0  # 0 means 1/2 GPU memory
+        elif initial_pool_size == 0:
+            initial_pool_size = 1  # Since "0" is semantic value, use 1 byte
+        if not isinstance(initial_pool_size, int):
+            raise TypeError("initial_pool_size must be an integer")
+        rmm_cfg.initial_pool_size = initial_pool_size
+    rmm_cfg.enable_logging = enable_logging
+    rmm.initialize()
+
+
+@initfunc
+def set_allocator(allocator="default", pool=False, initial_pool_size=None):
+    """
+    Set the GPU memory allocator. This function should be run only once,
+    before any cudf objects are created.
+
+    allocator : {"default", "managed"}
+        "default": use default allocator.
+        "managed": use managed memory allocator.
+    pool : bool
+        Enable memory pool.
+    initial_pool_size : int
+        Memory pool size in bytes. If ``None`` (default), 1/2 of total
+        GPU memory is used. If ``pool=False``, this argument is ignored.
+    """
+    use_managed_memory = True if allocator == "managed" else False
+    _set_rmm_config(use_managed_memory, pool, initial_pool_size)

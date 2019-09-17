@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.dataframe.dataframe import DataFrame, Series
+from cudf.core.dataframe import DataFrame, Series
 from cudf.tests.utils import assert_eq, gen_rand
 
 params_dtype = [np.int8, np.int16, np.int32, np.int64, np.float32, np.float64]
