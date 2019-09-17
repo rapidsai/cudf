@@ -15,6 +15,7 @@
  */
 
 #include <utilities/error_utils.hpp>
+#include <utilities/column_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/copying.hpp>
 
@@ -35,7 +36,7 @@ gdf_column repeat(const gdf_column &in, const gdf_column& count, cudaStream_t st
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
     "Count column should be of index type");
   CUDF_EXPECTS(in.size == count.size, "in and count must have equal size");
-  CUDF_EXPECTS(count.null_count == 0, "count cannot contain nulls");
+  CUDF_EXPECTS(not has_nulls(count), "count cannot contain nulls");
 
   if (in.size == 0) {
     return cudf::empty_like(in);
