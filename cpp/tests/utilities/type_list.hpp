@@ -15,7 +15,59 @@
  */
 #pragma once
 
-#include "GTest.hpp"
+#include "cudf_gtest.hpp"
+
+/**---------------------------------------------------------------------------*
+ * @file type_list.hpp
+ * @brief Utilities for creating type lists for typed tests in Google Test
+ *
+ * A "type list" is a list of types passed to a Google Test type-parameterized
+ * test suite. The set of tests in the suite will be invoked once for each type
+ * in the list. Normally, this is done by using the `testing::Types` `struct`
+ * provided by GTest. For example,
+ *
+ * ```
+ * using TestTypes = ::testing::Types<int, char, float>;
+ *
+ * template <class T>
+ * class TestFixture : ::testing::Test { };
+ *
+ * TYPED_TEST_CASE(TestFixure, TestTypes);
+ *
+ * TYPED_TEST(TestFixture, mytest){
+ *   using Type0 = GetType<TypeParam,0>; // the first type element
+ * }
+ * ```
+ *
+ * The test `mytest` will be invoked 3 times, once for each of the types `int,
+ * char, float`.
+ *
+ * Instead of using `::testing::Types` directly, we provide
+ * `cudf::testing::Types`. This is a drop in replacement for GTest's
+ * `::testing::Types`. In lieu of including `gtest/gtest.h`, include
+ * `cudf_gtest.hpp` to ensure `cudf::testing::Types` is used.
+ *
+ * Using the utilities in this file, you can compose complex type lists.
+ *
+ * For example, `CrossJoin` may be used to compute the cross-product of two or
+ * more type lists:
+ *
+ * ```
+ * using TestTypes = CrossJoin<Types<int,float>,Types<char, void*>>;
+ * // TestTypes ==  Types< <int,char> <int,void*> <float,char> <float,void*> >
+ * ```
+ * RemoveIf can be used to remove some parameters that match a given predicate:
+ *
+ * ```
+ * using TestTypes = RemoveIf<AllSame, CrossJoin<Types<int,char>,
+ *Types<int,char>>>;
+ * // TestTypes ==  Types< <int,char>,<char,int> >
+ * ```
+ *
+ * @note WARNING: Abusing and overusing these utilities can lead to dramatically
+ * increased compile-times. Use responsibly.
+ *
+ *---------------------------------------------------------------------------**/
 
 namespace cudf {
 namespace test {
@@ -25,37 +77,6 @@ namespace test {
 // Types is used to define type list, it's just an alias to ::testing::Types:
 // using Types = util::Types<int,char,float>;
 //
-// You can declare your tests using a template fixture:
-//
-// template <class T>
-// class TestFixture : ::testing::Test
-// {
-// };
-//
-// Inside your test function, you can access the parameters like this:
-//
-// TEST(TestFixture, mytest)
-// {
-//      using Type0 = GetType<TypeParam,0>; // the first type element
-// }
-//
-// You can compose complicated type arguments using Concat and CrossJoin
-// and RemoveIf
-//
-// using Types = CrossJoin<Types<int,float>,Types<char, void*>>;
-// creates the parameters <int,char> <int,void*> <float,char> <float,void*>
-//
-// Concat is useful to concatenate parameter lists created with CrossJoin
-//
-// using Types = Concat<CrossJoin<Types<int,float>,Types<char>>,
-//                      CrossJoin<Types<char,double>,ValueType<void*,short>>>;
-// creates the parameters <int,char> <float,char> <char,void*> <char,short>
-// <double,void*> <double,short>
-//
-// RemoveIf can be used to remove some parameters that match a given predicate:
-//
-// using Types = RemoveIf<AllSame, CrossJoin<Types<int,char>, Types<int,char>>>;
-// creates the parameters <int,char>,<char,int>
 
 // Types -----------------------------------------
 using ::testing::Types;
@@ -246,6 +267,10 @@ struct CrossJoinImpl<T, TAIL...> : CrossJoinImpl<Types<T>, TAIL...> {};
 /**---------------------------------------------------------------------------*
  * @brief Creates a new type list from the cross product (cartesian product) of
  * two type lists.
+ *
+ * @note This should be used with caution, as it can easily lead to a large
+ * number of typed test cases. For example, computing the `CrossJoin` of two type
+ * lists of size `n` and `m`, the resulting list will have `n*m` types.
  *
  * Example:
  * ```
