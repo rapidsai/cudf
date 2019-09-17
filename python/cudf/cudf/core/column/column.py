@@ -1051,46 +1051,6 @@ def column_empty(row_count, dtype, masked, categories=None):
     return build_column(data, dtype, mask, categories)
 
 
-def column_select_by_boolmask(column, boolmask):
-    """Select by a boolean mask to a column.
-
-    Returns (selected_column, selected_positions)
-    """
-    from cudf.core.column import NumericalColumn
-
-    assert column.null_count == 0  # We don't properly handle the boolmask yet
-    boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
-    indices = cudautils.arange(len(boolmask))
-    _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
-    _, selvals = cudautils.copy_to_dense(
-        column.data.to_gpu_array(), mask=boolbits
-    )
-
-    selected_values = column.replace(data=Buffer(selvals))
-    selected_index = Buffer(selinds)
-    return (
-        selected_values,
-        NumericalColumn(data=selected_index, dtype=selected_index.dtype),
-    )
-
-
-def column_select_by_position(column, positions):
-    """Select by a series of dtype int64 indicating positions.
-
-    Returns (selected_column, selected_positions)
-    """
-    from cudf.core.column import NumericalColumn
-
-    pos_ary = positions.data.to_gpu_array()
-    selected_values = libcudf.copying.gather(column, pos_ary)
-    selected_index = Buffer(pos_ary)
-
-    return (
-        selected_values,
-        NumericalColumn(data=selected_index, dtype=selected_index.dtype),
-    )
-
-
 def build_column(
     buffer, dtype, mask=None, categories=None, name=None, null_count=None
 ):
