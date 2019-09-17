@@ -87,6 +87,7 @@
 - PR #2787 Fix Broadcasting `None` to `cudf-series`
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2824 Fix issue with incorrect result when Numeric Series replace is called several times
 
 
 # cuDF 0.9.0 (21 Aug 2019)
