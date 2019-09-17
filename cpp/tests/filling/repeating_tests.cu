@@ -73,7 +73,8 @@ TYPED_TEST(RepeatTest, RepeatScalarCount)
   column_wrapper<T> expected = factory.make(column_size,
     [&](gdf_index_type row) { return expect_vals[row]; });
 
-  column_wrapper<T> actual(cudf::repeat(*values.get(), *count.get()));
+  cudf::table result = cudf::repeat({values.get()}, *count.get());
+  column_wrapper<T> actual(*result.get_column(0));
 
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
                               << "Expected:" << expected.to_str();
@@ -115,7 +116,8 @@ TYPED_TEST(RepeatTest, Repeat)
   column_wrapper<T> expected = factory.make(column_size,
     [&](gdf_index_type row) { return expect_vals[row]; });
 
-  column_wrapper<T> actual(cudf::repeat(*values.get(), *counts.get()));
+  cudf::table result = cudf::repeat({values.get()}, *counts.get());
+  column_wrapper<T> actual(*result.get_column(0));
 
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
                               << "Expected:" << expected.to_str();
@@ -164,7 +166,8 @@ TYPED_TEST(RepeatTest, RepeatNullable)
       auto corresponding_value_it = std::upper_bound(offsets.begin(), offsets.end(), row);
       return (corresponding_value_it - offsets.begin()) % 2; });
 
-  column_wrapper<T> actual(cudf::repeat(*values.get(), *counts.get()));
+  cudf::table result = cudf::repeat({values.get()}, *counts.get());
+  column_wrapper<T> actual(*result.get_column(0));
 
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
                               << "Expected:" << expected.to_str();
@@ -179,7 +182,8 @@ TYPED_TEST(RepeatTest, ZeroSizeInput)
 
   auto expected = column_wrapper<T>{};
 
-  column_wrapper<T> actual(cudf::repeat(*values.get(), *counts.get()));
+  cudf::table result = cudf::repeat({values.get()}, *counts.get());
+  column_wrapper<T> actual(*result.get_column(0));
 
   EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
                               << "Expected:" << expected.to_str();

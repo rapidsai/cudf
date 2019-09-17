@@ -39,9 +39,9 @@ namespace {
  * @param stream Stream to perform computation in
  * @return gdf_column Filled column
  */
-gdf_column fill_between_offsets(const gdf_column &in,
-                                rmm::device_vector<gdf_size_type> const& offset,
-                                cudaStream_t stream = 0)
+cudf::table fill_between_offsets(const cudf::table &in,
+                                 rmm::device_vector<gdf_size_type> const& offset,
+                                 cudaStream_t stream = 0)
 {
   gdf_size_type output_size = offset.back();
 
@@ -52,11 +52,9 @@ gdf_column fill_between_offsets(const gdf_column &in,
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  gdf_column output = cudf::allocate_like(in, output_size);
+  cudf::table output = cudf::allocate_like(in, output_size);
 
-  cudf::table in_table{const_cast<gdf_column*>(&in)};
-  cudf::table out_table{&output};
-  cudf::gather(&in_table, indices.data().get(), &out_table);
+  cudf::gather(&in, indices.data().get(), &output);
 
   return output;
 }
@@ -68,13 +66,13 @@ namespace cudf {
 
 namespace detail {
 
-gdf_column repeat(const gdf_column &in, const gdf_column& count, cudaStream_t stream = 0) {
+cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t stream = 0) {
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
     "Count column should be of index type");
-  CUDF_EXPECTS(in.size == count.size, "in and count must have equal size");
+  CUDF_EXPECTS(in.num_rows() == count.size, "in and count must have equal size");
   CUDF_EXPECTS(not has_nulls(count), "count cannot contain nulls");
 
-  if (in.size == 0) {
+  if (in.num_rows() == 0) {
     return cudf::empty_like(in);
   }
   
@@ -87,20 +85,20 @@ gdf_column repeat(const gdf_column &in, const gdf_column& count, cudaStream_t st
   return fill_between_offsets(in, offset, stream);
 }
 
-gdf_column repeat(const gdf_column &in, const gdf_scalar& count, cudaStream_t stream = 0) {
+cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t stream = 0) {
   CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
     "Count value should be of index type");
   CUDF_EXPECTS(count.is_valid, "count cannot be null");
 
-  if (in.size == 0) {
+  if (in.num_rows() == 0) {
     return cudf::empty_like(in);
   }
   
-  rmm::device_vector<gdf_size_type> offset(in.size);
+  rmm::device_vector<gdf_size_type> offset(in.num_rows());
   
   thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
                          thrust::make_constant_iterator(count.data.si32, 0),
-                         thrust::make_constant_iterator(count.data.si32, in.size),
+                         thrust::make_constant_iterator(count.data.si32, in.num_rows()),
                          offset.begin());
 
   return fill_between_offsets(in, offset, stream);
@@ -109,11 +107,11 @@ gdf_column repeat(const gdf_column &in, const gdf_scalar& count, cudaStream_t st
 } // namespace detail
 
 
-gdf_column repeat(const gdf_column &in, const gdf_column& count) {
+cudf::table repeat(const cudf::table &in, const gdf_column& count) {
   return detail::repeat(in, count);
 }
 
-gdf_column repeat(const gdf_column &in, const gdf_scalar& count) {
+cudf::table repeat(const cudf::table &in, const gdf_scalar& count) {
   return detail::repeat(in, count);
 }
 

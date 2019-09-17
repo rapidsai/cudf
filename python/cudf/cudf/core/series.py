@@ -2599,8 +2599,23 @@ class Series(object):
 
     def repeat(self, repeats, axis=None):
         assert axis in (None, 0)
-        col = libcudf.filling.repeat(self, repeats)
-        return Series(data=col)
+        in_index = self.index
+        from cudf.core.multiindex import MultiIndex
+
+        if isinstance(in_index, MultiIndex):
+            in_index = RangeIndex(len(in_index))
+
+        new_index, col = libcudf.filling.repeat(
+            [in_index.as_column(), self._column], repeats
+        )
+
+        new_index = as_index(new_index)
+        if self.index.equals(new_index):
+            new_index = self.index
+        if isinstance(self.index, MultiIndex):
+            new_index = self.index.take(new_index)
+
+        return Series(data=col, index=new_index)
 
 
 truediv_int_dtype_corrections = {

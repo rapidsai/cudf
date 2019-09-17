@@ -40,9 +40,9 @@ void fill(gdf_column *column, gdf_scalar const& value,
           gdf_index_type begin, gdf_index_type end);
 
 /**
- * @brief Repeat elements of a Column
+ * @brief Repeat rows of a Table
  * 
- * Creates a new column by repeating the values of @p in. The number of 
+ * Creates a new table by repeating the rows of @p in. The number of 
  * repetitions of each element is defined by the value at the corresponding 
  * index of @p count
  * Example:
@@ -54,14 +54,14 @@ void fill(gdf_column *column, gdf_scalar const& value,
  * 
  * @param in Input column
  * @param count Non-nullable column of type `GDF_INT32`
- * @return gdf_column The result column containing the repetitions
+ * @return cudf::table The result table containing the repetitions
  */
-gdf_column repeat(const gdf_column &in, const gdf_column& count);
+cudf::table repeat(const cudf::table &in, const gdf_column& count);
 
 /**
- * @brief Repeat elements of a Column
+ * @brief Repeat rows of a Table
  * 
- * Creates a new column by repeating @p count times the values of @p in.
+ * Creates a new table by repeating @p count times the rows of @p in.
  * Example:
  * ```
  * in = [4,5,6]
@@ -71,9 +71,9 @@ gdf_column repeat(const gdf_column &in, const gdf_column& count);
  * 
  * @param in Input column
  * @param count Non-null scalar of type `GDF_INT32`
- * @return gdf_column The result column containing the repetitions
+ * @return cudf::table The result table containing the repetitions
  */
-gdf_column repeat(const gdf_column &in, const gdf_scalar& count);
+cudf::table repeat(const cudf::table &in, const gdf_scalar& count);
 
 }; // namespace cudf
 

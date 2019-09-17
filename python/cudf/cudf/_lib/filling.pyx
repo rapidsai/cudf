@@ -31,28 +31,26 @@ def repeat(input, repeats):
     cdef gdf_scalar* c_repeats_scalar = NULL
     cdef gdf_column* c_repeats_col = NULL
 
-    input = as_column(input)
-
-    cdef gdf_column* c_input_col = column_view_from_column(input)
-    cdef gdf_column c_result_column
+    cdef cudf_table* c_input_table = table_from_columns(input)
+    cdef cudf_table c_result_table
 
     if np.isscalar(repeats):
         repeats = np.dtype("int32").type(repeats)
         c_repeats_scalar = gdf_scalar_from_scalar(repeats)
         with nogil:
-            c_result_column = cpp_repeat(
-                c_input_col[0],
+            c_result_table = cpp_repeat(
+                c_input_table[0],
                 c_repeats_scalar[0])
     else:
         repeats = as_column(repeats).astype("int32")
         c_repeats_col = column_view_from_column(repeats)
         with nogil:
-            c_result_column = cpp_repeat(
-                c_input_col[0],
+            c_result_table = cpp_repeat(
+                c_input_table[0],
                 c_repeats_col[0])
 
     free(c_repeats_scalar)
-    free_column(c_input_col)
+    del c_input_table
     free_column(c_repeats_col)
 
-    return gdf_column_to_column(&c_result_column)
+    return columns_from_table(&c_result_table)

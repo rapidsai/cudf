@@ -64,7 +64,7 @@ def test_repeat(dtype):
     gsr = cudf.from_pandas(psr)
     assert_eq(psr, gsr)
 
-    assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
+    assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
 
 
 @pytest.mark.parametrize(
@@ -77,7 +77,7 @@ def test_repeat_scalar(dtype):
     gsr = cudf.from_pandas(psr)
     assert_eq(psr, gsr)
 
-    assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
+    assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
 
 
 def test_null_copy():

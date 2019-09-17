@@ -17,12 +17,12 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
         gdf_index_type end
     ) except +
 
-    cdef gdf_column repeat(
-        const gdf_column & input,
+    cdef cudf_table repeat(
+        const cudf_table & input,
         const gdf_column & count
     ) except +
 
-    cdef gdf_column repeat(
-        const gdf_column & input,
+    cdef cudf_table repeat(
+        const cudf_table & input,
         const gdf_scalar & count
     ) except +
