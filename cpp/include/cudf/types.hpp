@@ -62,6 +62,19 @@ class mutable_table_view;
 using size_type = int32_t;
 using bitmask_type = uint32_t;
 
+/**---------------------------------------------------------------------------*
+ * @brief Controls the allocation/initialization of a null mask.
+ *---------------------------------------------------------------------------**/
+enum mask_state {
+  UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
+  UNINITIALIZED,  ///< Null mask allocated, but not initialized
+  ALL_VALID,      ///< Null mask allocated, initialized to all elements valid
+  ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Identifies a column's logical element type
+*---------------------------------------------------------------------------**/
 enum type_id {
   EMPTY = 0,  ///< Always null with no underlying data
   INT8,       ///< 1 byte signed integer
