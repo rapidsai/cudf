@@ -667,7 +667,7 @@ static PyObject* n_porter_stemmer_measure( PyObject* self, PyObject* args )
     const char* y_char  = "y";
     PyObject* argYChar = PyTuple_GetItem(args,2);
     if( argYChar != Py_None )
-        const char * y_char = PyUnicode_AsUTF8(argYChar);
+        y_char = PyUnicode_AsUTF8(argYChar);
 
     // get device pointer
     unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,3));
