@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Reports relevant environment information useful for diagnosing and
 # debugging cuDF issues.
-# Usage: 
+# Usage: test
 # "./print_env.sh" - prints to stdout
 # "./print_env.sh > env.txt" - prints to file "env.txt"
 
