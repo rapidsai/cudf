@@ -31,8 +31,16 @@
 
 namespace {
 
+/**
+ * @brief Fill the values from @p in between indices pointed to by @p offset
+ * 
+ * @param in Values to fill
+ * @param offset Indices to fill between
+ * @param stream Stream to perform computation in
+ * @return gdf_column Filled column
+ */
 gdf_column fill_between_offsets(const gdf_column &in,
-                                rmm::device_vector<gdf_size_type> &offset,
+                                rmm::device_vector<gdf_size_type> const& offset,
                                 cudaStream_t stream = 0)
 {
   gdf_size_type output_size = offset.back();
