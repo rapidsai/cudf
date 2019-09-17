@@ -18,11 +18,24 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_list.hpp>
+#include <tests/utilities/typed_tests.hpp>
 
-struct ColumnTest : public ::testing::Test {
+#include <gmock/gmock.h>
+
+struct ColumnTest : public cudf::test::BaseFixture {
   std::unique_ptr<cudf::column> col;
 };
 
-TEST_F(ColumnTest, First) {}
+template <typename T>
+class TypedColumnTest : public ColumnTest{
+
+};
+
+TYPED_TEST_CASE(TypedColumnTest, cudf::test::AllTypes);
+
+TYPED_TEST(TypedColumnTest, First) {
+
+}
