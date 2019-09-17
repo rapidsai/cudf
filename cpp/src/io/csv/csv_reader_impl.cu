@@ -570,8 +570,8 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
       }
     }
     if (filtered_count != count) {
-      it_end = std::remove_if(it_begin, it_end, [&](auto pos) {
-        return (pos == static_cast<decltype(pos)>(-1));
+      it_end = std::remove_if(it_begin, it_end, [](uint64_t pos) {
+        return (pos == static_cast<uint64_t>(-1));
       });
     }
   }
@@ -599,7 +599,7 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
     const auto carriage =
         (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
 
-    it_end = std::remove_if(it_begin, it_end, [&](auto pos) {
+    it_end = std::remove_if(it_begin, it_end, [=, &h_data](uint64_t pos) {
       return (h_data[pos] == newline || h_data[pos] == comment ||
               h_data[pos] == carriage);
     });
