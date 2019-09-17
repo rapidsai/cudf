@@ -16,8 +16,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <tests/utilities/TypeList.hpp>
+#include <tests/utilities/type_list.hpp>
 
 #include <array>
 #include <tuple>
@@ -35,7 +34,7 @@ namespace test {
 namespace detail {
 
 template <typename TYPES, std::size_t... Indices>
-constexpr std::array<cudf::type_id, sizeof...(Indices)> to_array_impl(
+constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
     std::index_sequence<Indices...>) {
   return {{cudf::exp::type_to_id<GetType<TYPES, Indices>>()...}};
 }
@@ -56,7 +55,7 @@ constexpr std::array<cudf::type_id, sizeof...(Indices)> to_array_impl(
 template <typename TYPES>
 constexpr auto types_to_ids() {
   constexpr auto N = GetSize<TYPES>;
-  return to_array_impl<TYPES>(std::make_index_sequence<N>());
+  return types_to_ids_impl<TYPES>(std::make_index_sequence<N>());
 }
 }  // namespace detail
 
