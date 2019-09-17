@@ -36,13 +36,12 @@ class column {
   column() = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column by deep copying the device memory of another
-   * column.
+   * @brief Construct a new column by deep copying the contents of `other`.
    *
    * All device memory allocation and copying is done using the
    * `device_memory_resource` and `stream` from `other`.
    *
-   * @param other The other column to copy
+   * @param other The column to copy
    *---------------------------------------------------------------------------**/
   column(column const& other);
 
@@ -59,9 +58,13 @@ class column {
    *---------------------------------------------------------------------------**/
   column(column const& other, cudaStream_t stream,
          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+  /**---------------------------------------------------------------------------*
+   * @brief Move the contents from `other` to create a new column.
    *
-   * @param other The other column whose device memory will be moved to the new
-   * column
+   * After the move, `other.size() == 0` and `other.type() = {EMPTY}`
+   *
+   * @param other The column whose contents will be moved into the new column
    *---------------------------------------------------------------------------**/
   column(column&& other);
 
@@ -70,11 +73,9 @@ class column {
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
-   * @param[in] data `device_buffer` whose contents will be copied for the
-   * column's data
-   * @param[in] null_mask Optional, `device_buffer` whose contents will be
-   * copied for the column's null mask. Buffer may be empty if `null_count` is 0
-   * or `UNKNOWN_NULL_COUNT`.
+   * @param[in] data The column's data
+   * @param[in] null_mask Optional, column's null value indicator bitmask. May
+   * be empty if `null_count` is 0 or `UNKNOWN_NULL_COUNT`.
    * @param null_count Optional, the count of null elements. If unknown, specify
    * `UNKNOWN_NULL_COUNT` to indicate that the null count should be computed on
    * the first invocation of `null_count()`.
@@ -92,18 +93,22 @@ class column {
         _children{std::move(children)} {}
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column by deep copying from a `column_view`.
+   * @brief Construct a new column by deep copying the contents of a
+   * `column_view`.
    *
    * This accounts for the `column_view`'s offset.
    *
-   * @param view The `column_view` that will be copied
+   * @param view The view to copy
+   * @param stream The stream on which all allocations and copies will be
+   * executed
+   * @param mr The resource to use for all allocations
    *---------------------------------------------------------------------------**/
   explicit column(
       column_view view, cudaStream_t stream = 0,
       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the element type
+   * @brief Returns the column's logical element type
    *---------------------------------------------------------------------------**/
   data_type type() const noexcept { return _type; }
 
@@ -136,13 +141,13 @@ class column {
   void set_null_count(size_type new_null_count);
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates whether it is possible for the column to contain null values,
-   * i.e., it has an allocated null mask.
+   * @brief Indicates whether it is possible for the column to contain null
+   * values, i.e., it has an allocated null mask.
    *
    * This may return `false` iff `null_count() == 0`.
    *
-   * May return true even if `null_count() == 0`. This function simply indicates whether the column has an
-   * allocated null mask.
+   * May return true even if `null_count() == 0`. This function simply indicates
+   * whether the column has an allocated null mask.
    *
    * @return true The column can hold null values
    * @return false The column cannot hold null values
