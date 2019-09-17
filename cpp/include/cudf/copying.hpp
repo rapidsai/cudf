@@ -26,8 +26,8 @@ typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 
-enum MaskAlloc {
-    RETAIN,
+enum mask_allocation_policy {
+    RETAIN, ///< Allocate a null mask if the input contains one
     NEVER,
     ALWAYS
 };
@@ -44,22 +44,24 @@ gdf_column empty_like(gdf_column const& input);
  * @brief Allocates a new column of the same size and type as the input.
  *
  * @param input The input column to emulate
- * @param mask_alloc Determines under what condition to allocate the mask. Defaults to RETAIN.
+ * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
+gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                         cudaStream_t stream = 0);
 
 /**
  * @brief Allocates a new column of the specified size and same type as the input.
  *
  * @param input The input column to emulate
  * @param size The size of the column to allocate in rows
- * @param mask_alloc Determines under what condition to allocate the mask. Defaults to RETAIN.
+ * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
+gdf_column allocate_like(gdf_column const& input, gdf_size_type size, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                         cudaStream_t stream = 0);
 
 
 /**
@@ -97,11 +99,12 @@ table empty_like(table const& t);
  * in the new table.
  *
  * @param t The table to emulate
- * @param mask_alloc Determines under what condition to allocate the mask. Defaults to RETAIN.
+ * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type and allocation size as input
  */
-table allocate_like(table const& t, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
+table allocate_like(table const& t, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                    cudaStream_t stream = 0);
 
 /**
  * @brief Creates a table of columns with the specified size and same type as
@@ -116,11 +119,12 @@ table allocate_like(table const& t, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cu
  *
  * @param t The table to emulate
  * @param size The size of the columns to allocate
- * @param mask_alloc Determines under what condition to allocate the mask. Defaults to RETAIN.
+ * @param mask_alloc Policy for allocating null mask. Defaults to RETAIN.
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type as @p t and specified @p size
  */
-table allocate_like(table const& t, gdf_size_type size, MaskAlloc mask_alloc = MaskAlloc::RETAIN, cudaStream_t stream = 0);
+table allocate_like(table const& t, gdf_size_type size, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+                    cudaStream_t stream = 0);
 
 
 /**
