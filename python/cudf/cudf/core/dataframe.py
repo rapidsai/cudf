@@ -3812,12 +3812,12 @@ class DataFrame(object):
 
         # Convert float to integer
         if map_index.dtype == np.float:
-            map_index = map_index.astype(np.int64)
+            map_index = map_index.astype(np.int32)
 
         # Convert string or categorical to integer
         if isinstance(map_index._column, StringColumn):
             map_index = Series(
-                map_index._column.as_categorical_column(np.int64).as_numerical
+                map_index._column.as_categorical_column(np.int32).as_numerical
             )
         elif isinstance(map_index._column, CategoricalColumn):
             map_index = Series(map_index._column.as_numerical)
