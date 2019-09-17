@@ -284,3 +284,36 @@ TEST_P(OrcWriterValueParamTest, Timestamps) {
 INSTANTIATE_TEST_CASE_P(OrcWriter, OrcWriterValueParamTest,
                         testing::Values(TIME_UNIT_s, TIME_UNIT_ms, TIME_UNIT_us,
                                         TIME_UNIT_ns));
+
+TEST_F(OrcWriterTest, Strings) {
+  std::vector<const char *> data{"M", "M", "F", "M", "F", "F", "F"};
+  gdf_size_type column_size = data.size();
+
+  cudf::test::column_wrapper<cudf::nvstring_category> col{column_size,
+                                                          data.data()};
+  column_set_name(col.get(), "col_string");
+
+  auto gdf_col = col.get();
+  auto expected = cudf::table{&gdf_col, 1};
+  EXPECT_EQ(1, expected.num_columns());
+
+  auto filepath =
+      temp_env->get_temp_filepath("OrcWriterStrings") + gdf_col->col_name;
+
+  cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
+  out_args.table = expected;
+  cudf::write_orc(out_args);
+
+  cudf::orc_read_arg in_args{cudf::source_info{filepath}};
+  in_args.use_index = false;
+  auto result = cudf::read_orc(in_args);
+
+  // Need to compare the string data themselves as the column types are
+  // different (GDF_STRING_CATEGORY vs GDF_STRING)
+  auto expect_strs = nvstrings_to_strings(
+      static_cast<NVCategory *>(gdf_col->dtype_info.category)->to_strings());
+  auto result_strs = nvstrings_to_strings(
+      static_cast<NVStrings *>(result.get_column(0)->data));
+
+  ASSERT_THAT(expect_strs, ::testing::ContainerEq(result_strs));
+}
