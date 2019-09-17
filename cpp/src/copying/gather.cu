@@ -268,14 +268,16 @@ struct dispatch_map_type {
     MapType const * typed_gather_map = static_cast<MapType const*>(gather_map.data);
 
     if (check_bounds) {
-      gdf_index_type begin = (transform_negative_indices) ? -source_n_rows : 0;
-      CUDF_EXPECTS(thrust::all_of(rmm::exec_policy()->on(0),
-				  typed_gather_map,
-				  typed_gather_map + destination_table->num_rows(),
-				  bounds_checker<MapType>{begin, source_n_rows}),
-		   "Index out of bounds.");
-    }
 
+      gdf_index_type begin = (transform_negative_indices) ? -source_n_rows : 0;
+      CUDF_EXPECTS(
+	  destination_table->num_rows() == thrust::count_if(
+	      rmm::exec_policy()->on(0),
+	      typed_gather_map,
+	      typed_gather_map + destination_table->num_rows(),
+	      bounds_checker<MapType>{begin, source_n_rows}),
+	  "Index out of bounds.");
+    }
 
     auto gather_map_iterator = thrust::make_transform_iterator(
 	typed_gather_map,
