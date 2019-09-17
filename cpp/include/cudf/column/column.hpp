@@ -47,8 +47,18 @@ class column {
   column(column const& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column object from the contents of another `column`
-   * using move semantics. After the move, `other` is guaranteed to be empty.
+   * @brief Construct a new column object by deep copying the contents of
+   *`other`.
+   *
+   * Uses the specified `stream` and device_memory_resource for all allocations
+   * and copies.
+   *
+   * @param other The `column` to copy
+   * @param stream The stream on which to execute all allocations and copies
+   * @param mr The resource to use for all allocations
+   *---------------------------------------------------------------------------**/
+  column(column const& other, cudaStream_t stream,
+         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
    *
    * @param other The other column whose device memory will be moved to the new
    * column
