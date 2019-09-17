@@ -98,7 +98,7 @@ def gather(source, maps, bounds_check=True):
     cdef gdf_column* c_maps = column_view_from_column(maps)
 
     cdef bool c_bounds_check = bounds_check
-    
+
     with nogil:
         c_out_table = cpp_gather(c_in_table, c_maps[0], c_bounds_check)
 
@@ -111,7 +111,7 @@ def gather(source, maps, bounds_check=True):
                 mask=out_cols[i].mask,
                 categories=in_col.cat().categories,
                 ordered=in_col.cat().ordered)
-    
+
     free_column(c_maps)
     free_table(c_in_table)
 
