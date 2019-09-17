@@ -60,6 +60,19 @@ constexpr auto types_to_ids() {
 }  // namespace detail
 
 /**---------------------------------------------------------------------------*
+ * @brief Provides a list of all numeric types supported in libcudf for use in a
+ * GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all numeric types in libcudf
+ * TYPED_TEST_CAST(MyTypedFixture, cudf::test::NumericTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using NumericTypes =
+    cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+
+/**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
  * typed test.
  *
@@ -72,21 +85,7 @@ constexpr auto types_to_ids() {
  * TYPED_TEST_CAST(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using AllTypes =
-    cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
-
-/**---------------------------------------------------------------------------*
- * @brief Provides a list of all numeric types supported in libcudf for use in a
- * GTest typed test.
- *
- * Example:
- * ```
- * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::NumericTypes);
- * ```
- *---------------------------------------------------------------------------**/
-using NumericTypes =
-    cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+using AllTypes = Concat<NumericTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all numeric `cudf::type_id`s
