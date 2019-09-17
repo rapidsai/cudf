@@ -1194,7 +1194,9 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 data = data.set_mask(mask)
 
         elif data.dtype.kind == "M":
-            null = cudf.core.column.column_empty_like(data, masked=True, newsize=1)
+            null = cudf.core.column.column_empty_like(
+                data, masked=True, newsize=1
+            )
             col = libcudf.replace.replace(
                 as_column(Buffer(arbitrary)),
                 as_column(

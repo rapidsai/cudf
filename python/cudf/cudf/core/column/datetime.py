@@ -83,7 +83,9 @@ class DatetimeColumn(column.TypedColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
-        null = cudf.core.column.column_empty_like(array, masked=True, newsize=1)
+        null = cudf.core.column.column_empty_like(
+            array, masked=True, newsize=1
+        )
         col = libcudf.replace.replace(
             as_column(Buffer(array)),
             as_column(
