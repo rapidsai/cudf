@@ -17,6 +17,7 @@
 #include <bitmask/valid_if.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column.hpp>
+#include <cudf/functions.h>
 #include <cudf/null_mask.hpp>
 #include <cudf/strings/strings_column_factories.hpp>
 #include <utilities/error_utils.hpp>
@@ -71,17 +72,12 @@ std::unique_ptr<column> make_strings_column(
         thrust::plus<int32_t>() );
 
     // create null mask
-    auto null_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
+    auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
         [d_strings] __device__ (size_type idx) { return d_strings[idx].first!=nullptr; },
         count, stream );
-
-    // build null_mask
-    //mask_state state = mask_state::UNINITIALIZED;
-    //if( null_count==0 )
-    //    state = mask_state::UNALLOCATED;
-    //else if( null_count==count )
-    //    state = mask_state::ALL_NULL;
-    //auto null_mask = create_null_mask(count, state, stream, mr);
+    auto null_count = valid_mask.second;
+    rmm::device_buffer null_mask(valid_mask.first,gdf_valid_allocation_size(count)); // does deep copy
+    RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build chars column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
@@ -107,7 +103,7 @@ std::unique_ptr<column> make_strings_column(
     // see column_view.cpp(45) to see why size must be 0 here
     return std::make_unique<column>(
         data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
-        rmm::device_buffer(null_mask.first,(size_type)null_mask.second), null_mask.second,
+        null_mask, null_count,
         std::move(children));
 }
 

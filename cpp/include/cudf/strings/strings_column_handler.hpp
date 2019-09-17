@@ -97,6 +97,9 @@ private:
 
 };
 
+namespace strings
+{
+
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column created from a subset of
  * of this instance's strings column.
@@ -137,4 +140,5 @@ std::unique_ptr<cudf::column> sort( strings_column_handler handler,
                                     strings_column_handler::sort_type stype, bool ascending=true,
                                     bool nullfirst=true, cudaStream_t stream=0 );
 
-}
+} // namespace strings
+} // namespace cudf

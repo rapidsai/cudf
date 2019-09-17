@@ -154,6 +154,9 @@ void strings_column_handler::print( size_type start, size_type end,
     }
 }
 
+namespace strings
+{
+
 // new strings column from subset of this strings instance
 std::unique_ptr<cudf::column> sublist( strings_column_handler handler,
                                        size_type start, size_type end,
@@ -210,11 +213,15 @@ std::unique_ptr<cudf::column> gather( strings_column_handler handler,
         thrust::plus<int32_t>());
 
     // build null mask
-    auto null_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
+    auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
         [d_column, d_indices] __device__ (size_type idx) {
             return !d_column.nullable() || !d_column.is_null(d_indices[idx]);
         },
         count, stream );
+    auto null_count = valid_mask.second;
+    auto null_size = gdf_valid_allocation_size(count);
+    rmm::device_buffer null_mask(valid_mask.first,null_size); // does deep copy
+    RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[count-1]; // this may not be stream friendly
@@ -227,9 +234,9 @@ std::unique_ptr<cudf::column> gather( strings_column_handler handler,
             // place individual strings
             if( d_column.nullable() && d_column.is_null(idx) )
                 return;
-            string_view dstr = d_column.element<string_view>(d_indices[idx]);
+            string_view d_str = d_column.element<string_view>(d_indices[idx]);
             size_type offset = (idx ? d_new_offsets[idx-1] : 0);
-            memcpy(d_chars + offset, dstr.data(), dstr.size() );
+            memcpy(d_chars + offset, d_str.data(), d_str.size() );
         });
 
   // build children vector
@@ -239,7 +246,7 @@ std::unique_ptr<cudf::column> gather( strings_column_handler handler,
 
   return std::make_unique<column>(
         data_type{STRING}, 0, rmm::device_buffer{0,stream,handler.memory_resource()},
-        rmm::device_buffer(null_mask.first,(size_type)null_mask.second), null_mask.second,
+        null_mask, null_count,
         std::move(children));
 }
 
@@ -274,4 +281,5 @@ std::unique_ptr<cudf::column> sort( strings_column_handler handler,
     return gather( handler, indices_view );
 }
 
-}  // namespace cudf
+} // namespace strings
+} // namespace cudf
