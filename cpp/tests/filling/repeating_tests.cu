@@ -27,6 +27,9 @@ template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;
 
 template <typename T>
+using scalar_wrapper = cudf::test::scalar_wrapper<T>;
+
+template <typename T>
 T random_int(T min, T max)
 {
   static unsigned seed = 13377331;
@@ -43,6 +46,38 @@ using test_types =
   ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double,
                    cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(RepeatTest, test_types);
+
+TYPED_TEST(RepeatTest, RepeatScalarCount)
+{
+  using T = TypeParam;
+
+  gdf_size_type repeat_count = 10;
+  gdf_size_type num_values = 10;
+
+  // set your expectations
+  gdf_size_type column_size = num_values * repeat_count;
+  std::vector<int> expect_vals;
+  for (gdf_size_type i = 0; i < num_values; i++) {
+    for (gdf_size_type j = 0; j < repeat_count; j++) {
+      expect_vals.push_back(i);
+    }
+  }
+
+  cudf::test::column_wrapper_factory<T> factory;
+
+  column_wrapper<T> values = factory.make(num_values,
+    [&](gdf_size_type i) { return i; });
+
+  scalar_wrapper<gdf_size_type> count{repeat_count};
+
+  column_wrapper<T> expected = factory.make(column_size,
+    [&](gdf_index_type row) { return expect_vals[row]; });
+
+  column_wrapper<T> actual(cudf::repeat(*values.get(), *count.get()));
+
+  EXPECT_EQ(expected, actual) << "  Actual:" << actual.to_str()
+                              << "Expected:" << expected.to_str();
+}
 
 TYPED_TEST(RepeatTest, Repeat)
 {

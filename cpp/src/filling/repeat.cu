@@ -24,9 +24,37 @@
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/iterator/counting_iterator.h>
+#include <thrust/iterator/constant_iterator.h>
 #include <thrust/iterator/transform_output_iterator.h>
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>
+
+namespace {
+
+gdf_column fill_between_offsets(const gdf_column &in,
+                                rmm::device_vector<gdf_size_type> &offset,
+                                cudaStream_t stream = 0)
+{
+  gdf_size_type output_size = offset.back();
+
+  rmm::device_vector<gdf_size_type> indices(output_size);
+  thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                      offset.begin(), offset.end(),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(output_size),
+                      indices.begin());
+
+  gdf_column output = cudf::allocate_like(in, output_size);
+
+  cudf::table in_table{const_cast<gdf_column*>(&in)};
+  cudf::table out_table{&output};
+  cudf::gather(&in_table, indices.data().get(), &out_table);
+
+  return output;
+}
+
+} // namespace anonymous
+
 
 namespace cudf {
 
@@ -48,28 +76,36 @@ gdf_column repeat(const gdf_column &in, const gdf_column& count, cudaStream_t st
   
   thrust::inclusive_scan(exec_policy, count_data, count_data + count.size, offset.begin());
 
-  gdf_size_type output_size = offset.back();
+  return fill_between_offsets(in, offset, stream);
+}
 
-  rmm::device_vector<gdf_size_type> indices(output_size);
-  thrust::upper_bound(exec_policy,
-                      offset.begin(), offset.end(),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(output_size),
-                      indices.begin());
+gdf_column repeat(const gdf_column &in, const gdf_scalar& count, cudaStream_t stream = 0) {
+  CUDF_EXPECTS(count.dtype == gdf_dtype_of<gdf_size_type>(),
+    "Count value should be of index type");
+  CUDF_EXPECTS(count.is_valid, "count cannot be null");
 
-  gdf_column output = cudf::allocate_like(in, output_size);
+  if (in.size == 0) {
+    return cudf::empty_like(in);
+  }
+  
+  rmm::device_vector<gdf_size_type> offset(in.size);
+  
+  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
+                         thrust::make_constant_iterator(count.data.si32, 0),
+                         thrust::make_constant_iterator(count.data.si32, in.size),
+                         offset.begin());
 
-  cudf::table in_table{const_cast<gdf_column*>(&in)};
-  cudf::table out_table{&output};
-  cudf::gather(&in_table, indices.data().get(), &out_table);
-
-  return output;
+  return fill_between_offsets(in, offset, stream);
 }
 
 } // namespace detail
 
 
 gdf_column repeat(const gdf_column &in, const gdf_column& count) {
+  return detail::repeat(in, count);
+}
+
+gdf_column repeat(const gdf_column &in, const gdf_scalar& count) {
   return detail::repeat(in, count);
 }
 

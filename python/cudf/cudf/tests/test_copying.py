@@ -65,3 +65,17 @@ def test_repeat(dtype):
 
     assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
     pass
+
+
+@pytest.mark.parametrize(
+    "dtype", ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_repeat_scalar(dtype):
+    arr = np.random.rand(10) * 10
+    repeats = 10
+    psr = pd.Series(arr).astype(dtype)
+    gsr = cudf.from_pandas(psr)
+    assert_eq(psr, gsr)
+
+    assert_eq(psr.repeat(repeats).reset_index(drop=True), gsr.repeat(repeats))
+    pass

@@ -58,6 +58,23 @@ void fill(gdf_column *column, gdf_scalar const& value,
  */
 gdf_column repeat(const gdf_column &in, const gdf_column& count);
 
+/**
+ * @brief Repeat elements of a Column
+ * 
+ * Creates a new column by repeating @p count times the values of @p in.
+ * Example:
+ * ```
+ * in = [4,5,6]
+ * count = 2
+ * return = [4,4,5,5,6,6]
+ * ```
+ * 
+ * @param in Input column
+ * @param count Non-null scalar of type `GDF_INT32`
+ * @return gdf_column The result column containing the repetitions
+ */
+gdf_column repeat(const gdf_column &in, const gdf_scalar& count);
+
 }; // namespace cudf
 
 #endif // FILLING_HPP

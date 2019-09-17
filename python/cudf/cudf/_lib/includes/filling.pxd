@@ -21,3 +21,8 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
         const gdf_column & input,
         const gdf_column & count
     ) except +
+
+    cdef gdf_column repeat(
+        const gdf_column & input,
+        const gdf_scalar & count
+    ) except +
