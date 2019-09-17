@@ -14,6 +14,7 @@ from librmm_cffi import librmm as rmm
 
 import cudf
 import cudf._lib as libcudf
+from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
 from cudf.utils.dtypes import (
@@ -800,10 +801,7 @@ class Column(object):
         if method != "sort":
             msg = "non sort based unique_count() not implemented yet"
             raise NotImplementedError(msg)
-        segs, _ = self._unique_segments()
-        if dropna is False and self.null_count > 0:
-            return len(segs) + 1
-        return len(segs)
+        return cpp_unique_count(self, dropna)
 
 
 class TypedColumnBase(Column):
