@@ -729,8 +729,8 @@ def test_dataframe_hash_partition_masked_keys(nrows):
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
-    df1 = pd.DataFrame(dict(x=np.arange(5).astype(dtype1)))
-    df2 = pd.DataFrame(dict(x=np.arange(5).astype(dtype2)))
+    df1 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype1)))
+    df2 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype2)))
     if dtype1 != dtype2 and "datetime" in dtype1 or "datetime" in dtype2:
         with pytest.raises(ValueError):
             gd.concat([df1, df2])
@@ -751,16 +751,67 @@ def test_dataframe_concat_different_column_types():
         gd.concat([df1, df2])
 
 
-def test_dataframe_empty_concat():
-    gdf1 = DataFrame()
-    gdf1["a"] = []
-    gdf1["b"] = []
+@pytest.mark.parametrize(
+    "df_1", [DataFrame({"a": [1, 2], "b": [1, 3]}), DataFrame({})]
+)
+@pytest.mark.parametrize(
+    "df_2", [DataFrame({"a": [], "b": []}), DataFrame({})]
+)
+def test_concat_empty_dataframe(df_1, df_2):
 
-    gdf2 = gdf1.copy()
+    got = gd.concat([df_1, df_2])
+    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
 
-    gdf3 = gd.concat([gdf1, gdf2])
-    assert len(gdf3) == 0
-    assert len(gdf3.columns) == 2
+    # ignoring dtypes as pandas upcasts int to float
+    # on concatenation with empty dataframes
+
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "df1_d",
+    [
+        {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
+        {"b": [1.9, 10.9], "c": ["s1", "s2"]},
+        {"c": ["s1"], "b": [None], "a": [False]},
+    ],
+)
+@pytest.mark.parametrize(
+    "df2_d",
+    [
+        {"a": [1, 2, 3]},
+        {"a": [1, None, 3], "b": [True, True, False], "c": ["s3", None, "s4"]},
+        {"a": [], "b": []},
+        {},
+    ],
+)
+def test_concat_different_column_dataframe(df1_d, df2_d):
+    got = gd.concat(
+        [DataFrame(df1_d), DataFrame(df2_d), DataFrame(df1_d)], sort=False
+    )
+
+    expect = pd.concat(
+        [pd.DataFrame(df1_d), pd.DataFrame(df2_d), pd.DataFrame(df1_d)],
+        sort=False,
+    )
+
+    # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
+    # casts nan to -1 in non-float numerical columns
+
+    numeric_cols = got.dtypes[got.dtypes != "object"].index
+    for col in numeric_cols:
+        got[col] = got[col].astype(np.float64).fillna(np.nan)
+
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+
+@pytest.mark.parametrize("ser_1", [pd.Series([1, 2, 3]), pd.Series([])])
+@pytest.mark.parametrize("ser_2", [pd.Series([])])
+def test_concat_empty_series(ser_1, ser_2):
+    got = gd.concat([Series(ser_1), Series(ser_2)])
+    expect = pd.concat([ser_1, ser_2])
+
+    pd.testing.assert_series_equal(got.to_pandas(), expect)
 
 
 def test_concat_with_axis():
@@ -823,6 +874,7 @@ def test_concat_with_axis():
     gdg2 = gdf2.groupby(["x", "y"]).min()
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
+
     assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
     assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
 
@@ -831,6 +883,7 @@ def test_concat_with_axis():
     gdgz2 = gdg2.z
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
+
     assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
     assert_eq(gd.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
 
