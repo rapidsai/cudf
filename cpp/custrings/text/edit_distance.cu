@@ -21,11 +21,15 @@
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <utilities/error_utils.hpp>
+#include <cudf/cudf.h>
+
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
 
 #include "../custring_view.cuh"
 #include "../util.h"
+
 
 
 // Documentation here: https://www.cuelogic.com/blog/the-levenshtein-algorithm
@@ -150,24 +154,24 @@ struct edit_distance_levenshtein_algorithm
 struct edit_distance_matrix_levenshtein_algorithm :
                     edit_distance_levenshtein_algorithm {
 
-    unsigned int count;   // size of nvstrings object
+    gdf_index_type count;   // size of nvstrings object
 
     // pair wise string distance computation
     edit_distance_matrix_levenshtein_algorithm( custring_view** strings,
                                                short* buffer,
                                                size_t* offsets,
                                                unsigned int* results,
-                                               unsigned int count)
+                                               gdf_index_type count)
           : edit_distance_levenshtein_algorithm( strings,
                                                 buffer,
                                                 offsets,
                                                 results),
                                                 count(count) {}
 
-    __device__ void operator() (unsigned int idx)
+    __device__ void operator() (gdf_index_type idx)
     {
-      unsigned int row = idx / count;
-      unsigned int col = idx % count;
+      gdf_index_type row = idx / count;
+      gdf_index_type col = idx % count;
       if( row > col )
          return;
       unsigned int dist = 0;  // diagonal
@@ -322,9 +326,10 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
                                            unsigned int* results,
                                            bool results_is_device_memory )
 {
-    if( algorithm != levenshtein || results==0 )
-        throw std::invalid_argument("invalid algorithm");
-    unsigned int count = strs.size();
+    CUDF_EXPECTS(algorithm == levenshtein, "Unsupported algorithm");
+    CUDF_EXPECTS(results != nullptr, "Null results pointer");
+
+    gdf_index_type count = strs.size();
     if( count==0 )
         return 0; // nothing to do
     auto execpol = rmm::exec_policy(0);
@@ -341,14 +346,14 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
 
     // calculate the size of the compute-buffer: 6 * length of string
     // considering only the upper diagonal matrix: N*(N-1)/2 elements
-    unsigned int n_upper = (count*(count-1))/2;
+    gdf_index_type n_upper = (count*(count-1))/2;
     rmm::device_vector<size_t> sizes(n_upper,0);
     size_t* d_sizes = sizes.data().get();
     thrust::for_each_n(execpol->on(0),
-        thrust::make_counting_iterator<unsigned int>(0), count*count,
-        [d_strings, d_sizes, count] __device__(unsigned int idx){
-            unsigned int row = idx / count;
-            unsigned int col = idx % count;
+        thrust::make_counting_iterator<gdf_index_type>(0), count*count,
+        [d_strings, d_sizes, count] __device__(gdf_index_type idx){
+            gdf_index_type row = idx / count;
+            gdf_index_type col = idx % count;
             if( row >= col )
                 return;
             custring_view* dstr1 = d_strings[row];
@@ -371,7 +376,7 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
                            sizes.end(), offsets.begin() );
 
     thrust::for_each_n(execpol->on(0),
-            thrust::make_counting_iterator<unsigned int>(0), count*count,
+            thrust::make_counting_iterator<gdf_index_type>(0), count*count,
             edit_distance_matrix_levenshtein_algorithm(d_strings,
                                                       d_buffer,
                                                       d_offsets,
