@@ -67,6 +67,16 @@ class reader::Impl {
 
  private:
   /**
+   * @brief Align a size such that aligned loads within a memory block
+   * won't read bytes beyond the unaligned cuda-memcheck limit
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Aligned size
+   **/
+  size_t align_size(size_t v) const { return v + (3 & -static_cast<int>(v)); }
+
+  /**
    * @brief Returns the number of total pages from the given column chunks
    *
    * @param[in] chunks List of column chunk descriptors
