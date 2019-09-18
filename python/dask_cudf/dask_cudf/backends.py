@@ -1,13 +1,5 @@
-import numpy as np
-
 from dask.dataframe.core import get_parallel_type, make_meta, meta_nonempty
-from dask.dataframe.methods import (
-    concat_dispatch,
-    group_split,
-    group_split_2,
-    hash_df,
-    percentiles_summary,
-)
+from dask.dataframe.methods import concat_dispatch, group_split, hash_df
 
 import cudf
 import cudf._lib as libcudf
@@ -60,50 +52,8 @@ def hash_df_cudf_index(ind):
 @group_split.register((cudf.DataFrame, cudf.Series, cudf.Index))
 def group_split_cudf(df, c, k):
     source = [df[col] for col in df.columns]
-    ind_map = cudf.Series(c.astype(np.int64))
     # TODO: Use proper python API (#2807)
-    tables = libcudf.copying.scatter_to_frames(source, ind_map)
+    tables = libcudf.copying.scatter_to_frames(source, cudf.Series(c))
     for i in range(k - len(tables)):
         tables.append(tables[0].iloc[[]])
     return dict(zip(range(k), tables))
-
-
-@group_split_2.register((cudf.DataFrame, cudf.Series, cudf.Index))
-def group_split_2_cudf(df, col):
-    if not len(df):
-        return {}, df
-    source = [df[c] for c in df.columns]
-    ind_map = df[col]
-    n = ind_map.max() + 1
-    # TODO: Use proper python API (#2807)
-    parts = libcudf.copying.scatter_to_frames(source, ind_map)
-    for i in range(n - len(parts)):
-        parts.append(parts[0].iloc[[]])
-    result2 = dict(zip(range(n), parts))
-    return result2, df.iloc[:0]
-
-
-@percentiles_summary.register(cudf.Series)
-def percentiles_summary_cudf(df, num_old, num_new, upsample, state):
-    from dask.dataframe.utils import is_categorical_dtype
-    from dask.dataframe.partitionquantiles import (
-        sample_percentiles,
-        percentiles_to_weights,
-    )
-    from dask.array.percentile import _percentile
-
-    length = len(df)
-    if length == 0:
-        return ()
-    random_state = np.random.RandomState(state)
-    qs = sample_percentiles(num_old, num_new, length, upsample, random_state)
-    data = df.values
-    interpolation = "linear"
-    if is_categorical_dtype(data):
-        data = data.codes
-        interpolation = "nearest"
-    vals, _ = _percentile(data, qs, interpolation=interpolation)
-    if interpolation == "linear" and np.issubdtype(data.dtype, np.integer):
-        vals = np.around(vals).astype(data.dtype)
-    vals_and_weights = percentiles_to_weights(qs, vals, length)
-    return vals_and_weights

@@ -41,8 +41,6 @@ try:
         hash_df_cudf,
         hash_df_cudf_index,
         group_split_cudf,
-        group_split_2_cudf,
-        percentiles_summary_cudf,
     )
 except ImportError:
     pass
