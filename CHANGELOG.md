@@ -23,6 +23,7 @@
 - PR #2785 Add nvstrings Python docs
 - PR #2786 Add benchmarks option to root build.sh
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
+- PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
 
 ## Improvements
 
@@ -38,13 +39,17 @@
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2728 Add YYMMDD to version tag for nightly conda packages
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2783 Support mapping input columns to function arguments in apply kernels
-- PR #2645 libcudf unique_count for Series.nunique 
+- PR #2645 libcudf unique_count for Series.nunique
+- PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
+- PR #2823 improve java data movement debugging
+- PR #2806 CSV Reader: Clean-up row offset operations
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
 
 ## Bug Fixes
@@ -86,8 +91,12 @@
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
 - PR #2716 Added Exception for `StringMethods` in string methods
 - PR #2787 Fix Broadcasting `None` to `cudf-series`
+- PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2751 Replace value with null
+- PR #2765 Fix Java inequality comparisons for string category
+- PR #2818 Fix java join API to use new C++ join API
 
 
 # cuDF 0.9.0 (21 Aug 2019)
