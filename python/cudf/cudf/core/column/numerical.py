@@ -53,16 +53,7 @@ class NumericalColumn(column.TypedColumnBase):
                 return False
         except Exception:
             return False
-        # Issue with cudautils with bool araray, always returns True.
-        if self.data.mem.dtype == np.bool:
-            return (
-                cudautils.find_first(
-                    self.data.mem.view("int8"), item.view("int8")
-                )
-                != -1
-            )
-        else:
-            return cudautils.find_first(self.data.mem, item) != -1
+        return libcudf.search.contains(self, item)
 
     def replace(self, **kwargs):
         if "data" in kwargs and "dtype" not in kwargs:
@@ -400,17 +391,23 @@ class NumericalColumn(column.TypedColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = _numeric_column_binop(
-                self[1:], self[:-1], "ge", "bool"
-            ).all()
+            if self.has_null_mask:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = libcudf.issorted.issorted(
+                    [self]
+                )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = _numeric_column_binop(
-                self[1:], self[:-1], "le", "bool"
-            ).all()
+            if self.has_null_mask:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = libcudf.issorted.issorted(
+                    [self], [1]
+                )
         return self._is_monotonic_decreasing
 
 
