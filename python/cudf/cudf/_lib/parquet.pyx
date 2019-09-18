@@ -24,7 +24,7 @@ import os
 
 cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
                    skip_rows=None, num_rows=None,
-                   strings_to_categorical=False):
+                   strings_to_categorical=False, use_pandas_metadata=False):
     """
     Cython function to call into libcudf API, see `read_parquet`.
 
@@ -39,6 +39,7 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
     for col in columns or []:
         options.columns.push_back(str(col).encode())
     options.strings_to_categorical = strings_to_categorical
+    options.use_pandas_metadata = use_pandas_metadata
 
     # Create reader from source
     cdef unique_ptr[parquet_reader] reader

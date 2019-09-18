@@ -208,79 +208,67 @@ def test_misc_quantiles(data, q):
 
 
 @pytest.mark.parametrize(
-    "data1",
+    "data",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
+        Series(np.random.normal(-100, 100, 1000)),
+        Series(np.random.randint(-50, 50, 1000)),
+        Series(np.zeros(100)),
+        Series(np.repeat(np.nan, 100)),
+        Series(np.array([1.123, 2.343, np.nan, 0.0])),
+        Series(
+            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
+        ),
+        Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         Series([]),
         Series([-3]),
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
     ],
 )
-@pytest.mark.parametrize(
-    "data2",
-    [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        Series([5]),
-    ],
-)
-def test_cov1d(data1, data2):
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_kurtosis(data, null_flag):
+    pdata = data.to_pandas()
 
-    ps1 = gs1.to_pandas()
-    ps2 = gs2.to_pandas()
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
 
-    got = gs1.cov(gs2)
-    expected = ps1.cov(ps2)
-    np.testing.assert_approx_equal(got, expected, significant=8)
+    got = data.kurtosis()
+    expected = pdata.kurtosis()
+    np.testing.assert_array_almost_equal(got, expected)
 
 
 @pytest.mark.parametrize(
-    "data1",
+    "data",
     [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
-        Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
+        Series(np.random.normal(-100, 100, 1000)),
+        Series(np.random.randint(-50, 50, 1000)),
+        Series(np.zeros(100)),
+        Series(np.repeat(np.nan, 100)),
+        Series(np.array([1.123, 2.343, np.nan, 0.0])),
+        Series(
+            [5, 10, 53, None, np.nan, None, 12, 43, -423], nan_as_null=False
+        ),
+        Series([1.1032, 2.32, 43.4, 13, -312.0], index=[0, 4, 3, 19, 6]),
         Series([]),
         Series([-3]),
+        randomdata(
+            nrows=1000, dtypes={"a": float, "b": int, "c": float, "d": str}
+        ),
     ],
 )
-@pytest.mark.parametrize(
-    "data2",
-    [
-        np.random.normal(-100, 100, 1000),
-        np.random.randint(-50, 50, 1000),
-        np.zeros(100),
-        np.repeat(np.nan, 100),
-        np.array([1.123, 2.343, np.nan, 0.0]),
-        Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
-        Series([5]),
-    ],
-)
-def test_corr1d(data1, data2):
-    gs1 = Series(data1)
-    gs2 = Series(data2)
+@pytest.mark.parametrize("null_flag", [False, True])
+def test_skew(data, null_flag):
+    pdata = data.to_pandas()
 
-    ps1 = gs1.to_pandas()
-    ps2 = gs2.to_pandas()
+    if null_flag and len(data) > 2:
+        data.iloc[[0, 2]] = None
+        pdata.iloc[[0, 2]] = None
 
-    got = gs1.corr(gs2)
-    expected = ps1.corr(ps2)
-    np.testing.assert_approx_equal(got, expected, significant=8)
+    got = data.skew()
+    expected = pdata.skew()
+    np.testing.assert_array_almost_equal(got, expected)
 
 
 @pytest.mark.parametrize(
@@ -296,7 +284,7 @@ def test_corr1d(data1, data2):
             randomdata(nrows=0, dtypes={"a": int, "b": float, "c": bool}),
             marks=[
                 pytest.mark.xfail(
-                    reason="Different empty frame handling for efficiency"
+                    reason="Different empty/null handling for efficiency"
                 )
             ],
         ),
@@ -324,7 +312,7 @@ def test_corr2d(data):
             randomdata(nrows=0, dtypes={"a": int, "b": float, "c": bool}),
             marks=[
                 pytest.mark.xfail(
-                    reason="Different empty frame handling for efficiency"
+                    reason="Different empty/null handling for efficiency"
                 )
             ],
         ),

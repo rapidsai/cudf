@@ -148,14 +148,6 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_HASH,
         N_GDF_METHODS,
 
-    ctypedef enum gdf_quantile_method:
-        GDF_QUANT_LINEAR =0,
-        GDF_QUANT_LOWER,
-        GDF_QUANT_HIGHER,
-        GDF_QUANT_MIDPOINT,
-        GDF_QUANT_NEAREST,
-        N_GDF_QUANT_METHODS,
-
     ctypedef enum gdf_agg_op:
         GDF_SUM = 0,
         GDF_MIN,
@@ -326,21 +318,6 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_column* out_col_indices,
         gdf_column** out_col_values,
         gdf_column* out_col_agg,
-        gdf_context* ctxt
-    ) except +
-
-    cdef gdf_error gdf_quantile_exact(
-        gdf_column* col_in,
-        gdf_quantile_method prec,
-        double q,
-        gdf_scalar* result,
-        gdf_context* ctxt
-    ) except +
-
-    cdef gdf_error gdf_quantile_approx(
-        gdf_column* col_in,
-        double q,
-        gdf_scalar* result,
         gdf_context* ctxt
     ) except +
 

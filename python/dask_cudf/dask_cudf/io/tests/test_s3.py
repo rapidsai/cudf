@@ -1,11 +1,13 @@
 import os
 from contextlib import contextmanager
+from io import BytesIO
 
+import pandas as pd
 import pytest
 
 import dask_cudf
 
-DaskS3FileSystem = pytest.importorskip("dask.bytes.s3").DaskS3FileSystem
+s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
 moto = pytest.importorskip("moto")
 httpretty = pytest.importorskip("httpretty")
@@ -40,11 +42,11 @@ def s3_context(bucket, files):
             for f, data in files.items():
                 client.put_object(Bucket=bucket, Key=f, Body=data)
 
-            yield DaskS3FileSystem(anon=True)
+            yield s3fs.S3FileSystem(anon=True)
 
             for f, data in files.items():
                 try:
-                    client.delete_object(Bucket=bucket, Key=f, Body=data)
+                    client.delete_object(Bucket=bucket, Key=f)
                 except Exception:
                     pass
                 finally:
@@ -53,8 +55,17 @@ def s3_context(bucket, files):
 
 
 def test_read_csv():
-    with s3_context("csv", {"a.csv": b"a,b\n1,2\n3,4\n"}) as s3:
-        df = dask_cudf.read_csv(
-            "s3://csv/*.csv", chunksize="50 B", storage_options={"s3": s3}
-        )
+    with s3_context("daskcsv", {"a.csv": b"a,b\n1,2\n3,4\n"}):
+        df = dask_cudf.read_csv("s3://daskcsv/*.csv", chunksize="50 B")
         assert df.a.sum().compute() == 4
+
+
+def test_read_parquet():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
+    buffer = BytesIO()
+    pdf.to_parquet(fname=buffer)
+    buffer.seek(0)
+    with s3_context("daskparquet", {"file.parq": buffer}):
+        df = dask_cudf.read_parquet("s3://daskparquet/*.parq")
+        assert df.a.sum().compute() == 10
+        assert df.b.sum().compute() == 9
