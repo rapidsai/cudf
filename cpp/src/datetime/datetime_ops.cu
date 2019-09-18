@@ -371,7 +371,7 @@ struct gdf_extract_weekday_from_date32_op : public thrust::unary_function<int32_
 		const unsigned yoe = (doe - doe/1460 + doe/36524 - doe/146096) / 365;
 		const unsigned doy = doe - (365*yoe + yoe/4 - yoe/100);
 		const unsigned mp = (5*doy + 2)/153;
-		const unsigned d = doy - (153*mp+2)/5 + 2;
+		const unsigned d = doy - (153*mp+2)/5 + 1;
 		int m = mp + (mp < 10 ? 3 : -9);
 		int y = static_cast<int>(yoe) + era * 400;
 
