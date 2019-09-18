@@ -3521,6 +3521,8 @@ class DataFrame(object):
         return self._apply_support_method("var", **kwargs)
 
     def cov(self, min_periods=None):
+        """Calculates the pairwise covariance of columns.
+        """
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "DataFrame.cov currently requires CuPy. "
@@ -3554,6 +3556,8 @@ class DataFrame(object):
         return result_df
 
     def corr(self, method="pearson", min_periods=1):
+        """Calculates the pairwise covariance of columns.
+        """
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "DataFrame.corr currently requires CuPy. "

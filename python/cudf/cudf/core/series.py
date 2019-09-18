@@ -1817,10 +1817,12 @@ class Series(object):
             index=self.index,
         )
 
-    def cov(self, other):
+    def cov(self, other, min_periods=None):
         """Calculates the sample covariance between two Series,
         excluding missing values.
         """
+        assert min_periods in (None,)
+
         if self.empty or other.empty:
             return np.nan
 
@@ -1835,12 +1837,11 @@ class Series(object):
         cov_sample = result.sum() / (len(lhs) - 1)
         return cov_sample
 
-    def corr(self, other, method="pearson"):
+    def corr(self, other, method="pearson", min_periods=None):
         """Calculates the sample correlation between two Series,
         excluding missing values.
         """
-        if method not in ("pearson",):
-            raise ValueError
+        assert method in ("pearson",) and min_periods in (None,)
 
         if self.empty or other.empty:
             return np.nan
