@@ -148,7 +148,7 @@ class ApplyKernelCompilerBase(object):
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
-            outdf[k] = outputs[k]
+            outdf[k] = Series(outputs[k], nan_as_null=False)
             if out_mask is not None:
                 outdf[k] = outdf[k].set_mask(out_mask.data)
 
@@ -164,9 +164,7 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
         return kernel
 
     def launch_kernel(self, df, args):
-        blksz = 64
-        blkct = cudautils.optimal_block_count(len(df) // blksz)
-        self.kernel[blkct, blksz](*args)
+        self.kernel.forall(len(df))(*args)
 
 
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
