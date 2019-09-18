@@ -28,6 +28,55 @@ namespace cudf {
 namespace exp {
 
 /**---------------------------------------------------------------------------*
+ * @brief Performs an equality comparison between two elements in two columns.
+ *
+ * @tparam has_nulls Indicates the potential for null values in either column.
+ *---------------------------------------------------------------------------**/
+template <bool has_nulls = true>
+struct element_equality_comparator {
+  column_device_view lhs;
+  column_device_view rhs;
+  bool nulls_are_equal;
+
+  /**---------------------------------------------------------------------------*
+   * @brief Construct type-dispatched function object for comparing equality
+   * between two elements.
+   *
+   * @note `lhs` and `rhs` may be the same.
+   *
+   * @param lhs The column containing the first element
+   * @param rhs The column containg the second element
+   * @param nulls_are_equal Indicates if two null elements are treated as
+   *equivalent
+   *---------------------------------------------------------------------------**/
+  element_equality_comparator(column_device_view lhs, column_device_view rhs,
+                              bool nulls_are_equal)
+      : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Compares the specified elements for equality.
+   *
+   * @param lhs_element_index The index of the first element
+   * @param rhs_element_index The index of the second element
+   *---------------------------------------------------------------------------**/
+  template <typename Element>
+  __device__ bool operator()(size_type lhs_element_index,
+                             size_type rhs_element_index) {
+    if (has_nulls) {
+      bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
+      bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
+      if (lhs_is_null and rhs_is_null) {
+        return nulls_are_equal;
+      } else {
+        return false;
+      }
+    }
+    return lhs.element<Element>(lhs_element_index) ==
+           rhs.element<Element>(rhs_element_index);
+  }
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Result type of the `element_relational_comparator` function object.
  *
  * Indicates how two elements `a` and `b` compare with one and another.
@@ -75,12 +124,11 @@ struct element_relational_comparator {
       if (lhs_is_null and rhs_is_null) {  // null <? null
         return weak_ordering::EQUIVALENT;
       } else if (lhs_is_null) {  // null <? x
-        return (null_precedence == null_order::BEFORE) 
-                   ? weak_ordering::LESS
-                   : weak_ordering::GREATER;
+        return (null_precedence == null_order::BEFORE) ? weak_ordering::LESS
+                                                       : weak_ordering::GREATER;
       } else if (rhs_is_null) {  // x <? null
         return (null_precedence == null_order::AFTER) ? weak_ordering::LESS
-                                                       : weak_ordering::GREATER;
+                                                      : weak_ordering::GREATER;
       }
     }
 
@@ -139,15 +187,14 @@ class row_lexicographic_comparator {
    * indicates the desired ascending/descending order of each column in a row.
    * If `nullptr`, it is assumed all columns are sorted in ascending order.
    *---------------------------------------------------------------------------**/
-  row_lexicographic_comparator(
-      table_device_view lhs, table_device_view rhs,
-      null_order null_precedence = null_order::BEFORE,
-      order* column_order = nullptr)
+  row_lexicographic_comparator(table_device_view lhs, table_device_view rhs,
+                               null_order null_precedence = null_order::BEFORE,
+                               order* column_order = nullptr)
       : _lhs{lhs},
         _rhs{rhs},
         _null_precedence{null_precedence},
         _column_order{column_order} {
-    // Add check for types to be the same. 
+    // Add check for types to be the same.
     CUDF_EXPECTS(_lhs.num_columns() == _rhs.num_columns(),
                  "Mismatched number of columns.");
   }
