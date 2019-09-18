@@ -1405,7 +1405,7 @@ class DataFrame(object):
             data, forceindex=forceindex, name=name
         )
 
-    def drop(self, labels, axis=None, errors="raise"):
+    def drop(self, labels=None, axis=None, columns=None, errors="raise"):
         """Drop column(s)
 
         Parameters
@@ -1414,6 +1414,7 @@ class DataFrame(object):
             Name of column(s) to be dropped.
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Only axis=1 is currently supported.
+        columns: array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
 
@@ -1447,11 +1448,22 @@ class DataFrame(object):
             raise NotImplementedError("Can only drop columns, not rows")
         if errors != "raise":
             raise NotImplementedError("errors= keyword not implemented")
+        if labels is None and columns is None:
+            raise ValueError(
+                "Need to specify at least one of 'labels' or 'columns'"
+            )
+        if labels is not None and columns is not None:
+            raise ValueError("Cannot specify both 'labels' and 'columns'")
+
+        if labels is not None:
+            target = labels
+        else:
+            target = columns
 
         columns = (
-            [labels]
-            if isinstance(labels, (str, numbers.Number))
-            else list(labels)
+            [target]
+            if isinstance(target, (str, numbers.Number))
+            else list(target)
         )
         outdf = self.copy()
         for c in columns:
