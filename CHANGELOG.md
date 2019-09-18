@@ -89,6 +89,7 @@
 - PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2837 Fix join benchmark
 
 
 # cuDF 0.9.0 (21 Aug 2019)
