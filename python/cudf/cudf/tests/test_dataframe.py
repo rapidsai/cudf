@@ -220,7 +220,7 @@ def test_dataframe_drop_method():
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(columns=["a"]).columns) == ("b", "c")
     assert tuple(df.columns) == ("a", "b", "c")
-    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == (,)
+    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == tuple()
     assert tuple(df.columns) == ("a", "b", "c")
 
     # Test drop error
