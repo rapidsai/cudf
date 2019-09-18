@@ -1505,6 +1505,20 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
     return Scalar.fromInt(Cudf.getCategoryIndex(this, s));
   }
 
+  /**
+   * Returns the value bounds of category index of the specified string scalar.
+   * @param s a {@link Scalar} of type {@link DType#STRING} to lookup
+   * @return a two-entry array containing the (lower, upper) category index
+   *         bounds of the specified scalar. If the two array entries are equal
+   *         then the specified scalar was present in the category.
+   */
+  public int[] getCategoryBounds(Scalar s) {
+    if (s.getType() != DType.STRING) {
+      throw new IllegalArgumentException("scalar must be a string type");
+    }
+    return Cudf.getCategoryBounds(this, s);
+  }
+
   /////////////////////////////////////////////////////////////////////////////
   // INTERNAL/NATIVE ACCESS
   /////////////////////////////////////////////////////////////////////////////
