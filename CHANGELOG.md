@@ -24,6 +24,7 @@
 - PR #2786 Add benchmarks option to root build.sh
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2836 Add nvstrings.code_points method
 
 ## Improvements
 

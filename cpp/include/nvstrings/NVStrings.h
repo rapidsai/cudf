@@ -425,6 +425,16 @@ public:
      * @return The number of trues.
      */
     unsigned int is_empty( bool* results, bool devmem=true );
+    /**
+     * @brief Fills in matrix with code point values (integers) for each string.
+     *
+     * @param[out] results Device array filled in by this method.
+     *                     This must point to device memory able to hold size() integer
+     *                     arrays where each sub-array has the length of the number of
+     *                     characters for that string.
+     * @return The total number of values written to results.
+     */
+    unsigned int code_points( unsigned int* results );
 
     // combine.cu
     /**
