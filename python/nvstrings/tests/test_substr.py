@@ -18,7 +18,7 @@ def test_slice_from():
     d_stops = rmm.to_device(np.asarray([-1, -1, 0, -1, -1], dtype=np.int32))
     got = strs.slice_from(
         starts=d_starts.device_ctypes_pointer.value,
-        stops=d_stops.device_ctypes_pointer.value
+        stops=d_stops.device_ctypes_pointer.value,
     )
     expected = ["llo world", "y accéntéd", "", None, ""]
     assert_eq(got, expected)
