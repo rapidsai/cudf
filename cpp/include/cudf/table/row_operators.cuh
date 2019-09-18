@@ -23,8 +23,9 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <utilities/release_assert.cuh>
 
-namespace cudf {
+#include <thrust/swap.h>
 
+namespace cudf {
 namespace exp {
 
 /**---------------------------------------------------------------------------*
@@ -45,12 +46,13 @@ struct element_equality_comparator {
    * @note `lhs` and `rhs` may be the same.
    *
    * @param lhs The column containing the first element
-   * @param rhs The column containg the second element
+   * @param rhs The column containg the second element (may be the same as lhs)
    * @param nulls_are_equal Indicates if two null elements are treated as
    *equivalent
    *---------------------------------------------------------------------------**/
-  element_equality_comparator(column_device_view lhs, column_device_view rhs,
-                              bool nulls_are_equal)
+  __host__ __device__ element_equality_comparator(column_device_view lhs,
+                                                  column_device_view rhs,
+                                                  bool nulls_are_equal)
       : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {}
 
   /**---------------------------------------------------------------------------*
@@ -61,7 +63,7 @@ struct element_equality_comparator {
    *---------------------------------------------------------------------------**/
   template <typename Element>
   __device__ bool operator()(size_type lhs_element_index,
-                             size_type rhs_element_index) {
+                             size_type rhs_element_index) const noexcept {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -98,12 +100,30 @@ enum class weak_ordering {
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
 struct element_relational_comparator {
+  column_device_view lhs;
+  column_device_view rhs;
+  null_order null_precedence;
+
   /**---------------------------------------------------------------------------*
-   * @brief Checks how two elements in two columns compare with each other.
+   * @brief Construct type-dispatched function object for performing a
+   * relational comparison between two elements.
+   *
+   * @note `lhs` and `rhs` may be the same.
    *
    * @param lhs The column containing the first element
+   * @param rhs The column containg the second element (may be the same as lhs)
+   * @param null_precedence Indicates how null values are ordered with other
+   * values
+   *---------------------------------------------------------------------------**/
+  __host__ __device__ element_relational_comparator(column_device_view lhs,
+                                                    column_device_view rhs,
+                                                    null_order null_precedence)
+      : lhs{lhs}, rhs{rhs}, null_precedence{null_precedence} {}
+
+  /**---------------------------------------------------------------------------*
+   * @brief Performs a relational comparison between the specified elements
+   *
    * @param lhs_element_index The index of the first element
-   * @param rhs The column containing the second element (may be equal to `lhs`)
    * @param rhs_element_index The index of the second element
    * @param null_precedence Indicates how null values are ordered with other
    * values
@@ -112,11 +132,9 @@ struct element_relational_comparator {
    *---------------------------------------------------------------------------**/
   template <typename Element, std::enable_if_t<cudf::is_relationally_comparable<
                                   Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(column_device_view lhs,
-                                      size_type lhs_element_index,
-                                      column_device_view rhs,
-                                      size_type rhs_element_index,
-                                      null_order null_precedence) {
+  __device__ weak_ordering operator()(size_type lhs_element_index,
+                                      size_type rhs_element_index) const
+      noexcept {
     if (has_nulls) {
       bool const lhs_is_null{lhs.nullable() and lhs.is_null(lhs_element_index)};
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
@@ -146,9 +164,7 @@ struct element_relational_comparator {
   template <typename Element,
             std::enable_if_t<not cudf::is_relationally_comparable<
                 Element, Element>()>* = nullptr>
-  __device__ weak_ordering operator()(column_device_view lhs,
-                                      size_type lhs_element_index,
-                                      column_device_view rhs,
+  __device__ weak_ordering operator()(size_type lhs_element_index,
                                       size_type rhs_element_index) {
     release_assert(false &&
                    "Attempted to compare elements of uncomparable types.");
@@ -174,8 +190,8 @@ template <bool has_nulls = true>
 class row_lexicographic_comparator {
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Construct a function object for comparing the rows between two
-   * tables.
+   * @brief Construct a function object for performing a lexicographic
+   * comparison between the rows of two tables.
    *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
    *
@@ -216,17 +232,15 @@ class row_lexicographic_comparator {
 
       weak_ordering state{weak_ordering::EQUIVALENT};
 
-      if (ascending) {
-        state = cudf::exp::type_dispatcher(
-            _lhs.column(i).type(), element_relational_comparator<has_nulls>{},
-            _lhs.column(i), lhs_index, _rhs.column(i), rhs_index,
-            _null_precedence);
-      } else {
-        state = cudf::exp::type_dispatcher(
-            _lhs.column(i).type(), element_relational_comparator<has_nulls>{},
-            _rhs.column(i), rhs_index, _lhs.column(i), lhs_index,
-            _null_precedence);
+      if (not ascending) {
+        thrust::swap(lhs_index, rhs_index);
       }
+
+      auto comparator = element_relational_comparator<has_nulls>{
+          _lhs.column(i), _rhs.column(i), _null_precedence};
+
+      state = cudf::exp::type_dispatcher(_lhs.column(i).type(), comparator,
+                                         lhs_index, rhs_index);
 
       if (state == weak_ordering::EQUIVALENT) {
         continue;
