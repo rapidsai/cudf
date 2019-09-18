@@ -51,7 +51,7 @@ namespace detail {
  * end).
  *
  *---------------------------------------------------------------------------**/
-template <typename MapType>
+template <typename map_type>
 struct bounds_checker {
   gdf_index_type begin;
   gdf_index_type end;
@@ -59,16 +59,16 @@ struct bounds_checker {
   __device__ bounds_checker(gdf_index_type begin_, gdf_index_type end_)
       : begin{begin_}, end{end_} {}
 
-  __device__ __forceinline__ bool operator()(MapType const index) {
+  __device__ __forceinline__ bool operator()(map_type const index) {
     return ((index >= begin) && (index < end));
   }
 };
 
 
-template <bool ignore_out_of_bounds, typename MapIterator>
+template <bool ignore_out_of_bounds, typename map_iterator_type>
 __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
                                       gdf_size_type num_source_rows,
-                                      MapIterator gather_map,
+                                      map_iterator_type gather_map,
                                       bit_mask_t **destination_valid,
                                       gdf_size_type num_destination_rows,
                                       gdf_size_type *d_count,
@@ -147,7 +147,7 @@ struct column_gatherer {
    * @brief Type-dispatched function to gather from one column to another based
    * on a `gather_map`.
    *
-   * @tparam ColumnType Dispatched type for the column being gathered
+   * @tparam column_type Dispatched type for the column being gathered
    * @param source_column The column to gather from
    * @param gather_map Array of indices that maps source elements to destination
    * elements
@@ -158,15 +158,15 @@ struct column_gatherer {
    * out of bounds
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
-  template <typename ColumnType, typename MapIterator>
+  template <typename column_type, typename map_iterator_type>
   void operator()(gdf_column const *source_column,
-		  MapIterator gather_map,
+		  map_iterator_type gather_map,
 		  gdf_column *destination_column, bool ignore_out_of_bounds,
 		  cudaStream_t stream, bool sync_nvstring_category = false) {
-    ColumnType const *source_data{
-      static_cast<ColumnType const *>(source_column->data)};
-    ColumnType *destination_data{
-      static_cast<ColumnType *>(destination_column->data)};
+    column_type const *source_data{
+      static_cast<column_type const *>(source_column->data)};
+    column_type *destination_data{
+      static_cast<column_type *>(destination_column->data)};
 
     gdf_size_type const num_destination_rows{destination_column->size};
 
@@ -174,7 +174,7 @@ struct column_gatherer {
     // (in which case the sync_nvstring_category should be set to true)
     // allocate temporary buffers to hold intermediate results
     bool const sync_category =
-      std::is_same<ColumnType, nvstring_category>::value &&
+      std::is_same<column_type, nvstring_category>::value &&
       sync_nvstring_category;
     bool const in_place = !sync_category && (source_data == destination_data);
 
@@ -192,10 +192,10 @@ struct column_gatherer {
 		   sync_column_categories(input_columns, output_columns, 2),
 		   "Failed to synchronize NVCategory");
 
-      source_data = static_cast<ColumnType *>(temp_src.data);
+      source_data = static_cast<column_type *>(temp_src.data);
     }
 
-    rmm::device_vector<ColumnType> in_place_buffer;
+    rmm::device_vector<column_type> in_place_buffer;
     if (in_place) {
       in_place_buffer.resize(num_destination_rows);
       destination_data = in_place_buffer.data().get();
@@ -222,7 +222,7 @@ struct column_gatherer {
     if (in_place) {
       thrust::copy(rmm::exec_policy(stream)->on(stream), destination_data,
 		   destination_data + num_destination_rows,
-		   static_cast<ColumnType *>(destination_column->data));
+		   static_cast<column_type *>(destination_column->data));
     }
 
     CHECK_STREAM(stream);
@@ -233,14 +233,14 @@ struct column_gatherer {
 * @brief Function object for applying a transformation on the gathermap
 * that converts negative indices to positive indices
 *---------------------------------------------------------------------------**/
-template <typename MapType>
-struct map_transform : public thrust::unary_function<MapType,MapType>
+template <typename map_type>
+struct map_transform : public thrust::unary_function<map_type,map_type>
 {
   map_transform(gdf_size_type n_rows, bool transform_negative_indices)
     : n_rows(n_rows), transform_negative_indices(transform_negative_indices){}
 
   __device__
-  MapType operator()(MapType in) const
+  map_type operator()(map_type in) const
   {
     if (transform_negative_indices)
       return ((in % n_rows) + n_rows) % n_rows;
@@ -254,7 +254,7 @@ struct map_transform : public thrust::unary_function<MapType,MapType>
 
 struct dispatch_map_type {
 
-  template <typename MapType, std::enable_if_t<std::is_integral<MapType>::value>* = nullptr>
+  template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column gather_map,
 		  table *destination_table, bool check_bounds,
 		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
@@ -265,7 +265,7 @@ struct dispatch_map_type {
 
     std::vector<util::cuda::scoped_stream> v_stream(source_n_cols);
 
-    MapType const * typed_gather_map = static_cast<MapType const*>(gather_map.data);
+    map_type const * typed_gather_map = static_cast<map_type const*>(gather_map.data);
 
     if (check_bounds) {
 
@@ -275,13 +275,13 @@ struct dispatch_map_type {
 	      rmm::exec_policy()->on(0),
 	      typed_gather_map,
 	      typed_gather_map + destination_table->num_rows(),
-	      bounds_checker<MapType>{begin, source_n_rows}),
+	      bounds_checker<map_type>{begin, source_n_rows}),
 	  "Index out of bounds.");
     }
 
     auto gather_map_iterator = thrust::make_transform_iterator(
 	typed_gather_map,
-	map_transform<MapType>{source_n_rows, transform_negative_indices});
+	map_transform<map_type>{source_n_rows, transform_negative_indices});
 
     for (gdf_size_type i = 0; i < source_n_cols; i++) {
       // Perform sanity checks
@@ -368,7 +368,7 @@ struct dispatch_map_type {
     }
   }
 
-  template <typename MapType, std::enable_if_t<not std::is_integral<MapType>::value>* = nullptr>
+  template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column const gather_map,
                   table *destination_table, bool check_bounds,
 		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
