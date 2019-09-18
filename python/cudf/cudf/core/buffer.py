@@ -47,17 +47,6 @@ class Buffer(object):
         if isinstance(mem, memoryview):
             mem = np.frombuffer(mem, dtype=header["dtype"])
             size = mem.size
-        if not (
-            isinstance(mem, np.ndarray)
-            or numba.cuda.driver.is_device_memory(mem)
-        ):
-            # this is probably a ucp_py.BufferRegion memory object
-            # check the header for info -- this should be encoded from
-            # serialization process.  Lastly, `typestr` and `shape` *must*
-            # manually set *before* consuming the buffer as a DeviceNDArray
-            mem.typestr = header.get("dtype", "B")
-            mem.shape = header.get("shape", len(mem))
-            size = mem.shape[0]
         self.mem = cudautils.to_device(mem)
         _BufferSentry(self.mem).ndim(1)
         self.size = size
@@ -84,10 +73,7 @@ class Buffer(object):
         """
         header = {}
         header["type"] = pickle.dumps(type(self))
-        header["shape"] = self.mem.shape
-        header["strides"] = self.mem.strides
-        header["dtype"] = self.mem.dtype.str
-
+        header["cuda_array_interface"] = self.mem.__cuda_array_interface__
         return header, [self.mem]
 
     @classmethod
@@ -110,7 +96,20 @@ class Buffer(object):
         obj : Buffer
             Returns an instance of Buffer.
         """
-        return Buffer(frames[0], header=header)
+        assert (len(frames) == 1, "Use Buffer.serialize() for serialization")
+        iface = header["cuda_array_interface"]
+        if iface["shape"][0] > 0:
+            arr = numba.cuda.devicearray.DeviceNDArray(
+                iface["shape"],
+                iface["strides"],
+                np.dtype(iface["typestr"]),
+                gpu_data=numba.cuda.as_cuda_array(frames[0]).gpu_data,
+            )
+        else:
+            arr = numba.cuda.device_array(
+                (0,), dtype=np.dtype(iface["typestr"])
+            )
+        return Buffer(arr, header=header)
 
     def __reduce__(self):
         cpumem = self.to_array()
