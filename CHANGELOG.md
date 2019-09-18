@@ -48,6 +48,7 @@
 - PR #2783 Support mapping input columns to function arguments in apply kernels
 - PR #2645 libcudf unique_count for Series.nunique 
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
+- PR #2806 CSV Reader: Clean-up row offset operations
 
 ## Bug Fixes
 
@@ -91,6 +92,7 @@
 - PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2818 Fix java join API to use new C++ join API
 
 
 # cuDF 0.9.0 (21 Aug 2019)
