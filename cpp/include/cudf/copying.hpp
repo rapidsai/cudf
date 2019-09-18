@@ -27,9 +27,9 @@ typedef struct CUstream_st* cudaStream_t;
 namespace cudf {
 
 enum mask_allocation_policy {
+    NEVER, ///< Do not allocate a null mask, regardless of input
     RETAIN, ///< Allocate a null mask if the input contains one
-    NEVER,
-    ALWAYS
+    ALWAYS ///< Allocate a null mask, regardless of input
 };
 
 /*
@@ -48,7 +48,7 @@ gdf_column empty_like(gdf_column const& input);
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc = RETAIN,
                          cudaStream_t stream = 0);
 
 /**
@@ -60,7 +60,7 @@ gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_al
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+gdf_column allocate_like(gdf_column const& input, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
                          cudaStream_t stream = 0);
 
 
@@ -103,7 +103,7 @@ table empty_like(table const& t);
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type and allocation size as input
  */
-table allocate_like(table const& t, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+table allocate_like(table const& t, mask_allocation_policy mask_alloc = RETAIN,
                     cudaStream_t stream = 0);
 
 /**
@@ -123,7 +123,7 @@ table allocate_like(table const& t, mask_allocation_policy mask_alloc = mask_all
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type as @p t and specified @p size
  */
-table allocate_like(table const& t, gdf_size_type size, mask_allocation_policy mask_alloc = mask_allocation_policy::RETAIN,
+table allocate_like(table const& t, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
                     cudaStream_t stream = 0);
 
 

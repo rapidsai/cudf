@@ -258,12 +258,12 @@ auto extract_results(table const& input_keys, table const& input_values,
   cudf::table output_keys{
       cudf::allocate_like(
         input_keys,
-        keys_have_nulls ? mask_allocation_policy::RETAIN : mask_allocation_policy::NEVER,
+        keys_have_nulls ? RETAIN : NEVER,
         stream)};
   cudf::table output_values{
       cudf::allocate_like(
         sparse_output_values,
-        values_have_nulls ? mask_allocation_policy::RETAIN : mask_allocation_policy::NEVER,
+        values_have_nulls ? RETAIN : NEVER,
         stream)};
 
   auto d_sparse_output_values =
