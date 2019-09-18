@@ -1,6 +1,5 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
-
-{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') %}
+{% set version = environ.get('GIT_DESCRIBE_TAG', '0.0.0.dev').lstrip('v') + environ.get('VERSION_SUFFIX', '') %}
 {% set minor_version =  version.split('.')[0] + '.' + version.split('.')[1] %}
 {% set git_revision_count=environ.get('GIT_DESCRIBE_NUMBER', 0) %}
 {% set py_version=environ.get('CONDA_PY', 36) %}
@@ -21,7 +20,8 @@ build:
     - CUDAHOSTCXX
     - CUDA_VERSION
     - PARALLEL_LEVEL
-
+    - VERSION_SUFFIX
+    
 requirements:
   build:
     - cmake >=3.12

@@ -1,6 +1,8 @@
 import os
 from contextlib import contextmanager
+from io import BytesIO
 
+import pandas as pd
 import pytest
 
 import dask_cudf
@@ -56,3 +58,14 @@ def test_read_csv():
     with s3_context("daskcsv", {"a.csv": b"a,b\n1,2\n3,4\n"}):
         df = dask_cudf.read_csv("s3://daskcsv/*.csv", chunksize="50 B")
         assert df.a.sum().compute() == 4
+
+
+def test_read_parquet():
+    pdf = pd.DataFrame({"a": [1, 2, 3, 4], "b": [2.1, 2.2, 2.3, 2.4]})
+    buffer = BytesIO()
+    pdf.to_parquet(fname=buffer)
+    buffer.seek(0)
+    with s3_context("daskparquet", {"file.parq": buffer}):
+        df = dask_cudf.read_parquet("s3://daskparquet/*.parq")
+        assert df.a.sum().compute() == 10
+        assert df.b.sum().compute() == 9

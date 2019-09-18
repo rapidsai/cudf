@@ -18,8 +18,10 @@ df : DataFrame
     The source dataframe.
 func : function
     The transformation function that will be executed on the CUDA GPU.
-incols: list
-    A list of names of input columns.
+incols: list or dict
+    A list of names of input columns that match the function arguments.
+    Or, a dictionary mapping input column names to their corresponding
+    function arguments such as {'col1': 'arg1'}.
 outcols: dict
     A dictionary of output column names and their dtype.
 kwargs: dict
@@ -123,7 +125,10 @@ class ApplyKernelCompilerBase(object):
 
     def run(self, df, **launch_params):
         # Get input columns
-        inputs = {k: df[k].data.mem for k in self.incols}
+        if isinstance(self.incols, dict):
+            inputs = {v: df[k].data.mem for (k, v) in self.incols.items()}
+        else:
+            inputs = {k: df[k].data.mem for k in self.incols}
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
