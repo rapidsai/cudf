@@ -193,3 +193,15 @@ def _is_nep18_active():
 
 
 IS_NEP18_ACTIVE = _is_nep18_active()
+
+
+def _cupy_available():
+    try:
+        import cupy as cp  # noqa: F401
+
+        return True
+    except ImportError:
+        return False
+
+
+IS_CUPY_AVAILABLE = _cupy_available()

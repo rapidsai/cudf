@@ -3453,6 +3453,11 @@ class DataFrame(object):
     #
     # Stats
     #
+    def _as_common_dtype(self):
+        common_dtype = np.find_common_type(self.dtypes, [])
+        coerced = self._apply_support_method("astype", dtype=common_dtype)
+        return coerced
+
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
@@ -3514,6 +3519,62 @@ class DataFrame(object):
 
     def var(self, **kwargs):
         return self._apply_support_method("var", **kwargs)
+
+    def cov(self):
+        if not utils.IS_CUPY_AVAILABLE:
+            msg = (
+                "DataFrame.cov currently requires CuPy. "
+                "Please install CuPy to use this operation."
+            )
+            raise ImportError(msg)
+
+        import cupy as cp
+
+        if self.empty:
+            return self
+
+        if any([col.has_null_mask for col in self._columns]):
+            msg = "Dataframe.cov does not currently support null values."
+            raise ValueError(msg)
+
+        filtered = self.select_dtypes(include=[np.number, np.bool])
+        coerced = filtered._as_common_dtype()
+        arr = cp.asarray(coerced.as_gpu_matrix())
+
+        result = cp.cov(arr, rowvar=False)
+        result_df = DataFrame.from_gpu_matrix(
+            cp.asfortranarray(result)
+        ).set_index(filtered.columns)
+        result_df.columns = filtered.columns
+        return result_df
+
+    def corr(self):
+        if not utils.IS_CUPY_AVAILABLE:
+            msg = (
+                "DataFrame.corr currently requires CuPy. "
+                "Please install CuPy to use this operation."
+            )
+            raise ImportError(msg)
+
+        import cupy as cp
+
+        if self.empty:
+            return self
+
+        if any([col.has_null_mask for col in self._columns]):
+            msg = "Dataframe.corr does not currently support null values."
+            raise ValueError(msg)
+
+        filtered = self.select_dtypes(include=[np.number, np.bool])
+        coerced = filtered._as_common_dtype()
+        arr = cp.asarray(coerced.as_gpu_matrix())
+
+        result = cp.corrcoef(arr, rowvar=False)
+        result_df = DataFrame.from_gpu_matrix(
+            cp.asfortranarray(result)
+        ).set_index(filtered.columns)
+        result_df.columns = filtered.columns
+        return result_df
 
     def all(self, bool_only=None, **kwargs):
         if bool_only:

@@ -4,7 +4,9 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import Series
+from cudf.core import DataFrame, Series
+from cudf.datasets import randomdata
+from cudf.tests.utils import assert_eq
 
 params_dtypes = [np.int32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -203,3 +205,119 @@ def test_misc_quantiles(data, q):
     expected = pdf_series.quantile(q)
     actual = gdf_series.quantile(q)
     utils.assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "data1",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
+        Series([1.1, 2.32, 43.4], index=[0, 4, 3]),
+        Series([]),
+        Series([-3]),
+    ],
+)
+@pytest.mark.parametrize(
+    "data2",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        Series([5]),
+    ],
+)
+def test_cov1d(data1, data2):
+    gs1 = Series(data1)
+    gs2 = Series(data2)
+
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
+
+    got = gs1.cov(gs2)
+    expected = ps1.cov(ps2)
+    np.testing.assert_approx_equal(got, expected, significant=8)
+
+
+@pytest.mark.parametrize(
+    "data1",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        Series([5, 10, 53, None, np.nan, None], nan_as_null=False),
+        Series([1.1032, 2.32, 43.4], index=[0, 4, 3]),
+        Series([]),
+        Series([-3]),
+    ],
+)
+@pytest.mark.parametrize(
+    "data2",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+        Series([1.1, 2.32, 43.4], index=[0, 500, 4000]),
+        Series([5]),
+    ],
+)
+def test_corr1d(data1, data2):
+    gs1 = Series(data1)
+    gs2 = Series(data2)
+
+    ps1 = gs1.to_pandas()
+    ps2 = gs2.to_pandas()
+
+    got = gs1.corr(gs2)
+    expected = ps1.corr(ps2)
+    np.testing.assert_approx_equal(got, expected, significant=8)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        randomdata(nrows=50, dtypes={"a": int, "b": float, "c": bool}),
+        randomdata(
+            nrows=50, dtypes={"a": int, "b": float, "c": str, "d": "category"}
+        ),
+        randomdata(nrows=100, dtypes={f"a{x}": float for x in range(100)}),
+        DataFrame({"a": [0, 0, 0], "b": [0, 0, 0]}),
+    ],
+)
+def test_corr2d(data):
+    gdf = data
+    pdf = data.to_pandas()
+
+    got = gdf.corr()
+    expected = pdf.corr()
+    assert_eq(got, expected)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        randomdata(nrows=50, dtypes={"a": int, "b": float, "c": bool}),
+        randomdata(
+            nrows=50, dtypes={"a": int, "b": float, "c": str, "d": "category"}
+        ),
+        randomdata(nrows=100, dtypes={f"a{x}": float for x in range(100)}),
+        DataFrame({"a": [0, 0, 0], "b": [0, 0, 0]}),
+    ],
+)
+def test_cov2d(data):
+    gdf = data
+    pdf = data.to_pandas()
+
+    got = gdf.corr()
+    expected = pdf.corr()
+    assert_eq(got, expected)
