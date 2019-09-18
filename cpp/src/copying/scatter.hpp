@@ -29,6 +29,9 @@ namespace detail {
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
                   table* destination_table);
 
+void scatter(table const* source_table, gdf_column const scatter_map,
+		  table* destination_table);
+
 }  // namespace detail
 
 }  // namespace cudf

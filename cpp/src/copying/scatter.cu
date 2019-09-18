@@ -15,6 +15,7 @@
  */
 
 #include <cudf/copying.hpp>
+#include <cudf/filling.hpp>
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>
 #include <utilities/cudf_utils.h>
@@ -34,20 +35,72 @@ using bit_mask::bit_mask_t;
 
 namespace cudf {
 namespace detail {
-  
-__global__ void invert_map(gdf_index_type gather_map[], const gdf_size_type destination_rows,
-                            gdf_index_type const scatter_map[], const gdf_size_type source_rows){
-  gdf_index_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
+
+template <typename map_type>
+__global__ void invert_map(map_type gather_map[], const gdf_size_type destination_rows,
+			   map_type const scatter_map[], const gdf_size_type source_rows){
+  map_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
   if(source_row < source_rows){
-    gdf_index_type destination_row = scatter_map[source_row];
+    map_type destination_row = scatter_map[source_row];
     if(destination_row < destination_rows){
       gather_map[destination_row] = source_row;
     }
   }
 }
 
-void scatter(table const* source_table, gdf_index_type const scatter_map[],
-            table* destination_table) {
+struct invert_map_kernel_forwarder {
+template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
+void operator()(gdf_column gather_map,
+		const gdf_size_type num_destination_rows,
+		const gdf_column scatter_map,
+		const gdf_size_type num_source_rows) {
+
+  gdf_scalar fill_value;
+  fill_value.dtype = gdf_dtype_of<map_type>();
+  fill_value.is_valid = true;
+
+  switch (gdf_dtype_of<map_type>()) {
+  case GDF_INT8:
+    fill_value.data.si08 = -1;
+    break;
+  case GDF_INT16:
+    fill_value.data.si16 = -1;
+    break;
+  case GDF_INT32:
+    fill_value.data.si32 = -1;
+    break;
+  case GDF_INT64:
+    fill_value.data.si64 = -1;
+    break;
+  default:
+    CUDF_FAIL("Invalid scatter map type");
+  }
+
+  constexpr int block_size = 256;
+  const gdf_size_type invert_grid_size =
+    (num_destination_rows + block_size - 1) / block_size;
+
+  cudf::fill(&gather_map, fill_value, 0, gather_map.size);
+
+  invert_map<map_type> <<<invert_grid_size, block_size>>>(
+      static_cast<map_type*>(gather_map.data),
+      num_destination_rows,
+      static_cast<map_type*>(scatter_map.data),
+      num_source_rows);
+}
+
+template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
+void operator()(gdf_column gather_map,
+		const gdf_size_type num_destination_rows,
+		const gdf_column scatter_map,
+		const gdf_size_type num_source_rows) {
+  CUDF_FAIL("Scatter map must be an integral type.");
+}
+
+};
+
+void scatter(table const* source_table, gdf_column const scatter_map,
+	     table* destination_table) {
   const gdf_size_type num_source_rows = source_table->num_rows();
   const gdf_size_type num_destination_rows = destination_table->num_rows();
   // Turn the scatter_map[] into a gather_map[] and then call gather(...).
@@ -63,21 +116,28 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
     return;
   }
   
-  CUDF_EXPECTS(nullptr != scatter_map, "scatter_map is null");
+  gdf_column gather_map = cudf::allocate_like(scatter_map, num_destination_rows);
 
-  constexpr gdf_index_type default_index_value = -1;  
-  rmm::device_vector<gdf_index_type> v_gather_map(num_destination_rows, default_index_value);
- 
-  constexpr int block_size = 256;
+  type_dispatcher(scatter_map.dtype, invert_map_kernel_forwarder{},
+		  gather_map,
+		  num_destination_rows,
+		  scatter_map,
+		  num_source_rows);
 
-  const gdf_size_type invert_grid_size =
-    (destination_table->num_rows() + block_size - 1) / block_size;
-
-  detail::invert_map<<<invert_grid_size, block_size>>>(v_gather_map.data().get(), num_destination_rows, scatter_map, num_source_rows);
-  
   // We want to ignore out of bounds indices for scatter since it is possible that
   // some elements of the destination column are not modified. 
-  detail::gather(source_table, v_gather_map.data().get(), destination_table, false, true, true);
+  detail::gather(source_table, gather_map, destination_table, false, true, true);
+}
+
+void scatter(table const* source_table, gdf_index_type const scatter_map[],
+            table* destination_table) {
+  gdf_column scatter_map_column{};
+  gdf_column_view(&scatter_map_column,
+		  const_cast<gdf_index_type*>(scatter_map),
+		  nullptr,
+		  source_table->num_rows(),
+		  gdf_dtype_of<gdf_index_type>());
+  scatter(source_table, scatter_map_column, destination_table);
 }
 
 template<bool mark_true>
@@ -177,6 +237,33 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 
 }  // namespace detail
 
+table scatter(table const& source, gdf_column const scatter_map,
+	      table const& target) {
+
+  const gdf_size_type n_cols = target.num_columns();
+
+  table output = copy(target);
+  for(int i = 0; i < n_cols; ++i){
+    // Allocate bitmask for each column
+    if(cudf::has_nulls(*source.get_column(i)) && !is_nullable(*target.get_column(i))){
+
+      gdf_size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
+      RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
+
+      gdf_size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
+      CUDA_TRY(cudaMemset(output.get_column(i)->valid, 0xff, valid_size_set));
+
+    }
+  }
+
+  detail::scatter(&source, scatter_map, &output);
+  nvcategory_gather_table(output, output);
+
+  return output;
+
+}
+
+
 table scatter(table const& source, gdf_index_type const scatter_map[], 
     table const& target) {
   
@@ -227,5 +314,6 @@ table scatter(std::vector<gdf_scalar> const& source,
   
   return output;
 }
+
 
 }  // namespace cudf

@@ -22,7 +22,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
 
     cdef cudf_table scatter(
         const cudf_table source,
-        const gdf_index_type* scatter_map,
+        const gdf_column scatter_map,
         const cudf_table target
     ) except +
 

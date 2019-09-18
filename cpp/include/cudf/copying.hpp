@@ -190,6 +190,9 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
 table scatter(table const& source, gdf_index_type const scatter_map[],
               table const& target);
 
+table scatter(table const& source, gdf_column const scatter_map,
+              table const& target);
+
 /**
  * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
  * values into the rows of a `target` table in-place.

@@ -127,8 +127,6 @@ def scatter(source, maps, target):
     cdef cudf_table* c_source_table
     cdef cudf_table* c_target_table
     cdef cudf_table c_result_table
-    cdef uintptr_t c_maps_ptr
-    cdef gdf_index_type* c_maps
 
     source_cols = source
     target_cols = target
@@ -147,16 +145,15 @@ def scatter(source, maps, target):
     c_source_table = table_from_columns(source_cols)
     c_target_table = table_from_columns(target_cols)
 
-    maps = _normalize_maps(maps, len(target_cols[0]))
-
-    c_maps_ptr = get_ctype_ptr(maps)
-    c_maps = <gdf_index_type*>c_maps_ptr
+    cdef gdf_column* c_maps = column_view_from_column(maps)
 
     with nogil:
         c_result_table = cpp_scatter(
             c_source_table[0],
-            c_maps,
+            c_maps[0],
             c_target_table[0])
+
+    free_column(c_maps)
 
     result_cols = columns_from_table(&c_result_table)
 
