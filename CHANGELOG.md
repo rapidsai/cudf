@@ -96,7 +96,7 @@
 - PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
-
+- PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
 
 # cuDF 0.9.0 (21 Aug 2019)
 
