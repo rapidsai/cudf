@@ -21,7 +21,6 @@ package ai.rapids.cudf;
 import org.junit.jupiter.api.Test;
 
 import static ai.rapids.cudf.TableTest.assertColumnsAreEqual;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 public class BinaryOpTest {
@@ -442,6 +441,25 @@ public class BinaryOpTest {
   }
 
   @Test
+  public void testStringCategoryEqualScalarNotPresent() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.categoryFromStrings("a", null, "b", null)) {
+      Scalar s = Scalar.fromString("boo");
+
+      try (ColumnVector answer = a.equalTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.equalTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, null, false, null)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
   public void testNotEqual() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
@@ -492,6 +510,25 @@ public class BinaryOpTest {
   }
 
   @Test
+  public void testStringCategoryNotEqualScalarNotPresent() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.categoryFromStrings("a", null, "b", null)) {
+      Scalar s = Scalar.fromString("abc");
+
+      try (ColumnVector answer = a.notEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.notEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, null, true, null)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
   public void testLessThan() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
@@ -516,7 +553,6 @@ public class BinaryOpTest {
     }
   }
 
-
   @Test
   public void testStringCategoryLessThanScalar() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
@@ -524,6 +560,32 @@ public class BinaryOpTest {
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
       Scalar s = Scalar.fromString("b");
+
+      try (ColumnVector answer = a.lessThan(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.lessThan(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, true)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = c.lessThan(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, null, false, null)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+
+  @Test
+  public void testStringCategoryLessThanScalarNotPresent() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
+      Scalar s = Scalar.fromString("abc");
 
       try (ColumnVector answer = a.lessThan(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(true, false, false, false)) {
@@ -593,6 +655,31 @@ public class BinaryOpTest {
   }
 
   @Test
+  public void testStringCategoryGreaterThanScalarNotPresent() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
+      Scalar s = Scalar.fromString("boo");
+
+      try (ColumnVector answer = a.greaterThan(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, true, true)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.greaterThan(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, false, false, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = c.greaterThan(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, null, false, null)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
   public void testLessOrEqualTo() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
@@ -643,6 +730,31 @@ public class BinaryOpTest {
   }
 
   @Test
+  public void testStringCategoryLessOrEqualToScalarNotPresent() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
+      Scalar s = Scalar.fromString("boo");
+
+      try (ColumnVector answer = a.lessOrEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, false, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.lessOrEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, true, true, true)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = c.lessOrEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(true, null, true, null)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
   public void testGreaterOrEqualTo() {
     assumeTrue(Cuda.isEnvCompatibleForTesting());
     try (ColumnVector icv = ColumnVector.fromBoxedInts(INTS_1);
@@ -674,6 +786,31 @@ public class BinaryOpTest {
          ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
          ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
       Scalar s = Scalar.fromString("b");
+
+      try (ColumnVector answer = a.greaterOrEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, true)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = b.greaterOrEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, false)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+
+      try (ColumnVector answer = c.greaterOrEqualTo(s);
+           ColumnVector expected = ColumnVector.fromBoxedBooleans(false, null, true, null)) {
+        assertColumnsAreEqual(expected, answer);
+      }
+    }
+  }
+
+  @Test
+  public void testStringCategoryGreaterOrEqualToScalarNotPresent() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+    try (ColumnVector a = ColumnVector.categoryFromStrings("a", "b", "c", "d");
+         ColumnVector b = ColumnVector.categoryFromStrings("a", "b", "b", "a");
+         ColumnVector c = ColumnVector.categoryFromStrings("a", null, "b", null)) {
+      Scalar s = Scalar.fromString("abc");
 
       try (ColumnVector answer = a.greaterOrEqualTo(s);
            ColumnVector expected = ColumnVector.fromBoxedBooleans(false, true, true, true)) {
