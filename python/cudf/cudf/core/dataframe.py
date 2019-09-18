@@ -3520,7 +3520,7 @@ class DataFrame(object):
     def var(self, **kwargs):
         return self._apply_support_method("var", **kwargs)
 
-    def cov(self):
+    def cov(self, min_periods=None):
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "DataFrame.cov currently requires CuPy. "
@@ -3530,8 +3530,13 @@ class DataFrame(object):
 
         import cupy as cp
 
+        assert min_periods in (None, 1)
+
         if self.empty:
             return self
+
+        if len(self) <= 1:
+            return np.nan
 
         if any([col.has_null_mask for col in self._columns]):
             msg = "Dataframe.cov does not currently support null values."
@@ -3548,7 +3553,7 @@ class DataFrame(object):
         result_df.columns = filtered.columns
         return result_df
 
-    def corr(self):
+    def corr(self, method="pearson", min_periods=1):
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "DataFrame.corr currently requires CuPy. "
@@ -3558,8 +3563,13 @@ class DataFrame(object):
 
         import cupy as cp
 
+        assert method in ("pearson",) and min_periods in (None, 1)
+
         if self.empty:
             return self
+
+        if len(self) <= 1:
+            return np.nan
 
         if any([col.has_null_mask for col in self._columns]):
             msg = "Dataframe.corr does not currently support null values."

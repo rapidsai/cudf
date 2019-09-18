@@ -292,6 +292,14 @@ def test_corr1d(data1, data2):
         ),
         randomdata(nrows=100, dtypes={f"a{x}": float for x in range(100)}),
         DataFrame({"a": [0, 0, 0], "b": [0, 0, 0]}),
+        pytest.param(
+            randomdata(nrows=0, dtypes={"a": int, "b": float, "c": bool}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Different empty frame handling for efficiency"
+                )
+            ],
+        ),
     ],
 )
 def test_corr2d(data):
@@ -312,6 +320,14 @@ def test_corr2d(data):
         ),
         randomdata(nrows=100, dtypes={f"a{x}": float for x in range(100)}),
         DataFrame({"a": [0, 0, 0], "b": [0, 0, 0]}),
+        pytest.param(
+            randomdata(nrows=0, dtypes={"a": int, "b": float, "c": bool}),
+            marks=[
+                pytest.mark.xfail(
+                    reason="Different empty frame handling for efficiency"
+                )
+            ],
+        ),
     ],
 )
 def test_cov2d(data):
