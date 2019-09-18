@@ -357,7 +357,7 @@ def test_series_multiple_times_with_nulls():
     sr = Series([1, 2, 3, None])
     expected = Series([None, None, None, None], dtype=np.int64)
 
-    for i in range(10):
+    for i in range(3):
         got = sr.replace([1, 2, 3], None)
         # This print is required as it will fail only if there is print
         print(got)

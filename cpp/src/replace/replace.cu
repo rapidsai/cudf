@@ -169,7 +169,7 @@ __device__ auto get_new_value(gdf_size_type         idx,
 
       bitmask &= __ballot_sync(active_mask, output_is_valid);
 
-      if(0 == (threadIdx.x % warp_size) && bitmask != 0){
+      if(0 == (threadIdx.x % warp_size)){
         output_valid[(int)(i/warp_size)] = bitmask;
         valid_sum[(int)(threadIdx.x / warp_size)] += __popc(bitmask);
       }
@@ -292,8 +292,6 @@ namespace detail {
                  "Nulls are in values_to_replace column.");
 
     gdf_column output = cudf::allocate_like(input_col, true, stream);
-    if (output.valid)
-      CUDA_TRY(cudaMemset(output.valid, 0x00, gdf_valid_allocation_size(output.size)));
 
     if (nullptr == input_col.valid && replacement_values.valid != nullptr) {
       gdf_valid_type *valid = nullptr;
