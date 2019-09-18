@@ -164,6 +164,8 @@ class DataFrame(object):
 
         self._add_empty_columns(columns, index)
 
+        self._enable_setattr_setitem = True
+
     @property
     def _constructor(self):
         return DataFrame
@@ -268,6 +270,22 @@ class DataFrame(object):
             c for c in self.columns if isinstance(c, str) and c.isidentifier()
         )
         return list(o)
+
+    def __setattr__(self, key, col):
+        try:
+            object.__getattribute__(self, key)
+            return object.__setattr__(self, key, col)
+        except AttributeError:
+            pass
+
+        try:
+            if self._enable_setattr_setitem:
+                self.__setitem__(key, col)
+        except AttributeError:
+            pass
+
+        return object.__setattr__(self, key, col)
+
 
     def __getattr__(self, key):
         if key != "_cols" and key in self._cols:
