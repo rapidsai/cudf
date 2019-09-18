@@ -96,7 +96,7 @@ class Buffer(object):
         obj : Buffer
             Returns an instance of Buffer.
         """
-        assert (len(frames) == 1, "Use Buffer.serialize() for serialization")
+        assert len(frames) == 1, "Use Buffer.serialize() for serialization"
         iface = header["cuda_array_interface"]
         if iface["shape"][0] > 0:
             arr = numba.cuda.devicearray.DeviceNDArray(
