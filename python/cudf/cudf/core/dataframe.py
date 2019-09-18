@@ -2742,7 +2742,8 @@ class DataFrame(object):
         kwargs={},
         pessimistic_nulls=True,
         chunks=None,
-        tpb=1,
+        blkct=None,
+        tpb=None,
     ):
         """
         Transform user-specified chunks using the user-provided function.
