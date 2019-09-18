@@ -29,38 +29,6 @@
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>
 
-namespace {
-
-/**
- * @brief Fill the values from @p in between indices pointed to by @p offset
- * 
- * @param in Values to fill
- * @param offset Indices to fill between
- * @param stream Stream to perform computation in
- * @return gdf_column Filled column
- */
-cudf::table fill_between_offsets(const cudf::table &in,
-                                 rmm::device_vector<gdf_size_type> const& offset,
-                                 cudaStream_t stream = 0)
-{
-  gdf_size_type output_size = offset.back();
-
-  rmm::device_vector<gdf_size_type> indices(output_size);
-  thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
-                      offset.begin(), offset.end(),
-                      thrust::make_counting_iterator(0),
-                      thrust::make_counting_iterator(output_size),
-                      indices.begin());
-
-  cudf::table output = cudf::allocate_like(in, output_size);
-
-  cudf::gather(&in, indices.data().get(), &output);
-
-  return output;
-}
-
-} // namespace anonymous
-
 
 namespace cudf {
 
@@ -82,7 +50,20 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t 
   
   thrust::inclusive_scan(exec_policy, count_data, count_data + count.size, offset.begin());
 
-  return fill_between_offsets(in, offset, stream);
+  gdf_size_type output_size = offset.back();
+
+  rmm::device_vector<gdf_size_type> indices(output_size);
+  thrust::upper_bound(exec_policy,
+                      offset.begin(), offset.end(),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(output_size),
+                      indices.begin());
+
+  cudf::table output = cudf::allocate_like(in, output_size, true, stream);
+
+  cudf::gather(&in, indices.data().get(), &output);
+
+  return output;
 }
 
 cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t stream = 0) {
@@ -94,14 +75,26 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t 
     return cudf::empty_like(in);
   }
   
-  rmm::device_vector<gdf_size_type> offset(in.num_rows());
-  
-  thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream),
-                         thrust::make_constant_iterator(count.data.si32, 0),
-                         thrust::make_constant_iterator(count.data.si32, in.num_rows()),
-                         offset.begin());
+  gdf_size_type stride = count.data.si32;
 
-  return fill_between_offsets(in, offset, stream);
+  gdf_size_type output_size = stride * in.num_rows();
+  auto offset = thrust::make_transform_iterator(
+    thrust::make_counting_iterator(0),
+    [stride] __device__ (auto i) { return (i+1) * stride; }
+  );
+
+  rmm::device_vector<gdf_size_type> indices(output_size);
+  thrust::upper_bound(rmm::exec_policy(stream)->on(stream),
+                      offset, offset + in.num_rows(),
+                      thrust::make_counting_iterator(0),
+                      thrust::make_counting_iterator(output_size),
+                      indices.begin());
+
+  cudf::table output = cudf::allocate_like(in, output_size, true, stream);
+
+  cudf::gather(&in, indices.data().get(), &output);
+
+  return output;
 }
 
 } // namespace detail
