@@ -43,7 +43,7 @@ class string_view
    * @param data Device char array encoded in UTF8.
    * @param bytes Number of bytes in data array.
    *---------------------------------------------------------------------------**/
-  __device__ string_view(const char* data, size_type bytes);
+  __host__ __device__ string_view(const char* data, size_type bytes);
   /**---------------------------------------------------------------------------*
    * @brief Create instance from existing device char array. The array must
    * include a null-terminator ('\0).

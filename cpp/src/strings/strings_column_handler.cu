@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-#include <bitmask/valid_if.cuh>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_factories.hpp>
@@ -23,8 +22,6 @@
 #include <utilities/error_utils.hpp>
 
 #include <thrust/for_each.h>
-#include <thrust/sort.h>
-#include <thrust/sequence.h>
 #include <thrust/transform_scan.h>
 
 namespace cudf {
@@ -157,129 +154,6 @@ void strings_column_handler::print( size_type start, size_type end,
 namespace strings
 {
 
-// new strings column from subset of this strings instance
-std::unique_ptr<cudf::column> sublist( strings_column_handler handler,
-                                       size_type start, size_type end,
-                                       size_type step, cudaStream_t stream )
-{
-    if( step <= 0 )
-        step = 1;
-    size_type count = handler.size();
-    if( end < 0 || end > count )
-        end = count;
-    if( start < 0 || start > end )
-        throw std::invalid_argument("invalid start parameter");
-    count = (end - start)/step +1;
-    //
-    auto execpol = rmm::exec_policy(stream);
-    // build indices
-    thrust::device_vector<size_type> indices(count);
-    thrust::sequence( execpol->on(stream), indices.begin(), indices.end(), start, step );
-    // create a column_view as a wrapper of these indices
-    column_view indices_view( data_type{INT32}, count, indices.data().get(), nullptr, 0 );
-    // build a new strings column from the indices
-    return gather(handler, indices_view);
-}
-
-// return new strings column with strings from this instance as specified by the indices
-std::unique_ptr<cudf::column> gather( strings_column_handler handler,
-                                      column_view gather_map, cudaStream_t stream )
-{
-    size_type count = gather_map.size();
-    auto d_indices = gather_map.data<int32_t>();
-
-    auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(handler.parent_column(),stream);
-    auto d_column = *strings_column;
-    auto d_offsets = handler.offsets_column().data<int32_t>();
-
-    // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED,
-                                               stream, handler.memory_resource() );
-    auto offsets_view = offsets_column->mutable_view();
-    auto d_new_offsets = offsets_view.data<int32_t>();
-    // create new offsets array
-    thrust::transform_inclusive_scan( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(count),
-        d_new_offsets,
-        [d_column, d_offsets, d_indices] __device__ (size_type idx) {
-            size_type index = d_indices[idx];
-            if( d_column.nullable() && d_column.is_null(index) )
-                return 0;
-            size_type offset = index ? d_offsets[index-1] : 0;
-            return d_offsets[index] - offset;
-        },
-        thrust::plus<int32_t>());
-
-    // build null mask
-    auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
-        [d_column, d_indices] __device__ (size_type idx) {
-            return !d_column.nullable() || !d_column.is_null(d_indices[idx]);
-        },
-        count, stream );
-    auto null_count = valid_mask.second;
-    auto null_size = gdf_valid_allocation_size(count);
-    rmm::device_buffer null_mask(valid_mask.first,null_size); // does deep copy
-    RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
-
-    // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_new_offsets)[count-1]; // this may not be stream friendly
-    auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
-                                             stream, handler.memory_resource() );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<int8_t>();
-    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
-        [d_column, d_indices, d_new_offsets, d_chars] __device__(size_type idx){
-            // place individual strings
-            if( d_column.nullable() && d_column.is_null(idx) )
-                return;
-            string_view d_str = d_column.element<string_view>(d_indices[idx]);
-            size_type offset = (idx ? d_new_offsets[idx-1] : 0);
-            memcpy(d_chars + offset, d_str.data(), d_str.size() );
-        });
-
-  // build children vector
-  std::vector<std::unique_ptr<column>> children;
-  children.emplace_back(std::move(offsets_column));
-  children.emplace_back(std::move(chars_column));
-
-  return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,handler.memory_resource()},
-        null_mask, null_count,
-        std::move(children));
-}
-
-// return sorted version of the given strings column
-std::unique_ptr<cudf::column> sort( strings_column_handler handler,
-                                    strings_column_handler::sort_type stype,
-                                    bool ascending, bool nullfirst, cudaStream_t stream )
-{
-    auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(handler.parent_column(), stream);
-    auto d_column = *strings_column;
-
-    // lets sort indices
-    size_type count = handler.size();
-    thrust::device_vector<size_type> indices(count);
-    thrust::sequence( execpol->on(stream), indices.begin(), indices.end() );
-    thrust::sort( execpol->on(stream), indices.begin(), indices.end(),
-        [d_column, stype, ascending, nullfirst] __device__ (size_type lhs, size_type rhs) {
-            bool lhs_null{d_column.nullable() && d_column.is_null(lhs)};
-            bool rhs_null{d_column.nullable() && d_column.is_null(rhs)};
-            if( lhs_null || rhs_null )
-                return (nullfirst ? !rhs_null : !lhs_null);
-            string_view lhs_str = d_column.element<string_view>(lhs);
-            string_view rhs_str = d_column.element<string_view>(rhs);
-            int cmp = lhs_str.compare(rhs_str);
-            return (ascending ? (cmp<0) : (cmp>0));
-        });
-
-    // create a column_view as a wrapper of these indices
-    column_view indices_view( data_type{INT32}, count, indices.data().get(), nullptr, 0 );
-    // now build a new strings column from the indices
-    return gather( handler, indices_view );
-}
 
 } // namespace strings
 } // namespace cudf

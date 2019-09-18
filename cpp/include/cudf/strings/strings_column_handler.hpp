@@ -15,8 +15,6 @@
  */
 #pragma once
 
-#include <vector>
-
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
@@ -77,9 +75,9 @@ class strings_column_handler
    * @param start Index of first string to print.
    * @param end Index of last string to print. Specify -1 for all strings.
    * @param max_width Maximum number of characters to print per string.
-   *                  Specify -1 to print all characters.
+   *        Specify -1 to print all characters.
    * @param delimiter The chars to print between each string.
-   *                  Default is new-line character.
+   *        Default is new-line character.
    *---------------------------------------------------------------------------**/
   void print( size_type start=0, size_type end=-1,
               size_type max_width=-1, const char* delimiter = "\n" ) const;
@@ -100,31 +98,49 @@ private:
 namespace strings
 {
 
+// array.cu
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column created from a subset of
  * of this instance's strings column.
  *
+ * @code
+ * s1 = ["a", "b", "c", "d", "e", "f"]
+ * s2 = sublist( s1, 2 )
+ * s2 is ["c", "d", "e", "f"]
+ * @endcode
+ * 
  * @param start Index of first string to use.
  * @param end Index of last string to use.
+ *        Default -1 indicates the last element.
  * @param step Increment value between indexes.
+ *        Default step is 1.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column of size (end-start)/step.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> sublist( strings_column_handler handler,
-                                       size_type start, size_type end,
-                                       size_type step, cudaStream_t stream=0 );
+                                       size_type start, size_type end=-1,
+                                       size_type step=1,
+                                       cudaStream_t stream=(cudaStream_t)0 );
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column created this strings instance using
  * the specified indices to select the strings.
+ * 
+ * @code
+ * s1 = ["a", "b", "c", "d", "e", "f"]
+ * map = [0, 2]
+ * s2 = gather( s1, map )
+ * s2 is ["a", "c"]
+ * @endcode
  *
- * @param indices The indices with which to select strings for the new column.
- *                Values must be within [0,count()) range.
+ * @param gather_map The indices with which to select strings for the new column.
+ *        Values must be within [0,size()) range.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column of size indices.size()
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> gather( strings_column_handler handler,
-                                      column_view gather_map, cudaStream_t stream=0 );
+                                      cudf::column_view gather_map,
+                                      cudaStream_t stream=(cudaStream_t)0 );
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column that is a sorted version of the
@@ -137,8 +153,80 @@ std::unique_ptr<cudf::column> gather( strings_column_handler handler,
  * @return New strings column with sorted elements of this instance.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> sort( strings_column_handler handler,
-                                    strings_column_handler::sort_type stype, bool ascending=true,
-                                    bool nullfirst=true, cudaStream_t stream=0 );
+                                    strings_column_handler::sort_type stype,
+                                    bool ascending=true,
+                                    bool nullfirst=true,
+                                    cudaStream_t stream=(cudaStream_t)0 );
+
+/**
+ * @brief Returns new instance using the provided map values and strings.
+ * The map values specify the location in the new strings instance.
+ * Missing values pass through from the handler instance into those positions.
+ *
+ * @code
+ * s1 = ["a", "b", "c", "d"]
+ * s2 = ["e", "f"]
+ * map = [1, 3]
+ * s3 = scatter( s1, s2, m1 )
+ * s3 is ["a", "e", "c", "f"]
+ * @endcode
+ *
+ * @param[in] strings The instance for which to retrieve the values
+ *            specified in map column.
+ * @param[in] scatter_map The 0-based index values to retrieve from the
+ *            strings parameter. Number of values must equal the number
+ *            of elements in strings pararameter (strings.size()).
+ * @param stream CUDA stream to use kernels in this method.
+ * @return New instance with the specified strings.
+ */
+std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
+                                       strings_column_handler strings,
+                                       cudf::column_view scatter_map,
+                                       cudaStream_t stream=(cudaStream_t)0 );
+/**
+ * @brief Returns new instance using the provided index values and a
+ * single string. The map values specify where to place the string
+ * in the new strings instance. Missing values pass through from
+ * the handler instance at those positions.
+ *
+ * @code
+ * s1 = ["a", "b", "c", "d"]
+ * map = [1, 3]
+ * s2 = scatter( s1, "e", m1 )
+ * s2 is ["a", "e", "c", "e"]
+ * @endcode
+ * 
+ * @param[in] string The string to place in according to the scatter_map.
+ * @param[in] scatter_map The 0-based index values to place the given string.
+ * @return New instance with the specified strings.
+ */
+std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
+                                       const char* string,
+                                       cudf::column_view scatter_map,
+                                       cudaStream_t stream=(cudaStream_t)0 );
+
+// attributes.cu
+/**---------------------------------------------------------------------------*
+ * @brief Returns the number of bytes for each string in a strings column.
+ * Null strings will have a byte count of 0.
+ *
+ * @param stream CUDA stream to use kernels in this method.
+ * @return Numeric column of type int32.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> bytes_counts( strings_column_handler handler,
+                                            cudaStream_t stream=(cudaStream_t)0 );
+
+/**---------------------------------------------------------------------------*
+ * @brief Returns the number of characters for each string in a strings column.
+ * Null strings will have a count of 0. The number of characters is not the
+ * same as the number of bytes if multi-byte encoded characters make up a
+ * string.
+ *
+ * @param stream CUDA stream to use kernels in this method.
+ * @return Numeric column of type int32.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> characters_counts( strings_column_handler handler,
+                                                 cudaStream_t stream=(cudaStream_t)0 );
 
 } // namespace strings
 } // namespace cudf
