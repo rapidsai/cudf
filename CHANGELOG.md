@@ -49,6 +49,7 @@
 - PR #2645 libcudf unique_count for Series.nunique 
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2831 Add `column` argument to `DataFrame.drop`
 
 ## Bug Fixes
 
