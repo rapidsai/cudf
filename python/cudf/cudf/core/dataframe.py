@@ -286,7 +286,6 @@ class DataFrame(object):
 
         return object.__setattr__(self, key, col)
 
-
     def __getattr__(self, key):
         if key != "_cols" and key in self._cols:
             return self[key]
