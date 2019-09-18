@@ -1193,6 +1193,21 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
                 mask = libcudf.unaryops.nans_to_nulls(data)
                 data = data.set_mask(mask)
 
+        elif data.dtype.kind == "M":
+            null = cudf.core.column.column_empty_like(
+                data, masked=True, newsize=1
+            )
+            col = libcudf.replace.replace(
+                as_column(Buffer(arbitrary)),
+                as_column(
+                    Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype))
+                ),
+                null,
+            )
+            data = datetime.DatetimeColumn(
+                data=Buffer(arbitrary), mask=col.mask, dtype=data.dtype
+            )
+
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__
         data = _data_from_cuda_array_interface_desc(desc)
