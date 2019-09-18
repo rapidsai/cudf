@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include "gather.cuh"
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/cudf.h>
@@ -36,78 +36,57 @@ using bit_mask::bit_mask_t;
 namespace cudf {
 namespace detail {
 
-template <typename map_type>
-__global__ void invert_map(map_type gather_map[], const gdf_size_type destination_rows,
-			   map_type const scatter_map[], const gdf_size_type source_rows){
-  map_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
-  if(source_row < source_rows){
-    map_type destination_row = scatter_map[source_row];
-    if(destination_row < destination_rows){
-      gather_map[destination_row] = source_row;
+
+template <typename value_type, typename InputIterator>
+struct scatter_to_gather {
+  scatter_to_gather(InputIterator first, InputIterator last, value_type default_value):
+    first(first), last(last), default_value(default_value) {}
+
+  value_type operator()(value_type in) {
+    InputIterator found = thrust::find(first, last, in);
+    if (found == last) {
+      return default_value;
+    }
+    else {
+      return thrust::distance(first, found);
     }
   }
-}
 
-struct invert_map_kernel_forwarder {
+  InputIterator first, last;
+  value_type default_value;
+};
+
+struct dispatch_map_type {
 template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
-void operator()(gdf_column gather_map,
-		const gdf_size_type num_destination_rows,
+void operator()(table const* source_table,
 		const gdf_column scatter_map,
-		const gdf_size_type num_source_rows) {
+		table *destination_table) {
+  map_type const * typed_scatter_map = static_cast<map_type const*>(scatter_map.data);
 
-  gdf_scalar fill_value;
-  fill_value.dtype = gdf_dtype_of<map_type>();
-  fill_value.is_valid = true;
+  // Turn the scatter_map[] into a gather_map[] and then call gather(...).
+  auto gather_map = thrust::make_transform_iterator(
+      thrust::make_counting_iterator(0),
+      scatter_to_gather<map_type, map_type const*>(
+	  typed_scatter_map,
+	  typed_scatter_map+source_table->num_rows(),
+	  -1));;
 
-  switch (gdf_dtype_of<map_type>()) {
-  case GDF_INT8:
-    fill_value.data.si08 = -1;
-    break;
-  case GDF_INT16:
-    fill_value.data.si16 = -1;
-    break;
-  case GDF_INT32:
-    fill_value.data.si32 = -1;
-    break;
-  case GDF_INT64:
-    fill_value.data.si64 = -1;
-    break;
-  default:
-    CUDF_FAIL("Invalid scatter map type");
-  }
+  detail::gather<decltype(gather_map)>(source_table, gather_map, destination_table, false, true, true, false);
 
-  constexpr int block_size = 256;
-  const gdf_size_type invert_grid_size =
-    (num_destination_rows + block_size - 1) / block_size;
-
-  cudf::fill(&gather_map, fill_value, 0, gather_map.size);
-
-  invert_map<map_type> <<<invert_grid_size, block_size>>>(
-      static_cast<map_type*>(gather_map.data),
-      num_destination_rows,
-      static_cast<map_type*>(scatter_map.data),
-      num_source_rows);
 }
 
 template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
-void operator()(gdf_column gather_map,
-		const gdf_size_type num_destination_rows,
-		const gdf_column scatter_map,
-		const gdf_size_type num_source_rows) {
+void operator()(table const* source_table,
+    const gdf_column scatter_map,
+    table *destination_table) {
   CUDF_FAIL("Scatter map must be an integral type.");
 }
 
 };
 
-void scatter(table const* source_table, gdf_column const scatter_map,
-	     table* destination_table) {
+void scatter(table const* source_table, gdf_column const scatter_map, table* destination_table) {
   const gdf_size_type num_source_rows = source_table->num_rows();
   const gdf_size_type num_destination_rows = destination_table->num_rows();
-  // Turn the scatter_map[] into a gather_map[] and then call gather(...).
-  // We are initializing the result gather_map with `num_source_rows`
-  // so if at the end the value is not modified we know the original 
-  // scatter map does not map to this row, and we should keep whatever is 
-  // there originally
   
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
@@ -115,18 +94,11 @@ void scatter(table const* source_table, gdf_column const scatter_map,
   if (0 == source_table->num_rows()) {
     return;
   }
-  
-  gdf_column gather_map = cudf::allocate_like(scatter_map, num_destination_rows);
 
-  type_dispatcher(scatter_map.dtype, invert_map_kernel_forwarder{},
-		  gather_map,
-		  num_destination_rows,
+  type_dispatcher(scatter_map.dtype, dispatch_map_type{},
+		  source_table,
 		  scatter_map,
-		  num_source_rows);
-
-  // We want to ignore out of bounds indices for scatter since it is possible that
-  // some elements of the destination column are not modified. 
-  detail::gather(source_table, gather_map, destination_table, false, true, true);
+		  destination_table);
 }
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],

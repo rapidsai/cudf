@@ -76,6 +76,7 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
 	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
 	    bool transform_negative_indices = false);
 
+
 }  // namespace detail
 }  // namespace cudf
 
