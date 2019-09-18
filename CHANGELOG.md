@@ -47,7 +47,7 @@
 - PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2783 Support mapping input columns to function arguments in apply kernels
 - PR #2645 libcudf unique_count for Series.nunique 
-- PR #2823 imporve java data movement debugging
+- PR #2823 improve java data movement debugging
 
 ## Bug Fixes
 
