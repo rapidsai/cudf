@@ -1444,7 +1444,7 @@ class DataFrame(object):
         3    3
         4    4
         """
-        if axis == 0:
+        if axis == 0 and labels is not None:
             raise NotImplementedError("Can only drop columns, not rows")
         if errors != "raise":
             raise NotImplementedError("errors= keyword not implemented")
