@@ -290,6 +290,7 @@ gdf_column* rolling_window(const gdf_column &input_col,
                         window_col, min_periods_col, forward_window_col,
                         stream);
 
+  set_null_count(*output_col.get());
   // Release the gdf pointer from the wrapper class
   return output_col.release();
 }
