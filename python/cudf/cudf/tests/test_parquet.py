@@ -368,3 +368,24 @@ def test_parquet_writer(tmpdir, pdf, gdf):
 
     # assert_eq(expect, got)
     assert pa.Table.equals(expect, got)
+
+
+def test_parquet_bug_2812(tmpdir):
+    processed = 0 #10000
+    batch = 10000
+    n = 100000
+    out_df = cudf.DataFrame({'y': np.random.choice(range(1000000, 2000000), n, replace=False),
+                   'z': np.random.choice(range(1000000, 2000000), n, replace=False),
+                   's': np.random.choice(range(20), n, replace=True),
+                   'a': np.round(np.random.uniform(1, 5000, n), 2)})
+    print(out_df.head())
+    out_df.to_parquet('temp')
+    out_df.reset_index(drop=True)
+    r_fi = ['temp/' + x for x in os.listdir('temp/') if x.endswith(".parquet")]
+    for i in range(10):
+        print('i =', i, 'processed=', processed)
+        chunk = cudf.read_parquet(r_fi[0], skip_rows=processed, num_rows=batch)
+        print(chunk.head())
+        #assert_eq(chunk.reset_index(drop=True), out_df[processed:processed+batch])
+        processed += batch
+        del chunk
