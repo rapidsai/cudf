@@ -371,7 +371,7 @@ def test_parquet_writer(tmpdir, pdf, gdf):
 
 
 def test_parquet_bug_2812(tmpdir):
-    processed = 0 #10000
+    processed = 10000
     batch = 10000
     n = 100000
     out_df = cudf.DataFrame({'y': np.random.choice(range(1000000, 2000000), n, replace=False),
