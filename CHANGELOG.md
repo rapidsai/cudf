@@ -46,7 +46,8 @@
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2783 Support mapping input columns to function arguments in apply kernels
-- PR #2645 libcudf unique_count for Series.nunique 
+- PR #2645 libcudf unique_count for Series.nunique
+- PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
 
