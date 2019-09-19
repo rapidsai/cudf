@@ -76,6 +76,33 @@ struct element_equality_comparator {
     return lhs.element<Element>(lhs_element_index) ==
            rhs.element<Element>(rhs_element_index);
   }
+template <bool has_nulls = true>
+class row_equality_comparator {
+ public:
+  row_equality_comparator(table_device_view lhs, table_device_view rhs,
+                          bool nulls_are_equal = true)
+      : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {
+
+
+
+      }
+
+  __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) {
+    auto equal_elements = [=](column_device_view l, column_device_view r) {
+      return cudf::exp::type_dispatcher(
+          l.type(),
+          element_equality_comparator<has_nulls>{l, r, nulls_are_equal},
+          lhs_row_index, rhs_row_index);
+    };
+
+    return thrust::equal(thrust::seq, lhs.begin(), lhs.end(), rhs.begin(),
+                         equal_elements);
+  }
+
+ private:
+  table_device_view lhs;
+  table_device_view rhs;
+  bool nulls_are_equal;
 };
 
 /**---------------------------------------------------------------------------*
