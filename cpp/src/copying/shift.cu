@@ -64,7 +64,7 @@ table shift(
   const gdf_scalar* fill_value
 )
 {
-  table out_table = allocate_like(in_table, MaskAlloc::ALWAYS);
+  table out_table = allocate_like(in_table, ALWAYS);
 
   for (gdf_index_type i = 0; i < out_table.num_columns(); i++)
   {
