@@ -1,6 +1,5 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
-from librmm_cffi import librmm as rmm
 
 from cudf import core, datasets
 from cudf._version import get_versions
@@ -30,6 +29,7 @@ from cudf.io import (
     read_orc,
     read_parquet,
 )
+from cudf.utils.utils import set_allocator
 
 __version__ = get_versions()["version"]
 del get_versions

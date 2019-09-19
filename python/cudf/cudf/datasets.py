@@ -138,10 +138,15 @@ def make_categorical(n, rstate):
     )
 
 
+def make_bool(n, rstate):
+    return rstate.choice([True, False], size=n)
+
+
 make = {
     float: make_float,
     int: make_int,
     str: make_string,
     object: make_string,
     "category": make_categorical,
+    bool: make_bool,
 }

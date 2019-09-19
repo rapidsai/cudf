@@ -57,6 +57,8 @@ cdef extern from "cudf/cudf.h" namespace "cudf::io::csv" nogil:
         quote_style         quoting
         bool                doublequote
 
+        gdf_time_unit       out_time_unit
+
     cdef cppclass reader:
         reader(const reader_options &args) except +
 
