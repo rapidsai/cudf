@@ -54,8 +54,8 @@ struct page_state_s {
     int32_t valid_map_offset;       // offset in valid_map, in bits
     uint32_t out_valid;
     uint32_t out_valid_mask;
-    int32_t first_row;
-    int32_t num_rows;
+    int32_t first_row;              // First row in page to output
+    int32_t num_rows;               // Rows in page to decode (including rows to be skipped)
     int32_t dtype_len;              // Output data type
     int32_t dtype_len_in;           // Can be larger than dtype_len if truncating 32-bit into 8-bit
     int32_t dict_bits;              // # of bits to store dictionary indices
