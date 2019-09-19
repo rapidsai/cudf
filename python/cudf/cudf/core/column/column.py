@@ -596,7 +596,13 @@ class Column(object):
                 self, value, key_start, key_stop, 0
             )
         else:
-            out = libcudf.copying.scatter(value, key, self)
+            try:
+                out = libcudf.copying.scatter(value, key, self)
+            except RuntimeError as e:
+                if "out of bounds" in str(e):
+                    raise IndexError(
+                        f"index out of bounds for column of size {len(self)}"
+                    )
 
         self._data = out.data
         self._mask = out.mask
@@ -708,13 +714,19 @@ class Column(object):
         """
         from cudf.core.column import column_empty_like
 
-        indices = Buffer(indices)
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
 
-        # Returns a new column
-        result = libcudf.copying.gather(self, indices)
+        try:
+            result = libcudf.copying.gather(self, indices)
+        except RuntimeError as e:
+            if "out of bounds" in str(e):
+                raise IndexError(
+                    f"index out of bounds for column of size {len(self)}"
+                )
+            raise
+
         result.name = self.name
         return result
 

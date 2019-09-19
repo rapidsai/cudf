@@ -873,3 +873,15 @@ def test_iloc_negative_indices():
     psr = pd.Series([1, 2, 3, 4, 5])
     gsr = cudf.from_pandas(psr)
     assert_eq(psr.iloc[[-1, -2, -4]], gsr.iloc[[-1, -2, -4]])
+
+
+def test_out_of_bounds_indexing():
+    a = cudf.Series([1, 2, 3])
+    with pytest.raises(IndexError):
+        a[[0, 1, 9]]
+    with pytest.raises(IndexError):
+        a[[0, 1, -4]]
+    with pytest.raises(IndexError):
+        a[[0, 1, 9]] = 2
+    with pytest.raises(IndexError):
+        a[[0, 1, -4]] = 2
