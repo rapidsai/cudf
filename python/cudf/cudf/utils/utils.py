@@ -295,5 +295,6 @@ def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     use_managed_memory = True if allocator == "managed" else False
     _set_rmm_config(use_managed_memory, pool, initial_pool_size)
 
+
 IS_NEP18_ACTIVE = _is_nep18_active()
 _have_cupy = _have_cupy()
