@@ -294,21 +294,20 @@ table gather(table const* source_table, gdf_column const& gather_map, bool check
  * size), the outcome is undefined.
  * When the indices array is empty, an empty vector of columns is returned.
  *
- * The output columns will be allocated by the function.
- *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
  * indices: {1, 3, 5, 9, 2, 4, 8, 8}
  * output:  {{12, 14}, {20, 22, 24, 26}, {14, 16}, {}}
  *
- * @param[in] input_column  The input column whose rows will be sliced.
+ * @param[in] input         The input column whose rows will be sliced.
  * @param[in] indices       An device array of indices that are used to take 'slices'
  * of the input column.
- * @return  A std::vector of gdf_column*, each of which may have a different number of rows.
- * a different number of rows that are equal to the difference of two
- * consecutive indices in the indices array.
+ * @param[in] num_indices   Number of indices in the indices array
+ * @return  A std::vector of gdf_column*, each of which may have a different
+ * number of rows. The number of rows in each column is equal to the difference
+ * of two consecutive indices in the indices array.
  */
-std::vector<gdf_column*> slice(gdf_column const &          input_column,
+std::vector<gdf_column*> slice(gdf_column const &         input,
                                gdf_index_type const*      indices,
                                gdf_size_type              num_indices);
 
@@ -317,18 +316,18 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
  * according to a set of indices.
  *
  * The "split" function divides the input column into multiple intervals
- * of rows using the indices values and it stores the intervals into the output
- * columns. Regarding the interval of indices, a pair of values are taken from
- * the indices array in a consecutive manner. The pair of indices are left-closed
- * and right-open.
+ * of rows using the splits indices values and it stores the intervals into the
+ * output columns. Regarding the interval of indices, a pair of values are taken
+ * from the indices array in a consecutive manner. The pair of indices are
+ * left-closed and right-open.
  *
- * The indices array ('indices') is require to be a monotonic non-decreasing set.
+ * The indices array ('splits') is require to be a monotonic non-decreasing set.
  * The indices in the array are required to comply with the following conditions:
  * a, b belongs to Range[0, input column size]
  * a <= b, where the position of a is less or equal to the position of b.
  *
  * The split function will take a pair of indices from the indices array
- * ('indices') in a consecutive manner. For the first pair, the function will
+ * ('splits') in a consecutive manner. For the first pair, the function will
  * take the value 0 and the first element of the indices array. For the last pair,
  * the function will take the last element of the indices array and the size of
  * the input column.
@@ -341,26 +340,63 @@ std::vector<gdf_column*> slice(gdf_column const &          input_column,
  * size), the outcome is undefined.
  * When the indices array is empty, an empty vector of columns is returned.
  *
- * It is required that the output columns will be preallocated. The size of each
- * of the columns can be of different value. The number of columns must be equal
- * to the number of indices in the array plus one. The datatypes of the input
- * column and the output columns must be the same.
+ * The input columns may have different sizes. The number of
+ * columns must be equal to the number of indices in the array plus one. 
  *
  * Example:
  * input:   {10, 12, 14, 16, 18, 20, 22, 24, 26, 28}
- * indices: {2, 5, 9}
+ * splits: {2, 5, 9}
  * output:  {{10, 12}, {14, 16, 18}, {20, 22, 24, 26}, {28}}
  *
- * @param[in] input_column  The input column whose rows will be split.
- * @param[in] indices       An device array of indices that are used to divide the input
- * column into multiple columns.
+ * @param[in] input         The input column whose rows will be split.
+ * @param[in] splits        An device array of indices that are used to divide
+ * the input column into multiple columns.
+ * @param[in] num_splits   Number of splits in the splits indices array
  * @return A std::vector of gdf_column*, each of which may have a different size
  * a different number of rows.
  */
-std::vector<gdf_column*> split(gdf_column const &          input_column,
-                               gdf_index_type const*      indices,
-                               gdf_size_type              num_indices);
+std::vector<gdf_column*> split(gdf_column const &         input,
+                               gdf_index_type const*      splits,
+                               gdf_size_type              num_splits);
 
+/**
+ * @brief Scatters the rows of a table to `n` tables according to a scatter map
+ *
+ * Copies the rows from the input table to new
+ * tables according to the table indices given by scatter map.
+ * The number of output tables is one more than the maximum value in @p scatter_map.
+ * If a value in [0,n] does not appear in scatter_map, then the corresponding
+ * output table will be empty.
+ *
+ * `scatter_map` is a non-nullable column of `GDF_INT32` elements whose `size`
+ * equals `input.num_rows()` and contains numbers in range of [0, n].
+ *
+ * Exceptional cases for the scatter_map column are:
+ * @throws cudf::logic_error when `scatter_map.dtype != GDF_INT32`
+ * @throws cudf::logic_error when `scatter_map.size != input.num_rows()`
+ * @throws cudf::logic_error when `has_nulls(scatter_map) == true`
+ *
+ * Example:
+ * input:       [{10, 12, 14, 16, 18, 20, 22, 24, 26, 28}, 
+ *               { 1,  2,  3,  4, null, 0, 2,  4,  6,  2}]
+ * scatter_map:  { 3,  4,  3,  1,  4,  4,  0,  1,  1,  1}
+ * output:     {[{22}, {2}], 
+ *              [{16, 24, 26, 28}, {4, 4, 6, 2}], 
+ *              [{}, {}], 
+ *              [{10, 14}, {1, 3}], 
+ *              [{12, 18, 20}, {2, null, 0}]}
+ *
+ * @param[in] input Table whose rows will be partitioned into a set of
+ * tables according to `scatter_map` 
+ * @param[in] scatter_map  Non-nullable column of `GDF_INT32` values that map
+ * each row in `input` table into one of the output tables. 
+ *
+ * @return A std::vector of `table`s containing the scattered rows of `input`.
+ * `table` `i` contains all rows `j` from `input` where `scatter_map[j] == i`. 
+ *
+ */
+std::vector<cudf::table>
+scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
 }  // namespace cudf
 
 #endif  // COPYING_H

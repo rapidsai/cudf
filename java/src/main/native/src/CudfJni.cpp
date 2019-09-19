@@ -535,4 +535,33 @@ JNIEXPORT jint JNICALL Java_ai_rapids_cudf_Cudf_getCategoryIndex(JNIEnv *env, jc
   }
   CATCH_STD(env, 0);
 }
+
+JNIEXPORT jintArray JNICALL Java_ai_rapids_cudf_Cudf_getCategoryBounds(JNIEnv *env, jclass,
+     jlong jcol, jbyteArray jstr) {
+  JNI_NULL_CHECK(env, jcol, "input column is null", nullptr);
+  JNI_NULL_CHECK(env, jstr, "string data is null", nullptr);
+  try {
+    gdf_column *col = reinterpret_cast<gdf_column *>(jcol);
+    std::pair<int, int> bounds(-1, -1);
+    if (col->size > 0) {
+      NVCategory *cat = static_cast<NVCategory *>(col->dtype_info.category);
+      JNI_NULL_CHECK(env, cat, "category is null", nullptr);
+
+      int len = env->GetArrayLength(jstr);
+      cudf::jni::check_java_exception(env);
+      std::unique_ptr<char[]> str(new char[len + 1]);
+      env->GetByteArrayRegion(jstr, 0, len, reinterpret_cast<jbyte *>(str.get()));
+      cudf::jni::check_java_exception(env);
+      str[len] = '\0'; // NUL-terminate UTF-8 string
+
+      bounds = cat->get_value_bounds(str.get());
+    }
+
+    cudf::jni::native_jintArray jbounds(env, 2);
+    jbounds[0] = bounds.first;
+    jbounds[1] = bounds.second;
+    return jbounds.get_jArray();
+  }
+  CATCH_STD(env, 0);
+}
 } // extern "C"

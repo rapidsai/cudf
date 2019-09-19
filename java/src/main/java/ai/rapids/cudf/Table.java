@@ -1036,7 +1036,8 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
-     * @return Joined {@link Table}
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
      */
     public Table leftJoin(TableOperation rightJoinIndices) {
       return new Table(gdfLeftJoin(operation.table.nativeHandle, operation.indices,
@@ -1050,7 +1051,8 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
-     * @return Joined {@link Table}
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
      */
     public Table innerJoin(TableOperation rightJoinIndices) {
       return new Table(gdfInnerJoin(operation.table.nativeHandle, operation.indices,
