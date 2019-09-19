@@ -75,6 +75,16 @@ def test_repeat_index():
     assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
 
 
+def test_repeat_dataframe():
+    psr = pd.DataFrame({"a": [1, 1, 2, 2]})
+    gsr = cudf.from_pandas(psr)
+    repeats = np.random.randint(10, size=4)
+
+    # pd.DataFrame doesn't have repeat() so as a workaround, we are
+    # comparing pd.Series.repeat() with cudf.DataFrame.repeat()['a']
+    assert_eq(psr["a"].repeat(repeats), gsr.repeat(repeats)["a"])
+
+
 @pytest.mark.parametrize(
     "dtype", ["bool", "int8", "int16", "int32", "int64", "float32", "float64"]
 )
