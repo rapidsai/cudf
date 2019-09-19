@@ -188,10 +188,10 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  * @return[out] The result of the scatter
  */
 table scatter(table const& source, gdf_index_type const scatter_map[],
-              table const& target);
+              table const& target, bool check_bounds = false);
 
 table scatter(table const& source, gdf_column const scatter_map,
-              table const& target);
+              table const& target, bool check_bounds = false);
 
 /**
  * @brief Creates a new `table` as if scattering a set of `gdf_scalar`

@@ -46,30 +46,6 @@ using bit_mask::bit_mask_t;
 namespace cudf {
 namespace detail {
 
-
-/**---------------------------------------------------------------------------*
-* @brief Function object for applying a transformation on the gathermap
-* that converts negative indices to positive indices
-*---------------------------------------------------------------------------**/
-template <typename map_type>
-struct map_transform : public thrust::unary_function<map_type,map_type>
-{
-  map_transform(gdf_size_type n_rows, bool transform_negative_indices)
-    : n_rows(n_rows), transform_negative_indices(transform_negative_indices){}
-
-  __device__
-  map_type operator()(map_type in) const
-  {
-    if (transform_negative_indices)
-      return ((in % n_rows) + n_rows) % n_rows;
-    else
-      return in;
-  }
-  gdf_size_type n_rows;
-  bool transform_negative_indices;
-};
-
-
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column gather_map,
@@ -109,7 +85,6 @@ struct dispatch_map_type {
    CUDF_FAIL("Gather map must be an integral type.");
   }
 };
-
 
 void gather(table const *source_table, gdf_column const gather_map,
             table *destination_table, bool check_bounds, bool ignore_out_of_bounds,

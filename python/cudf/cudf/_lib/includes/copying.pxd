@@ -13,7 +13,7 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     cdef cudf_table gather(
         const cudf_table * source_table,
         const gdf_column gather_map,
-        bool check_bounds
+        bool bounds_check
     ) except +
 
     cdef gdf_column copy(
@@ -23,7 +23,8 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
     cdef cudf_table scatter(
         const cudf_table source,
         const gdf_column scatter_map,
-        const cudf_table target
+        const cudf_table target,
+        bool bounds_check
     ) except +
 
     cdef void copy_range(

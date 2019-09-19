@@ -1,4 +1,3 @@
-
 #include <cudf/copying.hpp>
 #include <cudf/cudf.h>
 #include <utilities/bit_util.cuh>
@@ -213,6 +212,28 @@ struct column_gatherer {
 
     CHECK_STREAM(stream);
   }
+};
+
+/**---------------------------------------------------------------------------*
+* @brief Function object for applying a transformation on the gathermap
+* that converts negative indices to positive indices
+*---------------------------------------------------------------------------**/
+template <typename map_type>
+struct map_transform : public thrust::unary_function<map_type,map_type>
+{
+  map_transform(gdf_size_type n_rows, bool transform_negative_indices)
+    : n_rows(n_rows), transform_negative_indices(transform_negative_indices){}
+
+  __device__
+  map_type operator()(map_type in) const
+  {
+    if (transform_negative_indices)
+      return ((in % n_rows) + n_rows) % n_rows;
+    else
+      return in;
+  }
+  gdf_size_type n_rows;
+  bool transform_negative_indices;
 };
 
 } // namespace

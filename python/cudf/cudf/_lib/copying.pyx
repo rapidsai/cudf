@@ -94,9 +94,7 @@ def gather(source, maps, bounds_check=True):
 
     cdef cudf_table* c_in_table = table_from_columns(in_cols)
     cdef cudf_table c_out_table
-
     cdef gdf_column* c_maps = column_view_from_column(maps)
-
     cdef bool c_bounds_check = bounds_check
 
     with nogil:
@@ -121,7 +119,7 @@ def gather(source, maps, bounds_check=True):
         return out_cols[0]
 
 
-def scatter(source, maps, target):
+def scatter(source, maps, target, bounds_check=True):
     from cudf.core.column import column
 
     cdef cudf_table* c_source_table
@@ -146,12 +144,14 @@ def scatter(source, maps, target):
     c_target_table = table_from_columns(target_cols)
 
     cdef gdf_column* c_maps = column_view_from_column(maps)
+    cdef bool c_bounds_check = bounds_check
 
     with nogil:
         c_result_table = cpp_scatter(
             c_source_table[0],
             c_maps[0],
-            c_target_table[0])
+            c_target_table[0],
+            c_bounds_check)
 
     free_column(c_maps)
 

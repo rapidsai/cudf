@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
+#include "scatter.hpp"
+#include "gather.cuh"
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/cudf.h>
@@ -31,29 +32,45 @@
 #include <utilities/column_utils.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 
+
+
 using bit_mask::bit_mask_t;
+
 
 namespace cudf {
 namespace detail {
 
-template <typename map_type>
-__global__ void invert_map(map_type gather_map[], const gdf_size_type destination_rows,
-			   map_type const scatter_map[], const gdf_size_type source_rows){
-  map_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
+template <typename gather_map_type, typename scatter_map_type>
+__global__ void invert_map(gather_map_type gather_map[], const gdf_size_type destination_rows,
+			   scatter_map_type scatter_map, const gdf_size_type source_rows){
+  gather_map_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
   if(source_row < source_rows){
-    map_type destination_row = scatter_map[source_row];
+    gather_map_type destination_row = *(scatter_map + source_row);
     if(destination_row < destination_rows){
       gather_map[destination_row] = source_row;
     }
   }
 }
 
-struct invert_map_kernel_forwarder {
+struct dispatch_map_type {
 template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
-void operator()(gdf_column gather_map,
-		const gdf_size_type num_destination_rows,
-		const gdf_column scatter_map,
-		const gdf_size_type num_source_rows) {
+void operator()(table const *source_table, gdf_column scatter_map,
+    table *destination_table, bool check_bounds, bool transform_negative_indices) {
+
+  map_type const * typed_scatter_map = static_cast<map_type const*>(scatter_map.data);
+
+  if (check_bounds) {
+    gdf_index_type begin = (transform_negative_indices) ? -destination_table->num_rows() : 0;
+    CUDF_EXPECTS(
+	source_table->num_rows() == thrust::count_if(
+	    rmm::exec_policy()->on(0),
+	    typed_scatter_map,
+	    typed_scatter_map + source_table->num_rows(),
+	    bounds_checker<map_type>{begin, destination_table->num_rows()}),
+	"Index out of bounds.");
+  }
+
+  gdf_column gather_map = cudf::allocate_like(scatter_map, destination_table->num_rows());
 
   gdf_scalar fill_value;
   fill_value.dtype = gdf_dtype_of<map_type>();
@@ -78,36 +95,40 @@ void operator()(gdf_column gather_map,
 
   constexpr int block_size = 256;
   const gdf_size_type invert_grid_size =
-    (num_destination_rows + block_size - 1) / block_size;
+    (destination_table->num_rows() + block_size - 1) / block_size;
 
   cudf::fill(&gather_map, fill_value, 0, gather_map.size);
 
-  invert_map<map_type> <<<invert_grid_size, block_size>>>(
+  auto scatter_map_iterator = thrust::make_transform_iterator(
+      typed_scatter_map,
+      map_transform<map_type>{destination_table->num_rows(),
+				true});
+	  
+  invert_map<map_type, decltype(scatter_map_iterator)> <<<invert_grid_size, block_size>>>(
       static_cast<map_type*>(gather_map.data),
-      num_destination_rows,
-      static_cast<map_type*>(scatter_map.data),
-      num_source_rows);
+      destination_table->num_rows(),
+      scatter_map_iterator,
+      source_table->num_rows());
+
+  // We want to ignore out of bounds indices for scatter since it is possible that
+  // some elements of the destination column are not modified. 
+  detail::gather(source_table, gather_map, destination_table, false, true, true);
+
+  gdf_column_free(&gather_map);
+
 }
+      
 
 template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
-void operator()(gdf_column gather_map,
-		const gdf_size_type num_destination_rows,
-		const gdf_column scatter_map,
-		const gdf_size_type num_source_rows) {
+void operator()(table const *source_table, gdf_column scatter_map,
+    table *destination_table, bool check_bounds, bool transform_negative_indices) {
   CUDF_FAIL("Scatter map must be an integral type.");
 }
 
 };
 
 void scatter(table const* source_table, gdf_column const scatter_map,
-	     table* destination_table) {
-  const gdf_size_type num_source_rows = source_table->num_rows();
-  const gdf_size_type num_destination_rows = destination_table->num_rows();
-  // Turn the scatter_map[] into a gather_map[] and then call gather(...).
-  // We are initializing the result gather_map with `num_source_rows`
-  // so if at the end the value is not modified we know the original 
-  // scatter map does not map to this row, and we should keep whatever is 
-  // there originally
+    table* destination_table, bool check_bounds, bool transform_negative_indices) {
   
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
@@ -115,31 +136,25 @@ void scatter(table const* source_table, gdf_column const scatter_map,
   if (0 == source_table->num_rows()) {
     return;
   }
-  
-  gdf_column gather_map = cudf::allocate_like(scatter_map, num_destination_rows);
 
-  type_dispatcher(scatter_map.dtype, invert_map_kernel_forwarder{},
-		  gather_map,
-		  num_destination_rows,
-		  scatter_map,
-		  num_source_rows);
+  type_dispatcher(scatter_map.dtype, dispatch_map_type{},
+      source_table,
+      scatter_map,
+      destination_table,
+      check_bounds,
+      true);
 
-  // We want to ignore out of bounds indices for scatter since it is possible that
-  // some elements of the destination column are not modified. 
-  detail::gather(source_table, gather_map, destination_table, false, true, true);
-
-  gdf_column_free(&gather_map);
 }
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
-            table* destination_table) {
+    table* destination_table, bool check_bounds, bool transform_negative_indices) {
   gdf_column scatter_map_column{};
   gdf_column_view(&scatter_map_column,
 		  const_cast<gdf_index_type*>(scatter_map),
 		  nullptr,
 		  source_table->num_rows(),
 		  gdf_dtype_of<gdf_index_type>());
-  scatter(source_table, scatter_map_column, destination_table);
+  scatter(source_table, scatter_map_column, destination_table, check_bounds, transform_negative_indices);
 }
 
 template<bool mark_true>
@@ -240,7 +255,7 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 }  // namespace detail
 
 table scatter(table const& source, gdf_column const scatter_map,
-	      table const& target) {
+    table const& target, bool check_bounds) {
 
   const gdf_size_type n_cols = target.num_columns();
 
@@ -258,7 +273,7 @@ table scatter(table const& source, gdf_column const scatter_map,
     }
   }
 
-  detail::scatter(&source, scatter_map, &output);
+  detail::scatter(&source, scatter_map, &output, check_bounds, true);
   nvcategory_gather_table(output, output);
 
   return output;
@@ -267,7 +282,7 @@ table scatter(table const& source, gdf_column const scatter_map,
 
 
 table scatter(table const& source, gdf_index_type const scatter_map[], 
-    table const& target) {
+    table const& target, bool check_bounds) {
   
   const gdf_size_type n_cols = target.num_columns();
 
@@ -285,7 +300,7 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
     }
   }
 
-  detail::scatter(&source, scatter_map, &output);
+  detail::scatter(&source, scatter_map, &output, check_bounds, true);
   nvcategory_gather_table(output, output);
 
   return output;
