@@ -46,10 +46,12 @@
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2783 Support mapping input columns to function arguments in apply kernels
-- PR #2645 libcudf unique_count for Series.nunique 
+- PR #2645 libcudf unique_count for Series.nunique
+- PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
-- PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows`
+- PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
+- PR #2831 Add `column` argument to `DataFrame.drop`
 
 ## Bug Fixes
 
@@ -93,8 +95,10 @@
 - PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
+- PR #2837 Fix join benchmark
 
 
 # cuDF 0.9.0 (21 Aug 2019)
