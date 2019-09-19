@@ -259,7 +259,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
 
   // If any of the original requests were compound, compute them from the
   // results of simple aggregation requests
-  cudf::table final_output_values = compute_original_requests(
+  cudf::table final_output_values = compute_original_aggregations(
       original_requests, simple_requests, simple_output_values, stream);
 
   return std::make_pair(output_keys, final_output_values);

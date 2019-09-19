@@ -50,26 +50,26 @@ using index_vector = rmm::device_vector<gdf_size_type>;
 namespace {
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the remaining original requests which were skipped in a previous  
- * process, in  the `compound_to_simple` function. Then combine these resutts with 
- * the set of output aggregation columns corresponding to not complex aggregation
- * requests
+ * @brief Computes the remaining original aggregation requests which were skipped 
+ * in a previous process, in  the `compound_to_simple` function. Then combine these 
+ * results with  the set of output aggregation columns corresponding to not ordered
+ * aggregation requests.
  *
  * @param groupby[in] The object for computing sort-based groupby
- * @param original_requests[in] The original set of potentially complex
+ * @param original_requests[in] The original set of potentially ordered
  * aggregation requests
- * @param input_ops_args[in] The list of arguments fot each of the previous complex
+ * @param input_ops_args[in] The list of arguments fot each of the previous ordered
  * aggregation requests
  * @param current_output_values[in] Set of output aggregation columns corresponding to
- * not complex aggregation requests
+ * not ordered aggregation requests
  * @param stream[in] CUDA stream on which to execute
- * @return vector of columns satisfying each of the original requests
+ * @return vector of columns satisfying each of the original aggregation requests
  *---------------------------------------------------------------------------**/
-std::vector<gdf_column*>  process_remaining_complex_request(
+std::vector<gdf_column*>  compute_ordered_aggregations(
     detail::helper &groupby,
     std::vector<AggRequestType> const& original_requests,
     std::vector<operation_args*> const& input_ops_args,
-    cudf::table current_output_values,
+    cudf::table& current_output_values,
     cudaStream_t stream) {
 
   std::vector<gdf_column*> output_value(original_requests.size());
@@ -79,7 +79,7 @@ std::vector<gdf_column*>  process_remaining_complex_request(
 
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
-    if (is_complex(element.second)) {
+    if (is_ordered(element.second)) {
       gdf_column * value_col = element.first;
       gdf_column sorted_values;
       rmm::device_vector<gdf_size_type> group_sizes;
@@ -116,14 +116,6 @@ std::vector<gdf_column*>  process_remaining_complex_request(
       gdf_column_free(&sorted_values);
     }
   }
-
-  // Update size and null count of output columns
-  std::transform(output_value.begin(), output_value.end(), output_value.begin(),
-                 [](gdf_column *col) {
-                   CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
-                   set_null_count(*col);
-                   return col;
-                 });
   return output_value;
 }
 
@@ -140,7 +132,7 @@ std::vector<gdf_column*>  process_remaining_complex_request(
  * @return output value table with the aggregation(s) computed 
  *---------------------------------------------------------------------------**/
 template <bool keys_have_nulls, bool values_have_nulls>
-cudf::table compute_simple_request(const cudf::table &input_keys,
+cudf::table compute_simple_aggregations(const cudf::table &input_keys,
                                const Options &options,
                                detail::helper &groupby,
                                const std::vector<gdf_column *> &simple_values_columns,
@@ -225,7 +217,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
   cudf::table current_output_values{};
   if (simple_values_columns.size() > 0) {
     // Step 1: Aggregate all rows for simple requests 
-    cudf::table simple_output_values = compute_simple_request<keys_have_nulls, values_have_nulls>(input_keys,
+    cudf::table simple_output_values = compute_simple_aggregations<keys_have_nulls, values_have_nulls>(input_keys,
                               options,
                               groupby,
                               simple_values_columns,
@@ -233,10 +225,18 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                               stream);
     // Step 2: If any of the original requests were compound, compute them from the
     // results of simple aggregation requests
-    current_output_values = compute_original_requests(original_requests, simple_requests, simple_output_values, stream);
+    current_output_values = compute_original_aggregations(original_requests, simple_requests, simple_output_values, stream);
   }
-  // If there are "complex" aggregation requests like MEDIAN, QUANTILE, compute these aggregations 
-  std::vector<gdf_column*> final_output_values = process_remaining_complex_request(groupby, original_requests, input_ops_args, current_output_values, stream);
+  // If there are "ordered" aggregation requests like MEDIAN, QUANTILE, compute these aggregations 
+  std::vector<gdf_column*> final_output_values = compute_ordered_aggregations(groupby, original_requests, input_ops_args, current_output_values, stream);
+
+  // Update size and null count of output columns
+  std::transform(final_output_values.begin(), final_output_values.end(), final_output_values.begin(),
+                 [](gdf_column *col) {
+                   CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
+                   set_null_count(*col);
+                   return col;
+                 });
   return std::make_pair(groupby.unique_keys(), final_output_values);
 }
 
@@ -286,7 +286,7 @@ static void verify_operators_with_arguments(std::vector<operators> const& ops, s
       quantile_args* q_args = static_cast<quantile_args*>(args[i]); 
       if (q_args == nullptr or q_args->quantiles.size() == 0) {
         CUDF_FAIL(
-                "Cannot compute QUANTILE aggregation. It requires quantiles argument.");
+                "Missing quantile aggregation arguments.");
       }
     } 
   }

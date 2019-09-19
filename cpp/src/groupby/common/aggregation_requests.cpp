@@ -105,7 +105,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t strea
   return avg;
 }
 
-table compute_original_requests(
+table compute_original_aggregations(
     std::vector<AggRequestType> const& original_requests,
     std::vector<SimpleAggRequestCounter> const& simple_requests,
     table simple_outputs, cudaStream_t stream) {
@@ -154,7 +154,8 @@ table compute_original_requests(
   // Process simple requests
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& req = original_requests[i];
-    if (req.second != MEAN && req.second != MEDIAN && req.second != QUANTILE) {
+
+    if (is_simple(req.second)) {
       // For non-compound requests, append the result to the final output
       // and remove it from the map
       auto found = simple_requests_to_outputs.find(req);

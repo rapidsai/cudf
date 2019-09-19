@@ -56,28 +56,27 @@ using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
 
 static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
 
-static constexpr std::array<operators, 2> complex_aggregations = {MEDIAN, QUANTILE};
+static constexpr std::array<operators, 2> ordered_aggregations = {MEDIAN, QUANTILE};
 
 
 /**---------------------------------------------------------------------------*
  * @brief  To verify that the input operator is part of simple_aggregations list.
  * Note that in this kind of aggregators can be computed in a single pass scan.
- * In the other hand compound aggregation like AVG need to be computed by simple
+ * In the other hand the compound aggregation MEAN need to be computed by simple
  * ones (SUM and COUNT).
  *---------------------------------------------------------------------------**/
 inline bool is_simple(operators op) {
-  return std::any_of(simple_aggregations.begin(), simple_aggregations.end(),
-                     [&](operators test) { return test == op; });
+  return std::find(simple_aggregations.begin(), simple_aggregations.end(), op) !=  std::end(simple_aggregations);
 }
 
+
 /**---------------------------------------------------------------------------*
- * @brief  To verify that the input operator is part of  complex_aggregations list.
- * Complex aggregation is used to identify other ones like MEDIUM and  QUANTILE,
+ * @brief  To verify that the input operator is part of  ordered_aggregations list.
+ * Ordered aggregation is used to identify other ones like MEDIAN and  QUANTILE,
  * which cannot be represented as a combination of single-pass aggregations. 
  *---------------------------------------------------------------------------**/
-inline bool is_complex(operators op) {
-  return std::any_of(complex_aggregations.begin(), complex_aggregations.end(),
-                     [&](operators test) { return test == op; });
+inline bool is_ordered(operators op) {
+  return std::find(ordered_aggregations.begin(), ordered_aggregations.end(), op) !=  std::end(ordered_aggregations);
 }
 
 /**---------------------------------------------------------------------------*
@@ -123,7 +122,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count,
  * @param stream[in] CUDA stream on which to execute
  * @return table Set of columns satisfying each of the original requests
  *---------------------------------------------------------------------------**/
-table compute_original_requests(
+table compute_original_aggregations(
     std::vector<AggRequestType> const& original_requests,
     std::vector<SimpleAggRequestCounter> const& simple_requests, table simple_outputs,
     cudaStream_t stream);
