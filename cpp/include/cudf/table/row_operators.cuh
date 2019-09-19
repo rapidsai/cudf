@@ -23,6 +23,7 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <utilities/release_assert.cuh>
 
+#include <thrust/equal.h>
 #include <thrust/swap.h>
 
 namespace cudf {
@@ -34,13 +35,10 @@ namespace exp {
  * @tparam has_nulls Indicates the potential for null values in either column.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-struct element_equality_comparator {
-  column_device_view lhs;
-  column_device_view rhs;
-  bool nulls_are_equal;
-
+class element_equality_comparator {
+ public:
   /**---------------------------------------------------------------------------*
-   * @brief Construct type-dispatched function object for comparing equality
+   * @brief Conclass type-dispatched function object for comparing equality
    * between two elements.
    *
    * @note `lhs` and `rhs` may be the same.
@@ -52,7 +50,7 @@ struct element_equality_comparator {
    *---------------------------------------------------------------------------**/
   __host__ __device__ element_equality_comparator(column_device_view lhs,
                                                   column_device_view rhs,
-                                                  bool nulls_are_equal)
+                                                  bool nulls_are_equal = true)
       : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {}
 
   /**---------------------------------------------------------------------------*
@@ -69,13 +67,20 @@ struct element_equality_comparator {
       bool const rhs_is_null{rhs.nullable() and rhs.is_null(rhs_element_index)};
       if (lhs_is_null and rhs_is_null) {
         return nulls_are_equal;
-      } else {
+      } else if (lhs_is_null != rhs_is_null) {
         return false;
       }
     }
     return lhs.element<Element>(lhs_element_index) ==
            rhs.element<Element>(rhs_element_index);
   }
+
+ private:
+  column_device_view lhs;
+  column_device_view rhs;
+  bool nulls_are_equal;
+};
+
 template <bool has_nulls = true>
 class row_equality_comparator {
  public:
@@ -126,13 +131,10 @@ enum class weak_ordering {
  * @tparam has_nulls Indicates the potential for null values in either column.
  *---------------------------------------------------------------------------**/
 template <bool has_nulls = true>
-struct element_relational_comparator {
-  column_device_view lhs;
-  column_device_view rhs;
-  null_order null_precedence;
-
+class element_relational_comparator {
+ public:
   /**---------------------------------------------------------------------------*
-   * @brief Construct type-dispatched function object for performing a
+   * @brief Conclass type-dispatched function object for performing a
    * relational comparison between two elements.
    *
    * @note `lhs` and `rhs` may be the same.
@@ -196,6 +198,11 @@ struct element_relational_comparator {
     release_assert(false &&
                    "Attempted to compare elements of uncomparable types.");
   }
+
+ private:
+  column_device_view lhs;
+  column_device_view rhs;
+  null_order null_precedence;
 };
 
 /**---------------------------------------------------------------------------*
@@ -217,7 +224,7 @@ template <bool has_nulls = true>
 class row_lexicographic_comparator {
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Construct a function object for performing a lexicographic
+   * @brief Conclass a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`
