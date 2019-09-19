@@ -39,11 +39,13 @@ namespace detail {
 
 template <typename value_type, typename InputIterator>
 struct scatter_to_gather {
+
   scatter_to_gather(InputIterator first, InputIterator last, value_type default_value):
     first(first), last(last), default_value(default_value) {}
 
+  __device__
   value_type operator()(value_type in) {
-    InputIterator found = thrust::find(first, last, in);
+    InputIterator found = thrust::find(thrust::seq, first, last, in);
     if (found == last) {
       return default_value;
     }
@@ -51,7 +53,6 @@ struct scatter_to_gather {
       return thrust::distance(first, found);
     }
   }
-
   InputIterator first, last;
   value_type default_value;
 };
@@ -66,10 +67,10 @@ void operator()(table const* source_table,
   // Turn the scatter_map[] into a gather_map[] and then call gather(...).
   auto gather_map = thrust::make_transform_iterator(
       thrust::make_counting_iterator(0),
-      scatter_to_gather<map_type, map_type const*>(
+      scatter_to_gather<map_type, decltype(typed_scatter_map)>(
 	  typed_scatter_map,
-	  typed_scatter_map+source_table->num_rows(),
-	  -1));;
+	  typed_scatter_map+scatter_map.size,
+	  -1));
 
   detail::gather<decltype(gather_map)>(source_table, gather_map, destination_table, false, true, true, false);
 
