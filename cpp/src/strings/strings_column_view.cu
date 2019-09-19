@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/strings_column_handler.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <utilities/error_utils.hpp>
 
@@ -25,54 +25,52 @@
 namespace cudf {
 
 //
-strings_column_handler::strings_column_handler( column_view strings_column,
-                                                rmm::mr::device_memory_resource* mr )
-    : _parent(strings_column), _mr(mr)
+strings_column_view::strings_column_view( column_view strings_column )
+    : _parent(strings_column)
 {
-    CUDF_EXPECTS( _parent.type().id()==STRING, "strings_column_handler only supports strings");
+    CUDF_EXPECTS( _parent.type().id()==STRING, "strings_column_view only supports strings");
     CUDF_EXPECTS( _parent.num_children()>0, "strings column must have children"); // revisit this (all nulls column?)
 }
 
-size_type strings_column_handler::size() const
+size_type strings_column_view::size() const
 {
     return _parent.child(0).size();
 }
 
-column_view strings_column_handler::parent_column() const
+column_view strings_column_view::parent() const
 {
     return _parent;
 }
 
-column_view strings_column_handler::offsets_column() const
+column_view strings_column_view::offsets() const
 {
     return _parent.child(0);
 }
 
-column_view strings_column_handler::chars_column() const
+column_view strings_column_view::chars() const
 {
     return _parent.child(1);
 }
 
-const bitmask_type* strings_column_handler::null_mask() const
+const bitmask_type* strings_column_view::null_mask() const
 {
     return _parent.null_mask();
 }
 
-size_type strings_column_handler::null_count() const
+size_type strings_column_view::null_count() const
 {
     return _parent.null_count();
 }
 
-rmm::mr::device_memory_resource* strings_column_handler::memory_resource() const
+namespace strings
 {
-    return _mr;
-}
 
 // print strings to stdout
-void strings_column_handler::print( size_type start, size_type end,
-                                    size_type max_width, const char* delimiter ) const
+void print( strings_column_view strings,
+            size_type start, size_type end,
+            size_type max_width, const char* delimiter )
 {
-    size_type count = size();
+    size_type count = strings.size();
     if( end < 0 || end > count )
         end = count;
     if( start < 0 )
@@ -83,15 +81,16 @@ void strings_column_handler::print( size_type start, size_type end,
 
     // stick with the default stream for this odd/rare stdout function
     auto execpol = rmm::exec_policy(0);
-    auto strings_column = column_device_view::create(_parent);
+    auto strings_column = column_device_view::create(strings.parent());
     auto d_column = *strings_column;
-    auto d_offsets = offsets_column().data<int32_t>();
-    auto d_strings = chars_column().data<char>();
+    auto d_offsets = strings.offsets().data<int32_t>();
+    auto d_strings = strings.chars().data<char>();
 
     // create output strings offsets
     rmm::device_vector<size_t> output_offsets(count,0);
     thrust::transform_inclusive_scan( execpol->on(0),
-        thrust::make_counting_iterator<size_type>(start), thrust::make_counting_iterator<size_type>(end),
+        thrust::make_counting_iterator<size_type>(start),
+        thrust::make_counting_iterator<size_type>(end),
         output_offsets.begin(),
         [d_column, d_strings, max_width, d_offsets] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )
@@ -149,4 +148,5 @@ void strings_column_handler::print( size_type start, size_type end,
     }
 }
 
+} // namespace strings
 } // namespace cudf

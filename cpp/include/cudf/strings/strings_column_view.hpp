@@ -23,16 +23,15 @@ namespace cudf {
 
 /**---------------------------------------------------------------------------*
  * @brief Given a column-view of strings type, an instance of this class
- * provides the strings operations on the column.
+ * provides a wrapper on the column for strings operations.
  *---------------------------------------------------------------------------**/
-class strings_column_handler
+class strings_column_view : private column_view
 {
  public:
-  ~strings_column_handler() = default;
-
-  strings_column_handler( column_view strings_column,
-                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-  //strings_column_handler( const column_view&& strings_column );
+  strings_column_view( column_view strings_column );
+  strings_column_view( strings_column_view&& strings_view ) = default;
+  strings_column_view( const strings_column_view& strings_view ) = default;
+  ~strings_column_view() = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of strings in the column
@@ -42,17 +41,17 @@ class strings_column_handler
   /**---------------------------------------------------------------------------*
    * @brief Returns the internal parent string column
    *---------------------------------------------------------------------------**/
-  column_view parent_column() const;
+  column_view parent() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the internal column of offsets
    *---------------------------------------------------------------------------**/
-  column_view offsets_column() const;
+  column_view offsets() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the internal column of chars
    *---------------------------------------------------------------------------**/
-  column_view chars_column() const;
+  column_view chars() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a pointer to the internal null mask memory
@@ -64,39 +63,29 @@ class strings_column_handler
    *---------------------------------------------------------------------------**/
   size_type null_count() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the registered memory resource
-   *---------------------------------------------------------------------------**/
-  rmm::mr::device_memory_resource* memory_resource() const;
-
-  /**---------------------------------------------------------------------------*
-   * @brief Prints the strings to stdout.
-   *
-   * @param start Index of first string to print.
-   * @param end Index of last string to print. Specify -1 for all strings.
-   * @param max_width Maximum number of characters to print per string.
-   *        Specify -1 to print all characters.
-   * @param delimiter The chars to print between each string.
-   *        Default is new-line character.
-   *---------------------------------------------------------------------------**/
-  void print( size_type start=0, size_type end=-1,
-              size_type max_width=-1, const char* delimiter = "\n" ) const;
-
-  // sort types can be combined
-  enum sort_type {
-      none=0,    ///< no sorting
-      length=1,  ///< sort by string length
-      name=2     ///< sort by characters code-points
-  };
-
 private:
   const column_view _parent;
-  rmm::mr::device_memory_resource* _mr;
 
 };
 
 namespace strings
 {
+
+/**---------------------------------------------------------------------------*
+ * @brief Prints the strings to stdout.
+ *
+ * @param strings Strings instance for this operation.
+ * @param start Index of first string to print.
+ * @param end Index of last string to print. Specify -1 for all strings.
+ * @param max_width Maximum number of characters to print per string.
+ *        Specify -1 to print all characters.
+ * @param delimiter The chars to print between each string.
+ *        Default is new-line character.
+ *---------------------------------------------------------------------------**/
+void print( strings_column_view strings,
+            size_type start=0, size_type end=-1,
+            size_type max_width=-1, const char* delimiter = "\n" );
+
 
 // array.cu
 /**---------------------------------------------------------------------------*
@@ -109,6 +98,7 @@ namespace strings
  * s2 is ["c", "d", "e", "f"]
  * @endcode
  * 
+ * @param strings Strings instance for this operation.
  * @param start Index of first string to use.
  * @param end Index of last string to use.
  *        Default -1 indicates the last element.
@@ -117,10 +107,11 @@ namespace strings
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column of size (end-start)/step.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> sublist( strings_column_handler handler,
+std::unique_ptr<cudf::column> sublist( strings_column_view strings,
                                        size_type start, size_type end=-1,
                                        size_type step=1,
-                                       cudaStream_t stream=(cudaStream_t)0 );
+                                       cudaStream_t stream=0,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column created this strings instance using
@@ -133,30 +124,41 @@ std::unique_ptr<cudf::column> sublist( strings_column_handler handler,
  * s2 is ["a", "c"]
  * @endcode
  *
+ * @param strings Strings instance for this operation.
  * @param gather_map The indices with which to select strings for the new column.
  *        Values must be within [0,size()) range.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column of size indices.size()
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> gather( strings_column_handler handler,
+std::unique_ptr<cudf::column> gather( strings_column_view strings,
                                       cudf::column_view gather_map,
-                                      cudaStream_t stream=(cudaStream_t)0 );
+                                      cudaStream_t stream=0,
+                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+// sort types can be combined
+enum sort_type {
+    none=0,    ///< no sorting
+    length=1,  ///< sort by string length
+    name=2     ///< sort by characters code-points
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column that is a sorted version of the
  * strings in this instance.
  *
+ * @param strings Strings instance for this operation.
  * @param stype Specify what attribute of the string to sort on.
  * @param ascending Sort strings in ascending or descending order.
  * @param nullfirst Sort nulls to the beginning or the end of the new column.
  * @param stream CUDA stream to use kernels in this method.
  * @return New strings column with sorted elements of this instance.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> sort( strings_column_handler handler,
-                                    strings_column_handler::sort_type stype,
+std::unique_ptr<cudf::column> sort( strings_column_view strings,
+                                    sort_type stype,
                                     bool ascending=true,
                                     bool nullfirst=true,
-                                    cudaStream_t stream=(cudaStream_t)0 );
+                                    cudaStream_t stream=0,
+                                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**
  * @brief Returns new instance using the provided map values and strings.
@@ -171,18 +173,20 @@ std::unique_ptr<cudf::column> sort( strings_column_handler handler,
  * s3 is ["a", "e", "c", "f"]
  * @endcode
  *
- * @param[in] strings The instance for which to retrieve the values
- *            specified in map column.
- * @param[in] scatter_map The 0-based index values to retrieve from the
- *            strings parameter. Number of values must equal the number
- *            of elements in strings pararameter (strings.size()).
+ * @param strings Strings instance for this operation.
+ * @param values The instance for which to retrieve the strings
+ *        specified in map column.
+ * @param scatter_map The 0-based index values to retrieve from the
+ *        strings parameter. Number of values must equal the number
+ *        of elements in strings pararameter (strings.size()).
  * @param stream CUDA stream to use kernels in this method.
  * @return New instance with the specified strings.
  */
-std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
-                                       strings_column_handler strings,
+std::unique_ptr<cudf::column> scatter( strings_column_view strings,
+                                       strings_column_view values,
                                        cudf::column_view scatter_map,
-                                       cudaStream_t stream=(cudaStream_t)0 );
+                                       cudaStream_t stream=0,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 /**
  * @brief Returns new instance using the provided index values and a
  * single string. The map values specify where to place the string
@@ -196,25 +200,30 @@ std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
  * s2 is ["a", "e", "c", "e"]
  * @endcode
  * 
- * @param[in] string The string to place in according to the scatter_map.
- * @param[in] scatter_map The 0-based index values to place the given string.
+ * @param strings Strings instance for this operation.
+ * @param value Null-terminated encoded string in host memory to use with
+ *        the scatter_map.
+ * @param scatter_map The 0-based index values to place the given string.
  * @return New instance with the specified strings.
  */
-std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
-                                       const char* string,
+std::unique_ptr<cudf::column> scatter( strings_column_view strings,
+                                       const char* value,
                                        cudf::column_view scatter_map,
-                                       cudaStream_t stream=(cudaStream_t)0 );
+                                       cudaStream_t stream=0,
+                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 // attributes.cu
 /**---------------------------------------------------------------------------*
  * @brief Returns the number of bytes for each string in a strings column.
  * Null strings will have a byte count of 0.
  *
+ * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
  * @return Numeric column of type int32.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> bytes_counts( strings_column_handler handler,
-                                            cudaStream_t stream=(cudaStream_t)0 );
+std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
+                                            cudaStream_t stream=0,
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the number of characters for each string in a strings column.
@@ -222,11 +231,13 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_handler handler,
  * same as the number of bytes if multi-byte encoded characters make up a
  * string.
  *
+ * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
  * @return Numeric column of type int32.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> characters_counts( strings_column_handler handler,
-                                                 cudaStream_t stream=(cudaStream_t)0 );
+std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
+                                                 cudaStream_t stream=0,
+                                                 rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 } // namespace strings
 } // namespace cudf

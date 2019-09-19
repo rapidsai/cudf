@@ -15,7 +15,7 @@
  */
 
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/strings_column_handler.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 
 #include <thrust/transform.h>
@@ -25,18 +25,19 @@ namespace cudf
 namespace strings
 {
 
-std::unique_ptr<cudf::column> characters_counts( strings_column_handler handler,
-                                                 cudaStream_t stream )
+std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
+                                                 cudaStream_t stream,
+                                                 rmm::mr::device_memory_resource* mr )
 {
-    size_type count = handler.size();
+    size_type count = strings.size();
     auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(handler.parent_column(),stream);
+    auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
     // create output column
     auto result = std::make_unique<cudf::column>( data_type{INT32}, count,
-        rmm::device_buffer(count * sizeof(int32_t), stream, handler.memory_resource()),
+        rmm::device_buffer(count * sizeof(int32_t), stream, mr),
         rmm::device_buffer(d_column.null_mask(), gdf_valid_allocation_size(count),
-                           stream, handler.memory_resource()),
+                           stream, mr),
         d_column.null_count());
     auto results_view = result->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
@@ -53,18 +54,19 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_handler handler,
     return result;
 }
 
-std::unique_ptr<cudf::column> bytes_counts( strings_column_handler handler,
-                                            cudaStream_t stream )
+std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
+                                            cudaStream_t stream,
+                                            rmm::mr::device_memory_resource* mr )
 {
-    size_type count = handler.size();
+    size_type count = strings.size();
     auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(handler.parent_column(),stream);
+    auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
     // create output column
     auto result = std::make_unique<cudf::column>( data_type{INT32}, count,
-        rmm::device_buffer(count * sizeof(int32_t), stream, handler.memory_resource()),
+        rmm::device_buffer(count * sizeof(int32_t), stream, mr),
         rmm::device_buffer(d_column.null_mask(), gdf_valid_allocation_size(count),
-                           stream, handler.memory_resource()),
+                           stream, mr),
         d_column.null_count());
     auto results_view = result->mutable_view();
     auto d_lengths = results_view.data<int32_t>();

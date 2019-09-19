@@ -52,16 +52,16 @@ std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
 
 // build an array of string_view objects from a strings column
 rmm::device_vector<cudf::string_view> create_string_array_from_column(
-    cudf::strings_column_handler handler,
+    cudf::strings_column_view strings,
     cudaStream_t stream )
 {
     auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(handler.parent_column(),stream);
+    auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
 
-    auto count = handler.size();
-    rmm::device_vector<cudf::string_view> strings(count);
-    cudf::string_view* d_strings = strings.data().get();
+    auto count = strings.size();
+    rmm::device_vector<cudf::string_view> strings_array(count);
+    cudf::string_view* d_strings = strings_array.data().get();
     thrust::for_each_n( execpol->on(stream), 
         thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_strings] __device__ (size_type idx) {
@@ -70,12 +70,11 @@ rmm::device_vector<cudf::string_view> create_string_array_from_column(
             else
                 d_strings[idx] = d_column.element<cudf::string_view>(idx);
         });
-
-    return strings;
+    return strings_array;
 }
 
 // build a strings offsets column from an array of string_views
-std::unique_ptr<cudf::column> offsets_column_from_string_array(
+std::unique_ptr<cudf::column> offsets_from_string_array(
     const rmm::device_vector<cudf::string_view>& strings,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {
@@ -101,7 +100,7 @@ std::unique_ptr<cudf::column> offsets_column_from_string_array(
 }
 
 // build a strings chars column from an array of string_views
-std::unique_ptr<cudf::column> chars_column_from_string_array(
+std::unique_ptr<cudf::column> chars_from_string_array(
     const rmm::device_vector<cudf::string_view>& strings,
     const int32_t* d_offsets,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )

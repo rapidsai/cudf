@@ -427,7 +427,7 @@ add_library(cudf
             src/bitmask/null_mask.cpp
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
-            src/strings/strings_column_handler.cu
+            src/strings/strings_column_view.cu
             src/strings/array.cu
             src/strings/attributes.cu
             src/strings/utilities.cu

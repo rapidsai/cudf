@@ -15,7 +15,7 @@
  */
 
 #include <cuda_runtime.h>
-#include <cudf/strings/strings_column_handler.hpp>
+#include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 
 #include <rmm/thrust_rmm_allocator.h>
@@ -29,8 +29,6 @@ namespace detail
 
 /**
  * @brief Creates a temporary string_view object from a host string.
- * The host string is copied into device memory and the object
- * pointer can be used in device code.
  *
  * @param[in] str Null-terminated, encoded string in CPU memory.
  * @param[in] stream Stream to execute any device code against.
@@ -40,27 +38,46 @@ std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
     string_from_host( const char* str, cudaStream_t stream=0 );
 
 /**
- * 
+ * @brief Creates a strings array from a strings column.
+ * This is useful for doing some intermediate array operations.
+ *
+ * @param strings Strings instance.
+ * @param stream Stream to execute any device code against.
+ * @return Strings array
  */
 rmm::device_vector<cudf::string_view> create_string_array_from_column(
-    cudf::strings_column_handler strings,
-    cudaStream_t stream = (cudaStream_t)0 );
+    cudf::strings_column_view strings,
+    cudaStream_t stream=0 );
 
 /**
- * 
+ * @brief Creates an offsets column from a strings array.
+ * This can be used to recreate the offsets child of a new
+ * strings column from an intermediate strings array.
+ *
+ * @param strings Strings array
+ * @param stream Stream to execute any device code against.
+ * @param mr Memory resource to use.
+ * @return Offsets column
  */
-std::unique_ptr<cudf::column> offsets_column_from_string_array(
+std::unique_ptr<cudf::column> offsets_from_string_array(
     const rmm::device_vector<cudf::string_view>& strings,
-    cudaStream_t stream = (cudaStream_t)0,
+    cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**
- * 
+ * @brief Creates a chars column from a strings array.
+ * This can be used to recreate the chars child of a new
+ * strings column from an intermediate strings array.
+ *
+ * @param strings Strings array
+ * @param stream Stream to execute any device code against.
+ * @param mr Memory resource to use.
+ * @return chars column
  */
-std::unique_ptr<cudf::column> chars_column_from_string_array(
+std::unique_ptr<cudf::column> chars_from_string_array(
     const rmm::device_vector<cudf::string_view>& strings,
     const int32_t* d_offsets,
-    cudaStream_t stream = (cudaStream_t)0,
+    cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 } // namespace detail
