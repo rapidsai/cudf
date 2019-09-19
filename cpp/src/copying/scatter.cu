@@ -97,7 +97,7 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 
   constexpr int block_size = 256;
   const gdf_size_type invert_grid_size =
-    (destination_table->num_rows() + block_size - 1) / block_size;
+    (source_table->num_rows() + block_size - 1) / block_size;
 
   cudf::fill(&gather_map, fill_value, 0, gather_map.size);
 
