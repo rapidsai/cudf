@@ -67,12 +67,12 @@ class reader::Impl {
 
  private:
   /**
-   * @brief Align a size such that aligned loads within a memory block
+   * @brief Align a size such that aligned 32-bit loads within a memory block
    * won't read bytes beyond the unaligned cuda-memcheck limit
    *
    * @param[in] size in bytes
    *
-   * @return size_t Aligned size
+   * @return size_t Size aligned to the next multiple of 4
    **/
   size_t align_size(size_t v) const { return v + (3 & -static_cast<int>(v)); }
 
