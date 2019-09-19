@@ -1,6 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
-from io import BytesIO, StringIO
+from io import BytesIO, IOBase, StringIO
 
 import cudf._lib as libcudf
 from cudf.utils import ioutils
@@ -40,11 +40,12 @@ def read_csv(
     na_filter=True,
     prefix=None,
     index_col=None,
+    **kwargs,
 ):
     """{docstring}"""
 
     filepath_or_buffer, compression = ioutils.get_filepath_or_buffer(
-        filepath_or_buffer, compression, (BytesIO, StringIO)
+        filepath_or_buffer, compression, (BytesIO, StringIO), **kwargs
     )
     return libcudf.csv.read_csv(
         filepath_or_buffer,
@@ -106,6 +107,9 @@ def to_csv(
                 columns.insert(0, df.index.name)
         df = df.reset_index()
     rows_per_chunk = chunksize if chunksize else len(df)
+
+    if isinstance(path, IOBase):
+        path = path.name
 
     return libcudf.csv.write_csv(
         cols=df._cols,

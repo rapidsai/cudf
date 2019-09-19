@@ -24,6 +24,11 @@ cd $WORKSPACE
 export GIT_DESCRIBE_TAG=`git describe --abbrev=0 --tags`
 export GIT_DESCRIBE_NUMBER=`git rev-list ${GIT_DESCRIBE_TAG}..HEAD --count`
 
+# If nightly build, append current YYMMDD to version
+if [[ "$BUILD_MODE" = "branch" && "$SOURCE_BRANCH" = branch-* ]] ; then
+  export VERSION_SUFFIX=`date +%y%m%d`
+fi
+
 ################################################################################
 # SETUP - Check environment
 ################################################################################
@@ -44,23 +49,14 @@ conda list
 conda config --set ssl_verify False
 
 ################################################################################
-# INSTALL - Install NVIDIA driver
-################################################################################
-
-logger "Install NVIDIA driver for CUDA $CUDA..."
-apt-get update -q
-DRIVER_VER="396.44-1"
-LIBCUDA_VER="396"
-if [ "$CUDA" == "10.0" ]; then
-  DRIVER_VER="410.72-1"
-  LIBCUDA_VER="410"
-fi
-DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
-  cuda-drivers=${DRIVER_VER} libcuda1-${LIBCUDA_VER}
-
-################################################################################
 # BUILD - Conda package builds (conda deps: libcudf <- libcudf_cffi <- cudf)
 ################################################################################
+
+logger "Build conda pkg for libNVStrings..."
+source ci/cpu/libnvstrings/build_libnvstrings.sh
+
+logger "Build conda pkg for nvstrings..."
+source ci/cpu/nvstrings/build_nvstrings.sh
 
 logger "Build conda pkg for libcudf..."
 source ci/cpu/libcudf/build_libcudf.sh
@@ -71,6 +67,8 @@ source ci/cpu/cudf/build_cudf.sh
 logger "Build conda pkg for dask-cudf..."
 source ci/cpu/dask-cudf/build_dask_cudf.sh
 
+logger "Build conda pkg for custreamz..."
+source ci/cpu/custreamz/build_custreamz.sh
 ################################################################################
 # UPLOAD - Conda packages
 ################################################################################

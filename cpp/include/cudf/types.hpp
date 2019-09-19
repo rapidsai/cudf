@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include "cudf.h"
 
 /**---------------------------------------------------------------------------*

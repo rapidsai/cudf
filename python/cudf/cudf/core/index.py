@@ -45,6 +45,9 @@ class Index(object):
         header["frame_count"] = len(frames)
         return header, frames
 
+    def __contains__(self, item):
+        return item in self._values
+
     @classmethod
     def deserialize(cls, header, frames):
         """
@@ -383,6 +386,12 @@ class RangeIndex(Index):
         self.name = name
         self._cached_values = None
 
+    def __contains__(self, item):
+        if self._start <= item < self._stop:
+            return True
+        else:
+            return False
+
     def copy(self, deep=True):
         if deep:
             result = deepcopy(self)
@@ -418,6 +427,8 @@ class RangeIndex(Index):
             stop += self._start
             if sln == 0:
                 return RangeIndex(0)
+            elif step == 1:
+                return RangeIndex(start, stop)
             else:
                 return index_from_range(start, stop, step)
 
@@ -550,8 +561,15 @@ class RangeIndex(Index):
         return self._start >= self._stop
 
     def get_slice_bound(self, label, side, kind):
-        # TODO: Range-specific implementation here
-        raise (NotImplementedError)
+        if label < self._start:
+            return 0
+        elif label >= self._stop:
+            return len(self)
+        else:
+            if side == "left":
+                return label - self._start
+            elif side == "right":
+                return (label - self._start) + 1
 
     @property
     def __cuda_array_interface__(self):

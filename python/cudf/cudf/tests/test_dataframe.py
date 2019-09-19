@@ -729,8 +729,8 @@ def test_dataframe_hash_partition_masked_keys(nrows):
 @pytest.mark.parametrize("dtype1", utils.supported_numpy_dtypes)
 @pytest.mark.parametrize("dtype2", utils.supported_numpy_dtypes)
 def test_dataframe_concat_different_numerical_columns(dtype1, dtype2):
-    df1 = pd.DataFrame(dict(x=np.arange(5).astype(dtype1)))
-    df2 = pd.DataFrame(dict(x=np.arange(5).astype(dtype2)))
+    df1 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype1)))
+    df2 = pd.DataFrame(dict(x=pd.Series(np.arange(5)).astype(dtype2)))
     if dtype1 != dtype2 and "datetime" in dtype1 or "datetime" in dtype2:
         with pytest.raises(ValueError):
             gd.concat([df1, df2])
@@ -751,16 +751,67 @@ def test_dataframe_concat_different_column_types():
         gd.concat([df1, df2])
 
 
-def test_dataframe_empty_concat():
-    gdf1 = DataFrame()
-    gdf1["a"] = []
-    gdf1["b"] = []
+@pytest.mark.parametrize(
+    "df_1", [DataFrame({"a": [1, 2], "b": [1, 3]}), DataFrame({})]
+)
+@pytest.mark.parametrize(
+    "df_2", [DataFrame({"a": [], "b": []}), DataFrame({})]
+)
+def test_concat_empty_dataframe(df_1, df_2):
 
-    gdf2 = gdf1.copy()
+    got = gd.concat([df_1, df_2])
+    expect = pd.concat([df_1.to_pandas(), df_2.to_pandas()], sort=False)
 
-    gdf3 = gd.concat([gdf1, gdf2])
-    assert len(gdf3) == 0
-    assert len(gdf3.columns) == 2
+    # ignoring dtypes as pandas upcasts int to float
+    # on concatenation with empty dataframes
+
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "df1_d",
+    [
+        {"a": [1, 2], "b": [1, 2], "c": ["s1", "s2"], "d": [1.0, 2.0]},
+        {"b": [1.9, 10.9], "c": ["s1", "s2"]},
+        {"c": ["s1"], "b": [None], "a": [False]},
+    ],
+)
+@pytest.mark.parametrize(
+    "df2_d",
+    [
+        {"a": [1, 2, 3]},
+        {"a": [1, None, 3], "b": [True, True, False], "c": ["s3", None, "s4"]},
+        {"a": [], "b": []},
+        {},
+    ],
+)
+def test_concat_different_column_dataframe(df1_d, df2_d):
+    got = gd.concat(
+        [DataFrame(df1_d), DataFrame(df2_d), DataFrame(df1_d)], sort=False
+    )
+
+    expect = pd.concat(
+        [pd.DataFrame(df1_d), pd.DataFrame(df2_d), pd.DataFrame(df1_d)],
+        sort=False,
+    )
+
+    # numerical columns are upcasted to float in cudf.DataFrame.to_pandas()
+    # casts nan to -1 in non-float numerical columns
+
+    numeric_cols = got.dtypes[got.dtypes != "object"].index
+    for col in numeric_cols:
+        got[col] = got[col].astype(np.float64).fillna(np.nan)
+
+    pd.testing.assert_frame_equal(got.to_pandas(), expect, check_dtype=False)
+
+
+@pytest.mark.parametrize("ser_1", [pd.Series([1, 2, 3]), pd.Series([])])
+@pytest.mark.parametrize("ser_2", [pd.Series([])])
+def test_concat_empty_series(ser_1, ser_2):
+    got = gd.concat([Series(ser_1), Series(ser_2)])
+    expect = pd.concat([ser_1, ser_2])
+
+    pd.testing.assert_series_equal(got.to_pandas(), expect)
 
 
 def test_concat_with_axis():
@@ -823,6 +874,7 @@ def test_concat_with_axis():
     gdg2 = gdf2.groupby(["x", "y"]).min()
     pdg1 = gdg1.to_pandas()
     pdg2 = gdg2.to_pandas()
+
     assert_eq(gd.concat([gdg1, gdg2]), pd.concat([pdg1, pdg2]))
     assert_eq(gd.concat([gdg2, gdg1]), pd.concat([pdg2, pdg1]))
 
@@ -831,6 +883,7 @@ def test_concat_with_axis():
     gdgz2 = gdg2.z
     pdgz1 = gdgz1.to_pandas()
     pdgz2 = gdgz2.to_pandas()
+
     assert_eq(gd.concat([gdgz1, gdgz2]), pd.concat([pdgz1, pdgz2]))
     assert_eq(gd.concat([gdgz2, gdgz1]), pd.concat([pdgz2, pdgz1]))
 
@@ -1101,6 +1154,7 @@ def test_to_arrow_missing_categorical():
         "int16",
         "int32",
         "int64",
+        "longlong",
         "float32",
         "float64",
         "datetime64[ms]",
@@ -1134,7 +1188,8 @@ def test_from_scalar_typing(data_type):
 
 
 @pytest.mark.parametrize(
-    "data_type", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "data_type",
+    ["int8", "int16", "int32", "int64", "float32", "float64", "longlong"],
 )
 def test_from_python_array(data_type):
     np_arr = np.random.randint(0, 100, 10).astype(data_type)
@@ -2535,9 +2590,39 @@ def test_ndim():
     assert s.ndim == gs.ndim
 
 
-@pytest.mark.parametrize("decimal", range(-8, 8))
-def test_round(decimal):
-    arr = np.random.normal(0, 100, 10000)
+@pytest.mark.parametrize(
+    "arr",
+    [
+        np.random.normal(-100, 100, 1000),
+        np.random.randint(-50, 50, 1000),
+        np.zeros(100),
+        np.repeat(np.nan, 100),
+        np.array([1.123, 2.343, np.nan, 0.0]),
+    ],
+)
+@pytest.mark.parametrize(
+    "decimal",
+    [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        pytest.param(
+            -1,
+            marks=[
+                pytest.mark.xfail(reason="NotImplementedError: decimals < 0")
+            ],
+        ),
+    ],
+)
+def test_round(arr, decimal):
     pser = pd.Series(arr)
     ser = Series(arr)
     result = ser.round(decimal)
@@ -2547,7 +2632,8 @@ def test_round(decimal):
     )
 
     # with nulls, maintaining existing null mask
-    mask = np.random.randint(0, 2, 10000)
+    arr = arr.astype("float64")  # for pandas nulls
+    mask = np.random.randint(0, 2, arr.shape[0])
     arr[mask == 1] = np.nan
 
     pser = pd.Series(arr)
@@ -2558,6 +2644,27 @@ def test_round(decimal):
         result.to_pandas(), expected, decimal=10
     )
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
+
+
+@pytest.mark.parametrize(
+    "series",
+    [
+        Series([1.0, None, np.nan, 4.0], nan_as_null=False),
+        Series([1.24430, None, np.nan, 4.423530], nan_as_null=False),
+        Series([1.24430, np.nan, 4.423530], nan_as_null=False),
+        Series([-1.24430, np.nan, -4.423530], nan_as_null=False),
+        Series(np.repeat(np.nan, 100)),
+    ],
+)
+@pytest.mark.parametrize("decimal", [0, 1, 2, 3])
+def test_round_nan_as_null_false(series, decimal):
+    pser = series.to_pandas()
+    ser = Series(series)
+    result = ser.round(decimal)
+    expected = pser.round(decimal)
+    np.testing.assert_array_almost_equal(
+        result.to_pandas(), expected, decimal=10
+    )
 
 
 @pytest.mark.parametrize(
@@ -3417,3 +3524,56 @@ def test_constructor_properties():
     # Inorrect use of _constructor_expanddim (Raises for DataFrame)
     with pytest.raises(NotImplementedError):
         df._constructor_expanddim
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 3, 4, 5],
+        [1, 2, None, 4, 5],
+        [1.0, 2.0, 3.0, 4.0, 5.0],
+        [1.0, 2.0, None, 4.0, 5.0],
+        ["a", "b", "c", "d", "e"],
+        ["a", "b", None, "d", "e"],
+        [None, None, None, None, None],
+        np.array(["1991-11-20", "2004-12-04"], dtype=np.datetime64),
+        np.array(["1991-11-20", None], dtype=np.datetime64),
+        np.array(
+            ["1991-11-20 05:15:00", "2004-12-04 10:00:00"], dtype=np.datetime64
+        ),
+        np.array(["1991-11-20 05:15:00", None], dtype=np.datetime64),
+    ],
+)
+def test_tolist(data):
+    psr = pd.Series(data)
+    gsr = Series.from_pandas(psr)
+
+    got = gsr.tolist()
+    expected = [x if not pd.isnull(x) else None for x in psr.tolist()]
+
+    np.testing.assert_array_equal(got, expected)
+
+
+def test_tolist_mixed_nulls():
+    num_data = pa.array([1.0, None, np.float64("nan")])
+    num_data_expect = [1.0, None, np.float64("nan")]
+
+    time_data = pa.array(
+        [1, None, -9223372036854775808], type=pa.timestamp("ns")
+    )
+    time_data_expect = [
+        pd.Timestamp("1970-01-01T00:00:00.000000001"),
+        None,
+        pd.NaT,
+    ]
+
+    df = DataFrame()
+    df["num_data"] = num_data
+    df["time_data"] = time_data
+
+    num_data_got = df["num_data"].tolist()
+    time_data_got = df["time_data"].tolist()
+
+    np.testing.assert_equal(num_data_got, num_data_expect)
+    for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
+        assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
