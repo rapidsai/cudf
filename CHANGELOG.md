@@ -24,6 +24,7 @@
 - PR #2786 Add benchmarks option to root build.sh
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2844 Add Series/DataFrame notnull
 - PR #2719 Series and DataFrame covariance and Pearson correlation
 
 ## Improvements
@@ -51,6 +52,7 @@
 - PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2831 Add `column` argument to `DataFrame.drop`
 
 ## Bug Fixes
 
@@ -97,6 +99,7 @@
 - PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
+- PR #2837 Fix join benchmark
 
 
 # cuDF 0.9.0 (21 Aug 2019)

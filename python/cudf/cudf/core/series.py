@@ -1287,6 +1287,11 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
+    def notnull(self):
+        """Identify non-missing values in a Series. Alias for notna.
+        """
+        return self.notna()
+
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
