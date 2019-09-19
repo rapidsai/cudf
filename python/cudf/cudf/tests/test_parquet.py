@@ -320,17 +320,21 @@ def test_parquet_chunked_skiprows(tmpdir):
     processed = 0
     batch = 10000
     n = 100000
-    out_df = cudf.DataFrame({
-        'y': np.arange(n),
-        'z': np.random.choice(range(1000000, 2000000), n, replace=False),
-        's': np.random.choice(range(20), n, replace=True),
-        'a': np.round(np.random.uniform(1, 5000, n), 2)})
+    out_df = cudf.DataFrame(
+        {
+            "y": np.arange(n),
+            "z": np.random.choice(range(1000000, 2000000), n, replace=False),
+            "s": np.random.choice(range(20), n, replace=True),
+            "a": np.round(np.random.uniform(1, 5000, n), 2),
+        }
+    )
 
     fname = tmpdir.join("skiprows.parquet")
     out_df.to_pandas().to_parquet(fname)
+
     for i in range(10):
         chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
-        expect = out_df[processed:processed + batch].reset_index(drop=True)
+        expect = out_df[processed : processed + batch].reset_index(drop=True)
         assert_eq(chunk.reset_index(drop=True), expect)
         processed += batch
         del chunk
