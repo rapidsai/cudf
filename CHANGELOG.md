@@ -96,6 +96,7 @@
 - PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
+- PR #2837 Fix join benchmark
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 
 
