@@ -452,7 +452,7 @@ unsigned int NVStrings::code_points( unsigned int* d_results )
     // offsets point to each individual integer range
     rmm::device_vector<size_t> offsets(count);
     size_t* d_offsets = offsets.data().get();
-    thrust::transform_inclusive_scan(execpol->on(0),
+    thrust::transform_exclusive_scan(execpol->on(0),
         thrust::make_counting_iterator<size_t>(0),
         thrust::make_counting_iterator<size_t>(count),
         d_offsets,
@@ -463,7 +463,7 @@ unsigned int NVStrings::code_points( unsigned int* d_results )
                 length = d_str->chars_count();
             return length;
         },
-        thrust::plus<unsigned int>());
+        0, thrust::plus<unsigned int>());
 
     // now set the ranges from each strings' character values
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
@@ -471,7 +471,7 @@ unsigned int NVStrings::code_points( unsigned int* d_results )
             custring_view* d_str = d_strings[idx];
             if( !d_str )
                 return;
-            auto result = d_results + (idx ? d_offsets[idx-1] : 0);
+            auto result = d_results + d_offsets[idx];
             for( auto itr = d_str->begin(); itr != d_str->end(); ++itr )
                 *result++ = (unsigned int)*itr;
         });
