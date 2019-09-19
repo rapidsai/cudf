@@ -536,8 +536,8 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 
 gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
 
-	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);
-	GDF_REQUIRE(output->dtype == GDF_INT16, GDF_UNSUPPORTED_DTYPE);
+	CUDF_EXPECTS(input->size == output->size, "Column size mismatch");
+	CUDF_EXPECTS(output->dtype == GDF_INT16, "unsupported dtype");
 
 	cudaStream_t stream;
 	cudaStreamCreate(&stream);
