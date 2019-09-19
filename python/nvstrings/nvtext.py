@@ -317,3 +317,32 @@ def ngrams(tokens, N=2, sep="_"):
     if rtn is not None:
         rtn = nvs.nvstrings(rtn)
     return rtn
+
+
+def scatter_count(strs, counts):
+    """
+    Create a new strings instance by duplicating each string by
+    the count specified in counts.
+
+    Parameters
+    ----------
+    strs : nvstrings
+        The strings used for this operation.
+    counts : list or GPU memory pointer
+        Should be strs.size() of int32 values.
+        Each value is the number of times the corresponding
+        string is duplicated in the output instance.
+
+    Examples
+    --------
+    >>> import nvstrings, nvtext
+    >>> dstrings = nvstrings.to_device(['aaa', 'bbb', 'ccc'])
+    >>> print(nvtext.scatter_count(dstrings, [1,2,3]))
+    ['aaa', 'bbb', 'bbb', 'ccc', 'ccc', 'ccc']
+    """
+    if counts is None:
+        raise ValueError("counts must not be None")
+    rtn = pyniNVText.n_scatter_count(strs, counts)
+    if rtn is not None:
+        rtn = nvs.nvstrings(rtn)
+    return rtn

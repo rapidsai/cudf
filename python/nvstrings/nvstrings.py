@@ -2624,3 +2624,16 @@ class nvstrings:
         if rtn is not None:
             rtn = nvstrings(rtn)
         return rtn
+
+    def device_memory(self):
+        """
+        Returns the total device memory used by this instance
+
+        Examples
+        --------
+        >>> import nvstrings
+        >> s = nvstrings.to_device(['a'*7])
+        >>> print(s.device_memory())
+        24
+        """
+        return pyniNVStrings.n_device_memory(self.m_cptr)

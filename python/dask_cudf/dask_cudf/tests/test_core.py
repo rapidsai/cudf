@@ -393,3 +393,10 @@ def test_boolean_index(gdf, gddf):
     gddf2 = gddf[gddf.x > 2]
 
     dd.assert_eq(gdf2, gddf2)
+
+
+def test_drop(gdf, gddf):
+    gdf2 = gdf.drop(columns="x")
+    gddf2 = gddf.drop(columns="x").compute()
+
+    dd.assert_eq(gdf2, gddf2)

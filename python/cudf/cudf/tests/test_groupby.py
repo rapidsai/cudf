@@ -793,6 +793,28 @@ def test_groupby_index_type():
     assert isinstance(res.index, cudf.core.index.StringIndex)
 
 
+@pytest.mark.parametrize(
+    "interpolation", ["linear", "lower", "higher", "midpoint", "nearest"]
+)
+def test_groupby_quantile(interpolation):
+    raw_data = {
+        "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
+        "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
+    }
+    pdf = pd.DataFrame(raw_data)
+    gdf = DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby("x")
+    gdg = gdf.groupby("x")
+    pdresult = pdg.quantile(interpolation=interpolation)
+    gdresult = gdg.quantile(interpolation=interpolation)
+
+    # There's a lot left to add to python bindings like index name
+    # so this is a temporary workaround
+    pdresult = pdresult["y"].reset_index(drop=True)
+    gdresult = gdresult["y"].reset_index(drop=True)
+    assert_eq(pdresult, gdresult)
+
+
 def test_groupby_size():
     pdf = pd.DataFrame(
         {
@@ -870,3 +892,14 @@ def test_groupby_dropna_getattr():
     )
 
     assert_eq(expect, got)
+
+
+def test_groupby_categorical_from_string():
+    gdf = cudf.DataFrame()
+    gdf["id"] = ["a", "b", "c"]
+    gdf["val"] = [0, 1, 2]
+    gdf["id"] = gdf["id"].astype("category")
+    assert_eq(
+        cudf.DataFrame({"val": gdf["val"]}, index=gdf["id"]),
+        gdf.groupby("id").sum(),
+    )

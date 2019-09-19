@@ -18,11 +18,13 @@
 
 #include <io/comp/gpuinflate.h>
 #include <cuda_runtime.h>
-#include <nvstrings/NVStrings.h>
+
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <algorithm>
 #include <array>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -180,7 +182,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
    *
    * @return std::string Name of the index column
    **/
-  std::string get_index_column_name() {
+  std::string get_pandas_index_name() {
     auto it =
         std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
                      [](const auto &item) { return item.key == "pandas"; });
@@ -243,38 +245,38 @@ struct ParquetMetadata : public parquet::FileMetaData {
    * @brief Filters and reduces down to a selection of columns
    *
    * @param[in] use_names List of column names to select
-   * @param[in] use_index_col Name of the index column
+   * @param[in] include_index Whether to always include the PANDAS index column
+   * @param[in] pandas_index Name of the PANDAS index column
    *
-   * @return List of column names & Parquet column indexes
+   * @return List of column names
    **/
-  auto select_columns(std::vector<std::string> use_names,
-                      const char *use_index_col) {
+  auto select_columns(std::vector<std::string> use_names, bool include_index,
+                      const std::string &pandas_index) {
     std::vector<std::pair<int, std::string>> selection;
 
-    if (not use_names.empty()) {
-      if (get_total_rows() > 0) {
-        if (std::find(use_names.begin(), use_names.end(), use_index_col) == use_names.end()) {
-          use_names.push_back(use_index_col);
+    const auto names = get_column_names();
+    if (use_names.empty()) {
+      // No columns specified; include all in the dataset
+      for (const auto &name : names) {
+        selection.emplace_back(selection.size(), name);
+      }
+    } else {
+      // Load subset of columns; include PANDAS index unless excluded
+      if (include_index) {
+        if (std::find(use_names.begin(), use_names.end(), pandas_index) ==
+            use_names.end()) {
+          use_names.push_back(pandas_index);
         }
       }
       for (const auto &use_name : use_names) {
-        size_t index = 0;
-        for (const auto &name : get_column_names()) {
-          if (name == use_name) {
-            selection.emplace_back(index, name);
+        for (size_t i = 0; i < names.size(); ++i) {
+          if (names[i] == use_name) {
+            selection.emplace_back(i, names[i]);
             break;
           }
-          index++;
-        }
-      }
-    } else {
-      for (const auto &name : get_column_names()) {
-        if (get_total_rows() > 0 || name != use_index_col) {
-          selection.emplace_back(selection.size(), name);
         }
       }
     }
-    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
     return selection;
   }
@@ -543,10 +545,11 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
   md_ = std::make_unique<ParquetMetadata>(source_.get());
 
   // Store the index column (PANDAS-specific)
-  index_col_ = md_->get_index_column_name();
+  pandas_index_col_ = md_->get_pandas_index_name();
 
   // Select only columns required by the options
-  selected_cols_ = md_->select_columns(options.columns, index_col_.c_str());
+  selected_cols_ = md_->select_columns(
+      options.columns, options.use_pandas_metadata, pandas_index_col_);
 
   // Override output timestamp resolution if requested
   if (options.timestamp_unit != TIME_UNIT_NONE) {
@@ -562,6 +565,11 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
   const auto selected_row_groups =
       md_->select_row_groups(row_group, skip_rows, num_rows);
   const auto num_columns = selected_cols_.size();
+
+  // Return empty table rather than exception if nothing to load
+  if (selected_row_groups.empty() || selected_cols_.empty()) {
+    return cudf::table{};
+  }
 
   // Initialize gdf_columns, but hold off on allocating storage space
   LOG_PRINTF("[+] Selected row groups: %d\n", (int)selected_row_groups.size());
@@ -692,31 +700,22 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       page_data.clear();
       page_data.push_back(std::move(decomp_page_data));
     }
+
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      column.allocate();
     }
+
     decode_page_data(chunks, pages, chunk_map, skip_rows, num_rows);
+
+    // Perform any final column preparation (may reference decoded data)
+    for (auto &column : columns) {
+      column.finalize();
+    }
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-    }
-  }
-
-  // For string dtype, allocate an NvStrings container instance, deallocating
-  // the original string list memory in the process.
-  // This container takes a list of string pointers and lengths, and copies
-  // into its own memory so the source memory must not be released yet.
-  for (auto &column : columns) {
-    if (column->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
-
-      auto str_list = static_cast<str_pair *>(column->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
-                       &NVStrings::destroy);
-      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
-      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+      column.allocate();
+      column.finalize();
     }
   }
 
@@ -726,7 +725,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     out_cols[i] = columns[i].release();
   }
 
-  return table(out_cols.data(), out_cols.size());
+  return cudf::table(out_cols.data(), out_cols.size());
 }
 
 reader::reader(std::string filepath, reader_options const &options)

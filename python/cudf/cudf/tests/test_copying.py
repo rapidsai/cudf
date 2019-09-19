@@ -5,6 +5,7 @@ import numpy as np
 from librmm_cffi import librmm as rmm
 
 import cudf._lib as libcudf
+from cudf.core import Series
 from cudf.core.column import column
 
 
@@ -46,3 +47,9 @@ def test_gather_string_col():
     gather_map = column.as_column([0, 2, 3], dtype="int32").data.mem
     result = libcudf.copying.gather(col, gather_map)
     assert result.data.to_host() == ["a", None, "d"]
+
+
+def test_null_copy():
+    col = Series(np.arange(2049))
+    col[:] = None
+    assert len(col) == 2049
