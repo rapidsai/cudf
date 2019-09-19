@@ -176,10 +176,10 @@ struct edit_distance_matrix_levenshtein_algorithm :
          return;
       unsigned int dist = 0;  // diagonal
       if( row < col ){
-         custring_view* dstr1 = d_strings[row];
-         custring_view* dstr2 = d_strings[col];
+         custring_view* d_strings1 = d_strings[row];
+         custring_view* d_strings2 = d_strings[col];
          short* buf = (short*)d_buffer + d_offsets[idx - ((row+1)*(row+2))/2];
-         dist = compute_distance(dstr1, dstr2, buf);
+         dist = compute_distance(d_strings1, d_strings2, buf);
       }
       d_results[idx] = dist; // top half
       d_results[col * count + row] = dist; // bottom half
@@ -201,9 +201,9 @@ unsigned int NVText::edit_distance( distance_type algorithm,
     custring_view* d_target = custring_from_host(target);
 
     // setup results vector
-    unsigned int* d_rtn = results;
+    unsigned int* d_return = results;
     if( !results_is_device_memory )
-        d_rtn = device_alloc<unsigned int>(count,0);
+        d_return = device_alloc<unsigned int>(count,0);
 
     // get the string pointers
     rmm::device_vector<custring_view*> strings(count,nullptr);
@@ -239,13 +239,13 @@ unsigned int NVText::edit_distance( distance_type algorithm,
                                            d_target,
                                            d_buffer,
                                            d_offsets,
-                                           d_rtn));
+                                           d_return));
     //
     if( !results_is_device_memory )
     {
-        CUDA_TRY( cudaMemcpyAsync(results,d_rtn,
+        CUDA_TRY( cudaMemcpyAsync(results,d_return,
                   count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
-        RMM_FREE(d_rtn,0);
+        RMM_FREE(d_return,0);
     }
     RMM_FREE(d_target,0);
     return 0;
@@ -267,9 +267,9 @@ unsigned int NVText::edit_distance( distance_type algorithm,
 
     // setup results vector
     auto execpol = rmm::exec_policy(0);
-    unsigned int* d_rtn = results;
+    unsigned int* d_return = results;
     if( !results_is_device_memory )
-        d_rtn = device_alloc<unsigned int>(count,0);
+        d_return = device_alloc<unsigned int>(count,0);
 
     // get the string pointers
     rmm::device_vector<custring_view*> strings1(count,nullptr);
@@ -310,13 +310,13 @@ unsigned int NVText::edit_distance( distance_type algorithm,
                                            d_strings2,
                                            d_buffer,
                                            d_offsets,
-                                           d_rtn));
+                                           d_return));
     //
     if( !results_is_device_memory )
     {
-        CUDA_TRY( cudaMemcpyAsync(results,d_rtn,
+        CUDA_TRY( cudaMemcpyAsync(results,d_return,
                   count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
-        RMM_FREE(d_rtn,0);
+        RMM_FREE(d_return,0);
     }
     return 0;
 }
@@ -326,6 +326,7 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
                                            unsigned int* results,
                                            bool results_is_device_memory )
 {
+    CUDF_EXPECTS(strs != nullptr, "Null input strings pointer");
     CUDF_EXPECTS(algorithm == levenshtein, "Unsupported algorithm");
     CUDF_EXPECTS(results != nullptr, "Null results pointer");
 
@@ -335,9 +336,9 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
     auto execpol = rmm::exec_policy(0);
 
     // setup results vector
-    unsigned int* d_rtn = results;
+    unsigned int* d_return = results;
     if( !results_is_device_memory )
-        d_rtn = device_alloc<unsigned int>(count*count,0);
+        d_return = device_alloc<unsigned int>(count*count,0);
 
     // get the string pointers
     rmm::device_vector<custring_view*> strings(count,nullptr);
@@ -356,14 +357,14 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
             gdf_index_type col = idx % count;
             if( row >= col )
                 return;
-            custring_view* dstr1 = d_strings[row];
-            custring_view* dstr2 = d_strings[col];
+            custring_view* d_strings1 = d_strings[row];
+            custring_view* d_strings2 = d_strings[col];
 
-            if( !dstr1 || !dstr2)
+            if( !d_strings1 || !d_strings2)
                 return;
-            int len = dstr1->chars_count();
-            if( dstr2->chars_count() < len )
-                len = dstr2->chars_count();
+            int len = d_strings1->chars_count();
+            if( d_strings2->chars_count() < len )
+                len = d_strings2->chars_count();
             d_sizes[idx - ((row+1)*(row+2))/2 ] = len * 3;
         });
 
@@ -380,14 +381,14 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
             edit_distance_matrix_levenshtein_algorithm(d_strings,
                                                       d_buffer,
                                                       d_offsets,
-                                                      d_rtn,
+                                                      d_return,
                                                       count));
 
     if( !results_is_device_memory )
     {
-        CUDA_TRY( cudaMemcpyAsync(results,d_rtn,
+        CUDA_TRY( cudaMemcpyAsync(results,d_return,
                   count*count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
-        RMM_FREE(d_rtn,0);
+        RMM_FREE(d_return,0);
     }
     return 0;
 }
