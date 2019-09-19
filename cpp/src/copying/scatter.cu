@@ -45,11 +45,14 @@ namespace detail {
 template <typename index_type, typename scatter_map_type>
 __global__ void invert_map(index_type gather_map[], const gdf_size_type destination_rows,
 			   scatter_map_type const scatter_map, const gdf_size_type source_rows){
-  index_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
-  if(source_row < source_rows){
-    index_type destination_row = *(scatter_map + source_row);
+  index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tid < destination_rows) {
+    gather_map[tid] = -1;
+  }
+  if(tid < source_rows){
+    index_type destination_row = *(scatter_map + tid);
     if(destination_row < destination_rows){
-      gather_map[destination_row] = source_row;
+      gather_map[destination_row] = tid;
     }
   }
 }
@@ -74,32 +77,9 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 
   gdf_column gather_map = cudf::allocate_like(scatter_map, destination_table->num_rows());
 
-  gdf_scalar fill_value;
-  fill_value.dtype = gdf_dtype_of<map_type>();
-  fill_value.is_valid = true;
-
-  switch (gdf_dtype_of<map_type>()) {
-  case GDF_INT8:
-    fill_value.data.si08 = -1;
-    break;
-  case GDF_INT16:
-    fill_value.data.si16 = -1;
-    break;
-  case GDF_INT32:
-    fill_value.data.si32 = -1;
-    break;
-  case GDF_INT64:
-    fill_value.data.si64 = -1;
-    break;
-  default:
-    CUDF_FAIL("Invalid scatter map type");
-  }
-
   constexpr int block_size = 256;
   const gdf_size_type invert_grid_size =
-    (destination_table->num_rows() + block_size - 1) / block_size;
-
-  cudf::fill(&gather_map, fill_value, 0, gather_map.size);
+    (source_table->num_rows() + block_size - 1) / block_size;
 
   auto scatter_map_iterator = thrust::make_transform_iterator(
       typed_scatter_map,
