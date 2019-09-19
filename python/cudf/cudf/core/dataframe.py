@@ -24,7 +24,6 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.buffer import Buffer
 from cudf.core.column import CategoricalColumn
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
@@ -2224,7 +2223,11 @@ class DataFrame(object):
 
         # Fix column names by appending `suffixes`
         for name in same_named_columns:
-            if name not in left_on and name not in right_on:
+            if not (
+                name in left_on
+                and name in right_on
+                and (left_on.index(name) == right_on.index(name))
+            ):
                 if not (lsuffix or rsuffix):
                     raise ValueError(
                         "there are overlapping columns but "
@@ -2233,6 +2236,13 @@ class DataFrame(object):
                 else:
                     lhs.rename({name: "%s%s" % (name, lsuffix)}, inplace=True)
                     rhs.rename({name: "%s%s" % (name, rsuffix)}, inplace=True)
+                    if name in left_on:
+                        left_on[left_on.index(name)] = "%s%s" % (name, lsuffix)
+                    if name in right_on:
+                        right_on[right_on.index(name)] = "%s%s" % (
+                            name,
+                            rsuffix,
+                        )
 
         # We save the original categories for the reconstruction of the
         # final data frame
@@ -2251,19 +2261,6 @@ class DataFrame(object):
             lhs._cols, rhs._cols, left_on, right_on, how, method
         )
 
-        # GDF always removes the "right_on" columns from the result
-        # whereas Pandas keeps the "right_on" columns if its name differ
-        # from the one in the "left_on". Thus, here we duplicate the column if
-        # the name differ.
-        for left, right in zip(left_on, right_on):
-            if left != right:
-                for col, valid, name in gdf_result:
-                    if name == left:
-                        gdf_result.append((col, valid, right))
-                        break
-                else:
-                    assert False
-
         # Let's sort the columns of the GDF result. NB: Pandas doc says
         # that it sorts when how='outer' but this is NOT the case.
         result = []
@@ -2274,49 +2271,46 @@ class DataFrame(object):
             for name in lhs._cols.keys():
                 if name not in left_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][2] == name:
+                        if gdf_result[i][1] == name:
                             left_of_on.append(gdf_result.pop(i))
                             break
             in_on = []
             for name in itertools.chain(lhs._cols.keys(), rhs._cols.keys()):
                 if name in left_on or name in right_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][2] == name:
+                        if gdf_result[i][1] == name:
                             in_on.append(gdf_result.pop(i))
                             break
             right_of_on = []
             for name in rhs._cols.keys():
                 if name not in right_on:
                     for i in range(len(gdf_result)):
-                        if gdf_result[i][2] == name:
+                        if gdf_result[i][1] == name:
                             right_of_on.append(gdf_result.pop(i))
                             break
             result = (
-                sorted(left_of_on, key=lambda x: str(x[2]))
-                + sorted(in_on, key=lambda x: str(x[2]))
-                + sorted(right_of_on, key=lambda x: str(x[2]))
+                sorted(left_of_on, key=lambda x: str(x[1]))
+                + sorted(in_on, key=lambda x: str(x[1]))
+                + sorted(right_of_on, key=lambda x: str(x[1]))
             )
         else:
             for org_name in org_names:
                 for i in range(len(gdf_result)):
-                    if gdf_result[i][2] == org_name:
+                    if gdf_result[i][1] == org_name:
                         result.append(gdf_result.pop(i))
                         break
             assert len(gdf_result) == 0
 
         # Build a new data frame based on the merged columns from GDF
         df = DataFrame()
-        for col, valid, name in result:
+        for col, name in result:
             if isinstance(col, nvstrings.nvstrings):
                 df[name] = col
             else:
-                mask = None
-                if valid is not None:
-                    mask = Buffer(valid)
                 df[name] = column.build_column(
-                    Buffer(col),
+                    col.data,
                     dtype=categorical_dtypes.get(name, col.dtype),
-                    mask=mask,
+                    mask=col.mask,
                     categories=col_with_categories.get(name, None),
                 )
 
