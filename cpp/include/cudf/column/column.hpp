@@ -30,10 +30,10 @@ namespace cudf {
 
 class column {
  public:
+  column() = default;
   ~column() = default;
   column& operator=(column const& other) = delete;
   column& operator=(column&& other) = delete;
-  column() = default;
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a new column by deep copying the contents of `other`.
