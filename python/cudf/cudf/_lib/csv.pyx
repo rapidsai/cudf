@@ -15,15 +15,15 @@ from cudf._lib.includes.csv cimport (
     reader_options as csv_reader_options
 )
 from libc.stdlib cimport free
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 from cudf._lib.includes.io cimport *
 
 import numpy as np
 import collections.abc as abc
 
-from io import BytesIO, StringIO
 import errno
 import os
 
@@ -189,44 +189,48 @@ cpdef read_csv(
         args.prefix = prefix.encode()
 
     # Create reader from source
-    cdef unique_ptr[csv_reader] reader
-    cdef const unsigned char[::1] buffer = None
-    if isinstance(filepath_or_buffer, BytesIO):
-        buffer = filepath_or_buffer.getbuffer()
-    elif isinstance(filepath_or_buffer, StringIO):
-        buffer = filepath_or_buffer.read().encode()
-    elif isinstance(filepath_or_buffer, bytes):
-        buffer = filepath_or_buffer
-
+    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef string filepath
     if buffer is None:
         if not os.path.isfile(filepath_or_buffer):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
             )
-        reader = unique_ptr[csv_reader](
-            new csv_reader(str(filepath_or_buffer).encode(), args)
-        )
-    elif buffer.shape[0] != 0:
-        reader = unique_ptr[csv_reader](
-            new csv_reader(<char *>&buffer[0], buffer.shape[0], args)
-        )
-    else:
-        reader = unique_ptr[csv_reader](
-            new csv_reader(<char *>NULL, 0, args)
-        )
+        filepath = <string>str(filepath_or_buffer).encode()
+
+    cdef unique_ptr[csv_reader] reader
+    with nogil:
+        if buffer is None:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(filepath, args)
+            )
+        elif buffer.shape[0] != 0:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(<char *>&buffer[0], buffer.shape[0], args)
+            )
+        else:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(<char *>NULL, 0, args)
+            )
 
     # Read data into columns
     cdef cudf_table c_out_table
-    if byte_range is not None:
-        c_out_table = reader.get().read_byte_range(
-            byte_range[0], byte_range[1]
-        )
-    elif skipfooter != 0 or skiprows != 0 or nrows is not None:
-        c_out_table = reader.get().read_rows(
-            skiprows, skipfooter, nrows if nrows is not None else -1
-        )
-    else:
-        c_out_table = reader.get().read()
+    cdef int c_range_offset = byte_range[0] if byte_range is not None else 0
+    cdef int c_range_size = byte_range[1] if byte_range is not None else 0
+    cdef int c_skiprows = skiprows if skiprows is not None else 0
+    cdef int c_skipfooter = skipfooter if skipfooter is not None else 0
+    cdef int c_nrows = nrows if nrows is not None else -1
+    with nogil:
+        if c_range_offset !=0 or c_range_size != 0:
+            c_out_table = reader.get().read_byte_range(
+                c_range_offset, c_range_size
+            )
+        elif c_skiprows != 0 or c_skipfooter != 0 or c_nrows != -1:
+            c_out_table = reader.get().read_rows(
+                c_skiprows, c_skipfooter, c_nrows
+            )
+        else:
+            c_out_table = reader.get().read()
 
     # Construct dataframe from columns
     cast_col_name_to_int = names is not None and isinstance(names[0], (int))
