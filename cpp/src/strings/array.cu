@@ -113,12 +113,12 @@ std::unique_ptr<cudf::column> gather( strings_column_handler handler,
             memcpy(d_chars + offset, d_str.data(), d_str.size() );
         });
 
-  // build children vector
-  std::vector<std::unique_ptr<column>> children;
-  children.emplace_back(std::move(offsets_column));
-  children.emplace_back(std::move(chars_column));
+    // build children vector
+    std::vector<std::unique_ptr<column>> children;
+    children.emplace_back(std::move(offsets_column));
+    children.emplace_back(std::move(chars_column));
 
-  return std::make_unique<column>(
+    return std::make_unique<column>(
         data_type{STRING}, 0, rmm::device_buffer{0,stream,handler.memory_resource()},
         null_mask, null_count,
         std::move(children));
@@ -163,37 +163,32 @@ std::unique_ptr<cudf::column> sort( strings_column_handler handler,
 // ['a','e','c','f']
 //
 std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
-                                       strings_column_handler strings,
+                                       strings_column_handler map_strings,
                                        cudf::column_view scatter_map,
                                        cudaStream_t stream )
 {
-    size_type elements = strings.size();
+    size_type elements = map_strings.size();
     CUDF_EXPECTS( elements==scatter_map.size(), "number of strings must match map size" );
     size_type count = handler.size();
     auto d_indices = scatter_map.data<int32_t>();
     auto execpol = rmm::exec_policy(stream);
 
-    //
-    rmm::device_buffer buffer = create_string_array_from_column(handler,stream);
-    cudf::string_view* d_strings = reinterpret_cast<cudf::string_view*>(buffer.data());
-    rmm::device_buffer map_buffer = create_string_array_from_column(strings,stream);
-    cudf::string_view* d_map_strings = reinterpret_cast<cudf::string_view*>(map_buffer.data());
-    thrust::scatter( execpol->on(stream), d_map_strings, d_map_strings+elements, d_indices, d_strings );
+    // create strings arrays
+    rmm::device_vector<cudf::string_view> strings = 
+        detail::create_string_array_from_column(handler,stream);
+    cudf::string_view* d_strings = strings.data().get();
+    rmm::device_vector<cudf::string_view> values = 
+        detail::create_string_array_from_column(map_strings,stream);
+    cudf::string_view* d_values = values.data().get();
+    // do the scatter
+    thrust::scatter( execpol->on(stream),
+                     d_values, d_values+elements,
+                     d_indices, d_strings );
 
     // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED,
-                                               stream, handler.memory_resource() );
-    auto offsets_view = offsets_column->mutable_view();
+    auto offsets_column = detail::offsets_column_from_string_array(strings,stream,handler.memory_resource());
+    auto offsets_view = offsets_column->view();
     auto d_offsets = offsets_view.data<int32_t>();
-    // create new offsets array
-    thrust::transform_inclusive_scan( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(count),
-        d_offsets,
-        [d_strings, d_offsets] __device__ (size_type idx) {
-            return d_strings[idx].size();
-        },
-        thrust::plus<int32_t>());
 
     // build null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
@@ -206,25 +201,16 @@ std::unique_ptr<cudf::column> scatter( strings_column_handler handler,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1]; // this may not be stream friendly
-    auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
-                                             stream, handler.memory_resource() );
-    auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<int8_t>();
-    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
-        [d_strings, d_offsets, d_chars] __device__(size_type idx){
-            cudf::string_view d_str = d_strings[idx];
-            if( d_str.is_null() )
-                return;
-            size_type offset = (idx ? d_offsets[idx-1] : 0);
-            memcpy(d_chars + offset, d_str.data(), d_str.size() );
-        });
+    auto chars_column = 
+        detail::chars_column_from_string_array(strings, d_offsets,
+                                               stream, handler.memory_resource());
 
-  // build children vector
-  std::vector<std::unique_ptr<column>> children;
-  children.emplace_back(std::move(offsets_column));
-  children.emplace_back(std::move(chars_column));
+    // build children vector
+    std::vector<std::unique_ptr<column>> children;
+    children.emplace_back(std::move(offsets_column));
+    children.emplace_back(std::move(chars_column));
 
-  return std::make_unique<column>(
+    return std::make_unique<column>(
         data_type{STRING}, 0, rmm::device_buffer{0,stream,handler.memory_resource()},
         null_mask, null_count,
         std::move(children));

@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
-#include <cudf/strings/strings_column_factories.hpp>
 #include <cudf/strings/strings_column_handler.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <utilities/error_utils.hpp>
@@ -151,9 +149,4 @@ void strings_column_handler::print( size_type start, size_type end,
     }
 }
 
-namespace strings
-{
-
-
-} // namespace strings
 } // namespace cudf

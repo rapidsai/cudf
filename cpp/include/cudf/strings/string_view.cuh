@@ -60,11 +60,11 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Return the number of bytes in this string
    *---------------------------------------------------------------------------**/
-  __device__ size_type size() const;
+  __host__ __device__ size_type size() const;
   /**---------------------------------------------------------------------------*
    * @brief Return the number of bytes in this string
    *---------------------------------------------------------------------------**/
-  __device__ size_type length() const;
+  __host__ __device__ size_type length() const;
   /**---------------------------------------------------------------------------*
    * @brief Return the number of characters (UTF-8) in this string
    *---------------------------------------------------------------------------**/
@@ -72,7 +72,7 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Return a pointer to the internal device array
    *---------------------------------------------------------------------------**/
-  __device__ const char* data() const;
+  __host__ __device__ const char* data() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Return true if string has no characters

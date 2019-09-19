@@ -24,6 +24,8 @@ namespace cudf
 {
 namespace strings
 {
+namespace detail
+{
 
 /**
  * @brief Creates a temporary string_view object from a host string.
@@ -40,9 +42,27 @@ std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
 /**
  * 
  */
-rmm::device_buffer create_string_array_from_column(
-    strings_column_handler strings,
+rmm::device_vector<cudf::string_view> create_string_array_from_column(
+    cudf::strings_column_handler strings,
     cudaStream_t stream = (cudaStream_t)0 );
 
+/**
+ * 
+ */
+std::unique_ptr<cudf::column> offsets_column_from_string_array(
+    const rmm::device_vector<cudf::string_view>& strings,
+    cudaStream_t stream = (cudaStream_t)0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+/**
+ * 
+ */
+std::unique_ptr<cudf::column> chars_column_from_string_array(
+    const rmm::device_vector<cudf::string_view>& strings,
+    const int32_t* d_offsets,
+    cudaStream_t stream = (cudaStream_t)0,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+} // namespace detail
 } // namespace strings
 } // namespace cudf
