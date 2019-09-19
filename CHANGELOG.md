@@ -66,6 +66,7 @@
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
+- PR #2649 Fix groupby issue resulting from column_empty bug
 - PR #2658 Fix astype() for null categorical columns
 - PR #2660 fix column string category and timeunit concat in the java API
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe

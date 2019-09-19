@@ -17,12 +17,7 @@ import cudf._lib as libcudf
 from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_scalar,
-    min_scalar_type,
-    np_to_pa_dtype,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
 
 
@@ -1013,7 +1008,6 @@ def column_empty(row_count, dtype, masked, categories=None):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
-        dtype = min_scalar_type(len(categories))
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
         dtype = "category"
