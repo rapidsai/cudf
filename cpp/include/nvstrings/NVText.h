@@ -153,7 +153,6 @@ public:
      * @return 0 if successful.
      *
      * Exceptional cases for the edit_distance_matrix function are:
-     * @throws cudf::logic_error when `strings == nullptr`
      * @throws cudf::logic_error when `algorithm != levenshtein`
      * @throws cudf::logic_error when `results == nullptr`
      */

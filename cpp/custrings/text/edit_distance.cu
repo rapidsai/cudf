@@ -326,7 +326,6 @@ unsigned int NVText::edit_distance_matrix( distance_type algorithm,
                                            unsigned int* results,
                                            bool results_is_device_memory )
 {
-    CUDF_EXPECTS(strs != nullptr, "Null input strings pointer");
     CUDF_EXPECTS(algorithm == levenshtein, "Unsupported algorithm");
     CUDF_EXPECTS(results != nullptr, "Null results pointer");
 
