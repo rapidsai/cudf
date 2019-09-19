@@ -4,7 +4,6 @@ import functools
 import pickle
 import warnings
 
-import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
