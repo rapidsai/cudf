@@ -40,16 +40,19 @@ namespace detail {
  * The number of elements in the gather_map must equal the number of rows in the
  * destination columns.
  *
- * Optionally performs bounds checking on the values of the `gather_map` that
- * ignores values outside [0, num_source_rows). It is undefined behavior if a
- * value in `gather_map` is outside these bounds and bounds checking is not
- * enabled.
+ * Optionally considers negative values in the gathermap. If enabled, a negative
+ * value `i` in `gather_map` is interpreted as
+ * `((i % num_source_rows) + num_source_rows) % num_source_rows`.
  *
- * If the same index appears more than once in gather_map, the result is
- * undefined.
+ * Optionally performs bounds checking on the values of the `gather_map` and
+ * raises a runtime error if any of its values are outside the range
+ * [0, num_source_rows).
+ *
+ * Optionally ignores values in the gathermap outside of the range
+ * [0, num_source_rows).
  *
  * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map An array of indices that maps the rows in the source
+ * @param[in] gather_map A column containing indices that maps the rows in the source
  * columns to rows in the destination columns.
  * @param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the number of elements in the gather_map that will
@@ -59,17 +62,20 @@ namespace detail {
  * @param check_bounds Optionally perform bounds checking on the values of
  * `gather_map`
  * @param ignore_out_of_bounds Ignore values in `gather_map` that are
- * out of bounds. Independent of `check_bounds`.
+ * out of bounds. Currently incompatible with `consider_negative_indices`,
+ * i.e., setting both to `true` is undefined.
  * @param merge_nvstring_category If set to true and both the source column and its
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
  * `nvstring_category` objects of these will be synchronizeded before gather is 
  * performed. 
+ * #param consider_negative_indices Interpret each negative index `i` in the
+ * gathermap as a positive index.
  * @return gdf_error
  *---------------------------------------------------------------------------**/
-void gather(table const* source_table, gdf_column const gather_map,
+void gather(table const* source_table, gdf_column const& gather_map,
 	    table * destination_table, bool check_bounds = false,
 	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool transform_negative_indices = false);
+	    bool consider_negative_indices = false);
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
 	    table* destination_table, bool check_bounds = false,

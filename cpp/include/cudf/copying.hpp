@@ -181,17 +181,20 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  * - Its corresponding column in `source` has `null_count > 0` 
  *
  * @Param[in] source The columns whose rows will be scattered
- * @Param[in] scatter_map An array that maps rows in the input columns
- * to rows in the output columns.
+ * @Param[in] scatter_map A column containing indices that map rows
+ * in the input columns to rows in the output columns.
  * @Param[in] target The table to copy and then perform an in-place scatter 
  * into the copy.
  * @return[out] The result of the scatter
  */
-table scatter(table const& source, gdf_index_type const scatter_map[],
+table scatter(table const& source, gdf_column const& scatter_map,
               table const& target, bool check_bounds = false);
 
-table scatter(table const& source, gdf_column const scatter_map,
-              table const& target, bool check_bounds = false);
+/**
+ * @overloads
+ */
+table scatter(table const& source, gdf_index_type const scatter_map[],
+	      table const& target, bool check_bounds = false);
 
 /**
  * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
@@ -239,14 +242,12 @@ table scatter(std::vector<gdf_scalar> const& source,
  * The number of elements in the gather_map must equal the number of rows in the
  * destination columns.
  *
- * If any index in the gather_map is outside the range [0, num rows in
- * source_columns), the result is undefined.
- *
- * If the same index appears more than once in gather_map, the result is
- * undefined.
+ * If any index in the gather_map is outside the range `[-n, n)`, where
+ * `n` is the number of rows in the source column, the behavior is underfined.
+ * Optionally, a bounds check can be performed and an error can be raised.
  *
  * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map An array of indices that maps the rows in the source
+ * @param[in] gather_map A column containing indices that maps the rows in the source
  * columns to rows in the destination columns.
  * @param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the number of elements in the gather_map that will
@@ -254,13 +255,21 @@ table scatter(std::vector<gdf_scalar> const& source,
  * the same as `source_table` (in-place gather).
  *
  */
+void gather(table const* source_table, gdf_column const& gather_map,
+	    table* destination_table, bool check_bounds=false);
+
+/**
+ * @overloads
+ */
 void gather(table const* source_table, gdf_index_type const gather_map[],
 	    table* destination_table, bool check_bounds=false);
 
-void gather(table const* source_table, gdf_column const gather_map,
-	    table* destination_table, bool check_bounds=false);
-
-table gather(table const* source_table, gdf_column const gather_map, bool check_bounds=false);
+/**
+ * @overloads
+ *
+ * Returns a new table instead of expecting a pre-allocated `destination_table`.
+ */
+table gather(table const* source_table, gdf_column const& gather_map, bool check_bounds=false);
 
 /**
  * @brief Slices a column (including null values) into a set of columns

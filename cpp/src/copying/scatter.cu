@@ -40,12 +40,12 @@ using bit_mask::bit_mask_t;
 namespace cudf {
 namespace detail {
 
-template <typename gather_map_type, typename scatter_map_type>
-__global__ void invert_map(gather_map_type gather_map[], const gdf_size_type destination_rows,
-			   scatter_map_type scatter_map, const gdf_size_type source_rows){
-  gather_map_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
+template <typename index_type, typename scatter_map_type>
+__global__ void invert_map(index_type gather_map[], const gdf_size_type destination_rows,
+			   scatter_map_type const scatter_map, const gdf_size_type source_rows){
+  index_type source_row = threadIdx.x + blockIdx.x * blockDim.x;
   if(source_row < source_rows){
-    gather_map_type destination_row = *(scatter_map + source_row);
+    index_type destination_row = *(scatter_map + source_row);
     if(destination_row < destination_rows){
       gather_map[destination_row] = source_row;
     }
@@ -54,7 +54,7 @@ __global__ void invert_map(gather_map_type gather_map[], const gdf_size_type des
 
 struct dispatch_map_type {
 template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
-void operator()(table const *source_table, gdf_column scatter_map,
+void operator()(table const *source_table, gdf_column const& scatter_map,
     table *destination_table, bool check_bounds, bool consider_negative_indices) {
 
   map_type const * typed_scatter_map = static_cast<map_type const*>(scatter_map.data);
@@ -120,14 +120,14 @@ void operator()(table const *source_table, gdf_column scatter_map,
       
 
 template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
-void operator()(table const *source_table, gdf_column scatter_map,
+void operator()(table const *source_table, gdf_column const& scatter_map,
     table *destination_table, bool check_bounds, bool consider_negative_indices) {
   CUDF_FAIL("Scatter map must be an integral type.");
 }
 
 };
 
-void scatter(table const* source_table, gdf_column const scatter_map,
+void scatter(table const* source_table, gdf_column const& scatter_map,
     table* destination_table, bool check_bounds, bool consider_negative_indices) {
   
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
@@ -254,7 +254,7 @@ void scalar_scatter(const std::vector<gdf_scalar>& source,
 
 }  // namespace detail
 
-table scatter(table const& source, gdf_column const scatter_map,
+table scatter(table const& source, gdf_column const& scatter_map,
     table const& target, bool check_bounds) {
 
   const gdf_size_type n_cols = target.num_columns();

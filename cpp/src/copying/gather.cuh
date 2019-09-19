@@ -136,17 +136,15 @@ struct column_gatherer {
    * @param gather_map Array of indices that maps source elements to destination
    * elements
    * @param destination_column The column to gather into
-   * @param check_bounds Optionally perform bounds checking on the values of
-   * `gather_map`
    * @param ignore_out_of_bounds Ignore values in `gather_map` that are
    * out of bounds
    * @param stream Optional CUDA stream on which to execute kernels
    *---------------------------------------------------------------------------**/
-  template <typename column_type, typename map_iterator_type>
+  template <typename column_type, typename iterator_type>
   void operator()(gdf_column const *source_column,
-		  map_iterator_type gather_map,
+		  iterator_type gather_map,
 		  gdf_column *destination_column, bool ignore_out_of_bounds,
-		  cudaStream_t stream, bool sync_nvstring_category = false) {
+		  bool sync_nvstring_category, cudaStream_t stream) {
     column_type const *source_data{
       static_cast<column_type const *>(source_column->data)};
     column_type *destination_data{
@@ -184,7 +182,6 @@ struct column_gatherer {
       in_place_buffer.resize(num_destination_rows);
       destination_data = in_place_buffer.data().get();
     }
-
 
     if (ignore_out_of_bounds) {
       thrust::gather_if(rmm::exec_policy(stream)->on(stream), gather_map,
@@ -236,8 +233,8 @@ struct negative_index_converter : public thrust::unary_function<map_type,map_typ
 };
 
 
-template <typename map_iterator_type>
-void gather(table const *source_table, map_iterator_type gather_map,
+template <typename iterator_type>
+void gather(table const *source_table, iterator_type gather_map,
 	    table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
 	    bool sync_nvstring_category, bool consider_negative_indices)
 {
@@ -257,9 +254,8 @@ void gather(table const *source_table, map_iterator_type gather_map,
 
     // The data gather for n columns will be put on the first n streams
     cudf::type_dispatcher(src_col->dtype, column_gatherer{}, src_col,
-			  gather_map, dest_col,
-			  ignore_out_of_bounds, v_stream[i],
-			  sync_nvstring_category);
+			  gather_map, dest_col, ignore_out_of_bounds,
+			  sync_nvstring_category, v_stream[i]);
 
     if (cudf::has_nulls(*src_col)) {
       CUDF_EXPECTS(cudf::is_nullable(*dest_col),

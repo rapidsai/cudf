@@ -48,7 +48,7 @@ namespace detail {
 
 struct dispatch_map_type {
   template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
-  void operator()(table const *source_table, gdf_column gather_map,
+  void operator()(table const *source_table, gdf_column const& gather_map,
       table *destination_table, bool check_bounds,
       bool ignore_out_of_bounds, bool sync_nvstring_category = false,
       bool consider_negative_indices = false)
@@ -57,7 +57,6 @@ struct dispatch_map_type {
     map_type const * typed_gather_map = static_cast<map_type const*>(gather_map.data);
 
     if (check_bounds) {
-
       gdf_index_type begin = (consider_negative_indices) ? -source_table->num_rows() : 0;
       CUDF_EXPECTS(
 	  destination_table->num_rows() == thrust::count_if(
@@ -72,13 +71,12 @@ struct dispatch_map_type {
 	typed_gather_map,
 	negative_index_converter<map_type>{source_table->num_rows(), consider_negative_indices});
 
-    gather(source_table, gather_map_iterator,
-	destination_table, check_bounds,
+    gather(source_table, gather_map_iterator, destination_table, check_bounds,
 	ignore_out_of_bounds, sync_nvstring_category, consider_negative_indices);
   }
 
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
-  void operator()(table const *source_table, gdf_column const gather_map,
+  void operator()(table const *source_table, gdf_column const& gather_map,
                   table *destination_table, bool check_bounds,
 		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
 		  bool consider_negative_indices = false) {
@@ -86,7 +84,7 @@ struct dispatch_map_type {
   }
 };
 
-void gather(table const *source_table, gdf_column const gather_map,
+void gather(table const *source_table, gdf_column const& gather_map,
             table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
             bool sync_nvstring_category, bool consider_negative_indices) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
@@ -126,7 +124,7 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
 
 } // namespace detail
 
-table gather(table const *source_table, gdf_column const gather_map, bool check_bounds) {
+table gather(table const *source_table, gdf_column const& gather_map, bool check_bounds) {
   table destination_table = cudf::allocate_like(*source_table,
 						gather_map.size);
   detail::gather(source_table, gather_map, &destination_table,
@@ -135,7 +133,7 @@ table gather(table const *source_table, gdf_column const gather_map, bool check_
   return destination_table;
 }
 
-void gather(table const *source_table, gdf_column const gather_map,
+void gather(table const *source_table, gdf_column const& gather_map,
 	    table *destination_table, bool check_bounds) {
   detail::gather(source_table, gather_map, destination_table, check_bounds, false, false, true);
   nvcategory_gather_table(*source_table, *destination_table);

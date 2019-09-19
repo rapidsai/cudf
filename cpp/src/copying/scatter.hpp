@@ -30,7 +30,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 	     table* destination_table, bool check_bounds = false,
 	     bool consider_negative_indices = false);
 
-void scatter(table const* source_table, gdf_column const scatter_map,
+void scatter(table const* source_table, gdf_column const& scatter_map,
 	     table* destination_table, bool check_bounds = false,
 	     bool consider_negative_indices = false);
 
