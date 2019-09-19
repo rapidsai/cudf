@@ -571,8 +571,9 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(
         (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
 
     it_end = std::remove_if(it_begin, it_end, [=, &h_data](uint64_t pos) {
-      return (h_data[pos] == newline || h_data[pos] == comment ||
-              h_data[pos] == carriage);
+      return ((pos != h_size) &&
+              (h_data[pos] == newline || h_data[pos] == comment ||
+               h_data[pos] == carriage));
     });
   }
 
