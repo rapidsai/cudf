@@ -75,7 +75,8 @@ class reader::Impl {
    *
    * @return size_t Size aligned to the next multiple of specified bytes
    **/
-  size_t align_size(size_t v, size_t bytes = 4) const { return (v + (bytes - 1)) & ~(bytes - 1); }
+  size_t align_size(size_t v, size_t align_bytes = 4) const
+      { return (v + (align_bytes - 1)) & ~(align_bytes - 1); }
 
   /**
    * @brief Returns the number of total pages from the given column chunks
