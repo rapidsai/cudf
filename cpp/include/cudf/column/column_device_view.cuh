@@ -194,7 +194,8 @@ class alignas(16) column_device_view_base {
    * @param element_index
    * @return __device__ get_mask_element
    *---------------------------------------------------------------------------**/
-  __device__ bitmask_type get_mask_element(size_type element_index) const noexcept {
+  __device__ bitmask_type get_mask_element(size_type element_index) const
+      noexcept {
     return null_mask()[element_index];
   }
 
@@ -253,7 +254,17 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return A `unique_ptr` to a `column_device_view` that makes the data from
    *`source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static auto create(column_view source_view, cudaStream_t stream = 0);
+  static std::unique_ptr<column_device_view,
+                         std::function<void(column_device_view*)>>
+  create(column_view source_view, cudaStream_t stream = 0);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Destroy the `device_column_view` object.
+   *
+   * @note Does not free the column data, simply free's the device memory
+   * allocated to hold the child views.
+   *---------------------------------------------------------------------------**/
+  void destroy();
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -282,13 +293,6 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *---------------------------------------------------------------------------**/
   column_device_view(column_view source);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Destroy the `device_column_view` object.
-   *
-   * @note Does not free the column data, simply free's the device memory
-   * allocated to hold the child views.
-   *---------------------------------------------------------------------------**/
-  void destroy();
 };
 
 /**---------------------------------------------------------------------------*
@@ -448,7 +452,7 @@ class alignas(16) mutable_column_device_view
    * @param new_element The new bitmask element
    *---------------------------------------------------------------------------**/
   __device__ void set_mask_element(size_type element_index,
-                              bitmask_type new_element) const noexcept {
+                                   bitmask_type new_element) const noexcept {
     null_mask()[element_index] = new_element;
   }
 
