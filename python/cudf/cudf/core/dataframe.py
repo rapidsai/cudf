@@ -3785,6 +3785,13 @@ class DataFrame(object):
             chunksize,
         )
 
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        cols = libcudf.filling.repeat(self._columns, repeats)
+        # to preserve col names, need to get it from old _cols dict
+        column_names = self._cols.keys()
+        return DataFrame(dict(zip(column_names, cols)))
+
 
 def from_pandas(obj):
     """

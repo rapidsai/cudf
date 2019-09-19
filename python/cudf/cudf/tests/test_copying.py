@@ -62,7 +62,15 @@ def test_repeat(dtype):
     repeats = np.random.randint(10, size=10)
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)
-    assert_eq(psr, gsr)
+
+    assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
+
+
+def test_repeat_index():
+    arrays = [[1, 1, 2, 2], ["red", "blue", "red", "blue"]]
+    psr = pd.MultiIndex.from_arrays(arrays, names=("number", "color"))
+    gsr = cudf.from_pandas(psr)
+    repeats = np.random.randint(10, size=4)
 
     assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
 
@@ -75,7 +83,6 @@ def test_repeat_scalar(dtype):
     repeats = 10
     psr = pd.Series(arr).astype(dtype)
     gsr = cudf.from_pandas(psr)
-    assert_eq(psr, gsr)
 
     assert_eq(psr.repeat(repeats), gsr.repeat(repeats))
 

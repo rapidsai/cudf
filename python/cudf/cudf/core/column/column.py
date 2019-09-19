@@ -803,6 +803,10 @@ class Column(object):
             raise NotImplementedError(msg)
         return cpp_unique_count(self, dropna)
 
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        return libcudf.filling.repeat([self], repeats)[0]
+
 
 class TypedColumnBase(Column):
     """Base class for all typed column
