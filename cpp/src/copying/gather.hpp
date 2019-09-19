@@ -74,7 +74,7 @@ void gather(table const* source_table, gdf_column const gather_map,
 void gather(table const* source_table, gdf_index_type const gather_map[],
 	    table* destination_table, bool check_bounds = false,
 	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool transform_negative_indices = false);
+	    bool consider_negative_indices = false);
 
 
 }  // namespace detail

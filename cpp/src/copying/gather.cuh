@@ -27,9 +27,8 @@
 
 using bit_mask::bit_mask_t;
 
-namespace {
-
-constexpr int warp_size {32};
+namespace cudf {
+namespace detail {
 
 /**---------------------------------------------------------------------------*
  * @brief Function object to check if an index is within the bounds [begin,
@@ -219,32 +218,28 @@ struct column_gatherer {
 * that converts negative indices to positive indices
 *---------------------------------------------------------------------------**/
 template <typename map_type>
-struct map_transform : public thrust::unary_function<map_type,map_type>
+struct negative_index_converter : public thrust::unary_function<map_type,map_type>
 {
-  map_transform(gdf_size_type n_rows, bool transform_negative_indices)
-    : n_rows(n_rows), transform_negative_indices(transform_negative_indices){}
+  negative_index_converter(gdf_size_type n_rows, bool consider_negative_indices)
+    : n_rows(n_rows), consider_negative_indices(consider_negative_indices){}
 
   __device__
   map_type operator()(map_type in) const
   {
-    if (transform_negative_indices)
+    if (consider_negative_indices)
       return ((in % n_rows) + n_rows) % n_rows;
     else
       return in;
   }
   gdf_size_type n_rows;
-  bool transform_negative_indices;
+  bool consider_negative_indices;
 };
 
-} // namespace
-
-namespace cudf {
-namespace detail {
 
 template <typename map_iterator_type>
 void gather(table const *source_table, map_iterator_type gather_map,
 	    table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
-	    bool sync_nvstring_category, bool transform_negative_indices)
+	    bool sync_nvstring_category, bool consider_negative_indices)
 {
   auto source_n_cols = source_table->num_columns();
   auto source_n_rows = source_table->num_rows();
