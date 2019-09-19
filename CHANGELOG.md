@@ -24,7 +24,7 @@
 - PR #2786 Add benchmarks option to root build.sh
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
-- PR #2844 ADd Series/DataFrame notnull
+- PR #2844 Add Series/DataFrame notnull
 
 ## Improvements
 
