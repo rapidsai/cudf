@@ -3,7 +3,7 @@ import pandas as pd
 import pytest
 from pandas.util.testing import assert_series_equal
 
-from cudf.dataframe import Series
+from cudf import Series
 
 import dask_cudf as dgd
 
@@ -177,3 +177,22 @@ def test_categorical_compare_ordered(data):
     # Test ordered operators
     np.testing.assert_array_equal(pdsr1 < pdsr2, (dsr1 < dsr2).compute())
     np.testing.assert_array_equal(pdsr1 > pdsr2, (dsr1 > dsr2).compute())
+
+
+#############################################################################
+#                        String Accessor                                    #
+#############################################################################
+
+
+def data_str_1():
+    return pd.Series(["20190101", "20190102", "20190103"])
+
+
+@pytest.mark.parametrize("data", [data_str_1()])
+def test_string_slicing(data):
+    pdsr = pd.Series(data.copy())
+    sr = Series(pdsr)
+    dsr = dgd.from_cudf(sr, npartitions=2)
+    base = pdsr.str.slice(0, 4)
+    test = dsr.str.slice(0, 4).compute().to_pandas()
+    assert_series_equal(base, test)

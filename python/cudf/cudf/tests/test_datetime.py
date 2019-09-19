@@ -2,6 +2,7 @@ import datetime as dt
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 from pandas.util.testing import (
     assert_frame_equal,
@@ -9,9 +10,11 @@ from pandas.util.testing import (
     assert_series_equal,
 )
 
+from librmm_cffi import librmm as rmm
+
 import cudf
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import DatetimeIndex
+from cudf.core import DataFrame, Series
+from cudf.core.index import DatetimeIndex
 from cudf.tests.utils import assert_eq
 
 
@@ -397,3 +400,63 @@ def test_datetime_nunique(data, nulls):
     expected = psr.nunique()
     got = gsr.nunique()
     assert_eq(got, expected)
+
+
+testdata = [
+    (
+        Series(
+            ["2018-01-01", None, "2019-01-31", None, "2018-01-01"],
+            dtype="datetime64[ms]",
+        ),
+        True,
+    ),
+    (
+        Series(
+            [
+                "2018-01-01",
+                "2018-01-02",
+                "2019-01-31",
+                "2018-03-01",
+                "2018-01-01",
+            ],
+            dtype="datetime64[ms]",
+        ),
+        False,
+    ),
+    (
+        Series(
+            rmm.to_device(
+                np.array(
+                    ["2018-01-01", None, "2019-12-30"], dtype="datetime64[ms]"
+                )
+            )
+        ),
+        True,
+    ),
+]
+
+
+@pytest.mark.parametrize("data, expected", testdata)
+def test_datetime_has_null_test(data, expected):
+    pd_data = data.to_pandas()
+    count = pd_data.notna().value_counts()
+    expected_count = 0
+    if False in count.keys():
+        expected_count = count[False]
+
+    assert_eq(expected, data.has_null_mask)
+    assert_eq(expected_count, data.null_count)
+
+
+def test_datetime_has_null_test_pyarrow():
+    data = Series(
+        pa.array(
+            [0, np.iinfo("int64").min, np.iinfo("int64").max, None],
+            type=pa.timestamp("ns"),
+        )
+    )
+    expected = True
+    expected_count = 1
+
+    assert_eq(expected, data.has_null_mask)
+    assert_eq(expected_count, data.null_count)

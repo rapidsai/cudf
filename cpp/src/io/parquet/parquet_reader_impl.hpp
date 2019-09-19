@@ -47,11 +47,11 @@ class reader::Impl {
                 reader_options const &options);
 
   /**
-   * @brief Returns the index column derived from the dataset metadata.
+   * @brief Returns the PANDAS-specific index column derived from the metadata.
    *
    * @return std::string Name of the column
    **/
-  std::string get_index_column() const { return index_col_; }
+  std::string get_index_column() const { return pandas_index_col_; }
 
   /**
    * @brief Read an entire set or a subset of data from the source and returns
@@ -117,9 +117,10 @@ class reader::Impl {
   std::unique_ptr<datasource> source_;
   std::unique_ptr<ParquetMetadata> md_;
 
-  std::string index_col_;
+  std::string pandas_index_col_;
   std::vector<std::pair<int, std::string>> selected_cols_;
   bool strings_to_categorical_ = false;
+  gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
 } // namespace parquet

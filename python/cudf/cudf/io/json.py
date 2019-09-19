@@ -6,7 +6,7 @@ from io import BytesIO, StringIO
 import pandas as pd
 
 import cudf
-from cudf.bindings.json import cpp_read_json
+import cudf._lib as libcudf
 from cudf.utils import ioutils
 
 
@@ -29,10 +29,12 @@ def read_json(
         engine = "cudf" if lines else "pandas"
 
     path_or_buf, compression = ioutils.get_filepath_or_buffer(
-        path_or_buf, compression, (BytesIO, StringIO)
+        path_or_buf, compression, (BytesIO, StringIO), **kwargs
     )
     if engine == "cudf":
-        df = cpp_read_json(path_or_buf, dtype, lines, compression, byte_range)
+        df = libcudf.json.read_json(
+            path_or_buf, dtype, lines, compression, byte_range
+        )
     else:
         warnings.warn(
             "Using CPU via Pandas to read JSON dataset, this may "

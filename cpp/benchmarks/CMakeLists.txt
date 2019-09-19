@@ -33,7 +33,6 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}"
                     "${CMAKE_CURRENT_SOURCE_DIR}")
 
 ###################################################################################################
@@ -41,13 +40,11 @@ include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}"
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
+                 "${CMAKE_BINARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
                  "${GBENCH_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}"
-                 "${NVSTRINGS_LIBRARY}"
-                 "${NVCATEGORY_LIBRARY}"
-                 "${NVTEXT_LIBRARY}")
+                 "${RMM_LIBRARY}")
 
 ###################################################################################################
 ### test sources ##################################################################################
@@ -107,6 +104,14 @@ set(TD_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/type_dispatcher/type_dispatcher_benchmark.cu")
 
 ConfigureBench(TYPE_DISPATCHER_BENCH "${TD_BENCH_SRC}")
+
+###################################################################################################
+# - quantiles benchmark ---------------------------------------------------------------------------
+
+set(QUANTILES_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_benchmark.cu")
+
+ConfigureBench(QUANTILES_BENCH "${QUANTILES_BENCH_SRC}")
 
 ###################################################################################################
 # - order_by benchmark ------------------------------------------------------------------------------

@@ -1,5 +1,6 @@
 # Copyright (c) 2018, NVIDIA CORPORATION.
 
+from functools import lru_cache
 from math import fmod
 
 import numpy as np
@@ -277,10 +278,10 @@ def prefixsum(vals):
     Given the input of N.  The output size is N + 1.
     The first value is always 0.  The last value is the sum of *vals*.
     """
+    import cudf._lib as libcudf
 
-    import cudf.bindings.reduce as cpp_reduce
-    from cudf.dataframe.numerical import NumericalColumn
-    from cudf.dataframe.buffer import Buffer
+    from cudf.core.column import NumericalColumn
+    from cudf.core.buffer import Buffer
 
     # Allocate output
     slots = rmm.device_array(shape=vals.size + 1, dtype=vals.dtype)
@@ -294,7 +295,7 @@ def prefixsum(vals):
     out_col = NumericalColumn(
         data=Buffer(slots[1:]), mask=None, null_count=0, dtype=vals.dtype
     )
-    cpp_reduce.apply_scan(in_col, out_col, "sum", inclusive=True)
+    libcudf.reduce.scan(in_col, out_col, "sum", inclusive=True)
     return slots
 
 
@@ -550,21 +551,18 @@ def gpu_round(in_col, out_col, decimal):
     round_val = 10 ** (-1.0 * decimal)
 
     if i < in_col.size:
-        if not in_col[i]:
-            out_col[i] = np.nan
-            return
+        current = in_col[i]
+        newval = current // round_val * round_val
+        remainder = fmod(current, round_val)
 
-        newval = in_col[i] // round_val * round_val
-        remainder = fmod(in_col[i], round_val)
-
-        if remainder != 0 and remainder > (0.5 * round_val) and in_col[i] > 0:
+        if remainder != 0 and remainder > (0.5 * round_val) and current > 0:
             newval = newval + round_val
             out_col[i] = newval
 
         elif (
             remainder != 0
             and abs(remainder) < (0.5 * round_val)
-            and in_col[i] < 0
+            and current < 0
         ):
             newval = newval + round_val
             out_col[i] = newval
@@ -778,7 +776,7 @@ def find_first(arr, val, compare="eq"):
                 gpu_mark_found_int.forall(found.size)(
                     arr, val, found, arr.size
                 )
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     min_index = found_col.min()
@@ -811,7 +809,7 @@ def find_last(arr, val, compare="eq"):
                 gpu_mark_found_float.forall(found.size)(arr, val, found, -1)
             else:
                 gpu_mark_found_int.forall(found.size)(arr, val, found, -1)
-    from cudf.dataframe.columnops import as_column
+    from cudf.core.column import as_column
 
     found_col = as_column(found)
     max_index = found_col.max()
@@ -926,3 +924,41 @@ def window_sizes_from_offset(arr, offset):
             arr, window_sizes, offset
         )
     return window_sizes
+
+
+@lru_cache(maxsize=32)
+def compile_udf(udf, type_signature):
+    """Copmile ``udf`` with `numba`
+
+    Compile a python callable function ``udf`` with
+    `numba.cuda.jit(device=True)` using ``type_signature`` into CUDA PTX
+    together with the generated output type.
+
+    The output is expected to be passed to the PTX parser in `libcudf`
+    to generate a CUDA device funtion to be inlined into CUDA kernels,
+    compiled at runtime and launched.
+
+    Parameters
+    --------
+    udf:
+      a python callable function
+
+    type_signature:
+      a tuple that specifies types of each of the input parameters of ``udf``.
+      The types should be one in `numba.types` and could be converted from
+      numpy types with `numba.numpy_support.from_dtype(...)`.
+
+    Returns
+    --------
+    ptx_code:
+      The compiled CUDA PTX
+
+    output_type:
+      An numpy type
+
+    """
+    decorated_udf = cuda.jit(udf, device=True)
+    compiled = decorated_udf.compile(type_signature)
+    ptx_code = decorated_udf.inspect_ptx(type_signature).decode("utf-8")
+    output_type = numpy_support.as_dtype(compiled.signature.return_type)
+    return (ptx_code, output_type.type)

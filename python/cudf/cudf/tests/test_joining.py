@@ -7,7 +7,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import DataFrame
+from cudf.core import DataFrame
 from cudf.tests.utils import assert_eq
 
 
@@ -682,3 +682,56 @@ def test_merge_sort(kwargs, hows):
     pd_merge = left.merge(right, **kwargs)
     if pd_merge.empty:
         assert gd_merge.empty
+
+
+@pytest.mark.parametrize(
+    "dtype",
+    ["datetime64[s]", "datetime64[ms]", "datetime64[us]", "datetime64[ns]"],
+)
+def test_join_datetimes_index(dtype):
+    datetimes = pd.Series(pd.date_range("20010101", "20010102", freq="12h"))
+    pdf_lhs = pd.DataFrame(index=[1, 0, 1, 2, 0, 0, 1])
+    pdf_rhs = pd.DataFrame({"d": datetimes})
+    gdf_lhs = DataFrame.from_pandas(pdf_lhs)
+    gdf_rhs = DataFrame.from_pandas(pdf_rhs)
+
+    gdf_rhs["d"] = gdf_rhs["d"].astype(dtype)
+
+    pdf = pdf_lhs.join(pdf_rhs, sort=True)
+    gdf = gdf_lhs.join(gdf_rhs, sort=True)
+
+    assert gdf["d"].dtype == np.dtype(dtype)
+
+    assert_eq(pdf, gdf)
+
+
+def test_join_with_different_names():
+    left = pd.DataFrame({"a": [0, 1, 2.0, 3, 4, 5, 9]})
+    right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, how="outer", left_on=["a"], right_on=["b"])
+    gd_merge = gleft.merge(gright, how="outer", left_on=["a"], right_on=["b"])
+    assert_eq(pd_merge, gd_merge.sort_values(by=["a"]).reset_index(drop=True))
+
+
+def test_join_same_name_different_order():
+    left = pd.DataFrame({"a": [0, 0], "b": [1, 2]})
+    right = pd.DataFrame({"a": [1, 2], "b": [0, 0]})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, left_on=["a", "b"], right_on=["b", "a"])
+    gd_merge = gleft.merge(gright, left_on=["a", "b"], right_on=["b", "a"])
+    assert_eq(
+        pd_merge, gd_merge.sort_values(by=["a_x"]).reset_index(drop=True)
+    )
+
+
+def test_join_empty_table_dtype():
+    left = pd.DataFrame({"a": []})
+    right = pd.DataFrame({"b": [12, 5, 3, 9.0, 5], "c": [1, 2, 3, 4, 5.0]})
+    gleft = DataFrame.from_pandas(left)
+    gright = DataFrame.from_pandas(right)
+    pd_merge = left.merge(right, how="left", left_on=["a"], right_on=["b"])
+    gd_merge = gleft.merge(gright, how="left", left_on=["a"], right_on=["b"])
+    assert_eq(pd_merge["a"].dtype, gd_merge["a"].dtype)
