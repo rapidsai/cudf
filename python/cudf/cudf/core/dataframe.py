@@ -163,8 +163,7 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
-
-        self._enable_setattr_setitem = True
+        self._allow_setattr_to_setitem = True
 
     @property
     def _constructor(self):
@@ -271,20 +270,32 @@ class DataFrame(object):
         )
         return list(o)
 
+
     def __setattr__(self, key, col):
-        try:
-            object.__getattribute__(self, key)
-            return object.__setattr__(self, key, col)
-        except AttributeError:
-            pass
+        if getattr(self, "_allow_setattr_to_setitem", False):
+            # if an attribute already exists, set it.
+            try:
+                object.__getattribute__(self, key)
+                object.__setattr__(self, key, col)
+                return
+            except AttributeError:
+                pass
 
-        try:
-            if self._enable_setattr_setitem:
-                self.__setitem__(key, col)
-        except AttributeError:
-            pass
+            # if a column already exists, set it.
+            try:
+                self[key] # __getitem__ to verify key exists
+                self[key] = col
+                return
+            except KeyError:
+                pass
 
-        return object.__setattr__(self, key, col)
+            # warnings.warn(
+            #     "Columns may not be added to a DataFrame using a new " +
+            #     "attribute name. A new attribute will be created: '%s'" % key,
+            #     UserWarning
+            # )
+
+        object.__setattr__(self, key, col)
 
     def __getattr__(self, key):
         if key != "_cols" and key in self._cols:

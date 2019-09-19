@@ -226,7 +226,7 @@ def test_dataframe_column_add_drop():
     df = DataFrame()
     data = np.asarray(range(10))
     df["a"] = data
-    df.b = data
+    df["b"] = data
     assert tuple(df.columns) == ("a", "b")
     del df["a"]
     assert tuple(df.columns) == ("b",)
@@ -236,6 +236,37 @@ def test_dataframe_column_add_drop():
     assert tuple(df.columns) == ("b", "c", "a")
     del df["b"]
     assert tuple(df.columns) == ("c", "a")
+
+def test_dataframe_column_add_via_setattr():
+    df = DataFrame()
+    with pytest.warns(UserWarning) as record:
+        df.a = np.asarray(range(10))
+    
+    assert len(record) == 1
+    assert "A new attribute will be created" in str(record[0].message)
+
+
+def test_dataframe_column_set_drop_as_attr():
+    df = DataFrame()
+
+    data_0 = np.asarray([0, 1, 2])
+    data_1 = np.asarray([3, 2, 1])
+
+    df["a"] = data_0
+    df["b"] = data_1
+
+    df.a = data_1
+
+    assert tuple(df.columns) == ("a", "b")
+    assert_eq(df["a"].values, df["b"].values)
+
+    del df["a"]
+
+    assert tuple("b",)
+
+    # cannot drop column with attribute delete syntax
+    with pytest.raises(AttributeError):
+        del df.b
 
 
 def test_dataframe_pop():
