@@ -3075,20 +3075,25 @@ class DataFrame(object):
 
         return output_frame
 
-    def isnull(self, **kwargs):
+    def isnull(self):
         """Identify missing values in a DataFrame.
         """
-        return self._apply_support_method("isnull", **kwargs)
+        return self._apply_support_method("isnull")
 
-    def isna(self, **kwargs):
+    def isna(self):
         """Identify missing values in a DataFrame. Alias for isnull.
         """
-        return self.isnull(**kwargs)
+        return self.isnull()
 
-    def notna(self, **kwargs):
+    def notna(self):
         """Identify non-missing values in a DataFrame.
         """
-        return self._apply_support_method("notna", **kwargs)
+        return self._apply_support_method("notna")
+
+    def notnull(self):
+        """Identify non-missing values in a DataFrame. Alias for notna.
+        """
+        return self.notna()
 
     def to_pandas(self):
         """
