@@ -330,7 +330,7 @@ def test_parquet_chunked_skiprows(tmpdir):
     out_df.to_pandas().to_parquet(fname)
     for i in range(10):
         chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
-        expect = out_df[processed:processed+batch].reset_index(drop=True)
+        expect = out_df[processed:processed + batch].reset_index(drop=True)
         assert_eq(chunk.reset_index(drop=True), expect)
         processed += batch
         del chunk
