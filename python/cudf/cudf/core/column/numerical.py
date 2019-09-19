@@ -220,7 +220,7 @@ class NumericalColumn(column.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = sortedvals[segs]
+        out_col = column.as_column(sortedvals)[segs]
         return out_col
 
     def all(self):
