@@ -52,6 +52,7 @@
 - PR #2731 Fix building of benchmarks
 - PR #2736 Pin Jitify branch to v0.10 version
 - PR #2742 IO Readers: Fix possible silent failures when creating `NvStrings` instance
+- PR #XXXX Fixes dask_cudf.read_parquet on partitioned datasets
 
 
 # cuDF 0.9.0 (Date TBD)
