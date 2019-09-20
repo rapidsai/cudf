@@ -3556,8 +3556,9 @@ def test_rowwise_ops(data, op):
     gdf = data
     pdf = gdf.to_pandas()
 
-    # pandas errors due to not removing non-numeric columns before these ops,
-    # which feels like a bug not a feature
+    # pandas errors due to not removing non-numeric columns before these ops
+    # and doesn't perform as expected for scans on bools.
+    # Feels like a bug not a feature
     if op in ("cumsum", "cumprod"):
         pdf = pdf.select_dtypes([np.number, np.bool_])
 

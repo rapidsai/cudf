@@ -3515,9 +3515,9 @@ class DataFrame(object):
         coerced = self._apply_support_method("astype", dtype=common_dtype)
         return coerced
 
-    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
-        kwargs["axis"] = 1
-
+    def _prepare_for_rowwise_op(self, numeric_only=None):
+        """
+        """
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
                 "Row-wise operations currently require CuPy. "
@@ -3530,7 +3530,8 @@ class DataFrame(object):
         if any([col.has_null_mask for col in self._columns]):
             msg = (
                 "Row-wise operations do not currently support columns with "
-                "null values. Consider using .fillna() to fill null values."
+                "null values. Consider removing them with .dropna() "
+                "or using .fillna()."
             )
             raise ValueError(msg)
 
@@ -3543,10 +3544,14 @@ class DataFrame(object):
             )
             raise TypeError(msg)
 
-        filtered = self.select_dtypes(include=[np.number, np.bool])
-        coerced = filtered._as_common_dtype()
+        coerced = self._as_common_dtype()
         arr = cp.asarray(coerced.as_gpu_matrix())
-        result = getattr(arr, op)(**kwargs)
+        return arr
+
+    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
+        filtered = self.select_dtypes(include=[np.number, np.bool])
+        arr = filtered._prepare_for_rowwise_op(numeric_only=numeric_only)
+        result = getattr(arr, op)(axis=1, **kwargs)
 
         if len(result.shape) == 1:
             return Series(result, index=self.index)
@@ -3560,30 +3565,22 @@ class DataFrame(object):
 
     def min(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op(
-                "min", numeric_only=numeric_only, **kwargs
-            )
+            return self._apply_rowwise_op("min", numeric_only=numeric_only)
         return self._apply_support_method("min", **kwargs)
 
     def max(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op(
-                "max", numeric_only=numeric_only, **kwargs
-            )
+            return self._apply_rowwise_op("max", numeric_only=numeric_only)
         return self._apply_support_method("max", **kwargs)
 
     def sum(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op(
-                "sum", numeric_only=numeric_only, **kwargs
-            )
+            return self._apply_rowwise_op("sum", numeric_only=numeric_only)
         return self._apply_support_method("sum", **kwargs)
 
     def product(self, axis=0, numeric_only=None, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op(
-                "prod", numeric_only=numeric_only, **kwargs
-            )
+            return self._apply_rowwise_op("prod", numeric_only=numeric_only)
         return self._apply_support_method("product", **kwargs)
 
     def prod(self, axis=0, numeric_only=None, **kwargs):
@@ -3599,16 +3596,12 @@ class DataFrame(object):
 
     def cumsum(self, axis=0, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op(
-                "cumsum", numeric_only=None, **kwargs
-            )
+            return self._apply_rowwise_op("cumsum", numeric_only=None)
         return self._apply_support_method("cumsum", **kwargs)
 
     def cumprod(self, axis=0, **kwargs):
         if axis == 1:
-            return self._apply_rowwise_op(
-                "cumprod", numeric_only=None, **kwargs
-            )
+            return self._apply_rowwise_op("cumprod", numeric_only=None)
         return self._apply_support_method("cumprod", **kwargs)
 
     def mean(self, axis=0, numeric_only=None, **kwargs):
@@ -3633,22 +3626,20 @@ class DataFrame(object):
         mean : Series or DataFrame (if level specified)
         """
         if axis == 1:
-            return self._apply_rowwise_op(
-                "mean", numeric_only=numeric_only, **kwargs
-            )
+            return self._apply_rowwise_op("mean", numeric_only=numeric_only)
         return self._apply_support_method("mean", **kwargs)
 
-    def std(self, axis=0, numeric_only=None, **kwargs):
+    def std(self, axis=0, numeric_only=None, ddof=1, **kwargs):
         if axis == 1:
             return self._apply_rowwise_op(
-                "std", numeric_only=numeric_only, **kwargs
+                "std", numeric_only=numeric_only, ddof=ddof
             )
         return self._apply_support_method("std", **kwargs)
 
-    def var(self, axis=0, numeric_only=None, **kwargs):
+    def var(self, axis=0, numeric_only=None, ddof=1, **kwargs):
         if axis == 1:
             return self._apply_rowwise_op(
-                "var", numeric_only=numeric_only, **kwargs
+                "var", numeric_only=numeric_only, ddof=ddof
             )
         return self._apply_support_method("var", **kwargs)
 
