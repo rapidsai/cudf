@@ -534,6 +534,8 @@ gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output) {
 	return GDF_SUCCESS;
 }
 
+namespace cudf{
+namespace datetime{
 gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
 
 	CUDF_EXPECTS(input->size == output->size, "Column size mismatch");
@@ -577,7 +579,8 @@ gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output) {
 
 	return GDF_SUCCESS;
 }
-
+}
+}
 gdf_error gdf_extract_datetime_hour(gdf_column *input, gdf_column *output) {
 
 	GDF_REQUIRE(input->size == output->size, GDF_COLUMN_SIZE_MISMATCH);

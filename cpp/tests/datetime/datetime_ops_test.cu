@@ -20,6 +20,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/functions.h>
+#include <cudf/datetime.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -291,7 +292,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 	// example for gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output)
 	{
 		// from date32
-		gdfError = gdf_extract_datetime_weekday(&inputDate32Col, &outputInt16Col);
+		gdfError = cudf::datetime::gdf_extract_datetime_weekday(&inputDate32Col, &outputInt16Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -302,7 +303,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 		EXPECT_TRUE( results[2] == 2 );
 
 		// from date64
-		gdfError = gdf_extract_datetime_weekday(&inputDate64Col, &outputInt16Col);
+		gdfError = cudf::datetime::gdf_extract_datetime_weekday(&inputDate64Col, &outputInt16Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();
@@ -313,7 +314,7 @@ TEST_F(gdf_extract_from_datetime_example_test, usage_example) {
 		EXPECT_TRUE( results[2] == 2 );
 
 		// from timestamp in seconds
-		gdfError = gdf_extract_datetime_weekday(&inputTimestampSecsCol, &outputInt16Col);
+		gdfError = cudf::datetime::gdf_extract_datetime_weekday(&inputTimestampSecsCol, &outputInt16Col);
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 
 		results.clear();

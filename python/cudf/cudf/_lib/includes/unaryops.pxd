@@ -12,6 +12,12 @@ from libcpp.string cimport string
 
 ctypedef uint32_t* bit_mask_t_ptr
 
+cdef extern from "cudf/datetime.hpp" namespace "cudf::datetime" nogil:
+    cdef gdf_error gdf_extract_datetime_weekday(
+            gdf_column *input,
+            gdf_column *output
+        ) except +
+
 cdef extern from "cudf/cudf.h" nogil:
 
     cdef gdf_error gdf_extract_datetime_year(
@@ -25,11 +31,6 @@ cdef extern from "cudf/cudf.h" nogil:
     ) except +
 
     cdef gdf_error gdf_extract_datetime_day(
-        gdf_column *input,
-        gdf_column *output
-    ) except +
-
-    cdef gdf_error gdf_extract_datetime_weekday(
         gdf_column *input,
         gdf_column *output
     ) except +
