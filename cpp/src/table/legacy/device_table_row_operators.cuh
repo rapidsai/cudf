@@ -213,9 +213,9 @@ struct typed_row_inequality_comparator
         if (isNAN2 && isNAN1)
           return State::Undecided;
         else if (isNAN2)
-          return State::False;
-        else if (isNAN1)
           return State::True;
+        else if (isNAN1)
+          return State::False;
 
         if (lhs_data < rhs_data)
           return State::True;
