@@ -5,8 +5,6 @@ import functools
 from numba import cuda, six
 from numba.utils import exec_, pysignature
 
-from librmm_cffi import librmm as rmm
-
 import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.series import Series
@@ -36,18 +34,25 @@ pessimistic_nulls : bool
 
 _doc_applychunkparams = """
 chunks : int or Series-like
-            If it is an ``int``, it is the chunksize.
-            If it is an array, it contains integer offset for the start of
-            each chunk.  The span of a chunk for chunk i-th is
-            ``data[chunks[i] : chunks[i + 1]]`` for any
-            ``i + 1 < chunks.size``; or, ``data[chunks[i]:]`` for the
-            ``i == len(chunks) - 1``.
+    If it is an ``int``, it is the chunksize.
+    If it is an array, it contains integer offset for the start of each chunk.
+    The span of a chunk for chunk i-th is ``data[chunks[i] : chunks[i + 1]]``
+    for any ``i + 1 < chunks.size``; or, ``data[chunks[i]:]`` for the
+    ``i == len(chunks) - 1``.
 tpb : int; optional
-    It is the thread-per-block for the underlying kernel.
-    The default uses 1 thread to emulate serial execution for
-    each chunk.  It is a good starting point but inefficient.
-    Its maximum possible value is limited by the available CUDA GPU
-    resources.
+    The threads-per-block for the underlying kernel.
+    If not specified (Default), uses Numba ``.forall(...)`` built-in to query
+    the CUDA Driver API to determine optimal kernel launch configuration.
+    Specify 1 to emulate serial execution for each chunk.  It is a good
+    starting point but inefficient.
+    Its maximum possible value is limited by the available CUDA GPU resources.
+blkct : int; optional
+    The number of blocks for the underlying kernel.
+    If not specified (Default) and ``tpb`` is not specified (Default), uses
+    Numba ``.forall(...)`` built-in to query the CUDA Driver API to determine
+    optimal kernel launch configuration.
+    If not specified (Default) and ``tpb`` is specified, uses ``chunks`` as the
+    number of blocks.
 """
 
 doc_apply = docfmt_partial(params=_doc_applyparams)
@@ -74,7 +79,15 @@ def apply_rows(
 
 @doc_applychunks()
 def apply_chunks(
-    df, func, incols, outcols, kwargs, pessimistic_nulls, chunks, tpb
+    df,
+    func,
+    incols,
+    outcols,
+    kwargs,
+    pessimistic_nulls,
+    chunks,
+    blkct=None,
+    tpb=None,
 ):
     """Chunk-wise transformation
 
@@ -83,10 +96,10 @@ def apply_chunks(
     {params}
     {params_chunks}
     """
-    applyrows = ApplyChunksCompiler(
+    applychunks = ApplyChunksCompiler(
         func, incols, outcols, kwargs, pessimistic_nulls, cache_key=None
     )
-    return applyrows.run(df, chunks=chunks, tpb=tpb)
+    return applychunks.run(df, chunks=chunks, tpb=tpb)
 
 
 def make_aggregate_nullmask(df, columns=None, op="and"):
@@ -132,7 +145,7 @@ class ApplyKernelCompilerBase(object):
         # Allocate output columns
         outputs = {}
         for k, dt in self.outcols.items():
-            outputs[k] = rmm.device_array(len(df), dtype=dt)
+            outputs[k] = column.column_empty(len(df), dt, False)
         # Bind argument
         args = {}
         for dct in [inputs, outputs, self.kwargs]:
@@ -148,7 +161,7 @@ class ApplyKernelCompilerBase(object):
         # Prepare output frame
         outdf = df.copy()
         for k in sorted(self.outcols):
-            outdf[k] = outputs[k]
+            outdf[k] = Series(outputs[k], nan_as_null=False)
             if out_mask is not None:
                 outdf[k] = outdf[k].set_mask(out_mask.data)
 
@@ -164,9 +177,7 @@ class ApplyRowsCompiler(ApplyKernelCompilerBase):
         return kernel
 
     def launch_kernel(self, df, args):
-        blksz = 64
-        blkct = cudautils.optimal_block_count(len(df) // blksz)
-        self.kernel[blkct, blksz](*args)
+        self.kernel.forall(len(df))(*args)
 
 
 class ApplyChunksCompiler(ApplyKernelCompilerBase):
@@ -177,10 +188,15 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
         )
         return kernel
 
-    def launch_kernel(self, df, args, chunks, tpb):
+    def launch_kernel(self, df, args, chunks, blkct=None, tpb=None):
         chunks = self.normalize_chunks(len(df), chunks)
-        blkct = cudautils.optimal_block_count(chunks.size)
-        self.kernel[blkct, tpb](len(df), chunks, *args)
+        if blkct is None and tpb is None:
+            self.kernel.forall(len(df))(len(df), chunks, *args)
+        else:
+            assert tpb is not None
+            if blkct is None:
+                blkct = chunks.size
+            self.kernel[blkct, tpb](len(df), chunks, *args)
 
     def normalize_chunks(self, size, chunks):
         if isinstance(chunks, six.integer_types):
@@ -188,8 +204,8 @@ class ApplyChunksCompiler(ApplyKernelCompilerBase):
             return cudautils.arange(0, size, chunks)
         else:
             # *chunks* is an array of chunk leading offset
-            chunks = Series(chunks)
-            return chunks.to_gpu_array()
+            chunks = column.as_column(chunks)
+            return chunks.data.mem
 
 
 def _make_row_wise_kernel(func, argnames, extras):
