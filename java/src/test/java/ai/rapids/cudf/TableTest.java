@@ -632,17 +632,17 @@ public class TableTest {
   @Test
   void testLeftJoinWithNulls() {
     try (Table leftTable = new Table.TestBuilder()
-        .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
-        .column(102, 103, 19, 100, 101, 4, 104, 1, 3, 1)
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
         .build();
          Table rightTable = new Table.TestBuilder()
-             .column(6, 5, 9, 8, 10, 32)
-             .column(199, 211, 321, 1233, 33, 392)
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(201, 202, 203, 204, 205, 206)
              .build();
          Table expected = new Table.TestBuilder()
-             .column(100, 101, 102, 103, 104, 3, 1, 4, 1, 19)
-             .column(0, 1, 2, 3, 4, 5, 6, 7, 8, 9)
-             .column(null, null, null, null, null, 211, 199, null, 1233, 321)
+             .column(   2,    3,   9,    0,    1,    7,    4,   6,   5,   8) // common
+             .column( 100,  101, 102,  103,  104,  105,  106, 107, 108, 109) // left
+             .column(null, null, 203, null, null, null, null, 201, 202, 204) // right
              .build();
          Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(0));
          Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1))) {
@@ -654,18 +654,18 @@ public class TableTest {
   void testLeftJoin() {
     try (Table leftTable = new Table.TestBuilder()
         .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317)
-        .column(323, 172, 11, 243, 57, 143, 305, 95, 147, 58)
+        .column( 10,  11,  12,  13,  14,  15,  16,  17,  18,  19)
         .build();
          Table rightTable = new Table.TestBuilder()
              .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
-             .column(84, 257, 80, 93, 231, 193, 22, 12, 186, 184)
+             .column( 20,  21,  22,  23,  24,  25,  26,  27,  28,  29)
              .build();
          Table joinedTable = leftTable.onColumns(0).leftJoin(rightTable.onColumns(new int[]{0}));
          Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1));
          Table expected = new Table.TestBuilder()
-             .column(57, 305, 11, 147, 243, 58, 172, 95, 323, 143)
-             .column(109, 251, 254, 301, 306, 317, 326, 335, 360, 361)
-             .column(93, 186, 193, 257, 84, 22, 184, 231, 80, 12)
+             .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
+             .column( 10,  11,  12,  13,  14,  15,  16,  17,  18,  19) // left
+             .column( 22,  29,  25,  20,  23,  27,  28,  24,  21,  26) // right
              .build()) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }
@@ -674,17 +674,17 @@ public class TableTest {
   @Test
   void testInnerJoinWithNonCommonKeys() {
     try (Table leftTable = new Table.TestBuilder()
-        .column(2, 3, 9, 0, 1, 7, 4, 6, 5, 8)
-        .column(102, 103, 19, 100, 101, 4, 104, 1, 3, 1)
+        .column(  2,   3,   9,   0,   1,   7,   4,   6,   5,   8)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
         .build();
          Table rightTable = new Table.TestBuilder()
-             .column(6, 5, 9, 8, 10, 32)
-             .column(199, 211, 321, 1233, 33, 392)
+             .column(  6,   5,   9,   8,  10,  32)
+             .column(200, 201, 202, 203, 204, 205)
              .build();
          Table expected = new Table.TestBuilder()
-             .column(3, 1, 1, 19)
-             .column(5, 6, 8, 9)
-             .column(211, 199, 1233, 321)
+             .column(  9,   6,   5,   8) // common
+             .column(102, 107, 108, 109) // left
+             .column(202, 200, 201, 203) // right
              .build();
          Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(0));
          Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1))) {
@@ -696,18 +696,18 @@ public class TableTest {
   void testInnerJoinWithOnlyCommonKeys() {
     try (Table leftTable = new Table.TestBuilder()
         .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317)
-        .column(323, 172, 11, 243, 57, 143, 305, 95, 147, 58)
+        .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109)
         .build();
          Table rightTable = new Table.TestBuilder()
              .column(306, 301, 360, 109, 335, 254, 317, 361, 251, 326)
-             .column(84, 257, 80, 93, 231, 193, 22, 12, 186, 184)
+             .column(200, 201, 202, 203, 204, 205, 206, 207, 208, 209)
              .build();
          Table joinedTable = leftTable.onColumns(0).innerJoin(rightTable.onColumns(new int[]{0}));
          Table orderedJoinedTable = joinedTable.orderBy(true, Table.asc(1));
          Table expected = new Table.TestBuilder()
-             .column(57, 305, 11, 147, 243, 58, 172, 95, 323, 143)
-             .column(109, 251, 254, 301, 306, 317, 326, 335, 360, 361)
-             .column(93, 186, 193, 257, 84, 22, 184, 231, 80, 12)
+             .column(360, 326, 254, 306, 109, 361, 251, 335, 301, 317) // common
+             .column(100, 101, 102, 103, 104, 105, 106, 107, 108, 109) // left
+             .column(202, 209, 205, 200, 203, 207, 208, 204, 201, 206) // right
              .build()) {
       assertTablesAreEqual(expected, orderedJoinedTable);
     }

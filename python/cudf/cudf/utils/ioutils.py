@@ -115,6 +115,12 @@ skip_rows : int, default None
     If not None, the nunber of rows to skip from the start of the file.
 num_rows : int, default None
     If not None, the total number of rows to read.
+strings_to_categorical : boolean, default False
+    If True, return string columns as GDF_CATEGORY dtype; if False, return a
+    as GDF_STRING dtype.
+use_pandas_metadata : boolean, default True
+    If True and dataset has custom PANDAS schema metadata, ensure that index
+    columns are also loaded.
 
 Returns
 -------
