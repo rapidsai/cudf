@@ -25,7 +25,6 @@
 #include <stdio.h>
 #include <algorithm>
 
-
 #include <cudf/copying.hpp>
 #include <cudf/rolling.hpp>
 #include "rolling_detail.hpp"
