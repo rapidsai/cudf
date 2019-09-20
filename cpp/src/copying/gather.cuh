@@ -133,8 +133,7 @@ struct column_gatherer {
    *
    * @tparam column_type Dispatched type for the column being gathered
    * @param source_column The column to gather from
-   * @param gather_map Array of indices that maps source elements to destination
-   * elements
+   * @param gather_map An iterator over integral values representing the gather map
    * @param destination_column The column to gather into
    * @param ignore_out_of_bounds Ignore values in `gather_map` that are
    * out of bounds
