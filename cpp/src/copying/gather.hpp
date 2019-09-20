@@ -67,7 +67,7 @@ namespace detail {
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
  * `nvstring_category` objects of these will be synchronizeded before gather is 
  * performed. 
- * #param allow_negative_indices Interpret each negative index `i` in the
+ * @param allow_negative_indices Interpret each negative index `i` in the
  * gathermap as the positive index `i+num_source_rows`.
  * @return gdf_error
  *---------------------------------------------------------------------------**/
