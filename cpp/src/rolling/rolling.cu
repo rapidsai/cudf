@@ -39,7 +39,6 @@
 #include "jit/util/type.h"
 
 #include <types.h.jit>
-#include <bitmask/valid_if.cuh>
 
 namespace
 {
