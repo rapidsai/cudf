@@ -3819,11 +3819,20 @@ class DataFrame(object):
             map_index = Series(
                 map_index._column.as_categorical_column(np.int32).as_numerical
             )
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
         elif isinstance(map_index._column, CategoricalColumn):
             map_index = Series(map_index._column.as_numerical)
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
 
-        # scatter_to_frames wants a list of Series/columns
-        tables = libcudf.copying.scatter_to_frames(self._columns, map_index)
+        # scatter_to_frames wants a list of columns
+        source = [col for col in self._cols.values()]
+        tables = libcudf.copying.scatter_to_frames(source, map_index._column)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
