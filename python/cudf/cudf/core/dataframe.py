@@ -3823,8 +3823,7 @@ class DataFrame(object):
             map_index = Series(map_index._column.as_numerical)
 
         # scatter_to_frames wants a list of Series/columns
-        source = [self[col] for col in self.columns]
-        tables = libcudf.copying.scatter_to_frames(source, map_index)
+        tables = libcudf.copying.scatter_to_frames(self._columns, map_index)
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
