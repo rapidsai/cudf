@@ -105,6 +105,7 @@
 - PR #2818 Fix java join API to use new C++ join API
 - PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
 - PR #2837 Fix join benchmark
+- PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2851 Deleted existing dask-cudf/record.txt
 
 
