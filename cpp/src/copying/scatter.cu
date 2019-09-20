@@ -44,7 +44,7 @@ namespace detail {
 
 template <typename index_type, typename scatter_map_type>
 __global__ void invert_map(index_type gather_map[], const gdf_size_type destination_rows,
-			   scatter_map_type const scatter_map, const gdf_size_type source_rows){
+    scatter_map_type const scatter_map, const gdf_size_type source_rows, index_type default_value){
   index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid < destination_rows) {
     gather_map[tid] = -1;
@@ -81,16 +81,27 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
   const gdf_size_type invert_grid_size =
     (destination_table->num_rows() + block_size - 1) / block_size;
 
-  auto scatter_map_iterator = thrust::make_transform_iterator(
-      typed_scatter_map,
-      negative_index_converter<map_type>{destination_table->num_rows(),
-					   true});
-	  
-  invert_map<map_type, decltype(scatter_map_iterator)> <<<invert_grid_size, block_size>>>(
-      static_cast<map_type*>(gather_map.data),
-      destination_table->num_rows(),
-      scatter_map_iterator,
-      source_table->num_rows());
+  map_type default_value = -1;
+  if (allow_negative_indices) {
+    invert_map<<<invert_grid_size, block_size>>>(
+	static_cast<map_type*>(gather_map.data),
+	destination_table->num_rows(),
+	thrust::make_transform_iterator(
+	    typed_scatter_map,
+	    negative_index_converter<true,map_type>{destination_table->num_rows()}),
+	source_table->num_rows(),
+	default_value);
+  }
+  else {
+    invert_map<<<invert_grid_size, block_size>>>(
+	static_cast<map_type*>(gather_map.data),
+	destination_table->num_rows(),
+	thrust::make_transform_iterator(
+	    typed_scatter_map,
+	    negative_index_converter<false,map_type>{destination_table->num_rows()}),
+	source_table->num_rows(),
+	default_value);
+  }
 
   // We want to ignore out of bounds indices for scatter since it is possible that
   // some elements of the destination column are not modified. 

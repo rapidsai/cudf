@@ -67,12 +67,30 @@ struct dispatch_map_type {
 	  "Index out of bounds.");
     }
 
-    auto gather_map_iterator = thrust::make_transform_iterator(
-	typed_gather_map,
-	negative_index_converter<map_type>{source_table->num_rows(), allow_negative_indices});
-
-    gather(source_table, gather_map_iterator, destination_table, check_bounds,
-	ignore_out_of_bounds, sync_nvstring_category, allow_negative_indices);
+    if (allow_negative_indices) {
+      gather(source_table,
+	     thrust::make_transform_iterator(
+		 typed_gather_map,
+		 negative_index_converter<true,map_type>{source_table->num_rows()}),
+	     destination_table,
+	     check_bounds,
+	     ignore_out_of_bounds,
+	     sync_nvstring_category,
+	     allow_negative_indices
+	     );
+    }
+    else {
+      gather(source_table,
+	     thrust::make_transform_iterator(
+		 typed_gather_map,
+		 negative_index_converter<false,map_type>{source_table->num_rows()}),
+	     destination_table,
+	     check_bounds,
+	     ignore_out_of_bounds,
+	     sync_nvstring_category,
+	     allow_negative_indices
+	     );
+    }
   }
 
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
