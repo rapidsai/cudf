@@ -213,6 +213,14 @@ struct column_gatherer {
 /**---------------------------------------------------------------------------*
 * @brief Function object for applying a transformation on the gathermap
 * that converts negative indices to positive indices
+*
+* A negative index `i` is transformed to `i + size`, where `size` is
+* the number of elements in the column being gathered from.
+* Allowable values for the index `i` are in the range `[-size, size)`.
+* Thus, when gathering from a column of size `10`, the index `-1`
+* is transformed to `9` (i.e., the last element), `-2` is transformed
+* to `8` (the second-to-last element) and so on.
+* Positive indices are unchanged by this transformation.
 *---------------------------------------------------------------------------**/
 template <typename map_type>
 struct negative_index_converter : public thrust::unary_function<map_type,map_type>
