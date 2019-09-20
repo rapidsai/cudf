@@ -195,10 +195,17 @@ def test_cumprod_masked():
 def test_scan_boolean():
     s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
 
-    got = (s > 0).cumsum()
-    expect = pd.Series(
-        [False, False, False, True, True, True, True, True, True]
-    )
+    bool_s = (s > 0)
+
+    # cumsum test
+    got = bool_s.cumsum()
+    expect = bool_s.to_pandas().cumsum()
+
+    assert_eq(expect, got)
+
+    # cumprod test
+    got = bool_s.cumprod()
+    expect = bool_s.to_pandas().cumprod()
 
     assert_eq(expect, got)
 
