@@ -26,45 +26,44 @@ namespace cudf {
  *---------------------------------------------------------------------------**/
 class strings_column_view : private column_view
 {
- public:
-  strings_column_view( column_view strings_column );
-  strings_column_view( strings_column_view&& strings_view ) = default;
-  strings_column_view( const strings_column_view& strings_view ) = default;
-  ~strings_column_view() = default;
+public:
+    strings_column_view( column_view strings_column );
+    strings_column_view( strings_column_view&& strings_view ) = default;
+    strings_column_view( const strings_column_view& strings_view ) = default;
+    ~strings_column_view() = default;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the number of strings in the column
-   *---------------------------------------------------------------------------**/
-  size_type size() const;
+    /**---------------------------------------------------------------------------*
+     * @brief Returns the number of strings in the column
+     *---------------------------------------------------------------------------**/
+    size_type size() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the internal parent string column
-   *---------------------------------------------------------------------------**/
-  column_view parent() const;
+    /**---------------------------------------------------------------------------*
+     * @brief Returns the internal parent string column
+     *---------------------------------------------------------------------------**/
+    column_view parent() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the internal column of offsets
-   *---------------------------------------------------------------------------**/
-  column_view offsets() const;
+    /**---------------------------------------------------------------------------*
+    * @brief Returns the internal column of offsets
+    *---------------------------------------------------------------------------**/
+    column_view offsets() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the internal column of chars
-   *---------------------------------------------------------------------------**/
-  column_view chars() const;
+    /**---------------------------------------------------------------------------*
+    * @brief Returns the internal column of chars
+    *---------------------------------------------------------------------------**/
+    column_view chars() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns a pointer to the internal null mask memory
-   *---------------------------------------------------------------------------**/
-  const bitmask_type* null_mask() const;
+    /**---------------------------------------------------------------------------*
+    * @brief Returns a pointer to the internal null mask memory
+    *---------------------------------------------------------------------------**/
+    const bitmask_type* null_mask() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Returns the number of nulls in this column
-   *---------------------------------------------------------------------------**/
-  size_type null_count() const;
+    /**---------------------------------------------------------------------------*
+    * @brief Returns the number of nulls in this column
+    *---------------------------------------------------------------------------**/
+    size_type null_count() const;
 
 private:
-  const column_view _parent;
-
+    const column_view _parent;
 };
 
 namespace strings
@@ -96,7 +95,7 @@ void print( strings_column_view strings,
  * s2 = sublist( s1, 2 )
  * s2 is ["c", "d", "e", "f"]
  * @endcode
- * 
+ *
  * @param strings Strings instance for this operation.
  * @param start Index of first string to use.
  * @param end Index of last string to use.
@@ -104,6 +103,7 @@ void print( strings_column_view strings,
  * @param step Increment value between indexes.
  *        Default step is 1.
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return New strings column of size (end-start)/step.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> sublist( strings_column_view strings,
@@ -115,7 +115,7 @@ std::unique_ptr<cudf::column> sublist( strings_column_view strings,
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column created this strings instance using
  * the specified indices to select the strings.
- * 
+ *
  * @code
  * s1 = ["a", "b", "c", "d", "e", "f"]
  * map = [0, 2]
@@ -127,6 +127,7 @@ std::unique_ptr<cudf::column> sublist( strings_column_view strings,
  * @param gather_map The indices with which to select strings for the new column.
  *        Values must be within [0,size()) range.
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return New strings column of size indices.size()
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> gather( strings_column_view strings,
@@ -150,6 +151,7 @@ enum sort_type {
  * @param ascending Sort strings in ascending or descending order.
  * @param nullfirst Sort nulls to the beginning or the end of the new column.
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> sort( strings_column_view strings,
@@ -179,6 +181,7 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
  *        strings parameter. Number of values must equal the number
  *        of elements in strings pararameter (strings.size()).
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return New instance with the specified strings.
  */
 std::unique_ptr<cudf::column> scatter( strings_column_view strings,
@@ -198,11 +201,13 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
  * s2 = scatter( s1, "e", m1 )
  * s2 is ["a", "e", "c", "e"]
  * @endcode
- * 
+ *
  * @param strings Strings instance for this operation.
  * @param value Null-terminated encoded string in host memory to use with
  *        the scatter_map.
  * @param scatter_map The 0-based index values to place the given string.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return New instance with the specified strings.
  */
 std::unique_ptr<cudf::column> scatter( strings_column_view strings,
@@ -218,6 +223,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
  *
  * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return Numeric column of type int32.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
@@ -232,6 +238,7 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
  *
  * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return Numeric column of type int32.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
@@ -244,7 +251,7 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
  * For example, in UTF-8 the code point value for the character 'A' is 65.
  * The column is an array of variable-length integer arrays each with length
  * as returned by characters_counts().
- * 
+ *
  * @code
  * s = ["a","xyz", "éee"]
  * v = code_points(s)
@@ -253,11 +260,190 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
  *
  * @param strings Strings instance for this operation.
  * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
  * @return Numeric column of type int32. TODO: need uint32 here
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> code_points( strings_column_view strings,
                                            cudaStream_t stream=0,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+enum character_attribute {
+    DECIMAL=0,
+    NUMERIC=1,
+    DIGIT=2,
+    ALPHA=3,
+    SPACE=4,
+    UPPER=5,
+    LOWER=6,
+    ALPHANUM=7,
+    EMPTY=8
+};
+/**---------------------------------------------------------------------------*
+ * @brief Returns true for strings that have only characters of the specified
+ * type.
+ * @param strings Strings instance for this operation.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return Column of type bool.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> is_of_type( strings_column_view strings,
+                                          character_attribute ca_type,
+                                          cudaStream_t stream=0,
+                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+// combine.cu
+/**---------------------------------------------------------------------------*
+ * @brief Row-wise concatenates two columns of strings into a new a column.
+ * The number of strings in both columns must match.
+ * @param strings 1st string column.
+ * @param others 2nd string column.
+ * @param separator Null-terminated CPU string that should appear between each element.
+ * @param narep Null-terminated CPU string that should represent any null strings found.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return New instance with the concatenated
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
+                                           strings_column_view others,
+                                           const char* separator, const char* narep=nullptr,
+                                           cudaStream_t stream=0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+/**---------------------------------------------------------------------------*
+ * @brief Row-wise oncatenates the given list of strings columns with the first column.
+ * @param strings 1st string column.
+ * @param others List of string columns to concatenate.
+ * @param separator Null-terminated CPU string that should appear between each instance.
+ * @param narep Null-terminated CPU string that should represent any null strings found.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return New instance with the concatenated
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
+                                           std::vector<strings_column_view>& others,
+                                           const char* separator, const char* narep=nullptr,
+                                           cudaStream_t stream=0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+/**---------------------------------------------------------------------------*
+ * @brief Concatenates all strings in the column into one new string.
+ * This provides the Pandas strings equivalent of join().
+ * @param strings Strings for this operation.
+ * @param separator Null-terminated CPU string that should appear between each string.
+ * @param narep Null-terminated CPU string that should represent any null strings found.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return Resulting instance with one string.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> build_single_string( strings_column_view strings,
+                                                   const char* separator="",
+                                                   const char* narep=nullptr,
+                                                   cudaStream_t stream=0,
+                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+// split.cu
+/**---------------------------------------------------------------------------*
+ * @brief Split strings vertically creating new columns of strings.
+ * The number of columns will be equal to the string with the most splits.
+ *
+ * @param delimiter Null-terminated CPU string identifying the split points within each string.
+ *        Default of null splits on whitespace.
+ * @param maxsplit Maximum number of splits to perform searching from the beginning.
+ *        Default -1 indicates all delimiters are processed.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return List of strings columns.
+ *---------------------------------------------------------------------------**/
+std::vector<std::unique_ptr<cudf::column>> split( strings_column_view strings,
+                                                  const char* delimiter=nullptr,
+                                                  int maxsplit=-1,
+                                                  cudaStream_t stream=0,
+                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+/**---------------------------------------------------------------------------*
+ * @brief Split strings vertically creating new columns of NVStrings instances.
+ * The number of columns will be equal to the string with the most splits.
+ *
+ * @param delimiter Null-terminated CPU string identifying the split points within each string.
+ *        Default of null splits on whitespace.
+ * @param maxsplit Maximum number of splits to perform searching right to left.
+ *        Default -1 indicates all delimiters are processed.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return List of strings columns.
+ *---------------------------------------------------------------------------**/
+std::vector<std::unique_ptr<cudf::column>> rsplit( strings_column_view strings,
+                                                   const char* delimiter=nullptr,
+                                                   int maxsplit=-1,
+                                                   cudaStream_t stream=0,
+                                                   rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+/**---------------------------------------------------------------------------*
+ * @brief Each string is split into a list of new strings.
+ * The delimiter is searched from the beginning of each string.
+ * Each string results in a new strings column.
+ *
+ * @param strings Strings for this operation.
+ * @param delimiter Null-terminated CPU string identifying the split points within each string.
+ *        Default of null splits on whitespace.
+ * @param maxsplit Maximum number of splits to perform searching from the beginning.
+ *        Default -1 indicates all delimiters are processed.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return List of columns for each string.
+ *---------------------------------------------------------------------------**/
+std::vector<std::unique_ptr<cudf::column>> split_record( strings_column_view strings,
+                                                         const char* delimiter=nullptr,
+                                                         int maxsplit=-1,
+                                                         cudaStream_t stream=0,
+                                                         rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+/**---------------------------------------------------------------------------*
+ * @brief Each string is split into a list of new strings.
+ * The delimiter is searched from the end of each string.
+ * Each string results in a new strings column.
+ *
+ * @param strings Strings for this operation.
+ * @param delimiter Null-terminated CPU string identifying the split points within each string.
+ *        Default of null splits on whitespace.
+ * @param maxsplit Maximum number of splits to perform searching from the end.
+ *        Default -1 indicates all delimiters are processed.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return List of columns for each string.
+ *---------------------------------------------------------------------------**/
+std::vector<std::unique_ptr<cudf::column>> rsplit_record( strings_column_view strings,
+                                                          const char* delimiter=nullptr,
+                                                          int maxsplit=-1,
+                                                          cudaStream_t stream=0,
+                                                          rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+/**---------------------------------------------------------------------------*
+ * @brief Each string is split into two strings on the first delimiter found.
+ * Three strings are always created for each string: left-half, delimiter itself, right-half.
+ * The result is 3 strings columns representing the 3 partitions.
+ *
+ * @param delimiter Null-terminated CPU string identifying the split points within each string.
+ * @param results The list of instances for each string.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return List of columns for each partition.
+ *---------------------------------------------------------------------------**/
+std::vector<std::unique_ptr<cudf::column>> partition( strings_column_view strings,
+                                                      const char* delimiter,
+                                                      cudaStream_t stream=0,
+                                                      rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+/**---------------------------------------------------------------------------*
+ * @brief Each string is split into two strings on the last delimiter found.
+ * Three strings are always created for each string: left-half, delimiter itself, right-half.
+ * The result is 3 strings columns representing the 3 partitions.
+ *
+ * @param delimiter Null-terminated CPU string identifying the split points within each string.
+ * @param results The list of instances for each string.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return List of columns for each partition.
+ *---------------------------------------------------------------------------**/
+std::vector<std::unique_ptr<cudf::column>> rpartition( strings_column_view strings,
+                                                       const char* delimiter,
+                                                       cudaStream_t stream=0,
+                                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 } // namespace strings
 } // namespace cudf

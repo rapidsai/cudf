@@ -120,14 +120,14 @@ class string_view
 
   /**---------------------------------------------------------------------------*
    * @brief Return single UTF-8 character at the given character position
-   * 
+   *
    * @param pos Character position
    *---------------------------------------------------------------------------**/
   __device__ Char at(size_type pos) const;
   __device__ Char operator[](size_type pos) const;
   /**---------------------------------------------------------------------------*
    * @brief Return the byte offset from data() for a given character position
-   * 
+   *
    * @param pos Character position
    *---------------------------------------------------------------------------**/
   __device__ size_type byte_offset_for(size_type pos) const;
@@ -135,7 +135,7 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
-   * 
+   *
    * @param str Target string to compare with this string.
    * @return 0  If they compare equal.
    *         <0 Either the value of the first character of this string that does
@@ -149,7 +149,7 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Comparing target string with this string. Each character is compared
    * as a UTF-8 code-point value.
-   * 
+   *
    * @param str Target string to compare with this string.
    * @param bytes Number of bytes in str.
    * @return 0  If they compare equal.
@@ -189,7 +189,7 @@ class string_view
 
   /**---------------------------------------------------------------------------*
    * @brief Returns first character position if arg string is contained in this string.
-   * 
+   *
    * @param str Target string to compare with this string.
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
@@ -199,7 +199,7 @@ class string_view
   __device__ size_type find( const string_view& str, size_type pos=0, size_type count=-1 ) const;
   /**---------------------------------------------------------------------------*
    * @brief Returns first character position if arg array is contained in this string.
-   * 
+   *
    * @param str Target string to compare with this string.
    * @param bytes Number of bytes in str.
    * @param pos Character position to start search within this string.
@@ -210,7 +210,7 @@ class string_view
   __device__ size_type find( const char* str, size_type bytes, size_type pos=0, size_type count=-1 ) const;
   /**---------------------------------------------------------------------------*
    * @brief Returns first character position if arg character is contained in this string.
-   * 
+   *
    * @param chr Single encoded character.
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
@@ -220,7 +220,7 @@ class string_view
   __device__ size_type find( Char chr, size_type pos=0, size_type count=-1 ) const;
   /**---------------------------------------------------------------------------*
    * @brief Same as find() but searches from the end of this string.
-   * 
+   *
    * @param str Target string to compare with this string.
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
@@ -230,7 +230,7 @@ class string_view
   __device__ size_type rfind( const string_view& str, size_type pos=0, size_type count=-1 ) const;
   /**---------------------------------------------------------------------------*
    * @brief Same as find() but searches from the end of this string.
-   * 
+   *
    * @param str Target string to compare with this string.
    * @param bytes Number of bytes in str.
    * @param pos Character position to start search within this string.
@@ -241,7 +241,7 @@ class string_view
   __device__ size_type rfind( const char* str, size_type bytes, size_type pos=0, size_type count=-1 ) const;
   /**---------------------------------------------------------------------------*
    * @brief Same as find() but searches from the end of this string.
-   * 
+   *
    * @param chr Single encoded character.
    * @param pos Character position to start search within this string.
    * @param count Number of characters from pos to include in the search.
@@ -253,7 +253,7 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Return a sub-string of this string. The original string and device
    * memory but must still be maintained for the lifetime of the instance.
-   * 
+   *
    * @param start Character position to start the sub-string.
    * @param length Number of characters from start to include in the sub-string.
    * @return New instance pointing to a subset of the characters within this instance.
@@ -262,11 +262,11 @@ class string_view
 
   /**---------------------------------------------------------------------------*
    * @brief Tokenizes this string around the given delimiter up to count time.
-   * 
+   *
    * @param delim Character to use for separating tokens.
    * @param count Maximum number of tokens to return.
    *              Specify -1 to indicate all tokens.
-   * @param[out] Array to hold output tokens. 
+   * @param[out] Array to hold output tokens.
    *             Specify nullptr here to return just the token count.
    * @return Number of tokens.
    *---------------------------------------------------------------------------**/
@@ -274,11 +274,11 @@ class string_view
 
   /**---------------------------------------------------------------------------*
    * @brief Same as split() but starts tokenizing from the end of the string.
-   * 
+   *
    * @param delim Character to use for separating tokens.
    * @param count Maximum number of tokens to return.
    *              Specify -1 to indicate all tokens.
-   * @param[out] Array to hold output tokens. 
+   * @param[out] Array to hold output tokens.
    *             Specify nullptr here to return just the token count.
    * @return Number of tokens.
    *---------------------------------------------------------------------------**/
@@ -290,7 +290,7 @@ class string_view
   __host__ __device__ static size_type bytes_in_char( Char chr );
   /**---------------------------------------------------------------------------*
    * @brief Convert a char array into a Char value.
-   * 
+   *
    * @param str String containing encoded char bytes.
    * @param[out] chr Single Char value.
    * @return The number of bytes in the character
@@ -298,7 +298,7 @@ class string_view
   __host__ __device__ static size_type char_to_Char( const char* str, Char& chr );
   /**---------------------------------------------------------------------------*
    * @brief Place a Char value into a char array.
-   * 
+   *
    * @param chr Single character
    * @param[out] str Allocated char array with enough space to hold the encoded characer.
    * @return The number of bytes in the character
@@ -306,7 +306,7 @@ class string_view
   __host__ __device__ static size_type Char_to_char( Char chr, char* str );
   /**---------------------------------------------------------------------------*
    * @brief Return the number of characters in this provided char array.
-   * 
+   *
    * @param str String with encoded char bytes.
    * @param bytes Number of bytes in str.
    * @return The number of characters in the array.
@@ -319,7 +319,7 @@ private:
 
   /**---------------------------------------------------------------------------*
    * @brief Return the character position of the given byte offset.
-   * 
+   *
    * @param bytepos Byte position from start of _data.
    * @return The character position for the specified byte.
    *---------------------------------------------------------------------------**/
