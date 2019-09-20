@@ -696,7 +696,7 @@ TEST_F(SearchTest, contains_true)
     bool  result = false;
 
     auto column = column_wrapper<element_type> {0, 1, 17, 19, 23, 29, 71};
-    auto value = scalar_wrapper<element_type>{23};;
+    auto value = scalar_wrapper<element_type>{23};
 
     result = cudf::contains(
         column.get()[0],

@@ -212,6 +212,16 @@ def test_dataframe_drop_method():
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(["a", "b"]).columns) == ("c",)
     assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns=["a", "b"]).columns) == ("c",)
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns="a").columns) == ("b", "c")
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns=["a"]).columns) == ("b", "c")
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == tuple()
+    assert tuple(df.columns) == ("a", "b", "c")
 
     # Test drop error
     with pytest.raises(NameError) as raises:
@@ -220,6 +230,12 @@ def test_dataframe_drop_method():
     with pytest.raises(NameError) as raises:
         df.drop(["a", "d", "b"])
     raises.match("column 'd' does not exist")
+    with pytest.raises(ValueError) as raises:
+        df.drop("a", axis=1, columns="a")
+    raises.match("Cannot specify both")
+    with pytest.raises(ValueError) as raises:
+        df.drop(axis=1)
+    raises.match("Need to specify at least")
 
 
 def test_dataframe_column_add_drop():
@@ -2527,7 +2543,7 @@ def test_isnull_isna():
     assert_eq(ps.isna(), gs.isna())
 
 
-def test_notna():
+def test_notna_notnull():
     # float & strings some missing
     ps = pd.DataFrame(
         {
@@ -2538,12 +2554,16 @@ def test_notna():
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # integer & string none missing
     ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # all missing
     ps = pd.DataFrame(
@@ -2552,35 +2572,46 @@ def test_notna():
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # empty
     ps = pd.DataFrame({"a": []})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # one missing
     ps = pd.DataFrame({"a": [np.nan], "b": [None]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # strings missing
     ps = pd.DataFrame({"a": ["a", "b", "c", None, "e"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # strings none missing
     ps = pd.DataFrame({"a": ["a", "b", "c", "d", "e"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # unnamed series
     ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
     gs = Series.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
+    assert_eq(ps.notnull(), gs.notnull())
 
 
 def test_ndim():

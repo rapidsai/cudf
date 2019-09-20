@@ -416,6 +416,7 @@ add_library(cudf
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
+            src/filling/repeat.cu
             src/search/search.cu)
 
 # Override RPATH for nvstrings
