@@ -160,6 +160,15 @@ TEST(TestAttrs, IsUpperLower)
     NVStrings::destroy(strs);
 }
 
+TEST(TestAttrs, CodePoints)
+{
+    NVStrings* strs = NVStrings::create_from_array(hstrs.data(), 2);
+    thrust::device_vector<unsigned int> results(10,0);
+    strs->code_points(results.data().get());
+    unsigned int expected[] = {72, 50089, 108, 108, 111, 116, 104, 101, 115, 50089};
+    for( int idx = 0; idx < 10; ++idx )
+        EXPECT_EQ(results[idx],expected[idx]);
+}
 
 int main( int argc, char** argv )
 {

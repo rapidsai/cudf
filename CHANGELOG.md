@@ -25,6 +25,7 @@
 - PR #2802 Add `cudf::repeat()` and `cudf.Series.repeat()`
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 
 ## Improvements
@@ -104,6 +105,7 @@
 - PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
 - PR #2837 Fix join benchmark
 - PR #2809 Add hash_df and group_split dispatch functions for dask
+- PR #2851 Deleted existing dask-cudf/record.txt
 
 
 # cuDF 0.9.0 (21 Aug 2019)
