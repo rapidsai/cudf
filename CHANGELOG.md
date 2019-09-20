@@ -25,6 +25,7 @@
 - PR #2802 Add `cudf::repeat()` and `cudf.Series.repeat()`
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 
 ## Improvements
@@ -102,6 +103,7 @@
 - PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
+- PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
 - PR #2837 Fix join benchmark
 
 
