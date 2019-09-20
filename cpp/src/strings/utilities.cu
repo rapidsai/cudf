@@ -21,6 +21,7 @@
 #include "./utilities.h"
 
 #include <rmm/rmm.h>
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
 #include <thrust/transform_reduce.h>
 
@@ -108,7 +109,6 @@ std::unique_ptr<cudf::column> chars_from_string_array(
     size_type count = strings.size();
     auto d_strings = strings.data().get();
     auto execpol = rmm::exec_policy(stream);
-    auto size_fn = [d_strings] __device__ (size_type idx) { return d_strings[idx].size(); };
     size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
     // create column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes,

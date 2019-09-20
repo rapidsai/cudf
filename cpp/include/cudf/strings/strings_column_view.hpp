@@ -15,7 +15,6 @@
  */
 #pragma once
 
-#include <rmm/thrust_rmm_allocator.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
 
@@ -23,7 +22,7 @@ namespace cudf {
 
 /**---------------------------------------------------------------------------*
  * @brief Given a column-view of strings type, an instance of this class
- * provides a wrapper on the column for strings operations.
+ * provides a wrapper on this compound column for strings operations.
  *---------------------------------------------------------------------------**/
 class strings_column_view : private column_view
 {
@@ -238,6 +237,27 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
 std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                                                  cudaStream_t stream=0,
                                                  rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+/**---------------------------------------------------------------------------*
+ * @brief Creates a column with code point values (integers) for each string.
+ * A code point is the integer value representation of a character.
+ * For example, in UTF-8 the code point value for the character 'A' is 65.
+ * The column is an array of variable-length integer arrays each with length
+ * as returned by characters_counts().
+ * 
+ * @code
+ * s = ["a","xyz", "éee"]
+ * v = code_points(s)
+ * v is [97, 120, 121, 122, 50089, 101, 101]
+ * @endcode
+ *
+ * @param strings Strings instance for this operation.
+ * @param stream CUDA stream to use kernels in this method.
+ * @return Numeric column of type int32. TODO: need uint32 here
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> code_points( strings_column_view strings,
+                                           cudaStream_t stream=0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 } // namespace strings
 } // namespace cudf

@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
+#include <thrust/transform_scan.h>
 
 namespace cudf 
 {
@@ -29,7 +32,7 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                                                  cudaStream_t stream,
                                                  rmm::mr::device_memory_resource* mr )
 {
-    size_type count = strings.size();
+    auto count = strings.size();
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
@@ -58,7 +61,7 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                                             cudaStream_t stream,
                                             rmm::mr::device_memory_resource* mr )
 {
-    size_type count = strings.size();
+    auto count = strings.size();
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
@@ -83,6 +86,55 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
     return result;
 }
 
+//
+//
+std::unique_ptr<cudf::column> code_points( strings_column_view strings,
+                                           cudaStream_t stream,
+                                           rmm::mr::device_memory_resource* mr )
+{
+    auto count = strings.size();
+    auto execpol = rmm::exec_policy(0);
+    auto strings_column = column_device_view::create(strings.parent(),stream);
+    auto d_column = *strings_column;
+
+    // offsets point to each individual integer range
+    rmm::device_vector<size_type> offsets(count);
+    size_type* d_offsets = offsets.data().get();
+    thrust::transform_inclusive_scan(execpol->on(stream),
+        thrust::make_counting_iterator<size_type>(0),
+        thrust::make_counting_iterator<size_type>(count),
+        d_offsets,
+        [d_column] __device__(size_type idx){
+            if( d_column.nullable() && d_column.is_null(idx) )
+                return 0;
+            return d_column.element<string_view>(idx).characters();
+        },
+        thrust::plus<unsigned int>());
+    
+    // need the total size to build the column
+    // the size is the last element from an inclusive-scan
+    size_type size = offsets.back();
+    // create output column
+    auto result = make_numeric_column( data_type{INT32}, size,
+                                       mask_state::UNALLOCATED,
+                                       stream, mr );
+    auto results_view = result->mutable_view();
+    auto d_results = results_view.data<int32_t>();
+    // now set the ranges from each strings' character values
+    thrust::for_each_n(execpol->on(stream),
+        thrust::make_counting_iterator<unsigned int>(0), count,
+        [d_column, d_offsets, d_results] __device__(unsigned int idx){
+            if( d_column.nullable() && d_column.is_null(idx) )
+                return;
+            auto d_str = d_column.element<string_view>(idx);
+            auto result = d_results + (idx ? d_offsets[idx-1] :0);
+            thrust::copy( thrust::seq, d_str.begin(), d_str.end(), result);
+            //for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
+            //    *result++ = (unsigned int)*itr;
+        });
+    //
+    return result;
+}
 
 } // namespace strings
 } // namespace cudf

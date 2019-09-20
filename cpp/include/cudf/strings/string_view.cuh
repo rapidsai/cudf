@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <cstddef>
 #include <cuda_runtime.h>
 #include <cudf/types.hpp>
 
@@ -86,9 +87,16 @@ class string_view
   class iterator
   {
     public:
+      typedef ptrdiff_t difference_type;
+      typedef Char value_type;
+      typedef Char& reference;
+      typedef Char* pointer;
+      typedef std::input_iterator_tag iterator_category; // do not allow going backwards
       __device__ iterator(const string_view& str, size_type pos);
       iterator(const iterator& mit) = default;
       iterator(iterator&& mit) = default;
+      iterator& operator=(const iterator&) = default;
+      iterator& operator=(iterator&&) = default;
       __device__ iterator& operator++();
       __device__ iterator operator++(int);
       __device__ bool operator==(const iterator& rhs) const;

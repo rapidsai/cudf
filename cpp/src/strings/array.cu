@@ -21,6 +21,7 @@
 #include <cudf/strings/string_view.cuh>
 #include "./utilities.h"
 
+#include <rmm/thrust_rmm_allocator.h>
 #include <thrust/sort.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -107,10 +108,10 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
     auto d_chars = chars_view.data<int8_t>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_indices, d_new_offsets, d_chars] __device__(size_type idx){
-            // place individual strings
-            if( d_column.nullable() && d_column.is_null(idx) )
+            size_type index = d_indices[idx];
+            if( d_column.nullable() && d_column.is_null(index) )
                 return;
-            string_view d_str = d_column.element<string_view>(d_indices[idx]);
+            string_view d_str = d_column.element<string_view>(index);
             size_type offset = (idx ? d_new_offsets[idx-1] : 0);
             memcpy(d_chars + offset, d_str.data(), d_str.size() );
         });
@@ -267,7 +268,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
     auto d_offsets = offsets_view.data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1]; // this may not be stream friendly
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
     auto chars_column = detail::chars_from_string_array(strings, d_offsets,
                                                         stream, mr);
 
@@ -282,7 +283,6 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
         null_mask, null_count,
         std::move(children));
 }
-
 
 } // namespace strings
 } // namespace cudf
