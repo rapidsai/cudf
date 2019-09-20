@@ -3515,8 +3515,12 @@ class DataFrame(object):
         coerced = self._apply_support_method("astype", dtype=common_dtype)
         return coerced
 
-    def _prepare_for_rowwise_op(self, numeric_only=None):
-        """
+    def _prepare_for_rowwise_op(self):
+        """Prepare a DataFrame for CuPy-based row-wise operations.
+
+        Returns
+        -------
+        CuPy.NDArray
         """
         if not utils.IS_CUPY_AVAILABLE:
             msg = (
@@ -3535,6 +3539,14 @@ class DataFrame(object):
             )
             raise ValueError(msg)
 
+        coerced = self._as_common_dtype()
+        arr = cp.asarray(coerced.as_gpu_matrix())
+        return arr
+
+    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
+        """Apply a row-wise reduction or scan operation on a DataFrame.
+        """
+
         # Currently, we don't support row-wise operations on
         # datetimes, strings, and categoricals.
         if numeric_only not in (None, True):
@@ -3544,13 +3556,8 @@ class DataFrame(object):
             )
             raise TypeError(msg)
 
-        coerced = self._as_common_dtype()
-        arr = cp.asarray(coerced.as_gpu_matrix())
-        return arr
-
-    def _apply_rowwise_op(self, op, numeric_only=None, **kwargs):
         filtered = self.select_dtypes(include=[np.number, np.bool])
-        arr = filtered._prepare_for_rowwise_op(numeric_only=numeric_only)
+        arr = filtered._prepare_for_rowwise_op()
         result = getattr(arr, op)(axis=1, **kwargs)
 
         if len(result.shape) == 1:
