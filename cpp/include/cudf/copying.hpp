@@ -26,6 +26,9 @@ typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 
+/** ---------------------------------------------------------------------------*
+* @brief Indicates when to allocate a mask, based on an existing mask.
+* ---------------------------------------------------------------------------**/
 enum mask_allocation_policy {
     NEVER, ///< Do not allocate a null mask, regardless of input
     RETAIN, ///< Allocate a null mask if the input contains one
