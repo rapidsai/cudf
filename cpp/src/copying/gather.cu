@@ -51,13 +51,13 @@ struct dispatch_map_type {
   void operator()(table const *source_table, gdf_column const& gather_map,
       table *destination_table, bool check_bounds,
       bool ignore_out_of_bounds, bool sync_nvstring_category = false,
-      bool consider_negative_indices = false)
+      bool allow_negative_indices = false)
   {
 
     map_type const * typed_gather_map = static_cast<map_type const*>(gather_map.data);
 
     if (check_bounds) {
-      gdf_index_type begin = (consider_negative_indices) ? -source_table->num_rows() : 0;
+      gdf_index_type begin = (allow_negative_indices) ? -source_table->num_rows() : 0;
       CUDF_EXPECTS(
 	  destination_table->num_rows() == thrust::count_if(
 	      rmm::exec_policy()->on(0),
@@ -69,24 +69,24 @@ struct dispatch_map_type {
 
     auto gather_map_iterator = thrust::make_transform_iterator(
 	typed_gather_map,
-	negative_index_converter<map_type>{source_table->num_rows(), consider_negative_indices});
+	negative_index_converter<map_type>{source_table->num_rows(), allow_negative_indices});
 
     gather(source_table, gather_map_iterator, destination_table, check_bounds,
-	ignore_out_of_bounds, sync_nvstring_category, consider_negative_indices);
+	ignore_out_of_bounds, sync_nvstring_category, allow_negative_indices);
   }
 
   template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
   void operator()(table const *source_table, gdf_column const& gather_map,
                   table *destination_table, bool check_bounds,
 		  bool ignore_out_of_bounds, bool sync_nvstring_category = false,
-		  bool consider_negative_indices = false) {
+		  bool allow_negative_indices = false) {
    CUDF_FAIL("Gather map must be an integral type.");
   }
 };
 
 void gather(table const *source_table, gdf_column const& gather_map,
             table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
-            bool sync_nvstring_category, bool consider_negative_indices) {
+            bool sync_nvstring_category, bool allow_negative_indices) {
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
 
@@ -104,12 +104,12 @@ void gather(table const *source_table, gdf_column const& gather_map,
   cudf::type_dispatcher(gather_map.dtype, dispatch_map_type{},
 			source_table, gather_map, destination_table, check_bounds,
 			ignore_out_of_bounds,
-			sync_nvstring_category, consider_negative_indices);
+			sync_nvstring_category, allow_negative_indices);
 }
 
 void gather(table const *source_table, gdf_index_type const gather_map[],
 	    table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
-	    bool sync_nvstring_category, bool consider_negative_indices) {
+	    bool sync_nvstring_category, bool allow_negative_indices) {
   gdf_column gather_map_column{};
   gdf_column_view(&gather_map_column,
 		  const_cast<gdf_index_type*>(gather_map),
@@ -118,7 +118,7 @@ void gather(table const *source_table, gdf_index_type const gather_map[],
 		  gdf_dtype_of<gdf_index_type>());
   gather(source_table, gather_map_column, destination_table, check_bounds,
 	 ignore_out_of_bounds, sync_nvstring_category,
-	 consider_negative_indices);
+	 allow_negative_indices);
 }
 
 

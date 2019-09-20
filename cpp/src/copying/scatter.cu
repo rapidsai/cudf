@@ -60,12 +60,12 @@ __global__ void invert_map(index_type gather_map[], const gdf_size_type destinat
 struct dispatch_map_type {
 template <typename map_type, std::enable_if_t<std::is_integral<map_type>::value>* = nullptr>
 void operator()(table const *source_table, gdf_column const& scatter_map,
-    table *destination_table, bool check_bounds, bool consider_negative_indices) {
+    table *destination_table, bool check_bounds, bool allow_negative_indices) {
 
   map_type const * typed_scatter_map = static_cast<map_type const*>(scatter_map.data);
 
   if (check_bounds) {
-    gdf_index_type begin = (consider_negative_indices) ? -destination_table->num_rows() : 0;
+    gdf_index_type begin = (allow_negative_indices) ? -destination_table->num_rows() : 0;
     CUDF_EXPECTS(
 	source_table->num_rows() == thrust::count_if(
 	    rmm::exec_policy()->on(0),
@@ -103,14 +103,14 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 
 template <typename map_type, std::enable_if_t<not std::is_integral<map_type>::value>* = nullptr>
 void operator()(table const *source_table, gdf_column const& scatter_map,
-    table *destination_table, bool check_bounds, bool consider_negative_indices) {
+    table *destination_table, bool check_bounds, bool allow_negative_indices) {
   CUDF_FAIL("Scatter map must be an integral type.");
 }
 
 };
 
 void scatter(table const* source_table, gdf_column const& scatter_map,
-    table* destination_table, bool check_bounds, bool consider_negative_indices) {
+    table* destination_table, bool check_bounds, bool allow_negative_indices) {
   
   CUDF_EXPECTS(nullptr != source_table, "source table is null");
   CUDF_EXPECTS(nullptr != destination_table, "destination table is null");
@@ -129,14 +129,14 @@ void scatter(table const* source_table, gdf_column const& scatter_map,
 }
 
 void scatter(table const* source_table, gdf_index_type const scatter_map[],
-    table* destination_table, bool check_bounds, bool consider_negative_indices) {
+    table* destination_table, bool check_bounds, bool allow_negative_indices) {
   gdf_column scatter_map_column{};
   gdf_column_view(&scatter_map_column,
 		  const_cast<gdf_index_type*>(scatter_map),
 		  nullptr,
 		  source_table->num_rows(),
 		  gdf_dtype_of<gdf_index_type>());
-  scatter(source_table, scatter_map_column, destination_table, check_bounds, consider_negative_indices);
+  scatter(source_table, scatter_map_column, destination_table, check_bounds, allow_negative_indices);
 }
 
 template<bool mark_true>

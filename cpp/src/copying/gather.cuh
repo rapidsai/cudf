@@ -217,26 +217,26 @@ struct column_gatherer {
 template <typename map_type>
 struct negative_index_converter : public thrust::unary_function<map_type,map_type>
 {
-  negative_index_converter(gdf_size_type n_rows, bool consider_negative_indices)
-    : n_rows(n_rows), consider_negative_indices(consider_negative_indices){}
+  negative_index_converter(gdf_size_type n_rows, bool allow_negative_indices)
+    : n_rows(n_rows), allow_negative_indices(allow_negative_indices){}
 
   __device__
   map_type operator()(map_type in) const
   {
-    if (consider_negative_indices)
+    if (allow_negative_indices)
       return ((in % n_rows) + n_rows) % n_rows;
     else
       return in;
   }
   gdf_size_type n_rows;
-  bool consider_negative_indices;
+  bool allow_negative_indices;
 };
 
 
 template <typename iterator_type>
 void gather(table const *source_table, iterator_type gather_map,
 	    table *destination_table, bool check_bounds, bool ignore_out_of_bounds,
-	    bool sync_nvstring_category, bool consider_negative_indices)
+	    bool sync_nvstring_category, bool allow_negative_indices)
 {
   auto source_n_cols = source_table->num_columns();
   auto source_n_rows = source_table->num_rows();

@@ -62,25 +62,25 @@ namespace detail {
  * @param check_bounds Optionally perform bounds checking on the values of
  * `gather_map`
  * @param ignore_out_of_bounds Ignore values in `gather_map` that are
- * out of bounds. Currently incompatible with `consider_negative_indices`,
+ * out of bounds. Currently incompatible with `allow_negative_indices`,
  * i.e., setting both to `true` is undefined.
  * @param merge_nvstring_category If set to true and both the source column and its
  * corresponding destination column are of type `GDF_STRING_CATEGORY`, the
  * `nvstring_category` objects of these will be synchronizeded before gather is 
  * performed. 
- * #param consider_negative_indices Interpret each negative index `i` in the
+ * #param allow_negative_indices Interpret each negative index `i` in the
  * gathermap as a positive index.
  * @return gdf_error
  *---------------------------------------------------------------------------**/
 void gather(table const* source_table, gdf_column const& gather_map,
 	    table * destination_table, bool check_bounds = false,
 	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool consider_negative_indices = false);
+	    bool allow_negative_indices = false);
 
 void gather(table const* source_table, gdf_index_type const gather_map[],
 	    table* destination_table, bool check_bounds = false,
 	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
-	    bool consider_negative_indices = false);
+	    bool allow_negative_indices = false);
 
 
 }  // namespace detail
