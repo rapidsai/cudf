@@ -25,6 +25,7 @@
 #include <stdio.h>
 #include <algorithm>
 
+
 #include <cudf/copying.hpp>
 #include <cudf/rolling.hpp>
 #include "rolling_detail.hpp"
@@ -39,6 +40,7 @@
 #include "jit/util/type.h"
 
 #include <types.h.jit>
+#include <bitmask/valid_if.cuh>
 
 namespace
 {
@@ -54,6 +56,7 @@ namespace
  * 		  the output column
  * @param in_col[in]  Pointers to input column's data
  * @param in_cols_valid[in]  Pointers to the validity mask of the input column
+ * @param output_null_count[out] Variable to store null count in the bitmask
  * @param window[in]  The static rolling window size, accumulates from
  *                in_col[i-window+1] to in_col[i] inclusive
  * @param min_periods[in]  Minimum number of observations in window required to
@@ -81,6 +84,7 @@ void gpu_rolling(gdf_size_type nrows,
                  bit_mask::bit_mask_t * const __restrict__ out_col_valid,
                  ColumnType const * const __restrict__ in_col, 
                  bit_mask::bit_mask_t const * const __restrict__ in_col_valid,
+                 gdf_size_type* output_null_count,
                  gdf_size_type window,
                  gdf_size_type min_periods,
                  gdf_size_type forward_window,
@@ -94,6 +98,7 @@ void gpu_rolling(gdf_size_type nrows,
 
   gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
   gdf_size_type stride = blockDim.x * gridDim.x;
+  gdf_size_type valid_count_accumulate = 0;
 
   agg_op op;
 
@@ -131,8 +136,12 @@ void gpu_rolling(gdf_size_type nrows,
     gdf_index_type const out_mask_location = cudf::util::detail::bit_container_index<bit_mask_t, gdf_index_type>(i);
 
     // only one thread writes the mask
-    if (0 == threadIdx.x % warpSize)
+    if (0 == threadIdx.x % warpSize) {
       out_col_valid[out_mask_location] = result_mask;
+      // Perform null bitmask null count
+      valid_count_accumulate = __popc(result_mask);
+      atomicAdd(output_null_count, valid_count_accumulate);
+    }
 
     // store the output value, one per thread
     if (output_is_valid)
@@ -186,6 +195,7 @@ struct rolling_window_launcher
       gdf_agg_op agg_type,
       void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
       void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
+      gdf_size_type* output_null_count,
       gdf_size_type window,
       gdf_size_type min_periods,
       gdf_size_type forward_window,
@@ -206,35 +216,35 @@ struct rolling_window_launcher
     case GDF_SUM:
       dispatch_aggregation_type<ColumnType, cudf::DeviceSum, false>(nrows, stream,
                 typed_out_data, typed_out_valid,
-                typed_in_data, typed_in_valid,
+                typed_in_data, typed_in_valid, output_null_count,
                 window, min_periods, forward_window,
                 window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MIN:
       dispatch_aggregation_type<ColumnType, cudf::DeviceMin, false>(nrows, stream,
                  typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
+                 typed_in_data, typed_in_valid, output_null_count,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
     case GDF_MAX:
       dispatch_aggregation_type<ColumnType, cudf::DeviceMax, false>(nrows, stream,
                  typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
+                 typed_in_data, typed_in_valid, output_null_count,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
     case GDF_COUNT:
       dispatch_aggregation_type<ColumnType, cudf::DeviceCount, false>(nrows, stream,
                  typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
+                 typed_in_data, typed_in_valid, output_null_count,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
     case GDF_AVG:
       dispatch_aggregation_type<ColumnType, cudf::DeviceSum, true>(nrows, stream,
                  typed_out_data, typed_out_valid,
-                 typed_in_data, typed_in_valid,
+                 typed_in_data, typed_in_valid, output_null_count,
                  window, min_periods, forward_window,
                  window_col, min_periods_col, forward_window_col);
       break;
@@ -280,17 +290,26 @@ gdf_column* rolling_window(const gdf_column &input_col,
   // always use the default stream for now
   cudaStream_t stream = NULL;
 
+  // Create a new cuda variable for null count in the bitmask
+  rmm::device_vector<gdf_size_type> bit_set_counter(1, 0);
+
   // Launch type dispatcher
   cudf::type_dispatcher(input_col.dtype,
                         rolling_window_launcher{},
                         input_col.size, agg_type,
                         output_col->data, output_col->valid,
                         input_col.data, input_col.valid,
+			bit_set_counter.data().get(),
                         window, min_periods, forward_window,
                         window_col, min_periods_col, forward_window_col,
                         stream);
 
-  set_null_count(*output_col.get());
+  // Update the null count in the output column
+  gdf_size_type num_nulls = 0;
+  CUDA_TRY(cudaMemcpyAsync(&num_nulls, bit_set_counter.data().get(), sizeof(gdf_size_type),
+              cudaMemcpyDeviceToHost, stream));
+  output_col->null_count = output_col->size - num_nulls;
+
   // Release the gdf pointer from the wrapper class
   return output_col.release();
 }
