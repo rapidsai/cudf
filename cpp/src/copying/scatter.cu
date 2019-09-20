@@ -77,13 +77,12 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 
   gdf_column gather_map = cudf::allocate_like(scatter_map, destination_table->num_rows());
 
-  constexpr int block_size = 256;
-  const gdf_size_type invert_grid_size =
-    (destination_table->num_rows() + block_size - 1) / block_size;
+  // Configure grid for data kernel launch
+  auto grid_config = cudf::util::cuda::grid_config_1d(destination_table->num_rows(), 256);
 
   map_type default_value = -1;
   if (allow_negative_indices) {
-    invert_map<<<invert_grid_size, block_size>>>(
+    invert_map<<<grid_config.num_blocks, grid_config.num_threads_per_block>>>(
 	static_cast<map_type*>(gather_map.data),
 	destination_table->num_rows(),
 	thrust::make_transform_iterator(
@@ -93,7 +92,7 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 	default_value);
   }
   else {
-    invert_map<<<invert_grid_size, block_size>>>(
+    invert_map<<<grid_config.num_blocks, grid_config.num_threads_per_block>>>(
 	static_cast<map_type*>(gather_map.data),
 	destination_table->num_rows(),
 	thrust::make_transform_iterator(
