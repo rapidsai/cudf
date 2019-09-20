@@ -163,6 +163,8 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+
+        # allows Pandas-like __setattr__ functionality: `df.x = column`, etc.
         self._allow_setattr_to_setitem = True
 
     @property
@@ -289,11 +291,11 @@ class DataFrame(object):
             except KeyError:
                 pass
 
-            # warnings.warn(
-            #     "Columns may not be added to a DataFrame using a new " +
-            #     "attribute name. A new attribute will be created: '%s'" % key,
-            #     UserWarning
-            # )
+            warnings.warn(
+                "Columns may not be added to a DataFrame using a new " +
+                "attribute name. A new attribute will be created: '%s'" % key,
+                UserWarning
+            )
 
         object.__setattr__(self, key, col)
 
