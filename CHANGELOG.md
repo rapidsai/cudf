@@ -22,7 +22,11 @@
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 - PR #2785 Add nvstrings Python docs
 - PR #2786 Add benchmarks option to root build.sh
+- PR #2802 Add `cudf::repeat()` and `cudf.Series.repeat()`
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
+- PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2836 Add nvstrings.code_points method
+- PR #2844 Add Series/DataFrame notnull
 
 ## Improvements
 
@@ -38,13 +42,19 @@
 - PR #2706 Compute CSV format in device code to speedup performance
 - PR #2673 Add support for np.longlong type
 - PR #2703 move dask serialization dispatch into cudf
+- PR #2728 Add YYMMDD to version tag for nightly conda packages
 - PR #2729 Handle file-handle input in to_csv
 - PR #2741 CSV Reader: Move kernel functions into its own file
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
 - PR #2783 Support mapping input columns to function arguments in apply kernels
-- PR #2645 libcudf unique_count for Series.nunique 
+- PR #2645 libcudf unique_count for Series.nunique
+- PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
+- PR #2823 improve java data movement debugging
+- PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
+- PR #2831 Add `column` argument to `DataFrame.drop`
 
 ## Bug Fixes
 
@@ -58,6 +68,7 @@
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
+- PR #2649 Fix groupby issue resulting from column_empty bug
 - PR #2658 Fix astype() for null categorical columns
 - PR #2660 fix column string category and timeunit concat in the java API
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
@@ -85,8 +96,15 @@
 - PR #2752 CSV Reader: Fix exception when there's no rows to process
 - PR #2716 Added Exception for `StringMethods` in string methods
 - PR #2787 Fix Broadcasting `None` to `cudf-series`
+- PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2751 Replace value with null
+- PR #2765 Fix Java inequality comparisons for string category
+- PR #2818 Fix java join API to use new C++ join API
+- PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
+- PR #2837 Fix join benchmark
+- PR #2851 Deleted existing dask-cudf/record.txt
 
 
 # cuDF 0.9.0 (21 Aug 2019)
