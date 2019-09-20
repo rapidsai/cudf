@@ -17,14 +17,6 @@ from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
 
 
-def have_cupy():
-    try:
-        import cupy
-    except ImportError:
-        return False
-    return True
-
-
 def test_buffer_basic():
     n = 10
     buf = Buffer(np.arange(n, dtype=np.float64))
@@ -1539,12 +1531,18 @@ def test_series_hash_encode(nrows):
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
-@pytest.mark.skipif(not have_cupy(), reason="CuPy is not installed")
 def test_cuda_array_interface(dtype):
-    import cupy as cp
+    try:
+        import cupy
+
+        _have_cupy = True
+    except ImportError:
+        _have_cupy = False
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed")
 
     np_data = np.arange(10).astype(dtype)
-    cupy_data = cp.array(np_data)
+    cupy_data = cupy.array(np_data)
     pd_data = pd.Series(np_data)
 
     cudf_data = gd.Series(cupy_data)
@@ -1554,37 +1552,6 @@ def test_cuda_array_interface(dtype):
     gdf["test"] = cupy_data
     pd_data.name = "test"
     assert_eq(pd_data, gdf["test"])
-
-
-@pytest.mark.skipif(not have_cupy(), reason="CuPy is not installed")
-def test_column_from_ephemeral_cupy():
-    import cupy as cp
-
-    # Test that we keep a reference to the ephemeral
-    # CuPy array. If we didn't, then `a` would end
-    # up referring to the same memory as `b` due to
-    # CuPy's caching allocator
-    a = gd.Series(cp.asarray([1, 2, 3]))
-    b = gd.Series(cp.asarray([1, 1, 1]))
-    assert_eq(pd.Series([1, 2, 3]), a)
-    assert_eq(pd.Series([1, 1, 1]), b)
-
-
-@pytest.mark.skipif(not have_cupy(), reason="CuPy is not installed")
-def test_column_from_cupy_try_lose_reference():
-    import cupy as cp
-
-    # Try to lose the reference we keep to the ephermal
-    # CuPy array
-    a = gd.Series(cp.asarray([1, 2, 3]))._column
-    a = gd.core.column.as_column(a)
-    b = cp.asarray([1, 1, 1])
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
-
-    a = gd.Series(cp.asarray([1, 2, 3]))._column
-    a = a.replace(name="b")
-    b = cp.asarray([1, 1, 1])
-    assert_eq(pd.Series([1, 2, 3]), a.to_pandas())
 
 
 @pytest.mark.parametrize("nelem", [0, 2, 3, 100])
