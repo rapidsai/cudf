@@ -26,6 +26,7 @@
 #include "cudf/legacy/table.hpp"
 #include "cudf/stream_compaction.hpp"
 #include "cudf/types.hpp"
+#include "cudf/join.hpp"
 
 #include "jni_utils.hpp"
 
@@ -328,7 +329,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     cudf::table *n_left_table = reinterpret_cast<cudf::table *>(left_table);
     cudf::table *n_right_table = reinterpret_cast<cudf::table *>(right_table);
     cudf::jni::native_jintArray left_join_cols_arr(env, left_col_join_indices);
+    std::vector<int> left_join_cols(left_join_cols_arr.data(), left_join_cols_arr.data() + left_join_cols_arr.size());
     cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
+    std::vector<int> right_join_cols(right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
 
     gdf_context context{};
     context.flag_sorted = 0;
@@ -337,25 +340,23 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
     context.flag_sort_result = 1;
     context.flag_sort_inplace = 0;
 
-    int result_num_cols =
-        n_left_table->num_columns() + n_right_table->num_columns() - left_join_cols_arr.size();
-
-    // gdf_left_join is allocating the memory for the results so
-    // allocate the output column structures here when we get it back fill in
-    // the the outPtrs
-    cudf::jni::unique_jpointerArray<gdf_column> output_columns(env, result_num_cols);
-    for (int i = 0; i < result_num_cols; i++) {
-      output_columns.reset(i, new gdf_column());
+    int dedupe_size = left_join_cols.size();
+    std::vector<std::pair<gdf_size_type, gdf_size_type>> dedupe(dedupe_size);
+    for (int i = 0; i < dedupe_size; i++) {
+      dedupe[i].first = left_join_cols[i];
+      dedupe[i].second = right_join_cols[i];
     }
-    JNI_GDF_TRY(
-        env, NULL,
-        gdf_left_join(
-            n_left_table->begin(), n_left_table->num_columns(), left_join_cols_arr.data(),
-            n_right_table->begin(), n_right_table->num_columns(), right_join_cols_arr.data(),
-            left_join_cols_arr.size(), result_num_cols,
-            const_cast<gdf_column **>(output_columns.get()), // API does not respect const values
-            nullptr, nullptr, &context));
-    return output_columns.release();
+
+    cudf::table result = cudf::left_join(
+            *n_left_table, *n_right_table,
+            left_join_cols, right_join_cols,
+            dedupe,
+            nullptr, &context);
+
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
+                                                result.num_columns());
+
+    return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
 }
@@ -372,7 +373,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfInnerJoin(
     cudf::table *n_left_table = reinterpret_cast<cudf::table *>(left_table);
     cudf::table *n_right_table = reinterpret_cast<cudf::table *>(right_table);
     cudf::jni::native_jintArray left_join_cols_arr(env, left_col_join_indices);
+    std::vector<int> left_join_cols(left_join_cols_arr.data(), left_join_cols_arr.data() + left_join_cols_arr.size());
     cudf::jni::native_jintArray right_join_cols_arr(env, right_col_join_indices);
+    std::vector<int> right_join_cols(right_join_cols_arr.data(), right_join_cols_arr.data() + right_join_cols_arr.size());
 
     gdf_context context{};
     context.flag_sorted = 0;
@@ -381,29 +384,24 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfInnerJoin(
     context.flag_sort_result = 1;
     context.flag_sort_inplace = 0;
 
-    int result_num_cols =
-        n_left_table->num_columns() + n_right_table->num_columns() - left_join_cols_arr.size();
+    int dedupe_size = left_join_cols.size();
+    std::vector<std::pair<gdf_size_type, gdf_size_type>> dedupe(dedupe_size);
+    for (int i = 0; i < dedupe_size; i++) {
+      dedupe[i].first = left_join_cols[i];
+      dedupe[i].second = right_join_cols[i];
+    }
 
-    // gdf_inner_join is allocating the memory for the results so
-    // allocate the output column structures here when we get it back fill in
-    // the the outPtrs
-    cudf::jni::native_jlongArray output_handles(env, result_num_cols);
-    std::vector<std::unique_ptr<gdf_column>> output_columns(result_num_cols);
-    for (int i = 0; i < result_num_cols; i++) {
-      output_columns[i].reset(new gdf_column());
-      output_handles[i] = reinterpret_cast<jlong>(output_columns[i].get());
-    }
-    JNI_GDF_TRY(env, NULL,
-                gdf_inner_join(n_left_table->begin(), n_left_table->num_columns(),
-                               left_join_cols_arr.data(), n_right_table->begin(),
-                               n_right_table->num_columns(), right_join_cols_arr.data(),
-                               left_join_cols_arr.size(), result_num_cols,
-                               reinterpret_cast<gdf_column **>(output_handles.data()), nullptr,
-                               nullptr, &context));
-    for (int i = 0; i < result_num_cols; i++) {
-      output_columns[i].release();
-    }
-    return output_handles.get_jArray();
+    cudf::table result = cudf::inner_join(
+            *n_left_table, *n_right_table,
+            left_join_cols, right_join_cols,
+            dedupe,
+            nullptr, &context);
+
+    cudf::jni::native_jlongArray native_handles(env, reinterpret_cast<jlong *>(result.begin()),
+                                                result.num_columns());
+
+    return native_handles.get_jArray();
+
   }
   CATCH_STD(env, NULL);
 }
