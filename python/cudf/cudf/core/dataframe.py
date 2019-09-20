@@ -1007,10 +1007,7 @@ class DataFrame(object):
         """
         Return a list of Column objects backing this dataframe
         """
-        cols = [sr._column for sr in self._cols.values()]
-        for col in cols:
-            col.name = None
-        return cols
+        return [sr._column for sr in self._cols.values()]
 
     def _rename_columns(self, new_names):
         old_cols = list(self._cols.keys())
@@ -3849,8 +3846,9 @@ class DataFrame(object):
             )
 
         # scatter_to_frames wants a list of columns
-        source = [col for col in self._cols.values()]
-        tables = libcudf.copying.scatter_to_frames(source, map_index._column)
+        tables = libcudf.copying.scatter_to_frames(
+            self._columns, map_index._column
+        )
 
         if map_size:
             # Make sure map_size is >= the number of uniques in map_index
