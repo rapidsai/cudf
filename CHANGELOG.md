@@ -54,7 +54,6 @@
 - PR #2806 CSV Reader: Clean-up row offset operations
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
-- PR #2809 Add hash_df and group_split dispatch functions for dask
 
 ## Bug Fixes
 
@@ -104,6 +103,7 @@
 - PR #2818 Fix java join API to use new C++ join API
 - PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
 - PR #2837 Fix join benchmark
+- PR #2809 Add hash_df and group_split dispatch functions for dask
 
 
 # cuDF 0.9.0 (21 Aug 2019)

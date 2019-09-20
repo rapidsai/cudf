@@ -1405,7 +1405,6 @@ class DataFrame(object):
             data, forceindex=forceindex, name=name
         )
 
-
     def drop(self, labels=None, axis=None, columns=None, errors="raise"):
         """Drop column(s)
 
