@@ -97,6 +97,7 @@
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
 - PR #2837 Fix join benchmark
+- PR #2708 Fixed `cumsum()` and `cumprod()` on boolean series.
 
 
 # cuDF 0.9.0 (21 Aug 2019)
