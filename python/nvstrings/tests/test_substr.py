@@ -14,14 +14,18 @@ def test_slice_from():
     strs = nvstrings.to_device(
         ["hello world", "holy accéntéd", "batman", None, ""]
     )
-    d_arr = rmm.to_device(np.asarray([2, 3, -1, -1, -1], dtype=np.int32))
-    got = strs.slice_from(starts=d_arr.device_ctypes_pointer.value)
+    d_starts = rmm.to_device(np.asarray([2, 3, 0, -1, -1], dtype=np.int32))
+    d_stops = rmm.to_device(np.asarray([-1, -1, 0, -1, -1], dtype=np.int32))
+    got = strs.slice_from(
+        starts=d_starts.device_ctypes_pointer.value,
+        stops=d_stops.device_ctypes_pointer.value,
+    )
     expected = ["llo world", "y accéntéd", "", None, ""]
     assert_eq(got, expected)
 
 
-@pytest.mark.parametrize("start", [2, 2, 2, 2])
-@pytest.mark.parametrize("stop", [8, 15, 8, 8])
+@pytest.mark.parametrize("start", [2, 2, 2, 2, 0])
+@pytest.mark.parametrize("stop", [8, 15, 8, 8, 0])
 @pytest.mark.parametrize("step", [None, None, 2, 5])
 def test_slice(start, stop, step):
     s = ["abcdefghij", "0123456789", "9876543210", None, "accénted", ""]
