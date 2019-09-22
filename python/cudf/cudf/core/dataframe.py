@@ -2754,7 +2754,8 @@ class DataFrame(object):
         kwargs={},
         pessimistic_nulls=True,
         chunks=None,
-        tpb=1,
+        blkct=None,
+        tpb=None,
     ):
         """
         Transform user-specified chunks using the user-provided function.
@@ -3075,20 +3076,25 @@ class DataFrame(object):
 
         return output_frame
 
-    def isnull(self, **kwargs):
+    def isnull(self):
         """Identify missing values in a DataFrame.
         """
-        return self._apply_support_method("isnull", **kwargs)
+        return self._apply_support_method("isnull")
 
-    def isna(self, **kwargs):
+    def isna(self):
         """Identify missing values in a DataFrame. Alias for isnull.
         """
-        return self.isnull(**kwargs)
+        return self.isnull()
 
-    def notna(self, **kwargs):
+    def notna(self):
         """Identify non-missing values in a DataFrame.
         """
-        return self._apply_support_method("notna", **kwargs)
+        return self._apply_support_method("notna")
+
+    def notnull(self):
+        """Identify non-missing values in a DataFrame. Alias for notna.
+        """
+        return self.notna()
 
     def to_pandas(self):
         """
@@ -3796,6 +3802,14 @@ class DataFrame(object):
             line_terminator,
             chunksize,
         )
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        new_index = self.index.repeat(repeats)
+        cols = libcudf.filling.repeat(self._columns, repeats)
+        # to preserve col names, need to get it from old _cols dict
+        column_names = self._cols.keys()
+        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
 
 
 def from_pandas(obj):
