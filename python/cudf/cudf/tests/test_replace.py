@@ -360,10 +360,11 @@ def test_series_multiple_times_with_nulls():
     for i in range(3):
         got = sr.replace([1, 2, 3], None)
         assert_eq(expected, got)
+        # BUG: #2695
         # The following series will acquire a chunk of memory and update with
-        # values, but these values will still linger even after the memory
-        # gets released. This memory space will get used for replace in
-        # subsequent calls and the memory used for mask will have junk values.
+        # values, but these values may still linger even after the memory
+        # gets released. This memory space might get used for replace in
+        # subsequent calls and the memory used for mask may have junk values.
         # So, if it is not updated properly, the result would be wrong.
-        # So, this staement will help verify that scenario.
+        # So, this will help verify that scenario.
         Series([1, 1, 1, None])
