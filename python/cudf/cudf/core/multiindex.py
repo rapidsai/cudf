@@ -658,3 +658,9 @@ class MultiIndex(Index):
                 self._source_data._columns, [1] * len(self.levels)
             )
         return self._is_monotonic_decreasing
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        return MultiIndex.from_frame(
+            self._source_data.repeat(repeats), names=self.names
+        )

@@ -43,23 +43,23 @@
  * char, float`.
  *
  * Instead of using `::testing::Types` directly, we provide
- * `cudf::test::Types`. This is a drop in replacement for GTest's
+ * `cudf::testing::Types`. This is a drop in replacement for GTest's
  * `::testing::Types`. In lieu of including `gtest/gtest.h`, include
- * `cudf_gtest.hpp` to ensure `cudf::test::Types` is used.
+ * `cudf_gtest.hpp` to ensure `cudf::testing::Types` is used.
  *
  * Using the utilities in this file, you can compose complex type lists.
  *
- * For example, `CrossJoin` may be used to compute the cross-product of two or
+ * For example, `CrossProduct` may be used to compute the cross-product of two or
  * more type lists:
  *
  * ```
- * using TestTypes = CrossJoin<Types<int,float>,Types<char, void*>>;
+ * using TestTypes = CrossProduct<Types<int,float>,Types<char, void*>>;
  * // TestTypes ==  Types< <int,char> <int,void*> <float,char> <float,void*> >
  * ```
  * RemoveIf can be used to remove some parameters that match a given predicate:
  *
  * ```
- * using TestTypes = RemoveIf<AllSame, CrossJoin<Types<int,char>,
+ * using TestTypes = RemoveIf<AllSame, CrossProduct<Types<int,char>,
  *Types<int,char>>>;
  * // TestTypes ==  Types< <int,char>,<char,int> >
  * ```
@@ -216,7 +216,11 @@ struct FlattenImpl<Types<Types<HEAD...>, TAIL...>> {
 template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
+<<<<<<< HEAD
 // CrossJoin -----------------------------------------
+=======
+// CrossProduct -----------------------------------------
+>>>>>>> origin/branch-0.10
 namespace detail {
 // prepend T in TUPLE
 template <class T, class TUPLE>
@@ -242,45 +246,78 @@ struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {};
 }  // namespace detail
 
 template <class... ARGS>
+<<<<<<< HEAD
 struct CrossJoinImpl;
 
 template <>
 struct CrossJoinImpl<> {
+=======
+struct CrossProductImpl;
+
+template <>
+struct CrossProductImpl<> {
+>>>>>>> origin/branch-0.10
   using type = Types<>;
 };
 
 template <class... ARGS>
+<<<<<<< HEAD
 struct CrossJoinImpl<Types<ARGS...>> {
+=======
+struct CrossProductImpl<Types<ARGS...>> {
+>>>>>>> origin/branch-0.10
   using type = Types<Types<ARGS>...>;
 };
 
 template <class... AARGS, class... TAIL>
+<<<<<<< HEAD
 struct CrossJoinImpl<Types<AARGS...>, TAIL...> {
   using type = Concat<typename detail::Prepend<
       AARGS, typename CrossJoinImpl<TAIL...>::type>::type...>;
+=======
+struct CrossProductImpl<Types<AARGS...>, TAIL...> {
+  using type = Concat<typename detail::Prepend<
+      AARGS, typename CrossProductImpl<TAIL...>::type>::type...>;
+>>>>>>> origin/branch-0.10
 };
 
 // to make it easy for the user when there's only one element to be joined
 template <class T, class... TAIL>
+<<<<<<< HEAD
 struct CrossJoinImpl<T, TAIL...> : CrossJoinImpl<Types<T>, TAIL...> {};
+=======
+struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {};
+>>>>>>> origin/branch-0.10
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a new type list from the cross product (cartesian product) of
  * two type lists.
  *
  * @note This should be used with caution, as it can easily lead to a large
+<<<<<<< HEAD
  * number of typed test cases. For example, computing the `CrossJoin` of two type
+=======
+ * number of typed test cases. For example, computing the `CrossProduct` of two type
+>>>>>>> origin/branch-0.10
  * lists of size `n` and `m`, the resulting list will have `n*m` types.
  *
  * Example:
  * ```
+<<<<<<< HEAD
  * using Types = CrossJoin<Types<int,float>, Types<char, double>>;
+=======
+ * using Types = CrossProduct<Types<int,float>, Types<char, double>>;
+>>>>>>> origin/branch-0.10
  * // Types == Types< Types<int, char>, Types<int, double>, Types<float, char>,
  * Types<float, double> >
  * ```
  *---------------------------------------------------------------------------**/
 template <class... ARGS>
+<<<<<<< HEAD
 using CrossJoin = typename CrossJoinImpl<ARGS...>::type;
+=======
+using CrossProduct = typename CrossProductImpl<ARGS...>::type;
+>>>>>>> origin/branch-0.10
 
 // AllSame -----------------------------------------
 namespace detail {

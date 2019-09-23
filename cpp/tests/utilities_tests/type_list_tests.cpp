@@ -112,41 +112,41 @@ TEST(TypeList, Flatten) {
                    (Types<int, double, float>));
 }
 
-TEST(TypeList, CrossJoin) {
-  EXPECT_SAME_TYPE(CrossJoin<>, Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<>, Types<>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<>, Types<int>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<>, Types<int, double>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<>, Types<int, double>, Types<>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<>, Types<>, Types<>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<int, double>, Types<>, Types<>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<int>, Types<>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<int, double>, Types<>>), Types<>);
-  EXPECT_SAME_TYPE((CrossJoin<Types<int>, Types<int>>),
+TEST(TypeList, CrossProduct) {
+  EXPECT_SAME_TYPE(CrossProduct<>, Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<int>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<int, double>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<int, double>, Types<>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<>, Types<>, Types<>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<int, double>, Types<>, Types<>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<int>, Types<>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<int, double>, Types<>>), Types<>);
+  EXPECT_SAME_TYPE((CrossProduct<Types<int>, Types<int>>),
                    (Types<Types<int, int>>));
-  EXPECT_SAME_TYPE((CrossJoin<Types<int, double>, Types<int>>),
+  EXPECT_SAME_TYPE((CrossProduct<Types<int, double>, Types<int>>),
                    (Types<Types<int, int>, Types<double, int>>));
-  EXPECT_SAME_TYPE((CrossJoin<Types<int>, Types<double, char>>),
+  EXPECT_SAME_TYPE((CrossProduct<Types<int>, Types<double, char>>),
                    (Types<Types<int, double>, Types<int, char>>));
-  EXPECT_SAME_TYPE((CrossJoin<Types<int, double>, Types<short, char>>),
+  EXPECT_SAME_TYPE((CrossProduct<Types<int, double>, Types<short, char>>),
                    (Types<Types<int, short>, Types<int, char>,
                           Types<double, short>, Types<double, char>>));
-  EXPECT_SAME_TYPE((CrossJoin<Types<int, double>, Types<int>, Types<float>>),
+  EXPECT_SAME_TYPE((CrossProduct<Types<int, double>, Types<int>, Types<float>>),
                    (Types<Types<int, int, float>, Types<double, int, float>>));
 
   EXPECT_SAME_TYPE(
-      (CrossJoin<Types<int, double>, Types<int>, Types<float, char>>),
+      (CrossProduct<Types<int, double>, Types<int>, Types<float, char>>),
       (Types<Types<int, int, float>, Types<int, int, char>,
              Types<double, int, float>, Types<double, int, char>>));
   EXPECT_SAME_TYPE(
-      (CrossJoin<Types<int, double>, Types<int, short>, Types<float, char>>),
+      (CrossProduct<Types<int, double>, Types<int, short>, Types<float, char>>),
       (Types<Types<int, int, float>, Types<int, int, char>,
              Types<int, short, float>, Types<int, short, char>,
              Types<double, int, float>, Types<double, int, char>,
              Types<double, short, float>, Types<double, short, char>>));
-  EXPECT_SAME_TYPE((CrossJoin<Types<int, float>, int>),
+  EXPECT_SAME_TYPE((CrossProduct<Types<int, float>, int>),
                    (Types<Types<int, int>, Types<float, int>>));
-  EXPECT_SAME_TYPE((CrossJoin<int, Types<int, float>>),
+  EXPECT_SAME_TYPE((CrossProduct<int, Types<int, float>>),
                    (Types<Types<int, int>, Types<int, float>>));
 }
 
