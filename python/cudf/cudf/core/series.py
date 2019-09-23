@@ -1303,6 +1303,11 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
+    def notnull(self):
+        """Identify non-missing values in a Series. Alias for notna.
+        """
+        return self.notna()
+
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
@@ -2612,6 +2617,12 @@ class Series(object):
     @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        data = self._column.repeat(repeats)
+        new_index = self.index.repeat(repeats)
+        return Series(data, index=new_index, name=self.name)
 
 
 truediv_int_dtype_corrections = {
