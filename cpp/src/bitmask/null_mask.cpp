@@ -46,7 +46,7 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
 
   auto padded_bytes =
       padding_boundary * cudf::util::div_rounding_up_safe<size_type>(
-                             neccessary_bytes, padding_boundary);
+                             necessary_bytes, padding_boundary);
   return padded_bytes;
 }
 
