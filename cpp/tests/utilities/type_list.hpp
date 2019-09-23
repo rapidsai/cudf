@@ -216,11 +216,7 @@ struct FlattenImpl<Types<Types<HEAD...>, TAIL...>> {
 template <class T>
 using Flatten = typename FlattenImpl<T>::type;
 
-<<<<<<< HEAD
-// CrossJoin -----------------------------------------
-=======
 // CrossProduct -----------------------------------------
->>>>>>> origin/branch-0.10
 namespace detail {
 // prepend T in TUPLE
 template <class T, class TUPLE>
@@ -246,78 +242,45 @@ struct Prepend<T, Types<Types<>, TUPLES...>> : Prepend<T, Types<TUPLES...>> {};
 }  // namespace detail
 
 template <class... ARGS>
-<<<<<<< HEAD
-struct CrossJoinImpl;
-
-template <>
-struct CrossJoinImpl<> {
-=======
 struct CrossProductImpl;
 
 template <>
 struct CrossProductImpl<> {
->>>>>>> origin/branch-0.10
   using type = Types<>;
 };
 
 template <class... ARGS>
-<<<<<<< HEAD
-struct CrossJoinImpl<Types<ARGS...>> {
-=======
 struct CrossProductImpl<Types<ARGS...>> {
->>>>>>> origin/branch-0.10
   using type = Types<Types<ARGS>...>;
 };
 
 template <class... AARGS, class... TAIL>
-<<<<<<< HEAD
-struct CrossJoinImpl<Types<AARGS...>, TAIL...> {
-  using type = Concat<typename detail::Prepend<
-      AARGS, typename CrossJoinImpl<TAIL...>::type>::type...>;
-=======
 struct CrossProductImpl<Types<AARGS...>, TAIL...> {
   using type = Concat<typename detail::Prepend<
       AARGS, typename CrossProductImpl<TAIL...>::type>::type...>;
->>>>>>> origin/branch-0.10
 };
 
 // to make it easy for the user when there's only one element to be joined
 template <class T, class... TAIL>
-<<<<<<< HEAD
-struct CrossJoinImpl<T, TAIL...> : CrossJoinImpl<Types<T>, TAIL...> {};
-=======
 struct CrossProductImpl<T, TAIL...> : CrossProductImpl<Types<T>, TAIL...> {};
->>>>>>> origin/branch-0.10
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a new type list from the cross product (cartesian product) of
  * two type lists.
  *
  * @note This should be used with caution, as it can easily lead to a large
-<<<<<<< HEAD
- * number of typed test cases. For example, computing the `CrossJoin` of two type
-=======
  * number of typed test cases. For example, computing the `CrossProduct` of two type
->>>>>>> origin/branch-0.10
  * lists of size `n` and `m`, the resulting list will have `n*m` types.
  *
  * Example:
  * ```
-<<<<<<< HEAD
- * using Types = CrossJoin<Types<int,float>, Types<char, double>>;
-=======
  * using Types = CrossProduct<Types<int,float>, Types<char, double>>;
->>>>>>> origin/branch-0.10
  * // Types == Types< Types<int, char>, Types<int, double>, Types<float, char>,
  * Types<float, double> >
  * ```
  *---------------------------------------------------------------------------**/
 template <class... ARGS>
-<<<<<<< HEAD
-using CrossJoin = typename CrossJoinImpl<ARGS...>::type;
-=======
 using CrossProduct = typename CrossProductImpl<ARGS...>::type;
->>>>>>> origin/branch-0.10
 
 // AllSame -----------------------------------------
 namespace detail {
