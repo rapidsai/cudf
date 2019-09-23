@@ -44,11 +44,8 @@ namespace detail {
 
 template <typename index_type, typename scatter_map_type>
 __global__ void invert_map(index_type gather_map[], const gdf_size_type destination_rows,
-    scatter_map_type const scatter_map, const gdf_size_type source_rows, index_type default_value){
+    scatter_map_type const scatter_map, const gdf_size_type source_rows){
   index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
-  if (tid < destination_rows) {
-    gather_map[tid] = -1;
-  }
   if(tid < source_rows){
     index_type destination_row = *(scatter_map + tid);
     if(destination_row < destination_rows){
@@ -77,10 +74,33 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 
   gdf_column gather_map = cudf::allocate_like(scatter_map, destination_table->num_rows());
 
-  // Configure grid for data kernel launch
-  auto grid_config = cudf::util::cuda::grid_config_1d(destination_table->num_rows(), 256);
-
   map_type default_value = -1;
+  gdf_scalar fill_value;
+  fill_value.dtype = gdf_dtype_of<map_type>();
+  fill_value.is_valid = true;
+
+  switch (gdf_dtype_of<map_type>()) {
+  case GDF_INT8:
+    fill_value.data.si08 = default_value;
+    break;
+  case GDF_INT16:
+    fill_value.data.si16 = default_value;
+    break;
+  case GDF_INT32:
+    fill_value.data.si32 = default_value;
+    break;
+  case GDF_INT64:
+    fill_value.data.si64 = default_value;
+    break;
+  default:
+    CUDF_FAIL("Invalid scatter map type");
+  }
+  
+  cudf::fill(&gather_map, fill_value, 0, gather_map.size);
+
+  // Configure grid for data kernel launch
+  auto grid_config = cudf::util::cuda::grid_config_1d(source_table->num_rows(), 256);
+  
   if (allow_negative_indices) {
     invert_map<<<grid_config.num_blocks, grid_config.num_threads_per_block>>>(
 	static_cast<map_type*>(gather_map.data),
@@ -88,8 +108,7 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 	thrust::make_transform_iterator(
 	    typed_scatter_map,
 	    negative_index_converter<true,map_type>{destination_table->num_rows()}),
-	source_table->num_rows(),
-	default_value);
+	source_table->num_rows());
   }
   else {
     invert_map<<<grid_config.num_blocks, grid_config.num_threads_per_block>>>(
@@ -98,8 +117,7 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 	thrust::make_transform_iterator(
 	    typed_scatter_map,
 	    negative_index_converter<false,map_type>{destination_table->num_rows()}),
-	source_table->num_rows(),
-	default_value);
+	source_table->num_rows());
   }
 
   // We want to ignore out of bounds indices for scatter since it is possible that
