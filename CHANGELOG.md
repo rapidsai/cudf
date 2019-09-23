@@ -25,6 +25,7 @@
 - PR #2802 Add `cudf::repeat()` and `cudf.Series.repeat()`
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2807 Add scatter_by_map to DataFrame python API
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 
@@ -107,6 +108,7 @@
 - PR #2837 Fix join benchmark
 - PR #2842 Fix null count computation for rolling window
 - PR #2809 Add hash_df and group_split dispatch functions for dask
+- PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
 - PR #2842 Fix null count computation for rolling window
 
