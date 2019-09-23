@@ -192,23 +192,21 @@ def test_cumprod_masked():
         assert_eq(gs.cumprod(), expected)
 
 
-def test_scan_boolean():
+def test_scan_boolean_cumsum():
     s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
 
-    bool_s = (s > 0)
-
     # cumsum test
-    got = bool_s.cumsum()
-    expect = bool_s.to_pandas().cumsum()
+    got = (s > 0).cumsum()
+    expect = (s > 0).to_pandas().cumsum()
 
     assert_eq(expect, got)
+
+
+def test_scan_boolean_cumprod():
+    s = Series([0, -1, -300, 23, 4, -3, 0, 0, 100])
 
     # cumprod test
-    got = bool_s.cumprod()
-    expect = bool_s.to_pandas().cumprod()
+    got = (s > 0).cumprod()
+    expect = (s > 0).to_pandas().cumprod()
 
-    assert_eq(expect, got)
-
-    got = (s > 0).astype(np.int32).cumsum()
-    expect = pd.Series([0, 0, 0, 1, 2, 2, 2, 2, 3])
     assert_eq(expect, got)

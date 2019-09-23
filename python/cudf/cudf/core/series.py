@@ -1785,7 +1785,7 @@ class Series(object):
 
         # pandas always returns int64 dtype if original dtype is int or `bool`
         if np.issubdtype(self.dtype, np.integer) or \
-                np.issubdtype(self.dtype, np.bool):
+                np.issubdtype(self.dtype, np.bool_):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("sum"),
                 name=self.name,
