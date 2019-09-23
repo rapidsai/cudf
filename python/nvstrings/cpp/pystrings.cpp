@@ -3855,6 +3855,16 @@ static PyObject* n_url_decode( PyObject* self, PyObject* args )
     Py_RETURN_NONE;
 }
 
+static PyObject* n_code_points( PyObject* self, PyObject* args )
+{
+    NVStrings* tptr = (NVStrings*)PyLong_AsVoidPtr(PyTuple_GetItem(args,0));
+    unsigned int* results = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,1));
+    Py_BEGIN_ALLOW_THREADS
+    tptr->code_points(results);
+    Py_END_ALLOW_THREADS
+    Py_RETURN_NONE;
+}
+
 
 // Version 0.1, 0.1.1, 0.2, 0.2.1 features
 static PyMethodDef s_Methods[] = {
@@ -3961,6 +3971,7 @@ static PyMethodDef s_Methods[] = {
     { "n_get_info", n_get_info, METH_VARARGS, "" },
     { "n_url_encode", n_url_encode, METH_VARARGS, "" },
     { "n_url_decode", n_url_decode, METH_VARARGS, "" },
+    { "n_code_points", n_code_points, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }
 };
 
