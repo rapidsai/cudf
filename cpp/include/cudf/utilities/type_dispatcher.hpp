@@ -37,7 +37,7 @@ namespace exp {
  * For example:
  *
  * ```
- * return cudf::type_to_idk<int32_t>();        // Returns INT32
+ * return cudf::type_to_id<int32_t>();        // Returns INT32
  * ```
  *
  * @tparam T The type to map to a `cudf::type_id`
@@ -122,7 +122,7 @@ CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
  * cudf::type_dispatcher<always_int>(data_type, f);
  * ```
  *
- * It is sometimes neccessary to customize the dispatched functor's
+ * It is sometimes necessary to customize the dispatched functor's
  * `operator()` for different types.  This can be done in several ways.
  *
  * The first method is to use explicit template specialization. This is useful
