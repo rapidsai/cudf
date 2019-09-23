@@ -2602,6 +2602,12 @@ class Series(object):
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
 
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        data = self._column.repeat(repeats)
+        new_index = self.index.repeat(repeats)
+        return Series(data, index=new_index, name=self.name)
+
 
 truediv_int_dtype_corrections = {
     "int16": "float32",
