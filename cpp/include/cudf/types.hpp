@@ -73,7 +73,7 @@ enum type_id {
   BOOL8,      ///< Boolean using one byte per value, 0 == false, else true
   DATE32,     ///< days since Unix Epoch in int32
   TIMESTAMP,  ///< duration of specified resolution since Unix Epoch in int64
-  CATEGORY,   ///< Categorial/Dictionary type
+  CATEGORY,   ///< Categorical/Dictionary type
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids

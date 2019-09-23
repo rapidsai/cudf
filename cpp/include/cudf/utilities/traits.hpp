@@ -41,7 +41,7 @@ struct is_relationally_comparable_impl<
     : std::true_type {};
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if objects of types `L` and `R` can be relationally
+ * @brief Indicates whether objects of types `L` and `R` can be relationally
  *compared.
  *
  * Given two objects `L l`, and `R r`, returns true if `l < r` and `l > r` are
@@ -58,7 +58,7 @@ constexpr inline bool is_relationally_comparable() {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if the type `T` is a numeric type.
+ * @brief Indicates whether the type `T` is a numeric type.
  *
  * @tparam T  The type to verify
  * @return true `T` is numeric
@@ -70,7 +70,7 @@ constexpr inline bool is_numeric() {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if `type` is a numeric `data_type`.
+ * @brief Indicates whether `type` is a numeric `data_type`.
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
  * or `FLOAT*`. Types that wrap a numeric type are not considered numeric, e.g.,
@@ -86,7 +86,7 @@ constexpr inline bool is_numeric(data_type type) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of type `T` are fixed-width.
+ * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
  *
@@ -102,7 +102,7 @@ constexpr inline bool is_fixed_width() {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of `type` are fixed-width.
+ * @brief Indicates whether elements of `type` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
  *
@@ -116,7 +116,7 @@ constexpr inline bool is_fixed_width(data_type type) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indictates if the type `T` is a compound type.
+ * @brief Indictates whether the type `T` is a compound type.
  *
  * `column`s with "compound" elements are logically a single column of elements,
  * but may be concretely implemented with two or more `column`s. For example, a
@@ -134,7 +134,7 @@ constexpr inline bool is_compound() {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if the type `T` is a simple type.
+ * @brief Indicates whether the type `T` is a simple type.
  *
  * "Simple" element types are implemented with only a single column, i.e.,
  * `num_children() == 0` for columns of "simple" elements
@@ -149,7 +149,7 @@ constexpr inline bool is_simple() {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of `type` are compound.
+ * @brief Indicates whether elements of `type` are compound.
  *
  * `column`s with "compound" elements are logically a single column of elements,
  * but may be concretely implemented with two or more `column`s. For example, a
@@ -166,7 +166,7 @@ constexpr inline bool is_compound(data_type type) {
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if elements of `type` are simple.
+ * @brief Indicates whether elements of `type` are simple.
  *
  * "Simple" element types are implemented with only a single column, i.e.,
  * `num_children() == 0` for columns of "simple" elements
