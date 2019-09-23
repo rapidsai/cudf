@@ -57,7 +57,7 @@
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
-- PR #XXXX Update group_split_cudf to use scatter_by_map
+- PR #2856 Update group_split_cudf to use scatter_by_map
 
 ## Bug Fixes
 
