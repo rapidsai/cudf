@@ -57,8 +57,8 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys,
   gdf_order_by(keys.begin(), nullptr, keys.num_columns(), &gdf_sorted_indices,
                &context);
 
-  cudf::table sorted_output_keys = cudf::allocate_like(keys, true);
-  cudf::table sorted_output_values = cudf::allocate_like(values, true);
+  cudf::table sorted_output_keys = cudf::allocate_like(keys, RETAIN);
+  cudf::table sorted_output_values = cudf::allocate_like(values, RETAIN);
 
   cudf::gather(&keys, sorted_indices.data().get(), &sorted_output_keys);
   cudf::gather(&values, sorted_indices.data().get(), &sorted_output_values);

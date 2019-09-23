@@ -59,7 +59,7 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count, cudaStream_t 
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  cudf::table output = cudf::allocate_like(in, output_size, true, stream);
+  cudf::table output = cudf::allocate_like(in, output_size, RETAIN, stream);
 
   cudf::gather(&in, indices.data().get(), &output);
 
@@ -90,7 +90,7 @@ cudf::table repeat(const cudf::table &in, const gdf_scalar& count, cudaStream_t 
                       thrust::make_counting_iterator(output_size),
                       indices.begin());
 
-  cudf::table output = cudf::allocate_like(in, output_size, true, stream);
+  cudf::table output = cudf::allocate_like(in, output_size, RETAIN, stream);
 
   cudf::gather(&in, indices.data().get(), &output);
 
