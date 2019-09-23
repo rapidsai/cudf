@@ -48,9 +48,7 @@ gdf_column empty_like(gdf_column const& input)
 }
 
 inline bool should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
-  return
-    (mask_alloc == ALWAYS) ||
-    (mask_alloc == RETAIN && mask_exists);
+  return (mask_alloc == ALWAYS) || (mask_alloc == RETAIN && mask_exists);
 }
 
 /*

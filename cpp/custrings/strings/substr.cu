@@ -52,7 +52,7 @@ NVStrings* NVStrings::slice( int start, int stop, int step )
             custring_view* dstr = d_strings[idx];
             if( !dstr )
                 return;
-            int len = ( stop <= 0 ? dstr->chars_count() : stop ) - start;
+            int len = ( stop < 0 ? dstr->chars_count() : stop ) - start;
             unsigned int size = dstr->substr_size((unsigned)start,(unsigned)len,(unsigned)step);
             size = ALIGN_SIZE(size);
             d_lengths[idx] = (size_t)size;
@@ -74,7 +74,7 @@ NVStrings* NVStrings::slice( int start, int stop, int step )
             if( !dstr )
                 return;
             char* buffer = d_buffer + d_offsets[idx];
-            int len = ( stop <= 0 ? dstr->chars_count() : stop ) - start;
+            int len = ( stop < 0 ? dstr->chars_count() : stop ) - start;
             d_results[idx] = dstr->substr((unsigned)start,(unsigned)len,(unsigned)step,buffer);
         });
     //
@@ -97,7 +97,7 @@ NVStrings* NVStrings::slice_from( const int* starts, const int* stops )
                 return;
             int start = (starts ? starts[idx]:0);
             int stop = (stops ? stops[idx]: -1);
-            int len = ( stop <= 0 ? dstr->chars_count() : stop ) - start;
+            int len = ( stop < 0 ? dstr->chars_count() : stop ) - start;
             unsigned int size = dstr->substr_size((unsigned)start,(unsigned)len);
             size = ALIGN_SIZE(size);
             d_lengths[idx] = (size_t)size;
@@ -121,7 +121,7 @@ NVStrings* NVStrings::slice_from( const int* starts, const int* stops )
             int start = (starts ? starts[idx]:0);
             int stop = (stops ? stops[idx]: -1);
             char* buffer = d_buffer + d_offsets[idx];
-            int len = ( stop <= 0 ? dstr->chars_count() : stop ) - start;
+            int len = ( stop < 0 ? dstr->chars_count() : stop ) - start;
             d_results[idx] = dstr->substr((unsigned)start,(unsigned)len,1,buffer);
         });
     //
