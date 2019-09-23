@@ -50,7 +50,7 @@ try:
         cols = [column.as_column(ind)]
         return cudf.Series(numerical.column_hash_values(*cols))
 
-    @group_split.register((cudf.DataFrame, cudf.Series, cudf.Index))
+    @group_split.register(cudf.DataFrame)
     def group_split_cudf(df, c, k):
         return df.scatter_by_map(c, map_size=k)
 
