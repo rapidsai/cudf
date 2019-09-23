@@ -87,10 +87,9 @@ class row_equality_comparator {
   row_equality_comparator(table_device_view lhs, table_device_view rhs,
                           bool nulls_are_equal = true)
       : lhs{lhs}, rhs{rhs}, nulls_are_equal{nulls_are_equal} {
-
-
-
-      }
+    CUDF_EXPECTS(lhs.num_columns() == rhs.num_columns(),
+                 "Mismatched number of columns.");
+  }
 
   __device__ bool operator()(size_type lhs_row_index, size_type rhs_row_index) {
     auto equal_elements = [=](column_device_view l, column_device_view r) {
