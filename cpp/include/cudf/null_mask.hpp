@@ -43,7 +43,7 @@ enum mask_state {
 size_type state_null_count(mask_state state, size_type size);
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the required bytes neccessary to represent the specified
+ * @brief Computes the required bytes necessary to represent the specified
  * number of bits with a given padding boundary.
  *
  * @note The Arrow specification for the null bitmask requires a 64B padding

@@ -108,7 +108,7 @@ struct element_relational_comparator {
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Computes if one row is lexicographically *less* than another row.
+ * @brief Computes whether one row is lexicographically *less* than another row.
  *
  * Lexicographic ordering is determined by:
  * - Two rows are compared element by element.
@@ -153,7 +153,7 @@ class row_lexicographic_comparator {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Checks if the row at `lhs_index` in the `lhs` table compares
+   * @brief Checks whether the row at `lhs_index` in the `lhs` table compares
    * lexicographically less than the row at `rhs_index` in the `rhs` table.
    *
    * @param lhs_index The index of row in the `lhs` table to examine
@@ -195,7 +195,7 @@ class row_lexicographic_comparator {
   table_device_view _rhs;
   null_order _null_precedence{null_order::BEFORE};
   order const* _column_order{};
-};  // namespace exp
+};  // class row_lexicographic_comparator
 
 }  // namespace exp
 }  // namespace cudf
