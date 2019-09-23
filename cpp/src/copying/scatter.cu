@@ -146,7 +146,7 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 		  nullptr,
 		  source_table->num_rows(),
 		  gdf_dtype_of<gdf_index_type>());
-  scatter(source_table, scatter_map_column, destination_table, check_bounds, allow_negative_indices);
+  detail::scatter(source_table, scatter_map_column, destination_table, check_bounds, allow_negative_indices);
 }
 
 template<bool mark_true>
