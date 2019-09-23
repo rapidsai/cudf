@@ -87,11 +87,11 @@ class string_view
   class iterator
   {
     public:
-      typedef ptrdiff_t difference_type;
-      typedef Char value_type;
-      typedef Char& reference;
-      typedef Char* pointer;
-      typedef std::input_iterator_tag iterator_category; // do not allow going backwards
+      using difference_type = ptrdiff_t;
+      using value_type = Char;
+      using reference = Char&;
+      using pointer = Char*;
+      using iterator_category = std::input_iterator_tag; // do not allow going backwards
       __device__ iterator(const string_view& str, size_type pos);
       iterator(const iterator& mit) = default;
       iterator(iterator&& mit) = default;

@@ -25,7 +25,7 @@
 #include <thrust/transform_scan.h>
 #include <thrust/transform_reduce.h>
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
@@ -63,7 +63,7 @@ rmm::device_vector<cudf::string_view> create_string_array_from_column(
     auto count = strings.size();
     rmm::device_vector<cudf::string_view> strings_array(count);
     cudf::string_view* d_strings = strings_array.data().get();
-    thrust::for_each_n( execpol->on(stream), 
+    thrust::for_each_n( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_strings] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )

@@ -20,7 +20,7 @@
 
 #include <rmm/thrust_rmm_allocator.h>
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
@@ -79,6 +79,22 @@ std::unique_ptr<cudf::column> chars_from_string_array(
     const int32_t* d_offsets,
     cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+
+/**
+ * @brief This utility will copy the argument string's data into
+ * the provided buffer.
+ *
+ * @param buffer Device buffer to copy to.
+ * @param d_string String to copy.
+ * @return Points to the end of the buffer after the copy.
+ */
+__device__ inline char* copy_string( char* buffer, const cudf::string_view& d_string )
+{
+    memcpy( buffer, d_string.data(), d_string.size() );
+    return buffer + d_string.size();
+}
+
 
 } // namespace detail
 } // namespace strings
