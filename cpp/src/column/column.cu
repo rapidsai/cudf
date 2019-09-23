@@ -41,6 +41,19 @@ column::column(column const &other)
   }
 }
 
+column::column(column const &other, cudaStream_t stream,
+               rmm::mr::device_memory_resource *mr)
+    : _type{other._type},
+      _size{other._size},
+      _data{other._data, stream, mr},
+      _null_mask{other._null_mask, stream, mr},
+      _null_count{other._null_count} {
+  _children.reserve(other.num_children());
+  for (auto const &c : other._children) {
+    _children.emplace_back(std::make_unique<column>(*c, stream, mr));
+  }
+}
+
 // Move constructor
 column::column(column &&other)
     : _type{other._type},
