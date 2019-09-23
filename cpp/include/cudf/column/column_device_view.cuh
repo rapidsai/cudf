@@ -25,7 +25,7 @@ namespace detail {
 
 /**---------------------------------------------------------------------------*
  * @brief An immutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable CUDA device code.
+ * that is trivially copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
 class alignas(16) column_device_view_base {
  public:
@@ -43,7 +43,7 @@ class alignas(16) column_device_view_base {
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @note It should be rare to need to access the `head<T>()` allocation of
-   *a column, and instead, accessing the elements should be done via
+   * a column, and instead, accessing the elements should be done via
    *`data<T>()`.
    *
    * @tparam The type to cast to
@@ -109,7 +109,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if the column can contain null elements, i.e., if it has
+   * @brief Indicates whether the column can contain null elements, i.e., if it has
    * an allocated bitmask.
    *
    * @note If `null_count() > 0`, this function must always return `true`.
@@ -129,7 +129,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if the column contains null elements,
+   * @brief Indicates whether the column contains null elements,
    * i.e., `null_count() > 0`
    *
    * @return true The column contains null elements
@@ -157,7 +157,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns if the specified element holds a valid value (i.e., not
+   * @brief Returns whether the specified element holds a valid value (i.e., not
    * null)
    *
    * @note It is undefined behavior to call this function if `nullable() ==
@@ -172,7 +172,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns if the specified element is null
+   * @brief Returns whether the specified element is null
    *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
@@ -224,7 +224,7 @@ class alignas(16) column_device_view_base {
 
 /**---------------------------------------------------------------------------*
  * @brief An immutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable CUDA device code.
+ * that is trivially copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
 class alignas(16) column_device_view : public detail::column_device_view_base {
  public:
@@ -297,7 +297,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
 
 /**---------------------------------------------------------------------------*
  * @brief A mutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable CUDA device code.
+ * that is trivially copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
 class alignas(16) mutable_column_device_view
     : public detail::column_device_view_base {

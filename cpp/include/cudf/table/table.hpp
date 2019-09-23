@@ -94,7 +94,7 @@ class table {
 
   /**---------------------------------------------------------------------------*
    * @brief Releases ownership of the `column`s by returning a vector of
-   *`unique_ptr`s to the constiuent columns.
+   * `unique_ptr`s to the constituent columns.
    *
    * After `release()`, `num_columns() == 0` and `num_rows() == 0`
    *---------------------------------------------------------------------------**/
