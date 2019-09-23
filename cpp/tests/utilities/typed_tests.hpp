@@ -111,12 +111,17 @@ static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::type_id, 6> non_numeric_type_ids{
-    cudf::EMPTY,     cudf::BOOL8,    cudf::DATE32,
-    cudf::TIMESTAMP, cudf::CATEGORY, cudf::STRING};
-
-//static_assert(cudf::type_id::NUM_TYPE_IDS == all_type_ids.size(),
-//              "Mismatch in number of types");
+static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
+    cudf::EMPTY,
+    cudf::BOOL8,
+    cudf::DATE32,
+    cudf::TIMESTAMP_SECONDS,
+    cudf::TIMESTAMP_MILLISECONDS,
+    cudf::TIMESTAMP_MICROSECONDS,
+    cudf::TIMESTAMP_NANOSECONDS,
+    cudf::CATEGORY,
+    cudf::STRING
+};
 
 }  // namespace test
 }  // namespace cudf
