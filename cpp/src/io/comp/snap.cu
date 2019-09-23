@@ -222,7 +222,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src
             literal_cnt = 32;
         }
         // Update hash up to the first 4 bytes of the copy length
-        local_match &= (0x10 << literal_cnt) - 1;
+        local_match &= (0x2 << literal_cnt) - 1;
         if (t <= literal_cnt && t == 31 - __clz(local_match))
         {
             s->hash_map[hash] = pos + t;
