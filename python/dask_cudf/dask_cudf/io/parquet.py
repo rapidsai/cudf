@@ -56,20 +56,12 @@ class CudfEngine(ArrowEngine):
             df = df.set_index(index[0])
 
         if len(piece.partition_keys) > 0:
-            # Partitioning logic copied from
-            # (apache/arrow/python/pyarrow/parquet.py)
             if partitions is None:
                 raise ValueError("Must pass partition sets")
-            import numpy as np
-            import pyarrow as pa
-
             for i, (name, index2) in enumerate(piece.partition_keys):
-                indices = np.array([index2], dtype="i4").repeat(len(df))
-                dictionary = partitions.levels[i].dictionary
-                arr = pa.DictionaryArray.from_arrays(
-                    indices, dictionary
-                ).to_pandas()
-                df[name] = cudf.Series(arr).astype(arr.dtype._categories.dtype)
+                df[name] = cudf.Series(
+                    partitions.levels[i].dictionary[index2].as_py()
+                ).repeat(len(df))
 
         return df
 
