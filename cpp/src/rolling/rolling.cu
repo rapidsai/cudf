@@ -39,6 +39,7 @@
 #include "jit/util/type.h"
 
 #include <types.h.jit>
+#include <bitmask/valid_if.cuh>
 
 namespace
 {
@@ -137,7 +138,11 @@ void gpu_rolling(gdf_size_type nrows,
     if (0 == threadIdx.x % warpSize) {
       out_col_valid[out_mask_location] = result_mask;
       // Perform null bitmask null count
-      valid_count_accumulate = __popc(result_mask);
+      valid_count_accumulate += cudf::detail::single_lane_popc_block_reduce(result_mask);
+    }
+
+    //one atomicAdd per block
+    if (blockIdx.x == 0) {
       atomicAdd(output_null_count, valid_count_accumulate);
     }
 
