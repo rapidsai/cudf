@@ -38,7 +38,6 @@ def concat_cudf(
 try:
 
     from dask.dataframe.methods import group_split, hash_df
-    import cudf._lib as libcudf
 
     @hash_df.register(cudf.DataFrame)
     def hash_df_cudf(dfs):
@@ -53,12 +52,7 @@ try:
 
     @group_split.register((cudf.DataFrame, cudf.Series, cudf.Index))
     def group_split_cudf(df, c, k):
-        source = [df[col] for col in df.columns]
-        # TODO: Use proper python API (#2807)
-        tables = libcudf.copying.scatter_to_frames(source, cudf.Series(c))
-        for i in range(k - len(tables)):
-            tables.append(tables[0].iloc[[]])
-        return dict(zip(range(k), tables))
+        return df.scatter_by_map(c, map_size=k)
 
 
 except ImportError:
