@@ -69,7 +69,10 @@ class column {
   column(column&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column
+   * @brief Construct a new column from existing device device memory.
+   *
+   * @note This constructor is primarily intended for use in column factory
+   * functions. 
    *
    * @param[in] dtype The element type
    * @param[in] size The number of elements in the column
