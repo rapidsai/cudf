@@ -112,7 +112,6 @@
 - PR #2851 Deleted existing dask-cudf/record.txt
 - PR #2842 Fix null count computation for rolling window
 
-
 # cuDF 0.9.0 (21 Aug 2019)
 
 ## New Features
