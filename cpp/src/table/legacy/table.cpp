@@ -64,10 +64,10 @@ table::table(gdf_size_type num_rows,
         
         // Allocation size should be  aligned to 4 bytes. The use of 
         // `round_up_safe`guarantee correct execution with cuda-memcheck  
-        // for cases when the type size is 1 or 2. 
-        gdf_size_type buffer_size = cudf::size_of(dtype) * num_rows;
-        gdf_size_type buffer_size_aligned = 
-            cudf::util::round_up_safe((int32_t)buffer_size, (int32_t)sizeof(int32_t));
+        // for cases when the sizeof(type) is 1 or 2 bytes. 
+        size_t buffer_size = cudf::size_of(dtype) * num_rows;
+        size_t buffer_size_aligned = 
+            cudf::util::round_up_safe((size_t)buffer_size, (size_t)sizeof(int32_t));
 
         RMM_ALLOC(&col->data, buffer_size_aligned, stream);
         if (allocate_bitmasks) {
