@@ -17,6 +17,7 @@
 #pragma once
 
 #include "cudf.h"
+#include "utilities/cuda.cuh"
 
 #include <cstddef>
 
@@ -117,7 +118,7 @@ class data_type {
   /**---------------------------------------------------------------------------*
    * @brief Returns the type identifier
    *---------------------------------------------------------------------------**/
-  type_id id() const noexcept { return _id; }
+  CUDA_HOST_DEVICE_CALLABLE type_id id() const noexcept { return _id; }
 
  private:
   type_id _id{EMPTY};
