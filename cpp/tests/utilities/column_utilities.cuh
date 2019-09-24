@@ -16,41 +16,16 @@
 
 #pragma once
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list.hpp>
-#include <tests/utilities/typed_tests.hpp>
-
-#include <thrust/equal.h>
-
-#include <gmock/gmock.h>
 
 namespace cudf {
 namespace test {
-
-void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
-  EXPECT_EQ(lhs.type(), rhs.type());
-  EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
-  EXPECT_EQ(lhs.nullable(), rhs.nullable());
-  EXPECT_EQ(lhs.has_nulls(), rhs.has_nulls());
-  EXPECT_EQ(lhs.num_children(), rhs.num_children());
-
-  auto d_lhs = cudf::table_device_view::create(table_view{{lhs}});
-  auto d_rhs = cudf::table_device_view::create(table_view{{rhs}});
-
-  EXPECT_TRUE(
-      thrust::equal(thrust::device, thrust::make_counting_iterator(0),
-                    thrust::make_counting_iterator(lhs.size()),
-                    thrust::make_counting_iterator(0),
-                    cudf::exp::row_equality_comparator<true>{*d_lhs, *d_rhs}));
-
-  CUDA_TRY(cudaDeviceSynchronize());
-}
-
+/**---------------------------------------------------------------------------*
+ * @brief
+ *
+ * @param lhs
+ * @param rhs
+ *---------------------------------------------------------------------------**/
+void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
 }  // namespace test
 }  // namespace cudf
