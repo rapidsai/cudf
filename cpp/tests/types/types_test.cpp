@@ -324,7 +324,7 @@ using SourceType = TypeParam;
   for (int i = 0; i < NUM_TRIALS; ++i) {
     SourceType t{this->rand()};
     cudf::bool8 const w{t};
-    EXPECT_EQ(unwrap(w), static_cast<bool>(t));
+    EXPECT_EQ(unwrap(w), static_cast<cudf::bool8::value_type>(static_cast<bool>(t)));
   }
 }
 
