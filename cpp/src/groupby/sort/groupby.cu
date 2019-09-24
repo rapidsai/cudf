@@ -40,6 +40,7 @@
 #include "sort_helper.hpp"
 
 #include <quantiles/group_quantiles.hpp>
+#include <utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -137,15 +138,23 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
                                detail::helper &groupby,
                                const std::vector<gdf_column *> &simple_values_columns,
                                const std::vector<operators> &simple_operators,
-                               cudaStream_t &stream) {
-  const gdf_column& key_sorted_order = groupby.key_sort_order();
+                               cudaStream_t &stream) { 
+
+  const gdf_column& key_sorted_order = groupby.key_sort_order();   
+
+  //group_labels 
   const index_vector& group_labels = groupby.group_labels();
-  gdf_size_type num_groups = (gdf_size_type)groupby.num_groups();
+  const gdf_size_type num_groups = groupby.num_groups();
   
+  // Output allocation size aligned to 4 bytes. The use of `round_up_safe` 
+  // guarantee correct execution with cuda-memcheck  for cases when 
+  // num_groups == 1  and with dtype == int_8. 
+  gdf_size_type const output_size_estimate = cudf::util::round_up_safe((int64_t)groupby.num_groups(), (int64_t)sizeof(int32_t));
+
   cudf::table simple_values_table{simple_values_columns};
 
   cudf::table simple_output_values{
-      num_groups, target_dtypes(column_dtypes(simple_values_table), simple_operators),
+      output_size_estimate, target_dtypes(column_dtypes(simple_values_table), simple_operators),
       column_dtype_infos(simple_values_table), values_have_nulls, false, stream};
 
   initialize_with_identity(simple_output_values, simple_operators, stream);
@@ -166,6 +175,12 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
       group_labels.data().get(), options.ignore_null_keys,
       d_ops.data().get(), row_bitmask.data().get());
   
+   std::transform(simple_output_values.begin(), simple_output_values.end(), simple_output_values.begin(),
+                 [num_groups](gdf_column *col) {
+                   CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
+                   col->size = num_groups;
+                   return col;
+                 });
   return simple_output_values;
 }
 
@@ -185,6 +200,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
         std::vector<gdf_column*>{output_values.begin(), output_values.end()}
         );
   }
+  gdf_size_type num_groups = groupby.num_groups();
   // An "aggregation request" is the combination of a `gdf_column*` to a column
   // of values, and an aggregation operation enum indicating the aggregation
   // requested to be performed on the column
@@ -232,7 +248,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
 
   // Update size and null count of output columns
   std::transform(final_output_values.begin(), final_output_values.end(), final_output_values.begin(),
-                 [](gdf_column *col) {
+                 [num_groups](gdf_column *col) {
                    CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
                    set_null_count(*col);
                    return col;

@@ -37,6 +37,7 @@
 #include <thrust/fill.h>
 #include <type_traits>
 #include <vector>
+#include <utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -57,8 +58,11 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
                "Groupby input size too large.");
 
   // The exact output size is unknown a priori, therefore, use the input size as
-  // an upper bound
-  gdf_size_type const output_size_estimate{input_keys.num_rows()};
+  // an upper bound.
+  // Output allocation size aligned to 4 bytes. The use of `round_up_safe` 
+  // guarantee correct execution with cuda-memcheck  for cases when 
+  // input_keys.num_rows() == 1  and with dtype == int_8. 
+  gdf_size_type const output_size_estimate = cudf::util::round_up_safe((int64_t)input_keys.num_rows(), (int64_t)sizeof(int32_t));
 
   cudf::table sparse_output_values{
       output_size_estimate,
