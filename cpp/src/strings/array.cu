@@ -97,7 +97,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
         count, stream );
     auto null_count = valid_mask.second;
     auto null_size = gdf_valid_allocation_size(count);
-    rmm::device_buffer null_mask(valid_mask.first,null_size); // does deep copy
+    rmm::device_buffer null_mask(valid_mask.first,null_size,stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build chars column
@@ -259,7 +259,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
         count, stream );
     auto null_count = valid_mask.second;
     auto null_size = gdf_valid_allocation_size(count);
-    rmm::device_buffer null_mask(valid_mask.first,null_size); // does deep copy
+    rmm::device_buffer null_mask(valid_mask.first,null_size,stream,mr);
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build offsets column
