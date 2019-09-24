@@ -208,19 +208,10 @@ struct typed_row_inequality_comparator
         return State::Undecided;
       else if (isValid1 && isValid2)
       {
-        const bool isNAN1 = isnan(lhs_data);
-        const bool isNAN2 = isnan(rhs_data);
-        if (isNAN2 && isNAN1)
+        if (lhs_data == rhs_data || (isnan(lhs_data) && isnan(rhs_data)))
           return State::Undecided;
-        else if (isNAN2)
+        if (lhs_data < rhs_data || isnan(rhs_data))
           return State::True;
-        else if (isNAN1)
-          return State::False;
-
-        if (lhs_data < rhs_data)
-          return State::True;
-        else if (lhs_data == rhs_data)
-          return State::Undecided;
         else
           return State::False;
       }
@@ -231,19 +222,10 @@ struct typed_row_inequality_comparator
       else
         return State::False;
     } else {
-      const bool isNAN1 = isnan(lhs_data);
-      const bool isNAN2 = isnan(rhs_data);
-      if (isNAN2 && isNAN1)
+      if (lhs_data == rhs_data || (isnan(lhs_data) && isnan(rhs_data)))
         return State::Undecided;
-      else if (isNAN2)
+      if (lhs_data < rhs_data || isnan(rhs_data))
         return State::True;
-      else if (isNAN1)
-        return State::False;
-
-      if (lhs_data < rhs_data)
-        return State::True;
-      else if (lhs_data == rhs_data)
-        return State::Undecided;
       else
         return State::False;
     }
