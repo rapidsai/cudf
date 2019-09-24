@@ -41,7 +41,6 @@ namespace sort {
  * bitmask where bit `i` indicates the presence of a null value in row `i`.
  * @tparam values_have_nulls Indicates if rows in `input_values` contain null
  * values
- * @tparam num_rows The number of rows in the input values table 
  * @param input_values The table whose rows will be aggregated in the 
  * output values table 
  * @param output_values Table that stores the results of aggregating rows of
@@ -58,7 +57,6 @@ namespace sort {
  *---------------------------------------------------------------------------**/
 template <bool skip_rows_with_nulls, bool values_have_nulls>
 __global__ void aggregate_all_rows(
-    gdf_size_type num_rows, 
     device_table input_values,
     device_table output_values,
     gdf_size_type const* key_sorted_order, 
@@ -69,7 +67,7 @@ __global__ void aggregate_all_rows(
 
   gdf_size_type i = threadIdx.x + blockIdx.x * blockDim.x;
 
-  while (i < num_rows) {
+  while (i < input_values.num_rows()) {
     if (skip_null_keys and skip_rows_with_nulls and not bit_mask::is_valid(row_bitmask, key_sorted_order[i])) {
       i += blockDim.x * gridDim.x;
       continue;
