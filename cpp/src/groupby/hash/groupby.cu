@@ -37,6 +37,7 @@
 #include <thrust/fill.h>
 #include <type_traits>
 #include <vector>
+#include <utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace groupby {

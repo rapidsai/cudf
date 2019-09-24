@@ -40,6 +40,7 @@
 #include "sort_helper.hpp"
 
 #include <quantiles/group_quantiles.hpp>
+#include <utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -147,10 +148,15 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
   const index_vector& group_labels = groupby.group_labels();
   const gdf_size_type num_groups = groupby.num_groups();
   
+  // Output allocation size aligned to 4 bytes. The use of `round_up_safe` 
+  // guarantee correct execution with cuda-memcheck  for cases when 
+  // num_groups == 1  and with dtype == int_8. 
+  gdf_size_type const output_size_estimate = cudf::util::round_up_safe((int64_t)groupby.num_groups(), (int64_t)sizeof(int32_t));
+
   cudf::table simple_values_table{simple_values_columns};
 
   cudf::table simple_output_values{
-      num_groups, target_dtypes(column_dtypes(simple_values_table), simple_operators),
+      output_size_estimate, target_dtypes(column_dtypes(simple_values_table), simple_operators),
       column_dtype_infos(simple_values_table), values_have_nulls, false, stream};
 
   initialize_with_identity(simple_output_values, simple_operators, stream);
@@ -171,6 +177,12 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
       group_labels.data().get(), options.ignore_null_keys,
       d_ops.data().get(), row_bitmask.data().get());
   
+   std::transform(simple_output_values.begin(), simple_output_values.end(), simple_output_values.begin(),
+                 [num_groups](gdf_column *col) {
+                   CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
+                   col->size = num_groups;
+                   return col;
+                 });
   return simple_output_values;
 }
 
