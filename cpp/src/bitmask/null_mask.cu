@@ -22,6 +22,7 @@
 
 #include <cub/cub.cuh>
 #include <rmm/device_buffer.hpp>
+#include <rmm/device_scalar.hpp>
 #include <rmm/mr/device_memory_resource.hpp>
 
 namespace cudf {
@@ -154,40 +155,6 @@ __global__ void count_set_bits_kernel(bitmask_type *const bitmask,
 }  // namespace
 
 namespace detail {
-
-template <typename T>
-class scalar {
- public:
-  scalar(T initial_value, cudaStream_t stream_ = 0,
-         rmm::mr::device_memory_resource *mr_ = rmm::mr::get_default_resource())
-      : value{sizeof(T), stream_, mr_} {
-    CUDA_TRY(cudaMemcpyAsync(value.data(), &initial_value, sizeof(T),
-                             cudaMemcpyDefault, value.stream()));
-  }
-
-  T get() const noexcept {
-    CUDA_TRY(cudaStreamSynchronize(value.stream()));
-    T host_value{};
-    CUDA_TRY(cudaMemcpyAsync(&host_value, value.data(), sizeof(T),
-                             cudaMemcpyDefault, value.stream()));
-    return host_value;
-  }
-
-  operator T *() noexcept { return static_cast<T *>(value.data()); }
-
-  operator T() const { return get(); }
-
-  scalar() = default;
-  ~scalar() = default;
-  scalar(scalar const &) = default;
-  scalar(scalar &&) = default;
-  scalar &operator=(scalar const &) = default;
-  scalar &operator=(scalar &&) = default;
-
- private:
-  rmm::device_buffer value{};
-};
-
 cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
                                size_type stop, cudaStream_t stream = 0) {
   if (nullptr == bitmask) {
@@ -209,12 +176,12 @@ cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
 
   cudf::util::cuda::grid_config_1d grid(num_words, block_size);
 
-  scalar<size_type> non_zero_count(0, stream);
+  rmm::device_scalar<size_type> non_zero_count(0, stream);
 
   count_set_bits_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0,
-                          stream>>>(bitmask, start, (stop - 1), non_zero_count);
+                          stream>>>(bitmask, start, (stop - 1), non_zero_count.get());
 
-  return non_zero_count;
+  return non_zero_count.value();
 }
 }  // namespace detail
 
