@@ -18,6 +18,7 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/legacy/table.hpp>
+#include <cudf/transform.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
@@ -46,9 +47,8 @@ void BM_orderby(benchmark::State& state) {
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
       n_cols, {source_size,
                [source_size](gdf_index_type row) -> TypeParam {
-                 //if (reverse)
-                 //  return static_cast<TypeParam>(source_size - row);
                  if (hasna and !nan_as_null and bool(rand() % 2))
+                 //return INFINITY;
                    return NAN;
                  else
                    return static_cast<TypeParam>(rand());
@@ -62,6 +62,10 @@ void BM_orderby(benchmark::State& state) {
   std::vector<gdf_column*> vp_src(n_cols);
   for (size_t i = 0; i < v_src.size(); i++) {
     vp_src[i] = v_src[i].get();
+    //preprocess nulls for old code benchmark
+    //auto result = cudf::nans_to_nulls(*vp_src[i]);
+    //vp_src[i]->valid = reinterpret_cast<gdf_valid_type*>(result.first);
+    //vp_src[i]->null_count = result.second;
   }
 
   // Allocate output ordered indices
@@ -87,5 +91,5 @@ BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {        \
 BENCHMARK_REGISTER_F(benchmark, name)->Args({1<<10, 8})->Args({10<<10, 8})->Args({100<<10, 8})->Args({1<<20, 8})->Args({10<<20, 8})->Args({100<<20, 8})->UseManualTime()->Unit(benchmark::kMicrosecond);
 
 OBM_BENCHMARK_DEFINE(double_hasna_0_null_0,double,false,false); //all num
-OBM_BENCHMARK_DEFINE(double_hasna_1_null_0,double,false, true); //NaN
 OBM_BENCHMARK_DEFINE(double_hasna_1_null_1,double, true, true); //null
+OBM_BENCHMARK_DEFINE(double_hasna_1_null_0,double, true,false); //NaN
