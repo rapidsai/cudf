@@ -85,7 +85,7 @@ struct wrapper
   template <typename from_type, gdf_dtype dtype = type_id,
             std::enable_if_t<(dtype == GDF_BOOL8)> * = nullptr>
   CUDA_HOST_DEVICE_CALLABLE constexpr explicit wrapper(from_type v)
-      : value{static_cast<value_type>(static_cast<bool>(v))} {}
+      : value{static_cast<bool>(v)} {}
 
   CUDA_HOST_DEVICE_CALLABLE explicit operator value_type() const {
     return this->value;

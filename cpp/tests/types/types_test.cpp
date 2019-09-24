@@ -48,7 +48,30 @@ struct WrappersTest : public ::testing::Test {
   }
 };
 
-using WrappersTestBool8ArithmeticTest = WrappersTest<cudf::bool8>;
+using WrappersTestBool8 = WrappersTest<cudf::bool8>;
+
+template <typename SourceType>
+struct Bool8CtorTest : public ::testing::Test {
+  Bool8CtorTest() {
+    // Use constant seed for deterministic results
+    rng.seed(0);
+  }
+
+  std::mt19937 rng;
+
+  using uniform_distribution = typename std::conditional_t<
+      std::is_same<SourceType, bool>::value, std::bernoulli_distribution,
+      std::conditional_t<std::is_floating_point<SourceType>::value,
+                         std::uniform_real_distribution<SourceType>,
+                         std::uniform_int_distribution<SourceType>>>;
+
+  uniform_distribution dist{};
+
+  SourceType rand(){
+      return dist(rng);
+  }
+};
+
 
 // These structs enable specializing the underlying type to use in testing
 // comparisons. For example, we specialize cudf::bool8 to map to bool. This
@@ -72,18 +95,17 @@ struct TypeToUse<cudf::detail::wrapper<T, dtype>>{
 template <typename T>
 using WrappersNoBoolTest = WrappersTest<T>;
 
-template <typename T>
-using WrappersBoolTest = WrappersTest<T>;
-
 using WrappersNoBool = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
                                         cudf::date64>;
 
 using Wrappers = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
                                   cudf::date64, cudf::bool8>;
 
+using Bool8CastSourceTypes = ::testing::Types<char, bool, float, double, int32_t, int64_t>;
+
 TYPED_TEST_CASE(WrappersTest, Wrappers);
 TYPED_TEST_CASE(WrappersNoBoolTest, WrappersNoBool);
-TYPED_TEST_CASE(WrappersBoolTest, Wrappers);
+TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 
 /**
  * @brief The number of test trials for each operator
@@ -213,8 +235,8 @@ TYPED_TEST(WrappersNoBoolTest, BooleanOperators)
 }
 
 // Ensure bool8 constructor is correctly casting the input type to a bool
-TYPED_TEST(WrappersBoolTest, BooleanConstructor) {
-  using UnderlyingType = typename TypeToUse<TypeParam>::type;
+TEST_F(WrappersTestBool8, BooleanConstructor) {
+  using UnderlyingType = cudf::bool8::value_type;
   for (int i = 0; i < NUM_TRIALS; ++i) {
     UnderlyingType t{this->rand()};
     cudf::bool8 const w{t};
@@ -223,19 +245,15 @@ TYPED_TEST(WrappersBoolTest, BooleanConstructor) {
 }
 
 // Just for booleans
-TYPED_TEST(WrappersBoolTest, BooleanOperatorsBool8)
+TEST_F(WrappersTestBool8, BooleanOperatorsBool8)
 {
-    using UnderlyingType = typename TypeToUse<TypeParam>::type;
     for(int i = 0; i < NUM_TRIALS; ++i)
     {
-        UnderlyingType v0{this->rand()};
-        UnderlyingType v1{this->rand()};
-        
-        bool const t0{v0};
-        bool const t1{v1};
+        bool const t0{this->rand()};
+        bool const t1{this->rand()};
 
-        cudf::bool8 const w0{v0};
-        cudf::bool8 const w1{v1};
+        cudf::bool8 const w0{t0};
+        cudf::bool8 const w1{t1};
 
         EXPECT_EQ(t0 > t1, w0 > w1);
         EXPECT_EQ(t0 < t1, w0 < w1);
@@ -288,7 +306,7 @@ TYPED_TEST(WrappersBoolTest, BooleanOperatorsBool8)
 // This ensures that casting cudf::bool8 to int, doing arithmetic, and casting
 // the result to bool results in the right answer. If the arithmetic is done
 // on random underlying values you can get the wrong answer.
-TEST_F(WrappersTestBool8ArithmeticTest, CastArithmeticTest)
+TEST_F(WrappersTestBool8, CastArithmeticTest)
 {
     cudf::bool8 w1{42};
     cudf::bool8 w2{static_cast<char>(-42)};
@@ -298,6 +316,16 @@ TEST_F(WrappersTestBool8ArithmeticTest, CastArithmeticTest)
 
     EXPECT_EQ(static_cast<bool>(static_cast<int>(w1) + static_cast<int>(w2)),
               static_cast<bool>(static_cast<int>(t1) + static_cast<int>(t2)));
+}
+
+// Ensure bool8 constructor is correctly casting the input type to a bool
+TYPED_TEST(Bool8CtorTest, Bool8CastTest) {
+using SourceType = TypeParam;
+  for (int i = 0; i < NUM_TRIALS; ++i) {
+    SourceType t{this->rand()};
+    cudf::bool8 const w{t};
+    EXPECT_EQ(unwrap(w), static_cast<bool>(t));
+  }
 }
 
 TYPED_TEST(WrappersTest, CompoundAssignmentOperators)
