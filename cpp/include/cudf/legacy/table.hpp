@@ -126,10 +126,6 @@ struct table {
     return _columns[index];
   }
 
-  std::vector<gdf_column*> get_columns() const {
-    return std::vector<gdf_column*>(this->_columns);
-  }
-  
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of _columns in the table
    *
@@ -141,11 +137,24 @@ struct table {
    *
    *---------------------------------------------------------------------------**/
   gdf_size_type num_rows() const {
-    if (this->get_column(0) != nullptr) {
+    if (not _columns.empty()) {
       return this->get_column(0)->size;
     }
     return 0;
   }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns a new `table` containing the set of specified columns.
+   *
+   * @throws cudf::logic_error
+   * If columns requested exceeds number of columns exist
+   * @throws std::out_of_range
+   * If the index of the column exceeds max column index in table
+   *
+   * @param column_indices Indices of the desired columns
+   * @return table New table containing only the desired columns
+   *---------------------------------------------------------------------------**/
+  table select(std::vector<gdf_size_type> const& column_indices) const;
 
   /**---------------------------------------------------------------------------*
    * @brief Destroys the `gdf_column`s in the table.
@@ -183,6 +192,19 @@ std::vector<gdf_dtype_extra_info> column_dtype_infos(cudf::table const& table);
  * @return false If the table contains zero null values
  *---------------------------------------------------------------------------**/
 bool has_nulls(cudf::table const& table);
+
+/**---------------------------------------------------------------------------*
+ * @brief `table1` and `table2` are concatenated to return single table
+ *
+ * @throws cudf::logic_error
+ * If number of rows mismatch
+ *
+ * @param table1 The table to be concatenated with `table2`
+ * @param table2 The table to be concatenated with `table1`
+ * @return A single table having all the columns from `table1` and `table2`
+ * respectively in the same order.
+ *---------------------------------------------------------------------------**/
+table concat(cudf::table const& table1, cudf::table const&table2);
 
 }  // namespace cudf
 

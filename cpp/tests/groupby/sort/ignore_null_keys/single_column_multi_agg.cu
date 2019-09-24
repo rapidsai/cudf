@@ -21,7 +21,7 @@
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "../single_column_groupby_test.cuh"
-#include "../type_info.hpp"
+#include "../../common/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

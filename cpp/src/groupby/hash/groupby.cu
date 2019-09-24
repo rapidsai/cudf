@@ -28,15 +28,15 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "../common/aggregation_requests.hpp"
-#include "groupby.hpp"
 #include "groupby_kernels.cuh"
-#include "../common/type_info.hpp"
-#include "../common/utils.hpp"
+#include "groupby/common/aggregation_requests.hpp"
+#include "groupby/common/type_info.hpp"
+#include "groupby/common/utils.hpp"
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
 #include <type_traits>
 #include <vector>
+#include <utilities/integer_utils.hpp>
 
 namespace cudf {
 namespace groupby {
@@ -57,7 +57,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
                "Groupby input size too large.");
 
   // The exact output size is unknown a priori, therefore, use the input size as
-  // an upper bound
+  // an upper bound.
   gdf_size_type const output_size_estimate{input_keys.num_rows()};
 
   cudf::table sparse_output_values{
@@ -116,10 +116,17 @@ auto extract_results(table const& input_keys, table const& input_values,
                      device_table const& d_input_keys,
                      table const& sparse_output_values, Map const& map,
                      cudaStream_t stream) {
+
   cudf::table output_keys{
-      cudf::allocate_like(input_keys, keys_have_nulls, stream)};
+      cudf::allocate_like(
+        input_keys,
+        keys_have_nulls ? RETAIN : NEVER,
+        stream)};
   cudf::table output_values{
-      cudf::allocate_like(sparse_output_values, values_have_nulls, stream)};
+      cudf::allocate_like(
+        sparse_output_values,
+        values_have_nulls ? RETAIN : NEVER,
+        stream)};
 
   auto d_sparse_output_values =
       device_table::create(sparse_output_values, stream);
@@ -295,7 +302,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
                                             Options options,
-                                            cudaStream_t stream) {
+                                            cudaStream_t stream = 0) {
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
 

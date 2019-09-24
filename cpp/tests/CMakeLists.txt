@@ -116,17 +116,17 @@ set(HASH_GROUPBY_TEST_SRC
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
 set(SORT_GROUPBY_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_avg.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_sum.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_count.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_min.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_max.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_quantile.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_median.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_var.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_avg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_count.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_min.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_max.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_quantile.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_median.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_multi_agg.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/ignore_null_keys/single_column_var.cu"
 
-    # "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/pandas/single_column_multi_agg.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/sql/single_column_sum.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/sort/not_ignore_null_keys/single_column_sum.cu"
 )
 
 ConfigureTest(SORT_GROUPBY_TEST "${SORT_GROUPBY_TEST_SRC}")
@@ -346,6 +346,7 @@ set(COPYING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
     "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
 
@@ -363,7 +364,8 @@ set(NVSTRING_SCATTER_TEST_SRC
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
@@ -444,7 +446,8 @@ ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
 # - filling test --------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 

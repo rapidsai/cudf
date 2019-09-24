@@ -54,18 +54,41 @@ using AggRequestType = std::pair<gdf_column*, operators>;
 using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
 
 
-static constexpr std::array<operators, 4> simple_agg_list = {SUM, MIN, MAX, COUNT};
+static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
 
-static constexpr std::array<operators, 3> complex_agg_list = {MEDIAN, QUANTILE, VARIANCE};
+static constexpr std::array<operators, 3> ordered_aggregations = {MEDIAN, QUANTILE, VARIANCE};
 
-inline bool is_simple_agg(operators op) {
-  return std::any_of(simple_agg_list.begin(), simple_agg_list.end(),
-                     [&](operators test) { return test == op; });
+namespace constexpr_util {
+// Just a utility function to find the existence of an element in a constexpr array
+template <class T, size_t N>
+constexpr bool contains(std::array<T,N> const& haystack, T needle){
+    for(auto i = 0u; i < N; ++i){
+       if(haystack[i] == needle)
+           return true;
+    }
+    return false;
 }
 
-inline bool is_complex_agg(operators op) {
-  return std::any_of(complex_agg_list.begin(), complex_agg_list.end(),
-                     [&](operators test) { return test == op; });
+}//end namespace constexpr_util
+
+/**---------------------------------------------------------------------------*
+ * @brief  To verify that the input operator is part of simple_aggregations list.
+ * Note that in this kind of aggregators can be computed in a single pass scan.
+ * In the other hand the compound aggregation MEAN need to be computed by simple
+ * ones (SUM and COUNT).
+ *---------------------------------------------------------------------------**/
+inline bool is_simple(operators op) {
+  return constexpr_util::contains(simple_aggregations, op);
+}
+
+
+/**---------------------------------------------------------------------------*
+ * @brief  To verify that the input operator is part of  ordered_aggregations list.
+ * Ordered aggregation is used to identify other ones like MEDIAN and  QUANTILE,
+ * which cannot be represented as a combination of single-pass aggregations. 
+ *---------------------------------------------------------------------------**/
+inline bool is_ordered(operators op) {
+  return constexpr_util::contains(ordered_aggregations, op);
 }
 
 /**---------------------------------------------------------------------------*

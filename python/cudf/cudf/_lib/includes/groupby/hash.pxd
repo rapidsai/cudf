@@ -13,16 +13,19 @@ from cudf._lib.cudf cimport *
 
 cimport cudf._lib.includes.groupby.common as groupby_common
 
-cdef extern from "cudf/groupby.hpp" namespace "cudf::groupby::hash" nogil:
-    cdef cppclass Options(groupby_common.Options):
-        Options(bool _ignore_null_keys) except +
-
+cdef extern from "cudf/groupby.hpp" namespace "cudf::groupby" nogil:
     ctypedef enum operators:
         SUM,
         MIN,
         MAX,
         COUNT,
-        MEAN
+        MEAN,
+        MEDIAN,
+        QUANTILE
+
+cdef extern from "cudf/groupby.hpp" namespace "cudf::groupby::hash" nogil:
+    cdef cppclass Options(groupby_common.Options):
+        Options(bool _ignore_null_keys) except +
 
     cdef pair[cudf_table, cudf_table] groupby(
         cudf_table  keys,
