@@ -22,7 +22,6 @@
 
 namespace cudf {
 
-
 /**---------------------------------------------------------------------------*
  * @brief Returns the null count for a null mask of the specified `state`
  * representing `size` elements.
@@ -62,6 +61,22 @@ std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
  *---------------------------------------------------------------------------**/
 rmm::device_buffer create_null_mask(
     size_type size, mask_state state, cudaStream_t stream = 0,
-    rmm::mr::device_memory_resource *mr = rmm::mr::get_default_resource());
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
+
+/**---------------------------------------------------------------------------*
+ * @brief Given a bitmask, counts the number of set bits in the range
+ * `[start, stop)`
+ *
+ * Returns `0` if `bitmask == nullptr`.
+ * 
+ * @throws `cudf::logic_error` if `start > stop`
+ *
+ * @param bitmask Bitmask residing in device memory whose bits will be counted
+ * @param start_bit Index of the first bit to count (inclusive)
+ * @param stop_bit Index of the last bit to count (exclusive)
+ * @return The number of non-zero bits in the specified range
+ *---------------------------------------------------------------------------**/
+cudf::size_type count_set_bits(bitmask_type* const bitmask, size_type start,
+                               size_type stop);
 
 }  // namespace cudf
