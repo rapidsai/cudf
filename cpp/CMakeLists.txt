@@ -385,6 +385,7 @@ add_library(cudf
             src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
+            src/io/csv/csv_gpu.cu
             src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader_impl.cu
             src/io/orc/orc.cpp
@@ -416,6 +417,7 @@ add_library(cudf
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
             src/filling/fill.cu
+            src/filling/repeat.cu
             src/search/search.cu)
 
 # Override RPATH for nvstrings

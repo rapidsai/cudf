@@ -32,14 +32,25 @@ class CudfEngine(ArrowEngine):
             columns += index
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
-        df = cudf.read_parquet(
-            piece.path,
-            engine="cudf",
-            columns=columns,
-            row_group=piece.row_group,
-            strings_to_categorical=strings_to_cats,
-            **kwargs.get("read", {}),
-        )
+        if cudf.utils.ioutils._is_local_filesystem(fs):
+            df = cudf.read_parquet(
+                piece.path,
+                engine="cudf",
+                columns=columns,
+                row_group=piece.row_group,
+                strings_to_categorical=strings_to_cats,
+                **kwargs.get("read", {}),
+            )
+        else:
+            with fs.open(piece.path, mode="rb") as f:
+                df = cudf.read_parquet(
+                    f,
+                    engine="cudf",
+                    columns=columns,
+                    row_group=piece.row_group,
+                    strings_to_categorical=strings_to_cats,
+                    **kwargs.get("read", {}),
+                )
 
         if index is not None and index[0] in df.columns:
             df = df.set_index(index[0])
