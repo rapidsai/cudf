@@ -49,7 +49,7 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
                     thrust::make_counting_iterator(0),
                     cudf::exp::row_equality_comparator<true>{*d_lhs, *d_rhs}));
 
-  CUDA_TRY(cudaGetLastError());
+  CUDA_TRY(cudaDeviceSynchronize());
 }
 
 }  // namespace test
