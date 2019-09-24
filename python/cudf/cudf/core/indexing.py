@@ -131,8 +131,7 @@ class _DataFrameIndexer(object):
             all_numeric = all(
                 [pd.api.types.is_numeric_dtype(t) for t in dtypes]
             )
-            all_identical = dtypes.count(dtypes[0]) == len(dtypes)
-            if all_numeric or all_identical:
+            if all_numeric:
                 return True
         if ncols == 1:
             if type(arg[1]) is slice:
@@ -182,6 +181,7 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
 
     def _getitem_tuple_arg(self, arg):
         from cudf.core.dataframe import DataFrame
+        from cudf.core.column import column
         from cudf.core.index import as_index
         from cudf.utils.cudautils import arange
         from cudf import MultiIndex
@@ -217,7 +217,11 @@ class _DataFrameLocIndexer(_DataFrameIndexer):
                     start = self._df.index[0]
                 df.index = as_index(start)
             else:
-                df.index = as_index(arg[0])
+                row_selection = column.as_column(arg[0])
+                if pd.api.types.is_bool_dtype(row_selection.dtype):
+                    df.index = self._df.index.take(row_selection)
+                else:
+                    df.index = as_index(row_selection)
         # Step 4: Downcast
         if self._can_downcast_to_series(df, arg):
             return self._downcast_to_series(df, arg)
