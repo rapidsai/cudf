@@ -59,7 +59,7 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
 
   // The exact output size is unknown a priori, therefore, use the input size as
   // an upper bound.
-  gdf_size_type const output_size_estimate = input_keys.num_rows();
+  gdf_size_type const output_size_estimate{input_keys.num_rows()};
 
   cudf::table sparse_output_values{
       output_size_estimate,
@@ -148,6 +148,7 @@ auto extract_results(table const& input_keys, table const& input_values,
   // Update size and null count of output columns
   auto update_column = [result_size](gdf_column* col) {
     CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
+    col->size = result_size;
     set_null_count(*col);
     return col;
   };

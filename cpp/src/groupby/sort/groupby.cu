@@ -76,9 +76,7 @@ std::vector<gdf_column*>  compute_ordered_aggregations(
     cudaStream_t stream) {
 
   std::vector<gdf_column*> output_value(original_requests.size());
-  for (gdf_size_type i = 0; i < current_output_values.num_columns(); i++) {
-    output_value[i] = current_output_values.get_column(i);
-  }
+  std::copy(current_output_values.begin(), current_output_values.end(), output_value.begin());
 
   for (size_t i = 0; i < original_requests.size(); ++i) {
     auto const& element = original_requests[i];
