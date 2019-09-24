@@ -12,7 +12,8 @@ endif()
 add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -98,7 +99,7 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 # - column tests ----------------------------------------------------------------------------------
 
 set(COLUMN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cpp")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 

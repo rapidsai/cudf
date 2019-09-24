@@ -15,7 +15,6 @@
  */
 
 #include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
 #include <cudf/column/column_view.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
@@ -33,17 +32,11 @@ class TypedColumnTest : public ColumnTest {};
 
 TYPED_TEST_CASE(TypedColumnTest, cudf::test::AllTypes);
 
-TYPED_TEST(TypedColumnTest, First) {
+TYPED_TEST(TypedColumnTest, SelfEquality) {
   constexpr cudf::size_type size{1000};
   rmm::device_buffer data{size};
   cudf::column col{cudf::data_type{cudf::exp::type_to_id<TypeParam>()}, 100,
                    data};
 
-  auto d_col = cudf::column_device_view::create(col);
-
-  auto d_table = cudf::table_device_view::create(cudf::table_view{{col}});
-
   cudf::test::expect_columns_equal(col, col);
-
-  CUDA_TRY(cudaGetLastError());
 }
