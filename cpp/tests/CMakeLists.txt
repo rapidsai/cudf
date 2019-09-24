@@ -307,11 +307,11 @@ ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
 # - types tests -----------------------------------------------------------------------------------
 
-set(TYPES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
+set(LEGACY_TYPES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/legacy/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/legacy/dispatcher_test.cu")
 
-ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+ConfigureTest(LEGACY_TYPES_TEST "${LEGACY_TYPES_TEST_SRC}")
 
 ###################################################################################################
 # - nvcategory tests -------------------------------------------------------------------------------
@@ -466,6 +466,14 @@ set(FACTORIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/factories_test.cpp")
 
 ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
+
+###################################################################################################
+# - dispatcher test -----------------------------------------------------------------------------------
+
+set(DISPATCHER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/type_dispatcher_test.cu")
+
+ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################
