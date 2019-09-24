@@ -85,11 +85,11 @@ class Groupby(object):
 
     Notes
     -----
-    - `method=cudf` may be deprecated in the future
-    - Grouping by and aggregating over columns with null values may
-      lead to undefined behaviour
+    - `method=cudf` may be deprecated in the future.
+    - Grouping and aggregating over columns with null values will
+      return incorrect results.
     - Grouping by or aggregating over string columns is currently
-      not supported
+      not supported.
     """
 
     _NAMED_FUNCTIONS = {

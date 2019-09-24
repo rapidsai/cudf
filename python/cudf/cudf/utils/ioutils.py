@@ -9,10 +9,9 @@ import fsspec
 from cudf.utils.docutils import docfmt_partial
 
 _docstring_remote_sources = """
-- Cudf supports a variety of data stores. For more information on working
-  with different data sources and configuration options refer to:
-  `Remote data services
-  <https://docs.dask.org/en/latest/remote-data-services.html>`_
+- cuDF supports local and remote data stores. See configuration details for
+  available sources
+  `here <https://docs.dask.org/en/latest/remote-data-services.html>`_.
 """
 
 _docstring_read_avro = """
