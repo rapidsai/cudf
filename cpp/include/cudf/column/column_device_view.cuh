@@ -27,7 +27,7 @@ namespace detail {
 
 /**---------------------------------------------------------------------------*
  * @brief An immutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable CUDA device code.
+ * that is trivially copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
 class alignas(16) column_device_view_base {
  public:
@@ -45,7 +45,7 @@ class alignas(16) column_device_view_base {
    * @note If `offset() == 0`, then `head<T>() == data<T>()`
    *
    * @note It should be rare to need to access the `head<T>()` allocation of
-   *a column, and instead, accessing the elements should be done via
+   * a column, and instead, accessing the elements should be done via
    *`data<T>()`.
    *
    * @tparam The type to cast to
@@ -83,7 +83,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if the column can contain null elements, i.e., if it has
+   * @brief Indicates whether the column can contain null elements, i.e., if it has
    * an allocated bitmask.
    *
    * @note If `null_count() > 0`, this function must always return `true`.
@@ -103,7 +103,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates if the column contains null elements,
+   * @brief Indicates whether the column contains null elements,
    * i.e., `null_count() > 0`
    *
    * @return true The column contains null elements
@@ -131,7 +131,7 @@ class alignas(16) column_device_view_base {
   __host__ __device__ size_type offset() const noexcept { return _offset; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns if the specified element holds a valid value (i.e., not
+   * @brief Returns whether the specified element holds a valid value (i.e., not
    * null)
    *
    * @note It is undefined behavior to call this function if `nullable() ==
@@ -146,7 +146,7 @@ class alignas(16) column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns if the specified element is null
+   * @brief Returns whether the specified element is null
    *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
@@ -168,7 +168,8 @@ class alignas(16) column_device_view_base {
    * @param element_index
    * @return __device__ get_mask_element
    *---------------------------------------------------------------------------**/
-  __device__ bitmask_type get_mask_element(size_type element_index) const noexcept {
+  __device__ bitmask_type get_mask_element(size_type element_index) const
+      noexcept {
     return null_mask()[element_index];
   }
 
@@ -197,7 +198,7 @@ class alignas(16) column_device_view_base {
 
 /**---------------------------------------------------------------------------*
  * @brief An immutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable CUDA device code.
+ * that is trivially copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
 class alignas(16) column_device_view : public detail::column_device_view_base {
  public:
@@ -208,10 +209,24 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   column_device_view& operator=(column_device_view const&) = default;
   column_device_view& operator=(column_device_view&&) = default;
 
+ 
+  /**---------------------------------------------------------------------------*
+   * @brief Returns reference to element at the specified index.
+   *
+   * This function accounts for the offset.
+   *
+   * @tparam T The element type
+   * @param element_index Position of the desired element
+   *---------------------------------------------------------------------------**/
+  template <typename T>
+  __device__ T const element(size_type element_index) const noexcept {
+    return data<T>()[element_index];
+  }
+
   /**---------------------------------------------------------------------------*
    * @brief Factory to construct a column view that is usable in device memory.
    *
-   * Allocates and copies views of `soure_view`'s children to device memory to
+   * Allocates and copies views of `source_view`'s children to device memory to
    * make them accessible in device code.
    *
    * If `source_view.num_children() == 0`, then no device memory is allocated.
@@ -227,20 +242,17 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * @return A `unique_ptr` to a `column_device_view` that makes the data from
    *`source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> create(column_view source_view, cudaStream_t stream = 0);
-  
+  static std::unique_ptr<column_device_view,
+                         std::function<void(column_device_view*)>>
+  create(column_view source_view, cudaStream_t stream = 0);
+
   /**---------------------------------------------------------------------------*
-   * @brief Returns reference to element at the specified index.
+   * @brief Destroy the `device_column_view` object.
    *
-   * This function accounts for the offset.
-   *
-   * @tparam T The element type
-   * @param element_index Position of the desired element
+   * @note Does not free the column data, simply free's the device memory
+   * allocated to hold the child views.
    *---------------------------------------------------------------------------**/
-  template <typename T>
-  __device__ T const element(size_type element_index) const noexcept {
-    return data<T>()[element_index];
-  }
+  void destroy();
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the specified child
@@ -269,18 +281,11 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *---------------------------------------------------------------------------**/
   column_device_view(column_view source);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Destroy the `device_column_view` object.
-   *
-   * @note Does not free the column data, simply free's the device memory
-   * allocated to hold the child views.
-   *---------------------------------------------------------------------------**/
-  void destroy();
 };
 
 /**---------------------------------------------------------------------------*
  * @brief A mutable, non-owning view of device data as a column of elements
- * that is trivially copyable and usable CUDA device code.
+ * that is trivially copyable and usable in CUDA device code.
  *---------------------------------------------------------------------------**/
 class alignas(16) mutable_column_device_view
     : public detail::column_device_view_base {
@@ -420,7 +425,7 @@ class alignas(16) mutable_column_device_view
    * @param new_element The new bitmask element
    *---------------------------------------------------------------------------**/
   __device__ void set_mask_element(size_type element_index,
-                              bitmask_type new_element) const noexcept {
+                                   bitmask_type new_element) const noexcept {
     null_mask()[element_index] = new_element;
   }
 

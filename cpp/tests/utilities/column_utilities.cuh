@@ -14,15 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/column/column.hpp>
-#include <cudf/column/column_device_view.cuh>
+#pragma once
+
 #include <cudf/column/column_view.hpp>
 
-#include <gmock/gmock.h>
-#include <gtest/gtest.h>
-
-struct ColumnTest : public ::testing::Test {
-  std::unique_ptr<cudf::column> col;
-};
-
-TEST_F(ColumnTest, First) {}
+namespace cudf {
+namespace test {
+/**---------------------------------------------------------------------------*
+ * @brief
+ *
+ * @param lhs
+ * @param rhs
+ *---------------------------------------------------------------------------**/
+void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs);
+}  // namespace test
+}  // namespace cudf

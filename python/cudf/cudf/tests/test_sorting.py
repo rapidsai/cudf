@@ -259,3 +259,34 @@ def test_series_nlargest_nelem(nelem):
     pds = pd.Series(elems).nlargest(nelem)
 
     assert (pds == gds.to_pandas()).all().all()
+
+
+@pytest.mark.parametrize("map_size", [1, 2, 8])
+@pytest.mark.parametrize("nelem", [1, 10, 100])
+def test_dataframe_scatter_by_map(map_size, nelem):
+
+    strlist = ["dog", "cat", "fish", "bird", "pig", "fox", "cow", "goat"]
+    np.random.seed(0)
+    df = DataFrame()
+    df["a"] = np.random.choice(strlist[:map_size], nelem)
+    df["b"] = np.random.uniform(low=0, high=map_size, size=nelem)
+    df["c"] = np.random.randint(map_size, size=nelem)
+    df["d"] = df["a"]._column.as_categorical_column(np.int32)
+
+    def _check_scatter_by_map(dfs, col):
+        assert len(dfs) == map_size
+        nrows = 0
+        for df in dfs:
+            nrows += len(df)
+            assert df[col].astype(np.int32).nunique() <= 1
+        assert nrows == nelem
+
+    _check_scatter_by_map(df.scatter_by_map("a", map_size), "a")
+    _check_scatter_by_map(df.scatter_by_map("b", map_size), "b")
+    _check_scatter_by_map(df.scatter_by_map("c", map_size), "c")
+    _check_scatter_by_map(df.scatter_by_map("d", map_size), "d")
+
+    if map_size == 2 and nelem == 100:
+        df.scatter_by_map("a")  # Auto-detect map_size
+        with pytest.raises(ValueError):
+            df.scatter_by_map("a", 1)  # Bad map_size

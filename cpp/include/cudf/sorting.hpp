@@ -24,19 +24,6 @@
 namespace cudf {
 namespace exp {
 
-/**---------------------------------------------------------------------------*
- * @brief Indicates the order in which a column should be sorted.
- *---------------------------------------------------------------------------**/
-enum class order : bool { ASCENDING, DESCENDING };
-
-/**---------------------------------------------------------------------------*
- * @brief Indicates how null values compare against all other values.
- *
- * If `AFTER`, `NULL` values are ordered *after* all other values
- *
- * If `BEFORE`, `NULL` values are ordered *before* all other values
- *---------------------------------------------------------------------------**/
-enum class null_order : bool { AFTER, BEFORE };
 
 /**---------------------------------------------------------------------------*
  * @brief Computes the row indices that would produce `input`  in a

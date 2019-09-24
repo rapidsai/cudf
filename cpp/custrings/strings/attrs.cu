@@ -18,6 +18,7 @@
 #include <thrust/device_vector.h>
 #include <thrust/for_each.h>
 #include <thrust/count.h>
+#include <thrust/transform_scan.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
@@ -437,3 +438,43 @@ unsigned int NVStrings::is_empty( bool* results, bool todevice )
     return (unsigned int)matches;
 }
 
+//
+// s = ["a","xyz", "éee"]
+// s.code_points(results)
+// results is [   97   120   121   122 50089   101   101]
+//
+unsigned int NVStrings::code_points( unsigned int* d_results )
+{
+    auto count = size();
+    auto execpol = rmm::exec_policy(0);
+    custring_view_array d_strings = pImpl->getStringsPtr();
+
+    // offsets point to each individual integer range
+    rmm::device_vector<size_t> offsets(count);
+    size_t* d_offsets = offsets.data().get();
+    thrust::transform_exclusive_scan(execpol->on(0),
+        thrust::make_counting_iterator<size_t>(0),
+        thrust::make_counting_iterator<size_t>(count),
+        d_offsets,
+        [d_strings] __device__(size_t idx){
+            custring_view* d_str = d_strings[idx];
+            size_t length = 0;
+            if( d_str )
+                length = d_str->chars_count();
+            return length;
+        },
+        0, thrust::plus<unsigned int>());
+
+    // now set the ranges from each strings' character values
+    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
+        [d_strings, d_offsets, d_results] __device__(unsigned int idx){
+            custring_view* d_str = d_strings[idx];
+            if( !d_str )
+                return;
+            auto result = d_results + d_offsets[idx];
+            for( auto itr = d_str->begin(); itr != d_str->end(); ++itr )
+                *result++ = (unsigned int)*itr;
+        });
+    //
+    return offsets.back();
+}

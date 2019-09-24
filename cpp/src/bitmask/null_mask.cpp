@@ -41,12 +41,12 @@ size_type state_null_count(mask_state state, size_type size) {
 std::size_t bitmask_allocation_size_bytes(size_type number_of_bits,
                                           std::size_t padding_boundary) {
   CUDF_EXPECTS(padding_boundary > 0, "Invalid padding boundary");
-  auto neccessary_bytes =
+  auto necessary_bytes =
       cudf::util::div_rounding_up_safe<size_type>(number_of_bits, CHAR_BIT);
 
   auto padded_bytes =
       padding_boundary * cudf::util::div_rounding_up_safe<size_type>(
-                             neccessary_bytes, padding_boundary);
+                             necessary_bytes, padding_boundary);
   return padded_bytes;
 }
 

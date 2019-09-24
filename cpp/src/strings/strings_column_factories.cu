@@ -27,14 +27,10 @@
 #include <thrust/transform_scan.h>
 #include <thrust/for_each.h>
 
+
 namespace cudf {
 
-
-// Create a strings-type column.
-// A strings-column has children columns to manage the variable-length
-// encoded character array.
-// Use the strings_column_handler class to perform strings operations
-// on this type of column.
+// Create a strings-type column from array of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<thrust::pair<const char*,size_t>>& strings,
     cudaStream_t stream,
@@ -76,13 +72,14 @@ std::unique_ptr<column> make_strings_column(
         [d_strings] __device__ (size_type idx) { return d_strings[idx].first!=nullptr; },
         count, stream );
     auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask(valid_mask.first,gdf_valid_allocation_size(count)); // does deep copy
+    rmm::device_buffer null_mask(valid_mask.first, gdf_valid_allocation_size(count),
+                                 stream, mr);
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build chars column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
     auto chars_view = chars_column->mutable_view();
-    auto d_chars = chars_view.data<int8_t>();
+    auto d_chars = chars_view.data<char>();
     auto d_offsets = offsets_view.data<int32_t>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
           [d_strings, d_offsets, d_chars] __device__(size_type idx){
@@ -106,5 +103,55 @@ std::unique_ptr<column> make_strings_column(
         null_mask, null_count,
         std::move(children));
 }
+
+// Create a strings-type column from array of chars and array of offsets.
+std::unique_ptr<column> make_strings_column(
+    const rmm::device_vector<char>& strings,
+    const rmm::device_vector<size_type>& offsets,
+    const rmm::device_vector<bitmask_type>& valid_mask,
+    size_type null_count,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr )
+{
+    size_type count = offsets.size()-1;
+    CUDF_EXPECTS( count > 0, "strings count must be greater than 0");
+    CUDF_EXPECTS( null_count < count, "null strings column not yet supported");
+
+    auto execpol = rmm::exec_policy(stream);
+    size_type bytes = offsets.back() - offsets[0];
+    CUDF_EXPECTS( bytes >=0, "invalid offsets vector");
+
+    // build offsets column
+    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED, stream, mr );
+    auto offsets_view = offsets_column->mutable_view();
+    cudaMemcpyAsync( offsets_view.data<int32_t>(), offsets.data().get()+1,
+                     count*sizeof(int32_t),
+                     cudaMemcpyDeviceToHost, stream );
+
+    // build null bitmask
+    rmm::device_buffer null_mask;
+    if( null_count )
+        null_mask = rmm::device_buffer(valid_mask.data().get(),
+                                       gdf_valid_allocation_size(count),
+                                       stream, mr);
+
+    // build chars column
+    auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
+    auto chars_view = chars_column->mutable_view();
+    cudaMemcpyAsync( chars_view.data<char>(), strings.data().get(), bytes,
+                     cudaMemcpyDeviceToHost, stream );
+
+    // build children vector
+    std::vector<std::unique_ptr<column>> children;
+    children.emplace_back(std::move(offsets_column));
+    children.emplace_back(std::move(chars_column));
+
+    //
+    return std::make_unique<column>(
+        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        null_mask, null_count,
+        std::move(children));
+}
+
 
 }  // namespace cudf

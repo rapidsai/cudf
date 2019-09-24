@@ -274,7 +274,7 @@ groupby::sort_values(gdf_column const& values) {
               &context);
 
   cudf::table unsorted_values_table{unsorted_values};
-  auto sorted_values = allocate_like(values, num_keys(), true, _stream);
+  auto sorted_values = allocate_like(values, num_keys(), RETAIN, _stream);
   cudf::table sorted_values_table{&sorted_values};
   cudf::gather(&unsorted_values_table,
               static_cast<gdf_size_type*>(values_sort_order->data),
@@ -303,7 +303,7 @@ groupby::sort_values(gdf_column const& values) {
 cudf::table groupby::unique_keys() {
   cudf::table unique_keys = allocate_like(_keys, 
                                           (gdf_size_type)num_groups(),
-                                          true,
+                                          RETAIN,
                                           _stream);
   auto idx_data = static_cast<gdf_size_type*>(key_sort_order().data);
   auto transformed_group_ids = index_vector(num_groups());

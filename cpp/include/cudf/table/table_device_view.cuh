@@ -63,7 +63,7 @@ class table_device_view_base {
   void destroy();
 
  private:
-  ColumnDeviceView* _columns;  ///< Array of view objects in device memory
+  ColumnDeviceView* _columns{};  ///< Array of view objects in device memory
   size_type _num_rows{};
   size_type _num_columns{};
   cudaStream_t _stream{};

@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
+#pragma once
+
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-
-#include <gtest/gtest.h>
+#include <tests/utilities/type_list.hpp>
 
 #include <array>
 #include <tuple>
@@ -25,66 +26,53 @@
 /**---------------------------------------------------------------------------*
  * @filename typed_tests.hpp
  * @brief Provides centralized abstractions for use in Google Test
- * type-parameterized and value-parameterized tests.
+ * type-parameterized tests.
  *
  * These abstractions should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  *---------------------------------------------------------------------------**/
-
 namespace cudf {
 namespace test {
 namespace detail {
 
-template <typename Tuple, std::size_t... Indices>
-constexpr std::array<cudf::type_id, sizeof...(Indices)> to_array_impl(
+template <typename TYPES, std::size_t... Indices>
+constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
     std::index_sequence<Indices...>) {
-  return {{cudf::exp::type_to_id<std::tuple_element_t<Indices, Tuple>>()...}};
+  return {{cudf::exp::type_to_id<GetType<TYPES, Indices>>()...}};
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Converts a tuple of type `Ts...` into a `std::array` of the
- * corresponding `cudf::type_id`s for each `T` in `Ts...`
+ * @brief Converts a `Types` list of types into a `std::array` of the
+ * corresponding `cudf::type_id`s for each type in the list
  *
  * Example:
  * ```
- * auto array = tuple_to_data_type_array<std::tuple<int32_t, float>>();
+ * auto array = types_to_ids<Types<int32_t, float>>();
  * array == {INT32, FLOAT};
  * ```
  *
- * @tparam Tuple tuple of types `Ts...`
- * @return `std::array` of `type_id`s corresponding to each type in `Ts...`
+ * @tparam TYPES List of types to conver to `type_id`s
+ * @return `std::array` of `type_id`s corresponding to each type in `TYPES`
  *---------------------------------------------------------------------------**/
-template <typename Tuple>
+template <typename TYPES>
 constexpr auto types_to_ids() {
-  constexpr std::size_t N =
-      std::tuple_size<std::remove_reference_t<Tuple>>::value;
-  return to_array_impl<Tuple>(std::make_index_sequence<N>());
+  constexpr auto N = GetSize<TYPES>;
+  return types_to_ids_impl<TYPES>(std::make_index_sequence<N>());
 }
-
-template <typename... Ts>
-struct tuple_to_test_types_impl {};
-
-template <typename... Ts>
-struct tuple_to_test_types_impl<std::tuple<Ts...>> {
-  using types = ::testing::Types<Ts...>;
-};
+}  // namespace detail
 
 /**---------------------------------------------------------------------------*
- * @brief Converts a `std::tuple<Ts...>` into a Google Test
- * `testing::Types<Ts...>` for use in GTest typed tests.
+ * @brief Provides a list of all numeric types supported in libcudf for use in a
+ * GTest typed test.
  *
- * @tparam Tuple The tuple whose constituent types will be used in the GTest
- * typed tests
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all numeric types in libcudf
+ * TYPED_TEST_CAST(MyTypedFixture, cudf::test::NumericTypes);
+ * ```
  *---------------------------------------------------------------------------**/
-template <typename Tuple>
-using tuple_to_test_types = typename tuple_to_test_types_impl<Tuple>::types;
-
-using AllTypesTuple =
-    std::tuple<int8_t, int16_t, int32_t, int64_t, float, double>;
-
-using NumericTypesTuple =
-    std::tuple<int8_t, int16_t, int32_t, int64_t, float, double>;
-}  // namespace detail
+using NumericTypes =
+    cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -99,19 +87,15 @@ using NumericTypesTuple =
  * TYPED_TEST_CAST(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using AllTypes = detail::tuple_to_test_types<detail::AllTypesTuple>;
+using AllTypes = Concat<NumericTypes>;
 
 /**---------------------------------------------------------------------------*
- * @brief Provides a list of all numeric types supported in libcudf for use in a
- * GTest typed test.
+ * @brief `std::array` of of all `cudf::type_id`s
  *
- * Example:
- * ```
- * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::NumericTypes);
- * ```
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-using NumericTypes = detail::tuple_to_test_types<detail::NumericTypesTuple>;
+static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all numeric `cudf::type_id`s
@@ -119,8 +103,7 @@ using NumericTypes = detail::tuple_to_test_types<detail::NumericTypesTuple>;
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr auto numeric_data_types{
-    detail::types_to_ids<detail::NumericTypesTuple>()};
+static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all non-numeric `cudf::type_id`s
@@ -128,13 +111,12 @@ static constexpr auto numeric_data_types{
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::data_type, 6> non_numeric_data_types{
-    cudf::data_type{cudf::EMPTY},    cudf::data_type{cudf::BOOL8},
-    cudf::data_type{cudf::DATE32},   cudf::data_type{cudf::TIMESTAMP},
-    cudf::data_type{cudf::CATEGORY}, cudf::data_type{cudf::STRING}};
+static constexpr std::array<cudf::type_id, 6> non_numeric_type_ids{
+    cudf::EMPTY,     cudf::BOOL8,    cudf::DATE32,
+    cudf::TIMESTAMP, cudf::CATEGORY, cudf::STRING};
 
-static_assert(cudf::type_id::NUM_TYPE_IDS ==
-                  (non_numeric_data_types.size() + numeric_data_types.size()),
-              "Mismatch in number of types");
+//static_assert(cudf::type_id::NUM_TYPE_IDS == all_type_ids.size(),
+//              "Mismatch in number of types");
+
 }  // namespace test
 }  // namespace cudf

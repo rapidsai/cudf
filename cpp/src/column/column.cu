@@ -41,6 +41,19 @@ column::column(column const &other)
   }
 }
 
+column::column(column const &other, cudaStream_t stream,
+               rmm::mr::device_memory_resource *mr)
+    : _type{other._type},
+      _size{other._size},
+      _data{other._data, stream, mr},
+      _null_mask{other._null_mask, stream, mr},
+      _null_count{other._null_count} {
+  _children.reserve(other.num_children());
+  for (auto const &c : other._children) {
+    _children.emplace_back(std::make_unique<column>(*c, stream, mr));
+  }
+}
+
 // Move constructor
 column::column(column &&other)
     : _type{other._type},
@@ -84,7 +97,7 @@ mutable_column_view column::mutable_view() {
 
   // The elements of a column could be changed through a `mutable_column_view`,
   // therefore the existing `null_count` is no longer valid. Reset it to
-  // `UNKONWN_NULL_COUNT` forcing it to be recomputed on the next invocation of
+  // `UNKNOWN_NULL_COUNT` forcing it to be recomputed on the next invocation of
   // `null_count()`.
   set_null_count(UNKNOWN_NULL_COUNT);
 

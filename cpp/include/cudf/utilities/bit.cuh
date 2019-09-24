@@ -45,7 +45,7 @@ constexpr __host__ __device__ inline size_type intra_element_index(
 }
 
 /**---------------------------------------------------------------------------*
- * @brief Indicates if the specified bit is set to `1`
+ * @brief Indicates whether the specified bit is set to `1`
  *
  * @param bit_index Index of the bit to test
  * @return true The specified bit is `1`

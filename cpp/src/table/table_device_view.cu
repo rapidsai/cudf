@@ -39,22 +39,21 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     : _num_rows{source_view.num_rows()},
       _num_columns{source_view.num_columns()},
       _stream{stream} {
-  CUDF_EXPECTS(source_view.num_columns() > 0,
-               "Device table cannot have zero columns.");
+  if (source_view.num_columns() > 0) {
+    size_type total_descendants =
+        std::accumulate(source_view.begin(), source_view.end(), 0,
+                        [](size_type init, column_view col) {
+                          return init + count_descendants(col);
+                        });
+    CUDF_EXPECTS(0 == total_descendants,
+                 "Columns with descendants are not yet supported.");
 
-  size_type total_descendants =
-      std::accumulate(source_view.begin(), source_view.end(), 0,
-                      [](size_type init, column_view col) {
-                        return init + count_descendants(col);
-                      });
-  CUDF_EXPECTS(0 == total_descendants,
-               "Columns with descendants are not yet supported.");
-
-  auto views_size_bytes =
-      source_view.num_columns() * sizeof(source_view.column(0));
-  RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
-  CUDA_TRY(cudaMemcpyAsync(_columns, &source_view.column(0), views_size_bytes,
-                           cudaMemcpyDefault, stream));
+    auto views_size_bytes =
+        source_view.num_columns() * sizeof(*source_view.begin());
+    RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
+    CUDA_TRY(cudaMemcpyAsync(_columns, &(*source_view.begin()),
+                             views_size_bytes, cudaMemcpyDefault, stream));
+  }
 }
 
 // Explicit instantiation for a device table of immutable views

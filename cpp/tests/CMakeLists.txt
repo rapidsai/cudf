@@ -12,7 +12,8 @@ endif()
 add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -98,7 +99,7 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 # - column tests ----------------------------------------------------------------------------------
 
 set(COLUMN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cpp")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -307,11 +308,11 @@ ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
 # - types tests -----------------------------------------------------------------------------------
 
-set(TYPES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
+set(LEGACY_TYPES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/legacy/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/legacy/dispatcher_test.cu")
 
-ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+ConfigureTest(LEGACY_TYPES_TEST "${LEGACY_TYPES_TEST_SRC}")
 
 ###################################################################################################
 # - nvcategory tests -------------------------------------------------------------------------------
@@ -356,7 +357,8 @@ set(NVSTRING_SCATTER_TEST_SRC
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
@@ -437,7 +439,8 @@ ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
 # - filling test --------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 
@@ -465,7 +468,13 @@ set(FACTORIES_TEST_SRC
 
 #ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
 
+###################################################################################################
+# - dispatcher test -----------------------------------------------------------------------------------
 
+set(DISPATCHER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/type_dispatcher_test.cu")
+
+ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

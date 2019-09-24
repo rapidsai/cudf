@@ -22,15 +22,6 @@
 
 namespace cudf {
 
-/**---------------------------------------------------------------------------*
- * @brief Controls the allocation/initialization of a null mask.
- *---------------------------------------------------------------------------**/
-enum mask_state {
-  UNALLOCATED,    ///< Null mask not allocated, (all elements are valid)
-  UNINITIALIZED,  ///< Null mask allocated, but not initialized
-  ALL_VALID,      ///< Null mask allocated, initialized to all elements valid
-  ALL_NULL        ///< Null mask allocated, initialized to all elements NULL
-};
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the null count for a null mask of the specified `state`
@@ -43,7 +34,7 @@ enum mask_state {
 size_type state_null_count(mask_state state, size_type size);
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the required bytes neccessary to represent the specified
+ * @brief Computes the required bytes necessary to represent the specified
  * number of bits with a given padding boundary.
  *
  * @note The Arrow specification for the null bitmask requires a 64B padding
