@@ -867,3 +867,10 @@ def test_dataframe_setitem_iloc_multiindex(key, value, pdf_gdf_multi):
     gdf.iloc[key] = value
 
     assert_eq(pdf, gdf)
+
+
+def test_boolean_indexing_single_row(pdf_gdf):
+    pdf, gdf = pdf_gdf
+    assert_eq(
+        pdf.loc[[True, False, False], :], gdf.loc[[True, False, False], :]
+    )

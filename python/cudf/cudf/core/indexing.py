@@ -120,12 +120,18 @@ class _DataFrameIndexer(object):
         operation should be "downcasted" from a DataFrame to a
         Series
         """
+        from cudf.core.column import as_column
+
         if isinstance(df, cudf.Series):
             return False
         nrows, ncols = df.shape
         if nrows == 1:
             if type(arg[0]) is slice:
                 if not is_scalar(arg[1]):
+                    return False
+            else:
+                # row selection using boolean indexing - never downcasts
+                if pd.api.types.is_bool_dtype(as_column(arg[0]).dtype):
                     return False
             dtypes = df.dtypes.values.tolist()
             all_numeric = all(
