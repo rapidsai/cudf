@@ -354,6 +354,10 @@ class Index(object):
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
 
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        return as_index(self._values.repeat(repeats))
+
 
 class RangeIndex(Index):
     """An iterable integer index defined by a starting value and ending value.

@@ -24,6 +24,7 @@
 #include <vector>
 
 #include <cudf/legacy/table.hpp>
+#include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 #include "type_conversion.cuh"
 
@@ -33,18 +34,18 @@ namespace csv {
 
 /**---------------------------------------------------------------------------*
  * @brief Class used to parse Json input and convert it into gdf columns
- *
  *---------------------------------------------------------------------------**/
 class reader::Impl {
 private:
   const reader_options args_;
+
   device_buffer<char> data;         ///< device: the raw unprocessed CSV data - loaded as a large char * array.
-  device_buffer<uint64_t> recStart; ///< device: Starting position of the records.
+  rmm::device_vector<uint64_t> row_offsets;
+
+  gdf_size_type num_records = 0;    ///< Number of rows with actual data
 
  // dataframe dimensions
-  long num_bytes = 0;      ///< The number of bytes in the data.
   long num_bits = 0;       ///< The number of 64-bit bitmaps (different than valid).
-  gdf_size_type num_records =  0; ///< Number of records loaded into device memory, and then number of records to read.
   int num_active_cols = 0; ///< Number of columns that will be return to user.
   int num_actual_cols = 0; ///< Number of columns in the file --- based on the number of columns in header.
 
@@ -108,20 +109,37 @@ public:
    *---------------------------------------------------------------------------**/
   table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows);
 
-  auto getArgs() const { return args_; }
-
  private:
+  /**
+   * @brief Finds row positions within the specified input data
+   *
+   * This function scans the input data to record the row offsets (relative to
+   * the start of the input data) and the symbol or character that begins that
+   * row. A row is actually the data/offset between two termination symbols.
+   *
+   * @param[in] h_data Uncompressed input data in host memory
+   * @param[in] h_size Number of bytes of uncompressed input data
+   **/
+  void gather_row_offsets(const char *h_data, size_t h_size);
+
+  /**
+   * @brief Filters and discards row positions that are not used
+   *
+   * @param[in] h_data Uncompressed input data in host memory
+   * @param[in] h_size Number of bytes of uncompressed input data
+   *
+   * @return First and last row positions
+   **/
+  std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size);
+
   void setColumnNamesFromCsv();
-  void countRecordsAndQuotes(const char *h_data, size_t h_size);
-  void setRecordStarts(const char *h_data, size_t h_size);
-  void uploadDataToDevice(const char *h_uncomp_data, size_t h_uncomp_size);
 
   /**
    * @brief Returns a detected or parsed list of column dtypes
    *
    * @return std::vector<gdf_dtype> List of column dtypes
    **/
-  std::vector<gdf_dtype> gather_column_dtypes();
+  std::pair<std::vector<gdf_dtype>, std::vector<gdf_dtype_extra_info>> gather_column_dtypes();
 
   /**
    * @brief Converts the row-column data and outputs to gdf_columns
