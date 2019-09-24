@@ -17,12 +17,7 @@ import cudf._lib as libcudf
 from cudf._lib.stream_compaction import nunique as cpp_unique_count
 from cudf.core.buffer import Buffer
 from cudf.utils import cudautils, ioutils, utils
-from cudf.utils.dtypes import (
-    is_categorical_dtype,
-    is_scalar,
-    min_scalar_type,
-    np_to_pa_dtype,
-)
+from cudf.utils.dtypes import is_categorical_dtype, is_scalar, np_to_pa_dtype
 from cudf.utils.utils import buffers_from_pyarrow
 
 
@@ -803,6 +798,10 @@ class Column(object):
             raise NotImplementedError(msg)
         return cpp_unique_count(self, dropna)
 
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        return libcudf.filling.repeat([self], repeats)[0]
+
 
 class TypedColumnBase(Column):
     """Base class for all typed column
@@ -1013,7 +1012,6 @@ def column_empty(row_count, dtype, masked, categories=None):
         categories = [] if dtype.categories is None else dtype.categories
 
     if categories is not None:
-        dtype = min_scalar_type(len(categories))
         mem = rmm.device_array((row_count,), dtype=dtype)
         data = Buffer(mem)
         dtype = "category"
@@ -1192,6 +1190,21 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             if nan_as_null:
                 mask = libcudf.unaryops.nans_to_nulls(data)
                 data = data.set_mask(mask)
+
+        elif data.dtype.kind == "M":
+            null = cudf.core.column.column_empty_like(
+                data, masked=True, newsize=1
+            )
+            col = libcudf.replace.replace(
+                as_column(Buffer(arbitrary)),
+                as_column(
+                    Buffer(np.array([np.datetime64("NaT")], dtype=data.dtype))
+                ),
+                null,
+            )
+            data = datetime.DatetimeColumn(
+                data=Buffer(arbitrary), mask=col.mask, dtype=data.dtype
+            )
 
     elif hasattr(arbitrary, "__cuda_array_interface__"):
         desc = arbitrary.__cuda_array_interface__

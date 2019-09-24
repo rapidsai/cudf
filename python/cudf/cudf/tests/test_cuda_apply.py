@@ -83,8 +83,7 @@ def test_df_apply_custom_chunks(nelem):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i, (x, y, z) in enumerate(zip(in1, in2, in3)):
             out1[i] = extra2 * x - extra1 * y + z
-            # cuda.blockDim.x is 1
-            out2[i] = i * cuda.blockDim.x
+            out2[i] = i
 
     df = DataFrame()
     df["in1"] = in1 = np.arange(nelem)
@@ -118,8 +117,9 @@ def test_df_apply_custom_chunks(nelem):
 
 
 @pytest.mark.parametrize("nelem", [1, 15, 30, 64, 128, 129])
-@pytest.mark.parametrize("tpb", [1, 8, 16, 64])
-def test_df_apply_custom_chunks_tpb(nelem, tpb):
+@pytest.mark.parametrize("blkct", [None, 1, 8])
+@pytest.mark.parametrize("tpb", [1, 8, 64])
+def test_df_apply_custom_chunks_blkct_tpb(nelem, blkct, tpb):
     def kernel(in1, in2, in3, out1, out2, extra1, extra2):
         for i in range(cuda.threadIdx.x, in1.size, cuda.blockDim.x):
             x = in1[i]
@@ -151,6 +151,7 @@ def test_df_apply_custom_chunks_tpb(nelem, tpb):
         outcols=dict(out1=np.float64, out2=np.int32),
         kwargs=dict(extra1=extra1, extra2=extra2),
         chunks=chunks,
+        blkct=blkct,
         tpb=tpb,
     )
 
