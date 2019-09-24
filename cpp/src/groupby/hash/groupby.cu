@@ -57,8 +57,8 @@ auto build_aggregation_map(table const& input_keys, table const& input_values,
                "Groupby input size too large.");
 
   // The exact output size is unknown a priori, therefore, use the input size as
-  // an upper bound
-  gdf_size_type const output_size_estimate{input_keys.num_rows()};
+  // an upper bound.
+  gdf_size_type const output_size_estimate = input_keys.num_rows();
 
   cudf::table sparse_output_values{
       output_size_estimate,
@@ -147,7 +147,6 @@ auto extract_results(table const& input_keys, table const& input_values,
   // Update size and null count of output columns
   auto update_column = [result_size](gdf_column* col) {
     CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
-    col->size = result_size;
     set_null_count(*col);
     return col;
   };
@@ -259,7 +258,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
 
   // If any of the original requests were compound, compute them from the
   // results of simple aggregation requests
-  cudf::table final_output_values = compute_original_aggregations(
+  cudf::table final_output_values = compute_original_requests(
       original_requests, simple_requests, simple_output_values, stream);
 
   return std::make_pair(output_keys, final_output_values);

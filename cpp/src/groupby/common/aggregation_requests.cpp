@@ -105,7 +105,7 @@ gdf_column* compute_average(gdf_column sum, gdf_column count, cudaStream_t strea
   return avg;
 }
 
-table compute_original_aggregations(
+table compute_original_requests(
     std::vector<AggRequestType> const& original_requests,
     std::vector<SimpleAggRequestCounter> const& simple_requests,
     table simple_outputs, cudaStream_t stream) {

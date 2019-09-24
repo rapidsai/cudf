@@ -50,10 +50,12 @@ using index_vector = rmm::device_vector<gdf_size_type>;
 namespace {
 
 /**---------------------------------------------------------------------------*
- * @brief Computes the remaining original aggregation requests which were skipped 
- * in a previous process, in  the `compound_to_simple` function. Then combine these 
- * results with  the set of output aggregation columns corresponding to not ordered
- * aggregation requests.
+ * @brief Computes the ordered aggregation requests which were skipped 
+ * in a previous process (`compound_to_simple`). These ordered aggregations
+ * were skipped because they can't be compound to simple aggregation.
+ * 
+ * Then combine these results with  the set of output aggregation columns 
+ * corresponding to not ordered aggregation requests.
  *
  * @param groupby[in] The object for computing sort-based groupby
  * @param original_requests[in] The original set of potentially ordered
@@ -137,10 +139,13 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
                                detail::helper &groupby,
                                const std::vector<gdf_column *> &simple_values_columns,
                                const std::vector<operators> &simple_operators,
-                               cudaStream_t &stream) {
-  const gdf_column& key_sorted_order = groupby.key_sort_order();
+                               cudaStream_t &stream) { 
+
+  const gdf_column& key_sorted_order = groupby.key_sort_order();   
+
+  //group_labels 
   const index_vector& group_labels = groupby.group_labels();
-  gdf_size_type num_groups = (gdf_size_type)groupby.num_groups();
+  const gdf_size_type num_groups = groupby.num_groups();
   
   cudf::table simple_values_table{simple_values_columns};
 
@@ -185,6 +190,7 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
         std::vector<gdf_column*>{output_values.begin(), output_values.end()}
         );
   }
+  gdf_size_type num_groups = groupby.num_groups();
   // An "aggregation request" is the combination of a `gdf_column*` to a column
   // of values, and an aggregation operation enum indicating the aggregation
   // requested to be performed on the column
@@ -225,14 +231,14 @@ auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& inpu
                               stream);
     // Step 2: If any of the original requests were compound, compute them from the
     // results of simple aggregation requests
-    current_output_values = compute_original_aggregations(original_requests, simple_requests, simple_output_values, stream);
+    current_output_values = compute_original_requests(original_requests, simple_requests, simple_output_values, stream);
   }
   // If there are "ordered" aggregation requests like MEDIAN, QUANTILE, compute these aggregations 
   std::vector<gdf_column*> final_output_values = compute_ordered_aggregations(groupby, original_requests, input_ops_args, current_output_values, stream);
 
   // Update size and null count of output columns
   std::transform(final_output_values.begin(), final_output_values.end(), final_output_values.begin(),
-                 [](gdf_column *col) {
+                 [num_groups](gdf_column *col) {
                    CUDF_EXPECTS(col != nullptr, "Attempt to update Null column.");
                    set_null_count(*col);
                    return col;
