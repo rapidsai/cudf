@@ -28,11 +28,10 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "../common/aggregation_requests.hpp"
-#include "groupby.hpp"
 #include "groupby_kernels.cuh"
-#include "../common/type_info.hpp"
-#include "../common/utils.hpp"
+#include "groupby/common/aggregation_requests.hpp"
+#include "groupby/common/type_info.hpp"
+#include "groupby/common/utils.hpp"
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/fill.h>
 #include <type_traits>
@@ -303,7 +302,7 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
                                             cudf::table const& values,
                                             std::vector<operators> const& ops,
                                             Options options,
-                                            cudaStream_t stream) {
+                                            cudaStream_t stream = 0) {
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
 

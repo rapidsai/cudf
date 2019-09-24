@@ -33,9 +33,9 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
-#include "../common/aggregation_requests.hpp"
-#include "../common/utils.hpp"
-#include "groupby.hpp"
+#include "groupby/common/aggregation_requests.hpp"
+#include "groupby/common/type_info.hpp"
+#include "groupby/common/utils.hpp"
 #include "groupby_kernels.cuh"
 #include "sort_helper.hpp"
 
@@ -312,7 +312,7 @@ std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys
                                             cudf::table const& values,
                                             std::vector<operation> const& ops,
                                             Options options,
-                                            cudaStream_t stream) {
+                                            cudaStream_t stream = 0) {
   CUDF_EXPECTS(keys.num_rows() == values.num_rows(),
                "Size mismatch between number of rows in keys and values.");
   std::vector<operators> optype_list(ops.size());
