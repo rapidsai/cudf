@@ -45,16 +45,17 @@ TYPED_TEST_CASE(TypedTraitsTest, cudf::test::AllTypes);
 
 TEST_F(TraitsTest, NumericDataTypesAreNumeric) {
   using namespace cudf::test;
-  EXPECT_TRUE(std::all_of(
-      numeric_data_types.begin(), numeric_data_types.end(),
-      [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
+  EXPECT_TRUE(std::all_of(numeric_type_ids.begin(), numeric_type_ids.end(),
+                          [](cudf::type_id type) {
+                            return cudf::is_numeric(cudf::data_type{type});
+                          }));
 }
 
 /*
 These types are not yet supported by the type dispatcher
 TEST_F(TraitsTest, NonNumericDataTypesAreNotNumeric) {
   EXPECT_TRUE(std::none_of(
-      non_numeric_data_types.begin(), non_numeric_data_types.end(),
+      non_numeric_type_ids.begin(), non_numeric_type_ids.end(),
       [](cudf::data_type dtype) { return cudf::is_numeric(dtype); }));
 }
 */

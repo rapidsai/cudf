@@ -131,17 +131,17 @@ TYPED_TEST(NumericFactoryTest, AllNullMask) {
 
 class NonNumericFactoryTest
     : public ColumnFactoryTest,
-      public testing::WithParamInterface<cudf::data_type> {};
+      public testing::WithParamInterface<cudf::type_id> {};
 
 // All non-numeric types should throw
 TEST_P(NonNumericFactoryTest, NonNumericThrow) {
   auto construct = [this]() {
-    auto column = cudf::make_numeric_column(GetParam(), this->size(),
-                                            cudf::mask_state::UNALLOCATED,
-                                            this->stream(), this->mr());
+    auto column = cudf::make_numeric_column(
+        cudf::data_type{GetParam()}, this->size(),
+        cudf::mask_state::UNALLOCATED, this->stream(), this->mr());
   };
   EXPECT_THROW(construct(), cudf::logic_error);
 }
 
 INSTANTIATE_TEST_CASE_P(NonNumeric, NonNumericFactoryTest,
-                        testing::ValuesIn(cudf::test::non_numeric_data_types));
+                        testing::ValuesIn(cudf::test::non_numeric_type_ids));
