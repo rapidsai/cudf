@@ -53,6 +53,12 @@ TEST(TestModify, Slice)
         NVStrings::destroy(got);
     }
     {
+        NVStrings* got = strs->slice(0,0);
+        const char* expected[] = { "", "", nullptr, "", "", "" };
+        EXPECT_TRUE( verify_strings(got,expected) );
+        NVStrings::destroy(got);
+    }
+    {
         NVStrings* got = strs->get(0);
         const char* expected[] = { "H", "t", nullptr, "A", "t", "" };
         EXPECT_TRUE( verify_strings(got,expected) );
@@ -65,11 +71,21 @@ TEST(TestModify, Slice)
 TEST(TestModify, SliceFrom)
 {
     NVStrings* strs = NVStrings::create_from_array(hstrs.data(), hstrs.size());
-    thrust::device_vector<int> from(strs->size(),4);
-    NVStrings* got = strs->slice_from(from.data().get());
-    const char* expected[] = { "o", "é", nullptr, "THE", " strings", "" };
-    EXPECT_TRUE( verify_strings(got,expected) );
-    NVStrings::destroy(got);
+    {
+        thrust::device_vector<int> from(strs->size(),4);
+        NVStrings* got = strs->slice_from(from.data().get());
+        const char* expected[] = { "o", "é", nullptr, "THE", " strings", "" };
+        EXPECT_TRUE( verify_strings(got,expected) );
+        NVStrings::destroy(got);
+    }
+    {
+        thrust::device_vector<int> starts(strs->size(),0);
+        thrust::device_vector<int> ends(strs->size(),0);
+        NVStrings* got = strs->slice_from(starts.data().get(),ends.data().get());
+        const char* expected[] = { "", "", nullptr, "", "", "" };
+        EXPECT_TRUE( verify_strings(got,expected) );
+        NVStrings::destroy(got);
+    }
     NVStrings::destroy(strs);
 }
 

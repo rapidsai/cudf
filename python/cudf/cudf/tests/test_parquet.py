@@ -2,7 +2,6 @@
 
 import os
 import random
-from distutils.version import LooseVersion
 from io import BytesIO
 from string import ascii_letters
 
@@ -197,18 +196,40 @@ def test_parquet_reader_index_col(tmpdir, index_col, columns):
 
     fname = tmpdir.join("test_pq_reader_index_col.parquet")
 
-    # PANDAS' PyArrow backend always writes the index unless disabled via a
-    # recently-added parameter; unfortunately cannot use kwargs to disable
-    if LooseVersion(pd.__version__) < LooseVersion("0.24"):
-        df.to_parquet(fname)
-    else:
-        df.to_parquet(fname, index=(False if index_col is None else True))
+    # PANDAS' PyArrow backend always writes the index unless disabled
+    df.to_parquet(fname, index=(False if index_col is None else True))
     assert os.path.exists(fname)
 
     pdf = pd.read_parquet(fname, columns=columns)
     gdf = cudf.read_parquet(fname, engine="cudf", columns=columns)
 
     assert_eq(pdf, gdf, check_categorical=False)
+
+
+@pytest.mark.parametrize("pandas_compat", [True, False])
+@pytest.mark.parametrize("columns", [["a"], ["d"], ["a", "b"], None])
+def test_parquet_reader_pandas_metadata(tmpdir, columns, pandas_compat):
+    df = pd.DataFrame({"a": range(6, 9), "b": range(3, 6), "c": range(6, 9)})
+    df.set_index("b", inplace=True)
+
+    fname = tmpdir.join("test_pq_reader_pandas_metadata.parquet")
+    df.to_parquet(fname)
+    assert os.path.exists(fname)
+
+    # PANDAS `read_parquet()` and PyArrow `read_pandas()` always includes index
+    # Instead, directly use PyArrow to optionally omit the index
+    expect = pa.parquet.read_table(
+        fname, columns=columns, use_pandas_metadata=pandas_compat
+    ).to_pandas()
+    got = cudf.read_parquet(
+        fname, columns=columns, use_pandas_metadata=pandas_compat
+    )
+
+    if pandas_compat or columns is None or "b" in columns:
+        assert got.index.name == "b"
+    else:
+        assert got.index.name is None
+    assert_eq(expect, got, check_categorical=False)
 
 
 def test_parquet_read_metadata(tmpdir, pdf):
@@ -293,6 +314,30 @@ def test_parquet_reader_invalids(tmpdir):
     got = cudf.read_parquet(fname)
 
     assert_eq(expect, got)
+
+
+def test_parquet_chunked_skiprows(tmpdir):
+    processed = 0
+    batch = 10000
+    n = 100000
+    out_df = cudf.DataFrame(
+        {
+            "y": np.arange(n),
+            "z": np.random.choice(range(1000000, 2000000), n, replace=False),
+            "s": np.random.choice(range(20), n, replace=True),
+            "a": np.round(np.random.uniform(1, 5000, n), 2),
+        }
+    )
+
+    fname = tmpdir.join("skiprows.parquet")
+    out_df.to_pandas().to_parquet(fname)
+
+    for i in range(10):
+        chunk = cudf.read_parquet(fname, skip_rows=processed, num_rows=batch)
+        expect = out_df[processed : processed + batch].reset_index(drop=True)
+        assert_eq(chunk.reset_index(drop=True), expect)
+        processed += batch
+        del chunk
 
 
 def test_parquet_reader_filenotfound(tmpdir):
