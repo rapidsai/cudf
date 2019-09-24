@@ -64,6 +64,22 @@ using size_type = int32_t;
 using bitmask_type = uint32_t;
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates the order in which elements should be sorted.
+ *---------------------------------------------------------------------------**/
+enum class order : bool {
+  ASCENDING,  ///< Elements ordered from small to large
+  DESCENDING  ///< Elements ordered from large to small
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates how null values compare against all other values.
+ *---------------------------------------------------------------------------**/
+enum class null_order : bool {
+  AFTER,  ///< NULL values ordered *after* all other values
+  BEFORE  ///< NULL values ordered *before* all other values
+};
+
+/**---------------------------------------------------------------------------*
  * @brief Controls the allocation/initialization of a null mask.
  *---------------------------------------------------------------------------**/
 enum mask_state {
@@ -75,7 +91,7 @@ enum mask_state {
 
 /**---------------------------------------------------------------------------*
  * @brief Identifies a column's logical element type
-*---------------------------------------------------------------------------**/
+ *---------------------------------------------------------------------------**/
 enum type_id {
   EMPTY = 0,  ///< Always null with no underlying data
   INT8,       ///< 1 byte signed integer
