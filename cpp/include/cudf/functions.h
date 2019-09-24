@@ -362,6 +362,7 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
  */
 gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
 
+
 /**
  * @brief  Extracts hour from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
  *
