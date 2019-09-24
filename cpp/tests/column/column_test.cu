@@ -113,3 +113,17 @@ TYPED_TEST(TypedColumnTest, MoveDataAndMask) {
   EXPECT_EQ(v.head(), original_data);
   EXPECT_EQ(v.null_mask(), original_mask);
 }
+
+TYPED_TEST(TypedColumnTest, CopyConstructor) {
+  cudf::column original{this->type(), this->num_elements(), this->data,
+                        this->mask};
+  cudf::column copy{original};
+  verify_column_views(copy);
+  cudf::test::expect_columns_equal(original, copy);
+
+  // Verify deep copy
+  cudf::column_view original_view = original;
+  cudf::column_view copy_view = copy;
+  EXPECT_NE(original_view.head(), copy_view.head());
+  EXPECT_EQ(original_view.null_mask(), copy_view.null_mask());
+}
