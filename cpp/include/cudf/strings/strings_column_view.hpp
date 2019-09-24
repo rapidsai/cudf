@@ -18,6 +18,8 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/column/column.hpp>
 
+#include <rmm/thrust_rmm_allocator.h>
+
 namespace cudf {
 
 /**---------------------------------------------------------------------------*
@@ -84,6 +86,20 @@ void print( strings_column_view strings,
             size_type start=0, size_type end=-1,
             size_type max_width=-1, const char* delimiter = "\n" );
 
+
+/**---------------------------------------------------------------------------*
+ * @brief Create output pair per Arrow format of strings.
+ * The return pair is a the array of chars and an array of offsets.
+ *
+ * @param strings Strings instance for this operation.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return Contiguous array of chars and an array of offsets.
+ *---------------------------------------------------------------------------**/
+std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
+    create_offsets( strings_column_view strings,
+                    cudaStream_t stream=0,
+                    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 // array.cu
 /**---------------------------------------------------------------------------*

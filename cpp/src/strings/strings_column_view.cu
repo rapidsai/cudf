@@ -149,5 +149,29 @@ void print( strings_column_view strings,
     }
 }
 
+std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
+    create_offsets( strings_column_view strings,
+                    cudaStream_t stream,
+                    rmm::mr::device_memory_resource* mr )
+{
+    std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>> results;
+
+    size_type count = strings.size();
+    auto d_offsets = strings.offsets().data<size_type>();
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
+    results.second = rmm::device_vector<size_type>(count+1);
+    results.second[0] = 0;
+    cudaMemcpyAsync( results.second.data().get()+1, d_offsets, count*sizeof(size_type),
+                     cudaMemcpyDeviceToHost, stream);
+
+    auto d_chars = strings.chars().data<char>();
+    results.first = rmm::device_vector<char>(bytes);
+    cudaMemcpyAsync( results.first.data().get(), d_chars, bytes,
+                     cudaMemcpyDeviceToHost, stream);
+
+    return results;
+}
+
+
 } // namespace strings
 } // namespace cudf

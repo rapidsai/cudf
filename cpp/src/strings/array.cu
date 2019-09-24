@@ -27,7 +27,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
@@ -180,10 +180,10 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
     auto execpol = rmm::exec_policy(stream);
 
     // create strings arrays
-    rmm::device_vector<cudf::string_view> strings_array = 
+    rmm::device_vector<cudf::string_view> strings_array =
         detail::create_string_array_from_column(strings,stream);
     cudf::string_view* d_strings = strings_array.data().get();
-    rmm::device_vector<cudf::string_view> values_array = 
+    rmm::device_vector<cudf::string_view> values_array =
         detail::create_string_array_from_column(values,stream);
     cudf::string_view* d_values = values_array.data().get();
     // do the scatter
