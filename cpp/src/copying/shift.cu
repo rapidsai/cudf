@@ -65,11 +65,18 @@ table shift(
 )
 {
   table out_table = allocate_like(in_table, ALWAYS);
+  auto valid_size = gdf_valid_allocation_size(out_table.num_rows());
 
   for (gdf_index_type i = 0; i < out_table.num_columns(); i++)
   {
       auto out_column = const_cast<gdf_column*>(out_table.get_column(i));
       auto in_column = const_cast<gdf_column*>(in_table.get_column(i));
+
+      // null_count must corrospond to the bit mask, so initialize them.
+      out_column->null_count = 0;
+      if (is_nullable(*out_column)) {
+        CUDA_TRY(cudaMemset(out_column->valid, 0xff, valid_size));
+      }
 
       detail::shift(out_column, *in_column, periods, fill_value);
   }
