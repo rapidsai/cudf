@@ -425,6 +425,18 @@ public:
      * @return The number of trues.
      */
     unsigned int is_empty( bool* results, bool devmem=true );
+    /**
+     * @brief Fills in matrix with code point values (integers) for each string.
+     * A code point is the integer value representation of a character.
+     * For example, in UTF-8 the code point value for the character 'A' is 65.
+     *
+     * @param[out] results Device array filled in by this method.
+     *                     This must point to device memory able to hold size() integer
+     *                     arrays where each sub-array has the length of the number of
+     *                     characters for that string.
+     * @return The total number of values written to results.
+     */
+    unsigned int code_points( unsigned int* results );
 
     // combine.cu
     /**
