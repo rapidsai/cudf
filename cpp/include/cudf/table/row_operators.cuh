@@ -120,7 +120,7 @@ class row_equality_comparator {
  *---------------------------------------------------------------------------**/
 enum class weak_ordering {
   LESS,        ///< Indicates `a` is less than (ordered before) `b`
-  EQUIVALENT,  ///< Indicates `a` is neither less nor greater than `b`
+  EQUIVALENT,  ///< Indicates `a` is ordered neither before nor after `b`
   GREATER      ///< Indicates `a` is greater than (ordered after) `b`
 };
 
