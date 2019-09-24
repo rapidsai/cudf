@@ -91,5 +91,5 @@ BENCHMARK_DEFINE_F(benchmark, name)(::benchmark::State& state) {        \
 BENCHMARK_REGISTER_F(benchmark, name)->Args({1<<10, 8})->Args({10<<10, 8})->Args({100<<10, 8})->Args({1<<20, 8})->Args({10<<20, 8})->Args({100<<20, 8})->UseManualTime()->Unit(benchmark::kMicrosecond);
 
 OBM_BENCHMARK_DEFINE(double_hasna_0_null_0,double,false,false); //all num
-OBM_BENCHMARK_DEFINE(double_hasna_1_null_1,double, true, true); //null
-OBM_BENCHMARK_DEFINE(double_hasna_1_null_0,double, true,false); //NaN
+OBM_BENCHMARK_DEFINE(double_hasna_1_null_1,double, true, true); //50% num, 50% nulls
+OBM_BENCHMARK_DEFINE(double_hasna_1_null_0,double, true,false); //50% num, 50% NaN, no nulls
