@@ -28,6 +28,7 @@
 namespace cudf {
 namespace test {
 
+// Verify elementwise equality
 void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
   EXPECT_EQ(lhs.type(), rhs.type());
   EXPECT_EQ(lhs.size(), rhs.size());
@@ -46,6 +47,19 @@ void expect_columns_equal(cudf::column_view lhs, cudf::column_view rhs) {
                     cudf::exp::row_equality_comparator<true>{*d_lhs, *d_rhs}));
 
   CUDA_TRY(cudaDeviceSynchronize());
+}
+
+// Bitwise equality
+void expect_equal_buffers(void const* lhs, void const* rhs,
+                          std::size_t size_bytes) {
+  if (size_bytes > 0) {
+    EXPECT_NE(nullptr, lhs);
+    EXPECT_NE(nullptr, rhs);
+  }
+  auto typed_lhs = static_cast<char const*>(lhs);
+  auto typed_rhs = static_cast<char const*>(rhs);
+  EXPECT_TRUE(thrust::equal(thrust::device, typed_lhs, typed_lhs + size_bytes,
+                            typed_rhs));
 }
 
 }  // namespace test
