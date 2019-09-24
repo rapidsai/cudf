@@ -54,8 +54,8 @@ struct page_state_s {
     int32_t valid_map_offset;       // offset in valid_map, in bits
     uint32_t out_valid;
     uint32_t out_valid_mask;
-    int32_t first_row;
-    int32_t num_rows;
+    int32_t first_row;              // First row in page to output
+    int32_t num_rows;               // Rows in page to decode (including rows to be skipped)
     int32_t dtype_len;              // Output data type
     int32_t dtype_len_in;           // Can be larger than dtype_len if truncating 32-bit into 8-bit
     int32_t dict_bits;              // # of bits to store dictionary indices
@@ -1091,7 +1091,6 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             s->data_out = reinterpret_cast<uint8_t *>(s->col.column_data_base);
             s->valid_map = s->col.valid_map_base;
             s->valid_map_offset = 0;
-            s->first_row = 0;
             if (page_start_row >= min_row)
             {
                 if (s->data_out)
@@ -1103,13 +1102,13 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
                     s->valid_map += (page_start_row - min_row) >> 5;
                     s->valid_map_offset = (int32_t)((page_start_row - min_row) & 0x1f);
                 }
-                s->num_rows = s->page.num_rows;
+                s->first_row = 0;
             }
             else // First row starts after the beginning of the page
             {
                 s->first_row = (int32_t)min(min_row - page_start_row, (size_t)s->page.num_rows);
-                s->num_rows = s->page.num_rows - s->first_row;
             }
+            s->num_rows = s->page.num_rows;
             s->out_valid = 0;
             s->out_valid_mask = (~0) << s->valid_map_offset;
             if (page_start_row + s->num_rows > min_row + num_rows)
@@ -1177,7 +1176,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
         s->nz_count = 0;
         s->dict_pos = 0;
         s->out_pos = 0;
-        s->num_values = min(s->page.num_values, s->first_row + s->num_rows);
+        s->num_values = min(s->page.num_values, s->num_rows);
         __threadfence_block();
     }
     __syncthreads();
@@ -1238,7 +1237,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
             int dtype = s->col.data_type & 7;
             int out_pos = s->out_pos + t - out_thread0;
             int row_idx = s->nz_idx[out_pos & (NZ_BFRSZ - 1)];
-            if (out_pos < target_pos && row_idx >= 0 && row_idx < s->num_rows)
+            if (out_pos < target_pos && row_idx >= 0 && s->first_row + row_idx < s->num_rows)
             {
                 uint32_t dtype_len = s->dtype_len;
                 uint8_t *dst = s->data_out + (size_t)row_idx * dtype_len;
@@ -1271,7 +1270,7 @@ gpuDecodePageData(PageInfo *pages, ColumnChunkDesc *chunks, size_t min_row, size
     if (!t)
     {
         // Update the number of rows (after cropping to [min_row, min_row+num_rows-1]), and number of valid values
-        pages[page_idx].num_rows = s->num_rows;
+        pages[page_idx].num_rows = s->num_rows - s->first_row;
         pages[page_idx].valid_count = (s->error) ? -s->error : s->page.valid_count;
     }
 }
