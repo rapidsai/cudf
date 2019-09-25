@@ -1781,7 +1781,7 @@ class DataFrame(object):
         if nrow < 1:
             raise ValueError("require at least 1 row")
         if any(
-            (np.issubdtype(c, np.dtype("object")) or is_categorical_dtype(c))
+            (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
             for c in cols
         ):
             raise TypeError("Data must be homogenous numeric")
