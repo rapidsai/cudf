@@ -36,13 +36,16 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    rmm::device_buffer null_mask;
     cudf::size_type null_count = d_column.null_count();
+    if( d_column.nullable() )
+        null_mask = rmm::device_buffer( d_column.null_mask(),
+                                        gdf_valid_allocation_size(count),
+                                        stream, mr);
     // create output column
     auto results = std::make_unique<cudf::column>( data_type{INT32}, count,
         rmm::device_buffer(count * sizeof(int32_t), stream, mr),
-        rmm::device_buffer(d_column.null_mask(), gdf_valid_allocation_size(count),
-                           stream, mr),
-        d_column.null_count());
+        null_mask, null_count);
     auto results_view = results->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
     // set lengths
@@ -123,10 +126,10 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
     // the size is the last element from an inclusive-scan
     size_type size = offsets.back();
     // create output column
-    auto result = make_numeric_column( data_type{INT32}, size,
-                                       mask_state::UNALLOCATED,
-                                       stream, mr );
-    auto results_view = result->mutable_view();
+    auto results = make_numeric_column( data_type{INT32}, size,
+                                        mask_state::UNALLOCATED,
+                                        stream, mr );
+    auto results_view = results->mutable_view();
     auto d_results = results_view.data<int32_t>();
     // now set the ranges from each strings' character values
     thrust::for_each_n(execpol->on(stream),
@@ -141,7 +144,8 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
             //    *result++ = (unsigned int)*itr;
         });
     //
-    return result;
+    results->set_null_count(0); // no nulls here
+    return results;
 }
 
 } // namespace strings
