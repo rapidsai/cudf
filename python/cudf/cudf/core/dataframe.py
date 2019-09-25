@@ -1784,7 +1784,7 @@ class DataFrame(object):
             (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
             for c in cols
         ):
-            raise TypeError("Data must be homogenous numeric")
+            raise TypeError("non-numeric data not yet supported")
         dtype = np.find_common_type(cols, [])
         for k, c in self._cols.items():
             if c.null_count > 0:
