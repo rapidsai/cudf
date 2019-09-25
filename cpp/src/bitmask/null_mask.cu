@@ -153,6 +153,7 @@ cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
     return 0;
   }
 
+  CUDF_EXPECTS(start >= 0, "Invalid range.");
   CUDF_EXPECTS(start <= stop, "Invalid bit range.");
 
   std::size_t num_bits_to_count = stop - start;
