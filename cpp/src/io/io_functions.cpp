@@ -81,6 +81,7 @@ table read_csv(csv_read_arg const &args) {
     options.quotechar = args.quotechar;
     options.quoting = static_cast<csv::quote_style>(args.quoting);
     options.doublequote = args.doublequote;
+    options.out_time_unit = args.out_time_unit;
 
     return std::make_unique<csv::reader>(options);
   }();
@@ -126,7 +127,8 @@ table read_json(json_read_arg const &args) {
 
 table read_orc(orc_read_arg const &args) {
   auto reader = [&]() {
-    orc::reader_options options{args.columns, args.use_index, args.use_np_dtypes};
+    orc::reader_options options{args.columns, args.use_index,
+                                args.use_np_dtypes, args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<orc::reader>(args.source.filepath, options);
@@ -151,7 +153,9 @@ table read_orc(orc_read_arg const &args) {
 
 table read_parquet(parquet_read_arg const &args) {
   auto reader = [&]() {
-    parquet::reader_options options{args.columns, args.strings_to_categorical};
+    parquet::reader_options options{args.columns, args.strings_to_categorical,
+                                    args.use_pandas_metadata,
+                                    args.timestamp_unit};
 
     if (args.source.type == FILE_PATH) {
       return std::make_unique<parquet::reader>(args.source.filepath, options);
@@ -174,4 +178,4 @@ table read_parquet(parquet_read_arg const &args) {
   }
 }
 
-} // namespace cudf
+}  // namespace cudf

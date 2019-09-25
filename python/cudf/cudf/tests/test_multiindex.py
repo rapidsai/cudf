@@ -93,7 +93,7 @@ def test_multiindex_series_assignment():
 
 
 def test_string_index():
-    from cudf.dataframe.index import StringIndex, StringColumn
+    from cudf.core.index import StringIndex, StringColumn
 
     pdf = pd.DataFrame(np.random.rand(5, 5))
     gdf = cudf.from_pandas(pdf)
@@ -168,6 +168,19 @@ def test_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     gdf = cudf.from_pandas(pdf)
     assert_eq(pdf, gdf)
+
+
+def test_from_pandas_series():
+    pdf = pd.DataFrame(
+        {"a": [1, 2, 3], "b": [4, 5, 6], "c": [7, 8, 9]}
+    ).set_index(["a", "b"])
+
+    result = cudf.from_pandas(pdf)
+    assert_eq(pdf, result)
+
+    test_pdf = pdf["c"]
+    result = cudf.from_pandas(test_pdf)
+    assert_eq(test_pdf, result)
 
 
 def test_series_multiindex(pdfIndex):
@@ -678,7 +691,7 @@ def test_multiindex_columns_from_pandas(pdf, pdfIndex):
     pdf.index = pdfIndex
     pdfT = pdf.T
     gdfT = cudf.from_pandas(pdfT)
-    assert isinstance(gdfT.columns, cudf.dataframe.multiindex.MultiIndex)
+    assert isinstance(gdfT.columns, cudf.core.multiindex.MultiIndex)
 
 
 def test_groupby_multiindex_columns_from_pandas(pdf, gdf, pdfIndex):

@@ -183,9 +183,10 @@ public final class Table implements AutoCloseable {
    * @param filePath          the path of the file to read, or null if no path should be read.
    * @param address           the address of the buffer to read from or 0 if we should not.
    * @param length            the length of the buffer to read from.
+   * @param timeUnit          return type of TimeStamp in units
    */
-  private static native long[] gdfReadParquet(String[] filterColumnNames,
-                                              String filePath, long address, long length) throws CudfException;
+  private static native long[] gdfReadParquet(String[] filterColumnNames, String filePath,
+                                              long address, long length, int timeUnit) throws CudfException;
 
   /**
    * Read in ORC formatted data.
@@ -196,10 +197,11 @@ public final class Table implements AutoCloseable {
    * @param length            the length of the buffer to read from.
    * @param usingNumPyTypes   whether the parser should implicitly promote DATE32 and TIMESTAMP
    *                          columns to DATE64 for compatibility with NumPy.
+   * @param timeUnit          return type of TimeStamp in units
    */
   private static native long[] gdfReadORC(String[] filterColumnNames,
                                           String filePath, long address, long length,
-                                          boolean usingNumPyTypes) throws CudfException;
+                                          boolean usingNumPyTypes, int timeUnit) throws CudfException;
 
   private static native long[] gdfGroupByAggregate(long inputTable, int[] keyIndices, int[] aggColumnsIndices,
                                                    int[] aggTypes, boolean ignoreNullKeys) throws CudfException;
@@ -575,7 +577,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readParquet(ParquetOptions opts, File path) {
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0));
+        path.getAbsolutePath(), 0, 0, opts.timeUnit().getNativeId()));
   }
 
   /**
@@ -635,7 +637,7 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadParquet(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len));
+        null, buffer.getAddress() + offset, len, opts.timeUnit().getNativeId()));
   }
 
   /**
@@ -653,7 +655,7 @@ public final class Table implements AutoCloseable {
    */
   public static Table readORC(ORCOptions opts, File path) {
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes()));
+        path.getAbsolutePath(), 0, 0, opts.usingNumPyTypes(), opts.timeUnit().getNativeId()));
   }
 
   /**
@@ -713,7 +715,8 @@ public final class Table implements AutoCloseable {
     assert len <= buffer.getLength() - offset;
     assert offset >= 0 && offset < buffer.length;
     return new Table(gdfReadORC(opts.getIncludeColumnNames(),
-        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes()));
+        null, buffer.getAddress() + offset, len, opts.usingNumPyTypes(),
+                opts.timeUnit().getNativeId()));
   }
 
   /**
@@ -1033,7 +1036,8 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).leftJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
-     * @return Joined {@link Table}
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
      */
     public Table leftJoin(TableOperation rightJoinIndices) {
       return new Table(gdfLeftJoin(operation.table.nativeHandle, operation.indices,
@@ -1047,7 +1051,8 @@ public final class Table implements AutoCloseable {
      * Table t2 ...
      * Table result = t1.onColumns(0,1).innerJoin(t2.onColumns(2,3));
      * @param rightJoinIndices - Indices of the right table to join on
-     * @return Joined {@link Table}
+     * @return the joined table.  The order of the columns returned will be join columns,
+     * left non-join columns, right non-join columns.
      */
     public Table innerJoin(TableOperation rightJoinIndices) {
       return new Table(gdfInnerJoin(operation.table.nativeHandle, operation.indices,

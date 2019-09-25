@@ -67,7 +67,8 @@ gdf_scalar simple_reduction(gdf_column const& col, gdf_dtype const output_dtype,
     RMM_TRY(RMM_FREE(result, stream));
 
     // set scalar is valid
-    scalar.is_valid = true;
+    if (col.null_count < col.size)
+      scalar.is_valid = true;
     return scalar;
 };
 

@@ -5,7 +5,7 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import Series
+from cudf.core import Series
 from cudf.tests import utils
 
 

@@ -44,7 +44,7 @@ def test_from_cudf_with_generic_idx():
 
     ddf = dgd.from_cudf(cdf, npartitions=2)
 
-    assert isinstance(ddf.index.compute(), cudf.dataframe.index.GenericIndex)
+    assert isinstance(ddf.index.compute(), cudf.core.index.GenericIndex)
     dd.assert_eq(ddf.loc[1:2, ["a"]], cdf.loc[1:2, ["a"]])
 
 
@@ -391,5 +391,12 @@ def test_boolean_index(gdf, gddf):
 
     gdf2 = gdf[gdf.x > 2]
     gddf2 = gddf[gddf.x > 2]
+
+    dd.assert_eq(gdf2, gddf2)
+
+
+def test_drop(gdf, gddf):
+    gdf2 = gdf.drop(columns="x")
+    gddf2 = gddf.drop(columns="x").compute()
 
     dd.assert_eq(gdf2, gddf2)
