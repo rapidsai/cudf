@@ -890,11 +890,12 @@ def test_groupby_categorical_from_string():
         gdf.groupby("id").sum(),
     )
 
+
 def test_groupby_arbitrary_length_series():
-    gdf = cudf.DataFrame({'a': [1, 1, 2], 'b': [2, 3, 4]}, index=[4, 5, 6])
+    gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
     gsr = cudf.Series([1, 2, 2], index=[3, 4, 5])
 
-    expect = pd.DataFrame({'a': [2], 'b': [5]}, index=[2])
+    expect = pd.DataFrame({"a": [2], "b": [5]}, index=[2])
     got = gdf.groupby(gsr).sum()
 
     assert_eq(expect, got)

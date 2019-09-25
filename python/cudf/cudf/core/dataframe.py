@@ -2542,13 +2542,13 @@ class DataFrame(object):
         df = self
         if isinstance(by, Series):
             if not self.index.equals(by.index):
-                by_sr_name = 'by_sr'
+                by_sr_name = "by_sr"
                 column_names = list(self)
-                while (by_sr_name in column_names):
-                    by_sr_name += '_x'
+                while by_sr_name in column_names:
+                    by_sr_name += "_x"
                 tmp = DataFrame()
                 tmp[by_sr_name] = by
-                df = tmp.join(self, how='inner')
+                df = tmp.join(self, how="inner")
                 by = df[df.columns[0]]
                 by.name = None
                 df = df[df.columns[1::]]
