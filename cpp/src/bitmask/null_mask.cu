@@ -20,6 +20,7 @@
 #include <utilities/error_utils.hpp>
 #include <utilities/integer_utils.hpp>
 
+#include <thrust/extrema.h>
 #include <cub/cub.cuh>
 #include <rmm/device_buffer.hpp>
 #include <rmm/device_scalar.hpp>
@@ -80,67 +81,58 @@ namespace {
 
 /**---------------------------------------------------------------------------*
  * @brief Counts the number of non-zero bits in a bitmask in the range
- * `[first_bit_index, last_bit_index]`.
+ * `[start_bit_index, stop_bit_index]`.
  *
- * Expects `0 <= first_bit_index <= last_bit_index`.
+ * Expects `0 <= start_bit_index < stop_bit_index`.
  *
  * @param[in] bitmask The bitmask whose non-zero bits will be counted.
- * @param[in] first_bit_index The index (inclusive) of the first bit to count
- * @param[in] last_bit_index The index (inclusive) of the last bit to count
- * @param[out] count The number of non-zero bits in the specified range
+ * @param[in] start_bit_index The index (inclusive) of the first bit to count
+ * @param[in] stop_bit_index The index (exclusive) of the last bit to count
+ * @param[out] global_count The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
 template <size_type block_size>
 __global__ void count_set_bits_kernel(bitmask_type *const bitmask,
-                                      size_type first_bit_index,
-                                      size_type last_bit_index,
+                                      size_type start_bit_index,
+                                      size_type stop_bit_index,
                                       size_type *global_count) {
-  size_type first_word_index = word_index(first_bit_index);
-  size_type last_word_index = word_index(last_bit_index);
+  constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
+
+  auto const start_word_index{word_index(start_bit_index)};
+  auto const stop_word_index{word_index(stop_bit_index)};
+
+  // There's always at least one word to count
+  auto const num_words{thrust::max((stop_word_index - start_word_index), 1)};
 
   size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
-  // thread index shifted by the index of the first counted word
-  size_type thread_word_index = tid + first_word_index;
-
   size_type thread_count{0};
 
-  // The number of uncounted bits in the word before `first_bit_index`
-  auto pre_slack_bits = first_bit_index % detail::size_in_bits<bitmask_type>();
-  // The number of uncounted bits in the word after `last_bit_index`
-  auto post_slack_bits =
-      detail::size_in_bits<bitmask_type>() -
-      (last_bit_index % detail::size_in_bits<bitmask_type>());
+  // First, just count the bits in all words
+  while (tid < num_words) {
+    thread_count += __popc(bitmask[tid + start_word_index]);
+    tid += blockDim.x * gridDim.x;
+  }
 
-  // Start/Stop lie within the same word
-  if (first_word_index == last_word_index) {
-    if (thread_word_index == first_word_index) {
-      bitmask_type word = bitmask[first_word_index];
+  // Subtract any slack bits counted from the first and last word
+  // Two threads handle this -- one for first word, one for last
+  tid = threadIdx.x + blockIdx.x * blockDim.x;
+  if (tid < 2) {
+    bool const first{tid == 0};
+    bool const last{not first};
 
-      // Mask off the pre slack bits
-      word = word & ~((1 << pre_slack_bits) - 1);
+    size_type bit_index = (first) ? start_bit_index : stop_bit_index;
+    size_type word_index = (first) ? start_word_index : stop_word_index;
 
-      // Shift off the post slack bits
-      word = word << post_slack_bits;
-
-      thread_count = __popc(word);
-    }
-  } else {
-    if (thread_word_index == first_word_index) {
-      bitmask_type first_word = bitmask[first_word_index];
-      // Mask off the pre slack bits
-      first_word = first_word & ~((bitmask_type{1} << pre_slack_bits) - 1);
-      thread_count += __popc(first_word);
+    size_type num_slack_bits = bit_index % word_size;
+    if (last and (num_slack_bits > 0)) {
+      num_slack_bits = word_size - num_slack_bits;
     }
 
-    while (first_word_index < thread_word_index < last_word_index) {
-      thread_count += __popc(bitmask[thread_word_index]);
-      thread_word_index += blockDim.x * gridDim.x;
-    }
+    if (num_slack_bits > 0) {
+      bitmask_type word = bitmask[word_index];
+      auto slack_mask = (first) ? set_least_significant_bits(num_slack_bits)
+                                : set_most_significant_bits(num_slack_bits);
 
-    if (thread_word_index == last_word_index) {
-      bitmask_type last_word = bitmask[last_word_index];
-      // Shift off the post slack bits
-      last_word = last_word << post_slack_bits;
-      thread_count += __popc(last_word);
+      thread_count -= __popc(word & slack_mask);
     }
   }
 
@@ -178,8 +170,9 @@ cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
 
   rmm::device_scalar<size_type> non_zero_count(0, stream);
 
-  count_set_bits_kernel<block_size><<<grid.num_blocks, grid.num_threads_per_block, 0,
-                          stream>>>(bitmask, start, (stop - 1), non_zero_count.get());
+  count_set_bits_kernel<block_size>
+      <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
+          bitmask, start, stop, non_zero_count.get());
 
   return non_zero_count.value();
 }
