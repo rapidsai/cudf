@@ -111,6 +111,7 @@
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
+- PR #2865 DaskIO: Fix `read_csv` and `read_orc` when input is list of files
 
 
 # cuDF 0.9.0 (21 Aug 2019)
