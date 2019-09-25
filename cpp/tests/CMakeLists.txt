@@ -487,6 +487,12 @@ set(STRINGS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
 
 ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
+# - bitmask tests ---------------------------------------------------------------------------------
+
+set(BITMASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/count_bitmask_tests.cu")
+
+ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################

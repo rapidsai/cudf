@@ -68,15 +68,16 @@ rmm::device_buffer create_null_mask(
  * `[start, stop)`
  *
  * Returns `0` if `bitmask == nullptr`.
- * 
+ *
  * @throws `cudf::logic_error` if `start > stop`
+ * @throws `cudf::logic_error` if `start < 0`
  *
  * @param bitmask Bitmask residing in device memory whose bits will be counted
  * @param start_bit Index of the first bit to count (inclusive)
  * @param stop_bit Index of the last bit to count (exclusive)
  * @return The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
-cudf::size_type count_set_bits(bitmask_type* const bitmask, size_type start,
+cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start,
                                size_type stop);
 
 }  // namespace cudf
