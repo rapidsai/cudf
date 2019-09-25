@@ -38,12 +38,12 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
     auto d_column = *strings_column;
     cudf::size_type null_count = d_column.null_count();
     // create output column
-    auto result = std::make_unique<cudf::column>( data_type{INT32}, count,
+    auto results = std::make_unique<cudf::column>( data_type{INT32}, count,
         rmm::device_buffer(count * sizeof(int32_t), stream, mr),
         rmm::device_buffer(d_column.null_mask(), gdf_valid_allocation_size(count),
                            stream, mr),
         d_column.null_count());
-    auto results_view = result->mutable_view();
+    auto results_view = results->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
     // set lengths
     thrust::transform( execpol->on(stream), 
@@ -55,8 +55,8 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                 return 0;
             return d_column.element<string_view>(idx).characters();
         });
-    results_view.set_null_count(null_count);
-    return result;
+    results->set_null_count(null_count);
+    return results;
 }
 
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
@@ -74,10 +74,10 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                                         gdf_valid_allocation_size(count),
                                         stream, mr);
     // create output column
-    auto result = std::make_unique<cudf::column>( data_type{INT32}, count,
+    auto results = std::make_unique<cudf::column>( data_type{INT32}, count,
         rmm::device_buffer(count * sizeof(int32_t), stream, mr),
         null_mask, null_count);
-    auto results_view = result->mutable_view();
+    auto results_view = results->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
     // set sizes
     thrust::transform( execpol->on(stream), 
@@ -89,10 +89,9 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                 return 0;
             return d_column.element<string_view>(idx).size();
         });
-    // reset the null count
-    results_view.set_null_count(null_count);
-    printf("size=%d, null_count=%d\n", count, null_count);
-    return result;
+    // reset null count must be done on the column and not the view
+    results->set_null_count(null_count);
+    return results;
 }
 
 //

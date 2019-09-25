@@ -35,16 +35,17 @@ TEST_F(AttrsTest, BytesCounts)
 {
     std::vector<const char*> h_test_strings{ "xyz", "", "aé", nullptr, "bbb", "éé" };
     std::vector<int32_t> h_bytes{ 3, 0, 3, 0, 3, 4 };
+    std::vector<cudf::bitmask_type> h_nbits{ 0x0037 };
 
     auto strings = cudf::test::create_strings_column(h_test_strings);
     auto strings_view = cudf::strings_column_view(strings->view());
     cudf::size_type count = strings_view.size();
-    cudf::strings::print(strings_view);
 
     auto column = cudf::strings::bytes_counts(strings_view);
     rmm::device_vector<int32_t> d_expected(h_bytes);
+    rmm::device_vector<cudf::bitmask_type> d_nbits(h_nbits);
     cudf::column_view column_expected( cudf::data_type{cudf::INT32}, count,
-        d_expected.data().get(), nullptr, 0 );
+        d_expected.data().get(), d_nbits.data().get(), 1 );
     cudf::test::expect_columns_equal(column->view(), column_expected);
 }
 
@@ -52,6 +53,7 @@ TEST_F(AttrsTest, CharactersCounts)
 {
     std::vector<const char*> h_test_strings{ "xyz", "", "aé", nullptr, "bbb", "éé" };
     std::vector<int32_t> h_characters{ 3, 0, 2, 0, 3, 2 };
+    std::vector<cudf::bitmask_type> h_nbits{ 0x0037 };
 
     auto strings = cudf::test::create_strings_column(h_test_strings);
     auto strings_view = cudf::strings_column_view(strings->view());
@@ -59,8 +61,9 @@ TEST_F(AttrsTest, CharactersCounts)
 
     auto column = cudf::strings::characters_counts(strings_view);
     rmm::device_vector<int32_t> d_expected(h_characters);
+    rmm::device_vector<cudf::bitmask_type> d_nbits(h_nbits);
     cudf::column_view column_expected( cudf::data_type{cudf::INT32}, count,
-        d_expected.data().get(), nullptr, 0 );
+        d_expected.data().get(), d_nbits.data().get(), 1 );
     cudf::test::expect_columns_equal(column->view(), column_expected);
 }
 
