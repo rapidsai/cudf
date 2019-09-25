@@ -454,10 +454,6 @@ class DataFrame(object):
 
         return cupy.asarray(self.as_gpu_matrix())
 
-    @property
-    def values_host(self):
-        return self.as_gpu_matrix().copy_to_host()
-
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
         columns = [
