@@ -22,6 +22,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -124,6 +125,16 @@ class reader::Impl {
                           rmm::device_vector<orc::gpu::RowGroup> &row_groups,
                           size_t row_index_stride,
                           const std::vector<gdf_column_wrapper> &columns);
+
+  /**
+   * @brief Align a size such that aligned 64-bit loads within a memory block
+   * won't trip cuda-memcheck if the size is not a multiple of 8
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by orc kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint64_t)); }
 
  private:
   std::unique_ptr<datasource> source_;
