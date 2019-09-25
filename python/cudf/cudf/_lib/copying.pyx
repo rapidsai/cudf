@@ -10,6 +10,7 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
 import cudf.utils.utils as utils
+from cudf.utils.dtypes import is_string_dtype
 from cudf._lib.utils cimport (
     columns_from_table,
     table_from_columns,
@@ -94,7 +95,7 @@ def gather(source, maps, dest=None):
         if dest is not None:
             out_cols[i] = column.as_column(out_cols[i])
 
-    if in_cols[0].dtype == np.dtype("object"):
+    if is_string_dtype(in_cols[0]):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
@@ -126,7 +127,7 @@ def gather(source, maps, dest=None):
     cdef uintptr_t c_maps_ptr
     cdef gdf_index_type* c_maps
     if gather_count != 0:
-        if out_cols[0].dtype == np.dtype("object"):
+        if is_string_dtype(out_cols[0]):
             out_size = out_cols[0].data.size()
         else:
             out_size = out_cols[0].data.size
@@ -140,7 +141,7 @@ def gather(source, maps, dest=None):
 
     for i, col in enumerate(out_cols):
         col._update_null_count(c_out_cols[i].null_count)
-        if col.dtype == np.dtype("object") and len(col) > 0:
+        if is_string_dtype(col) and len(col) > 0:
             update_nvstrings_col(
                 out_cols[i],
                 <uintptr_t>c_out_cols[i].dtype_info.category)
@@ -261,7 +262,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
 
     out_col._update_null_count(c_out_col.null_count)
 
-    if out_col.dtype == np.dtype("object") and len(out_col) > 0:
+    if is_string_dtype(out_col) and len(out_col) > 0:
         update_nvstrings_col(
             out_col,
             <uintptr_t>c_out_col.dtype_info.category)
@@ -294,7 +295,7 @@ def scatter_to_frames(source, maps):
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
 
-    if in_cols[0].dtype == np.dtype("object"):
+    if is_string_dtype(in_cols[0]):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
