@@ -45,7 +45,7 @@ std::unique_ptr<cudf::column> sublist( strings_column_view handler,
         end = count;
     if( start < 0 || start > end )
         throw std::invalid_argument("invalid start parameter");
-    count = (end - start)/step +1;
+    count = (end - start)/step;
     //
     auto execpol = rmm::exec_policy(stream);
     // build indices

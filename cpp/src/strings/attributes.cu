@@ -23,7 +23,7 @@
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
@@ -49,7 +49,7 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
     auto results_view = results->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
     // set lengths
-    thrust::transform( execpol->on(stream), 
+    thrust::transform( execpol->on(stream),
         thrust::make_counting_iterator<int32_t>(0),
         thrust::make_counting_iterator<int32_t>(count),
         d_lengths,
@@ -83,7 +83,7 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
     auto results_view = results->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
     // set sizes
-    thrust::transform( execpol->on(stream), 
+    thrust::transform( execpol->on(stream),
         thrust::make_counting_iterator<int32_t>(0),
         thrust::make_counting_iterator<int32_t>(count),
         d_lengths,
@@ -121,7 +121,7 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
             return d_column.element<string_view>(idx).characters();
         },
         thrust::plus<unsigned int>());
-    
+
     // need the total size to build the column
     // the size is the last element from an inclusive-scan
     size_type size = offsets.back();

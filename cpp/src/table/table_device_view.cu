@@ -21,6 +21,7 @@
 
 #include <rmm/rmm.h>
 
+#include <vector>
 #include <algorithm>
 #include <numeric>
 
@@ -40,18 +41,40 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
       _num_columns{source_view.num_columns()},
       _stream{stream} {
   if (source_view.num_columns() > 0) {
-    size_type total_descendants =
+//    size_type total_descendants =
+//        std::accumulate(source_view.begin(), source_view.end(), 0,
+//                        [](size_type init, column_view col) {
+//                          return init + count_descendants(col);
+//                        });
+//    CUDF_EXPECTS(0 == total_descendants,
+//                 "Columns with descendants are not yet supported.");
+//    auto views_size_bytes =
+//        source_view.num_columns() * sizeof(*source_view.begin());
+    size_type views_size_bytes =
         std::accumulate(source_view.begin(), source_view.end(), 0,
-                        [](size_type init, column_view col) {
-                          return init + count_descendants(col);
-                        });
-    CUDF_EXPECTS(0 == total_descendants,
-                 "Columns with descendants are not yet supported.");
+            [](size_type init, column_view col) {
+                return init + ColumnDeviceView::extent(col);
+            });
+    
+    //CUDA_TRY(cudaMemcpyAsync(_columns, &(*source_view.begin()),
+    //                         views_size_bytes, cudaMemcpyDefault, stream));
 
-    auto views_size_bytes =
-        source_view.num_columns() * sizeof(*source_view.begin());
+    std::vector<int8_t> h_buffer(views_size_bytes);
+    ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
+    int8_t* h_end = (int8_t*)(h_column + _num_columns);
     RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
-    CUDA_TRY(cudaMemcpyAsync(_columns, &(*source_view.begin()),
+    ColumnDeviceView* d_column = _columns;
+    int8_t* d_end = (int8_t*)(d_column + _num_columns);
+    for( size_type idx=0; idx < _num_columns; ++idx )
+    {
+      auto col = source_view.column(idx);
+      new(h_column) ColumnDeviceView(col,(ptrdiff_t)h_end,(ptrdiff_t)d_end);
+      h_column++;
+      h_end += (ColumnDeviceView::extent(col));
+      d_end += (ColumnDeviceView::extent(col));
+    }
+    
+    CUDA_TRY(cudaMemcpyAsync(_columns, h_buffer.data(),
                              views_size_bytes, cudaMemcpyDefault, stream));
   }
 }

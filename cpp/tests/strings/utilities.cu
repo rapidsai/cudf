@@ -14,10 +14,17 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/strings_column_factories.hpp>
 #include "./utilities.h"
 
+#include <cudf/strings/strings_column_factories.hpp>
+#include <cudf/table/row_operators.cuh>
+#include <cudf/table/table_device_view.cuh>
+
 #include <cstring>
+#include <thrust/execution_policy.h>
+#include <thrust/equal.h>
+
+#include <gmock/gmock.h>
 
 namespace cudf {
 namespace test {
@@ -49,6 +56,47 @@ std::unique_ptr<cudf::column> create_strings_column( const std::vector<const cha
     rmm::device_vector<thrust::pair<const char*,size_t>> d_strings(strings);
     cudaMemcpy( d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice );
     return cudf::make_strings_column( d_strings );
+}
+
+struct compare_strings_fn
+{
+    __device__ bool operator()(int lidx, int ridx)
+    {
+        if( d_lhs.nullable() && d_lhs.is_null(lidx) &&
+            d_rhs.nullable() && d_rhs.is_null(ridx) )
+            return true;
+        cudf::string_view lstr = d_lhs.element<cudf::string_view>(lidx);
+        cudf::string_view rstr = d_rhs.element<cudf::string_view>(ridx);
+        return lstr.compare(rstr)==0;
+    }
+    column_device_view d_lhs;
+    column_device_view d_rhs;
+};
+
+//
+void expect_strings_columns_equal(cudf::strings_column_view lhs, cudf::strings_column_view rhs) 
+{
+  EXPECT_EQ(lhs.size(), rhs.size());
+  EXPECT_EQ(lhs.null_count(), rhs.null_count());
+
+  // this almost works
+  //auto d_lhs = cudf::table_device_view::create(table_view{{lhs.parent()}});
+  //auto d_rhs = cudf::table_device_view::create(table_view{{rhs.parent()}});
+  //EXPECT_TRUE(
+  //    thrust::equal(thrust::device, thrust::make_counting_iterator(0),
+  //                  thrust::make_counting_iterator(lhs.size()),
+  //                  thrust::make_counting_iterator(0),
+  //                  cudf::exp::row_equality_comparator<true>{*d_lhs, *d_rhs}));
+  //CUDA_TRY(cudaDeviceSynchronize());
+
+  auto col_lhs = column_device_view::create(lhs.parent());
+  auto col_rhs = column_device_view::create(rhs.parent());
+
+  EXPECT_TRUE(
+      thrust::equal(thrust::device, thrust::make_counting_iterator<int>(0),
+                    thrust::make_counting_iterator<int>((int)lhs.size()),
+                    thrust::make_counting_iterator<int>(0),
+                    compare_strings_fn{*col_lhs,*col_rhs}));
 }
 
 }  // namespace test

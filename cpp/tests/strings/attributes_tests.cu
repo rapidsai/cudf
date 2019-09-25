@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/strings_column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
-#include <cudf/types.hpp>
 
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
@@ -25,7 +23,6 @@
 #include "./utilities.h"
 
 #include <vector>
-#include <cstring>
 
 
 struct AttrsTest : public GdfTest {};

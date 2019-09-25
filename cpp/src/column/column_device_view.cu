@@ -38,29 +38,76 @@ void column_device_view::destroy() {
   delete this;
 }
 
+// For use with inplace-new to pre-fill memory to be copied to device
+column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptrdiff_t d_ptr )
+    : detail::column_device_view_base{source.type(),       source.size(),
+                                      source.head(),       source.null_mask(),
+                                      source.null_count(), source.offset()},
+      _num_children{source.num_children()}
+{
+  if( _num_children > 0 )
+  {
+    column_device_view* h_column = reinterpret_cast<column_device_view*>(h_ptr);
+    column_device_view* d_column = reinterpret_cast<column_device_view*>(d_ptr);
+    d_children = d_column;
+    for( size_type idx=0; idx < _num_children; ++idx )
+    { // inplace-new each child
+      column_view child = source.child(idx);
+      CUDF_EXPECTS( child.num_children()==0, "column grand-children not currently supported");
+      new(h_column) column_device_view(child);
+      h_column++;
+      //d_column++;
+    }
+  }
+}
+
+// For use with inplace-new to pre-fill memory to be copied to device
+mutable_column_device_view::mutable_column_device_view( mutable_column_view source, ptrdiff_t h_ptr, ptrdiff_t d_ptr )
+    : detail::column_device_view_base{source.type(),       source.size(),
+                                      source.head(),       source.null_mask(),
+                                      source.null_count(), source.offset()}
+{}
+
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
-  size_type num_descendants{count_descendants(source)};
+  //size_type num_descendants{count_descendants(source)};
   //if( num_descendants > 0 )   {
   //  CUDF_FAIL("Columns with children are not currently supported.");
   // }
   auto deleter = [](column_device_view* v) { v->destroy(); };
   std::unique_ptr<column_device_view, decltype(deleter)> p{
       new column_device_view(source), deleter};
-  if( num_descendants > 0 )
+  size_type num_children = source.num_children();
+  if( num_children > 0 )
   {
     // ignore grand-children right now
-    RMM_ALLOC(&p->d_children, sizeof(column_device_view)*num_descendants, stream);
-    for( size_type idx=0; idx < num_descendants; ++idx )
+    RMM_ALLOC(&p->d_children, sizeof(column_device_view)*num_children, stream);
+    for( size_type idx=0; idx < num_children; ++idx )
     {
       column_device_view child(source.child(idx));
       CUDF_EXPECTS( child._num_children==0, "column grand-children not currently supported");
-      cudaMemcpyAsync(p->d_children+idx, &child, sizeof(column_device_view), cudaMemcpyHostToDevice, stream);
+      CUDA_TRY(cudaMemcpyAsync(p->d_children+idx, &child, sizeof(column_device_view),
+                               cudaMemcpyHostToDevice, stream));
     }
-    p->_num_children = num_descendants;
+    p->_num_children = num_children;
     cudaStreamSynchronize(stream);
   }
   return p;
 }
+
+size_type column_device_view::extent(column_view source) {
+  size_type data_size = sizeof(column_device_view);
+  for( size_type idx=0; idx < source.num_children(); ++idx )
+    data_size += extent(source.child(idx));
+  return data_size;
+}
+
+size_type mutable_column_device_view::extent(column_view source) {
+  size_type data_size = sizeof(column_device_view);
+  for( size_type idx=0; idx < source.num_children(); ++idx )
+    data_size += extent(source.child(idx));
+  return data_size;
+}
+
 
 }  // namespace cudf
