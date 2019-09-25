@@ -2539,6 +2539,20 @@ class DataFrame(object):
             raise TypeError(
                 "groupby() requires either by or level to be" "specified."
             )
+        df = self
+        if isinstance(by, Series):
+            if not self.index.equals(by.index):
+                by_sr_name = 'by_sr'
+                column_names = list(self)
+                while (by_sr_name in column_names):
+                    by_sr_name += '_x'
+                tmp = DataFrame()
+                tmp[by_sr_name] = by
+                df = tmp.join(self, how='inner')
+                by = df[df.columns[0]]
+                by.name = None
+                df = df[df.columns[1::]]
+
         if method == "cudf":
             from cudf.core.groupby.legacy_groupby import Groupby
 
@@ -2548,7 +2562,7 @@ class DataFrame(object):
                     "multi-index with legacy groupby function. Use hash "
                     "method for multi-index"
                 )
-            result = Groupby(self, by=by)
+            result = Groupby(df, by=by)
             return result
         else:
             from cudf.core.groupby.groupby import DataFrameGroupBy
@@ -2558,7 +2572,7 @@ class DataFrame(object):
             libcudf.nvtx.nvtx_range_push("CUDF_GROUPBY", "purple")
 
             result = DataFrameGroupBy(
-                self,
+                df,
                 by=by,
                 method=method,
                 as_index=as_index,
