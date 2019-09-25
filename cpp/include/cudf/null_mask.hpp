@@ -77,7 +77,7 @@ rmm::device_buffer create_null_mask(
  * @param stop_bit Index of the last bit to count (exclusive)
  * @return The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
-cudf::size_type count_set_bits(bitmask_type* const bitmask, size_type start,
+cudf::size_type count_set_bits(bitmask_type const* bitmask, size_type start,
                                size_type stop);
 
 }  // namespace cudf

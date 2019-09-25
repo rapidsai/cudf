@@ -91,7 +91,7 @@ namespace {
  * @param[out] global_count The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
 template <size_type block_size>
-__global__ void count_set_bits_kernel(bitmask_type *const bitmask,
+__global__ void count_set_bits_kernel(bitmask_type const*bitmask,
                                       size_type start_bit_index,
                                       size_type stop_bit_index,
                                       size_type *global_count) {
@@ -147,7 +147,7 @@ __global__ void count_set_bits_kernel(bitmask_type *const bitmask,
 }  // namespace
 
 namespace detail {
-cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
+cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
                                size_type stop, cudaStream_t stream = 0) {
   if (nullptr == bitmask) {
     return 0;
@@ -157,7 +157,6 @@ cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
   CUDF_EXPECTS(start <= stop, "Invalid bit range.");
 
   std::size_t num_bits_to_count = stop - start;
-
   if (num_bits_to_count == 0) {
     return 0;
   }
@@ -180,7 +179,7 @@ cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
 }  // namespace detail
 
 // Count non-zero bits in the specified range
-cudf::size_type count_set_bits(bitmask_type *const bitmask, size_type start,
+cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
                                size_type stop) {
   return detail::count_set_bits(bitmask, start, stop);
 }
