@@ -15,6 +15,7 @@
  */
 
 #include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
 #include <utilities/error_utils.hpp>
 
@@ -58,11 +59,8 @@ size_type column_view_base::null_count() const noexcept {
   if (_null_count > cudf::UNKNOWN_NULL_COUNT) {
     return _null_count;
   } else {
-    if (_null_mask == nullptr) {
-      _null_count = 0;
-      return null_count();
-    }
-    CUDF_FAIL("On-demand null count computation not yet implemented.");
+    _null_count = cudf::count_set_bits(null_mask(), 0, size());
+    return null_count();
   }
 }
 }  // namespace detail
