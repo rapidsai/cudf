@@ -51,12 +51,20 @@ TEST_F(TraitsTest, NumericDataTypesAreNumeric) {
                           }));
 }
 
+TEST_F(TraitsTest, TimestampDataTypesAreNotNumeric) {
+  using namespace cudf::test;
+  EXPECT_TRUE(std::none_of(
+      timestamp_type_ids.begin(), timestamp_type_ids.end(),
+      [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
+}
+
 /*
 These types are not yet supported by the type dispatcher
 TEST_F(TraitsTest, NonNumericDataTypesAreNotNumeric) {
+  using namespace cudf::test;
   EXPECT_TRUE(std::none_of(
       non_numeric_type_ids.begin(), non_numeric_type_ids.end(),
-      [](cudf::data_type dtype) { return cudf::is_numeric(dtype); }));
+      [](cudf::type_id type) { return cudf::is_numeric(cudf::data_type{type}); }));
 }
 */
 

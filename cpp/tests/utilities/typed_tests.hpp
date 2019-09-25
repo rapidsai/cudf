@@ -106,6 +106,20 @@ static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
 static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
 
 /**---------------------------------------------------------------------------*
+ * @brief `std::array` of of all timestamp `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
+ *---------------------------------------------------------------------------**/
+static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{
+    cudf::DATE32,
+    cudf::TIMESTAMP_SECONDS,
+    cudf::TIMESTAMP_MILLISECONDS,
+    cudf::TIMESTAMP_MICROSECONDS,
+    cudf::TIMESTAMP_NANOSECONDS
+};
+
+/**---------------------------------------------------------------------------*
  * @brief `std::array` of of all non-numeric `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
