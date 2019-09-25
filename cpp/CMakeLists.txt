@@ -425,7 +425,7 @@ add_library(cudf
             src/table/table_view.cpp
             src/table/table_device_view.cu
             src/table/table.cpp
-            src/bitmask/null_mask.cpp
+            src/bitmask/null_mask.cu
             src/sort/sort.cu
             src/strings/strings_column_factories.cu
             src/strings/strings_column_view.cu

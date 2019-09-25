@@ -34,7 +34,8 @@ namespace detail {
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
                                      null_order null_precedence,
-                                     cudaStream_t stream = 0) {
+                                     cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr) {
   if (input.num_rows() == 0 or input.num_columns() == 0) {
     return cudf::make_numeric_column(data_type{INT32}, 0);
   }
@@ -46,7 +47,7 @@ std::unique_ptr<column> sorted_order(table_view input,
   }
 
   std::unique_ptr<column> sorted_indices = cudf::make_numeric_column(
-      data_type{INT32}, input.num_rows(), mask_state::UNALLOCATED, stream);
+      data_type{INT32}, input.num_rows(), mask_state::UNALLOCATED, stream, mr);
 
   mutable_column_view mutable_indices_view = sorted_indices->mutable_view();
 
@@ -81,8 +82,9 @@ std::unique_ptr<column> sorted_order(table_view input,
 
 std::unique_ptr<column> sorted_order(table_view input,
                                      std::vector<order> const& column_order,
-                                     null_order null_precedence) {
-  return detail::sorted_order(input, column_order, null_precedence);
+                                     null_order null_precedence,
+                                     rmm::mr::device_memory_resource* mr) {
+  return detail::sorted_order(input, column_order, null_precedence, 0, mr);
 }
 }  // namespace exp
 }  // namespace cudf

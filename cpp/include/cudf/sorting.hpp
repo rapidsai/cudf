@@ -24,7 +24,6 @@
 namespace cudf {
 namespace exp {
 
-
 /**---------------------------------------------------------------------------*
  * @brief Computes the row indices that would produce `input`  in a
  * lexicographical sorted order.
@@ -38,8 +37,9 @@ namespace exp {
  * @return std::unique_ptr<column> A non-nullable column of INT32 elements
  * containing the permuted row indices of `input` if it were sorted
  *---------------------------------------------------------------------------**/
-std::unique_ptr<column> sorted_order(table_view input,
-                                     std::vector<order> const& column_order,
-                                     null_order null_precedence);
+std::unique_ptr<column> sorted_order(
+    table_view input, std::vector<order> const& column_order,
+    null_order null_precedence,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 }  // namespace exp
 }  // namespace cudf
