@@ -18,12 +18,34 @@
 #include <cudf/utilities/bit.cuh>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
+#include <utilities/error_utils.hpp>
 
 #include <gmock/gmock.h>
 
 #include <thrust/device_vector.h>
 
 struct CountBitmaskTest : public cudf::test::BaseFixture {};
+
+TEST_F(CountBitmaskTest, NullMask) {
+  EXPECT_EQ(0, cudf::count_set_bits(nullptr, 0, 32));
+}
+
+TEST_F(CountBitmaskTest, NegativeStart) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, 0);
+  EXPECT_THROW(cudf::count_set_bits(mask.data().get(), -1, 32),
+               cudf::logic_error);
+}
+
+TEST_F(CountBitmaskTest, StartLargerThanStop) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, 0);
+  EXPECT_THROW(cudf::count_set_bits(mask.data().get(), 32, 31),
+               cudf::logic_error);
+}
+
+TEST_F(CountBitmaskTest, EmptyRange) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, 0);
+  EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 17, 17));
+}
 
 TEST_F(CountBitmaskTest, SingleWordAllZero) {
   thrust::device_vector<cudf::bitmask_type> mask(1, 0);
