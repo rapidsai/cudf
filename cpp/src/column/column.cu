@@ -16,6 +16,7 @@
 
 #include <cudf/column/column.hpp>
 #include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
 #include <cudf/utilities/bit.cuh>
 #include <cudf/utilities/traits.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
@@ -115,13 +116,8 @@ size_type column::null_count() const {
   if (_null_count > UNKNOWN_NULL_COUNT) {
     return _null_count;
   } else {
-    // If the null mask isn't allocated, then we can return 0
-    if (0 == _null_mask.size()) {
-      _null_count = 0;
-      return null_count();
-    }
-    CUDF_FAIL(
-        "On-demand computation of null count is not currently supported.");
+    _null_count = cudf::count_set_bits(view().null_mask(), 0, size());
+    return null_count();
   }
 }
 

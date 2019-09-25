@@ -15,7 +15,6 @@
  */
 #include <cudf/null_mask.hpp>
 #include <cudf/types.hpp>
-#include <cudf/utilities/bit.cuh>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
 #include <utilities/error_utils.hpp>
