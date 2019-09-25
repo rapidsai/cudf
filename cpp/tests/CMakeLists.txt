@@ -477,6 +477,16 @@ set(DISPATCHER_TEST_SRC
 ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 
 ###################################################################################################
+# - strings test --------------------------------------------------------------------------------------
+
+set(STRINGS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/attributes_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/utilities.cu")
+
+ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
+
+###################################################################################################
 ### enable testing ################################################################################
 ###################################################################################################
 

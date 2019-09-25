@@ -36,6 +36,7 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    cudf::size_type null_count = d_column.null_count();
     // create output column
     auto result = std::make_unique<cudf::column>( data_type{INT32}, count,
         rmm::device_buffer(count * sizeof(int32_t), stream, mr),
@@ -54,6 +55,7 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                 return 0;
             return d_column.element<string_view>(idx).characters();
         });
+    results_view.set_null_count(null_count);
     return result;
 }
 
@@ -65,12 +67,16 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
     auto execpol = rmm::exec_policy(stream);
     auto strings_column = column_device_view::create(strings.parent(),stream);
     auto d_column = *strings_column;
+    rmm::device_buffer null_mask;
+    cudf::size_type null_count = d_column.null_count();
+    if( d_column.nullable() )
+        null_mask = rmm::device_buffer( d_column.null_mask(),
+                                        gdf_valid_allocation_size(count),
+                                        stream, mr);
     // create output column
     auto result = std::make_unique<cudf::column>( data_type{INT32}, count,
         rmm::device_buffer(count * sizeof(int32_t), stream, mr),
-        rmm::device_buffer(d_column.null_mask(), gdf_valid_allocation_size(count),
-                           stream, mr),
-        d_column.null_count());
+        null_mask, null_count);
     auto results_view = result->mutable_view();
     auto d_lengths = results_view.data<int32_t>();
     // set sizes
@@ -83,6 +89,9 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                 return 0;
             return d_column.element<string_view>(idx).size();
         });
+    // reset the null count
+    results_view.set_null_count(null_count);
+    printf("size=%d, null_count=%d\n", count, null_count);
     return result;
 }
 
