@@ -154,11 +154,11 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
       __ballot_sync(0xFFFF'FFFF, destination_bit_index < number_of_bits);
 
   while (destination_bit_index < number_of_bits) {
-    bitmask_type const new_mask_element = __ballot_sync(
+    bitmask_type const new_word_index = __ballot_sync(
         active_mask, bit_is_set(source, bit_offset + destination_bit_index));
 
     if (threadIdx.x % warp_size == 0) {
-      destination[element_index(destination_bit_index)] = new_mask_element;
+      destination[word_index(destination_bit_index)] = new_word_index;
     }
 
     destination_bit_index += blockDim.x * gridDim.x;

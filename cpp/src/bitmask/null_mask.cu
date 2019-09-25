@@ -94,8 +94,8 @@ __global__ void count_set_bits_kernel(bitmask_type *const bitmask,
                                       size_type first_bit_index,
                                       size_type last_bit_index,
                                       size_type *global_count) {
-  size_type first_word_index = element_index(first_bit_index);
-  size_type last_word_index = element_index(last_bit_index);
+  size_type first_word_index = word_index(first_bit_index);
+  size_type last_word_index = word_index(last_bit_index);
 
   size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   // thread index shifted by the index of the first counted word

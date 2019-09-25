@@ -109,8 +109,8 @@ class alignas(16) column_device_view_base {
   __host__ __device__ data_type type() const noexcept { return _type; }
 
   /**---------------------------------------------------------------------------*
-   * @brief Indicates whether the column can contain null elements, i.e., if it has
-   * an allocated bitmask.
+   * @brief Indicates whether the column can contain null elements, i.e., if it
+   *has an allocated bitmask.
    *
    * @note If `null_count() > 0`, this function must always return `true`.
    *
@@ -186,17 +186,16 @@ class alignas(16) column_device_view_base {
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the the specified bitmask element from the `null_mask()`.
+   * @brief Returns the the specified bitmask word from the `null_mask()`.
    *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
    *
    * @param element_index
-   * @return __device__ get_mask_element
+   * @return __device__ get_mask_word
    *---------------------------------------------------------------------------**/
-  __device__ bitmask_type get_mask_element(size_type element_index) const
-      noexcept {
-    return null_mask()[element_index];
+  __device__ bitmask_type get_mask_word(size_type word_index) const noexcept {
+    return null_mask()[word_index];
   }
 
  protected:
@@ -292,7 +291,6 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    *`column_device_view::create()` function should be used.
    *---------------------------------------------------------------------------**/
   column_device_view(column_view source);
-
 };
 
 /**---------------------------------------------------------------------------*
@@ -442,8 +440,8 @@ class alignas(16) mutable_column_device_view
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Updates the specified bitmask element in the `null_mask()` with a
-   * new element.
+   * @brief Updates the specified bitmask word in the `null_mask()` with a
+   * new word.
    *
    * @note It is undefined behavior to call this function if `nullable() ==
    * false`.
@@ -451,9 +449,9 @@ class alignas(16) mutable_column_device_view
    * @param element_index The index of the element to update
    * @param new_element The new bitmask element
    *---------------------------------------------------------------------------**/
-  __device__ void set_mask_element(size_type element_index,
-                                   bitmask_type new_element) const noexcept {
-    null_mask()[element_index] = new_element;
+  __device__ void set_mask_word(size_type word_index,
+                                bitmask_type new_word) const noexcept {
+    null_mask()[word_index] = new_word;
   }
 
  private:
