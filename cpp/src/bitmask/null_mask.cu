@@ -91,7 +91,7 @@ namespace {
  * @param[out] global_count The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
 template <size_type block_size>
-__global__ void count_set_bits_kernel(bitmask_type const*bitmask,
+__global__ void count_set_bits_kernel(bitmask_type const *bitmask,
                                       size_type start_bit_index,
                                       size_type stop_bit_index,
                                       size_type *global_count) {
@@ -99,22 +99,18 @@ __global__ void count_set_bits_kernel(bitmask_type const*bitmask,
 
   auto const start_word_index{word_index(start_bit_index)};
   auto const stop_word_index{word_index(stop_bit_index)};
-
-  // There's always at least one word to count
-  auto const num_words{thrust::max((stop_word_index - start_word_index), 1)};
-
-  size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
+  auto thread_word_index = tid + start_word_index;
   size_type thread_count{0};
 
   // First, just count the bits in all words
-  while (tid < num_words) {
+  while (thread_word_index <= stop_word_index) {
     thread_count += __popc(bitmask[tid + start_word_index]);
-    tid += blockDim.x * gridDim.x;
+    thread_word_index += blockDim.x * gridDim.x;
   }
 
   // Subtract any slack bits counted from the first and last word
   // Two threads handle this -- one for first word, one for last
-  tid = threadIdx.x + blockIdx.x * blockDim.x;
   if (tid < 2) {
     bool const first{tid == 0};
     bool const last{not first};
@@ -123,8 +119,8 @@ __global__ void count_set_bits_kernel(bitmask_type const*bitmask,
     size_type word_index = (first) ? start_word_index : stop_word_index;
 
     size_type num_slack_bits = bit_index % word_size;
-    if (last and (num_slack_bits > 0)) {
-      num_slack_bits = word_size - num_slack_bits;
+    if (last) {
+      num_slack_bits = (word_size - num_slack_bits) - 1;
     }
 
     if (num_slack_bits > 0) {
@@ -172,7 +168,7 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 
   count_set_bits_kernel<block_size>
       <<<grid.num_blocks, grid.num_threads_per_block, 0, stream>>>(
-          bitmask, start, stop, non_zero_count.get());
+          bitmask, start, stop - 1, non_zero_count.get());
 
   return non_zero_count.value();
 }
