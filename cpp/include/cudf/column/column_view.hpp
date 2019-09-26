@@ -124,8 +124,13 @@ class column_view_base {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the count of null elements
+   * 
+   * @note If the column was constructed with `UNKNOWN_NULL_COUNT`, or if at any
+   * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
+   * first invocation of `null_count()` will compute and store the count of null
+   * elements indicated by the `null_mask` (if it exists).
    *---------------------------------------------------------------------------**/
-  size_type null_count() const noexcept;
+  size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the column contains null elements,
