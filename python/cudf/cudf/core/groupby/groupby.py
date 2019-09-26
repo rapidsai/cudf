@@ -334,9 +334,14 @@ class _GroupbyHelper(object):
         else:
             value_col_names = []
             # add all non-key columns to value_col_names,
-            # dropping "nuisance columns":
+            # dropping "nuisance columns".
+            # But don't srop if keys are supplied from
+            # some other individual series.
             for col_name in self.obj.columns:
-                if col_name not in self.key_names:
+                if (
+                    isinstance(self.by, cudf.Series)
+                    or col_name not in self.key_names
+                ):
                     drop = False
                     if isinstance(
                         self.obj[col_name]._column,

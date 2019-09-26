@@ -893,9 +893,25 @@ def test_groupby_categorical_from_string():
 
 def test_groupby_arbitrary_length_series():
     gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
-    gsr = cudf.Series([1, 2, 2], index=[3, 4, 5])
+    gsr = cudf.Series([1.0, 2.0, 2.0], index=[3, 4, 5])
 
-    expect = pd.DataFrame({"a": [2], "b": [5]}, index=[2])
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
+
+    expect = pdf.groupby(psr).sum()
+    got = gdf.groupby(gsr).sum()
+
+    assert_eq(expect, got)
+
+
+def test_groupby_series_same_name_as_dataframe_column():
+    gdf = cudf.DataFrame({"a": [1, 1, 2], "b": [2, 3, 4]}, index=[4, 5, 6])
+    gsr = cudf.Series([1.0, 2.0, 2.0], name="a", index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr = gsr.to_pandas()
+
+    expect = pdf.groupby(psr).sum()
     got = gdf.groupby(gsr).sum()
 
     assert_eq(expect, got)
