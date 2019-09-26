@@ -1788,8 +1788,10 @@ class Series(object):
         """Compute the cumulative sum of the series"""
         assert axis in (None, 0) and skipna is True
 
-        # pandas always returns int64 dtype if original dtype is int
-        if np.issubdtype(self.dtype, np.integer):
+        # pandas always returns int64 dtype if original dtype is int or `bool`
+        if np.issubdtype(self.dtype, np.integer) or np.issubdtype(
+            self.dtype, np.bool_
+        ):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("sum"),
                 name=self.name,
@@ -1806,8 +1808,10 @@ class Series(object):
         """Compute the cumulative product of the series"""
         assert axis in (None, 0) and skipna is True
 
-        # pandas always returns int64 dtype if original dtype is int
-        if np.issubdtype(self.dtype, np.integer):
+        # pandas always returns int64 dtype if original dtype is int or `bool`
+        if np.issubdtype(self.dtype, np.integer) or np.issubdtype(
+            self.dtype, np.bool_
+        ):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("product"),
                 name=self.name,
@@ -2644,6 +2648,12 @@ class Series(object):
     @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        data = self._column.repeat(repeats)
+        new_index = self.index.repeat(repeats)
+        return Series(data, index=new_index, name=self.name)
 
 
 truediv_int_dtype_corrections = {

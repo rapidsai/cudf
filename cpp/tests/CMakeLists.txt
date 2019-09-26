@@ -116,7 +116,9 @@ set(HASH_GROUPBY_TEST_SRC
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
 set(GROUPBY_WO_AGG_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/single_column_groupby.cu"
+    )
 
 ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 
@@ -348,7 +350,8 @@ set(NVSTRING_SCATTER_TEST_SRC
 # - utilities tests -------------------------------------------------------------------------------
 
 set(UTILITIES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/column_wrapper_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/utilities_tests/type_list_tests.cpp")
 
 ConfigureTest(UTILITIES_TEST "${UTILITIES_TEST_SRC}")
 
@@ -429,7 +432,8 @@ ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
 # - filling test --------------------------------------------------------------------------
 
 set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 

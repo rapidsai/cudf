@@ -24,7 +24,7 @@ import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.column import CategoricalColumn
+from cudf.core.column import CategoricalColumn, StringColumn
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -1007,10 +1007,7 @@ class DataFrame(object):
         """
         Return a list of Column objects backing this dataframe
         """
-        cols = [sr._column for sr in self._cols.values()]
-        for col in cols:
-            col.name = None
-        return cols
+        return [sr._column for sr in self._cols.values()]
 
     def _rename_columns(self, new_names):
         old_cols = list(self._cols.keys())
@@ -2754,7 +2751,8 @@ class DataFrame(object):
         kwargs={},
         pessimistic_nulls=True,
         chunks=None,
-        tpb=1,
+        blkct=None,
+        tpb=None,
     ):
         """
         Transform user-specified chunks using the user-provided function.
@@ -3876,6 +3874,77 @@ class DataFrame(object):
             line_terminator,
             chunksize,
         )
+
+    def scatter_by_map(self, map_index, map_size=None):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
+
+        # map_index might be a column name or array,
+        # make it a Series
+        if isinstance(map_index, str):
+            map_index = self[map_index]
+        else:
+            map_index = Series(map_index)
+
+        # Convert float to integer
+        if map_index.dtype == np.float:
+            map_index = map_index.astype(np.int32)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index._column, StringColumn):
+            map_index = Series(
+                map_index._column.as_categorical_column(np.int32).as_numerical
+            )
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+        elif isinstance(map_index._column, CategoricalColumn):
+            map_index = Series(map_index._column.as_numerical)
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+
+        # scatter_to_frames wants a list of columns
+        tables = libcudf.copying.scatter_to_frames(
+            self._columns, map_index._column
+        )
+
+        if map_size:
+            # Make sure map_size is >= the number of uniques in map_index
+            if len(tables) > map_size:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (len(tables), map_size)
+                )
+
+            # Append empty dataframes if map_size > len(tables)
+            for i in range(map_size - len(tables)):
+                tables.append(self.iloc[[]])
+        return tables
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        new_index = self.index.repeat(repeats)
+        cols = libcudf.filling.repeat(self._columns, repeats)
+        # to preserve col names, need to get it from old _cols dict
+        column_names = self._cols.keys()
+        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
 
 
 def from_pandas(obj):

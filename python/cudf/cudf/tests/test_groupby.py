@@ -892,3 +892,14 @@ def test_groupby_dropna_getattr():
     )
 
     assert_eq(expect, got)
+
+
+def test_groupby_categorical_from_string():
+    gdf = cudf.DataFrame()
+    gdf["id"] = ["a", "b", "c"]
+    gdf["val"] = [0, 1, 2]
+    gdf["id"] = gdf["id"].astype("category")
+    assert_eq(
+        cudf.DataFrame({"val": gdf["val"]}, index=gdf["id"]),
+        gdf.groupby("id").sum(),
+    )
