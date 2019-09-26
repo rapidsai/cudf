@@ -287,15 +287,3 @@ def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     """
     use_managed_memory = True if allocator == "managed" else False
     _set_rmm_config(use_managed_memory, pool, initial_pool_size)
-
-
-def _cupy_available():
-    try:
-        import cupy as cp  # noqa: F401
-
-        return True
-    except ImportError:
-        return False
-
-
-IS_CUPY_AVAILABLE = _cupy_available()
