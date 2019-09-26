@@ -115,6 +115,7 @@
 - PR #2851 Deleted existing dask-cudf/record.txt
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
+- PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 
 # cuDF 0.9.0 (21 Aug 2019)
 
