@@ -90,7 +90,7 @@ mutable_column_view::mutable_column_view(
 }
 
 // Update the null count
-void mutable_column_view::set_null_count(size_type new_null_count) noexcept {
+void mutable_column_view::set_null_count(size_type new_null_count) {
   if (new_null_count > 0) {
     CUDF_EXPECTS(nullable(), "Invalid null count.");
   }
