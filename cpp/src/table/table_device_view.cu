@@ -41,15 +41,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
       _num_columns{source_view.num_columns()},
       _stream{stream} {
   if (source_view.num_columns() > 0) {
-//    size_type total_descendants =
-//        std::accumulate(source_view.begin(), source_view.end(), 0,
-//                        [](size_type init, column_view col) {
-//                          return init + count_descendants(col);
-//                        });
-//    CUDF_EXPECTS(0 == total_descendants,
-//                 "Columns with descendants are not yet supported.");
-//    auto views_size_bytes =
-//        source_view.num_columns() * sizeof(*source_view.begin());
+    //
     size_type views_size_bytes =
         std::accumulate(source_view.begin(), source_view.end(), 0,
             [](size_type init, column_view col) {

@@ -18,15 +18,14 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 #include "./utilities.h"
 
 #include <vector>
+#include <gmock/gmock.h>
 
 
-struct ArrayTest : public GdfTest {};
+struct ArrayTest : public cudf::test::BaseFixture {};
 
 TEST_F(ArrayTest, Sort)
 {
@@ -45,15 +44,25 @@ TEST_F(ArrayTest, Sort)
     cudf::test::expect_strings_columns_equal(results_view, expected_view);
 }
 
-TEST_F(ArrayTest, Sublist)
+class ArrayTestParms1 : public ArrayTest,
+                        public testing::WithParamInterface<cudf::size_type> {};
+
+TEST_P(ArrayTestParms1, Sublist)
 {
     std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
-    std::vector<const char*> h_expected{ "", "aa", "bbb", "ééé" };
+    cudf::size_type start = 3;
+    cudf::size_type end = GetParam();
+    std::vector<const char*> h_expected;
+    if( end > start )
+    {
+        for( cudf::size_type idx=start; (idx < end) && (idx < (cudf::size_type)h_strings.size()); ++idx )
+            h_expected.push_back( h_strings[idx] );
+    }
 
     auto d_strings = cudf::test::create_strings_column(h_strings);
     auto strings_view = cudf::strings_column_view(d_strings->view());
 
-    auto results = cudf::strings::sublist(strings_view,3);
+    auto results = cudf::strings::sublist(strings_view,start,end);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);
@@ -61,6 +70,9 @@ TEST_F(ArrayTest, Sublist)
 
     cudf::test::expect_strings_columns_equal(results_view, expected_view);
 }
+
+INSTANTIATE_TEST_CASE_P(SublistParms, ArrayTestParms1,
+                        testing::ValuesIn(std::array<cudf::size_type,3>{5,6,7}));
 
 TEST_F(ArrayTest, Gather)
 {
@@ -72,7 +84,7 @@ TEST_F(ArrayTest, Gather)
 
     rmm::device_vector<int32_t> gather_map(2,0);
     gather_map[0] = 4;
-    gather_map[1] = 1;    
+    gather_map[1] = 1;
     cudf::column_view gather_map_view( cudf::data_type{cudf::INT32}, gather_map.size(),
                                        gather_map.data().get(), nullptr, 0);
 
@@ -98,11 +110,34 @@ TEST_F(ArrayTest, Scatter)
 
     rmm::device_vector<int32_t> scatter_map(2,0);
     scatter_map[0] = 4;
-    scatter_map[1] = 1;    
+    scatter_map[1] = 1;
     cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
                                         scatter_map.data().get(), nullptr, 0);
 
     auto results = cudf::strings::scatter(view1,view2,scatter_map_view);
+    auto results_view = cudf::strings_column_view(results->view());
+
+    auto d_expected = cudf::test::create_strings_column(h_expected);
+    auto expected_view = cudf::strings_column_view(d_expected->view());
+
+    cudf::test::expect_strings_columns_equal(results_view, expected_view);
+}
+
+TEST_F(ArrayTest, ScatterScalar)
+{
+    std::vector<const char*> h_strings{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
+    std::vector<const char*> h_expected{ "eee", "---", nullptr, "", "---", "bbb", "ééé" };
+
+    auto d_strings = cudf::test::create_strings_column(h_strings);
+    auto view = cudf::strings_column_view(d_strings->view());
+
+    rmm::device_vector<int32_t> scatter_map(2,0);
+    scatter_map[0] = 4;
+    scatter_map[1] = 1;
+    cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
+                                        scatter_map.data().get(), nullptr, 0);
+
+    auto results = cudf::strings::scatter(view,"---",scatter_map_view);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);

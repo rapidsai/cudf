@@ -112,6 +112,8 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_results_offsets)[count-1]; // this may not be stream friendly
+    if( (bytes==0) && (null_count < count) )
+        bytes = 1; // all entries are empty strings
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
                                              stream, mr );
     auto chars_view = chars_column->mutable_view();

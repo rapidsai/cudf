@@ -75,6 +75,8 @@ std::unique_ptr<column> make_strings_column(
     rmm::device_buffer null_mask(valid_mask.first, gdf_valid_allocation_size(count),
                                  stream, mr);
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
+    if( (bytes==0) && (null_count < count) )
+        bytes = 1; // all entries are empty strings
 
     // build chars column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );

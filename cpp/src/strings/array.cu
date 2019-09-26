@@ -102,6 +102,8 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_new_offsets)[count-1]; // this may not be stream friendly
+    if( (bytes==0) && (null_count < count) )
+        bytes = 1; // all entries are empty strings
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
                                              stream, mr );
     auto chars_view = chars_column->mutable_view();
@@ -207,6 +209,8 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1]; // this may not be stream friendly
+    if( (bytes==0) && (null_count < count) )
+        bytes = 1; // all entries are empty strings
     auto chars_column = detail::chars_from_string_array(strings_array, d_offsets,
                                                         stream, mr);
 
@@ -269,6 +273,8 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
+    if( (bytes==0) && (null_count < count) )
+        bytes = 1; // all entries are empty strings
     auto chars_column = detail::chars_from_string_array(strings, d_offsets,
                                                         stream, mr);
 

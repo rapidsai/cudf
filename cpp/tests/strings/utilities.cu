@@ -35,6 +35,8 @@ std::unique_ptr<cudf::column> create_strings_column( const std::vector<const cha
     cudf::size_type memsize = 0;
     for( auto itr=h_strings.begin(); itr!=h_strings.end(); ++itr )
         memsize += *itr ? (cudf::size_type)strlen(*itr) : 0;
+    if( memsize==0 && h_strings.size() )
+        memsize = 1; // prevent vectors from being null in all empty-string case
     cudf::size_type count = (cudf::size_type)h_strings.size();
     thrust::host_vector<char> h_buffer(memsize);
     thrust::device_vector<char> d_buffer(memsize);
@@ -62,9 +64,9 @@ struct compare_strings_fn
 {
     __device__ bool operator()(int lidx, int ridx)
     {
-        if( d_lhs.nullable() && d_lhs.is_null(lidx) &&
-            d_rhs.nullable() && d_rhs.is_null(ridx) )
-            return true;
+        if( (d_lhs.nullable() && d_lhs.is_null(lidx)) ||
+            (d_rhs.nullable() && d_rhs.is_null(ridx)) )
+            return d_lhs.is_null(lidx)==d_rhs.is_null(ridx);
         cudf::string_view lstr = d_lhs.element<cudf::string_view>(lidx);
         cudf::string_view rstr = d_rhs.element<cudf::string_view>(ridx);
         return lstr.compare(rstr)==0;
@@ -74,7 +76,7 @@ struct compare_strings_fn
 };
 
 //
-void expect_strings_columns_equal(cudf::strings_column_view lhs, cudf::strings_column_view rhs) 
+void expect_strings_columns_equal(cudf::strings_column_view lhs, cudf::strings_column_view rhs)
 {
   EXPECT_EQ(lhs.size(), rhs.size());
   EXPECT_EQ(lhs.null_count(), rhs.null_count());
