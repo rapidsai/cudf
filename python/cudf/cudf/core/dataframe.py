@@ -2549,8 +2549,7 @@ class DataFrame(object):
                 tmp = DataFrame()
                 tmp[by_sr_name] = by
                 df = tmp.join(self, how="inner")
-                by = df[df.columns[0]]
-                by.name = None
+                by, by.name = df[df.columns[0]], by.name
                 df = df[df.columns[1::]]
 
         if method == "cudf":
