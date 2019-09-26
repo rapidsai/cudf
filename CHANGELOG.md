@@ -28,6 +28,7 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2872 Add Java pinned memory pool allocator
 
 ## Improvements
 
