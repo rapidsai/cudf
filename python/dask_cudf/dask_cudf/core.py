@@ -23,7 +23,7 @@ from dask.utils import M, OperatorMethodMixin, derived_from, funcname
 import cudf
 import cudf._lib as libcudf
 
-from dask_cudf import batcher_sortnet, join_impl
+from dask_cudf import batcher_sortnet
 from dask_cudf.accessor import (
     CachedAccessor,
     CategoricalAccessor,
@@ -137,48 +137,16 @@ class DataFrame(_Frame, dd.core.DataFrame):
             do_apply_rows, func, incols, outcols, kwargs, meta=meta
         )
 
-    def merge(
-        self,
-        other,
-        on=None,
-        how="left",
-        left_index=False,
-        right_index=False,
-        suffixes=("_x", "_y"),
-    ):
-        """Merging two dataframes on the column(s) indicated in *on*.
-        """
-        if (
-            left_index
-            or right_index
-            or not dask.is_dask_collection(other)
-            or self.npartitions == 1
-            and how in ("inner", "right")
-            or other.npartitions == 1
-            and how in ("inner", "left")
-        ):
-            return dd.merge(
-                self,
-                other,
-                how=how,
-                suffixes=suffixes,
-                left_index=left_index,
-                right_index=right_index,
+    def merge(self, other, **kwargs):
+        if kwargs.pop("shuffle", "tasks") != "tasks":
+            raise ValueError(
+                "Dask-cudf only supports task based shuffling, got %s"
+                % kwargs["shuffle"]
             )
-
-        if not on and not left_index and not right_index:
-            on = [c for c in self.columns if c in other.columns]
-            if not on:
-                left_index = right_index = True
-
-        return join_impl.join_frames(
-            left=self,
-            right=other,
-            on=on,
-            how=how,
-            lsuffix=suffixes[0],
-            rsuffix=suffixes[1],
-        )
+        on = kwargs.pop("on", None)
+        if isinstance(on, tuple):
+            on = list(on)
+        return super().merge(other, on=on, shuffle="tasks", **kwargs)
 
     def join(self, other, how="left", lsuffix="", rsuffix=""):
         """Join two datatframes
