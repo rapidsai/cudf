@@ -183,11 +183,15 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
  * The number of elements in the `scatter_map` must equal the number of rows in
  * the source columns.
  *
- * If any index in `scatter_map` is outside the range of [0, target.num_rows()),
- * the result is undefined.
+ * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `destination_table`.
  *
  * If the same index appears more than once in `scatter_map`, the result is
  * undefined.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the destination table. If `check_bounds == false`, the behavior is undefined.
  *
  * A column in the output will only be nullable if:
  * - Its corresponding column in `target` is nullable
@@ -220,11 +224,15 @@ table scatter(table const& source, gdf_column const& scatter_map,
  * The number of elements in the `scatter_map` must equal the number of rows in
  * the source columns.
  *
- * If any index in `scatter_map` is outside the range of [0, target.num_rows()),
- * the result is undefined.
+ * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `destination_table`.
  *
  * If the same index appears more than once in `scatter_map`, the result is
  * undefined.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the destination table. If `check_bounds == false`, the behavior is undefined.
  *
  * A column in the output will only be nullable if:
  * - Its corresponding column in `target` is nullable
@@ -255,10 +263,6 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
  * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `destination_table`.
  *
- * If `check_bounds == false` and any index in the `scatter_map` is outside the range
- * `[-n, n)`, where `n` is the number of rows in the `source_table`, the
- * behavior is undefined.
- *
  * If the same index appears more than once in `scatter_map`, the result is
  * undefined.
  *
@@ -270,8 +274,6 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
  * @Param[in] target The table to copy and then perform an in-place scatter
  * into the copy.
  * @return[out] The result of the scatter
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `scatter_map` outside the range `[-n, n)`
  */
 table scatter(std::vector<gdf_scalar> const& source,
 	      gdf_index_type const scatter_map[],
@@ -296,9 +298,9 @@ table scatter(std::vector<gdf_scalar> const& source,
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * If `check_bounds == false` and any index in the `gather_map` is outside the range
- * `[-n, n)`, where `n` is the number of rows in the `source_table`, the
- * behavior is undefined.
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map A non-nullable column of integral indices that maps the
@@ -309,8 +311,6 @@ table scatter(std::vector<gdf_scalar> const& source,
  * of rows equal in size to the number of elements in the gather_map that will
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`
  */
 void gather(table const* source_table, gdf_column const& gather_map,
 	    table* destination_table, bool check_bounds=false);
@@ -334,9 +334,9 @@ void gather(table const* source_table, gdf_column const& gather_map,
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * If `check_bounds == false` and any index in the `gather_map` is outside the range
- * `[-n, n)`, where `n` is the number of rows in the `source_table`, the
- * behavior is undefined.
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map An array of integral indices that maps the
@@ -347,8 +347,6 @@ void gather(table const* source_table, gdf_column const& gather_map,
  * of rows equal in size to the number of elements in the gather_map that will
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
 	    table* destination_table, bool check_bounds=false);
@@ -363,9 +361,9 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
  * `n` is the number of rows in the `source_table`.
  *
- * If `check_bounds == false` and any index in the `gather_map` is outside the range
- * `[-n, n)`, where `n` is the number of rows in the `source_table`, the
- * behavior is undefined.
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
  *
  * @param[in] source_table The input columns whose rows will be gathered
  * @param[in] gather_map A non-nullable column of integral indices that maps the
@@ -373,8 +371,6 @@ void gather(table const* source_table, gdf_index_type const gather_map[],
  * @param[in] check_bounds Optionally perform bounds checking on the values
  * of `gather_map` and throw an error if any of its values are out of bounds.
  * @return cudf::table Result of the gather
- * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
- * `gather_map` outside the range `[-n, n)`
  */
 table gather(table const* source_table, gdf_column const& gather_map, bool check_bounds=false);
 
