@@ -1,5 +1,4 @@
 import numpy as np
-import pandas as pd
 
 import cudf as gd
 from cudf.tests.utils import assert_eq
