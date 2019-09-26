@@ -335,7 +335,7 @@ class _GroupbyHelper(object):
             value_col_names = []
             # add all non-key columns to value_col_names,
             # dropping "nuisance columns".
-            # But don't srop if keys are supplied from
+            # But don't drop if keys are supplied from
             # some other individual series.
             for col_name in self.obj.columns:
                 if (
