@@ -229,7 +229,14 @@ def _is_nep18_active():
         return False
 
 
-IS_NEP18_ACTIVE = _is_nep18_active()
+def _have_cupy():
+    try:
+        import cupy  # noqa: F401
+
+        _have_cupy = True
+    except ModuleNotFoundError:
+        _have_cupy = False
+    return _have_cupy
 
 
 def _set_rmm_config(
@@ -287,3 +294,7 @@ def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     """
     use_managed_memory = True if allocator == "managed" else False
     _set_rmm_config(use_managed_memory, pool, initial_pool_size)
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()
+_have_cupy = _have_cupy()
