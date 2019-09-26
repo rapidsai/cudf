@@ -20,7 +20,6 @@
 #include <utilities/error_utils.hpp>
 
 namespace cudf {
-
 namespace {
 struct size_of_helper {
   template <typename T>
@@ -28,22 +27,12 @@ struct size_of_helper {
     return sizeof(T);
   }
 };
+}  // namespace
 
-/**
- * @brief Returns the size in bytes of elements of the specified `data_type`
- *
- * @note Only fixed-width types are supported
- *
- * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
- *
- * TODO: This should go somewhere else
- */
-constexpr inline std::size_t size_of(data_type element_type) {
+std::size_t size_of(data_type element_type) {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
   return cudf::exp::type_dispatcher(element_type, size_of_helper{});
 }
-
-}  // namespace
 
 // Allocate storage for a specified number of numeric elements
 std::unique_ptr<column> make_numeric_column(
