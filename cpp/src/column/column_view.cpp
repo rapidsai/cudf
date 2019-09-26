@@ -59,7 +59,7 @@ size_type column_view_base::null_count() const noexcept {
   if (_null_count > cudf::UNKNOWN_NULL_COUNT) {
     return _null_count;
   } else {
-    _null_count = cudf::count_set_bits(null_mask(), 0, size());
+    _null_count = cudf::count_set_bits(null_mask(), offset(), size());
     return null_count();
   }
 }
