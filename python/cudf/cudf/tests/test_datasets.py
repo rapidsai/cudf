@@ -29,7 +29,7 @@ def test_dataset_timeseries():
 
     assert gdf["value"].head().dtype == float
     assert gdf["id"].head().dtype == int
-    assert gdf["name"].head().dtype == pd.api.types.CategoricalDtype()
+    assert gdf["name"].head().dtype == "category"
 
     gdf = gd.datasets.randomdata()
     assert gdf["id"].head().dtype == int
