@@ -81,31 +81,31 @@ namespace {
 
 /**---------------------------------------------------------------------------*
  * @brief Counts the number of non-zero bits in a bitmask in the range
- * `[start_bit_index, stop_bit_index]`.
+ * `[first_bit_index, last_bit_index]`.
  *
- * Expects `0 <= start_bit_index < stop_bit_index`.
+ * Expects `0 <= first_bit_index < last_bit_index`.
  *
  * @param[in] bitmask The bitmask whose non-zero bits will be counted.
- * @param[in] start_bit_index The index (inclusive) of the first bit to count
- * @param[in] stop_bit_index The index (exclusive) of the last bit to count
+ * @param[in] first_bit_index The index (inclusive) of the first bit to count
+ * @param[in] last_bit_index The index (inclusive) of the last bit to count
  * @param[out] global_count The number of non-zero bits in the specified range
  *---------------------------------------------------------------------------**/
 template <size_type block_size>
 __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
-                                      size_type start_bit_index,
-                                      size_type stop_bit_index,
+                                      size_type first_bit_index,
+                                      size_type last_bit_index,
                                       size_type *global_count) {
   constexpr auto const word_size{detail::size_in_bits<bitmask_type>()};
 
-  auto const start_word_index{word_index(start_bit_index)};
-  auto const stop_word_index{word_index(stop_bit_index)};
+  auto const first_word_index{word_index(first_bit_index)};
+  auto const last_word_index{word_index(last_bit_index)};
   auto const tid = threadIdx.x + blockIdx.x * blockDim.x;
-  auto thread_word_index = tid + start_word_index;
+  auto thread_word_index = tid + first_word_index;
   size_type thread_count{0};
 
   // First, just count the bits in all words
-  while (thread_word_index <= stop_word_index) {
-    thread_count += __popc(bitmask[tid + start_word_index]);
+  while (thread_word_index <= last_word_index) {
+    thread_count += __popc(bitmask[tid + first_word_index]);
     thread_word_index += blockDim.x * gridDim.x;
   }
 
@@ -115,8 +115,8 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
     bool const first{tid == 0};
     bool const last{not first};
 
-    size_type bit_index = (first) ? start_bit_index : stop_bit_index;
-    size_type word_index = (first) ? start_word_index : stop_word_index;
+    size_type bit_index = (first) ? first_bit_index : last_bit_index;
+    size_type word_index = (first) ? first_word_index : last_word_index;
 
     size_type num_slack_bits = bit_index % word_size;
     if (last) {
