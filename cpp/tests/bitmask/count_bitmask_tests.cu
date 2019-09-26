@@ -56,6 +56,11 @@ TEST_F(CountBitmaskTest, SingleBitAllZero) {
   EXPECT_EQ(0, cudf::count_set_bits(mask.data().get(), 17, 18));
 }
 
+TEST_F(CountBitmaskTest, SingleBitAllSet) {
+  thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
+  EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 13, 14));
+}
+
 TEST_F(CountBitmaskTest, SingleWordAllBitsSet) {
   thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
   EXPECT_EQ(32, cudf::count_set_bits(mask.data().get(), 0, 32));
@@ -81,7 +86,22 @@ TEST_F(CountBitmaskTest, SingleWordSubset2) {
   EXPECT_EQ(28, cudf::count_set_bits(mask.data().get(), 2, 30));
 }
 
-TEST_F(CountBitmaskTest, CountSingleBit) {
-  thrust::device_vector<cudf::bitmask_type> mask(1, ~cudf::bitmask_type{0});
-  EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 13, 14));
+TEST_F(CountBitmaskTest, MultipleWordsAllBits) {
+  thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
+  EXPECT_EQ(320, cudf::count_set_bits(mask.data().get(), 0, 320));
+}
+
+TEST_F(CountBitmaskTest, MultipleWordsSubsetWordBoundary) {
+  thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
+  EXPECT_EQ(256, cudf::count_set_bits(mask.data().get(), 32, 288));
+}
+
+TEST_F(CountBitmaskTest, MultipleWordsSubset) {
+  thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
+  EXPECT_EQ(226, cudf::count_set_bits(mask.data().get(), 67, 293));
+}
+
+TEST_F(CountBitmaskTest, MultipleWordsSingleBit) {
+  thrust::device_vector<cudf::bitmask_type> mask(10, ~cudf::bitmask_type{0});
+  EXPECT_EQ(1, cudf::count_set_bits(mask.data().get(), 67, 68));
 }

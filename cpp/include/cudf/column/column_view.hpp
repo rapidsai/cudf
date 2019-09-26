@@ -124,8 +124,13 @@ class column_view_base {
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the count of null elements
+   *
+   * @note If the column was constructed with `UNKNOWN_NULL_COUNT`, or if at any
+   * point `set_null_count(UNKNOWN_NULL_COUNT)` was invoked, then the
+   * first invocation of `null_count()` will compute and store the count of null
+   * elements indicated by the `null_mask` (if it exists).
    *---------------------------------------------------------------------------**/
-  size_type null_count() const noexcept;
+  size_type null_count() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Indicates if the column contains null elements,
@@ -134,7 +139,7 @@ class column_view_base {
    * @return true One or more elements are null
    * @return false All elements are valid
    *---------------------------------------------------------------------------**/
-  bool has_nulls() const noexcept { return null_count() > 0; }
+  bool has_nulls() const { return null_count() > 0; }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns raw pointer to the underlying bitmask allocation.
@@ -432,7 +437,7 @@ class mutable_column_view : public detail::column_view_base {
    *
    * @param new_null_count The new null count
    *---------------------------------------------------------------------------**/
-  void set_null_count(size_type new_null_count) noexcept;
+  void set_null_count(size_type new_null_count);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a reference to the specified child

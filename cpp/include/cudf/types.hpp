@@ -64,6 +64,14 @@ using size_type = int32_t;
 using bitmask_type = uint32_t;
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates an unknown null count.
+ *
+ * Use this value when constructing any column-like object to indicate that
+ * the null count should be computed on the first invocation of `null_count()`.
+ *---------------------------------------------------------------------------**/
+static constexpr size_type UNKNOWN_NULL_COUNT{-1};
+
+/**---------------------------------------------------------------------------*
  * @brief Indicates the order in which elements should be sorted.
  *---------------------------------------------------------------------------**/
 enum class order : bool {
@@ -158,12 +166,15 @@ inline bool operator==(data_type const& lhs, data_type const& rhs) {
   return lhs.id() == rhs.id();
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Indicates an unknown null count.
+/**
+ * @brief Returns the size in bytes of elements of the specified `data_type`
  *
- * Use this value when constructing any column-like object to indicate that
- * the null count should be computed on the first invocation of `null_count()`.
- *---------------------------------------------------------------------------**/
-static constexpr size_type UNKNOWN_NULL_COUNT{-1};
+ * @note Only fixed-width types are supported
+ *
+ * @throws cudf::logic_error if `is_fixed_width(element_type) == false`
+ *
+ * @return Size in bytes of an element of the specified `data_type`
+ */
+std::size_t size_of(data_type t);
 
 }  // namespace cudf

@@ -18,17 +18,19 @@
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <vector>
 #include <algorithm>
+#include <vector>
 
-namespace cudf {
 /**---------------------------------------------------------------------------*
+ * @file table_view.hpp
  * @brief A `(mutable_)table_view` is a set of `(mutable_)column_view`s of equal
  * size.
  *
  * A `(mutable_)table_view` is non-owning and trivially copyable and should be
  * passed by value.
  *---------------------------------------------------------------------------**/
+
+namespace cudf {
 namespace detail {
 /**---------------------------------------------------------------------------*
  * @brief Base class for a table of `ColumnView`s
@@ -49,7 +51,14 @@ class table_view_base {
                 "table_view_base can only be instantiated with column_view or "
                 "column_view_base.");
 
+ private:
+  std::vector<ColumnView> _columns{};  ///< ColumnViews to columns of equal size
+  size_type _num_rows{};  ///< The number of elements in every column
+
  public:
+  using iterator = decltype(std::begin(_columns));
+  using const_iterator = decltype(std::cbegin(_columns));
+
   /**---------------------------------------------------------------------------*
    * @brief Construct a table from a vector of views
    *
@@ -71,7 +80,12 @@ class table_view_base {
   /**---------------------------------------------------------------------------*
    * @brief Returns an iterator to the first view in the `table`.
    *---------------------------------------------------------------------------**/
-  auto begin() const noexcept { return _columns.begin(); }
+  iterator begin() noexcept { return std::begin(_columns); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns an iterator to the first view in the `table`.
+   *---------------------------------------------------------------------------**/
+  const_iterator begin() const noexcept { return std::begin(_columns); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns an iterator one past the last column view in the `table`.
@@ -79,7 +93,15 @@ class table_view_base {
    * `end()` acts as a place holder. Attempting to dereference it results in
    * undefined behavior.
    *---------------------------------------------------------------------------**/
-  auto end() const noexcept { return _columns.end(); }
+  iterator end() noexcept { return std::end(_columns); }
+
+  /**---------------------------------------------------------------------------*
+   * @brief Returns an iterator one past the last column view in the `table`.
+   *
+   * `end()` acts as a place holder. Attempting to dereference it results in
+   * undefined behavior.
+   *---------------------------------------------------------------------------**/
+  const_iterator end() const noexcept { return std::end(_columns); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns a reference to the view of the specified column
@@ -105,10 +127,6 @@ class table_view_base {
   table_view_base(table_view_base&&) = default;
   table_view_base& operator=(table_view_base const&) = default;
   table_view_base& operator=(table_view_base&&) = default;
-
- private:
-  std::vector<ColumnView> _columns{};  ///< ColumnViews to columns of equal size
-  size_type _num_rows{};  ///< The number of elements in every column
 };
 }  // namespace detail
 

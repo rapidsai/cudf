@@ -55,11 +55,11 @@ column_view_base::column_view_base(data_type type, size_type size,
 }
 
 // If null count is known, returns it. Else, computes it and returns
-size_type column_view_base::null_count() const noexcept {
+size_type column_view_base::null_count() const {
   if (_null_count > cudf::UNKNOWN_NULL_COUNT) {
     return _null_count;
   } else {
-    _null_count = cudf::count_set_bits(null_mask(), 0, size());
+    _null_count = cudf::count_set_bits(null_mask(), offset(), size());
     return null_count();
   }
 }
@@ -90,7 +90,7 @@ mutable_column_view::mutable_column_view(
 }
 
 // Update the null count
-void mutable_column_view::set_null_count(size_type new_null_count) noexcept {
+void mutable_column_view::set_null_count(size_type new_null_count) {
   if (new_null_count > 0) {
     CUDF_EXPECTS(nullable(), "Invalid null count.");
   }
