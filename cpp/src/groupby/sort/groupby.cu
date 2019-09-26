@@ -185,7 +185,7 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
 }
 
 template <bool keys_have_nulls, bool values_have_nulls>
-auto compute_sort_groupby(cudf::table const& input_keys, cudf::table const& input_values,
+std::pair<cudf::table, std::vector<gdf_column*>> compute_sort_groupby(cudf::table const& input_keys, cudf::table const& input_values,
                           std::vector<operators> const& input_ops,
                           std::vector<operation_args*> const& input_ops_args,
                           Options options,

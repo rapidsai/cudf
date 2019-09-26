@@ -53,23 +53,19 @@ using AggRequestType = std::pair<gdf_column*, operators>;
  *---------------------------------------------------------------------------**/
 using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
 
-
 static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
 
 static constexpr std::array<operators, 2> ordered_aggregations = {MEDIAN, QUANTILE};
 
-namespace constexpr_util {
 // Just an utility function to find the existence of on element in a constexpr array
 template <class T, size_t N>
-constexpr bool contains(std::array<T,N> const& haystack, T needle){
+constexpr bool array_contains(std::array<T,N> const& haystack, T needle){
     for(auto i = 0u; i < N; ++i){
        if(haystack[i] == needle)
            return true;
     }
     return false;
 }
-
-}//end namespace constexpr_util
 
 /**---------------------------------------------------------------------------*
  * @brief  To verify that the input operator is part of simple_aggregations list.
@@ -78,7 +74,7 @@ constexpr bool contains(std::array<T,N> const& haystack, T needle){
  * ones (SUM and COUNT).
  *---------------------------------------------------------------------------**/
 inline bool is_simple(operators op) {
-  return constexpr_util::contains(simple_aggregations, op);
+  return array_contains(simple_aggregations, op);
 }
 
 
@@ -88,7 +84,7 @@ inline bool is_simple(operators op) {
  * which cannot be represented as a combination of single-pass aggregations. 
  *---------------------------------------------------------------------------**/
 inline bool is_ordered(operators op) {
-  return constexpr_util::contains(ordered_aggregations, op);
+  return array_contains(ordered_aggregations, op);
 }
 
 /**---------------------------------------------------------------------------*
