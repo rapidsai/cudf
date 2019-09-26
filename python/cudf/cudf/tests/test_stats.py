@@ -4,9 +4,8 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from cudf.core import DataFrame, Series
+from cudf.core import Series
 from cudf.datasets import randomdata
-from cudf.tests.utils import assert_eq
 
 params_dtypes = [np.int32, np.float32, np.float64]
 methods = ["min", "max", "sum", "mean", "var", "std"]
@@ -345,59 +344,3 @@ def test_corr1d(data1, data2):
     got = gs1.corr(gs2)
     expected = ps1.corr(ps2)
     np.testing.assert_approx_equal(got, expected, significant=8)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        randomdata(nrows=50, dtypes={"a": int, "b": float, "c": bool}),
-        randomdata(
-            nrows=50, dtypes={"a": int, "b": float, "c": str, "d": "category"}
-        ),
-        randomdata(nrows=100, dtypes={f"a{x}": float for x in range(100)}),
-        DataFrame({"a": [0, 0, 0], "b": [0, 0, 0]}),
-        pytest.param(
-            randomdata(nrows=0, dtypes={"a": int, "b": float, "c": bool}),
-            marks=[
-                pytest.mark.xfail(
-                    reason="Different empty/null handling for efficiency"
-                )
-            ],
-        ),
-    ],
-)
-def test_corr2d(data):
-    gdf = data
-    pdf = data.to_pandas()
-
-    got = gdf.corr()
-    expected = pdf.corr()
-    assert_eq(got, expected)
-
-
-@pytest.mark.parametrize(
-    "data",
-    [
-        randomdata(nrows=50, dtypes={"a": int, "b": float, "c": bool}),
-        randomdata(
-            nrows=50, dtypes={"a": int, "b": float, "c": str, "d": "category"}
-        ),
-        randomdata(nrows=100, dtypes={f"a{x}": float for x in range(100)}),
-        DataFrame({"a": [0, 0, 0], "b": [0, 0, 0]}),
-        pytest.param(
-            randomdata(nrows=0, dtypes={"a": int, "b": float, "c": bool}),
-            marks=[
-                pytest.mark.xfail(
-                    reason="Different empty/null handling for efficiency"
-                )
-            ],
-        ),
-    ],
-)
-def test_cov2d(data):
-    gdf = data
-    pdf = data.to_pandas()
-
-    got = gdf.corr()
-    expected = pdf.corr()
-    assert_eq(got, expected)
