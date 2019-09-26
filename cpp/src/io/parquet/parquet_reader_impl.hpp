@@ -22,6 +22,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
+#include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
@@ -66,6 +67,16 @@ class reader::Impl {
   table read(int skip_rows, int num_rows, int row_group);
 
  private:
+  /**
+   * @brief Align a size such that aligned 32-bit loads within a memory block
+   * won't read bytes beyond the unaligned cuda-memcheck limit
+   *
+   * @param[in] size in bytes
+   *
+   * @return size_t Size aligned to the next multiple of bytes needed by parquet kernels
+   **/
+  size_t align_size(size_t v) const { return util::round_up_safe(v, sizeof(uint32_t)); }
+
   /**
    * @brief Returns the number of total pages from the given column chunks
    *
