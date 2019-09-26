@@ -60,6 +60,7 @@
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2878 Use upstream merge code in dask_cudf
 
 ## Bug Fixes
 
