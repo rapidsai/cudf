@@ -172,12 +172,28 @@ cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
 
   return non_zero_count.value();
 }
+
+cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
+                                 size_type stop, cudaStream_t stream = 0) {
+  if (nullptr == bitmask) {
+    return 0;
+  }
+  auto num_bits = (stop - start);
+  return (num_bits - detail::count_set_bits(bitmask, start, stop, stream));
+}
+
 }  // namespace detail
 
 // Count non-zero bits in the specified range
 cudf::size_type count_set_bits(bitmask_type const *bitmask, size_type start,
                                size_type stop) {
   return detail::count_set_bits(bitmask, start, stop);
+}
+
+// Count zero bits in the specified range
+cudf::size_type count_unset_bits(bitmask_type const *bitmask, size_type start,
+                                 size_type stop) {
+  return detail::count_unset_bits(bitmask, start, stop);
 }
 
 }  // namespace cudf
