@@ -312,6 +312,10 @@ def edit_distance_matrix(strs, algo=0, devptr=0):
      [6, 5, 0]]
 
     """
+    if strs.size() < 2:
+        raise ValueError("minimum two strings are required!")
+    if algo != 0:
+        raise ValueError("Only `levenshtein` algorithm is supported yet.")
     rtn = pyniNVText.n_edit_distance_matrix(strs, algo, devptr)
     return rtn
 
