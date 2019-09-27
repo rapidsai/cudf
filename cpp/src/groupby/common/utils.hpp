@@ -178,10 +178,8 @@ static void initialize_with_identity(cudf::table const& table,
  *---------------------------------------------------------------------------**/
 static void update_nvcategories(table const& input_keys, table& output_keys,
                          table const& input_values, table& output_values) {
-  gdf_error update_err = nvcategory_gather_table(input_keys, output_keys);
-  CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for keys");
-  update_err =  nvcategory_gather_table(input_values, output_values);
-  CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for values");
+  nvcategory_gather_table(input_keys, output_keys);
+  nvcategory_gather_table(input_values, output_values);
 }
 
 
