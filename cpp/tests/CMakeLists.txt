@@ -1,4 +1,4 @@
-﻿cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
+cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
 project(CUDF_TESTS LANGUAGES C CXX CUDA)
 
@@ -387,12 +387,12 @@ set(TRANSPOSE_TEST_SRC
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
 ###################################################################################################
-# - table tests -----------------------------------------------------------------------------------
+# - legacy table tests -----------------------------------------------------------------------------------
 
-set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+set(LEGACY_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/legacy/table_tests.cu")
 
-ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+ConfigureTest(LEGACY_TABLE_TEST "${LEGACY_TABLE_TEST_SRC}")
 ###################################################################################################
 # - device table tests -----------------------------------------------------------------------------------
 
