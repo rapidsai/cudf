@@ -83,7 +83,7 @@ namespace {
  * @brief Counts the number of non-zero bits in a bitmask in the range
  * `[first_bit_index, last_bit_index]`.
  *
- * Expects `0 <= first_bit_index < last_bit_index`.
+ * Expects `0 <= first_bit_index <= last_bit_index`.
  *
  * @param[in] bitmask The bitmask whose non-zero bits will be counted.
  * @param[in] first_bit_index The index (inclusive) of the first bit to count
@@ -105,7 +105,7 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
 
   // First, just count the bits in all words
   while (thread_word_index <= last_word_index) {
-    thread_count += __popc(bitmask[tid + first_word_index]);
+    thread_count += __popc(bitmask[thread_word_index]);
     thread_word_index += blockDim.x * gridDim.x;
   }
 
@@ -120,7 +120,7 @@ __global__ void count_set_bits_kernel(bitmask_type const *bitmask,
 
     size_type num_slack_bits = bit_index % word_size;
     if (last) {
-      num_slack_bits = (word_size - num_slack_bits) - 1;
+      num_slack_bits = word_size - num_slack_bits - 1;
     }
 
     if (num_slack_bits > 0) {
