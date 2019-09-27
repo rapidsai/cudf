@@ -105,6 +105,7 @@ class Buffer(object):
                 np.dtype(iface["typestr"]),
                 gpu_data=numba.cuda.as_cuda_array(frames[0]).gpu_data,
             )
+            arr, _ = rmm.auto_device(arr)
         else:
             arr = numba.cuda.device_array(
                 (0,), dtype=np.dtype(iface["typestr"])
