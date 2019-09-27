@@ -445,6 +445,16 @@ def test_groupby_external_series(series):
     assert_eq(pxx, gxx)
 
 
+@pytest.mark.parametrize("series", [[0.0, 1.0], [1.0, 1.0, 1.0, 1.0]])
+
+def test_groupby_external_series_incorrect_length(series):
+    pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
+    gdf = DataFrame.from_pandas(pdf)
+    pxx = pdf.groupby(pd.Series(series)).x.sum()
+    gxx = gdf.groupby(cudf.Series(series)).x.sum()
+    assert_eq(pxx, gxx)
+
+
 @pytest.mark.parametrize(
     "level", [0, 1, "a", "b", [0, 1], ["a", "b"], ["a", 1], -1, [-1, -2]]
 )
