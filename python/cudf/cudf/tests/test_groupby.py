@@ -446,7 +446,6 @@ def test_groupby_external_series(series):
 
 
 @pytest.mark.parametrize("series", [[0.0, 1.0], [1.0, 1.0, 1.0, 1.0]])
-
 def test_groupby_external_series_incorrect_length(series):
     pdf = pd.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]})
     gdf = DataFrame.from_pandas(pdf)
