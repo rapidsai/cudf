@@ -100,7 +100,7 @@ TYPED_TEST(TypedColumnTest, ExplicitNullCountAllValid) {
 
 TYPED_TEST(TypedColumnTest, DefaultNullCountAllNull) {
   cudf::column col{this->type(), this->num_elements(), this->data,
-                   this->all_valid_mask};
+                   this->all_null_mask};
   EXPECT_TRUE(col.nullable());
   EXPECT_EQ(this->num_elements(), col.null_count());
 }
