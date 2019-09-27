@@ -57,6 +57,8 @@
 - PR #2806 CSV Reader: Clean-up row offset operations
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
+- PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
+- PR #2810 cudf::allocate_like can optionally always allocate a mask.
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2830 Use YYMMDD tag in custreamz nightly build
