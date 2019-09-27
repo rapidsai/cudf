@@ -1674,6 +1674,44 @@ def test_dataframe_boolmask(mask_shape):
         )
 
 
+@pytest.mark.parametrize(
+    "mask",
+    [
+        [False, False, False],
+        [False, False, True],
+        [False, True, False],
+        [False, True, True],
+        [True, False, False],
+        [True, False, True],
+        [True, True, False],
+        [True, True, True],
+    ],
+)
+def test_dataframe_boolmask_multiindex(mask):
+    pdf = pd.DataFrame({"x": [1, 2, 3], "y": [4, 5, 6], "z": [7, 8, 9]})
+    gdf = DataFrame.from_pandas(pdf)
+    assert_eq(pdf[mask], gdf[mask])
+
+
+def test_dataframe_boolmask_rangeindex_nulls():
+    a = Series([1, 2, None])
+    b = Series([4, None, 6])
+    c = Series([None, 7, 8])
+    gdf = DataFrame({"a": a, "b": b, "c": c})
+    pdf = gdf.to_pandas()
+    assert_eq(gdf[[True, False, True]], pdf[[True, False, True]])
+
+
+def test_dataframe_boolmask_genericindex_nulls():
+    a = Series([1, 2, None])
+    b = Series([4, None, 6])
+    c = Series([None, 7, 8])
+    gdf = DataFrame({"a": a, "b": b, "c": c})
+    gdf = gdf.set_index([1000, 2000, 3000])
+    pdf = gdf.to_pandas()
+    assert_eq(gdf[[True, False, True]], pdf[[True, False, True]])
+
+
 def test_dataframe_assignment():
     pdf = pd.DataFrame()
     for col in "abc":
