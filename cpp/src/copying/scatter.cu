@@ -107,7 +107,7 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 	destination_table->num_rows(),
 	thrust::make_transform_iterator(
 	    typed_scatter_map,
-	    negative_index_converter<true,map_type>{destination_table->num_rows()}),
+	    index_converter<map_type,index_conversion::NEGATIVE_TO_POSITIVE>{destination_table->num_rows()}),
 	source_table->num_rows());
   }
   else {
@@ -116,7 +116,7 @@ void operator()(table const *source_table, gdf_column const& scatter_map,
 	destination_table->num_rows(),
 	thrust::make_transform_iterator(
 	    typed_scatter_map,
-	    negative_index_converter<false,map_type>{destination_table->num_rows()}),
+	    index_converter<map_type>{destination_table->num_rows()}),
 	source_table->num_rows());
   }
 

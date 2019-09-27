@@ -71,7 +71,7 @@ struct dispatch_map_type {
       gather(source_table,
 	     thrust::make_transform_iterator(
 		 typed_gather_map,
-		 negative_index_converter<true,map_type>{source_table->num_rows()}),
+		 index_converter<map_type,index_conversion::NEGATIVE_TO_POSITIVE>{source_table->num_rows()}),
 	     destination_table,
 	     check_bounds,
 	     ignore_out_of_bounds,
@@ -83,7 +83,7 @@ struct dispatch_map_type {
       gather(source_table,
 	     thrust::make_transform_iterator(
 		 typed_gather_map,
-		 negative_index_converter<false,map_type>{source_table->num_rows()}),
+		 index_converter<map_type>{source_table->num_rows()}),
 	     destination_table,
 	     check_bounds,
 	     ignore_out_of_bounds,
