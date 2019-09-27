@@ -109,6 +109,7 @@
 - PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2885 Fix issue with boolmasking DFs with MultiIndex
 
 
 # cuDF 0.9.0 (21 Aug 2019)
