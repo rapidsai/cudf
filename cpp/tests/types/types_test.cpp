@@ -50,6 +50,29 @@ struct WrappersTest : public ::testing::Test {
 
 using WrappersTestBool8 = WrappersTest<cudf::bool8>;
 
+template <typename SourceType>
+struct Bool8CtorTest : public ::testing::Test {
+  Bool8CtorTest() {
+    // Use constant seed for deterministic results
+    rng.seed(0);
+  }
+
+  std::mt19937 rng;
+
+  using uniform_distribution = typename std::conditional_t<
+      std::is_same<SourceType, bool>::value, std::bernoulli_distribution,
+      std::conditional_t<std::is_floating_point<SourceType>::value,
+                         std::uniform_real_distribution<SourceType>,
+                         std::uniform_int_distribution<SourceType>>>;
+
+  uniform_distribution dist{};
+
+  SourceType rand(){
+      return dist(rng);
+  }
+};
+
+
 // These structs enable specializing the underlying type to use in testing
 // comparisons. For example, we specialize cudf::bool8 to map to bool. This
 // means that it's wrapper operators are expected to act like bool even though
@@ -78,8 +101,11 @@ using WrappersNoBool = ::testing::Types<cudf::category, cudf::timestamp, cudf::d
 using Wrappers = ::testing::Types<cudf::category, cudf::timestamp, cudf::date32,
                                   cudf::date64, cudf::bool8>;
 
+using Bool8CastSourceTypes = ::testing::Types<char, bool, float, double, int32_t, int64_t>;
+
 TYPED_TEST_CASE(WrappersTest, Wrappers);
 TYPED_TEST_CASE(WrappersNoBoolTest, WrappersNoBool);
+TYPED_TEST_CASE(Bool8CtorTest, Bool8CastSourceTypes);
 
 /**
  * @brief The number of test trials for each operator
@@ -290,6 +316,16 @@ TEST_F(WrappersTestBool8, CastArithmeticTest)
 
     EXPECT_EQ(static_cast<bool>(static_cast<int>(w1) + static_cast<int>(w2)),
               static_cast<bool>(static_cast<int>(t1) + static_cast<int>(t2)));
+}
+
+// Ensure bool8 constructor is correctly casting the input type to a bool
+TYPED_TEST(Bool8CtorTest, Bool8CastTest) {
+using SourceType = TypeParam;
+  for (int i = 0; i < NUM_TRIALS; ++i) {
+    SourceType t{this->rand()};
+    cudf::bool8 const w{t};
+    EXPECT_EQ(unwrap(w), static_cast<cudf::bool8::value_type>(static_cast<bool>(t)));
+  }
 }
 
 TYPED_TEST(WrappersTest, CompoundAssignmentOperators)

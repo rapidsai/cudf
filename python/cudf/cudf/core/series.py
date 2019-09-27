@@ -143,8 +143,24 @@ class Series(object):
 
     @property
     def values(self):
+        if not utils._have_cupy:
+            raise ModuleNotFoundError("CuPy was not found.")
+        import cupy
+
+        if is_categorical_dtype(self.dtype) or np.issubdtype(
+            self.dtype, np.dtype("object")
+        ):
+            raise TypeError("Data must be numeric")
+
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+
+        return cupy.asarray(self.to_gpu_array())
+
+    @property
+    def values_host(self):
         if self.dtype == np.dtype("object"):
-            return self.data.to_host()
+            return np.array(self.data.to_host(), dtype="object")
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
@@ -1788,8 +1804,10 @@ class Series(object):
         """Compute the cumulative sum of the series"""
         assert axis in (None, 0) and skipna is True
 
-        # pandas always returns int64 dtype if original dtype is int
-        if np.issubdtype(self.dtype, np.integer):
+        # pandas always returns int64 dtype if original dtype is int or `bool`
+        if np.issubdtype(self.dtype, np.integer) or np.issubdtype(
+            self.dtype, np.bool_
+        ):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("sum"),
                 name=self.name,
@@ -1806,8 +1824,10 @@ class Series(object):
         """Compute the cumulative product of the series"""
         assert axis in (None, 0) and skipna is True
 
-        # pandas always returns int64 dtype if original dtype is int
-        if np.issubdtype(self.dtype, np.integer):
+        # pandas always returns int64 dtype if original dtype is int or `bool`
+        if np.issubdtype(self.dtype, np.integer) or np.issubdtype(
+            self.dtype, np.bool_
+        ):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("product"),
                 name=self.name,
