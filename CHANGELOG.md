@@ -29,6 +29,7 @@
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
 - PR #2655 CuPy-based Series and Dataframe .values property
+- PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 
 ## Improvements
 
