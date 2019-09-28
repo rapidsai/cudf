@@ -145,67 +145,65 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
 
         while (bytes_left > 0)
         {
-            uint32_t blen, offset, is_literal;
+            uint32_t blen, offset;
 
             if (lit_len == 0)
             {
-                blen = READ_BYTE(cur);
-                cur++;
-                if (blen & 2)
+                uint8_t b0 = READ_BYTE(cur);
+                if (b0 & 3)
                 {
-                    // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
-                    offset = READ_BYTE(cur) | (READ_BYTE(cur+1) << 8);
-                    cur += 2;
-                    if (blen & 1) // 4-byte offset
+                    uint8_t b1 = READ_BYTE(cur+1);
+                    if (!(b0 & 2))
                     {
-                        offset |= (READ_BYTE(cur) << 16) | (READ_BYTE(cur + 1) << 24);
+                        // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
+                        offset = ((b0 & 0xe0) << 3) | b1;
+                        blen = ((b0 >> 2) & 7) + 4;
                         cur += 2;
                     }
-                    blen = (blen >> 2) + 1;
-                    is_literal = 0;
+                    else
+                    {
+                        // xxxxxx1x: copy with 6-bit length, 2-byte or 4-byte offset
+                        offset = b1 | (READ_BYTE(cur+2) << 8);
+                        if (b0 & 1) // 4-byte offset
+                        {
+                            offset |= (READ_BYTE(cur+3) << 16) | (READ_BYTE(cur + 4) << 24);
+                            cur += 5;
+                        }
+                        else
+                        {
+                            cur += 3;
+                        }
+                        blen = (b0 >> 2) + 1;
+                    }
                     if (offset - 1u >= dst_pos)
                         break;
                 }
                 else
                 {
-                    if (blen & 1)
+                    // xxxxxx00: literal
+                    lit_len = b0 >> 2;
+                    if (lit_len >= 60)
                     {
-                        // xxxxxx01.oooooooo: copy with 3-bit length, 11-bit offset
-                        offset = ((blen & 0xe0) << 3) | READ_BYTE(cur);
-                        cur++;
-                        blen = ((blen >> 2) & 7) + 4;
-                        is_literal = 0;
-                        if (offset - 1u >= dst_pos)
-                            break;
-                    }
-                    else
-                    {
-                        // xxxxxx00: literal
-                        blen >>= 2;
-                        if (blen >= 60)
+                        uint32_t num_bytes = lit_len - 59;
+                        lit_len = READ_BYTE(cur + 1);
+                        if (num_bytes > 1)
                         {
-                            uint32_t num_bytes = blen - 59;
-                            blen = READ_BYTE(cur);
-                            if (num_bytes > 1)
+                            lit_len |= READ_BYTE(cur + 2) << 8;
+                            if (num_bytes > 2)
                             {
-                                blen |= READ_BYTE(cur + 1) << 8;
-                                if (num_bytes > 2)
+                                lit_len |= READ_BYTE(cur + 3) << 16;
+                                if (num_bytes > 3)
                                 {
-                                    blen |= READ_BYTE(cur + 2) << 16;
-                                    if (num_bytes > 3)
-                                    {
-                                        blen |= READ_BYTE(cur + 3) << 24;
-                                        if (blen >= end)
-                                            break;
-                                    }
+                                    lit_len |= READ_BYTE(cur + 4) << 24;
+                                    if (lit_len >= end)
+                                        break;
                                 }
                             }
-                            cur += num_bytes;
                         }
-                        blen += 1;
-                        lit_len = blen;
-                        is_literal = 64;
+                        cur += num_bytes;
                     }
+                    cur += 1;
+                    lit_len += 1;
                 }
             }
             if (lit_len != 0)
@@ -222,14 +220,24 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                 {
                     NANOSLEEP(50);
                 }
+                dst_pos += blen;
+                if (bytes_left < blen)
+                {
+                    break;
+                }
+                bytes_left -= blen;
+                blen += 64;
             }
-            dst_pos += blen;
-            if (bytes_left < blen)
+            else
             {
-                break;
+                dst_pos += blen;
+                if (bytes_left < blen)
+                {
+                    break;
+                }
+                bytes_left -= blen;
             }
-            bytes_left -= blen;
-            b->len = blen + is_literal;
+            b->len = blen;
             b->offset = offset;
             b++;
             if (++batch_len == BATCH_SIZE)
@@ -434,13 +442,13 @@ unsnap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int co
         }
         else if (t < 64)
         {
-            // WARP1: LZ77
-            snappy_process_symbols(s, t & 0x1f);
+            // WARP1: prefetch byte stream for WARP0
+            snappy_prefetch_bytestream(s, t & 0x1f);
         }
         else if (t < 96)
         {
-            // WARP2: prefetch byte stream for WARP0
-            snappy_prefetch_bytestream(s, t & 0x1f);
+            // WARP2: LZ77
+            snappy_process_symbols(s, t & 0x1f);
         }
     }
     __syncthreads();
