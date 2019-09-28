@@ -1847,6 +1847,13 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf["a"].tail(-2), gdf["a"][2:])
 
 
+def test_tail_for_string():
+    gdf = DataFrame()
+    gdf["id"] = Series(["a", "b"], dtype=np.object)
+    gdf["v"] = Series([1, 2])
+    assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
+
+
 @pytest.mark.parametrize("drop", [True, False])
 def test_reset_index(pdf, gdf, drop):
     assert_eq(pdf.reset_index(drop=drop), gdf.reset_index(drop=drop))
