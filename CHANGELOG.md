@@ -1,6 +1,7 @@
 # cuDF 0.10.0 (Date TBD)
 
 ## New Features
+
 - PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
@@ -59,7 +60,6 @@
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
-
 
 ## Bug Fixes
 
