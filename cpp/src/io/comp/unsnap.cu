@@ -118,6 +118,17 @@ __device__ void snappy_prefetch_bytestream(unsnap_state_s *s, int t)
 
 #define READ_BYTE(pos)  s->q.buf[(pos) & (PREFETCH_SIZE-1)]
 
+// Nobody likes goto statements, but branches are expensive
+#define USE_GOTO 1
+#if USE_GOTO
+#define GOTO(lbl)    goto lbl
+#define LBL(lbl)     lbl:
+#define NOGOTO(expr)
+#else
+#define GOTO(lbl)
+#define LBL(lbl)
+#define NOGOTO(expr) expr
+#endif
 
 __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
 {
@@ -177,6 +188,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                     }
                     if (offset - 1u >= dst_pos)
                         break;
+                    GOTO(o_nonliteral);
                 }
                 else
                 {
@@ -204,10 +216,12 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                     }
                     cur += 1;
                     lit_len += 1;
+                    GOTO(o_literal);
                 }
             }
-            if (lit_len != 0)
+            NOGOTO(if (lit_len != 0))
             {
+                LBL(o_literal)
                 offset = cur;
                 blen = min(lit_len, 64);
                 lit_len -= blen;
@@ -227,9 +241,11 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                 }
                 bytes_left -= blen;
                 blen += 64;
+                GOTO(o_done);
             }
-            else
+            NOGOTO(else)
             {
+                LBL(o_nonliteral)
                 dst_pos += blen;
                 if (bytes_left < blen)
                 {
@@ -237,6 +253,7 @@ __device__ uint32_t snappy_decode_symbols(unsnap_state_s *s)
                 }
                 bytes_left -= blen;
             }
+            LBL(o_done)
             b->len = blen;
             b->offset = offset;
             b++;
