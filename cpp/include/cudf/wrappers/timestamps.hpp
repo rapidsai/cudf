@@ -16,12 +16,6 @@
 
 #pragma once
 
-// Figure out a way to avoid the macro redefinitions in <simt/../details/__config>
-#ifndef __CUDACC__
-#  undef __host__
-#  undef __device__
-#endif
-
 #include <simt/chrono>
 
 /**---------------------------------------------------------------------------*
@@ -30,7 +24,6 @@
  * varying resolutions as durations since the UNIX epoch.
  *---------------------------------------------------------------------------**/
 namespace cudf {
-namespace exp {
 
 namespace detail {
 
@@ -52,5 +45,4 @@ using timestamp_ms = detail::timestamp<int64_t, 1, 1000>;
 using timestamp_us = detail::timestamp<int64_t, 1, 1000000>;
 using timestamp_ns = detail::timestamp<int64_t, 1, 1000000000>;
 
-}  // exp
 }  // cudf

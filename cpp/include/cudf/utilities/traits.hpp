@@ -17,6 +17,7 @@
 #pragma once
 
 #include <cudf/types.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 
 #include <type_traits>
@@ -86,6 +87,37 @@ constexpr inline bool is_numeric(data_type type) {
 }
 
 /**---------------------------------------------------------------------------*
+ * @brief Indicates whether the type `T` is a timestamp type.
+ *
+ * @tparam T  The type to verify
+ * @return true `T` is a timestamp
+ * @return false  `T` is not a timestamp
+ *---------------------------------------------------------------------------**/
+template <typename T>
+constexpr inline bool is_timestamp() {
+  return (
+    std::is_same<cudf::timestamp_D, T>::value ||
+    std::is_same<cudf::timestamp_s, T>::value ||
+    std::is_same<cudf::timestamp_ms, T>::value ||
+    std::is_same<cudf::timestamp_us, T>::value ||
+    std::is_same<cudf::timestamp_ns, T>::value );
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief Indicates whether `type` is a timestamp `data_type`.
+ *
+ * "Timestamp" types are int32_t or int64_t durations since the unix epoch.
+ *
+ * @param type The `data_type` to verify
+ * @return true `type` is a timestamp
+ * @return false `type` is not a timestamp
+ *---------------------------------------------------------------------------**/
+constexpr inline bool is_timestamp(data_type type) {
+  return cudf::exp::type_dispatcher(
+      type, [](auto dummy) { return is_timestamp<decltype(dummy)>(); }, 0);
+}
+
+/**---------------------------------------------------------------------------*
  * @brief Indicates whether elements of type `T` are fixed-width.
  *
  * Elements of a fixed-width type all have the same size in bytes.
@@ -98,7 +130,7 @@ template <typename T>
 constexpr inline bool is_fixed_width() {
   // TODO Add fixed width wrapper types
   // Is a category fixed width?
-  return cudf::is_numeric<T>();
+  return cudf::is_numeric<T>() || cudf::is_timestamp<T>();
 }
 
 /**---------------------------------------------------------------------------*

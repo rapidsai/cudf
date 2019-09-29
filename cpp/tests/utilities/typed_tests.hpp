@@ -18,6 +18,7 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
+#include <cudf/wrappers/timestamps.hpp>
 #include <tests/utilities/type_list.hpp>
 
 #include <array>
@@ -75,6 +76,19 @@ using NumericTypes =
     cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
 
 /**---------------------------------------------------------------------------*
+ * @brief Provides a list of all timestamp types supported in libcudf for use
+ * in a GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all timestamp types in libcudf
+ * TYPED_TEST_CAST(MyTypedFixture, cudf::test::TimestampTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using TimestampTypes =
+    cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms, timestamp_us, timestamp_ns>;
+
+/**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
  * typed test.
  *
@@ -87,7 +101,7 @@ using NumericTypes =
  * TYPED_TEST_CAST(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using AllTypes = Concat<NumericTypes>;
+using AllTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all `cudf::type_id`s
