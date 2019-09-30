@@ -99,7 +99,8 @@ ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
 # - column tests ----------------------------------------------------------------------------------
 
 set(COLUMN_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
@@ -125,7 +126,9 @@ set(HASH_GROUPBY_TEST_SRC
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
 set(GROUPBY_WO_AGG_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/single_column_groupby.cu"
+    )
 
 ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 
@@ -387,12 +390,12 @@ set(TRANSPOSE_TEST_SRC
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
 ###################################################################################################
-# - table tests -----------------------------------------------------------------------------------
+# - legacy table tests -----------------------------------------------------------------------------------
 
-set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+set(LEGACY_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/legacy/table_tests.cu")
 
-ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+ConfigureTest(LEGACY_TABLE_TEST "${LEGACY_TABLE_TEST_SRC}")
 ###################################################################################################
 # - device table tests -----------------------------------------------------------------------------------
 
