@@ -19,9 +19,11 @@
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/utilities/type_dispatcher.hpp>
 #include "./utilities.h"
 
 #include <rmm/thrust_rmm_allocator.h>
+#include <thrust/iterator/transform_iterator.h>
 #include <thrust/sort.h>
 #include <thrust/sequence.h>
 #include <thrust/transform.h>
@@ -77,15 +79,14 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
     auto d_new_offsets = offsets_view.data<int32_t>();
     // create new offsets array
     thrust::transform_inclusive_scan( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(count),
+        d_indices,
+        d_indices + count,
         d_new_offsets,
         [d_column, d_offsets, d_indices] __device__ (size_type idx) {
-            size_type index = d_indices[idx];
-            if( d_column.nullable() && d_column.is_null(index) )
+            if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
-            size_type offset = index ? d_offsets[index-1] : 0;
-            return d_offsets[index] - offset;
+            size_type offset = idx ? d_offsets[idx-1] : 0;
+            return d_offsets[idx] - offset;
         },
         thrust::plus<int32_t>());
 
