@@ -195,6 +195,30 @@ def test_set_index_w_series():
         dd.assert_eq(expect, got)
 
 
+@pytest.mark.parametrize("nelem", [10, 200, 1333])
+def test_rearrange_by_divisions(nelem):
+    with dask.config.set(scheduler="single-threaded"):
+        np.random.seed(42)
+        df = pd.DataFrame(
+            {
+                "x": np.random.randint(0, 20, size=nelem),
+                "y": np.random.normal(size=nelem),
+            }
+        )
+        ddf1 = dd.from_pandas(df, npartitions=4)
+        gdf1 = dd.from_pandas(cudf.DataFrame.from_pandas(df), npartitions=4)
+        divisions = (0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20)
+
+        expect = dd.shuffle.rearrange_by_divisions(
+            ddf1, "x", divisions=divisions, shuffle="tasks"
+        )
+        result = dd.shuffle.rearrange_by_divisions(
+            gdf1, "x", divisions=divisions, shuffle="tasks"
+        )
+
+        dd.assert_eq(expect, result)
+
+
 def test_assign():
     np.random.seed(0)
     df = pd.DataFrame(

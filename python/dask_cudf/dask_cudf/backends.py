@@ -52,7 +52,16 @@ try:
 
     @group_split.register(cudf.DataFrame)
     def group_split_cudf(df, c, k):
-        return df.scatter_by_map(c, map_size=k)
+        ind_name = df.index.name
+        reset_name = ind_name or "index"
+        parts = [
+            part.set_index(reset_name)
+            for part in df.reset_index().scatter_by_map(c, map_size=k)
+        ]
+        if ind_name is None:
+            for part in parts:
+                part.index.name = ind_name
+        return dict(zip(range(k), parts))
 
 
 except ImportError:
