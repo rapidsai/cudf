@@ -80,7 +80,7 @@ column_view column::view() const {
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
-      null_count(), 0,
+      _null_count(), 0,
       child_views};
 }
 
@@ -114,7 +114,8 @@ mutable_column_view column::mutable_view() {
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
   if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
-    _null_count = cudf::count_unset_bits(view().null_mask(), 0, size());
+    _null_count = cudf::count_unset_bits(
+        static_cast<bitmask_type const *>(_null_mask.data()), 0, size());
   }
   return _null_count;
 }
