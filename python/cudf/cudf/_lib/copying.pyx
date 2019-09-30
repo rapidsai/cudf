@@ -63,7 +63,7 @@ def _normalize_maps(maps, size):
     return maps
 
 
-def gather(source, maps, dest=None):
+def gather(source, maps, bounds_check=True):
     """
     Gathers elements from source into dest (if given) using the gathermap maps.
     If dest is not given, it is allocated inside the function and returned.
@@ -72,86 +72,51 @@ def gather(source, maps, dest=None):
     ----------
     source : Column or list of Columns
     maps : DeviceNDArray
-    dest : Column or list of Columns (optional)
 
     Returns
     -------
     Column or list of Columns, or None if dest is given
     """
-    from cudf.core.column import column
+    from cudf.core.column import column, CategoricalColumn
 
     if isinstance(source, (list, tuple)):
-        if dest is not None:
-            assert(isinstance(dest, (list, tuple)))
         in_cols = source
-        out_cols = dest
     else:
         in_cols = [source]
-        out_cols = None if dest is None else [dest]
 
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
-        if dest is not None:
-            out_cols[i] = column.as_column(out_cols[i])
 
     if in_cols[0].dtype == np.dtype("object"):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
 
-    maps = _normalize_maps(maps, in_size)
+    maps = column.as_column(maps)
 
     col_count=len(in_cols)
     gather_count = len(maps)
 
-    cdef gdf_column** c_in_cols = cols_view_from_cols(in_cols)
-    cdef cudf_table* c_in_table = new cudf_table(c_in_cols, col_count)
+    cdef cudf_table* c_in_table = table_from_columns(in_cols)
+    cdef cudf_table c_out_table
+    cdef gdf_column* c_maps = column_view_from_column(maps)
+    cdef bool c_bounds_check = bounds_check
 
-    # check out_cols == in_cols and out_cols=None cases
-    cdef bool is_same_input = False
-    cdef gdf_column** c_out_cols
-    cdef cudf_table* c_out_table
-    if out_cols == in_cols:
-        is_same_input = True
-        c_out_cols = c_in_cols
-        c_out_table = c_in_table
-    elif out_cols is not None:
-        c_out_cols = cols_view_from_cols(out_cols)
-        c_out_table = new cudf_table(c_out_cols, col_count)
-    else:
-        out_cols = clone_columns_with_size(in_cols, gather_count)
-        c_out_cols = cols_view_from_cols(out_cols)
-        c_out_table = new cudf_table(c_out_cols, col_count)
+    with nogil:
+        c_out_table = cpp_gather(c_in_table, c_maps[0], c_bounds_check)
 
-    cdef uintptr_t c_maps_ptr
-    cdef gdf_index_type* c_maps
-    if gather_count != 0:
-        if out_cols[0].dtype == np.dtype("object"):
-            out_size = out_cols[0].data.size()
-        else:
-            out_size = out_cols[0].data.size
-        assert gather_count == out_size
+    out_cols = columns_from_table(&c_out_table)
 
-        c_maps_ptr = get_ctype_ptr(maps)
-        c_maps = <gdf_index_type*>c_maps_ptr
+    for i, in_col in enumerate(in_cols):
+        if isinstance(in_col, CategoricalColumn):
+            out_cols[i] = CategoricalColumn(
+                data=out_cols[i].data,
+                mask=out_cols[i].mask,
+                categories=in_col.cat().categories,
+                ordered=in_col.cat().ordered)
 
-        with nogil:
-            cpp_gather(c_in_table, c_maps, c_out_table)
-
-    for i, col in enumerate(out_cols):
-        col._update_null_count(c_out_cols[i].null_count)
-        if col.dtype == np.dtype("object") and len(col) > 0:
-            update_nvstrings_col(
-                out_cols[i],
-                <uintptr_t>c_out_cols[i].dtype_info.category)
-
-    if is_same_input is False:
-        free_table(c_out_table, c_out_cols)
-
-    free_table(c_in_table, c_in_cols)
-
-    if dest is not None:
-        return
+    free_column(c_maps)
+    free_table(c_in_table)
 
     if isinstance(source, (list, tuple)):
         return out_cols
@@ -159,14 +124,12 @@ def gather(source, maps, dest=None):
         return out_cols[0]
 
 
-def scatter(source, maps, target):
+def scatter(source, maps, target, bounds_check=True):
     from cudf.core.column import column
 
     cdef cudf_table* c_source_table
     cdef cudf_table* c_target_table
     cdef cudf_table c_result_table
-    cdef uintptr_t c_maps_ptr
-    cdef gdf_index_type* c_maps
 
     source_cols = source
     target_cols = target
@@ -185,16 +148,17 @@ def scatter(source, maps, target):
     c_source_table = table_from_columns(source_cols)
     c_target_table = table_from_columns(target_cols)
 
-    maps = _normalize_maps(maps, len(target_cols[0]))
-
-    c_maps_ptr = get_ctype_ptr(maps)
-    c_maps = <gdf_index_type*>c_maps_ptr
+    cdef gdf_column* c_maps = column_view_from_column(maps)
+    cdef bool c_bounds_check = bounds_check
 
     with nogil:
         c_result_table = cpp_scatter(
             c_source_table[0],
-            c_maps,
-            c_target_table[0])
+            c_maps[0],
+            c_target_table[0],
+            c_bounds_check)
+
+    free_column(c_maps)
 
     result_cols = columns_from_table(&c_result_table)
 
