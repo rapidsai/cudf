@@ -227,6 +227,38 @@ def test_merge_1col_left(
     dd.assert_eq(expect, got)
 
 
+def test_merge_should_fail():
+    # Expected failure cases described in #2694
+    df1 = cudf.DataFrame()
+    df1["a"] = [1, 2, 3, 4, 5, 6] * 2
+    df1["b"] = np.random.randint(0, 12, 12)
+
+    df2 = cudf.DataFrame()
+    df2["a"] = [7, 2, 3, 8, 5, 9] * 2
+    df2["c"] = np.random.randint(0, 12, 12)
+
+    left = dgd.from_cudf(df1, 1).groupby("a").b.min().to_frame()
+    right = dgd.from_cudf(df2, 1).groupby("a").c.min().to_frame()
+
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["nonCol"])
+    with pytest.raises(ValueError):
+        left.merge(right, how="left", on=["b"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["c"])
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on=["a"])
+
+    # Same column names
+    df2["b"] = np.random.randint(0, 12, 12)
+    right = dgd.from_cudf(df2, 1).groupby("a").b.min().to_frame()
+
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on="NonCol")
+    with pytest.raises(KeyError):
+        left.merge(right, how="left", on="a")
+
+
 @pytest.mark.parametrize("how", ["inner", "left"])
 def test_indexed_join(how):
     p_left = pd.DataFrame({"x": np.arange(10)}, index=np.arange(10) * 2)
