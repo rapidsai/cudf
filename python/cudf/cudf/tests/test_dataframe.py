@@ -3627,7 +3627,7 @@ def test_tolist_mixed_nulls():
     "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_df_astype_numeric_to_numeric(dtype, as_dtype):
-    data = [1,2,3]
+    data = [1,2,3, None, 5]
     pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
     gdf = DataFrame.from_pandas(pdf)
 
@@ -3637,5 +3637,51 @@ def test_df_astype_numeric_to_numeric(dtype, as_dtype):
 
     assert_eq(pdf, gdf)
 
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_df_astype_numeric_to_other(dtype, as_dtype):
+    data = [1, 2, 3, None, 5]
+    pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
+    gdf = DataFrame.from_pandas(pdf)
 
+    pdf = pdf.astype(as_dtype)
+    gdf = gdf.astype(as_dtype)
+
+    assert_eq(pdf, gdf)
     
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "str",
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
+)
+def test_series_astype_string_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05"]
+        kwargs = {"format": "%Y-%m-%d"}
+    else:
+        data = ["1", "2", "3"]
+        kwargs = {}
+    psr = pd.DataFrame(data, columns='test')
+    gsr = gd.from_pandas(psr)
+    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
