@@ -215,8 +215,7 @@ def test_rearrange_by_divisions(nelem):
         result = dd.shuffle.rearrange_by_divisions(
             gdf1, "x", divisions=divisions, shuffle="tasks"
         )
-
-        dd.assert_eq(expect, result)
+        dd.assert_eq(expect, result, check_index=False)
 
 
 def test_assign():
