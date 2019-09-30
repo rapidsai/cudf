@@ -143,8 +143,24 @@ class Series(object):
 
     @property
     def values(self):
+        if not utils._have_cupy:
+            raise ModuleNotFoundError("CuPy was not found.")
+        import cupy
+
+        if is_categorical_dtype(self.dtype) or np.issubdtype(
+            self.dtype, np.dtype("object")
+        ):
+            raise TypeError("Data must be numeric")
+
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+
+        return cupy.asarray(self.to_gpu_array())
+
+    @property
+    def values_host(self):
         if self.dtype == np.dtype("object"):
-            return self.data.to_host()
+            return np.array(self.data.to_host(), dtype="object")
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
@@ -1592,8 +1608,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = libcudf.copying.gather(self._column, rinds)
-        index = libcudf.copying.gather(self.index.as_column(), rinds)
+        col = self._column[rinds]
+        index = self.index.as_column()[rinds]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):

@@ -351,7 +351,7 @@ cudf::table construct_join_output_df(
     }
 
     cudf::table result(join_size, result_dtypes, result_dtype_infos, true);
-    bool const check_bounds{ join_type != JoinType::INNER_JOIN };
+    bool const ignore_out_of_bounds{ join_type != JoinType::INNER_JOIN };
 
     // Construct the left columns
     if (not left_non_common_indices.empty()) {
@@ -360,8 +360,7 @@ cudf::table construct_join_output_df(
 
       cudf::detail::gather(&left_source_table,
                            static_cast<index_type const *>(left_indices->data),
-                           &left_destination_table, check_bounds);
-
+                           &left_destination_table, false, ignore_out_of_bounds);
       gdf_error update_err = nvcategory_gather_table(left_source_table,left_destination_table);
       CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
@@ -376,7 +375,7 @@ cudf::table construct_join_output_df(
 
       cudf::detail::gather(&right_source_table,
                            static_cast<index_type const *>(right_indices->data),
-                           &right_destination_table, check_bounds);
+                           &right_destination_table, false, ignore_out_of_bounds);
       gdf_error update_err = nvcategory_gather_table(right_source_table,right_destination_table);
       CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
@@ -396,12 +395,12 @@ cudf::table construct_join_output_df(
         cudf::detail::gather(
             &right_source_table,
             static_cast<index_type const *>(right_indices->data),
-            &join_destination_table, check_bounds);
+            &join_destination_table, false, ignore_out_of_bounds);
       }
 
       cudf::detail::gather(&join_source_table,
                            static_cast<index_type const *>(left_indices->data),
-                           &join_destination_table, check_bounds);
+                           &join_destination_table, false, ignore_out_of_bounds);
       gdf_error update_err = nvcategory_gather_table(join_source_table,join_destination_table);
       CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
