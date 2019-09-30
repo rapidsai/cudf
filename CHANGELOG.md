@@ -22,8 +22,16 @@
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
 - PR #2785 Add nvstrings Python docs
 - PR #2786 Add benchmarks option to root build.sh
+- PR #2802 Add `cudf::repeat()` and `cudf.Series.repeat()`
 - PR #2773 Add Fisher's unbiased kurtosis and skew for Series/DataFrame
 - PR #2748 Parquet Reader: Add option to specify loading of PANDAS index
+- PR #2807 Add scatter_by_map to DataFrame python API
+- PR #2836 Add nvstrings.code_points method
+- PR #2844 Add Series/DataFrame notnull
+- PR #2858 Add GTest type list utilities
+- PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
+- PR #2655 CuPy-based Series and Dataframe .values property
+- PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 
 ## Improvements
 
@@ -51,6 +59,13 @@
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
 - PR #2640 Add dask wait/persist exmaple to 10 minute guide
+- PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
+- PR #2831 Add `column` argument to `DataFrame.drop`
+- PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
+- PR #2810 cudf::allocate_like can optionally always allocate a mask.
+- PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
+- PR #2856 Update group_split_cudf to use scatter_by_map
+- PR #2830 Use YYMMDD tag in custreamz nightly build
 
 ## Bug Fixes
 
@@ -62,8 +77,10 @@
 - PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
+- PR #2628 groupby_without_aggregation non-nullable input table produces non-nullable output
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
+- PR #2649 Fix groupby issue resulting from column_empty bug
 - PR #2658 Fix astype() for null categorical columns
 - PR #2660 fix column string category and timeunit concat in the java API
 - PR #2664 ORC reader: fix `skip_rows` larger than first stripe
@@ -94,9 +111,19 @@
 - PR #2794 Fix async race in NVCategory::get_value and get_value_bounds
 - PR #2795 Fix java build/cast error
 - PR #2496 Fix improper merge of two dataframes when names differ
+- PR #2824 Fix issue with incorrect result when Numeric Series replace is called several times
 - PR #2751 Replace value with null
 - PR #2765 Fix Java inequality comparisons for string category
 - PR #2818 Fix java join API to use new C++ join API
+- PR #2841 Fix nvstrings.slice and slice_from for range (0,0)
+- PR #2837 Fix join benchmark
+- PR #2809 Add hash_df and group_split dispatch functions for dask
+- PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
+- PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2859 Fix tail method issue for string columns
+- PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
+- PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
+- PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 
 
 # cuDF 0.9.0 (21 Aug 2019)

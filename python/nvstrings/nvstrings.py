@@ -419,12 +419,7 @@ class nvstrings:
         if isinstance(key, int):
             return self.gather([key])
         if isinstance(key, slice):
-            start = 0 if key.start is None else key.start
-            end = self.size() if key.stop is None else key.stop
-            step = 1 if key.step is None or key.step == 0 else key.step
-            # negative slicing check
-            end = self.size() + end if end < 0 else end
-            start = self.size() + start if start < 0 else start
+            start, end, step = key.indices(self.size())
             rtn = pyniNVStrings.n_sublist(self.m_cptr, start, end, step)
             if rtn is not None:
                 rtn = nvstrings(rtn)
@@ -2637,3 +2632,33 @@ class nvstrings:
         24
         """
         return pyniNVStrings.n_device_memory(self.m_cptr)
+
+    def code_points(self, results):
+        """
+        Fills the given results array with the UTF-8 code point values
+        for each character of each string. Use the len() method to
+        determine the size of each sub-array of integers.
+
+        Parameters
+        ----------
+        results : GPU memory pointer
+            Memory size must be able to hold at least size()*len()
+            of uint32 values.
+
+        Examples
+        --------
+        >>> import nvstrings
+        >>> from librmm_cffi import librmm as rmm
+        >>> import numpy as np
+        >>> s = nvstrings.to_device(["a","xyz", "éee"])
+        >>> s.len()
+        [1, 3, 3]
+        >>> results = rmm.device_array(7,dtype=np.uint32)
+        >>> s.code_points(results.device_ctypes_pointer.value)
+        >>> print(results.copy_to_host())
+        [   97   120   121   122 50089   101   101]
+
+        """
+        if results is None:
+            raise ValueError("results must be device pointer")
+        pyniNVStrings.n_code_points(self.m_cptr, results)

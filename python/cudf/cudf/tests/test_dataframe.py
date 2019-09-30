@@ -15,6 +15,7 @@ from cudf.core.buffer import Buffer
 from cudf.core.dataframe import DataFrame, Series
 from cudf.tests import utils
 from cudf.tests.utils import assert_eq, gen_rand
+from cudf.utils.utils import _have_cupy
 
 
 def test_buffer_basic():
@@ -212,6 +213,16 @@ def test_dataframe_drop_method():
     assert tuple(df.columns) == ("a", "b", "c")
     assert tuple(df.drop(["a", "b"]).columns) == ("c",)
     assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(["a", "b"]).columns) == ("c",)
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns=["a", "b"]).columns) == ("c",)
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns="a").columns) == ("b", "c")
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns=["a"]).columns) == ("b", "c")
+    assert tuple(df.columns) == ("a", "b", "c")
+    assert tuple(df.drop(columns=["a", "b", "c"]).columns) == tuple()
+    assert tuple(df.columns) == ("a", "b", "c")
 
     # Test drop error
     with pytest.raises(NameError) as raises:
@@ -220,6 +231,12 @@ def test_dataframe_drop_method():
     with pytest.raises(NameError) as raises:
         df.drop(["a", "d", "b"])
     raises.match("column 'd' does not exist")
+    with pytest.raises(ValueError) as raises:
+        df.drop("a", axis=1, columns="a")
+    raises.match("Cannot specify both")
+    with pytest.raises(ValueError) as raises:
+        df.drop(axis=1)
+    raises.match("Need to specify at least")
 
 
 def test_dataframe_column_add_drop():
@@ -1516,14 +1533,9 @@ def test_series_hash_encode(nrows):
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_cuda_array_interface(dtype):
-    try:
-        import cupy
-
-        _have_cupy = True
-    except ImportError:
-        _have_cupy = False
     if not _have_cupy:
         pytest.skip("CuPy is not installed")
+    import cupy
 
     np_data = np.arange(10).astype(dtype)
     cupy_data = cupy.array(np_data)
@@ -1833,6 +1845,13 @@ def test_head_tail(nelem, data_type):
     check_frame_series_equality(gdf["a"].tail(), gdf["a"][-5:])
     check_frame_series_equality(gdf["a"].tail(3), gdf["a"][-3:])
     check_frame_series_equality(gdf["a"].tail(-2), gdf["a"][2:])
+
+
+def test_tail_for_string():
+    gdf = DataFrame()
+    gdf["id"] = Series(["a", "b"], dtype=np.object)
+    gdf["v"] = Series([1, 2])
+    assert_eq(gdf.tail(3), gdf.to_pandas().tail(3))
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -2527,7 +2546,7 @@ def test_isnull_isna():
     assert_eq(ps.isna(), gs.isna())
 
 
-def test_notna():
+def test_notna_notnull():
     # float & strings some missing
     ps = pd.DataFrame(
         {
@@ -2538,12 +2557,16 @@ def test_notna():
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # integer & string none missing
     ps = pd.DataFrame({"a": [0, 1, 2, 3, 4], "b": ["a", "b", "u", "h", "d"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # all missing
     ps = pd.DataFrame(
@@ -2552,35 +2575,46 @@ def test_notna():
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # empty
     ps = pd.DataFrame({"a": []})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # one missing
     ps = pd.DataFrame({"a": [np.nan], "b": [None]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # strings missing
     ps = pd.DataFrame({"a": ["a", "b", "c", None, "e"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # strings none missing
     ps = pd.DataFrame({"a": ["a", "b", "c", "d", "e"]})
     gs = DataFrame.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
     assert_eq(ps.a.notna(), gs.a.notna())
+    assert_eq(ps.notnull(), gs.notnull())
+    assert_eq(ps.a.notnull(), gs.a.notnull())
 
     # unnamed series
     ps = pd.Series([0, 1, 2, np.nan, 4, None, 6])
     gs = Series.from_pandas(ps)
     assert_eq(ps.notna(), gs.notna())
+    assert_eq(ps.notnull(), gs.notnull())
 
 
 def test_ndim():
@@ -3157,11 +3191,87 @@ def test_create_dataframe_column():
         ["m", "a", "d", "v"],
     ],
 )
-def test_series_values_property(data):
+def test_series_values_host_property(data):
     pds = pd.Series(data)
     gds = Series(data)
 
-    np.testing.assert_array_equal(pds.values, gds.values)
+    np.testing.assert_array_equal(pds.values, gds.values_host)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        [1, 2, 4],
+        [],
+        [5.0, 7.0, 8.0],
+        pytest.param(
+            pd.Categorical(["a", "b", "c"]),
+            marks=pytest.mark.xfail(raises=TypeError),
+        ),
+        pytest.param(
+            ["m", "a", "d", "v"], marks=pytest.mark.xfail(raises=TypeError)
+        ),
+    ],
+)
+def test_series_values_property(data):
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed")
+    import cupy
+
+    pds = pd.Series(data)
+    gds = Series(data)
+    gds_vals = gds.values
+    assert isinstance(gds_vals, cupy.ndarray)
+    np.testing.assert_array_equal(gds_vals.get(), pds.values)
+
+
+@pytest.mark.parametrize(
+    "data",
+    [
+        {"A": [1, 2, 3], "B": [4, 5, 6]},
+        {"A": [1.0, 2.0, 3.0], "B": [4.0, 5.0, 6.0]},
+        {"A": [1, 2, 3], "B": [1.0, 2.0, 3.0]},
+        {"A": np.float32(np.arange(3)), "B": np.float64(np.arange(3))},
+        pytest.param(
+            {"A": [1, None, 3], "B": [1, 2, None]},
+            marks=pytest.mark.xfail(
+                reason="Nulls not supported by as_gpu_matrix"
+            ),
+        ),
+        pytest.param(
+            {"A": [None, None, None], "B": [None, None, None]},
+            marks=pytest.mark.xfail(
+                reason="Nulls not supported by as_gpu_matrix"
+            ),
+        ),
+        pytest.param(
+            {"A": [], "B": []},
+            marks=pytest.mark.xfail(reason="Requires at least 1 row"),
+        ),
+        pytest.param(
+            {"A": [1, 2, 3], "B": ["a", "b", "c"]},
+            marks=pytest.mark.xfail(
+                reason="str or categorical not supported by as_gpu_matrix"
+            ),
+        ),
+        pytest.param(
+            {"A": pd.Categorical(["a", "b", "c"]), "B": ["d", "e", "f"]},
+            marks=pytest.mark.xfail(
+                reason="str or categorical not supported by as_gpu_matrix"
+            ),
+        ),
+    ],
+)
+def test_df_values_property(data):
+    if not _have_cupy:
+        pytest.skip("CuPy is not installed")
+    pdf = pd.DataFrame.from_dict(data)
+    gdf = DataFrame.from_pandas(pdf)
+
+    pmtr = pdf.values
+    gmtr = gdf.values.get()
+
+    np.testing.assert_array_equal(pmtr, gmtr)
 
 
 def test_value_counts():

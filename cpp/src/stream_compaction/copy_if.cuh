@@ -394,7 +394,7 @@ table copy_if(table const &input, Filter filter, cudaStream_t stream = 0) {
   }
   else if (output_size > 0) {
     // Allocate/initialize output columns
-    output = cudf::allocate_like(input, output_size, true, stream);
+    output = cudf::allocate_like(input, output_size, RETAIN, stream);
 
     // 4. Scatter the output data and valid mask
     for (int col = 0; col < input.num_columns(); col++) {

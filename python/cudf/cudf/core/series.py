@@ -143,8 +143,24 @@ class Series(object):
 
     @property
     def values(self):
+        if not utils._have_cupy:
+            raise ModuleNotFoundError("CuPy was not found.")
+        import cupy
+
+        if is_categorical_dtype(self.dtype) or np.issubdtype(
+            self.dtype, np.dtype("object")
+        ):
+            raise TypeError("Data must be numeric")
+
+        if len(self) == 0:
+            return cupy.asarray([], dtype=self.dtype)
+
+        return cupy.asarray(self.to_gpu_array())
+
+    @property
+    def values_host(self):
         if self.dtype == np.dtype("object"):
-            return self.data.to_host()
+            return np.array(self.data.to_host(), dtype="object")
         elif is_categorical_dtype(self.dtype):
             return self._column.to_pandas().values
         else:
@@ -1287,6 +1303,11 @@ class Series(object):
         mask = cudautils.notna_mask(self.data, self.nullmask.mem)
         return Series(mask, name=self.name, index=self.index)
 
+    def notnull(self):
+        """Identify non-missing values in a Series. Alias for notna.
+        """
+        return self.notna()
+
     def nans_to_nulls(self):
         """
         Convert nans (if any) to nulls
@@ -1587,8 +1608,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = libcudf.copying.gather(self._column, rinds)
-        index = libcudf.copying.gather(self.index.as_column(), rinds)
+        col = self._column[rinds]
+        index = self.index.as_column()[rinds]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):
@@ -1783,8 +1804,10 @@ class Series(object):
         """Compute the cumulative sum of the series"""
         assert axis in (None, 0) and skipna is True
 
-        # pandas always returns int64 dtype if original dtype is int
-        if np.issubdtype(self.dtype, np.integer):
+        # pandas always returns int64 dtype if original dtype is int or `bool`
+        if np.issubdtype(self.dtype, np.integer) or np.issubdtype(
+            self.dtype, np.bool_
+        ):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("sum"),
                 name=self.name,
@@ -1801,8 +1824,10 @@ class Series(object):
         """Compute the cumulative product of the series"""
         assert axis in (None, 0) and skipna is True
 
-        # pandas always returns int64 dtype if original dtype is int
-        if np.issubdtype(self.dtype, np.integer):
+        # pandas always returns int64 dtype if original dtype is int or `bool`
+        if np.issubdtype(self.dtype, np.integer) or np.issubdtype(
+            self.dtype, np.bool_
+        ):
             return Series(
                 self.astype(np.int64)._column._apply_scan_op("product"),
                 name=self.name,
@@ -2596,6 +2621,12 @@ class Series(object):
     @property
     def __cuda_array_interface__(self):
         return self._column.__cuda_array_interface__
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        data = self._column.repeat(repeats)
+        new_index = self.index.repeat(repeats)
+        return Series(data, index=new_index, name=self.name)
 
 
 truediv_int_dtype_corrections = {
