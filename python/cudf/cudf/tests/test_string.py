@@ -770,7 +770,8 @@ def test_string_groupby_key(str_data, num_keys):
     "str_data", [[], ["a", "b", "c", "d", "e"], [None, None, None, None, None]]
 )
 @pytest.mark.parametrize("num_cols", [1, 2, 3])
-def test_string_groupby_non_key(str_data, num_cols):
+@pytest.mark.parametrize("agg", ["count", "max", "min"])
+def test_string_groupby_non_key(str_data, num_cols, agg):
     other_data = [1, 2, 3, 4, 5][: len(str_data)]
 
     pdf = pd.DataFrame()
@@ -781,33 +782,13 @@ def test_string_groupby_non_key(str_data, num_cols):
     pdf["a"] = other_data
     gdf["a"] = other_data
 
-    expect = pdf.groupby("a", as_index=False).count()
-    got = gdf.groupby("a", as_index=False).count()
+    expect = getattr(pdf.groupby("a", as_index=False), agg)()
+    got = getattr(gdf.groupby("a", as_index=False), agg)()
 
     expect = expect.sort_values(["a"]).reset_index(drop=True)
     got = got.sort_values(["a"]).reset_index(drop=True)
 
-    assert_eq(expect, got, check_dtype=False)
-
-    expect = pdf.groupby("a", as_index=False).max()
-    got = gdf.groupby("a", as_index=False).max()
-
-    expect = expect.sort_values(["a"]).reset_index(drop=True)
-    got = got.sort_values(["a"]).reset_index(drop=True)
-
-    if len(expect) == 0 and len(got) == 0:
-        for i in range(num_cols):
-            expect[i] = expect[i].astype("str")
-
-    assert_eq(expect, got, check_dtype=False)
-
-    expect = pdf.groupby("a", as_index=False).min()
-    got = gdf.groupby("a", as_index=False).min()
-
-    expect = expect.sort_values(["a"]).reset_index(drop=True)
-    got = got.sort_values(["a"]).reset_index(drop=True)
-
-    if len(expect) == 0 and len(got) == 0:
+    if agg in ["min", "max"] and len(expect) == 0 and len(got) == 0:
         for i in range(num_cols):
             expect[i] = expect[i].astype("str")
 

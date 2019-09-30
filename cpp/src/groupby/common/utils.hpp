@@ -178,8 +178,28 @@ static void initialize_with_identity(cudf::table const& table,
  *---------------------------------------------------------------------------**/
 static void update_nvcategories(table const& input_keys, table& output_keys,
                          table const& input_values, table& output_values) {
-  nvcategory_gather_table(input_keys, output_keys);
-  nvcategory_gather_table(input_values, output_values);
+  gdf_error update_err = nvcategory_gather_table(input_keys, output_keys);
+  CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for keys");
+
+  // Filter out columns from (input/output)_values where the output datatype is
+  // not GDF_STRING_CATEGORY. This is possible in aggregations like `count`.
+  std::vector<gdf_column *> string_input_value_cols;
+  std::vector<gdf_column *> string_output_value_cols;
+
+  for (gdf_size_type i = 0; i < input_values.num_columns(); i++) {
+    if (output_values.get_column(i)->dtype == GDF_STRING_CATEGORY) {
+      string_input_value_cols.push_back(
+        const_cast<gdf_column*>(input_values.get_column(i)));
+      string_output_value_cols.push_back(
+        const_cast<gdf_column*>(output_values.get_column(i)));
+    }
+  }
+  
+  cudf::table string_input_values(string_input_value_cols);
+  cudf::table string_output_values(string_output_value_cols);
+  
+  update_err = nvcategory_gather_table(string_input_values, string_output_values);
+  CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error for values");
 }
 
 
