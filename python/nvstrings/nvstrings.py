@@ -419,12 +419,7 @@ class nvstrings:
         if isinstance(key, int):
             return self.gather([key])
         if isinstance(key, slice):
-            start = 0 if key.start is None else key.start
-            end = self.size() if key.stop is None else key.stop
-            step = 1 if key.step is None or key.step == 0 else key.step
-            # negative slicing check
-            end = self.size() + end if end < 0 else end
-            start = self.size() + start if start < 0 else start
+            start, end, step = key.indices(self.size())
             rtn = pyniNVStrings.n_sublist(self.m_cptr, start, end, step)
             if rtn is not None:
                 rtn = nvstrings(rtn)

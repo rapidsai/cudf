@@ -10,27 +10,24 @@ from cudf._lib.cudf import *
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 from cudf._lib.nvtx import nvtx_range_push, nvtx_range_pop
+from cudf._lib.includes.csv cimport (
+    reader as csv_reader,
+    reader_options as csv_reader_options
+)
 from libc.stdlib cimport free
-from libcpp.vector cimport vector
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
+from libcpp.vector cimport vector
 
 from cudf._lib.includes.io cimport *
 
-import nvstrings
 import numpy as np
 import collections.abc as abc
-import os
+
 import errno
+import os
 
 cimport cudf._lib.includes.csv as cpp_csv
-
-
-def is_file_like(obj):
-    if not (hasattr(obj, 'read') or hasattr(obj, 'write')):
-        return False
-    if not hasattr(obj, "__iter__"):
-        return False
-    return True
 
 
 _quoting_enum = {
@@ -95,24 +92,8 @@ cpdef read_csv(
 
     nvtx_range_push("CUDF_READ_CSV", "purple")
 
-    cdef cpp_csv.reader_options args = cpp_csv.reader_options()
-
-    # Populate args struct
-    if is_file_like(filepath_or_buffer):
-        buffer = filepath_or_buffer.read()
-        # check if StringIO is used
-        if hasattr(buffer, 'encode'):
-            args.filepath_or_buffer = buffer.encode()
-        else:
-            args.filepath_or_buffer = buffer
-        args.input_data_form = HOST_BUFFER
-    else:
-        if not os.path.isfile(filepath_or_buffer):
-            raise FileNotFoundError(
-                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
-            )
-        args.filepath_or_buffer = str(filepath_or_buffer).encode()
-        args.input_data_form = FILE_PATH
+    # Setup reader options
+    cdef csv_reader_options args = csv_reader_options()
 
     if header == 'infer':
         header = -1
@@ -207,25 +188,51 @@ cpdef read_csv(
     if prefix is not None:
         args.prefix = prefix.encode()
 
-    cdef unique_ptr[cpp_csv.reader] reader
+    # Create reader from source
+    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef string filepath
+    if buffer is None:
+        if not os.path.isfile(filepath_or_buffer):
+            raise FileNotFoundError(
+                errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
+            )
+        filepath = <string>str(filepath_or_buffer).encode()
+
+    cdef unique_ptr[csv_reader] reader
     with nogil:
-        reader = unique_ptr[cpp_csv.reader](new cpp_csv.reader(args))
+        if buffer is None:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(filepath, args)
+            )
+        elif buffer.shape[0] != 0:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(<char *>&buffer[0], buffer.shape[0], args)
+            )
+        else:
+            reader = unique_ptr[csv_reader](
+                new csv_reader(<char *>NULL, 0, args)
+            )
 
+    # Read data into columns
     cdef cudf_table c_out_table
-    if byte_range is not None:
-        c_out_table = reader.get().read_byte_range(
-            byte_range[0], byte_range[1]
-        )
-    elif skipfooter != 0 or skiprows != 0 or nrows is not None:
-        c_out_table = reader.get().read_rows(
-            skiprows, skipfooter, nrows if nrows is not None else -1
-        )
-    else:
-        c_out_table = reader.get().read()
+    cdef int c_range_offset = byte_range[0] if byte_range is not None else 0
+    cdef int c_range_size = byte_range[1] if byte_range is not None else 0
+    cdef int c_skiprows = skiprows if skiprows is not None else 0
+    cdef int c_skipfooter = skipfooter if skipfooter is not None else 0
+    cdef int c_nrows = nrows if nrows is not None else -1
+    with nogil:
+        if c_range_offset !=0 or c_range_size != 0:
+            c_out_table = reader.get().read_byte_range(
+                c_range_offset, c_range_size
+            )
+        elif c_skiprows != 0 or c_skipfooter != 0 or c_nrows != -1:
+            c_out_table = reader.get().read_rows(
+                c_skiprows, c_skipfooter, c_nrows
+            )
+        else:
+            c_out_table = reader.get().read()
 
-    # Extract parsed columns
-
-    # Build dataframe from parsed columns
+    # Construct dataframe from columns
     cast_col_name_to_int = names is not None and isinstance(names[0], (int))
     df = table_to_dataframe(&c_out_table, int_col_names=cast_col_name_to_int)
 
