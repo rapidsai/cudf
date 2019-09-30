@@ -1,6 +1,5 @@
 import pickle
 
-import numba.cuda
 import numpy as np
 
 import rmm
@@ -98,18 +97,27 @@ class Buffer(object):
         """
         assert len(frames) == 1, "Use Buffer.serialize() for serialization"
         iface = header["cuda_array_interface"]
-        if iface["shape"][0] > 0:
-            arr = numba.cuda.devicearray.DeviceNDArray(
-                iface["shape"],
-                iface["strides"],
-                np.dtype(iface["typestr"]),
-                gpu_data=numba.cuda.as_cuda_array(frames[0]).gpu_data,
+        if (
+            len(iface["shape"]) == 0 or 0 in iface["shape"]
+        ):  # The array is empty
+            arr = rmm.device_array(
+                iface["shape"], dtype=np.dtype(iface["typestr"])
             )
-            arr, _ = rmm.auto_device(arr)
         else:
-            arr = numba.cuda.device_array(
-                (0,), dtype=np.dtype(iface["typestr"])
-            )
+            # Updating the data pointer to the frame data.
+            iface["data"] = frames[0].__cuda_array_interface__["data"]
+
+            class _dummy_iface_obj:
+                """ This class is simply an object exposing __cuda_array_interface__"""
+
+                def __init__(self, cuda_interface):
+                    self.__cuda_array_interface__ = cuda_interface
+
+            # Allocating a new RMM CUDA array with shape and dtype as specified in `iface`
+            # and copy the frame data to it, which makes the memory survive until the new
+            # Buffer goes out of scope.
+            # TODO: when DASK supports RMM, we can simply return it as is.
+            arr, _ = rmm.auto_device(_dummy_iface_obj(iface))
         return Buffer(arr, header=header)
 
     def __reduce__(self):
