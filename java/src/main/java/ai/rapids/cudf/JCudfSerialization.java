@@ -606,14 +606,17 @@ public class JCudfSerialization {
 
     if (validCount < headers.length) {
       SerializedTableHeader[] filteredHeaders = new SerializedTableHeader[validCount];
+      HostMemoryBuffer[] filteredBuffers = new HostMemoryBuffer[validCount];
       int at = 0;
       for (int i = 0; i < headers.length; i++) {
         if (headers[i].numRows > 0) {
           filteredHeaders[at] = headers[i];
+          filteredBuffers[at] = dataBuffers[i];
           at++;
         }
       }
       headers = filteredHeaders;
+      dataBuffers = filteredBuffers;
     }
 
     DataOutputStream dout;
