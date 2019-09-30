@@ -67,8 +67,8 @@ struct compare_strings_fn
         if( (d_lhs.nullable() && d_lhs.is_null(lidx)) ||
             (d_rhs.nullable() && d_rhs.is_null(ridx)) )
             return d_lhs.is_null(lidx)==d_rhs.is_null(ridx);
-        cudf::string_view lstr = d_lhs.element<cudf::string_view>(lidx);
-        cudf::string_view rstr = d_rhs.element<cudf::string_view>(ridx);
+        cudf::strings::string_view lstr = d_lhs.element<cudf::strings::string_view>(lidx);
+        cudf::strings::string_view rstr = d_rhs.element<cudf::strings::string_view>(ridx);
         return lstr.compare(rstr)==0;
     }
     column_device_view d_lhs;

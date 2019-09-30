@@ -100,7 +100,7 @@ void print( strings_column_view strings,
             size_type bytes = d_offsets[idx] - offset;     // specialization on element()
             string_view d_str( d_strings + offset, bytes ); // method of column_device_view
             if( (max_width > 0) && (d_str.characters() > max_width) )
-                bytes = d_str.byte_offset_for(max_width);
+                bytes = d_str.byte_offset(max_width);
             return bytes+1; // allow for null-terminator on non-null strings
         },
         thrust::plus<int32_t>());

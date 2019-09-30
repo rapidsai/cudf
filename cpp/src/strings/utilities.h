@@ -34,7 +34,7 @@ namespace detail
  * @param[in] stream Stream to execute any device code against.
  * @return Device object pointer.
  */
-std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
+std::unique_ptr<string_view, std::function<void(string_view*)>>
     string_from_host( const char* str, cudaStream_t stream=0 );
 
 /**
@@ -45,7 +45,7 @@ std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
  * @param stream Stream to execute any device code against.
  * @return Strings array
  */
-rmm::device_vector<cudf::string_view> create_string_array_from_column(
+rmm::device_vector<string_view> create_string_array_from_column(
     cudf::strings_column_view strings,
     cudaStream_t stream=0 );
 
@@ -60,7 +60,7 @@ rmm::device_vector<cudf::string_view> create_string_array_from_column(
  * @return Offsets column
  */
 std::unique_ptr<cudf::column> offsets_from_string_array(
-    const rmm::device_vector<cudf::string_view>& strings,
+    const rmm::device_vector<string_view>& strings,
     cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
@@ -75,26 +75,10 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
  * @return chars column
  */
 std::unique_ptr<cudf::column> chars_from_string_array(
-    const rmm::device_vector<cudf::string_view>& strings,
+    const rmm::device_vector<string_view>& strings,
     const int32_t* d_offsets,
     cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
-
-
-/**
- * @brief This utility will copy the argument string's data into
- * the provided buffer.
- *
- * @param buffer Device buffer to copy to.
- * @param d_string String to copy.
- * @return Points to the end of the buffer after the copy.
- */
-__device__ inline char* copy_string( char* buffer, const cudf::string_view& d_string )
-{
-    memcpy( buffer, d_string.data(), d_string.size() );
-    return buffer + d_string.size();
-}
-
 
 } // namespace detail
 } // namespace strings

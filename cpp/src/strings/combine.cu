@@ -22,6 +22,7 @@
 #include <cudf/strings/string_view.cuh>
 #include <utilities/error_utils.hpp>
 #include "./utilities.h"
+#include "./utilities.cuh"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
@@ -48,7 +49,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
     auto separator_ptr = detail::string_from_host(separator, stream);
     auto d_separator = *separator_ptr;
     auto narep_ptr = detail::string_from_host(narep, stream);
-    cudf::string_view d_narep(nullptr,0);
+    string_view d_narep(nullptr,0);
     if( narep_ptr )
         d_narep = *narep_ptr;
 
@@ -82,16 +83,16 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
         thrust::make_counting_iterator<unsigned int>(count),
         d_results_offsets,
         [d_strings, d_others, d_separator, d_narep] __device__ (size_type idx) {
-            cudf::string_view d_str1;
+            string_view d_str1;
             if( d_strings.nullable() && d_strings.is_null(idx) )
-                d_str1 = cudf::string_view(nullptr,0);
+                d_str1 = string_view(nullptr,0);
             else
-                d_str1 = d_strings.element<cudf::string_view>(idx);
-            cudf::string_view d_str2;
+                d_str1 = d_strings.element<string_view>(idx);
+            string_view d_str2;
             if( d_others.nullable() && d_others.is_null(idx) )
-                d_str2 = cudf::string_view(nullptr,0);
+                d_str2 = string_view(nullptr,0);
             else
-                d_str2 = d_others.element<cudf::string_view>(idx);
+                d_str2 = d_others.element<string_view>(idx);
             if( (d_str1.is_null() || d_str2.is_null()) && d_narep.is_null() )
                 return 0; // null output case
             size_type bytes = 0;
@@ -120,16 +121,16 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
     auto d_results_chars = chars_view.data<char>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, d_others, d_separator, d_narep, d_results_offsets, d_results_chars] __device__(size_type idx){
-            cudf::string_view d_str1;
+            string_view d_str1;
             if( d_strings.nullable() && d_strings.is_null(idx) )
-                d_str1 = cudf::string_view(nullptr,0);
+                d_str1 = string_view(nullptr,0);
             else
-                d_str1 = d_strings.element<cudf::string_view>(idx);
-            cudf::string_view d_str2;
+                d_str1 = d_strings.element<string_view>(idx);
+            string_view d_str2;
             if( d_others.nullable() && d_others.is_null(idx) )
-                d_str2 = cudf::string_view(nullptr,0);
+                d_str2 = string_view(nullptr,0);
             else
-                d_str2 = d_others.element<cudf::string_view>(idx);
+                d_str2 = d_others.element<string_view>(idx);
             if( (d_str1.is_null() || d_str2.is_null()) && d_narep.is_null() )
                 return; // null -- nothing to do
             // concat the two strings with appropriate separator and narep

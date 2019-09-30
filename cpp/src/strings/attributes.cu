@@ -140,8 +140,6 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
             auto d_str = d_column.element<string_view>(idx);
             auto result = d_results + (idx ? d_offsets[idx-1] :0);
             thrust::copy( thrust::seq, d_str.begin(), d_str.end(), result);
-            //for( auto itr = d_str.begin(); itr != d_str.end(); ++itr )
-            //    *result++ = (unsigned int)*itr;
         });
     //
     results->set_null_count(0); // no nulls here

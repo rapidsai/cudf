@@ -33,7 +33,7 @@ namespace detail
 {
 
 // Used to build a temporary string_view object from a single host string.
-std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
+std::unique_ptr<string_view, std::function<void(string_view*)>>
     string_from_host( const char* str, cudaStream_t stream )
 {
     if( !str )
@@ -46,13 +46,13 @@ std::unique_ptr<cudf::string_view, std::function<void(cudf::string_view*)>>
                               cudaMemcpyHostToDevice, stream ));
     CUDA_TRY(cudaStreamSynchronize(stream));
 
-    auto deleter = [](cudf::string_view* sv) { RMM_FREE(const_cast<char*>(sv->data()),0); };
-    return std::unique_ptr<cudf::string_view,
-        decltype(deleter)>{ new cudf::string_view(d_str,length), deleter};
+    auto deleter = [](string_view* sv) { RMM_FREE(const_cast<char*>(sv->data()),0); };
+    return std::unique_ptr<string_view,
+        decltype(deleter)>{ new string_view(d_str,length), deleter};
 }
 
 // build an array of string_view objects from a strings column
-rmm::device_vector<cudf::string_view> create_string_array_from_column(
+rmm::device_vector<string_view> create_string_array_from_column(
     cudf::strings_column_view strings,
     cudaStream_t stream )
 {
@@ -61,22 +61,22 @@ rmm::device_vector<cudf::string_view> create_string_array_from_column(
     auto d_column = *strings_column;
 
     auto count = strings.size();
-    rmm::device_vector<cudf::string_view> strings_array(count);
-    cudf::string_view* d_strings = strings_array.data().get();
+    rmm::device_vector<string_view> strings_array(count);
+    string_view* d_strings = strings_array.data().get();
     thrust::for_each_n( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_strings] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )
-                d_strings[idx] = cudf::string_view(nullptr,0);
+                d_strings[idx] = string_view(nullptr,0);
             else
-                d_strings[idx] = d_column.element<cudf::string_view>(idx);
+                d_strings[idx] = d_column.element<string_view>(idx);
         });
     return strings_array;
 }
 
 // build a strings offsets column from an array of string_views
 std::unique_ptr<cudf::column> offsets_from_string_array(
-    const rmm::device_vector<cudf::string_view>& strings,
+    const rmm::device_vector<string_view>& strings,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {
     size_type count = strings.size();
@@ -102,7 +102,7 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
 
 // build a strings chars column from an array of string_views
 std::unique_ptr<cudf::column> chars_from_string_array(
-    const rmm::device_vector<cudf::string_view>& strings,
+    const rmm::device_vector<string_view>& strings,
     const int32_t* d_offsets,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {

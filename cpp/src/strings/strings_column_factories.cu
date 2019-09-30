@@ -36,7 +36,7 @@ std::unique_ptr<column> make_strings_column(
     cudaStream_t stream,
     rmm::mr::device_memory_resource* mr)
 {
-    size_type count = (size_type)strings.size();
+    size_type count = strings.size();
     // maybe a separate factory for creating null strings-column
     CUDF_EXPECTS(count > 0, "must specify at least one pair");
 
@@ -49,10 +49,9 @@ std::unique_ptr<column> make_strings_column(
         thrust::make_counting_iterator<size_t>(count),
         [d_strings] __device__ (size_t idx) {
             auto item = d_strings[idx];
-            return item.first ? item.second : (size_t)0;
+            return item.first ? item.second : 0;
         },
-        (size_t)0,
-        thrust::plus<size_t>());
+        0, thrust::plus<size_t>());
     CUDF_EXPECTS( bytes < std::numeric_limits<size_type>::max(), "total size of strings is too large for cudf column" );
 
     // build offsets column
@@ -63,7 +62,7 @@ std::unique_ptr<column> make_strings_column(
         offsets_view.data<int32_t>(),
         [d_strings] __device__ (size_type idx) {
             thrust::pair<const char*,size_t> item = d_strings[idx];
-            return ( item.first ? (int32_t)item.second : 0 );
+            return ( item.first ? static_cast<int32_t>(item.second) : 0 );
         },
         thrust::plus<int32_t>() );
 

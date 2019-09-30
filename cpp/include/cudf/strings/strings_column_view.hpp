@@ -326,7 +326,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**---------------------------------------------------------------------------*
- * @brief Row-wise oncatenates the given list of strings columns with the first column.
+ * @brief Row-wise concatenates the given list of strings columns with the first column.
  * 
  * @code
  * s1 = ['aa', null, '', 'aa']

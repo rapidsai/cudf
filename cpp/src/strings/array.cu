@@ -183,12 +183,12 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
     auto execpol = rmm::exec_policy(stream);
 
     // create strings arrays
-    rmm::device_vector<cudf::string_view> strings_array =
+    rmm::device_vector<string_view> strings_array =
         detail::create_string_array_from_column(strings,stream);
-    cudf::string_view* d_strings = strings_array.data().get();
-    rmm::device_vector<cudf::string_view> values_array =
+    string_view* d_strings = strings_array.data().get();
+    rmm::device_vector<string_view> values_array =
         detail::create_string_array_from_column(values,stream);
-    cudf::string_view* d_values = values_array.data().get();
+    string_view* d_values = values_array.data().get();
     // do the scatter
     thrust::scatter( execpol->on(stream),
                      d_values, d_values+elements,
@@ -247,7 +247,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
     auto replace = detail::string_from_host(string, stream);
     auto d_replace = *replace;
     // create strings array
-    rmm::device_vector<cudf::string_view> strings =
+    rmm::device_vector<string_view> strings =
         detail::create_string_array_from_column(handler, stream);
     auto d_strings = strings.data().get();
     // replace specific elements

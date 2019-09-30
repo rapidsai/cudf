@@ -486,13 +486,13 @@ class alignas(16) mutable_column_device_view
  * @return string_view instance representing this element at this index
  *---------------------------------------------------------------------------**/
 template <>
-__device__ inline string_view const column_device_view::element<string_view>(
+__device__ inline strings::string_view const column_device_view::element<strings::string_view>(
     size_type element_index) const noexcept {
       size_type index = element_index + _offset; // account for this view's _offset
       const int32_t* d_offsets = d_children[0].data<int32_t>();
       const char* d_strings = d_children[1].data<char>();
       size_type offset = index ? d_offsets[index-1] : 0;
-      return string_view{d_strings + offset, d_offsets[index] - offset};
+      return strings::string_view{d_strings + offset, d_offsets[index] - offset};
 }
 
 //template <>
