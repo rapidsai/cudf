@@ -78,9 +78,9 @@ column_view column::view() const {
   }
 
   return column_view{
-      _type,        _size,
+      type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
-      _null_count,  0,
+      null_count(), 0,
       child_views};
 }
 
@@ -94,7 +94,7 @@ mutable_column_view column::mutable_view() {
   }
 
   // Store the old null count
-  auto current_null_count = _null_count;
+  auto current_null_count = null_count();
 
   // The elements of a column could be changed through a `mutable_column_view`,
   // therefore the existing `null_count` is no longer valid. Reset it to
@@ -102,8 +102,8 @@ mutable_column_view column::mutable_view() {
   // `null_count()`.
   set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
-  return mutable_column_view{_type,
-                             _size,
+  return mutable_column_view{type(),
+                             size(),
                              _data.data(),
                              static_cast<bitmask_type *>(_null_mask.data()),
                              current_null_count,
