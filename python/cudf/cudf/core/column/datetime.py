@@ -246,7 +246,7 @@ class DatetimeColumn(column.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = libcudf.copying.gather(self, col_inds)
+        col_keys = self[col_inds]
         col_inds.name = self.name
         return col_keys, col_inds
 
@@ -284,7 +284,7 @@ class DatetimeColumn(column.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = libcudf.copying.gather(sortedvals, segs)
+        out_col = column.as_column(sortedvals)[segs]
         return out_col
 
     @property
