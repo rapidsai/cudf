@@ -13,11 +13,11 @@ from cudf._lib.includes.orc cimport (
 )
 from libc.stdlib cimport free
 from libcpp.memory cimport unique_ptr
+from libcpp.string cimport string
 
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 
-from io import BytesIO
 import errno
 import os
 
@@ -39,41 +39,37 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     options.use_index = use_index
 
     # Create reader from source
-    cdef unique_ptr[orc_reader] reader
-    cdef const unsigned char[:] buffer = None
-    if isinstance(filepath_or_buffer, BytesIO):
-        buffer = filepath_or_buffer.getbuffer()
-    elif isinstance(filepath_or_buffer, bytes):
-        buffer = filepath_or_buffer
-
-    if buffer is not None:
-        reader = unique_ptr[orc_reader](
-            new orc_reader(<char *>&buffer[0], buffer.shape[0], options)
-        )
-    else:
+    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef string filepath
+    if buffer is None:
         if not os.path.isfile(filepath_or_buffer):
             raise FileNotFoundError(
                 errno.ENOENT, os.strerror(errno.ENOENT), filepath_or_buffer
             )
-        reader = unique_ptr[orc_reader](
-            new orc_reader(str(filepath_or_buffer).encode(), options)
-        )
+        filepath = <string>str(filepath_or_buffer).encode()
+
+    cdef unique_ptr[orc_reader] reader
+    with nogil:
+        if buffer is None:
+            reader = unique_ptr[orc_reader](
+                new orc_reader(filepath, options)
+            )
+        else:
+            reader = unique_ptr[orc_reader](
+                new orc_reader(<char *>&buffer[0], buffer.shape[0], options)
+            )
 
     # Read data into columns
     cdef cudf_table c_out_table
-    if skip_rows is not None:
-        c_out_table = reader.get().read_rows(
-            skip_rows,
-            num_rows if num_rows is not None else 0
-        )
-    elif num_rows is not None:
-        c_out_table = reader.get().read_rows(
-            skip_rows if skip_rows is not None else 0,
-            num_rows
-        )
-    elif stripe is not None:
-        c_out_table = reader.get().read_stripe(stripe)
-    else:
-        c_out_table = reader.get().read_all()
+    cdef int c_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef int c_num_rows = num_rows if num_rows is not None else -1
+    cdef int c_stripe = stripe if stripe is not None else -1
+    with nogil:
+        if c_skip_rows != 0 or c_num_rows != -1:
+            c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
+        elif c_stripe != -1:
+            c_out_table = reader.get().read_stripe(c_stripe)
+        else:
+            c_out_table = reader.get().read_all()
 
     return table_to_dataframe(&c_out_table)
