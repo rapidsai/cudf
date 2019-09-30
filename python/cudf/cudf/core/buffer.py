@@ -26,9 +26,7 @@ class Buffer(object):
         mem = rmm.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(
-        self, mem, size=None, capacity=None, categorical=False, header=None
-    ):
+    def __init__(self, mem, size=None, capacity=None, categorical=False):
         if size is None:
             if categorical:
                 size = len(mem)
@@ -41,11 +39,6 @@ class Buffer(object):
                 size = mem.size
         if capacity is None:
             capacity = size
-        # memoryviews can come from UCX when the length of the DataFrame
-        # is 0 -- for example: joins resulting in empty frames or metadata
-        if isinstance(mem, memoryview):
-            mem = np.frombuffer(mem, dtype=header["dtype"])
-            size = mem.size
         self.mem = cudautils.to_device(mem)
         _BufferSentry(self.mem).ndim(1)
         self.size = size
@@ -118,7 +111,7 @@ class Buffer(object):
             # Buffer goes out of scope.
             # TODO: when DASK supports RMM, we can simply return it as is.
             arr, _ = rmm.auto_device(_dummy_iface_obj(iface))
-        return Buffer(arr, header=header)
+        return Buffer(arr)
 
     def __reduce__(self):
         cpumem = self.to_array()
