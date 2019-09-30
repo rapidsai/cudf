@@ -1,4 +1,5 @@
 import pickle
+import types
 
 import numpy as np
 
@@ -100,17 +101,15 @@ class Buffer(object):
             # Updating the data pointer to the frame data.
             iface["data"] = frames[0].__cuda_array_interface__["data"]
 
-            class _dummy_iface_obj:
-                """ This class is simply an object exposing __cuda_array_interface__"""
-
-                def __init__(self, cuda_interface):
-                    self.__cuda_array_interface__ = cuda_interface
+            # We need an object that exposes __cuda_array_interface__
+            _dummy_iface = types.SimpleNamespace()
+            _dummy_iface.__cuda_array_interface__ = iface
 
             # Allocating a new RMM CUDA array with shape and dtype as specified in `iface`
             # and copy the frame data to it, which makes the memory survive until the new
             # Buffer goes out of scope.
             # TODO: when DASK supports RMM, we can simply return it as is.
-            arr, _ = rmm.auto_device(_dummy_iface_obj(iface))
+            arr, _ = rmm.auto_device(_dummy_iface)
         return Buffer(arr)
 
     def __reduce__(self):
