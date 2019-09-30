@@ -26,6 +26,7 @@
 #include <thrust/count.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+#include <utilities/error_utils.hpp>
 
 #include "nvstrings/NVStrings.h"
 
