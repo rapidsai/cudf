@@ -7,6 +7,8 @@ from cudf.core.column import CategoricalColumn
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
+_axis_map = {"index": 0, "columns": 1}
+
 
 def concat(objs, axis=0, ignore_index=False, sort=None):
     """Concatenate DataFrames, Series, or Indices row-wise.
@@ -35,6 +37,16 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
 
     typs = set(type(o) for o in objs)
     allowed_typs = {Series, DataFrame}
+
+    if isinstance(axis, str):
+        axis = _axis_map.get(axis, None)
+        if axis is None:
+            raise ValueError(
+                '`axis` must be 0 / "index" or 1 / "columns", got: {0}'.format(
+                    axis
+                )
+            )
+
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
         assert typs.issubset(allowed_typs)
