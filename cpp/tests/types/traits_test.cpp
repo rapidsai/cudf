@@ -68,6 +68,21 @@ TEST_F(TraitsTest, NonNumericDataTypesAreNotNumeric) {
 }
 */
 
+TEST_F(TraitsTest, NumericDataTypesAreNotTimestamps) {
+  using namespace cudf::test;
+  EXPECT_TRUE(std::none_of(numeric_type_ids.begin(), numeric_type_ids.end(),
+                          [](cudf::type_id type) {
+                            return cudf::is_timestamp(cudf::data_type{type});
+                          }));
+}
+
+TEST_F(TraitsTest, TimestampDataTypesAreTimestamps) {
+  using namespace cudf::test;
+  EXPECT_TRUE(std::all_of(
+      timestamp_type_ids.begin(), timestamp_type_ids.end(),
+      [](cudf::type_id type) { return cudf::is_timestamp(cudf::data_type{type}); }));
+}
+
 TYPED_TEST(TypedTraitsTest, RelationallyComparable) {
   // All the test types should be comparable with themselves
   bool comparable = cudf::is_relationally_comparable<TypeParam, TypeParam>();
