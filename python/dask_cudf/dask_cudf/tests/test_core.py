@@ -198,7 +198,7 @@ def test_set_index_w_series():
 @pytest.mark.parametrize("nelem", [10, 200, 1333])
 def test_rearrange_by_divisions(nelem):
     with dask.config.set(scheduler="single-threaded"):
-        np.random.seed(42)
+        np.random.seed(0)
         df = pd.DataFrame(
             {
                 "x": np.random.randint(0, 20, size=nelem),
