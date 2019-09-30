@@ -64,6 +64,7 @@
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
 - PR #2856 Update group_split_cudf to use scatter_by_map
+- PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
 
 ## Bug Fixes
