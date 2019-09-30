@@ -340,10 +340,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                selvals, selinds = column.column_select_by_boolmask(
-                    column.as_column(self.index), Series(mask)
-                )
-                index = self.index.take(selinds.to_gpu_array())
+                index = as_index(self.index.as_column()[mask])
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
@@ -445,6 +442,14 @@ class DataFrame(object):
     @property
     def empty(self):
         return not len(self)
+
+    @property
+    def values(self):
+        if not utils._have_cupy:
+            raise ModuleNotFoundError("CuPy was not found.")
+        import cupy
+
+        return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
@@ -1772,9 +1777,12 @@ class DataFrame(object):
             raise ValueError("require at least 1 column")
         if nrow < 1:
             raise ValueError("require at least 1 row")
-        dtype = cols[0].dtype
-        if any(dtype != c.dtype for c in cols):
-            raise ValueError("all columns must have the same dtype")
+        if any(
+            (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
+            for c in cols
+        ):
+            raise TypeError("non-numeric data not yet supported")
+        dtype = np.find_common_type(cols, [])
         for k, c in self._cols.items():
             if c.null_count > 0:
                 errmsg = (
@@ -1788,7 +1796,7 @@ class DataFrame(object):
                 shape=(nrow, ncol), dtype=dtype, order=order
             )
             for colidx, inpcol in enumerate(cols):
-                dense = inpcol.to_gpu_array(fillna="pandas")
+                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
                 matrix[:, colidx].copy_to_device(dense)
         elif order == "C":
             matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)

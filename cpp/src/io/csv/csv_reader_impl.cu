@@ -80,6 +80,44 @@ namespace cudf {
 namespace io {
 namespace csv {
 
+/**
+ * @brief Returns the compression type based upon the user-specified parameter
+ * or from the filename extension.
+ *
+ * @param[in] compression_arg User-supplied string specifying compression type
+ * @param[in] filename Name of the file to infer if necessary
+ *
+ * @return Compression type
+ **/
+std::string infer_compression_type(const std::string &compression_arg,
+                                   const std::string &filename) {
+  std::unordered_map<std::string, std::string> ext_to_compression = {
+      {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}};
+
+  auto str_tolower = [](const auto &begin, const auto &end) {
+    std::string out;
+    std::transform(begin, end, std::back_inserter(out), ::tolower);
+    return out;
+  };
+
+  // Attempt to infer from user-supplied argument
+  const auto arg = str_tolower(compression_arg.begin(), compression_arg.end());
+  if (arg != "infer") {
+    return arg;
+  }
+
+  // Attempt to infer from the file extension
+  const auto pos = filename.find_last_of('.');
+  if (pos != std::string::npos) {
+    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
+    if (ext_to_compression.find(ext) != ext_to_compression.end()) {
+      return ext_to_compression.find(ext)->second;
+    }
+  }
+
+  return "none";
+}
+
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number 
  * of columns
@@ -219,112 +257,41 @@ void reader::Impl::setColumnNamesFromCsv() {
 	}
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Reads CSV-structured data and returns an array of gdf_columns.
- *
- * @return void
- *---------------------------------------------------------------------------**/
-table reader::Impl::read()
-{
-	// TODO move initialization to constructor
-	num_actual_cols = args_.names.size();
-	num_active_cols = args_.names.size();
-
-	if (args_.delim_whitespace) {
-		opts.delimiter = ' ';
-		opts.multi_delimiter = true;
-	} else {
-		opts.delimiter = args_.delimiter;
-		opts.multi_delimiter = false;
-	}
-	opts.terminator = args_.lineterminator;
-	if (args_.quotechar != '\0' && args_.quoting != QUOTE_NONE) {
-		opts.quotechar = args_.quotechar;
-		opts.keepquotes = false;
-		opts.doublequote = args_.doublequote;
-	} else {
-		opts.quotechar = '\0';
-		opts.keepquotes = true;
-		opts.doublequote = false;
-	}
-	opts.skipblanklines = args_.skip_blank_lines;
-	opts.comment = args_.comment;
-	opts.dayfirst = args_.dayfirst;
-	opts.decimal = args_.decimal;
-	opts.thousands = args_.thousands;
-	CUDF_EXPECTS(opts.decimal != opts.delimiter, "Decimal point cannot be the same as the delimiter");
-	CUDF_EXPECTS(opts.thousands != opts.delimiter, "Thousands separator cannot be the same as the delimiter");
-
-  const auto compression_type = inferCompressionType(
-      args_.compression, args_.input_data_form, args_.filepath_or_buffer,
-      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
-
-  if (byte_range_offset > 0 || byte_range_size > 0) {
-    CUDF_EXPECTS(compression_type == "none",
-                 "Compression unsupported when reading using byte range");
+table reader::Impl::read(size_t range_offset, size_t range_size,
+                         gdf_size_type skip_rows, gdf_size_type skip_end_rows,
+                         gdf_size_type num_rows) {
+  if (range_offset > 0 || range_size > 0) {
+    CUDF_EXPECTS(compression_type_ == "none",
+                 "Reading compressed data using `byte range` is unsupported");
   }
-
-	// Handle user-defined booleans values, whereby field data is substituted
-	// with true/false values; CUDF booleans are int types of 0 or 1
-	vector<string> true_values{"True", "TRUE", "true"};
-	true_values.insert(true_values.end(), args_.true_values.begin(), args_.true_values.end());
-
-	d_trueTrie = createSerializedTrie(true_values);
-	opts.trueValuesTrie = d_trueTrie.data().get();
-
-	vector<string> false_values{"False", "FALSE", "false"};
-	false_values.insert(false_values.end(), args_.false_values.begin(), args_.false_values.end());
-	d_falseTrie = createSerializedTrie(false_values);
-	opts.falseValuesTrie = d_falseTrie.data().get();
-
-	if (args_.na_filter && (args_.keep_default_na || !args_.na_values.empty())) {
-		vector<string> na_values{
-			"#N/A", "#N/A N/A", "#NA", "-1.#IND", 
-			"-1.#QNAN", "-NaN", "-nan", "1.#IND", 
-			"1.#QNAN", "N/A", "NA", "NULL", 
-			"NaN", "n/a", "nan", "null"};
-		if(!args_.keep_default_na){
-			na_values.clear();
-		}
-		na_values.insert(na_values.end(), args_.na_values.begin(), args_.na_values.end());
-
-		d_naTrie = createSerializedTrie(na_values);
-		opts.naValuesTrie = d_naTrie.data().get();
-	}
-
-  size_t range_size = 0;
-  if (byte_range_size != 0) {
+  size_t map_range_size = 0;
+  if (range_size != 0) {
     const auto num_columns = std::max(args_.names.size(), args_.dtype.size());
-    range_size = byte_range_size + calculateMaxRowSize(num_columns);
+    map_range_size = range_size + calculateMaxRowSize(num_columns);
   }
 
-  auto source = [&] {
-    if (args_.input_data_form == FILE_PATH) {
-      return datasource::create(args_.filepath_or_buffer, byte_range_offset,
-                                range_size);
-    } else if (args_.input_data_form == HOST_BUFFER) {
-      return datasource::create(args_.filepath_or_buffer.c_str(),
-                                args_.filepath_or_buffer.size());
-    } else {
-      CUDF_FAIL("Invalid input type");
-    }
-  }();
+  // Support delayed opening of the file if using memory mapping datasource
+  // This allows only mapping of a subset of the file if using byte range
+  if (source_ == nullptr) {
+    assert(!filepath_.empty());
+    source_ = datasource::create(filepath_, range_offset, map_range_size);
+  }
 
   // Return an empty dataframe if no data and no column metadata to process
-  if (source->empty() && (args_.names.empty() || args_.dtype.empty())) {
-    return table();
+  if (source_->empty() && (args_.names.empty() || args_.dtype.empty())) {
+    return cudf::table{};
   }
 
   // Transfer source data to GPU
-  if (not source->empty()) {
+  if (!source_->empty()) {
     const char *h_uncomp_data = nullptr;
     size_t h_uncomp_size = 0;
 
-    auto data_size = (range_size != 0) ? range_size : source->size();
-    auto buffer = source->get_buffer(byte_range_offset, data_size);
+    auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
+    auto buffer = source_->get_buffer(range_offset, data_size);
 
     std::vector<char> h_uncomp_data_owner;
-    if (compression_type == "none") {
+    if (compression_type_ == "none") {
       // Do not use the owner vector here to avoid extra copy
       h_uncomp_data = reinterpret_cast<const char *>(buffer->data());
       h_uncomp_size = buffer->size();
@@ -332,14 +299,15 @@ table reader::Impl::read()
       CUDF_EXPECTS(
           getUncompressedHostData(
               reinterpret_cast<const char *>(buffer->data()), buffer->size(),
-              compression_type, h_uncomp_data_owner) == GDF_SUCCESS,
+              compression_type_, h_uncomp_data_owner) == GDF_SUCCESS,
           "Cannot decompress data");
       h_uncomp_data = h_uncomp_data_owner.data();
       h_uncomp_size = h_uncomp_data_owner.size();
     }
 
-    gather_row_offsets(h_uncomp_data, h_uncomp_size);
-    auto row_range = select_rows(h_uncomp_data, h_uncomp_size);
+    gather_row_offsets(h_uncomp_data, h_uncomp_size, range_offset);
+    auto row_range = select_rows(h_uncomp_data, h_uncomp_size, range_size,
+                                 skip_rows, skip_end_rows, num_rows);
 
     data_size = row_range.second - row_range.first;
     CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
@@ -506,9 +474,10 @@ table reader::Impl::read()
   return cudf::table(out_cols.data(), out_cols.size());
 }
 
-void reader::Impl::gather_row_offsets(const char *h_data, size_t h_size) {
+void reader::Impl::gather_row_offsets(const char *h_data, size_t h_size,
+                                      size_t range_offset) {
   // Account for the start and end of row region offsets
-  const bool require_first_line_start = (byte_range_offset == 0);
+  const bool require_first_line_start = (range_offset == 0);
   const bool require_last_line_end = (h_data[h_size - 1] != opts.terminator);
 
   auto symbols = (opts.quotechar != '\0')
@@ -539,8 +508,10 @@ void reader::Impl::gather_row_offsets(const char *h_data, size_t h_size) {
   thrust::sort(rmm::exec_policy()->on(0), ptr_first, ptr_last);
 }
 
-std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
-                                                        size_t h_size) {
+std::pair<uint64_t, uint64_t> reader::Impl::select_rows(
+    const char *h_data, size_t h_size, size_t range_size,
+    gdf_size_type skip_rows, gdf_size_type skip_end_rows,
+    gdf_size_type num_rows) {
   std::vector<uint64_t> h_row_offsets(row_offsets.size());
   auto it_begin = h_row_offsets.begin();
   auto it_end = h_row_offsets.end();
@@ -577,14 +548,14 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that are to be skipped from the start
-  if (skiprows != 0 && skiprows < std::distance(it_begin, it_end)) {
-    it_begin += skiprows;
+  if (skip_rows != 0 && skip_rows < std::distance(it_begin, it_end)) {
+    it_begin += skip_rows;
   }
 
   // Exclude the rows outside of requested range
-  if (byte_range_size != 0) {
+  if (range_size != 0) {
     auto it = it_end - 1;
-    while (it >= it_begin && *it > uint64_t(byte_range_size)) {
+    while (it >= it_begin && *it > static_cast<uint64_t>(range_size)) {
       --it;
     }
     if ((it + 2) < it_end) {
@@ -600,8 +571,9 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
         (opts.skipblanklines && opts.terminator == '\n') ? '\r' : comment;
 
     it_end = std::remove_if(it_begin, it_end, [=, &h_data](uint64_t pos) {
-      return (h_data[pos] == newline || h_data[pos] == comment ||
-              h_data[pos] == carriage);
+      return ((pos != h_size) &&
+              (h_data[pos] == newline || h_data[pos] == comment ||
+               h_data[pos] == carriage));
     });
   }
 
@@ -617,13 +589,13 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(const char *h_data,
   }
 
   // Exclude the rows that exceed past the requested number
-  if (nrows >= 0 && nrows < std::distance(it_begin, it_end)) {
-    it_end = it_begin + nrows + 1;
+  if (num_rows >= 0 && num_rows < std::distance(it_begin, it_end)) {
+    it_end = it_begin + num_rows + 1;
   }
 
   // Exclude the rows that are to be skipped from the end
-  if (skipfooter != 0 && skipfooter < std::distance(it_begin, it_end)) {
-    it_end -= skipfooter;
+  if (skip_end_rows != 0 && skip_end_rows < std::distance(it_begin, it_end)) {
+    it_end -= skip_end_rows;
   }
 
   const uint64_t offset_start = *it_begin;
@@ -792,37 +764,97 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
   }
 }
 
-reader::Impl::Impl(reader_options const &args) : args_(args) {}
+reader::Impl::Impl(std::unique_ptr<datasource> source,
+                   std::string filepath, reader_options const &options)
+    : source_(std::move(source)), filepath_(filepath), args_(options) {
+  num_actual_cols = args_.names.size();
+  num_active_cols = args_.names.size();
 
-table reader::Impl::read_byte_range(size_t offset, size_t size) {
-  byte_range_offset = offset;
-  byte_range_size = size;
-  return read();
+  if (args_.delim_whitespace) {
+    opts.delimiter = ' ';
+    opts.multi_delimiter = true;
+  } else {
+    opts.delimiter = args_.delimiter;
+    opts.multi_delimiter = false;
+  }
+  opts.terminator = args_.lineterminator;
+  if (args_.quotechar != '\0' && args_.quoting != QUOTE_NONE) {
+    opts.quotechar = args_.quotechar;
+    opts.keepquotes = false;
+    opts.doublequote = args_.doublequote;
+  } else {
+    opts.quotechar = '\0';
+    opts.keepquotes = true;
+    opts.doublequote = false;
+  }
+  opts.skipblanklines = args_.skip_blank_lines;
+  opts.comment = args_.comment;
+  opts.dayfirst = args_.dayfirst;
+  opts.decimal = args_.decimal;
+  opts.thousands = args_.thousands;
+  CUDF_EXPECTS(opts.decimal != opts.delimiter,
+               "Decimal point cannot be the same as the delimiter");
+  CUDF_EXPECTS(opts.thousands != opts.delimiter,
+               "Thousands separator cannot be the same as the delimiter");
+
+  compression_type_ = infer_compression_type(args_.compression, filepath);
+
+  // Handle user-defined booleans, whereby field data are substituted with
+  // true/false values; for numeric dtypes, they are mapped to 1/0 respectively
+  std::vector<string> true_values{"True", "TRUE", "true"};
+  true_values.insert(true_values.end(), args_.true_values.begin(),
+                     args_.true_values.end());
+  d_trueTrie = createSerializedTrie(true_values);
+  opts.trueValuesTrie = d_trueTrie.data().get();
+
+  std::vector<string> false_values{"False", "FALSE", "false"};
+  false_values.insert(false_values.end(), args_.false_values.begin(),
+                      args_.false_values.end());
+  d_falseTrie = createSerializedTrie(false_values);
+  opts.falseValuesTrie = d_falseTrie.data().get();
+
+  // Handle user-defined NA values, whereby field data is treated as invalid
+  if (args_.na_filter && (args_.keep_default_na || !args_.na_values.empty())) {
+    std::vector<string> na_values{"#N/A",     "#N/A N/A", "#NA",  "-1.#IND",
+                                  "-1.#QNAN", "-NaN",     "-nan", "1.#IND",
+                                  "1.#QNAN",  "N/A",      "NA",   "NULL",
+                                  "NaN",      "n/a",      "nan",  "null"};
+    if (!args_.keep_default_na) {
+      na_values.clear();
+    }
+    na_values.insert(na_values.end(), args_.na_values.begin(),
+                     args_.na_values.end());
+    d_naTrie = createSerializedTrie(na_values);
+    opts.naValuesTrie = d_naTrie.data().get();
+  }
 }
 
-table reader::Impl::read_rows(gdf_size_type num_skip_header,
-                              gdf_size_type num_skip_footer,
-                              gdf_size_type num_rows) {
-  CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
-               "cannot use both num_rows and num_skip_footer parameters");
-
-  skiprows = num_skip_header;
-  nrows = num_rows;
-  skipfooter = num_skip_footer;
-  return read();
+reader::reader(std::string filepath, reader_options const &options)
+    : impl_(std::make_unique<Impl>(nullptr, filepath, options)) {
+  // Delay actual instantiation of data source until read to allow for
+  // partial memory mapping of file using byte ranges
 }
 
-reader::reader(reader_options const &args)
-    : impl_(std::make_unique<Impl>(args)) {}
+reader::reader(const char *buffer, size_t length, reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(buffer, length), "",
+                                   options)) {}
 
-table reader::read() { return impl_->read(); }
+reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(file), "", options)) {}
+
+table reader::read() { return impl_->read(0, 0, 0, 0, -1); }
 
 table reader::read_byte_range(size_t offset, size_t size) {
-  return impl_->read_byte_range(offset, size);
+  return impl_->read(offset, size, 0, 0, -1);
 }
+
 table reader::read_rows(gdf_size_type num_skip_header,
                         gdf_size_type num_skip_footer, gdf_size_type num_rows) {
-  return impl_->read_rows(num_skip_header, num_skip_footer, num_rows);
+  CUDF_EXPECTS(num_rows == -1 || num_skip_footer == 0,
+               "Cannot use both `num_rows` and `num_skip_footer`");
+
+  return impl_->read(0, 0, num_skip_header, num_skip_footer, num_rows);
 }
 
 reader::~reader() = default;

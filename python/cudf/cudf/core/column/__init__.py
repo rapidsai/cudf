@@ -8,8 +8,6 @@ from cudf.core.column.column import (  # noqa: F401
     column_empty,
     column_empty_like,
     column_empty_like_same_mask,
-    column_select_by_boolmask,
-    column_select_by_position,
     deserialize_columns,
     serialize_columns,
 )
