@@ -92,7 +92,7 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
     return table_to_dataframe(&c_out_table)
 
 
-cpdef write_orc(cols, filepath, compression=None):
+cpdef write_orc(cols, filepath_or_buffer, compression=None):
     """
     Cython function to call into libcudf API, see `write_orc`.
 
@@ -111,11 +111,14 @@ cpdef write_orc(cols, filepath, compression=None):
         raise ValueError("Unsupported `compression` type")
 
     # Create writer
+    cdef string filepath = <string>str(filepath_or_buffer).encode()
     cdef unique_ptr[orc_writer] writer
-    writer = unique_ptr[orc_writer](
-        new orc_writer(str(filepath).encode(), options)
-    )
+    with nogil:
+        writer = unique_ptr[orc_writer](
+            new orc_writer(filepath, options)
+        )
 
     # Write data to output
     cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
-    writer.get().write_all(deref(c_in_table))
+    with nogil:
+        writer.get().write_all(deref(c_in_table))
