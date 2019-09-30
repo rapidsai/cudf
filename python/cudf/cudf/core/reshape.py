@@ -7,7 +7,7 @@ from cudf.core.column import CategoricalColumn
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype, is_list_like
 
-_axis_map = {"index": 0, "columns": 1}
+_axis_map = {0: 0, 1: 1, "index": 0, "columns": 1}
 
 
 def concat(objs, axis=0, ignore_index=False, sort=None):
@@ -16,8 +16,9 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     Parameters
     ----------
     objs : list of DataFrame, Series, or Index
-    axis : concatenation axis, 0 - index, 1 - columns
-    ignore_index : bool
+    axis : {0/'index', 1/'columns'}, default 0
+        The axis to concatenate along.
+    ignore_index : bool, default False
         Set True to ignore the index of the *objs* and provide a
         default range index instead.
 
@@ -38,14 +39,15 @@ def concat(objs, axis=0, ignore_index=False, sort=None):
     typs = set(type(o) for o in objs)
     allowed_typs = {Series, DataFrame}
 
-    if isinstance(axis, str):
-        axis = _axis_map.get(axis, None)
-        if axis is None:
-            raise ValueError(
-                '`axis` must be 0 / "index" or 1 / "columns", got: {0}'.format(
-                    axis
-                )
+    param_axis = _axis_map.get(axis, None)
+    if param_axis is None:
+        raise ValueError(
+            '`axis` must be 0 / "index" or 1 / "columns", got: {0}'.format(
+                param_axis
             )
+        )
+    else:
+        axis = param_axis
 
     # when axis is 1 (column) we can concat with Series and Dataframes
     if axis == 1:
