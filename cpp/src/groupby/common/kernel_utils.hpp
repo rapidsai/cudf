@@ -21,7 +21,9 @@ namespace cudf {
 namespace groupby {
 
 /**---------------------------------------------------------------------------*
- * @brief Base case for invalid SourceType and op combinations.
+ * @brief This functor is used by elementwise_aggregator to do in-place update
+ * operations.
+ * Base case for invalid SourceType and op combinations.
  *
  * For an invalid combination of SourceType and operator,
  *`target_type_t<SourceType, operator>` yields a `void` TargetType. This

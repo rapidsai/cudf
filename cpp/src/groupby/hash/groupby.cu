@@ -229,12 +229,12 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // translate these compound requests into simple requests, and compute the
   // groupby operation for these simple requests. Later, we translate the simple
   // requests back to compound request results.
-  std::vector<SimpleAggRequestCounter> simple_requests =
+  std::vector<SimpleAggRequestCounter> simple_agg_columns =
       compound_to_simple(original_requests);
 
   std::vector<gdf_column*> simple_values_columns;
   std::vector<operators> simple_operators;
-  for (auto const& p : simple_requests) {
+  for (auto const& p : simple_agg_columns) {
     const AggRequestType& agg_req_type = p.first;
     simple_values_columns.push_back(
         const_cast<gdf_column*>(agg_req_type.first));
@@ -267,7 +267,7 @@ auto compute_hash_groupby(cudf::table const& keys, cudf::table const& values,
   // If any of the original requests were compound, compute them from the
   // results of simple aggregation requests
   cudf::table final_output_values = compute_original_requests(
-      original_requests, simple_requests, simple_output_values, stream);
+      original_requests, simple_agg_columns, simple_output_values, stream);
 
   return std::make_pair(output_keys, final_output_values);
 }
