@@ -476,6 +476,17 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Drop any data stored on the host.
+   */
+  public final void dropHostData() {
+    ensureOnDevice();
+    if (offHeap.hostData != null) {
+      offHeap.hostData.close();
+      offHeap.hostData = null;
+    }
+  }
+
+  /**
    * Be sure the data is on the host.
    */
   public final void ensureOnHost() {

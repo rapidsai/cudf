@@ -38,6 +38,16 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_Cuda_memGetInfo(JNIEnv *env, jclas
   return info_obj;
 }
 
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Cuda_hostAllocPinned(JNIEnv *env, jclass, jlong size) {
+  void * ret = nullptr;
+  JNI_CUDA_TRY(env, 0, cudaMallocHost(&ret, size));
+  return reinterpret_cast<jlong>(ret);
+}
+
+JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_freePinned(JNIEnv *env, jclass, jlong ptr) {
+  JNI_CUDA_TRY(env, , cudaFreeHost(reinterpret_cast<void *>(ptr)));
+}
+
 JNIEXPORT void JNICALL Java_ai_rapids_cudf_Cuda_memcpy(JNIEnv *env, jclass, jlong dst, jlong src,
                                                        jlong count, jint kind) {
   JNI_NULL_CHECK(env, dst, "dst memory pointer is null", );
