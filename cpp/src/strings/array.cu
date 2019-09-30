@@ -82,7 +82,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
         d_indices,
         d_indices + count,
         d_new_offsets,
-        [d_column, d_offsets, d_indices] __device__ (size_type idx) {
+        [d_column, d_offsets] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
             size_type offset = idx ? d_offsets[idx-1] : 0;
