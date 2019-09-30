@@ -869,6 +869,13 @@ def test_dataframe_setitem_iloc_multiindex(key, value, pdf_gdf_multi):
     assert_eq(pdf, gdf)
 
 
+def test_boolean_indexing_single_row(pdf_gdf):
+    pdf, gdf = pdf_gdf
+    assert_eq(
+        pdf.loc[[True, False, False], :], gdf.loc[[True, False, False], :]
+    )
+
+
 def test_iloc_negative_indices():
     psr = pd.Series([1, 2, 3, 4, 5])
     gsr = cudf.from_pandas(psr)
