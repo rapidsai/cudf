@@ -77,9 +77,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
 
     void combineWith(MemorySection other) {
-      if (!canCombine(other)) {
-        throw new IllegalStateException("Cannot combine " + this + " with " + other);
-      }
+      assert canCombine(other);
       log.trace("COMBINING {} AND {}", this, other);
       this.baseAddress = Math.min(baseAddress, other.baseAddress);
       this.size = other.size + this.size;
