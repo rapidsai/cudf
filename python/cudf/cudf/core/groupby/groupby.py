@@ -105,6 +105,8 @@ class DataFrameGroupBy(_Groupby):
         method="hash",
         dropna=True,
     ):
+        if by is not None:
+            df, by = _align_by_and_df(df, by)
         self._df = df
         self._groupby = _GroupbyHelper(
             obj=self._df,
@@ -265,6 +267,7 @@ class _GroupbyHelper(object):
         """
         Sets self.key_names and self.key_columns
         """
+        self.df_key_names = []
         if isinstance(self.by, (list, tuple)):
             self.key_names = []
             self.key_columns = []
@@ -283,6 +286,7 @@ class _GroupbyHelper(object):
         Get (key_name, key_column) pair from a single *by* argument
         """
         if is_scalar(by):
+            self.df_key_names.append(by)
             key_name = by
             key_column = self.obj[by]._column
         else:
@@ -338,10 +342,7 @@ class _GroupbyHelper(object):
             # But don't drop if keys are supplied from
             # some other individual series.
             for col_name in self.obj.columns:
-                if (
-                    isinstance(self.by, cudf.Series)
-                    or col_name not in self.key_names
-                ):
+                if col_name not in self.df_key_names:
                     drop = False
                     if isinstance(
                         self.obj[col_name]._column,
@@ -533,3 +534,51 @@ def _add_prefixes(names, prefixes):
         for i, (prefix, col_name) in enumerate(zip(prefixes, names)):
             prefixed_names[i] = f"{prefix}_{col_name}"
     return prefixed_names
+
+
+def _align_by_and_df(obj, by, how="inner"):
+    """
+    Returns a pair of dataframes and a list may be containing
+    combination of column names and Series  which are intersected
+    as per their indices.
+    """
+    new_obj = None
+    new_by = []
+    if not isinstance(by, (list, tuple)):
+        by = [by]
+
+    series_count = 0
+    for i in by:
+        if not is_scalar(i):
+            sr = i
+            if not isinstance(i, cudf.Series):
+                sr = cudf.Series(i)
+            if new_obj is None:
+                new_obj = sr.to_frame(series_count)
+            else:
+                new_obj = new_obj.join(
+                    sr.to_frame(series_count), how="inner", sort="True"
+                )
+            series_count += 1
+
+    series_count = 0
+    if new_obj is not None:
+        new_obj = new_obj.join(obj, how=how, sort="True")
+        columns = new_obj.columns
+        for i in by:
+            if isinstance(i, cudf.Series):
+                sr, sr.name = (
+                    cudf.Series(new_obj[columns[series_count]]),
+                    i.name,
+                )
+                new_by.append(sr)
+                series_count += 1
+            else:
+                new_by.append(i)
+
+        new_obj = new_obj[columns[series_count::]]
+    else:
+        new_obj = obj
+        new_by = by
+
+    return new_obj, new_by

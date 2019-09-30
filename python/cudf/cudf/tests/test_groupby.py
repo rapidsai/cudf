@@ -924,3 +924,20 @@ def test_groupby_series_same_name_as_dataframe_column():
     got = gdf.groupby(gsr).sum()
 
     assert_eq(expect, got)
+
+
+def test_group_by_series_and_column_name_in_by():
+    gdf = cudf.DataFrame(
+        {"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]}, index=[1, 2, 3]
+    )
+    gsr0 = cudf.Series([0.0, 1.0, 2.0], name="a", index=[1, 2, 3])
+    gsr1 = cudf.Series([0.0, 1.0, 3.0], name="b", index=[3, 4, 5])
+
+    pdf = gdf.to_pandas()
+    psr0 = gsr0.to_pandas()
+    psr1 = gsr1.to_pandas()
+
+    expect = pdf.groupby(["x", psr0, psr1]).sum()
+    got = gdf.groupby(["x", gsr0, gsr1]).sum()
+
+    assert_eq(expect, got)
