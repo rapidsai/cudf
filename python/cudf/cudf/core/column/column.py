@@ -57,12 +57,12 @@ class Column(object):
                 return StringColumn(data=nvstrings.to_device([]), null_count=0)
             elif is_categorical_dtype(dtype):
                 return CategoricalColumn(
-                    data=Column(Buffer.null(np.dtype("int8"))),
+                    data=as_column(Buffer.null(np.dtype("int8"))),
                     null_count=0,
                     ordered=False,
                 )
             else:
-                return Column(Buffer.null(dtype))
+                return as_column(Buffer.null(dtype))
 
         # If all columns are `NumericalColumn` with different dtypes,
         # we cast them to a common dtype.
@@ -592,7 +592,13 @@ class Column(object):
                 self, value, key_start, key_stop, 0
             )
         else:
-            out = libcudf.copying.scatter(value, key, self)
+            try:
+                out = libcudf.copying.scatter(value, key, self)
+            except RuntimeError as e:
+                if "out of bounds" in str(e):
+                    raise IndexError(
+                        f"index out of bounds for column of size {len(self)}"
+                    )
 
         self._data = out.data
         self._mask = out.mask
@@ -704,13 +710,19 @@ class Column(object):
         """
         from cudf.core.column import column_empty_like
 
-        indices = Buffer(indices).to_gpu_array()
         # Handle zero size
         if indices.size == 0:
             return column_empty_like(self, newsize=0)
 
-        # Returns a new column
-        result = libcudf.copying.gather(self, indices)
+        try:
+            result = libcudf.copying.gather(self, indices)
+        except RuntimeError as e:
+            if "out of bounds" in str(e):
+                raise IndexError(
+                    f"index out of bounds for column of size {len(self)}"
+                )
+            raise
+
         result.name = self.name
         return result
 
@@ -999,6 +1011,20 @@ def column_empty_like(column, dtype=None, masked=False, newsize=None):
     return column_empty(row_count, dtype, masked, categories=categories)
 
 
+def column_empty_like_same_mask(column, dtype):
+    """Create a new empty Column with the same length and the same mask.
+
+    Parameters
+    ----------
+    dtype : np.dtype like
+        The dtype of the data buffer.
+    """
+    result = column_empty_like(column, dtype)
+    if column.has_null_mask:
+        result = result.set_mask(column.mask)
+    return result
+
+
 def column_empty(row_count, dtype, masked, categories=None):
     """Allocate a new column like the given row_count and dtype.
     """
@@ -1031,61 +1057,6 @@ def column_empty(row_count, dtype, masked, categories=None):
     from cudf.core.column import build_column
 
     return build_column(data, dtype, mask, categories)
-
-
-def column_empty_like_same_mask(column, dtype):
-    """Create a new empty Column with the same length and the same mask.
-
-    Parameters
-    ----------
-    dtype : np.dtype like
-        The dtype of the data buffer.
-    """
-    data = rmm.device_array(shape=len(column), dtype=dtype)
-    params = dict(data=Buffer(data))
-    if column.has_null_mask:
-        params.update(mask=column.nullmask)
-    return Column(**params)
-
-
-def column_select_by_boolmask(column, boolmask):
-    """Select by a boolean mask to a column.
-
-    Returns (selected_column, selected_positions)
-    """
-    from cudf.core.column import NumericalColumn
-
-    assert column.null_count == 0  # We don't properly handle the boolmask yet
-    boolbits = cudautils.compact_mask_bytes(boolmask.to_gpu_array())
-    indices = cudautils.arange(len(boolmask))
-    _, selinds = cudautils.copy_to_dense(indices, mask=boolbits)
-    _, selvals = cudautils.copy_to_dense(
-        column.data.to_gpu_array(), mask=boolbits
-    )
-
-    selected_values = column.replace(data=Buffer(selvals))
-    selected_index = Buffer(selinds)
-    return (
-        selected_values,
-        NumericalColumn(data=selected_index, dtype=selected_index.dtype),
-    )
-
-
-def column_select_by_position(column, positions):
-    """Select by a series of dtype int64 indicating positions.
-
-    Returns (selected_column, selected_positions)
-    """
-    from cudf.core.column import NumericalColumn
-
-    pos_ary = positions.data.to_gpu_array()
-    selected_values = libcudf.copying.gather(column, pos_ary)
-    selected_index = Buffer(pos_ary)
-
-    return (
-        selected_values,
-        NumericalColumn(data=selected_index, dtype=selected_index.dtype),
-    )
 
 
 def build_column(
@@ -1157,15 +1128,7 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
         name = arbitrary.name
 
     if isinstance(arbitrary, Column):
-        categories = None
-        if hasattr(arbitrary, "categories"):
-            categories = arbitrary.categories
-        data = build_column(
-            arbitrary.data,
-            arbitrary.dtype,
-            mask=arbitrary.mask,
-            categories=categories,
-        )
+        return arbitrary
 
     elif isinstance(arbitrary, Series):
         data = arbitrary._column

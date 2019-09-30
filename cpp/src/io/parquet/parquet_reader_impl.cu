@@ -404,7 +404,7 @@ device_buffer<uint8_t> reader::Impl::decompress_page_data(
       codecs[1].second);
 
   // Dispatch batches of pages to decompress for each codec
-  device_buffer<uint8_t> decomp_pages(total_decompressed_size);
+  device_buffer<uint8_t> decomp_pages(align_size(total_decompressed_size));
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
 
@@ -646,7 +646,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
                                 ? std::min(col_meta.data_page_offset,
                                            col_meta.dictionary_page_offset)
                                 : col_meta.data_page_offset;
-        page_data.emplace_back(col_meta.total_compressed_size);
+        page_data.emplace_back(align_size(col_meta.total_compressed_size));
         d_compdata = page_data.back().data();
         const auto buffer = source_->get_buffer(offset, col_meta.total_compressed_size);
         CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
