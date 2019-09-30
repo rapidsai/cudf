@@ -112,14 +112,7 @@ def cudf_dtype_from_pydata_dtype(dtype):
     """ Given a numpy or pandas dtype, converts it into the equivalent cuDF
         Python dtype.
     """
-    try:
-        # pd 0.24.X
-        from pandas.core.dtypes.common import infer_dtype_from_object
-    except ImportError:
-        # pd 0.23.X
-        from pandas.core.dtypes.common import (
-            _get_dtype_from_object as infer_dtype_from_object,
-        )
+    from pandas.core.dtypes.common import infer_dtype_from_object
 
     if is_categorical_dtype(dtype):
         return cudf.core.dtypes.CategoricalDtype
