@@ -100,7 +100,7 @@ mutable_column_view column::mutable_view() {
   // therefore the existing `null_count` is no longer valid. Reset it to
   // `UNKNOWN_NULL_COUNT` forcing it to be recomputed on the next invocation of
   // `null_count()`.
-  set_null_count(UNKNOWN_NULL_COUNT);
+  set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
   return mutable_column_view{_type,
                              _size,
@@ -113,12 +113,10 @@ mutable_column_view column::mutable_view() {
 
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
-  if (_null_count > UNKNOWN_NULL_COUNT) {
-    return _null_count;
-  } else {
+  if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::count_unset_bits(view().null_mask(), 0, size());
-    return null_count();
   }
+  return _null_count;
 }
 
 void column::set_null_count(size_type new_null_count) {
