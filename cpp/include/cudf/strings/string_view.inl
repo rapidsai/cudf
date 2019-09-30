@@ -16,22 +16,15 @@ typedef unsigned char BYTE;
  * @param byte Byte from an encoded character.
  * @return Number of bytes.
  *---------------------------------------------------------------------------**/
-__host__ __device__ inline static cudf::size_type bytes_in_utf8_byte(BYTE byte)
+__host__ __device__ inline cudf::size_type bytes_in_utf8_byte(BYTE byte)
 {
     cudf::size_type count = 1;
-    // no if-statements means no divergence
-    count += (int)((byte & 0xF0) == 0xF0);
-    count += (int)((byte & 0xE0) == 0xE0);
-    count += (int)((byte & 0xC0) == 0xC0);
-    count -= (int)((byte & 0xC0) == 0x80);
+    count += (int)((byte & 0xF0) == 0xF0); // 4-byte character prefix
+    count += (int)((byte & 0xE0) == 0xE0); // 3-byte character prefix
+    count += (int)((byte & 0xC0) == 0xC0); // 2-byte character prefix
+    count -= (int)((byte & 0xC0) == 0x80); // intermediate byte
     return count;
 }
-} // namespace
-
-namespace cudf
-{
-namespace strings
-{
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the number of bytes used in the provided char array by
@@ -40,16 +33,22 @@ namespace strings
  * @param str Null-terminated array of chars.
  * @return Number of bytes.
  *---------------------------------------------------------------------------**/
-__device__ inline static size_type string_length( const char* str )
+__device__ inline cudf::size_type string_length( const char* str )
 {
     if( !str )
         return 0;
-    size_type bytes = 0;
+    cudf::size_type bytes = 0;
     while(*str++)
         ++bytes;
     return bytes;
 }
 
+} // namespace
+
+namespace cudf
+{
+namespace strings
+{
 
 __device__ inline string_view::string_view(const char* data, size_type bytes)
     : _data(data), _bytes(bytes)

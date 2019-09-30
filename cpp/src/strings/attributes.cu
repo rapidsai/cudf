@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 
+#include <cudf/column/column.hpp>
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <cudf/strings/strings_column_view.hpp>
@@ -22,6 +23,48 @@
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform.h>
 #include <thrust/transform_scan.h>
+
+namespace
+{
+
+// used by bytes_counts() and characters_counts()
+template<typename predicate>
+std::unique_ptr<cudf::column> counts( cudf::strings_column_view strings,
+                                      predicate& pfn,
+                                      cudaStream_t stream,
+                                      rmm::mr::device_memory_resource* mr )
+{
+    auto count = strings.size();
+    auto execpol = rmm::exec_policy(stream);
+    auto strings_column = cudf::column_device_view::create(strings.parent(),stream);
+    auto d_column = *strings_column;
+    rmm::device_buffer null_mask;
+    cudf::size_type null_count = d_column.null_count();
+    if( d_column.nullable() )
+        null_mask = rmm::device_buffer( d_column.null_mask(),
+                                        gdf_valid_allocation_size(count),
+                                        stream, mr);
+    // create output column
+    auto results = std::make_unique<cudf::column>( cudf::data_type{cudf::INT32}, count,
+        rmm::device_buffer(count * sizeof(int32_t), stream, mr),
+        null_mask, null_count);
+    auto results_view = results->mutable_view();
+    auto d_lengths = results_view.data<int32_t>();
+    // set the counts
+    thrust::transform( execpol->on(stream),
+        thrust::make_counting_iterator<int32_t>(0),
+        thrust::make_counting_iterator<int32_t>(count),
+        d_lengths,
+        [d_column, pfn] __device__ (int32_t idx) {
+            if( d_column.nullable() && d_column.is_null(idx) )
+                return 0;
+            return pfn(d_column.element<cudf::strings::string_view>(idx));
+        });
+    results->set_null_count(null_count);
+    return results;
+}
+
+} // namespace
 
 namespace cudf
 {
@@ -32,69 +75,16 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                                                  cudaStream_t stream,
                                                  rmm::mr::device_memory_resource* mr )
 {
-    auto count = strings.size();
-    auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(strings.parent(),stream);
-    auto d_column = *strings_column;
-    rmm::device_buffer null_mask;
-    cudf::size_type null_count = d_column.null_count();
-    if( d_column.nullable() )
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(count),
-                                        stream, mr);
-    // create output column
-    auto results = std::make_unique<cudf::column>( data_type{INT32}, count,
-        rmm::device_buffer(count * sizeof(int32_t), stream, mr),
-        null_mask, null_count);
-    auto results_view = results->mutable_view();
-    auto d_lengths = results_view.data<int32_t>();
-    // set lengths
-    thrust::transform( execpol->on(stream),
-        thrust::make_counting_iterator<int32_t>(0),
-        thrust::make_counting_iterator<int32_t>(count),
-        d_lengths,
-        [d_column] __device__ (int32_t idx) {
-            if( d_column.nullable() && d_column.is_null(idx) )
-                return 0;
-            return d_column.element<string_view>(idx).characters();
-        });
-    results->set_null_count(null_count);
-    return results;
+    auto pfn = [] __device__ (const cudf::strings::string_view& d_str) { return d_str.characters(); };
+    return counts(strings,pfn,stream,mr);
 }
 
 std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                                             cudaStream_t stream,
                                             rmm::mr::device_memory_resource* mr )
 {
-    auto count = strings.size();
-    auto execpol = rmm::exec_policy(stream);
-    auto strings_column = column_device_view::create(strings.parent(),stream);
-    auto d_column = *strings_column;
-    rmm::device_buffer null_mask;
-    cudf::size_type null_count = d_column.null_count();
-    if( d_column.nullable() )
-        null_mask = rmm::device_buffer( d_column.null_mask(),
-                                        gdf_valid_allocation_size(count),
-                                        stream, mr);
-    // create output column
-    auto results = std::make_unique<cudf::column>( data_type{INT32}, count,
-        rmm::device_buffer(count * sizeof(int32_t), stream, mr),
-        null_mask, null_count);
-    auto results_view = results->mutable_view();
-    auto d_lengths = results_view.data<int32_t>();
-    // set sizes
-    thrust::transform( execpol->on(stream),
-        thrust::make_counting_iterator<int32_t>(0),
-        thrust::make_counting_iterator<int32_t>(count),
-        d_lengths,
-        [d_column] __device__ (int32_t idx) {
-            if( d_column.nullable() && d_column.is_null(idx) )
-                return 0;
-            return d_column.element<string_view>(idx).size();
-        });
-    // reset null count must be done on the column and not the view
-    results->set_null_count(null_count);
-    return results;
+    auto pfn = [] __device__ (const cudf::strings::string_view& d_str) { return d_str.size(); };
+    return counts(strings,pfn,stream,mr);
 }
 
 //
@@ -109,7 +99,7 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
     auto d_column = *strings_column;
 
     // offsets point to each individual integer range
-    rmm::device_vector<size_type> offsets(count);
+    rmm::device_vector<cudf::size_type> offsets(count);
     size_type* d_offsets = offsets.data().get();
     thrust::transform_inclusive_scan(execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0),
