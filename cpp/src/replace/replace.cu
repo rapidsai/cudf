@@ -169,7 +169,7 @@ __device__ auto get_new_value(gdf_size_type         idx,
 
       bitmask &= __ballot_sync(active_mask, output_is_valid);
 
-      if(0 == (threadIdx.x % warp_size) && bitmask != 0){
+      if(0 == (threadIdx.x % warp_size)){
         output_valid[(int)(i/warp_size)] = bitmask;
         valid_sum[(int)(threadIdx.x / warp_size)] += __popc(bitmask);
       }
