@@ -64,6 +64,7 @@
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
 - PR #2856 Update group_split_cudf to use scatter_by_map
+- PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
 
 ## Bug Fixes
@@ -120,6 +121,7 @@
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
 - PR #2854 Fix column creation from ephemeral objects exposing __cuda_array_interface__
+- PR #2860 Fix boolean indexing when the result is a single row
 - PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
