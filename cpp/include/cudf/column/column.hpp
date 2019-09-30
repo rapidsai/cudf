@@ -69,7 +69,7 @@ class column {
   column(column&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from existing device device memory.
+   * @brief Construct a new column from existing device memory.
    *
    * @note This constructor is primarily intended for use in column factory
    * functions. 
