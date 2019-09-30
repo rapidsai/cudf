@@ -85,8 +85,9 @@ class PinnedMemoryPoolTest {
 
   @Test
   void testFragmentationAndExhaustion() {
-    PinnedMemoryPool.initialize(15 * 1024L);
-    assertEquals(15*1024L, PinnedMemoryPool.getAvailableBytes());
+    final long poolSize = 15 * 1024L;
+    PinnedMemoryPool.initialize(poolSize);
+    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
     HostMemoryBuffer[] buffers = new HostMemoryBuffer[5];
     try {
       buffers[0] = PinnedMemoryPool.tryAllocate(1024);
@@ -122,5 +123,19 @@ class PinnedMemoryPoolTest {
         }
       }
     }
+    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+  }
+
+  @Test
+  void testZeroSizedAllocation() {
+    final long poolSize = 4 * 1024L;
+    PinnedMemoryPool.initialize(poolSize);
+    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+    try (HostMemoryBuffer buffer = PinnedMemoryPool.tryAllocate(0)) {
+      assertNotNull(buffer);
+      assertEquals(0, buffer.getLength());
+      assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
+    }
+    assertEquals(poolSize, PinnedMemoryPool.getAvailableBytes());
   }
 }

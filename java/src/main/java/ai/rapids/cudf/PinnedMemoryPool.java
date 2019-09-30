@@ -77,7 +77,9 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
 
     void combineWith(MemorySection other) {
-      assert canCombine(other);
+      if (!canCombine(other)) {
+        throw new IllegalStateException("Cannot combine " + this + " with " + other);
+      }
       log.trace("COMBINING {} AND {}", this, other);
       this.baseAddress = Math.min(baseAddress, other.baseAddress);
       this.size = other.size + this.size;
@@ -85,7 +87,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     }
 
     MemorySection splitOff(long newSize) {
-      assert this.size >= newSize;
+      assert this.size > newSize;
       MemorySection ret = new MemorySection(baseAddress, newSize);
       this.baseAddress += newSize;
       this.size -= newSize;
@@ -267,6 +269,7 @@ public final class PinnedMemoryPool implements AutoCloseable {
     // and one below it. That will happen in a single pass through the heap.  We do a second pass
     // simply out of an abundance of caution.
     // Adding it in will be a log(N) operation because it is a heap.
+    availableBytes += section.size;
     boolean anyReplaced;
     do {
       anyReplaced = false;
@@ -282,7 +285,6 @@ public final class PinnedMemoryPool implements AutoCloseable {
     } while(anyReplaced);
     freeHeap.add(section);
     numAllocatedSections--;
-    availableBytes += section.size;
     log.debug("After freeing {} outstanding {}", freeHeap, numAllocatedSections);
   }
 
