@@ -49,13 +49,6 @@ table read_csv(csv_read_arg const &args) {
   auto reader = [&]() {
     csv::reader_options options{};
 
-    options.input_data_form = args.source.type;
-    if (options.input_data_form == HOST_BUFFER) {
-      options.filepath_or_buffer =
-          std::string(args.source.buffer.first, args.source.buffer.second);
-    } else {
-      options.filepath_or_buffer = args.source.filepath;
-    }
     options.compression = args.compression;
     options.lineterminator = args.lineterminator;
     options.delimiter = args.delimiter;
@@ -83,7 +76,16 @@ table read_csv(csv_read_arg const &args) {
     options.doublequote = args.doublequote;
     options.out_time_unit = args.out_time_unit;
 
-    return std::make_unique<csv::reader>(options);
+    if (args.source.type == FILE_PATH) {
+      return std::make_unique<csv::reader>(args.source.filepath, options);
+    } else if (args.source.type == HOST_BUFFER) {
+      return std::make_unique<csv::reader>(args.source.buffer.first,
+                                           args.source.buffer.second, options);
+    } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
+      return std::make_unique<csv::reader>(args.source.file, options);
+    } else {
+      CUDF_FAIL("Unsupported source type");
+    }
   }();
 
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {
