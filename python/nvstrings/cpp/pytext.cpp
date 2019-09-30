@@ -492,6 +492,60 @@ static PyObject* n_normalize_spaces( PyObject* self, PyObject* args )
     return PyLong_FromVoidPtr((void*)strs);
 }
 
+static PyObject* n_edit_distance_matrix( PyObject* self, PyObject* args )
+{
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+    if( strs==0 )
+        Py_RETURN_NONE;
+
+    unsigned int count = strs->size();
+    if( count < 2 )
+    {
+        PyErr_Format(PyExc_ValueError,"minimum two strings are required!");
+        Py_RETURN_NONE;
+    }
+
+    NVText::distance_type algo = NVText::levenshtein;
+    PyObject* pyalgo = PyTuple_GetItem(args,1);
+
+    if( pyalgo != Py_None )
+    {
+        int ialgo = (int)PyLong_AsLong(pyalgo);
+        if( ialgo != (int)NVText::levenshtein )
+        {
+            PyErr_Format(PyExc_ValueError,"unrecognized edit-distance algorithm");
+            Py_RETURN_NONE;
+        }
+    }
+
+    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,2));
+    if( devptr )
+    {
+        Py_BEGIN_ALLOW_THREADS
+        NVText::edit_distance_matrix(NVText::levenshtein,*strs,devptr);
+        Py_END_ALLOW_THREADS
+        Py_RETURN_NONE;
+    }
+
+    // or fill in python list with host memory
+    PyObject* ret = PyList_New(count);
+
+    std::vector<unsigned int> rtn(count*count);
+    Py_BEGIN_ALLOW_THREADS
+    NVText::edit_distance_matrix(NVText::levenshtein, *strs, rtn.data(),false);
+    Py_END_ALLOW_THREADS
+    for(unsigned int row=0; row < count; row++)
+    {
+        PyObject* tmp = PyList_New(count);
+        for(unsigned int idx=0; idx < count; idx++)
+            PyList_SetItem(tmp, idx, PyLong_FromLong((long)rtn[row*count+idx]));
+
+        PyList_SetItem(ret, row, tmp);
+    }
+    return ret;
+}
+
 static PyObject* n_edit_distance( PyObject* self, PyObject* args )
 {
     PyObject* pystrs = PyTuple_GetItem(args,0);
@@ -661,6 +715,7 @@ static PyMethodDef s_Methods[] = {
     { "n_replace_tokens", n_replace_tokens, METH_VARARGS, "" },
     { "n_normalize_spaces", n_normalize_spaces, METH_VARARGS, "" },
     { "n_edit_distance", n_edit_distance, METH_VARARGS, "" },
+    { "n_edit_distance_matrix", n_edit_distance_matrix, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }

@@ -62,52 +62,27 @@ private:
   std::vector<std::string> col_names; ///< Array of column names.
   std::vector<char> header;           ///< Header row data, for parsing column names.
 
-  // Specifying which part of the file to parse
-  size_t byte_range_offset = 0; ///< Offset into the data to start parsing.
-  size_t byte_range_size = 0;   ///< Length of the data of interest to parse.
-  gdf_size_type nrows = -1;     ///< Number of rows to read. -1 for all rows.
-  gdf_size_type skiprows = 0;   ///< Number of rows to skip from the start.
-  gdf_size_type skipfooter = 0; ///< Number of rows to skip from the end.
-
 public:
-  /**---------------------------------------------------------------------------*
-   * @brief Constructor; throws if arguments are not supported
-   *---------------------------------------------------------------------------**/
-  explicit Impl(reader_options const &args);
+ /**
+  * @brief Constructor from a dataset source with reader options.
+  **/
+ explicit Impl(std::unique_ptr<datasource> source, std::string filepath,
+               reader_options const &args);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Parse the input CSV file as specified with the args_ data member
-   *
-   * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
-  table read();
-
-  /**---------------------------------------------------------------------------*
-   * @brief Read and return only the specified range of bytes.
-   *
-   * Reads the row that starts before or at the end of the range, even if it ends
-   * after the end of the range.
-   *
-   * @param[in] offset Offset of the byte range to read.
-   * @param[in] size Size of the byte range to read. Set to zero to read to
-   * the end of the file.
-   *
-   * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
-  table read_byte_range(size_t offset, size_t size);
-
-  /**---------------------------------------------------------------------------*
-   * @brief Read and return only the specified range of rows.
-   * 
-   * Set num_skip_footer to zero when using num_rows parameter.
-   *
-   * @param[in] num_skip_header Number of rows at the start of the files to skip.
-   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
-   * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows.
-   * 
-   * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
-  table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer, gdf_size_type num_rows);
+ /**
+  * @brief Read an entire set or a subset of data from the source and returns
+  * an array of gdf_columns.
+  *
+  * @param[in] range_offset Number of bytes offset from the start
+  * @param[in] range_size Bytes to read; use `0` for all remaining data
+  * @param[in] skip_rows Number of rows to skip from the start
+  * @param[in] skip_end_rows Number of rows to skip from the end
+  * @param[in] num_rows Number of rows to read; use -1 for all remaining data
+  *
+  * @return Object that contains the array of gdf_columns
+  **/
+ table read(size_t range_offset, size_t range_size, gdf_size_type skip_rows,
+            gdf_size_type skip_end_rows, gdf_size_type num_rows);
 
  private:
   /**
@@ -119,18 +94,28 @@ public:
    *
    * @param[in] h_data Uncompressed input data in host memory
    * @param[in] h_size Number of bytes of uncompressed input data
+   * @param[in] range_offset Number of bytes offset from the start
    **/
-  void gather_row_offsets(const char *h_data, size_t h_size);
+  void gather_row_offsets(const char *h_data, size_t h_size,
+                          size_t range_offset);
 
   /**
    * @brief Filters and discards row positions that are not used
    *
    * @param[in] h_data Uncompressed input data in host memory
    * @param[in] h_size Number of bytes of uncompressed input data
+   * @param[in] range_size Bytes to read; use `0` for all remaining data
+   * @param[in] skip_rows Number of rows to skip from the start
+   * @param[in] skip_end_rows Number of rows to skip from the end
+   * @param[in] num_rows Number of rows to read; use -1 for all remaining data
    *
    * @return First and last row positions
    **/
-  std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size);
+  std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size,
+                                            size_t range_size,
+                                            gdf_size_type skip_rows,
+                                            gdf_size_type skip_end_rows,
+                                            gdf_size_type num_rows);
 
   void setColumnNamesFromCsv();
 
@@ -147,6 +132,11 @@ public:
    * @param[in,out] columns List of gdf_columns
    **/
   void decode_data(const std::vector<gdf_column_wrapper> &columns);
+
+private:
+ std::unique_ptr<datasource> source_;
+ std::string filepath_;
+ std::string compression_type_;
 };
 
 }  // namespace csv

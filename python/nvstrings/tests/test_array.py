@@ -1,5 +1,7 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
+from utils import assert_eq
+
 import nvstrings
 
 
@@ -44,3 +46,10 @@ def test_scalar_scatter():
     got = s1.scalar_scatter("+", [1, 3], 2)
     expected = ["a", "+", "c", "+"]
     assert got.to_host() == expected
+
+
+def test_slice_negative_start():
+    strs = nvstrings.to_device(["a", "b"])
+    got = strs[slice(-3, None, None)]
+    expected = ["a", "b"]
+    assert_eq(got, expected)
