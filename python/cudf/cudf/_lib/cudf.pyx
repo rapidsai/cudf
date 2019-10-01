@@ -503,7 +503,7 @@ cdef gdf_column* column_view_from_string_column(
     return c_col
 
 
-cdef gdf_column** cols_view_from_cols(cols):
+cdef gdf_column** cols_view_from_cols(cols) except ? NULL:
     col_count=len(cols)
     cdef gdf_column **c_cols = <gdf_column**>malloc(
         sizeof(gdf_column*) * col_count
