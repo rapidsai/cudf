@@ -4,7 +4,6 @@ import functools
 import pickle
 import warnings
 
-import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -644,19 +643,6 @@ class StringColumn(column.TypedColumnBase):
             if isinstance(frame, memoryview):
                 sheader = header["subheaders"][i]
                 dtype = sheader["dtype"]
-                frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
-            elif not (
-                isinstance(frame, np.ndarray)
-                or numba.cuda.driver.is_device_memory(frame)
-            ):
-                # this is probably a ucp_py.BufferRegion memory object
-                # check the header for info -- this should be encoded from
-                # serialization process.  Lastly, `typestr` and `shape` *must*
-                # manually set *before* consuming the buffer as a DeviceNDArray
-                sheader = header["subheaders"][i]
-                frame.typestr = sheader.get("dtype", "B")
-                frame.shape = sheader.get("shape", len(frame))
                 frame = np.frombuffer(frame, dtype=dtype)
                 frame = cudautils.to_device(frame)
 

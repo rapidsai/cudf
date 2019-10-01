@@ -704,6 +704,57 @@ static PyObject* n_scatter_count( PyObject* self, PyObject* args )
 }
 
 //
+static PyObject* n_porter_stemmer_measure( PyObject* self, PyObject* args )
+{
+
+    PyObject* pystrs = PyTuple_GetItem(args,0);
+    NVStrings* strs = strings_from_object(pystrs);
+
+     if( strs==0 )
+        Py_RETURN_NONE;
+
+    const char* vowels = "aeiou";
+    PyObject* argVowels = PyTuple_GetItem(args,1);
+    if( argVowels != Py_None )
+        vowels = PyUnicode_AsUTF8(argVowels);
+
+    const char* y_char  = "y";
+    PyObject* argYChar = PyTuple_GetItem(args,2);
+    if( argYChar != Py_None )
+        y_char = PyUnicode_AsUTF8(argYChar);
+
+    // get device pointer
+    unsigned int* devptr = (unsigned int*)PyLong_AsVoidPtr(PyTuple_GetItem(args,3));
+
+    if( devptr )
+    {
+        Py_BEGIN_ALLOW_THREADS
+        NVText::porter_stemmer_measure(*strs, vowels, y_char, devptr);
+        Py_END_ALLOW_THREADS
+        return PyLong_FromVoidPtr((void*)devptr);
+    }
+
+    // copy to host option
+
+    unsigned int count = strs->size();
+
+    PyObject* ret = PyList_New(count);
+    if( count==0 )
+        return ret;
+
+    unsigned int* rtn = new unsigned int[count];
+    Py_BEGIN_ALLOW_THREADS
+    NVText::porter_stemmer_measure(*strs, vowels, y_char, rtn, false);
+    Py_END_ALLOW_THREADS
+
+    for(unsigned int idx=0; idx < count; idx++)
+        PyList_SetItem(ret, idx, PyLong_FromLong((long)rtn[idx]));
+
+    delete rtn;
+    return ret;
+}
+
+//
 static PyMethodDef s_Methods[] = {
     { "n_tokenize", n_tokenize, METH_VARARGS, "" },
     { "n_tokenize_multi", n_tokenize_multi, METH_VARARGS, "" },
@@ -718,6 +769,7 @@ static PyMethodDef s_Methods[] = {
     { "n_edit_distance_matrix", n_edit_distance_matrix, METH_VARARGS, "" },
     { "n_create_ngrams", n_create_ngrams, METH_VARARGS, "" },
     { "n_scatter_count", n_scatter_count, METH_VARARGS, "" },
+    { "n_porter_stemmer_measure", n_porter_stemmer_measure, METH_VARARGS, "" },
     { NULL, NULL, 0, NULL }
 };
 
