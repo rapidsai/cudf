@@ -123,6 +123,7 @@
 - PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2854 Fix column creation from ephemeral objects exposing __cuda_array_interface__
 - PR #2860 Fix boolean indexing when the result is a single row
 - PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
