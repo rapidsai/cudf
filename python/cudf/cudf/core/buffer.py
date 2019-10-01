@@ -105,9 +105,9 @@ class Buffer(object):
             _dummy_iface = types.SimpleNamespace()
             _dummy_iface.__cuda_array_interface__ = iface
 
-            # Allocating a new RMM CUDA array with shape and dtype as specified in `iface`
-            # and copy the frame data to it, which makes the memory survive until the new
-            # Buffer goes out of scope.
+            # Allocating a new RMM CUDA array with shape and dtype as specified
+            # in `iface` and copy the frame data to it, which makes the memory
+            # survive until the new Buffer goes out of scope.
             # TODO: when DASK supports RMM, we can simply return it as is.
             arr, _ = rmm.auto_device(_dummy_iface)
         return Buffer(arr)
