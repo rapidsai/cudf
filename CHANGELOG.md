@@ -39,7 +39,8 @@
 - PR #2766 Improve nvstrings python cmake flexibility
 - PR #2756 Add out_time_unit option to csv reader, support timestamp resolutions
 - PR #2771 Stopgap alias for to_gpu_matrix()
-- PR #2645 libcudf unique_count for Series.nunique 
+- PR #2645 libcudf unique_count for Series.nunique
+- PR #2788 Guide to Python UDFs
 
 ## Bug Fixes
 
