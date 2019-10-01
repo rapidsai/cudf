@@ -73,7 +73,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED,
+    auto offsets_column = make_numeric_column( data_type{INT32}, count+1, mask_state::UNALLOCATED,
                                                stream, mr );
     auto offsets_view = offsets_column->mutable_view();
     auto d_results_offsets = offsets_view.data<int32_t>();
@@ -81,7 +81,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
     thrust::transform_inclusive_scan( execpol->on(stream),
         thrust::make_counting_iterator<unsigned int>(0),
         thrust::make_counting_iterator<unsigned int>(count),
-        d_results_offsets,
+        d_results_offsets+1,
         [d_strings, d_others, d_separator, d_narep] __device__ (size_type idx) {
             string_view d_str1;
             if( d_strings.nullable() && d_strings.is_null(idx) )
@@ -110,9 +110,11 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
             return bytes;
         },
         thrust::plus<int32_t>() );
+    int32_t offset_zero = 0;
+    cudaMemcpyAsync( d_results_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_results_offsets)[count-1]; // this may not be stream friendly
+    size_type bytes = thrust::device_pointer_cast(d_results_offsets)[count];
     if( (bytes==0) && (null_count < count) )
         bytes = 1; // all entries are empty strings
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
@@ -134,7 +136,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
             if( (d_str1.is_null() || d_str2.is_null()) && d_narep.is_null() )
                 return; // null -- nothing to do
             // concat the two strings with appropriate separator and narep
-            size_type offset = (idx ? d_results_offsets[idx-1] : 0);
+            size_type offset = d_results_offsets[idx];
             char* d_buffer = d_results_chars + offset;
             if( !d_str1.is_null() )
                 d_buffer = detail::copy_string(d_buffer, d_str1);
@@ -154,7 +156,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
     children.emplace_back(std::move(chars_column));
 
     return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        data_type{STRING}, count, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,
         std::move(children));
 }

@@ -491,8 +491,8 @@ __device__ inline strings::string_view const column_device_view::element<strings
       size_type index = element_index + _offset; // account for this view's _offset
       const int32_t* d_offsets = d_children[0].data<int32_t>();
       const char* d_strings = d_children[1].data<char>();
-      size_type offset = index ? d_offsets[index-1] : 0;
-      return strings::string_view{d_strings + offset, d_offsets[index] - offset};
+      size_type offset = d_offsets[index];
+      return strings::string_view{d_strings + offset, d_offsets[index+1] - offset};
 }
 
 //template <>

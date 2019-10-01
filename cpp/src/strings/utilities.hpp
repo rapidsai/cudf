@@ -70,13 +70,15 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
  * strings column from an intermediate strings array.
  *
  * @param strings Strings array
+ * @param d_offsets Offsets array for placing strings into column's memory.
+ * @param null_count Number of null strings.
  * @param stream Stream to execute any device code against.
  * @param mr Memory resource to use.
  * @return chars column
  */
 std::unique_ptr<cudf::column> chars_from_string_array(
     const rmm::device_vector<string_view>& strings,
-    const int32_t* d_offsets,
+    const int32_t* d_offsets, cudf::size_type null_count,
     cudaStream_t stream=0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 

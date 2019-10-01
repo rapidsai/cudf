@@ -73,22 +73,21 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
     auto d_offsets = handler.offsets().data<int32_t>();
 
     // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED,
+    auto offsets_column = make_numeric_column( data_type{INT32}, count+1, mask_state::UNALLOCATED,
                                                stream, mr );
     auto offsets_view = offsets_column->mutable_view();
     auto d_new_offsets = offsets_view.data<int32_t>();
-    // create new offsets array
+    // fill new offsets array -- last entry includes the total size
     thrust::transform_inclusive_scan( execpol->on(stream),
-        d_indices,
-        d_indices + count,
-        d_new_offsets,
+        d_indices, d_indices + count, d_new_offsets+1,
         [d_column, d_offsets] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
-            size_type offset = idx ? d_offsets[idx-1] : 0;
-            return d_offsets[idx] - offset;
+            return d_offsets[idx+1] - d_offsets[idx];
         },
         thrust::plus<int32_t>());
+    int32_t offset_zero = 0;
+    cudaMemcpyAsync( d_new_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
 
     // build null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
@@ -102,7 +101,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_new_offsets)[count-1]; // this may not be stream friendly
+    size_type bytes = thrust::device_pointer_cast(d_new_offsets)[count]; // this may not be stream friendly
     if( (bytes==0) && (null_count < count) )
         bytes = 1; // all entries are empty strings
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED,
@@ -115,8 +114,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
             if( d_column.nullable() && d_column.is_null(index) )
                 return;
             string_view d_str = d_column.element<string_view>(index);
-            size_type offset = (idx ? d_new_offsets[idx-1] : 0);
-            memcpy(d_chars + offset, d_str.data(), d_str.size() );
+            memcpy(d_chars + d_new_offsets[idx], d_str.data(), d_str.size() );
         });
 
     // build children vector
@@ -125,7 +123,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view handler,
     children.emplace_back(std::move(chars_column));
 
     return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        data_type{STRING}, count, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,
         std::move(children));
 }
@@ -141,7 +139,7 @@ std::unique_ptr<cudf::column> sort( strings_column_view handler,
     auto strings_column = column_device_view::create(handler.parent(), stream);
     auto d_column = *strings_column;
 
-    // lets sort indices
+    // sort the indices of the strings
     size_type count = handler.size();
     thrust::device_vector<size_type> indices(count);
     thrust::sequence( execpol->on(stream), indices.begin(), indices.end() );
@@ -209,11 +207,10 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
     auto d_offsets = offsets_view.data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1]; // this may not be stream friendly
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[count]; // this may not be stream friendly
     if( (bytes==0) && (null_count < count) )
         bytes = 1; // all entries are empty strings
-    auto chars_column = detail::chars_from_string_array(strings_array, d_offsets,
-                                                        stream, mr);
+    auto chars_column = detail::chars_from_string_array(strings_array,d_offsets,null_count,stream,mr);
 
     // build children vector
     std::vector<std::unique_ptr<column>> children;
@@ -222,7 +219,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
 
     // return new strings column
     return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        data_type{STRING}, count, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,
         std::move(children));
 }
@@ -273,11 +270,10 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
     auto d_offsets = offsets_view.data<int32_t>();
 
     // build chars column
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
     if( (bytes==0) && (null_count < count) )
         bytes = 1; // all entries are empty strings
-    auto chars_column = detail::chars_from_string_array(strings, d_offsets,
-                                                        stream, mr);
+    auto chars_column = detail::chars_from_string_array(strings,d_offsets,null_count,stream,mr);
 
     // build children vector
     std::vector<std::unique_ptr<column>> children;
@@ -286,7 +282,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view handler,
 
     // return new strings column
     return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        data_type{STRING}, count, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,
         std::move(children));
 }

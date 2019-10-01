@@ -82,34 +82,38 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
     size_type count = strings.size();
     auto d_strings = strings.data().get();
     auto execpol = rmm::exec_policy(stream);
-    auto offsets_column = make_numeric_column( data_type{INT32}, count,
+    // offsets elements is the number of strings + 1
+    auto offsets_column = make_numeric_column( data_type{INT32}, count+1,
                                                mask_state::UNALLOCATED,
                                                stream, mr );
     auto offsets_view = offsets_column->mutable_view();
     auto d_offsets = offsets_view.data<int32_t>();
-    // create new offsets array
+    // create new offsets array -- last entry includes the total size
     thrust::transform_inclusive_scan( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(count),
-        d_offsets,
-        [d_strings] __device__ (size_type idx) {
-            return d_strings[idx].size();
-        },
+        d_offsets+1,
+        [d_strings] __device__ (size_type idx) { return d_strings[idx].size(); },
         thrust::plus<int32_t>());
-
+    int32_t offset_zero = 0;
+    cudaMemcpyAsync( d_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
+    //
     return offsets_column;
 }
 
 // build a strings chars column from an array of string_views
 std::unique_ptr<cudf::column> chars_from_string_array(
     const rmm::device_vector<string_view>& strings,
-    const int32_t* d_offsets,
+    const int32_t* d_offsets, cudf::size_type null_count,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {
     size_type count = strings.size();
     auto d_strings = strings.data().get();
     auto execpol = rmm::exec_policy(stream);
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
+    if( (bytes==0) && (null_count < count) )
+        bytes = 1; // all entries are empty strings
+
     // create column
     auto chars_column = make_numeric_column( data_type{INT8}, bytes,
                                              mask_state::UNALLOCATED,
@@ -117,13 +121,12 @@ std::unique_ptr<cudf::column> chars_from_string_array(
     // get it's view
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<int8_t>();
-    thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
+    thrust::for_each_n(execpol->on(stream),
+        thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, d_offsets, d_chars] __device__(size_type idx){
             string_view d_str = d_strings[idx];
-            if( d_str.is_null() )
-                return;
-            size_type offset = (idx ? d_offsets[idx-1] : 0);
-            memcpy(d_chars + offset, d_str.data(), d_str.size() );
+            if( !d_str.is_null() )
+                memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size() );
         });
 
     return chars_column;

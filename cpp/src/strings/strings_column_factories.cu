@@ -54,17 +54,20 @@ std::unique_ptr<column> make_strings_column(
         0, thrust::plus<size_t>());
     CUDF_EXPECTS( bytes < std::numeric_limits<size_type>::max(), "total size of strings is too large for cudf column" );
 
-    // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED, stream, mr );
+    // build offsets column -- last entry is the total size
+    auto offsets_column = make_numeric_column( data_type{INT32}, count+1, mask_state::UNALLOCATED, stream, mr );
     auto offsets_view = offsets_column->mutable_view();
+    auto d_offsets = offsets_view.data<int32_t>();
     thrust::transform_inclusive_scan( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), thrust::make_counting_iterator<size_type>(count),
-        offsets_view.data<int32_t>(),
+        d_offsets+1,
         [d_strings] __device__ (size_type idx) {
             thrust::pair<const char*,size_t> item = d_strings[idx];
             return ( item.first ? static_cast<int32_t>(item.second) : 0 );
         },
         thrust::plus<int32_t>() );
+    int32_t offset_zero = 0;
+    cudaMemcpyAsync( d_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
 
     // create null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
@@ -81,16 +84,12 @@ std::unique_ptr<column> make_strings_column(
     auto chars_column = make_numeric_column( data_type{INT8}, bytes, mask_state::UNALLOCATED, stream, mr );
     auto chars_view = chars_column->mutable_view();
     auto d_chars = chars_view.data<char>();
-    auto d_offsets = offsets_view.data<int32_t>();
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), count,
           [d_strings, d_offsets, d_chars] __device__(size_type idx){
               // place individual strings
               auto item = d_strings[idx];
               if( item.first )
-              {
-                  size_type offset = (idx ? d_offsets[idx-1] : 0);
-                  memcpy(d_chars + offset, item.first, item.second );
-              }
+                  memcpy(d_chars + d_offsets[idx], item.first, item.second );
           });
 
     // build children vector
@@ -98,9 +97,9 @@ std::unique_ptr<column> make_strings_column(
     children.emplace_back(std::move(offsets_column));
     children.emplace_back(std::move(chars_column));
 
-    // see column_view.cpp(45) to see why size must be 0 here
+    // no data-ptr with count elements plus children
     return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        data_type{STRING}, count, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,
         std::move(children));
 }
@@ -122,11 +121,11 @@ std::unique_ptr<column> make_strings_column(
     size_type bytes = offsets.back() - offsets[0];
     CUDF_EXPECTS( bytes >=0, "invalid offsets vector");
 
-    // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, count, mask_state::UNALLOCATED, stream, mr );
+    // build offsets column -- this is the number of strings + 1
+    auto offsets_column = make_numeric_column( data_type{INT32}, count+1, mask_state::UNALLOCATED, stream, mr );
     auto offsets_view = offsets_column->mutable_view();
-    cudaMemcpyAsync( offsets_view.data<int32_t>(), offsets.data().get()+1,
-                     count*sizeof(int32_t),
+    cudaMemcpyAsync( offsets_view.data<int32_t>(), offsets.data().get(),
+                     (count+1)*sizeof(int32_t),
                      cudaMemcpyDeviceToHost, stream );
 
     // build null bitmask
@@ -149,7 +148,7 @@ std::unique_ptr<column> make_strings_column(
 
     //
     return std::make_unique<column>(
-        data_type{STRING}, 0, rmm::device_buffer{0,stream,mr},
+        data_type{STRING}, count, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,
         std::move(children));
 }

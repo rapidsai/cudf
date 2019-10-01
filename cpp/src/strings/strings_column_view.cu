@@ -35,7 +35,7 @@ strings_column_view::strings_column_view( column_view strings_column )
 
 size_type strings_column_view::size() const
 {
-    return _parent.child(0).size();
+    return _parent.size();
 }
 
 column_view strings_column_view::parent() const
@@ -88,22 +88,24 @@ void print( strings_column_view strings,
     auto d_strings = strings.chars().data<char>();
 
     // create output strings offsets
-    rmm::device_vector<size_t> output_offsets(count,0);
+    rmm::device_vector<size_t> output_offsets(count+1,0);
+    size_t* d_output_offsets = output_offsets.data().get();
     thrust::transform_inclusive_scan( execpol->on(0),
         thrust::make_counting_iterator<size_type>(start),
         thrust::make_counting_iterator<size_type>(end),
-        output_offsets.begin(),
-        [d_column, d_strings, max_width, d_offsets] __device__ (size_type idx) {
+        d_output_offsets+1,
+        [d_column, max_width] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
-            size_type offset = idx ? d_offsets[idx-1] : 0; // this logic will be a template
-            size_type bytes = d_offsets[idx] - offset;     // specialization on element()
-            string_view d_str( d_strings + offset, bytes ); // method of column_device_view
+            string_view d_str = d_column.element<string_view>(idx);
+            size_type bytes = d_str.size();
             if( (max_width > 0) && (d_str.characters() > max_width) )
                 bytes = d_str.byte_offset(max_width);
             return bytes+1; // allow for null-terminator on non-null strings
         },
         thrust::plus<int32_t>());
+    int32_t offset_zero = 0;
+    cudaMemcpy( d_output_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice);
 
     // build output buffer
     size_t buffer_size = output_offsets.back(); // last element has total size
@@ -115,31 +117,30 @@ void print( strings_column_view strings,
     rmm::device_vector<char> buffer(buffer_size,0); // allocate and pre-null-terminate
     char* d_buffer = buffer.data().get();
     // copy strings into output buffer
-    size_t* d_output_offsets = output_offsets.data().get();
     thrust::for_each_n(execpol->on(0),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_strings, start, d_offsets, d_output_offsets, d_buffer] __device__(size_type idx) {
-            size_t output_offset = (idx ? d_output_offsets[idx-1] : 0);
-            size_t length = d_output_offsets[idx] - output_offset; // bytes
+            size_t output_offset = d_output_offsets[idx];
+            size_t length = d_output_offsets[idx+1] - output_offset; // bytes
             if( length ) // this is only 0 for nulls
             {
                 idx += start;
-                size_type offset = (idx ? d_offsets[idx-1]:0);
+                size_type offset = d_offsets[idx];
                 memcpy(d_buffer + output_offset, d_strings + offset, length-1 );
             }
         });
 
     // copy output buffer to host
-    std::vector<size_t> h_offsets(count);
-    cudaMemcpy( h_offsets.data(), d_output_offsets, count*sizeof(size_t), cudaMemcpyDeviceToHost);
+    std::vector<size_t> h_offsets(count+1);
+    cudaMemcpy( h_offsets.data(), d_output_offsets, (count+1)*sizeof(size_t), cudaMemcpyDeviceToHost);
     std::vector<char> h_buffer(buffer_size);
     cudaMemcpy( h_buffer.data(), d_buffer, buffer_size, cudaMemcpyDeviceToHost );
 
     // print out the strings to stdout
     for( size_type idx=0; idx < count; ++idx )
     {
-        size_t offset = (idx ? h_offsets[idx-1]:0);
-        size_t length = h_offsets[idx] - offset;
+        size_t offset = h_offsets[idx];
+        size_t length = h_offsets[idx+1] - offset;
         printf("%d:",idx);
         if( length )
             printf("[%s]", h_buffer.data()+offset);
@@ -158,12 +159,11 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
 
     size_type count = strings.size();
     auto d_offsets = strings.offsets().data<size_type>();
-    size_type bytes = thrust::device_pointer_cast(d_offsets)[count-1];
     results.second = rmm::device_vector<size_type>(count+1);
-    results.second[0] = 0;
-    cudaMemcpyAsync( results.second.data().get()+1, d_offsets, count*sizeof(size_type),
+    cudaMemcpyAsync( results.second.data().get(), d_offsets, (count+1)*sizeof(size_type),
                      cudaMemcpyDeviceToHost, stream);
 
+    size_type bytes = thrust::device_pointer_cast(d_offsets)[count];
     auto d_chars = strings.chars().data<char>();
     results.first = rmm::device_vector<char>(bytes);
     cudaMemcpyAsync( results.first.data().get(), d_chars, bytes,

@@ -79,7 +79,7 @@ TEST_F(FactoriesTest, CreateColumnFromArray)
 
     cudf::strings_column_view strings_view(column->view());
     EXPECT_EQ( strings_view.size(), count);
-    EXPECT_EQ( strings_view.offsets().size(), count );
+    EXPECT_EQ( strings_view.offsets().size(), count+1 );
     EXPECT_EQ( strings_view.chars().size(), memsize );
 
     // check string data
@@ -128,7 +128,7 @@ TEST_F(FactoriesTest, CreateColumnFromOffsets)
 
     cudf::strings_column_view strings_view(column->view());
     EXPECT_EQ( strings_view.size(), count);
-    EXPECT_EQ( strings_view.offsets().size(), count );
+    EXPECT_EQ( strings_view.offsets().size(), count+1 );
     EXPECT_EQ( strings_view.chars().size(), memsize );
 
     // check string data
