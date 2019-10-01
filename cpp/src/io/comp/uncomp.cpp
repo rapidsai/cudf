@@ -21,6 +21,9 @@
 #include <zlib.h> // uncompress
 #include "unbz2.h" // bz2 uncompress
 
+namespace cudf {
+namespace io {
+
 #define GZ_FLG_FTEXT    0x01    // ASCII text hint
 #define GZ_FLG_FHCRC    0x02    // Header CRC present
 #define GZ_FLG_FEXTRA   0x04    // Extra fields present
@@ -652,3 +655,8 @@ HostDecompressor *HostDecompressor::Create(int stream_type)
     }
     return decompressor;
 }
+
+
+} // namespace io
+} // namespace cudf
+
