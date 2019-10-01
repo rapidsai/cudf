@@ -61,9 +61,13 @@ class _Groupby(object):
     def deserialize(cls, header, frames):
         groupby_type = pickle.loads(header["type"])
         _groupby = _GroupbyHelper.deserialize(header, frames)
+        by = None
+        if _groupby.level is None:
+            by = _groupby.by
         return groupby_type(
             _groupby.obj,
-            by=_groupby.by,
+            by=by,
+            level=_groupby.level,
             sort=_groupby.sort,
             as_index=_groupby.as_index,
         )
@@ -105,7 +109,8 @@ class DataFrameGroupBy(_Groupby):
         method="hash",
         dropna=True,
     ):
-        if by is not None:
+
+        if by is not None and level is None:
             df, by = _align_by_and_df(df, by)
         self._df = df
         self._groupby = _GroupbyHelper(
@@ -196,6 +201,7 @@ class _GroupbyHelper(object):
             if by is not None:
                 raise TypeError("Cannot use both 'by' and 'level'")
             by = self.get_by_from_level(level)
+        self.level = level
         self.by = by
         self.as_index = as_index
         self.sort = sort
@@ -212,6 +218,7 @@ class _GroupbyHelper(object):
         frames.extend(obj_frames)
 
         header["key_names"] = self.key_names
+        header["level"] = self.level
         header["df_key_names"] = self.df_key_names
         header["as_index"] = self.as_index
         header["sort"] = self.sort
@@ -235,6 +242,7 @@ class _GroupbyHelper(object):
         as_index = header["as_index"]
         sort = header["sort"]
         df_key_names = header["df_key_names"]
+        level = header["level"]
 
         key_column_frames = frames[header["obj_frame_count"] :]
         key_columns = deserialize_columns(
@@ -244,9 +252,12 @@ class _GroupbyHelper(object):
         for col_name, col in zip(header["key_names"], key_columns):
             col.name = col_name
 
-        by = df_key_names
-        by.extend(key_columns[len(df_key_names)::])
-        gby = cls(obj, by=by, as_index=as_index, sort=sort)
+        by = None
+        if level is None:
+            by = df_key_names
+            by.extend(key_columns[len(df_key_names) : :])
+
+        gby = cls(obj, by=by, level=level, as_index=as_index, sort=sort)
 
         return gby
 
@@ -553,7 +564,8 @@ def _align_by_and_df(obj, by, how="inner"):
     >>> import cudf
     >>> import cudf.core.groupby.groupby as grp_by
 
-    >>> gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]}, index=[1,2,3])
+    >>> gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]},
+            index=[1,2,3])
     >>> gsr = cudf.Series([0.0, 1.0, 2.0], name='a', index=[2,3,4])
     >>> updtd_gdf, updtd_by = grp_by._align_by_and_df(gdf, ['x', gsr])
     >>> print (gdf)
