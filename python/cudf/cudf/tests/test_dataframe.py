@@ -3645,11 +3645,12 @@ def test_df_astype_numeric_to_numeric(dtype, as_dtype):
 )
 def test_df_astype_numeric_to_numeric_nulls(dtype, as_dtype):
     data = [1, 2, None, 4]
-    pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
-    gdf = DataFrame.from_pandas(pdf)
+    gdf = DataFrame()
+    gdf['test'] = Series(data).astype(dtype)
 
-    pdf_as_dtype = pd.DataFrame(data, columns=['test'], dtype=as_dtype)
-    expect = DataFrame.from_pandas(pdf_as_dtype)
+    expect = DataFrame()
+    expect['test'] = Series(data).astype(as_dtype)
+    
     got = gdf.astype(as_dtype)
 
     assert_eq(expect, got)
