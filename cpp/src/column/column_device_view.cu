@@ -56,7 +56,6 @@ column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptr
       CUDF_EXPECTS( child.num_children()==0, "column grand-children not currently supported");
       new(h_column) column_device_view(child);
       h_column++;
-      //d_column++;
     }
   }
 }

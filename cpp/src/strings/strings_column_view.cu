@@ -172,6 +172,5 @@ std::pair<rmm::device_vector<char>, rmm::device_vector<size_type>>
     return results;
 }
 
-
 } // namespace strings
 } // namespace cudf
