@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf.core.column import Column, DatetimeColumn, column
@@ -1194,17 +1194,21 @@ class Series(object):
         """
         Replace values with other where the condition is False.
 
-        :param cond: boolean
+        Parameters
+        ----------
+        cond : boolean
             Where cond is True, keep the original value. Where False,
             replace with corresponding value from other.
-        :param other: scalar, default None
+        other: scalar, default None
             Entries where cond is False are replaced with
             corresponding value from other.
-        :param axis:
-        :return: Series
 
-        Examples:
-        ---------
+        Returns
+        -------
+        result : Series
+
+        Examples
+        --------
         >>> import cudf
         >>> ser = cudf.Series([4, 3, 2, 1, 0])
         >>> print(ser.where(ser > 2, 10))
@@ -1219,7 +1223,6 @@ class Series(object):
         2
         3
         4
-
         """
 
         to_replace = self._column.apply_boolean_mask(~cond & self.notna())
@@ -1423,7 +1426,7 @@ class Series(object):
         Cast the Series to the given dtype
 
         Parameters
-        ---------
+        ----------
 
         dtype : data type
         **kwargs : extra arguments to pass on to the constructor
@@ -1538,13 +1541,11 @@ class Series(object):
             Value(s) to replace.
 
             * numeric or str:
-
                 - values equal to *to_replace* will be replaced with *value*
 
             * list of numeric or str:
-
                 - If *replacement* is also list-like, *to_replace* and
-                *replacement* must be of same length.
+                  *replacement* must be of same length.
         replacement : numeric, str, list-like, or dict
             Value(s) to replace `to_replace` with.
 
@@ -1723,7 +1724,7 @@ class Series(object):
           likely complex numbers.
 
         * These five functions in `math` are not supported since numba
-          generatesmultiple PTX functions from them
+          generates multiple PTX functions from them
 
           * math.sin()
           * math.cos()
@@ -2230,6 +2231,7 @@ class Series(object):
         Examples
         --------
         Describing a ``Series`` containing numeric values.
+
         >>> import cudf
         >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         >>> print(s.describe())
@@ -2356,6 +2358,7 @@ class Series(object):
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
         an array and store the output in a new array.
+
         Notes
         -----
         Diff currently only supports float and integer dtype columns with
@@ -2417,134 +2420,16 @@ class Series(object):
             win_type=win_type,
         )
 
+    @ioutils.doc_to_json()
     def to_json(self, path_or_buf=None, *args, **kwargs):
-        """
-        Convert the cuDF object to a JSON string.
-        Note nulls and NaNs will be converted to null and datetime objects
-        will be converted to UNIX timestamps.
-        Parameters
-        ----------
-        path_or_buf : string or file handle, optional
-            File path or object. If not specified, the result is returned as
-            a string.
-        orient : string
-            Indication of expected JSON string format.
-            * Series
-                - default is 'index'
-                - allowed values are: {'split','records','index','table'}
-            * DataFrame
-                - default is 'columns'
-                - allowed values are:
-                {'split','records','index','columns','values','table'}
-            * The format of the JSON string
-                - 'split' : dict like {'index' -> [index],
-                'columns' -> [columns], 'data' -> [values]}
-                - 'records' : list like
-                [{column -> value}, ... , {column -> value}]
-                - 'index' : dict like {index -> {column -> value}}
-                - 'columns' : dict like {column -> {index -> value}}
-                - 'values' : just the values array
-                - 'table' : dict like {'schema': {schema}, 'data': {data}}
-                describing the data, and the data component is
-                like ``orient='records'``.
-        date_format : {None, 'epoch', 'iso'}
-            Type of date conversion. 'epoch' = epoch milliseconds,
-            'iso' = ISO8601. The default depends on the `orient`. For
-            ``orient='table'``, the default is 'iso'. For all other orients,
-            the default is 'epoch'.
-        double_precision : int, default 10
-            The number of decimal places to use when encoding
-            floating point values.
-        force_ascii : bool, default True
-            Force encoded string to be ASCII.
-        date_unit : string, default 'ms' (milliseconds)
-            The time unit to encode to, governs timestamp and ISO8601
-            precision.  One of 's', 'ms', 'us', 'ns' for second, millisecond,
-            microsecond, and nanosecond respectively.
-        default_handler : callable, default None
-            Handler to call if object cannot otherwise be converted to a
-            suitable format for JSON. Should receive a single argument which is
-            the object to convert and return a serialisable object.
-        lines : bool, default False
-            If 'orient' is 'records' write out line delimited json format. Will
-            throw ValueError if incorrect 'orient' since others are not list
-            like.
-        compression : {'infer', 'gzip', 'bz2', 'zip', 'xz', None}
-            A string representing the compression to use in the output file,
-            only used when the first argument is a filename. By default, the
-            compression is inferred from the filename.
-        index : bool, default True
-            Whether to include the index values in the JSON string. Not
-            including the index (``index=False``) is only supported when
-            orient is 'split' or 'table'.
-        """
+        """{docstring}"""
         import cudf.io.json as json
 
         json.to_json(self, path_or_buf=path_or_buf, *args, **kwargs)
 
+    @ioutils.doc_to_hdf()
     def to_hdf(self, path_or_buf, key, *args, **kwargs):
-        """
-        Write the contained data to an HDF5 file using HDFStore.
-
-        Hierarchical Data Format (HDF) is self-describing, allowing an
-        application to interpret the structure and contents of a file with
-        no outside information. One HDF file can hold a mix of related objects
-        which can be accessed as a group or as individual objects.
-
-        In order to add another DataFrame or Series to an existing HDF file
-        please use append mode and a different a key.
-
-        For more information see the :ref:`user guide
-        <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
-
-        Parameters
-        ----------
-        path_or_buf : str or pandas.HDFStore
-            File path or HDFStore object.
-        key : str
-            Identifier for the group in the store.
-        mode : {'a', 'w', 'r+'}, default 'a'
-            Mode to open file:
-            - 'w': write, a new file is created (an existing file with
-                the same name would be deleted).
-            - 'a': append, an existing file is opened for reading and
-                writing, and if the file does not exist it is created.
-            - 'r+': similar to 'a', but the file must already exist.
-        format : {'fixed', 'table'}, default 'fixed'
-            Possible values:
-            - 'fixed': Fixed format. Fast writing/reading. Not-appendable,
-                nor searchable.
-            - 'table': Table format. Write as a PyTables Table structure
-                which may perform worse but allow more flexible operations
-                like searching / selecting subsets of the data.
-        append : bool, default False
-            For Table formats, append the input data to the existing.
-        data_columns :  list of columns or True, optional
-            List of columns to create as indexed data columns for on-disk
-            queries, or True to use all columns. By default only the axes
-            of the object are indexed. `See Query via Data Columns
-            <https://pandas.pydata.org/pandas-docs/stable/user_guide/io.html#hdf5-pytables>`_.
-            Applicable only to format='table'.
-        complevel : {0-9}, optional
-            Specifies a compression level for data.
-            A value of 0 disables compression.
-        complib : {'zlib', 'lzo', 'bzip2', 'blosc'}, default 'zlib'
-            Specifies the compression library to be used.
-            As of v0.20.2 these additional compressors for Blosc are supported
-            (default if no compressor specified: 'blosc:blosclz'):
-            {'blosc:blosclz', 'blosc:lz4', 'blosc:lz4hc', 'blosc:snappy',
-            'blosc:zlib', 'blosc:zstd'}.
-            Specifying a compression library which is not available issues
-            a ValueError.
-        fletcher32 : bool, default False
-            If applying compression use the fletcher32 checksum.
-        dropna : bool, default False
-            If true, ALL nan rows will not be written to store.
-        errors : str, default 'strict'
-            Specifies how encoding and decoding errors are to be handled.
-            See the errors argument for :func:`open` for a full list
-            of options.
-        """
+        """{docstring}"""
         import cudf.io.hdf as hdf
 
         hdf.to_hdf(path_or_buf, key, self, *args, **kwargs)
