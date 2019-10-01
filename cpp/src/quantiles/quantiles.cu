@@ -22,6 +22,7 @@
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
+#include <bitmask/legacy/legacy_bitmask.hpp>
 #include <rmm/thrust_rmm_allocator.h>
 
 #include <thrust/device_vector.h>
@@ -92,12 +93,17 @@ namespace{ // anonymous
                              stream);
     }else{
       // create a clone of col_data if sort is required but sort_inplace is not allowed.
-      rmm::device_vector<ColType> dv(n);
-      thrust::copy_n(rmm::exec_policy(stream)->on(stream), col_data, n, dv.begin());
+      rmm::device_vector<ColType> dv(n-col_in->null_count);
+      thrust::copy_if(rmm::exec_policy(stream)->on(stream), col_data,
+                      col_data + n,
+                      thrust::counting_iterator<gdf_index_type>(0), dv.begin(),
+                      [bitmask = col_in->valid] __device__(auto i) {
+                        return gdf_is_valid(bitmask, i);
+                      });
       ColType* clone_data = dv.data().get();
 
       return select_quantile(clone_data,
-                             n,
+                             dv.size(),
                              quant, 
                              interpolation,
                              *ptr_res,
@@ -179,7 +185,6 @@ gdf_error quantile_exact( gdf_column*         col_in,       // input column
 
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   gdf_error ret = GDF_SUCCESS;
   result->dtype = GDF_FLOAT64;
@@ -207,7 +212,6 @@ gdf_error quantile_approx(	gdf_column*  col_in,       // input column
 
   GDF_REQUIRE(nullptr != col_in->data, GDF_DATASET_EMPTY);
   GDF_REQUIRE(0 < col_in->size, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr == col_in->valid || 0 == col_in->null_count, GDF_VALIDITY_UNSUPPORTED);
 
   gdf_error ret = GDF_SUCCESS;
   result->dtype = col_in->dtype;
