@@ -15,11 +15,11 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.9.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.10.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
-endif()
+endif(NOT CMAKE_CUDA_COMPILER)
 
 ###################################################################################################
 # - build type ------------------------------------------------------------------------------------
@@ -34,7 +34,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
   # Set the possible values of build type for cmake-gui
   set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS
     "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
-endif()
+endif(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
 
 ###################################################################################################
 # - compiler options ------------------------------------------------------------------------------
@@ -73,7 +73,7 @@ set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -Werror cross-execution-space-call -Xc
 
 # Option to enable line info in CUDA device compilation to allow introspection when profiling / memchecking
 option(CMAKE_CUDA_LINEINFO "Enable the -lineinfo option for nvcc (useful for cuda-memcheck / profiler" OFF)
-if (CMAKE_CUDA_LINEINFO)
+if(CMAKE_CUDA_LINEINFO)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} -lineinfo")
 endif(CMAKE_CUDA_LINEINFO)
 
@@ -87,9 +87,9 @@ endif(CMAKE_BUILD_TYPE MATCHES Debug)
 set(CMAKE_SHARED_LINKER_FLAGS "-Wl,--disable-new-dtags")
 set(CMAKE_EXE_LINKER_FLAGS "-Wl,--disable-new-dtags")
 
-option(BUILD_TESTS "Configure CMake to build tests"
-       ON)
-
+# Build options
+option(BUILD_SHARED_LIBS "Build shared libraries" ON)
+option(BUILD_TESTS "Configure CMake to build tests" ON)
 option(BUILD_BENCHMARKS "Configure CMake to build (google) benchmarks" OFF)
 
 ###################################################################################################
@@ -102,11 +102,27 @@ include(CheckIncludeFiles)
 include(CheckLibraryExists)
 
 ###################################################################################################
+# - conda environment -----------------------------------------------------------------------------
+
+if("$ENV{CONDA_BUILD}" STREQUAL "1")
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{BUILD_PREFIX};$ENV{PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    set(CONDA_INCLUDE_DIRS "$ENV{BUILD_PREFIX}/include" "$ENV{PREFIX}/include")
+    set(CONDA_LINK_DIRS "$ENV{BUILD_PREFIX}/lib" "$ENV{PREFIX}/lib")
+    message(STATUS "Conda build detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+elseif(DEFINED ENV{CONDA_PREFIX})
+    set(CMAKE_SYSTEM_PREFIX_PATH "$ENV{CONDA_PREFIX};${CMAKE_SYSTEM_PREFIX_PATH}")
+    set(CONDA_INCLUDE_DIRS "$ENV{CONDA_PREFIX}/include")
+    set(CONDA_LINK_DIRS "$ENV{CONDA_PREFIX}/lib")
+    message(STATUS "Conda environment detected, CMAKE_SYSTEM_PREFIX_PATH set to: ${CMAKE_SYSTEM_PREFIX_PATH}")
+endif("$ENV{CONDA_BUILD}" STREQUAL "1")
+
+###################################################################################################
 # - find arrow ------------------------------------------------------------------------------------
 
+message(STATUS "BUILDING ARROW")
 include(ConfigureArrow)
 
-if (ARROW_FOUND)
+if(ARROW_FOUND)
     message(STATUS "Apache Arrow found in ${ARROW_INCLUDE_DIR}")
 else()
     message(FATAL_ERROR "Apache Arrow not found, please check your settings.")
@@ -116,6 +132,10 @@ endif(ARROW_FOUND)
 # - find zlib -------------------------------------------------------------------------------------
 
 find_package(ZLIB REQUIRED)
+
+message(STATUS "ZLIB: ZLIB_LIBRARIES set to ${ZLIB_LIBRARIES}")
+message(STATUS "ZLIB: ZLIB_INCLUDE_DIRS set to ${ZLIB_INCLUDE_DIRS}")
+
 if(ZLIB_FOUND)
     message(STATUS "ZLib found in ${ZLIB_INCLUDE_DIRS}")
 else()
@@ -123,64 +143,51 @@ else()
 endif(ZLIB_FOUND)
 
 ###################################################################################################
+# - find boost ------------------------------------------------------------------------------------
+
+# Don't look for a CMake configuration file
+set(Boost_NO_BOOST_CMAKE ON)
+
+find_package(
+    Boost REQUIRED MODULE
+    COMPONENTS filesystem
+)
+
+message(STATUS "BOOST: Boost_LIBRARIES set to ${Boost_LIBRARIES}")
+message(STATUS "BOOST: Boost_INCLUDE_DIRS set to ${Boost_INCLUDE_DIRS}")
+
+if(Boost_FOUND)
+    message(STATUS "Boost found in ${Boost_INCLUDE_DIRS}")
+else()
+    message(FATAL_ERROR "Boost not found, please check your settings.")
+endif(Boost_FOUND)
+
+###################################################################################################
 # - RMM -------------------------------------------------------------------------------------------
 
 find_path(RMM_INCLUDE "rmm"
-          HINTS "$ENV{RMM_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/rmm"
-                "$ENV{CONDA_PREFIX}/include")
+          HINTS "$ENV{RMM_ROOT}/include")
 
 find_library(RMM_LIBRARY "rmm"
-             HINTS "$ENV{RMM_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
+             HINTS "$ENV{RMM_ROOT}/lib")
 
 message(STATUS "RMM: RMM_LIBRARY set to ${RMM_LIBRARY}")
 message(STATUS "RMM: RMM_INCLUDE set to ${RMM_INCLUDE}")
 
 add_library(rmm SHARED IMPORTED ${RMM_LIBRARY})
-if (RMM_INCLUDE AND RMM_LIBRARY)
+if(RMM_INCLUDE AND RMM_LIBRARY)
     set_target_properties(rmm PROPERTIES IMPORTED_LOCATION ${RMM_LIBRARY})
-endif (RMM_INCLUDE AND RMM_LIBRARY)
+endif(RMM_INCLUDE AND RMM_LIBRARY)
 
 ###################################################################################################
-# - NVStrings -------------------------------------------------------------------------------------
+# - DLPACK -------------------------------------------------------------------------------------------
 
-find_path(NVSTRINGS_INCLUDE "nvstrings"
-          HINTS "$ENV{NVSTRINGS_ROOT}/include"
-                "$ENV{CONDA_PREFIX}/include/nvstrings"
-                "$ENV{CONDA_PREFIX}/include")
+find_path(
+    DLPACK_INCLUDE "dlpack"
+    HINTS "$ENV{DLPACK_ROOT}/include"
+)
 
-find_library(NVSTRINGS_LIBRARY "NVStrings"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-find_library(NVCATEGORY_LIBRARY "NVCategory"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-find_library(NVTEXT_LIBRARY "NVText"
-             HINTS "$ENV{NVSTRINGS_ROOT}/lib"
-                   "$ENV{CONDA_PREFIX}/lib")
-
-message(STATUS "NVSTRINGS: NVSTRINGS_INCLUDE set to ${NVSTRINGS_INCLUDE}")
-message(STATUS "NVSTRINGS: NVSTRINGS_LIBRARY set to ${NVSTRINGS_LIBRARY}")
-message(STATUS "NVSTRINGS: NVCATEGORY_LIBRARY set to ${NVCATEGORY_LIBRARY}")
-message(STATUS "NVSTRINGS: NVTEXT_LIBRARY set to ${NVTEXT_LIBRARY}")
-
-add_library(NVStrings SHARED IMPORTED ${NVSTRINGS_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
-    set_target_properties(NVStrings PROPERTIES IMPORTED_LOCATION ${NVSTRINGS_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVSTRINGS_LIBRARY)
-
-add_library(NVCategory SHARED IMPORTED ${NVCATEGORY_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
-    set_target_properties(NVCategory PROPERTIES IMPORTED_LOCATION ${NVCATEGORY_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVCATEGORY_LIBRARY)
-
-add_library(NVText SHARED IMPORTED ${NVTEXT_LIBRARY})
-if (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
-    set_target_properties(NVText PROPERTIES IMPORTED_LOCATION ${NVTEXT_LIBRARY})
-endif (NVSTRINGS_INCLUDE AND NVTEXT_LIBRARY)
+message(STATUS "DLPACK: DLPACK_INCLUDE set to ${DLPACK_INCLUDE}")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -202,18 +209,22 @@ if(BUILD_TESTS)
         message(STATUS "Google C++ Testing Framework (Google Test) found in ${GTEST_ROOT}")
         include_directories(${GTEST_INCLUDE_DIR})
         add_subdirectory(${CMAKE_SOURCE_DIR}/tests)
+        add_subdirectory(${CMAKE_SOURCE_DIR}/custrings/tests)
     else()
         message(AUTHOR_WARNING "Google C++ Testing Framework (Google Test) not found: automated tests are disabled.")
     endif(GTEST_FOUND)
 endif(BUILD_TESTS)
 
+message(STATUS "CUDF_TEST_LIST set to: ${CUDF_TEST_LIST}")
+message(STATUS "NVSTRINGS_TEST_LIST set to: ${NVSTRINGS_TEST_LIST}")
+
 ###################################################################################################
 # - add google benchmark --------------------------------------------------------------------------
 
 if(BUILD_BENCHMARKS)
-  
+
   include(ConfigureGoogleBenchmark)
-  
+
   if(GBENCH_FOUND)
     message(STATUS "Google C++ Benchmarking Framework (Google Benchmark) found in ${GBENCH_ROOT}")
     include_directories(${GBENCH_INCLUDE_DIR})
@@ -229,64 +240,126 @@ endif(BUILD_BENCHMARKS)
 
 if(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 	include_directories("${CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES}")
-endif()
+endif(CMAKE_CUDA_TOOLKIT_INCLUDE_DIRECTORIES)
 
 include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
-                    "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
+                    "${Boost_INCLUDE_DIRS}"
                     "${RMM_INCLUDE}"
-                    "${NVSTRINGS_INCLUDE}")
+                    "${DLPACK_INCLUDE}")
+
+if(CONDA_INCLUDE_DIRS)
+    include_directories("${CONDA_INCLUDE_DIRS}")
+endif(CONDA_INCLUDE_DIRS)
 
 ###################################################################################################
 # - library paths ---------------------------------------------------------------------------------
 
 link_directories("${CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES}" # CMAKE_CUDA_IMPLICIT_LINK_DIRECTORIES is an undocumented/unsupported variable containing the link directories for nvcc
                  "${CMAKE_BINARY_DIR}/lib"
+                 "${CMAKE_BINARY_DIR}"
                  "${FLATBUFFERS_LIBRARY_DIR}"
                  "${GTEST_LIBRARY_DIR}"
-                 "${RMM_LIBRARY}"
-                 "${NVSTRINGS_LIBRARY}"
-                 "${NVCATEGORY_LIBRARY}"
-                 "${NVTEXT_LIBRARY}")
+                 "${RMM_LIBRARY}")
+
+if(CONDA_LINK_DIRS)
+    link_directories("${CONDA_LINK_DIRS}")
+endif(CONDA_LINK_DIRS)
 
 ###################################################################################################
 # - library targets -------------------------------------------------------------------------------
 
-add_library(cudf SHARED
-            src/comms/ipc/ipc.cu
+add_library(libNVStrings
+            custrings/strings/NVStrings.cu
+            custrings/strings/NVStringsImpl.cu
+            custrings/strings/array.cu
+            custrings/strings/attrs.cu
+            custrings/strings/case.cu
+            custrings/strings/combine.cu
+            custrings/strings/convert.cu
+            custrings/strings/count.cu
+            custrings/strings/datetime.cu
+            custrings/strings/extract.cu
+            custrings/strings/extract_record.cu
+            custrings/strings/find.cu
+            custrings/strings/findall.cu
+            custrings/strings/findall_record.cu
+            custrings/strings/modify.cu
+            custrings/strings/pad.cu
+            custrings/strings/replace.cu
+            custrings/strings/replace_backref.cu
+            custrings/strings/replace_multi.cu
+            custrings/strings/split.cu
+            custrings/strings/strip.cu
+            custrings/strings/substr.cu
+            custrings/strings/urlencode.cu
+            custrings/util.cu
+            custrings/regex/regexec.cpp
+            custrings/regex/regcomp.cpp)
+
+add_library(libNVCategory
+            custrings/category/NVCategory.cu
+            custrings/category/numeric_category.cu
+            custrings/category/numeric_category_int.cu
+            custrings/category/numeric_category_long.cu
+            custrings/category/numeric_category_float.cu
+            custrings/category/numeric_category_double.cu)
+
+add_library(libNVText
+            custrings/text/NVText.cu
+            custrings/text/edit_distance.cu
+            custrings/text/ngram.cu
+            custrings/text/stemmer.cu
+            custrings/text/tokens.cu
+            custrings/util.cu)
+
+add_library(cudf
+            src/comms/ipc/ipc.cpp
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
-            src/table/table.cpp
+            src/table/legacy/table.cpp
             src/string/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
+            src/predicates/is_sorted.cu
             src/sort/digitize.cu
-            src/sort/segmented_sorting.cu
             src/groupby/hash/groupby.cu
             src/groupby/groupby_without_aggregation.cu
             src/groupby/hash/aggregation_requests.cpp
             src/rolling/rolling.cu
+            src/rolling/jit/code/kernel.cpp
+            src/rolling/jit/code/operation.cpp
+            src/rolling/jit/util/type.cpp
             src/binaryop/binaryop.cpp
             src/binaryop/compiled/binary_ops.cu
             src/binaryop/jit/code/kernel.cpp
             src/binaryop/jit/code/operation.cpp
             src/binaryop/jit/code/traits.cpp
-            src/binaryop/jit/core/launcher.cpp
-            src/binaryop/jit/core/parser.cpp
-            src/binaryop/jit/core/cache.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
+            src/jit/type.cpp
+            src/jit/parser.cpp
+            src/jit/cache.cpp
+            src/jit/launcher.cpp
+            src/transform/transform.cpp
+            src/transform/jit/code/kernel.cpp
+            src/transform/nans_to_nulls.cu
             src/bitmask/legacy/bitmask_ops.cu
-            src/stream_compaction/stream_compaction.cu
+            src/stream_compaction/apply_boolean_mask.cu
+            src/stream_compaction/drop_nulls.cu
+            src/stream_compaction/drop_duplicates.cu
             src/datetime/datetime_ops.cu
+            src/datetime/datetime_util.cpp
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
+            src/quantiles/group_quantiles.cu
+            src/quantiles/groupby.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
@@ -303,12 +376,15 @@ add_library(cudf SHARED
             src/unary/math_ops.cu
             src/unary/cast_ops.cu
             src/io/cuio_common.cpp
+            src/io/io_functions.cpp
             src/io/convert/csr/cudf_to_csr.cu
-            src/io/utilities/parsing_utils.cu
-            src/io/utilities/file_utils.cpp
             src/io/convert/dlpack/cudf_dlpack.cpp
+            src/io/avro/avro_reader_impl.cu
+            src/io/avro/avro_gpu.cu
+            src/io/avro/avro.cpp
             src/io/csv/csv_reader_impl.cu
             src/io/csv/csv_writer.cu
+            src/io/csv/csv_gpu.cu
             src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader_impl.cu
             src/io/orc/orc.cpp
@@ -325,7 +401,8 @@ add_library(cudf SHARED
             src/io/comp/debrotli.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
-            src/io/io_functions.cpp
+            src/io/utilities/datasource.cpp
+            src/io/utilities/parsing_utils.cu
             src/utilities/cuda_utils.cu
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
@@ -338,10 +415,22 @@ add_library(cudf SHARED
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
-            src/filling/fill.cu)
+            src/filling/fill.cu
+            src/filling/repeat.cu
+            src/search/search.cu)
 
-#Override RPATH for cudf
-SET_TARGET_PROPERTIES(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+# Override RPATH for nvstrings
+set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+# Rename installation to proper names for later finding
+set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
+set_target_properties(libNVCategory PROPERTIES OUTPUT_NAME "NVCategory")
+set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
+
+# Override RPATH for cudf
+set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------
@@ -379,28 +468,92 @@ if(HT_LEGACY_ALLOCATOR)
     set(CMAKE_CUDA_FLAGS "${CMAKE_CUDA_FLAGS} --define-macro HT_LEGACY_ALLOCATOR")
 endif(HT_LEGACY_ALLOCATOR)
 
-
 ###################################################################################################
 # - link libraries --------------------------------------------------------------------------------
 
-target_link_libraries(cudf rmm cudart cuda "${ARROW_LIB}" ${ZLIB_LIBRARIES} NVCategory NVStrings nvrtc)
+# Get all the symbols from the Arrow CUDA Library for Cython
+set(ARROW_CUDA_LIB_LINK -Wl,--whole-archive ${ARROW_CUDA_LIB} -Wl,--no-whole-archive)
 
+# link targets for NVStrings
+target_link_libraries(libNVStrings rmm cudart cuda)
+target_link_libraries(libNVCategory libNVStrings rmm cudart cuda)
+target_link_libraries(libNVText libNVStrings rmm cudart cuda)
+
+# link targets for cuDF
+target_link_libraries(cudf NVCategory NVStrings rmm ${ARROW_CUDA_LIB_LINK} ${ARROW_LIB} nvrtc cudart cuda ${ZLIB_LIBRARIES} ${Boost_LIBRARIES})
 
 ###################################################################################################
 # - install targets -------------------------------------------------------------------------------
 
-install(TARGETS cudf
-        DESTINATION lib)
+# install targets for NVStrings
+install(TARGETS libNVStrings
+        DESTINATION lib
+        COMPONENT nvstrings)
 
+install(TARGETS libNVCategory
+        DESTINATION lib
+        COMPONENT nvstrings)
+
+install(TARGETS libNVText
+        DESTINATION lib
+        COMPONENT nvstrings)
+
+install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/nvstrings
+        DESTINATION include
+        COMPONENT nvstrings)
+
+add_custom_target(nvstrings
+                  DEPENDS libNVStrings libNVCategory libNVText)
+
+# install targets for cuDF
+install(TARGETS cudf
+        DESTINATION lib
+        COMPONENT cudf)
 install(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/include/cudf
-        DESTINATION include)
+        DESTINATION include
+        COMPONENT cudf)
+
+add_custom_target(install_cudf
+                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=cudf -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+                  DEPENDS cudf)
+
+if(BUILD_TESTS)
+    add_dependencies(install_cudf cudftestutil)
+endif(BUILD_TESTS)
+
+add_custom_target(install_nvstrings
+                  COMMAND "${CMAKE_COMMAND}" -DCOMPONENT=nvstrings -P "${CMAKE_BINARY_DIR}/cmake_install.cmake"
+                  DEPENDS nvstrings)
+
+add_custom_target(build_tests_cudf
+                  DEPENDS ${CUDF_TEST_LIST})
+
+add_custom_target(build_tests_nvstrings
+                  DEPENDS ${NVSTRINGS_TEST_LIST})
+
+add_custom_target(test_cudf
+                  COMMAND ctest -E "NVSTRINGS"
+                  DEPENDS build_tests_cudf)
+
+add_custom_target(test_nvstrings
+                  COMMAND ctest -R "NVSTRINGS"
+                  DEPENDS build_tests_nvstrings)
 
 ###################################################################################################
 # - make documentation ----------------------------------------------------------------------------
 
+# doc targets for nvstrings
+add_custom_command(OUTPUT NVSTRINGS_DOXYGEN
+                   WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/custrings/doxygen
+                   COMMAND doxygen Doxyfile
+                   VERBATIM
+)
+add_custom_target(docs_nvstrings DEPENDS NVSTRINGS_DOXYGEN)
+
+# doc targets for cuDF
 add_custom_command(OUTPUT CUDF_DOXYGEN
                    WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/doxygen
                    COMMAND doxygen Doxyfile
                    VERBATIM)
 
-add_custom_target(doc DEPENDS CUDF_DOXYGEN)
+add_custom_target(docs_cudf DEPENDS CUDF_DOXYGEN)

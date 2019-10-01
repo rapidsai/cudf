@@ -19,13 +19,13 @@
 #include <utilities/column_utils.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/types.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/bit_util.cuh>
 #include <rmm/thrust_rmm_allocator.h>
 #include <bitmask/legacy/bit_mask.cuh> 
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <copying/slice.hpp>
 
 namespace cudf {
@@ -262,6 +262,7 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
 
   // Initialize output_columns
   output_columns.resize(num_indices/2);
+  //TODO: optimize to launch all slices in parallel
   for (gdf_size_type i = 0; i < num_indices/2; i++){
     output_columns[i] = new gdf_column{};
     gdf_column_view_augmented(output_columns[i],

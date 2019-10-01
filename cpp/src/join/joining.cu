@@ -19,11 +19,12 @@
 #include <cudf/types.hpp>
 #include <cudf/cudf.h>
 #include <rmm/rmm.h>
+#include <cudf/copying.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <nvstrings/NVCategory.h>
 #include <copying/gather.hpp>
 #include "joining.h"
@@ -31,37 +32,15 @@
 #include <limits>
 #include <set>
 #include <vector>
+#include <numeric>
+#include <algorithm>
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
 using output_index_type = gdf_index_type;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
-/* --------------------------------------------------------------------------*/
-/** 
- * @brief Computes the Join result between two tables using the hash-based implementation. 
- * 
- * @param[in] num_cols The number of columns to join
- * @param[in] leftcol The left set of columns to join
- * @param[in] rightcol The right set of columns to join
- * @param[out] l_result The join computed indices of the left table
- * @param[out] r_result The join computed indices of the right table
- * @tparam join_type The type of join to be performed
- * 
- * @returns Upon successful computation, returns GDF_SUCCESS. Otherwise returns appropriate error code 
- */
-/* ----------------------------------------------------------------------------*/
-template <JoinType join_type>
-gdf_error hash_join(gdf_size_type num_cols, gdf_column **leftcol, gdf_column **rightcol,
-                    gdf_column *l_result, gdf_column *r_result)
-{
-  cudf::table left_table{leftcol, num_cols};
-  cudf::table right_table{rightcol, num_cols};
-
-  return join_hash<join_type, output_index_type>(left_table, right_table,
-                                                 l_result, r_result);
-}
-
+namespace cudf {
 /* --------------------------------------------------------------------------*/
 /**
  * @brief  Allocates a buffer and fills it with a repeated value
@@ -108,17 +87,18 @@ gdf_error allocSequenceBuffer(data_type ** buffer,
 /** 
  * @brief  Trivially computes full join of two tables if one of the tables
  * are empty
+ *
+ * @throws cudf::logic_error
+ * "Dataset is empty" if both left_table and right_table are empty
  * 
  * @param[in] left_size The size of the left table
  * @param[in] right_size The size of the right table
  * @param[in] rightcol The right set of columns to join
  * @param[out] left_result The join computed indices of the left table
  * @param[out] right_result The join computed indices of the right table
- * 
- * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
-gdf_error trivial_full_join(
+void trivial_full_join(
         const gdf_size_type left_size,
         const gdf_size_type right_size,
         gdf_column *left_result,
@@ -136,9 +116,7 @@ gdf_error trivial_full_join(
     output_index_type *l_ptr{nullptr};
     output_index_type *r_ptr{nullptr};
     gdf_size_type result_size{0};
-    if ((left_size == 0) && (right_size == 0)) {
-        return GDF_DATASET_EMPTY;
-    }
+    CUDF_EXPECTS((left_size != 0) || (right_size != 0), "Dataset is empty");
     if (left_size == 0) {
         allocValueBuffer(&l_ptr, right_size,
                          static_cast<output_index_type>(-1));
@@ -150,90 +128,90 @@ gdf_error trivial_full_join(
         allocSequenceBuffer(&l_ptr, left_size);
         result_size = left_size;
     }
-    gdf_column_view( left_result, l_ptr, nullptr, result_size, dtype);
-    gdf_column_view(right_result, r_ptr, nullptr, result_size, dtype);
+
+    gdf_column_view_augmented(left_result,
+                              l_ptr, nullptr,
+                              result_size, dtype, 0,
+                              left_result->dtype_info,
+                              left_result->col_name);
+
+    gdf_column_view_augmented(right_result,
+                              r_ptr, nullptr,
+                              result_size, dtype, 0,
+                              right_result->dtype_info,
+                              right_result->col_name);
+
     CUDA_CHECK_LAST();
-    return GDF_SUCCESS;
 }
 
 /* --------------------------------------------------------------------------*/
 /** 
  * @brief  Computes the join operation between two sets of columns
+ *
+ * @throws cudf::logic_error
+ * If `left`/`right` table is empty
+ * If number of rows in table is too big
+ * If it has in-valid join context
+ * If method is sort based and number of columns to join are more than `1`
  * 
- * @param[in] num_cols The number of columns to join
- * @param[in] leftcol The left set of columns to join
- * @param[in] rightcol The right set of columns to join
- * @param[out] left_result The join computed indices of the left table
- * @param[out] right_result The join computed indices of the right table
+ * @param[in] left  Table of left columns to join
+ * @param[in] right Table of right  columns to join
+ * @param[out] left_result The join computed indices of the `left` table
+ * @param[out] right_result The join computed indices of the `right` table
  * @param[in] join_context A structure that determines various run parameters, such as
  *                         whether to perform a hash or sort based join
  * @tparam join_type The type of join to be performed
- * 
- * @returns GDF_SUCCESS upon succesfull compute, otherwise returns appropriate error code
  */
 /* ----------------------------------------------------------------------------*/
 template <JoinType join_type>
-gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
+void join_call(cudf::table const& left, cudf::table const& right,
                      gdf_column *left_result, gdf_column *right_result,
                      gdf_context *join_context)
 {
-  GDF_REQUIRE( 0 != num_cols, GDF_DATASET_EMPTY);
-  GDF_REQUIRE( nullptr != leftcol, GDF_DATASET_EMPTY);
-  GDF_REQUIRE( nullptr != rightcol, GDF_DATASET_EMPTY);
-  GDF_REQUIRE( nullptr != join_context, GDF_INVALID_API_CALL);
-
-  const auto left_col_size = leftcol[0]->size;
-  const auto right_col_size = rightcol[0]->size;
-  
-  GDF_REQUIRE( left_col_size < MAX_JOIN_SIZE, GDF_COLUMN_SIZE_TOO_BIG);
-  GDF_REQUIRE( right_col_size < MAX_JOIN_SIZE, GDF_COLUMN_SIZE_TOO_BIG);
-
+  CUDF_EXPECTS( 0 != left.num_columns(), "Left Dataset is empty");
+  CUDF_EXPECTS( 0 != right.num_columns(), "Right Dataset is empty");
+  CUDF_EXPECTS( nullptr != join_context, "Invalid join context");
+  CUDF_EXPECTS( left.num_rows() < MAX_JOIN_SIZE, "left column size is too big");
+  CUDF_EXPECTS( right.num_rows() < MAX_JOIN_SIZE, "right column size is too big");
 
   // If both frames are empty, return immediately
-  if((0 == left_col_size ) && (0 == right_col_size)) {
-    return GDF_SUCCESS;
+  if((0 == left.num_rows() ) && (0 == right.num_rows())) {
+    return;
   }
 
   // If left join and the left table is empty, return immediately
-  if( (JoinType::LEFT_JOIN == join_type) && (0 == left_col_size)){
-    return GDF_SUCCESS;
+  if( (JoinType::LEFT_JOIN == join_type) && (0 == left.num_rows())){
+    return;
   }
 
   // If Inner Join and either table is empty, return immediately
   if( (JoinType::INNER_JOIN == join_type) && 
-      ((0 == left_col_size) || (0 == right_col_size)) ){
-    return GDF_SUCCESS;
+      ((0 == left.num_rows()) || (0 == right.num_rows())) ){
+    return;
   }
 
   // If Full Join and either table is empty, compute trivial full join
   if( (JoinType::FULL_JOIN == join_type) && 
-      ((0 == left_col_size) || (0 == right_col_size)) ){
-    return trivial_full_join(left_col_size, right_col_size, left_result, right_result);
+      ((0 == left.num_rows()) || (0 == right.num_rows())) ){
+    return trivial_full_join(left.num_rows(), right.num_rows(), left_result, right_result);
   }
 
   // check that the columns data are not null, have matching types, 
   // and the same number of rows
-  for (int i = 0; i < num_cols; i++) {
-    if((right_col_size > 0) && (nullptr == rightcol[i]->data)){
-     return GDF_DATASET_EMPTY;
-    } 
-    if((left_col_size > 0) && (nullptr == leftcol[i]->data)){
-     return GDF_DATASET_EMPTY;
-    } 
-    if(rightcol[i]->dtype != leftcol[i]->dtype) return GDF_DTYPE_MISMATCH;
-    if(left_col_size != leftcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
-    if(right_col_size != rightcol[i]->size) return GDF_COLUMN_SIZE_MISMATCH;
+  for (int i = 0; i < left.num_columns(); i++) {
+    CUDF_EXPECTS (!((left.num_rows() > 0) && (nullptr == left.get_column(i)->data)), "Null column data in left set");
+    CUDF_EXPECTS (!((right.num_rows() > 0) && (nullptr == right.get_column(i)->data)), "Null column data in right set");
+    CUDF_EXPECTS (right.get_column(i)->dtype == left.get_column(i)->dtype, "DTYPE mismatch");
 
     // Ensure GDF_TIMESTAMP columns have the same resolution
-    if (GDF_TIMESTAMP == rightcol[i]->dtype) {
-      GDF_REQUIRE(
-          rightcol[i]->dtype_info.time_unit == leftcol[i]->dtype_info.time_unit,
-          GDF_TIMESTAMP_RESOLUTION_MISMATCH);
+    if (GDF_TIMESTAMP == right.get_column(i)->dtype) {
+      CUDF_EXPECTS(
+          right.get_column(i)->dtype_info.time_unit == left.get_column(i)->dtype_info.time_unit,
+          "Timestamp resolution mismatch");
     }
   }
 
   gdf_method join_method = join_context->flag_method; 
-
   gdf_error gdf_error_code{GDF_SUCCESS};
 
   PUSH_RANGE("LIBGDF_JOIN", JOIN_COLOR);
@@ -242,253 +220,313 @@ gdf_error join_call( int num_cols, gdf_column **leftcol, gdf_column **rightcol,
   {
     case GDF_HASH:
       {
-        gdf_error_code =  hash_join<join_type>(num_cols, leftcol, rightcol, left_result, right_result);
+        gdf_error_code = join_hash<join_type, output_index_type>(left, right, left_result, right_result);
+        CUDF_EXPECTS(gdf_error_code == GDF_SUCCESS, "GDF Error");
         break;
       }
     case GDF_SORT:
       {
         // Sort based joins only support single column joins
-        if(1 == num_cols)
+        if(1 == left.num_columns())
         {
-          gdf_error_code =  sort_join<join_type, output_index_type>(leftcol[0], rightcol[0], left_result, right_result);
+          gdf_error_code =  sort_join<join_type, output_index_type>(const_cast <gdf_column*> (left.get_column(0)), 
+                            const_cast <gdf_column*> (right.get_column(0)), left_result, right_result);
+          CUDF_EXPECTS(gdf_error_code != GDF_VALIDITY_UNSUPPORTED, "GDF Validity is unsupported by sort_join");
+          CUDF_EXPECTS(gdf_error_code == GDF_SUCCESS, "GDF Error");
         }
         else
         {
-          gdf_error_code =  GDF_JOIN_TOO_MANY_COLUMNS;
+          CUDF_FAIL("Sort-based join only supports a single \"on\" column.");
         }
 
         break;
       }
     default:
-      gdf_error_code =  GDF_UNSUPPORTED_METHOD;
+      CUDF_FAIL("Unsupported join Method");
   }
 
   POP_RANGE();
-
-  return gdf_error_code;
 }
 
+/**---------------------------------------------------------------------------*
+ * @brief Returns a vector with non-common indices which is set difference
+ * between `[0, num_columns)` and index values in common_column_indices
+ *
+ * @param num_columns The number of columns , which represents column indices
+ * from `[0, num_columns)` in a table
+ * @param common_column_indices A vector of common indices which needs to be
+ * excluded from `[0, num_columns)`
+ * @return vector A vector containing only the indices which are not present in
+ * `common_column_indices`
+ *---------------------------------------------------------------------------**/
 
+auto non_common_column_indices(
+    gdf_size_type num_columns,
+    std::vector<gdf_size_type> const& common_column_indices) {
+  CUDF_EXPECTS(common_column_indices.size() <= static_cast<unsigned long>(num_columns),
+               "Too many columns in common");
+  std::vector<gdf_size_type> all_column_indices(num_columns);
+  std::iota(std::begin(all_column_indices), std::end(all_column_indices), 0);
+  std::vector<gdf_size_type> sorted_common_column_indices{
+      common_column_indices};
+  std::sort(std::begin(sorted_common_column_indices),
+            std::end(sorted_common_column_indices));
+  std::vector<gdf_size_type> non_common_column_indices(num_columns -
+                                                common_column_indices.size());
+  std::set_difference(std::cbegin(all_column_indices),
+                      std::cend(all_column_indices),
+                      std::cbegin(sorted_common_column_indices),
+                      std::cend(sorted_common_column_indices), std::begin(non_common_column_indices));
+   return non_common_column_indices;
+}
+
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Gathers rows indicated by `left_indices` and `right_indices` from
+ * tables `left` and `right`, respectively, into a single `table`.
+ *
+ * The row from `left` at `left_indices[i]` will be concatenated with the row i
+ * from `right` at `right_indices[i]` to form a new row in the output `table`.
+ * If either `left_indices[i]` or `right_indices[i]` is negative, then the i
+ * contributions from `left` or `right` will be NULL.
+ *
+ * @throws cudf::logic_error
+ * If call to nvcategory_gather_table fails
+ * 
+ * @param[in] left   The left table
+ * @param[in] right  the right table
+ * @param[in] columns_in_common is a vector of pairs of column indices
+ * from tables `left` and `right` respectively, that are "in common".
+ * For "common" columns, only a single output column will be produced.
+ * For an inner or left join, the result will be gathered from the column in
+ * `left`. For a full join, the result will be gathered from both common
+ * columns in `left` and `right`.
+ * @param[in] left_indices Row indices from `left` to gather. If any row index
+ * is out of bounds, the contribution in the output `table` will be NULL.
+ * @param[in] right_indicess  Row indices from `right` to gather. If any row
+ * index is out of bounds, the contribution in the output `table` will be NULL.
+ * 
+ * @returns `table` containing the concatenation of rows from `left` and
+ * `right` specified by `left_indices` and `right_indices`, respectively.
+ * For any columns indicated by `columns_in_common`, only the corresponding
+ * column in `left` will be included in the result. Final form would look like
+ * `left(including common columns)+right(excluding common columns)`.
+ */
+/* ----------------------------------------------------------------------------*/
 
 template <JoinType join_type, typename index_type>
-gdf_error construct_join_output_df(
-        std::vector<gdf_column*>& ljoincol,
-        std::vector<gdf_column*>& rjoincol,
-        gdf_column **left_cols, 
-        int num_left_cols,
-        int left_join_cols[],
-        gdf_column **right_cols,
-        int num_right_cols,
-        int right_join_cols[],
-        int num_cols_to_join,
-        int result_num_cols,
-        gdf_column ** result_cols,
+cudf::table construct_join_output_df(
+        cudf::table const& left, 
+        cudf::table const& right,
+        std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
         gdf_column * left_indices,
         gdf_column * right_indices) {
 
-
-  PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
+    PUSH_RANGE("LIBGDF_JOIN_OUTPUT", JOIN_COLOR);
     //create left and right input table with columns not joined on
-    std::vector<gdf_column*> lnonjoincol;
-    std::vector<gdf_column*> rnonjoincol;
-    std::set<int> l_join_indices, r_join_indices;
-    for (int i = 0; i < num_cols_to_join; ++i) {
-        l_join_indices.insert(left_join_cols[i]);
-        r_join_indices.insert(right_join_cols[i]);
+    std::vector<gdf_size_type> left_columns_in_common (columns_in_common.size());
+    std::vector<gdf_size_type> right_columns_in_common (columns_in_common.size());
+
+    for (unsigned int i = 0; i < columns_in_common.size(); ++i)
+    {
+        left_columns_in_common[i] = columns_in_common[i].first;
+        right_columns_in_common[i] = columns_in_common[i].second;
     }
-    for (int i = 0; i < num_left_cols; ++i) {
-        if (l_join_indices.find(i) == l_join_indices.end()) {
-            lnonjoincol.push_back(left_cols[i]);
-        }
-    }
-    for (int i = 0; i < num_right_cols; ++i) {
-        if (r_join_indices.find(i) == r_join_indices.end()) {
-            rnonjoincol.push_back(right_cols[i]);
-        }
-    }
-    //TODO : Invalid api
+  
+    // Gathering the indices that are not in common
+    std::vector<gdf_size_type> left_non_common_indices =
+                                    non_common_column_indices(left.num_columns(), left_columns_in_common);
+    std::vector<gdf_size_type> right_non_common_indices =
+                                     non_common_column_indices(right.num_columns(), right_columns_in_common);
 
     gdf_size_type join_size = left_indices->size;
-    int left_table_end = num_left_cols - num_cols_to_join;
-    int right_table_begin = num_left_cols;
+    // Update first set of type and type infos from left
+    std::vector<gdf_dtype> result_dtypes = cudf::column_dtypes(left);
+    std::vector<gdf_dtype_extra_info> result_dtype_infos = cudf::column_dtype_infos(left);
 
-    //create left and right output column data buffers
-    for (int i = 0; i < left_table_end; ++i) {
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, lnonjoincol[i]->dtype);
-        int col_width = cudf::byte_width(*(result_cols[i]));
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
-        CHECK_STREAM(0);
-    }
-    for (int i = right_table_begin; i < result_num_cols; ++i) {
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, rnonjoincol[i - right_table_begin]->dtype);
-        int col_width = cudf::byte_width(*(result_cols[i]));
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
-        CHECK_STREAM(0);
-    }
-    //create joined output column data buffers
-    for (int join_index = 0; join_index < num_cols_to_join; ++join_index) {
-        int i = left_table_end + join_index;
-        gdf_column_view(result_cols[i], nullptr, nullptr, join_size, left_cols[left_join_cols[join_index]]->dtype);
-        int col_width = cudf::byte_width(*(result_cols[i]));
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->data), col_width * join_size, 0) ); // TODO: non-default stream?
-        RMM_TRY( RMM_ALLOC((void**)&(result_cols[i]->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size), 0) );
-        CUDA_TRY( cudaMemset(result_cols[i]->valid, 0, sizeof(gdf_valid_type)*gdf_valid_allocation_size(join_size)) );
-        CHECK_STREAM(0);
+    // Gathering all the right table columns not in joining indices
+    for (auto index: right_non_common_indices){
+        result_dtypes.push_back(right.get_column(index)->dtype);
+        result_dtype_infos.push_back(right.get_column(index)->dtype_info);
     }
 
-
-    // If the join_type is an outer join, then indices for non-matches will be
-    // -1, requiring bounds checking when gathering the result table
-    bool const check_bounds{ join_type != JoinType::INNER_JOIN };
+    cudf::table result(join_size, result_dtypes, result_dtype_infos, true);
+    bool const ignore_out_of_bounds{ join_type != JoinType::INNER_JOIN };
 
     // Construct the left columns
-    if (0 != lnonjoincol.size()) {
-      cudf::table left_source_table(lnonjoincol.data(), lnonjoincol.size());
-      cudf::table left_destination_table(result_cols,
-                                         num_left_cols - num_cols_to_join);
+    if (not left_non_common_indices.empty()) {
+      cudf::table left_source_table = left.select(left_non_common_indices);
+      cudf::table left_destination_table = result.select(left_non_common_indices);
 
       cudf::detail::gather(&left_source_table,
                            static_cast<index_type const *>(left_indices->data),
-                           &left_destination_table, check_bounds);
-      CHECK_STREAM(0);
+                           &left_destination_table, false, ignore_out_of_bounds);
       gdf_error update_err = nvcategory_gather_table(left_source_table,left_destination_table);
-      CHECK_STREAM(0);
-      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
+      CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
 
     // Construct the right columns
-    if (0 != rnonjoincol.size()) {
-      cudf::table right_source_table(rnonjoincol.data(), rnonjoincol.size());
-      cudf::table right_destination_table(result_cols + right_table_begin,
-                                          num_right_cols - num_cols_to_join);
+    if (not right_non_common_indices.empty()) {
+      std::vector<gdf_size_type> result_right_non_common_indices (right_non_common_indices.size());
+      std::iota(std::begin(result_right_non_common_indices),
+                std::end(result_right_non_common_indices), left.num_columns());
+      cudf::table right_source_table = right.select(right_non_common_indices);
+      cudf::table right_destination_table = result.select(result_right_non_common_indices);
 
       cudf::detail::gather(&right_source_table,
                            static_cast<index_type const *>(right_indices->data),
-                           &right_destination_table, check_bounds);
-      CHECK_STREAM(0);
+                           &right_destination_table, false, ignore_out_of_bounds);
       gdf_error update_err = nvcategory_gather_table(right_source_table,right_destination_table);
-      CHECK_STREAM(0);
-      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
+      CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
 
     // Construct the joined columns
-    if (0 != ljoincol.size()) {
-      cudf::table join_source_table(ljoincol.data(), ljoincol.size());
-      cudf::table join_destination_table(result_cols + left_table_end,
-                                         num_cols_to_join);
+    if (not columns_in_common.empty()) {
+
+      // Gather the columns which join into single column from joined columns
+      cudf::table join_source_table = left.select(left_columns_in_common);
+      cudf::table join_destination_table = result.select(left_columns_in_common);
 
       // Gather valid rows from the right table
       // TODO: Revisit this, because it probably can be done more efficiently
       if (JoinType::FULL_JOIN == join_type) {
-        cudf::table right_source_table(rjoincol.data(), rjoincol.size());
+        cudf::table right_source_table = right.select(right_columns_in_common);
 
         cudf::detail::gather(
             &right_source_table,
             static_cast<index_type const *>(right_indices->data),
-            &join_destination_table, check_bounds);
-        CHECK_STREAM(0);
+            &join_destination_table, false, ignore_out_of_bounds);
       }
 
       cudf::detail::gather(&join_source_table,
                            static_cast<index_type const *>(left_indices->data),
-                           &join_destination_table, check_bounds);
-      CHECK_STREAM(0);
+                           &join_destination_table, false, ignore_out_of_bounds);
       gdf_error update_err = nvcategory_gather_table(join_source_table,join_destination_table);
-      CHECK_STREAM(0);
-      GDF_REQUIRE(update_err == GDF_SUCCESS,update_err);
+      CUDF_EXPECTS(update_err == GDF_SUCCESS, "nvcategory_gather_table error");
     }
 
+    CHECK_STREAM(0);
     POP_RANGE();
-    return GDF_SUCCESS;
+    return result;
 }
 
+/* --------------------------------------------------------------------------*/
+/** 
+ * @brief  Performs join on the columns provided in `left` and `right` as per
+ * the joining indices given in `left_on` and `right_on` and creates a single
+ * table.
+ *
+ * @throws cudf::logic_error
+ * if a sort-based join is requested and either `right_on` or `left_on` contains null values.
+ *
+ * @param[in] left The left table
+ * @param[in] right The right table
+ * @param[in] left_on The column's indices from `left` to join on.
+ * Column `i` from `left_on` will be compared against column `i` of `right_on`.
+ * @param[in] right_on The column's indices from `right` to join on.
+ * Column `i` from `right_on` will be compared with column `i` of `left_on`. 
+ * @param[in] columns_in_common is a vector of pairs of column indices into
+ * `left_on` and `right_on`, respectively, that are "in common". For "common"
+ * columns, only a single output column will be produced, which is gathered
+ * from `left_on` if it is left join or from intersection of `left_on` and `right_on`
+ * if it is inner join or gathered from both `left_on` and `right_on` if it is full join.
+ * Else, for every column in `left_on` and `right_on`, an output column will be produced.
+ *
+ * @param[out] * @returns joined_indices Optional, if not `nullptr`, on return, will
+ * contain two non-nullable, `GDF_INT32` columns containing the indices of
+ * matching rows between `left_on` and `right_on`. The first column corresponds to
+ * rows in `left_on`, and the second to `right_on`. A value of `-1` in the second column
+ * indicates that the corresponding row in `left_on` has no match. And similarly `-1` in
+ * first column indicates that the corresponding row in `right_on` has no match.
+ * It is the caller's responsibility to free these columns.
+ * @param[in] join_context The context to use to control how
+ * the join is performed,e.g., sort vs hash based implementation
+ *
+ * @returns Result of joining `left` and `right` tables on the columns
+ * specified by `left_on` and `right_on`. The resulting table will be joined columns of
+ * `left(including common columns)+right(excluding common columns)`.
+ */
+/* ----------------------------------------------------------------------------*/
 template <JoinType join_type, typename index_type>
-gdf_error join_call_compute_df(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
+cudf::table join_call_compute_df(
+                         cudf::table const& left, 
+                         cudf::table const& right,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         cudf::table *joined_indices,
                          gdf_context *join_context) {
-  GDF_REQUIRE(nullptr != left_cols, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr != right_cols, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(0 != num_cols_to_join, GDF_SUCCESS);
-  GDF_REQUIRE(nullptr != left_join_cols, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr != right_join_cols, GDF_DATASET_EMPTY);
-  GDF_REQUIRE(nullptr != join_context, GDF_INVALID_API_CALL);
+ 
+  CUDF_EXPECTS (0 != left.num_columns(), "Left table is empty");
+  CUDF_EXPECTS (0 != right.num_columns(), "Right table is empty");
+  CUDF_EXPECTS (nullptr != join_context, "Join context is invalid");
+  CUDF_EXPECTS(std::none_of(std::cbegin(left), std::cend(left), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported left column dtype");
+  CUDF_EXPECTS(std::none_of(std::cbegin(right), std::cend(right), [](auto col) { return col->dtype == GDF_invalid; }), "Unsupported right column dtype");
 
-  for(int column_index = 0; column_index  < num_left_cols; column_index++){
-    GDF_REQUIRE(left_cols[column_index]->dtype != GDF_invalid,GDF_UNSUPPORTED_DTYPE);
+  std::vector<gdf_size_type> right_columns_in_common (columns_in_common.size());
+
+  for (unsigned int i = 0; i < columns_in_common.size(); ++i)
+  {
+      right_columns_in_common [i] = columns_in_common[i].second;
   }
-  for(int column_index = 0; column_index  < num_right_cols; column_index++){
-    GDF_REQUIRE(right_cols[column_index]->dtype != GDF_invalid,GDF_UNSUPPORTED_DTYPE);
+
+  cudf::table empty_left = cudf::empty_like(left);
+  cudf::table empty_right = cudf::empty_like(right);
+  std::vector <gdf_size_type> right_non_common_indices = non_common_column_indices(right.num_columns(),
+                                                                         right_columns_in_common);;
+  cudf::table tmp_right_table = empty_right.select(right_non_common_indices);
+  cudf::table tmp_table = cudf::concat(empty_left, tmp_right_table);
+  
+  // If there is nothing to join, then send empty table with all columns
+  if (left_on.empty() || right_on.empty() || left_on.size() != right_on.size())
+  {
+      return tmp_table;
   }
 
-  // Determine if requested output is the indices of matching rows, the fully
-  // constructed output dataframe, or both
-  bool const construct_output_dataframe{nullptr != result_cols};
-  bool const return_output_indices{(nullptr != left_indices) and
-                                   (nullptr != right_indices)};
-
-  GDF_REQUIRE(construct_output_dataframe or return_output_indices,
-              GDF_INVALID_API_CALL);
-
-  auto const left_col_size = left_cols[0]->size;
-  auto const right_col_size = right_cols[0]->size;
-
+  // Even though the resulting table might be empty, but the column should match the expected dtypes and other necessary information
+  // So, there is a possibility that there will be lesser number of right columns, so the tmp_table.
   // If the inputs are empty, immediately return
-  if ((0 == left_col_size) && (0 == right_col_size)) {
-    return GDF_SUCCESS;
+  if ((0 == left.num_rows()) && (0 == right.num_rows())) {
+      return tmp_table;
   }
 
   // If left join and the left table is empty, return immediately
-  if ((JoinType::LEFT_JOIN == join_type) && (0 == left_col_size)) {
-    return GDF_SUCCESS;
+  if ((JoinType::LEFT_JOIN == join_type) && (0 == left.num_rows())) {
+      return tmp_table;
   }
 
   // If Inner Join and either table is empty, return immediately
   if ((JoinType::INNER_JOIN == join_type) &&
-      ((0 == left_col_size) || (0 == right_col_size))) {
-    return GDF_SUCCESS;
+      ((0 == left.num_rows()) || (0 == right.num_rows()))) {
+      return cudf::empty_like(tmp_table);
   }
-
 
   //if the inputs are nvcategory we need to make the dictionaries comparable
-  bool at_least_one_category_column = false;
-  for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
-    at_least_one_category_column |= left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY;
-  }
+  bool at_least_one_category_column = std::any_of (cbegin(left_on), cend(left_on),
+                                                  [&](auto index) {  return (left.get_column(index)->dtype == GDF_STRING_CATEGORY);});
+  
+  std::vector<gdf_column*> new_left_cols(left.num_columns());
+  std::vector<gdf_column*> new_right_cols(right.num_columns());
 
-  std::vector<gdf_column*> new_left_cols(left_cols, left_cols + num_left_cols);
-  std::vector<gdf_column*> new_right_cols(right_cols, right_cols + num_right_cols);
+  std::transform (std::cbegin(left), std::cend(left),
+                  std::begin(new_left_cols), [](auto col) { return const_cast<gdf_column*>(col); });
+  std::transform (std::cbegin(right), std::cend(right),
+                  std::begin(new_right_cols), [](auto col) { return const_cast<gdf_column*>(col); });
+
   std::vector<gdf_column *> temp_columns_to_free;
   if(at_least_one_category_column){
-    for(int join_column_index = 0; join_column_index < num_cols_to_join; join_column_index++){
-      if(left_cols[left_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY){
-        GDF_REQUIRE(right_cols[right_join_cols[join_column_index]]->dtype == GDF_STRING_CATEGORY, GDF_DTYPE_MISMATCH);
+    for(unsigned int join_column_index = 0; join_column_index < left_on.size(); join_column_index++){
+      if(left.get_column(left_on[join_column_index])->dtype == GDF_STRING_CATEGORY){
+        CUDF_EXPECTS(right.get_column(right_on[join_column_index])->dtype == GDF_STRING_CATEGORY, "GDF type mismatch");
 
-        gdf_column * left_original_column = new_left_cols[left_join_cols[join_column_index]];
-        gdf_column * right_original_column = new_right_cols[right_join_cols[join_column_index]];
-
-
-
+        gdf_column * left_original_column = new_left_cols[left_on[join_column_index]];
+        gdf_column * right_original_column = new_right_cols[right_on[join_column_index]];
 
         gdf_column * new_left_column_ptr = new gdf_column{};
         gdf_column * new_right_column_ptr = new gdf_column{};
 
         temp_columns_to_free.push_back(new_left_column_ptr);
         temp_columns_to_free.push_back(new_right_column_ptr);
-
 
         gdf_column * input_join_columns_merge[2] = {left_original_column, right_original_column};
         gdf_column * new_join_columns[2] = {new_left_column_ptr,
@@ -519,24 +557,16 @@ gdf_error join_call_compute_df(
             new_join_columns,
             2);
 
-        GDF_REQUIRE(GDF_SUCCESS == err, err);
+        CUDF_EXPECTS(GDF_SUCCESS == err, "GDF_ERROR");
 
-        new_left_cols[left_join_cols[join_column_index]] = new_join_columns[0];
-        new_right_cols[right_join_cols[join_column_index]] = new_join_columns[1];
-        CHECK_STREAM(0);
+        new_left_cols[left_on[join_column_index]] = new_join_columns[0];
+        new_right_cols[right_on[join_column_index]] = new_join_columns[1];
       }
     }
-
-
-    left_cols = new_left_cols.data();
-    right_cols = new_right_cols.data();
   }
 
-  // If index outputs are not requested, create columns to store them
-  // for computing combined join output
-  gdf_column *left_index_out = left_indices;
-  gdf_column *right_index_out = right_indices;
-
+  cudf::table  updated_left_table(new_left_cols);
+  cudf::table  updated_right_table(new_right_cols);
   using gdf_col_pointer =
       typename std::unique_ptr<gdf_column, std::function<void(gdf_column *)>>;
   auto gdf_col_deleter = [](gdf_column *col) {
@@ -548,147 +578,101 @@ gdf_error join_call_compute_df(
       RMM_FREE(col->valid, 0);
     }
   };
-  gdf_col_pointer l_index_temp, r_index_temp;
 
-  if (nullptr == left_indices) {
-    l_index_temp = {new gdf_column{}, gdf_col_deleter};
-    left_index_out = l_index_temp.get();
-    }
+  gdf_col_pointer left_index_temp, right_index_temp;
+  gdf_column *left_index_out = nullptr;
+  gdf_column *right_index_out = nullptr;
 
-    if (nullptr == right_indices) {
-        r_index_temp = {new gdf_column{}, gdf_col_deleter};
-        right_index_out = r_index_temp.get();
-    }
+  if (nullptr != joined_indices && joined_indices->num_columns () > 0)
+  {
+      left_index_out = const_cast <gdf_column*>(joined_indices->get_column(0));
+      right_index_out = const_cast <gdf_column*>(joined_indices->get_column(1));
+  }
+  else
+  {
+      left_index_temp = {new gdf_column{}, gdf_col_deleter};
+      left_index_out = left_index_temp.get();
 
-    //get column pointers to join on
-    std::vector<gdf_column*> ljoincol;
-    std::vector<gdf_column*> rjoincol;
-    for (int i = 0; i < num_cols_to_join; ++i) {
-        ljoincol.push_back(left_cols[ left_join_cols[i] ]);
-        rjoincol.push_back(right_cols[ right_join_cols[i] ]);
-    }
+      right_index_temp = {new gdf_column{}, gdf_col_deleter};
+      right_index_out = right_index_temp.get();
+  }
 
-
-    gdf_error join_err = join_call<join_type>(num_cols_to_join,
-            ljoincol.data(), rjoincol.data(),
+  //get column pointers to join on
+  join_call<join_type>(updated_left_table.select(left_on),
+            updated_right_table.select(right_on),
             left_index_out, right_index_out,
             join_context);
-    CHECK_STREAM(0);
-    GDF_REQUIRE(GDF_SUCCESS == join_err, join_err);
 
-    //If construct_output_dataframe is false then left_index_out or right_index_out
-    //was not dynamically allocated.
-    if (not construct_output_dataframe) {
-        return join_err;
-    }
+  cudf::table result =
+      construct_join_output_df<join_type, index_type>(
+          updated_left_table, updated_right_table, 
+          columns_in_common, 
+          left_index_out, right_index_out);
+  left_index_temp.reset(nullptr);
+  right_index_temp.reset(nullptr);
 
-    gdf_error df_err =
-        construct_join_output_df<join_type, index_type>(
-            ljoincol, rjoincol,
-            left_cols, num_left_cols, left_join_cols,
-            right_cols, num_right_cols, right_join_cols,
-            num_cols_to_join, result_num_cols, result_cols,
-            left_index_out, right_index_out);
-    CHECK_STREAM(0);
-    l_index_temp.reset(nullptr);
-    r_index_temp.reset(nullptr);
-
-
-
-
-
-    //freeing up the temp column used to synch categories between columns
-    for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
+  //freeing up the temp column used to synch categories between columns
+  for(unsigned int column_to_free = 0; column_to_free < temp_columns_to_free.size(); column_to_free++){
       gdf_column_free(temp_columns_to_free[column_to_free]);
       delete temp_columns_to_free[column_to_free];
-    }
+  }
 
-    CHECK_STREAM(0);
-
-
-    return df_err;
+  CHECK_STREAM(0);
+    
+  return result;
 }
 
-gdf_error gdf_left_join(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
+cudf::table left_join(
+                         cudf::table const& left,
+                         cudf::table const& right,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         cudf::table *joined_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::LEFT_JOIN, output_index_type>(
-                     left_cols, 
-                     num_left_cols,
-                     left_join_cols,
-                     right_cols,
-                     num_right_cols,
-                     right_join_cols,
-                     num_cols_to_join,
-                     result_num_cols,
-                     result_cols,
-                     left_indices,
-                     right_indices,
+                     left,
+                     right,
+                     left_on,
+                     right_on,
+                     columns_in_common,
+                     joined_indices,
                      join_context);
 }
 
-gdf_error gdf_inner_join(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
+cudf::table inner_join(
+                         cudf::table const& left,
+                         cudf::table const& right,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         cudf::table *joined_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::INNER_JOIN, output_index_type>(
-                     left_cols, 
-                     num_left_cols,
-                     left_join_cols,
-                     right_cols,
-                     num_right_cols,
-                     right_join_cols,
-                     num_cols_to_join,
-                     result_num_cols,
-                     result_cols,
-                     left_indices,
-                     right_indices,
+                     left,
+                     right,
+                     left_on,
+                     right_on,
+                     columns_in_common,
+                     joined_indices,
                      join_context);
 }
 
-gdf_error gdf_full_join(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
+cudf::table full_join(
+                         cudf::table const& left,
+                         cudf::table const& right,
+                         std::vector<gdf_size_type> const& left_on,
+                         std::vector<gdf_size_type> const& right_on,
+                         std::vector<std::pair<gdf_size_type, gdf_size_type>> const& columns_in_common,
+                         cudf::table *joined_indices,
                          gdf_context *join_context) {
     return join_call_compute_df<JoinType::FULL_JOIN, output_index_type>(
-                     left_cols, 
-                     num_left_cols,
-                     left_join_cols,
-                     right_cols,
-                     num_right_cols,
-                     right_join_cols,
-                     num_cols_to_join,
-                     result_num_cols,
-                     result_cols,
-                     left_indices,
-                     right_indices,
+                     left,
+                     right,
+                     left_on,
+                     right_on,
+                     columns_in_common,
+                     joined_indices,
                      join_context);
+}
 }

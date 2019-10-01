@@ -25,8 +25,8 @@ enum class JoinType {
 };
 
 #include <cudf/cudf.h>
-#include <table/device_table.cuh>
-#include <table/device_table_row_operators.cuh>
+#include <table/legacy/device_table.cuh>
+#include <table/legacy/device_table_row_operators.cuh>
 #include <hash/concurrent_unordered_multimap.cuh>
 #include <hash/hash_functions.cuh>
 #include <utilities/bit_util.cuh>
@@ -48,7 +48,7 @@ enum class JoinType {
 */
 /* ----------------------------------------------------------------------------*/
 template<typename multimap_type>
-__global__ void build_hash_table( multimap_type * const multi_map,
+__global__ void build_hash_table( multimap_type multi_map,
                                   device_table build_table,
                                   const gdf_size_type build_table_num_rows,
                                   gdf_error * gdf_error_code)
@@ -62,11 +62,11 @@ __global__ void build_hash_table( multimap_type * const multi_map,
       // Insert the (row hash value, row index) into the map
       // using the row hash value to determine the location in the
       // hash map where the new pair should be inserted
-      const auto insert_location = multi_map->insert(
+      const auto insert_location = multi_map.insert(
           thrust::make_pair(row_hash_value, i), true, row_hash_value);
 
       // If the insert failed, set the error code accordingly
-      if (multi_map->end() == insert_location) {
+      if (multi_map.end() == insert_location) {
         *gdf_error_code = GDF_HASH_TABLE_INSERT_FAILURE;
       }
       i += blockDim.x * gridDim.x;
@@ -122,7 +122,7 @@ template< JoinType join_type,
           typename multimap_type,
           int block_size,
           int output_cache_size>
-__global__ void compute_join_output_size( multimap_type const * const multi_map,
+__global__ void compute_join_output_size( multimap_type multi_map,
                                           device_table build_table,
                                           device_table probe_table,
                                           const gdf_size_type probe_table_num_rows,
@@ -137,8 +137,8 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
   gdf_size_type thread_counter {0};
   const gdf_size_type start_idx = threadIdx.x + blockIdx.x * blockDim.x;
   const gdf_size_type stride = blockDim.x * gridDim.x;
-  const auto unused_key = multi_map->get_unused_key();
-  const auto end = multi_map->end();
+  const auto unused_key = multi_map.get_unused_key();
+  const auto end = multi_map.end();
 
   for (gdf_size_type probe_row_index = start_idx; probe_row_index < probe_table_num_rows; probe_row_index += stride) {
 
@@ -149,7 +149,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
     probe_row_hash_value = hash_row(probe_table,probe_row_index);
-    found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
+    found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     // for left-joins we always need to add an output
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found); 
@@ -181,7 +181,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
         ++found;
         // If you hit the end of the hash map, wrap around to the beginning
         if(end == found)
-          found = multi_map->begin();
+          found = multi_map.begin();
         // Next entry is empty, stop searching
         if(unused_key == found->first)
           running = false;
@@ -192,7 +192,7 @@ __global__ void compute_join_output_size( multimap_type const * const multi_map,
         ++found;
         // If you hit the end of the hash map, wrap around to the beginning
         if(end == found)
-          found = multi_map->begin();
+          found = multi_map.begin();
         // Next entry is empty, stop searching
         if(unused_key == found->first)
           running = false;
@@ -244,7 +244,7 @@ template< JoinType join_type,
           typename output_index_type,
           gdf_size_type block_size,
           gdf_size_type output_cache_size>
-__global__ void probe_hash_table( multimap_type const * const multi_map,
+__global__ void probe_hash_table( multimap_type multi_map,
                                   device_table build_table,
                                   device_table probe_table,
                                   const gdf_size_type probe_table_num_rows,
@@ -285,8 +285,8 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
 #endif
   if ( probe_row_index < probe_table_num_rows ) {
 
-    const auto unused_key = multi_map->get_unused_key();
-    const auto end = multi_map->end();  
+    const auto unused_key = multi_map.get_unused_key();
+    const auto end = multi_map.end();  
     auto found = end;    
 
     // Search the hash map for the hash value of the probe row using the row's
@@ -296,7 +296,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
     hash_value_type probe_row_hash_value{0};
     // Search the hash map for the hash value of the probe row
     probe_row_hash_value = hash_row(probe_table,probe_row_index);
-    found = multi_map->find(probe_row_hash_value, true, probe_row_hash_value);
+    found = multi_map.find(probe_row_hash_value, true, probe_row_hash_value);
 
     bool running = (join_type == JoinType::LEFT_JOIN) || (end != found);	// for left-joins we always need to add an output
     bool found_match = false;
@@ -334,7 +334,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
           ++found;
           // If you hit the end of the hash map, wrap around to the beginning
           if(end == found)
-            found = multi_map->begin();
+            found = multi_map.begin();
           // Next entry is empty, stop searching
           if(unused_key == found->first)
             running = false;
@@ -345,7 +345,7 @@ __global__ void probe_hash_table( multimap_type const * const multi_map,
           ++found;
           // If you hit the end of the hash map, wrap around to the beginning
           if(end == found)
-            found = multi_map->begin();
+            found = multi_map.begin();
           // Next entry is empty, stop searching
           if(unused_key == found->first)
             running = false;

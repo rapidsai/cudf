@@ -16,11 +16,11 @@
 
 #include <bitmask/legacy/bit_mask.cuh>
 #include <utilities/error_utils.hpp>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <utilities/bit_util.cuh>
 #include <utilities/cuda_utils.hpp>
 #include <utilities/column_utils.hpp>
-#include <string/nvcategory_util.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
 
 #include <cub/cub.cuh>
 
@@ -43,6 +43,7 @@ void copy_range_kernel(T * __restrict__ const data,
 
   const gdf_size_type masks_per_grid = gridDim.x * blockDim.x / mask_size;
   const int warp_id = tid / warp_size;
+  const int warp_null_change_id = threadIdx.x / warp_size;
   const int lane_id = threadIdx.x % warp_size;
 
   const gdf_index_type begin_mask_idx =
@@ -85,8 +86,8 @@ void copy_range_kernel(T * __restrict__ const data,
                               (warp_mask & active_mask);
         bitmask[mask_idx] = new_mask;
         // null_diff = (mask_size - __popc(new_mask)) - (mask_size - __popc(old_mask))
-        warp_null_change[warp_id] += __popc(active_mask & old_mask) -
-                                     __popc(active_mask & new_mask);
+        warp_null_change[warp_null_change_id] += __popc(active_mask & old_mask) -
+                                                 __popc(active_mask & new_mask);
       }
     }
 

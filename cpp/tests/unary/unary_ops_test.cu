@@ -18,8 +18,9 @@
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/column_wrapper.cuh>
 #include <utilities/cudf_utils.h>
-#include <utilities/wrapper_types.hpp>
+#include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
+#include <cudf/unary.hpp>
 
 #include <thrust/device_vector.h>
 #include <thrust/random.h>
@@ -38,9 +39,9 @@
 #include <algorithm>
 #include <cstdlib>
 
-struct gdf_cast_test : public GdfTest {};
+struct col_cast_test : public GdfTest {};
 
-TEST_F(gdf_cast_test, usage_example) {
+TEST_F(col_cast_test, usage_example) {
 
 	// gdf_column input examples for int32, int64, float32, float64, date32, date64 and timestamp (in milliseconds)
 
@@ -86,8 +87,6 @@ TEST_F(gdf_cast_test, usage_example) {
 		cudf::timestamp{-1577923201000}, // '1919-12-31 23:59:59.000'
 	};
 
-	int colSize = 3;
-
 	// Input column for int32
 	auto inputInt32Col = cudf::test::column_wrapper<int32_t>(inputInt32Data);
 
@@ -107,42 +106,40 @@ TEST_F(gdf_cast_test, usage_example) {
 	auto inputTimestampMilliCol = cudf::test::column_wrapper<cudf::timestamp>(inputTimestampMilliData);
 	inputTimestampMilliCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-	gdf_error gdfError;
-
-	// example for gdf_cast generic to f32
+	// example for cudf::cast generic to f32
 	{
-		// Output column
-		auto outputFloat32Col = cudf::test::column_wrapper<float>(colSize);
 		auto results = cudf::test::column_wrapper<float>(std::vector<float>{
 			-1528.0,
 			1.0,
 			19382.0,});
 
 		// from int32
-		gdfError = gdf_cast(inputInt32Col, outputFloat32Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputInt32Col, GDF_FLOAT32) );
+
+		// Output column
+		auto outputFloat32Col = cudf::test::column_wrapper<float>(output);
 		EXPECT_TRUE( results == outputFloat32Col );
 	}
 
-	// example for gdf_cast generic to i32
+	// example for cudf::cast generic to i32
 	{
-		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			1,
 			19382,});
 
 		// from float32
-		gdfError = gdf_cast(inputFloat32Col, outputInt32Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputFloat32Col, GDF_INT32) );
+
+		// Output column
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
 	}
 
-	// example for gdf_cast generic to i64 - upcast
+	// example for cudf::cast generic to i64 - upcast
 	{
-		// Output column
-		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(colSize);
 		auto results = cudf::test::column_wrapper<int64_t>(std::vector<int64_t>{
 			-1528,
 			1,
@@ -150,15 +147,16 @@ TEST_F(gdf_cast_test, usage_example) {
 		});
 
 		// from int32
-		gdfError = gdf_cast(inputInt32Col, outputInt64Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputInt32Col, GDF_INT64) );
+
+		// Output column
+		auto outputInt64Col = cudf::test::column_wrapper<int64_t>(output);
 		EXPECT_TRUE( results == outputInt64Col );
 	}
 
-	// example for gdf_cast generic to i32 - downcast
+	// example for cudf::cast generic to i32 - downcast
 	{
-		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			1,
@@ -166,15 +164,16 @@ TEST_F(gdf_cast_test, usage_example) {
 		});
 
 		// from int64
-		gdfError = gdf_cast(inputInt64Col, outputInt32Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputInt64Col, GDF_INT32) );
+
+		// Output column
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
 	}
 
-	// example for gdf_cast generic to i32
+	// example for cudf::cast generic to i32
 	{
-		// Output column
-		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(colSize);
 		auto results = cudf::test::column_wrapper<int32_t>(std::vector<int32_t>{
 			-1528,
 			17716,
@@ -182,15 +181,31 @@ TEST_F(gdf_cast_test, usage_example) {
 		});
 
 		// from date32
-		gdfError = gdf_cast(inputDate32Col, outputInt32Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputDate32Col, GDF_INT32) );
+
+		// Output column
+		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
 	}
 
-	// example for gdf_cast generic to date32
+
+	// example for cudf::cast int64 to bool8
 	{
-		// Output column
-		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize);
+		std::vector<int64_t> inputData = { 0x12345678, 0x12345600 };
+		auto inputCol = cudf::test::column_wrapper<int64_t>(inputData);
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputCol, GDF_BOOL8) );
+		auto outputCol = cudf::test::column_wrapper<cudf::bool8>(output);
+		auto out_h = outputCol.to_host();
+		auto out_data = std::get<0>(out_h);
+		ASSERT_TRUE(out_data.size() == 2);
+		ASSERT_TRUE(out_data[0]);
+		ASSERT_TRUE(out_data[1]);
+	}
+
+	// example for cudf::cast generic to date32
+	{
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{-1528},
 			cudf::date32{1},
@@ -198,33 +213,36 @@ TEST_F(gdf_cast_test, usage_example) {
 		});
 
 		// from int32
-		gdfError = gdf_cast(inputInt32Col, outputDate32Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputInt32Col, GDF_DATE32) );
+
+		// Output column
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(output);
 		EXPECT_TRUE( results == outputDate32Col );
 	}
 
-	// example for gdf_cast generic to timestamp
+	// example for cudf::cast generic to timestamp
 	{
-		// Output column
-		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::timestamp>(std::vector<cudf::timestamp>{
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
 			cudf::timestamp{1528935599999000}, // '2018-06-14 00:19:59.999000'
 			cudf::timestamp{-1577923201000000},  // '1919-12-31 23:59:59.000000'
 		});
-		outputTimestampMicroCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		results.get()->dtype_info.time_unit = TIME_UNIT_us;
 
 		// from date64
-		gdfError = gdf_cast(inputDate64Col, outputTimestampMicroCol);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_us;
+		EXPECT_NO_THROW( output = cudf::cast(inputDate64Col, GDF_TIMESTAMP, info) );
+
+		// Output column
+		auto outputTimestampMicroCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( results == outputTimestampMicroCol );
 	}
 
-	// example for gdf_cast generic to date32
+	// example for cudf::cast generic to date32
 	{
-		// Output column
-		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(colSize);
 		auto results = cudf::test::column_wrapper<cudf::date32>(std::vector<cudf::date32>{
 			cudf::date32{17696}, // '2018-06-14'
 			cudf::date32{17696}, // '2018-06-14'
@@ -232,66 +250,36 @@ TEST_F(gdf_cast_test, usage_example) {
 		});
 
 		// from timestamp in ms
-		gdfError = gdf_cast(inputTimestampMilliCol, outputDate32Col);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputTimestampMilliCol, GDF_DATE32) );
+
+		// Output column
+		auto outputDate32Col = cudf::test::column_wrapper<cudf::date32>(output);
 		EXPECT_TRUE( results == outputDate32Col );
 	}
 }
 
-TEST_F(gdf_cast_test, inputFailureTest) {
-	// Pointer to input column is null
-	EXPECT_THROW(gdf_cast(nullptr, nullptr), cudf::logic_error);
+TEST_F(col_cast_test, dataPtrFailureTest) {
 
 	std::vector<int32_t> inputData = { -1528, 1, 19382 };
 	auto inputCol = cudf::test::column_wrapper<int32_t>(inputData);
-
-	// Pointer to output column is null
-	EXPECT_THROW(gdf_cast(inputCol, nullptr), cudf::logic_error);
-}
-
-TEST_F(gdf_cast_test, dataPtrFailureTest) {
-
-	std::vector<int32_t> inputData = { -1528, 1, 19382 };
-	auto inputCol = cudf::test::column_wrapper<int32_t>(inputData);
-
-	size_t colSize = 3;
-	auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
 
 	auto indata = inputCol.get()->data;
 	inputCol.get()->data = nullptr;
 
 	// Pointer to data in input column is null
-	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
-
-	inputCol.get()->data = indata;
-	outputCol.get()->data = nullptr;
-
-	// Pointer to data in output column is null
-	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
+	EXPECT_THROW(cudf::cast(inputCol, GDF_FLOAT32), cudf::logic_error);
 }
 
-TEST_F(gdf_cast_test, inputValidMaskFailureTest) {
+TEST_F(col_cast_test, inputValidMaskFailureTest) {
 
 	std::vector<int32_t> inputData = { -1528, 1, 19382 };
 	auto inputCol = cudf::test::column_wrapper<int32_t>(inputData);
 
-	size_t colSize = 3;
-	auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
-
 	inputCol.get()->null_count = 1;
 
 	// Pointer to input column's valid mask is null but null count > 0
-	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
-}
-
-TEST_F(gdf_cast_test, outputValidMaskFailureTest) {
-
-	size_t colSize = 3;
-	auto inputCol = cudf::test::column_wrapper<int32_t>(colSize, true);
-	auto outputCol = cudf::test::column_wrapper<float>(colSize, false);
-
-	// Input column has valid mask but output column does not
-	EXPECT_THROW(gdf_cast(inputCol, outputCol), cudf::logic_error);
+	EXPECT_THROW(cudf::cast(inputCol, GDF_FLOAT32), cudf::logic_error);
 }
 
 // Use partial template specialization to choose the uniform_real_distribution type without 
@@ -340,7 +328,7 @@ void fill_random_bitmap(std::vector<gdf_valid_type>& valid_input, size_t size)
 
 // CPU casting
 
-struct gdf_cast_CPU_VS_GPU_TEST : public GdfTest {};
+struct col_cast_CPU_VS_GPU_TEST : public GdfTest {};
 
 template<typename T, typename Tout>
 struct HostUnaryOp {
@@ -362,25 +350,25 @@ gdf_error gdf_host_cast_##VFROM##_to_##VTO(gdf_column *input, gdf_column *output
 
 // Comparing CPU and GPU casting results
 #define DEF_CAST_IMPL_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)				\
-	TEST_F(gdf_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO) {							\
+	TEST_F(col_cast_CPU_VS_GPU_TEST, VFROM##_to_##VTO) {						\
 	{																			\
 		int colSize = 1024;														\
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
 		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
-		auto outputCol = cudf::test::column_wrapper<TTO>(colSize);				\
 																				\
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
+		gdf_column output;														\
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, cudf::gdf_dtype_of<TTO>()));\
 																				\
+		auto outputCol = cudf::test::column_wrapper<TTO>(output);				\
 		auto results = std::get<0>(outputCol.to_host());						\
 																				\
 		std::vector<TTO> outputData(colSize);									\
 		inputCol.get()->data = inputData.data();								\
 		outputCol.get()->data = outputData.data();								\
 																				\
-		gdfError = gdf_host_cast_##VFROM##_to_##VTO(inputCol, outputCol);		\
+		gdf_error gdfError = gdf_host_cast_##VFROM##_to_##VTO(inputCol, outputCol);\
 		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 																				\
 		for (int i = 0; i < colSize; i++){										\
@@ -416,62 +404,54 @@ DEF_CAST_TYPE_TEST(i64, GDF_INT64, int64_t)
 DEF_CAST_TYPE_TEST(f32, GDF_FLOAT32, float)
 DEF_CAST_TYPE_TEST(f64, GDF_FLOAT64, double)
 
-struct gdf_cast_swap_TEST : public GdfTest {};
+struct col_cast_swap_TEST : public GdfTest {};
 
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value 
 #define DEF_CAST_SWAP_TEST(VFROM, VTO, VVFROM, VVTO, TFROM, TTO)				\
-	TEST_F(gdf_cast_swap_TEST, VFROM##_to_##VTO) {								\
+	TEST_F(col_cast_swap_TEST, VFROM##_to_##VTO) {								\
 	{																			\
 		int colSize = 1024;														\
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<TTO, TFROM>(inputData, colSize);				\
 																				\
 		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
-		auto outputCol = cudf::test::column_wrapper<TTO>(colSize);				\
-		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(colSize);	\
 																				\
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
-		gdfError = gdf_cast(outputCol, originalOutputCol);						\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
+		gdf_column output = cudf::cast(inputCol, cudf::gdf_dtype_of<TTO>());\
 																				\
+		gdf_column originalOutput = cudf::cast(output, cudf::gdf_dtype_of<TFROM>());\
+																				\
+		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(originalOutput);\
 		auto results = std::get<0>(originalOutputCol.to_host());				\
 																				\
 		for (int i = 0; i < colSize; i++){										\
 			EXPECT_TRUE( results[i] == inputData[i] );							\
 		}																		\
-																				\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 	}																			\
 }
 
 // Casting from T1 to T2, and then casting from T2 to T1 results in the same value
 #define DEF_CAST_SWAP_TEST_TO_TIMESTAMP(VFROM, VVFROM, TFROM)				\
-	TEST_F(gdf_cast_swap_TEST, VFROM##_to_timestamp) {								\
+	TEST_F(col_cast_swap_TEST, VFROM##_to_timestamp) {								\
 	{																			\
 		int colSize = 1024;														\
 		std::vector<TFROM> inputData(colSize);									\
 		fill_with_random_values<int64_t, TFROM>(inputData, colSize);			\
 																				\
 		auto inputCol = cudf::test::column_wrapper<TFROM>(inputData);			\
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize);	\
-		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(colSize);	\
 																				\
-		outputCol.get()->dtype = GDF_TIMESTAMP;									\
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;					\
+		gdf_dtype_extra_info info{};											\
+		info.time_unit = TIME_UNIT_ms;											\
 																				\
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);						\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
-		gdfError = gdf_cast(outputCol, originalOutputCol);						\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
+		gdf_column output = cudf::cast(inputCol, GDF_TIMESTAMP, info);		\
 																				\
+		gdf_column originalOutput = cudf::cast(output, cudf::gdf_dtype_of<TFROM>());\
+																				\
+		auto originalOutputCol = cudf::test::column_wrapper<TFROM>(originalOutput);\
 		auto results = std::get<0>(originalOutputCol.to_host());				\
 																				\
 		for (int i = 0; i < colSize; i++){										\
 			EXPECT_TRUE( results[i] == inputData[i] );							\
 		}																		\
-																				\
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );									\
 	}																			\
 }
 
@@ -514,10 +494,8 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		fill_with_random_values<double, float>(inputData, colSize);
 
 		auto inputCol = cudf::test::column_wrapper<float>(inputData); 
-		auto outputCol = cudf::test::column_wrapper<double>(colSize);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		EXPECT_NO_THROW(cudf::cast(inputCol, GDF_FLOAT64));
 	}
 
 	//The input and output valid bitmaps are equal
@@ -527,12 +505,12 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		fill_with_random_values<float, float>(inputData, colSize);
 
 		auto inputCol = cudf::test::column_wrapper<float>(inputData, generateValidRandom{}); 
-		auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_FLOAT32));
+
+		auto outputCol = cudf::test::column_wrapper<float>(output);
 		EXPECT_TRUE( outputCol.get()->dtype == GDF_FLOAT32 );
-
 		EXPECT_TRUE( inputCol == outputCol );
 	}
 
@@ -543,10 +521,11 @@ TEST_F(gdf_unaryops_output_valid_TEST, checkingValidAndDtype) {
 		fill_with_random_values<float, float>(inputData, colSize);
 
 		auto inputCol = cudf::test::column_wrapper<float>(inputData, generateValidRandom{}); 
-		auto outputCol = cudf::test::column_wrapper<float>(colSize, true);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_FLOAT32));
+
+		auto outputCol = cudf::test::column_wrapper<float>(output);
 		EXPECT_TRUE( inputCol == outputCol );
 	}
 }
@@ -557,8 +536,6 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 
 	//date32 to date64
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date32> inputData = {
 			cudf::date32{17696},	// '2018-06-14'
 			cudf::date32{17697},	// '2018-06-15'
@@ -583,19 +560,17 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>(inputData,  allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>(colSize,    true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, allValidFunctor);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	// date64 to date32
 	{
-		int colSize = 30;
-
 		// timestamps with milliseconds
 		std::vector<cudf::date64> inputData = {
 			cudf::date64{1528935590000}, // '2018-06-14 00:19:50.000'
@@ -665,12 +640,12 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>(inputData,  allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>(colSize,    true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>(outputData, allValidFunctor);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 }
@@ -679,8 +654,6 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 
 	//date32 to date64 over valid bitmask
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date32> inputData = {
 			cudf::date32{17696},	// '2018-06-14'
 			cudf::date32{17697},	// '2018-06-15'
@@ -705,12 +678,12 @@ TEST_F(gdf_date_casting_TEST, date32_to_date64_over_valid_bitmask) {
 
 		auto altValidFunctor = [](gdf_size_type row){return (row % 2 == 0);}; //01010101
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>(inputData,  altValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>(colSize,    true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(outputData, altValidFunctor);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 }
@@ -719,8 +692,6 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 	//date32 to timestamp s
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date32> inputData = {
 			cudf::date32{17696},	// '2018-06-14'
 			cudf::date32{17697},	// '2018-06-15'
@@ -745,22 +716,21 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_s;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp s to date32
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528934400},	// '2018-06-14 00:00:00'
 			cudf::timestamp{1529020800},	// '2018-06-15 00:00:00'
@@ -785,21 +755,19 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 	
 	//date32 to timestamp ms
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date32> inputData = {
 			cudf::date32{17696},	// '2018-06-14'
 			cudf::date32{17697},	// '2018-06-15'
@@ -824,22 +792,21 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ms;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp ms to date32
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000}, // '2018-06-14 00:19:50.000'
 			cudf::timestamp{1528935599999}, // '2018-06-14 00:19:59.999'
@@ -864,21 +831,19 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//date32 to timestamp ns
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date32> inputData = {
 			cudf::date32{17696},	// '2018-06-14'
 			cudf::date32{17697},	// '2018-06-15'
@@ -903,22 +868,21 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ns;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp ns to date32
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000000}, // '2018-06-14 00:19:50.000000000'
 			cudf::timestamp{1528935599999999999}, // '2018-06-14 00:19:59.999999999'
@@ -943,21 +907,19 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//date32 to timestamp us
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date32> inputData = {
 			cudf::date32{17696},	// '2018-06-14'
 			cudf::date32{17697},	// '2018-06-15'
@@ -982,22 +944,21 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date32>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_us;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp us to date32
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
 			cudf::timestamp{1528935599000000}, // '2018-06-14 00:19:59.000000'
@@ -1022,14 +983,14 @@ TEST_F(gdf_date_casting_TEST, date32_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date32>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE32));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date32>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 }
@@ -1078,19 +1039,20 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>(colSize,
 			[data] (gdf_size_type row) { return cudf::date64{ data[row] }; },
 			allValidFunctor
-	); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize, true);
+		); 
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(colSize,
 			[data] (gdf_size_type row) { return cudf::timestamp{ data[row] }; },
 			allValidFunctor
-	);
+		);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ms;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
@@ -1136,25 +1098,23 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(colSize,
 			[data] (gdf_size_type row) { return cudf::timestamp{ data[row] }; },
 			allValidFunctor
-	); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>(colSize, true);
+		); 
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>(colSize,
 			[data] (gdf_size_type row) { return cudf::date64{ data[row] }; },
 			allValidFunctor
-	);
+		);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//date64 to timestamp s
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date64> inputData = {
 			cudf::date64{1528935590000}, // '2018-06-14 00:19:50.000'
 			cudf::date64{1528935599999}, // '2018-06-14 00:19:59.999'
@@ -1179,22 +1139,21 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_s;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp s to date64
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590}, // '2018-06-14 00:19:50'
 			cudf::timestamp{1528935599}, // '2018-06-14 00:19:59'
@@ -1219,21 +1178,19 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//date64 to timestamp us
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date64> inputData = {
 			cudf::date64{1528935590000}, // '2018-06-14 00:19:50.000'
 			cudf::date64{1528935599999}, // '2018-06-14 00:19:59.999'
@@ -1258,22 +1215,21 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_us;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp us to date64
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
 			cudf::timestamp{1528935599999999}, // '2018-06-14 00:19:59.999999'
@@ -1298,21 +1254,19 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//date64 to timestamp ns
 	{
-		int colSize = 8;
-
 		std::vector<cudf::date64> inputData = {
 			cudf::date64{1528935590000}, // '2018-06-14 00:19:50.000'
 			cudf::date64{1528935599999}, // '2018-06-14 00:19:59.999'
@@ -1337,22 +1291,21 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::date64>   (inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ns;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp ns to date64
 	{
-		int colSize = 8;
-
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000000}, // '2018-06-14 00:19:50.000000000'
 			cudf::timestamp{1528935599999999999}, // '2018-06-14 00:19:59.999999999'
@@ -1377,14 +1330,14 @@ TEST_F(gdf_date_casting_TEST, date64_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::date64>   (outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_DATE64));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::date64>   (output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 }
@@ -1395,8 +1348,6 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 	//timestamp to timestamp from s to ms
 	{
-		int colSize = 30;
-
 		// timestamps with seconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590}, // '2018-06-14 00:19:50'
@@ -1467,23 +1418,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ms;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from ms to s
 	{
-		int colSize = 30;
-
 		// timestamps with milliseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000}, // '2018-06-14 00:19:50.000'
@@ -1554,23 +1504,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_s;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from s to us
 	{
-		int colSize = 30;
-
 		// timestamps with seconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590}, // '2018-06-14 00:19:50'
@@ -1641,23 +1590,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_us;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from us to s
 	{
-		int colSize = 30;
-
 		// timestamps with microseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
@@ -1728,24 +1676,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_s;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
-
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from s to ns
 	{
-		int colSize = 30;
-
 		// timestamps with seconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590}, // '2018-06-14 00:19:50'
@@ -1816,23 +1762,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ns;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from ns to s
 	{
-		int colSize = 30;
-
 		// timestamps with nanoseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000000}, // '2018-06-14 00:19:50.000000000'
@@ -1903,23 +1848,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_s;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_s;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_s;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from us to ns
 	{
-		int colSize = 30;
-
 		// timestamps with microseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
@@ -1990,23 +1934,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ns;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from ns to us
 	{
-		int colSize = 30;
-
 		// timestamps with nanoseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000000}, // '2018-06-14 00:19:50.000000000'
@@ -2077,23 +2020,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_us;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from ms to ns
 	{
-		int colSize = 30;
-
 		// timestamps with milliseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000}, // '2018-06-14 00:19:50.000'
@@ -2164,23 +2106,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ns;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ns;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from ns to ms
 	{
-		int colSize = 30;
-
 		// timestamps with nanoseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000000}, // '2018-06-14 00:19:50.000000000'
@@ -2251,23 +2192,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ns;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ms;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from us to ms
 	{
-		int colSize = 30;
-
 		// timestamps with microseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000000}, // '2018-06-14 00:19:50.000000'
@@ -2338,23 +2278,22 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_ms;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_ms;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 
 	//timestamp to timestamp from ms to us
 	{
-		int colSize = 30;
-
 		// timestamps with milliseconds
 		std::vector<cudf::timestamp> inputData = {
 			cudf::timestamp{1528935590000}, // '2018-06-14 00:19:50.000'
@@ -2425,16 +2364,17 @@ TEST_F(gdf_timestamp_casting_TEST, timestamp_to_timestamp) {
 
 		auto allValidFunctor = [](gdf_size_type row){return true;};
 		auto inputCol  = cudf::test::column_wrapper<cudf::timestamp>(inputData, allValidFunctor); 
-		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(colSize,   true);
 		auto expectOut = cudf::test::column_wrapper<cudf::timestamp>(outputData,allValidFunctor);
 
 		inputCol.get()->dtype_info.time_unit = TIME_UNIT_ms;
-		outputCol.get()->dtype_info.time_unit = TIME_UNIT_us;
 		expectOut.get()->dtype_info.time_unit = TIME_UNIT_us;
 
-		gdf_error gdfError = gdf_cast(inputCol, outputCol);
+		gdf_column output;
+		gdf_dtype_extra_info info{};
+		info.time_unit = TIME_UNIT_us;
+		EXPECT_NO_THROW(output = cudf::cast(inputCol, GDF_TIMESTAMP, info));
 
-		EXPECT_TRUE( gdfError == GDF_SUCCESS );
+		auto outputCol = cudf::test::column_wrapper<cudf::timestamp>(output);
 		EXPECT_TRUE( outputCol == expectOut );
 	}
 }
@@ -2455,7 +2395,6 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 	initialize_vector(h_input_v, colSize, 10, false);
 
 	auto inputCol = cudf::test::column_wrapper<TypeParam>{h_input_v}; 
-	auto outputCol = cudf::test::column_wrapper<cudf::bool8>{colSize};
 
 	std::vector<cudf::bool8> h_expect_v{colSize};
 
@@ -2466,8 +2405,9 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 	// Use vector to build expected output
 	auto expectCol = cudf::test::column_wrapper<cudf::bool8>{h_expect_v};
 
-	auto error = gdf_unary_math(inputCol, outputCol, GDF_NOT);
-	EXPECT_EQ(error, GDF_SUCCESS);
+	auto output = cudf::unary_operation(inputCol, cudf::unary_op::NOT);
+
+	auto outputCol = cudf::test::column_wrapper<cudf::bool8>(output);
 
 	EXPECT_EQ(expectCol, outputCol);
 }

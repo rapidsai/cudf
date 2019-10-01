@@ -8,8 +8,8 @@ import pandas as pd
 import pytest
 
 import cudf
-from cudf.dataframe import DataFrame
-from cudf.dataframe.index import (
+from cudf.core import DataFrame
+from cudf.core.index import (
     CategoricalIndex,
     DatetimeIndex,
     GenericIndex,
@@ -219,11 +219,11 @@ def test_set_index_as_property():
 @pytest.mark.parametrize(
     "idx",
     [
-        cudf.dataframe.index.RangeIndex(1, 5),
-        cudf.dataframe.index.DatetimeIndex(["2001", "2003", "2003"]),
-        cudf.dataframe.index.StringIndex(["a", "b", "c"]),
-        cudf.dataframe.index.GenericIndex([1, 2, 3]),
-        cudf.dataframe.index.CategoricalIndex(["a", "b", "c"]),
+        cudf.core.index.RangeIndex(1, 5),
+        cudf.core.index.DatetimeIndex(["2001", "2003", "2003"]),
+        cudf.core.index.StringIndex(["a", "b", "c"]),
+        cudf.core.index.GenericIndex([1, 2, 3]),
+        cudf.core.index.CategoricalIndex(["a", "b", "c"]),
     ],
 )
 @pytest.mark.parametrize("deep", [True, False])

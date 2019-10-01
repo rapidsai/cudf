@@ -76,8 +76,6 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
 gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
 
 
-
-
 /* context operations */
 
 /**
@@ -89,13 +87,16 @@ gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
  * @param[in] flag_distinct For COUNT: DISTINCT = 1, else = 0
  * @param[in] flag_sort_result When method is GDF_HASH, 0 = result is not sorted, 1 = result is sorted
  * @param[in] flag_sort_inplace 0 = No sort in place allowed, 1 = else
+ * @param[in] flag_groupby_include_nulls false = Nulls are ignored (Pandas style)
+ *                                       true = Nulls compare as equal (SQL style)
  * @param[in] flag_null_sort_behavior GDF_NULL_AS_LARGEST = Nulls are treated as largest,
  *                                    GDF_NULL_AS_SMALLEST = Nulls are treated as smallest, 
  *
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_context_view(gdf_context *context, int flag_sorted, gdf_method flag_method,
-                           int flag_distinct, int flag_sort_result, int flag_sort_inplace, 
+                           int flag_distinct, int flag_sort_result, int flag_sort_inplace,
+			   bool flag_groupby_include_nulls,
                            gdf_null_sort_behavior flag_null_sort_behavior);
 
 
@@ -135,165 +136,6 @@ const char * gdf_cuda_error_string(int cuda_error);
  */
 const char * gdf_cuda_error_name(int cuda_error);
 
-
-/* ipc */
-
-/**
- * @brief  Opens a parser from a pyarrow RecordBatch schema
- *
- * @param[in] Pointer to a byte array containing the pyarrow RecordBatch schema
- * @param[in] Size of the byte array
- *
- * @returns Pointer to a parsing struct gdf_ipc_parser_type
- */
-gdf_ipc_parser_type* gdf_ipc_parser_open(const uint8_t *schema, size_t length);
-
-/**
- * @brief  Opens a pyarrow RecordBatch bytearray
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- * @param[in] Pointer to a pyarrow RecordBatch bytearray
- * @param[in] Size of the byte array
- *
- * @returns
- */
-void gdf_ipc_parser_open_recordbatches(gdf_ipc_parser_type *handle,
-                                       const uint8_t *recordbatches,
-                                       size_t length);
-
-/**
- * @brief  Closes a parser from a pyarrow RecordBatch schema
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns void
- */
-void gdf_ipc_parser_close(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  Checks for a failure in the parser
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns 1 if error
- */
-int gdf_ipc_parser_failed(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  returns parsed data as json
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns char* of parsed data as json
- */
-const char* gdf_ipc_parser_to_json(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  Gets error from gdf_ipc_parser_type
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns Error message as char*
- */
-const char* gdf_ipc_parser_get_error(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  Gets parsed data from gdf_ipc_parser_type
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns Pointer parsed data
- */
-const void* gdf_ipc_parser_get_data(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  Gets data offset from gdf_ipc_parser_type
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns Data offset
- */
-int64_t gdf_ipc_parser_get_data_offset(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  returns parsed schema as json
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns char* of parsed schema as json
- */
-const char *gdf_ipc_parser_get_schema_json(gdf_ipc_parser_type *handle);
-
-/**
- * @brief  returns layout as json
- *
- * @param[in] Pointer to a parsing struct gdf_ipc_parser_type
- *
- * @returns char* of layout as json
- */
-const char *gdf_ipc_parser_get_layout_json(gdf_ipc_parser_type *handle);
-
-
-/* segmented sorting */
-
-/**
- * @brief  Constructor for the gdf_segmented_radixsort_plan_type object
- *
- * @param[in] Number of items to sort
- * @param[in] Indicates if sort should be ascending or descending. 1 = Descending, 0 = Ascending
- * @param[in] The least-significant bit index (inclusive) needed for key comparison
- * @param[in] The most-significant bit index (exclusive) needed for key comparison (e.g., sizeof(unsigned int) * 8)
- *
- * @returns  gdf_segmented_radixsort_plan_type object pointer
- */
-gdf_segmented_radixsort_plan_type* gdf_segmented_radixsort_plan(size_t num_items,
-                                                                int descending,
-                                                                unsigned begin_bit,
-                                                                unsigned end_bit);
-
-/**
- * @brief  Allocates device memory for the segmented radixsort
- *
- * @param[in] Segmented Radix sort plan
- * @param[in] sizeof data type of key
- * @param[in] sizeof data type of val
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_plan_setup(gdf_segmented_radixsort_plan_type *hdl,
-                                            size_t sizeof_key,
-                                            size_t sizeof_val);
-
-/**
- * @brief  Frees device memory used for the segmented radixsort
- *
- * @param[in] Segmented Radix sort plan
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort_plan_free(gdf_segmented_radixsort_plan_type *hdl);
-
-
-/**
- * @brief  Performs a segmented radixsort on the key and value columns
- * 
- * The null_count of the keycol and valcol columns are expected to be 0
- * otherwise a GDF_VALIDITY_UNSUPPORTED error is returned.
- *
- * @param[in] Radix sort plan
- * @param[in] key gdf_column
- * @param[in] value gdf_column
- * @param[in] The number of segments that comprise the sorting data
- * @param[in] Pointer to the sequence of beginning offsets of length num_segments, such that d_begin_offsets[i] is the first element of the ith data segment in d_keys_* and d_values_*
- * @param[in] Pointer to the sequence of ending offsets of length num_segments, such that d_end_offsets[i]-1 is the last element of the ith data segment in d_keys_* and d_values_*. If d_end_offsets[i]-1 <= d_begin_offsets[i], the ith is considered empty.
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_segmented_radixsort(gdf_segmented_radixsort_plan_type *hdl,
-                                  gdf_column *keycol, gdf_column *valcol,
-                                  unsigned num_segments,
-                                  unsigned *d_begin_offsets,
-                                  unsigned *d_end_offsets);
 // transpose
 /**
  * @brief Transposes the table in_cols and copies to out_cols
@@ -307,130 +149,6 @@ gdf_error gdf_transpose(gdf_size_type ncols,
                         gdf_column** in_cols,
                         gdf_column** out_cols);
 
-// joins
-
-/** 
- * @brief  Performs an inner join on the specified columns of two
- * dataframes (left, right)
- * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
- * returned.
- * 
- * @param[in] left_cols[] The columns of the left dataframe
- * @param[in] num_left_cols The number of columns in the left dataframe
- * @param[in] left_join_cols[] The column indices of columns from the left dataframe
- * to join on
- * @param[in] right_cols[] The columns of the right dataframe
- * @param[in] num_right_cols The number of columns in the right dataframe
- * @param[in] right_join_cols[] The column indices of columns from the right dataframe
- * to join on
- * @param[in] num_cols_to_join The total number of columns to join on
- * @param[in] result_num_cols The number of columns in the resulting dataframe
- * @param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
- * the left and right tables on the specified columns
- * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
- * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- * sort vs hash based implementation
- * 
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
- * error code
- */
-gdf_error gdf_inner_join(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
-                         gdf_context *join_context);
-
-/** 
- * @brief  Performs a left join (also known as left outer join) on the
- * specified columns of two dataframes (left, right)
- * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
- * returned.
- * 
- * @param[in] left_cols[] The columns of the left dataframe
- * @param[in] num_left_cols The number of columns in the left dataframe
- * @param[in] left_join_cols[] The column indices of columns from the left dataframe
- * to join on
- * @param[in] right_cols[] The columns of the right dataframe
- * @param[in] num_right_cols The number of columns in the right dataframe
- * @param[in] right_join_cols[] The column indices of columns from the right dataframe
- * to join on
- * @param[in] num_cols_to_join The total number of columns to join on
- * @param[in] result_num_cols The number of columns in the resulting dataframe
- * @param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
- * the left and right tables on the specified columns
- * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
- * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- * sort vs hash based implementation
- * 
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
- * error code
- */
-gdf_error gdf_left_join(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
-                         gdf_context *join_context);
-
-/** 
- * @brief  Performs a full join (also known as full outer join) on the
- * specified columns of two dataframes (left, right)
- * If join_context->flag_method is set to GDF_SORT then the null_count of the
- * columns must be set to 0 otherwise a GDF_VALIDITY_UNSUPPORTED error is
- * returned.
- * 
- * @param[in] left_cols[] The columns of the left dataframe
- * @param[in] num_left_cols The number of columns in the left dataframe
- * @param[in] left_join_cols[] The column indices of columns from the left dataframe
- * to join on
- * @param[in] right_cols[] The columns of the right dataframe
- * @param[in] num_right_cols The number of columns in the right dataframe
- * @param[in] right_join_cols[] The column indices of columns from the right dataframe
- * to join on
- * @param[in] num_cols_to_join The total number of columns to join on
- * @param[in] result_num_cols The number of columns in the resulting dataframe
- * @param[out] gdf_column *result_cols[] If not nullptr, the dataframe that results from joining
- * the left and right tables on the specified columns
- * @param[out] gdf_column * left_indices If not nullptr, indices of rows from the left table that match rows in the right table
- * @param[out] gdf_column * right_indices If not nullptr, indices of rows from the right table that match rows in the left table
- * @param[in] join_context The context to use to control how the join is performed,e.g.,
- * sort vs hash based implementation
- * 
- * @returns   GDF_SUCCESS if the join operation was successful, otherwise an appropriate
- * error code
- */
-gdf_error gdf_full_join(
-                         gdf_column **left_cols, 
-                         int num_left_cols,
-                         int left_join_cols[],
-                         gdf_column **right_cols,
-                         int num_right_cols,
-                         int right_join_cols[],
-                         int num_cols_to_join,
-                         int result_num_cols,
-                         gdf_column **result_cols,
-                         gdf_column * left_indices,
-                         gdf_column * right_indices,
-                         gdf_context *join_context);
 
 /* partioning */
 
@@ -486,49 +204,6 @@ gdf_error gdf_hash(int num_cols,
                    gdf_hash_func hash,
                    uint32_t *initial_hash_values,
                    gdf_column *output);
-
-
-/**
- * @brief  Performs unary math op on all values in column
- *
- * The following math operations are supported:
- * sin - Computes trigonometric sine function
- * cos - Computes trigonometric cosine function
- * tan - Computes trigonometric tangent function
- * asin - Computes trigonometric arcsin function
- * acos - Computes trigonometric arccos function
- * atan - Computes trigonometric arctan function
- * exp - Computes e (Euler's number, 2.7182818...) raised to the given power arg
- * log - Computes the natural (base e) logarithm of arg
- * sqrt - Computes the square root
- * ceil - Computes the smallest integer value not less than arg
- * floor - Computes the largest integer value not greater than arg
- * 
- * All operations only supported on floating point types
- * 
- * @param[in] gdf_column of the input
- * @param[out] output gdf_column. The output memory needs to be preallocated
- * @param[in] gdf_unary_math_op operation to perform
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_unary_math(gdf_column *input, gdf_column *output, gdf_unary_math_op op);
-
-/* casting */
-
-/**
- * @brief  Casts data from dtype specified in input to dtype specified in output
- * 
- * The desired dtype for output should be set in output->dtype.
- * In case of conversion from GDF_DATE32/GDF_DATE64/GDF_TIMESTAMP to GDF_TIMESTAMP,
- * the time unit for output should be set in output->dtype_info.time_unit
- *
- * @param[in] gdf_column of the input
- * @param[out] output gdf_column. The output memory needs to be preallocated
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_cast(gdf_column *input, gdf_column *output);
 
 
 /* datetime extract*/
@@ -592,43 +267,6 @@ gdf_error gdf_extract_datetime_minute(gdf_column *input, gdf_column *output);
  * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
  */
 gdf_error gdf_extract_datetime_second(gdf_column *input, gdf_column *output);
-
-
-
-/**
- * @brief  Computes exact quantile
- * computes quantile as double. This function works with arithmetic colum.
- *
- * @param[in] input column
- * @param[in] precision: type of quantile method calculation
- * @param[in] requested quantile in [0,1]
- * @param[out] result the result as double. The type can be changed in future
- * @param[in] struct with additional info
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_quantile_exact(gdf_column* col_in,
-                            gdf_quantile_method prec,
-                            double q,
-                            gdf_scalar*  result,
-                            gdf_context* ctxt);
-
-/**
- * @brief  Computes approximate quantile
- * computes quantile with the same type as @p col_in.
- * This function works with arithmetic colum.
- *
- * @param[in] input column
- * @param[in] requested quantile in [0,1]
- * @param[out] result quantile, with the same type as @p col_in
- * @param[in] struct with additional info
- *
- * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
- */
-gdf_error gdf_quantile_approx(gdf_column* col_in,
-                              double q,
-                              gdf_scalar*  result,
-                              gdf_context* ctxt);
 
 
 /** 
@@ -730,3 +368,5 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
                         gdf_size_type num_columns);
+
+

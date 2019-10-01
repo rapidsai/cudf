@@ -18,11 +18,13 @@
 
 #include <io/comp/gpuinflate.h>
 #include <cuda_runtime.h>
-#include <nvstrings/NVStrings.h>
+
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
 
+#include <algorithm>
 #include <array>
+#include <utility>
 
 namespace cudf {
 namespace io {
@@ -35,11 +37,29 @@ namespace parquet {
 #endif
 
 /**
+ * @brief Function that translates cuDF time unit to Parquet clock frequency
+ **/
+constexpr int32_t to_clockrate(gdf_time_unit time_unit) {
+  switch (time_unit) {
+    case TIME_UNIT_s:
+      return 1;
+    case TIME_UNIT_ms:
+      return 1000;
+    case TIME_UNIT_us:
+      return 1000000;
+    case TIME_UNIT_ns:
+      return 1000000000;
+    default:
+      return 0;
+  }
+}
+
+/**
  * @brief Function that translates Parquet datatype to GDF dtype
  **/
 constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     parquet::Type physical, parquet::ConvertedType logical,
-    bool strings_to_categorical) {
+    bool strings_to_categorical, gdf_time_unit ts_unit) {
   // Logical type used for actual data interpretation; the legacy converted type
   // is superceded by 'logical' type whenever available.
   switch (logical) {
@@ -52,11 +72,15 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
     case parquet::DATE:
       return std::make_pair(GDF_DATE32, gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::TIMESTAMP_MICROS:
-    #if !PARQUET_GPU_USEC_TO_MSEC
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_us});
-    #endif
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_us});
     case parquet::TIMESTAMP_MILLIS:
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_ms});
     default:
       break;
   }
@@ -80,8 +104,10 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
       return std::make_pair(strings_to_categorical ? GDF_CATEGORY : GDF_STRING,
                             gdf_dtype_extra_info{TIME_UNIT_NONE});
     case parquet::INT96:
-      // Convert Spark INT96 timestamp to GDF_DATE64
-      return std::make_pair(GDF_DATE64, gdf_dtype_extra_info{TIME_UNIT_ms});
+      return (ts_unit != TIME_UNIT_NONE)
+                 ? std::make_pair(GDF_TIMESTAMP, gdf_dtype_extra_info{ts_unit})
+                 : std::make_pair(GDF_TIMESTAMP,
+                                  gdf_dtype_extra_info{TIME_UNIT_ns});
     default:
       break;
   }
@@ -94,7 +120,8 @@ constexpr std::pair<gdf_dtype, gdf_dtype_extra_info> to_dtype(
  **/
 template <typename T = uint8_t>
 T required_bits(uint32_t max_level) {
-  return static_cast<T>(parquet::CompactProtocolReader::NumRequiredBits(max_level));
+  return static_cast<T>(
+      parquet::CompactProtocolReader::NumRequiredBits(max_level));
 }
 
 /**
@@ -102,7 +129,7 @@ T required_bits(uint32_t max_level) {
  * convenience methods for initializing and accessing the metadata and schema
  **/
 struct ParquetMetadata : public parquet::FileMetaData {
-  explicit ParquetMetadata(DataSource *source) {
+  explicit ParquetMetadata(datasource *source) {
     constexpr auto header_len = sizeof(parquet::file_header_s);
     constexpr auto ender_len = sizeof(parquet::file_ender_s);
 
@@ -155,7 +182,7 @@ struct ParquetMetadata : public parquet::FileMetaData {
    *
    * @return std::string Name of the index column
    **/
-  std::string get_index_column_name() {
+  std::string get_pandas_index_name() {
     auto it =
         std::find_if(key_value_metadata.begin(), key_value_metadata.end(),
                      [](const auto &item) { return item.key == "pandas"; });
@@ -218,38 +245,38 @@ struct ParquetMetadata : public parquet::FileMetaData {
    * @brief Filters and reduces down to a selection of columns
    *
    * @param[in] use_names List of column names to select
-   * @param[in] use_index_col Name of the index column
+   * @param[in] include_index Whether to always include the PANDAS index column
+   * @param[in] pandas_index Name of the PANDAS index column
    *
-   * @return List of column names & Parquet column indexes
+   * @return List of column names
    **/
-  auto select_columns(std::vector<std::string> use_names,
-                      const char *use_index_col) {
+  auto select_columns(std::vector<std::string> use_names, bool include_index,
+                      const std::string &pandas_index) {
     std::vector<std::pair<int, std::string>> selection;
 
-    if (not use_names.empty()) {
-      if (get_total_rows() > 0) {
-        if (std::find(use_names.begin(), use_names.end(), use_index_col) == use_names.end()) {
-          use_names.push_back(use_index_col);
+    const auto names = get_column_names();
+    if (use_names.empty()) {
+      // No columns specified; include all in the dataset
+      for (const auto &name : names) {
+        selection.emplace_back(selection.size(), name);
+      }
+    } else {
+      // Load subset of columns; include PANDAS index unless excluded
+      if (include_index) {
+        if (std::find(use_names.begin(), use_names.end(), pandas_index) ==
+            use_names.end()) {
+          use_names.push_back(pandas_index);
         }
       }
       for (const auto &use_name : use_names) {
-        size_t index = 0;
-        for (const auto &name : get_column_names()) {
-          if (name == use_name) {
-            selection.emplace_back(index, name);
+        for (size_t i = 0; i < names.size(); ++i) {
+          if (names[i] == use_name) {
+            selection.emplace_back(i, names[i]);
             break;
           }
-          index++;
-        }
-      }
-    } else {
-      for (const auto &name : get_column_names()) {
-        if (get_total_rows() > 0 || name != use_index_col) {
-          selection.emplace_back(selection.size(), name);
         }
       }
     }
-    CUDF_EXPECTS(selection.size() > 0, "Filtered out all columns");
 
     return selection;
   }
@@ -275,7 +302,6 @@ struct ParquetMetadata : public parquet::FileMetaData {
 
 size_t reader::Impl::count_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks) {
-
   size_t total_pages = 0;
 
   CUDA_TRY(cudaMemcpyAsync(chunks.device_ptr(), chunks.host_ptr(),
@@ -307,7 +333,6 @@ size_t reader::Impl::count_page_headers(
 void reader::Impl::decode_page_headers(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
-
   for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
     chunks[c].max_num_pages = chunks[c].num_data_pages + chunks[c].num_dict_pages;
     chunks[c].page_info = pages.device_ptr(page_count);
@@ -335,11 +360,9 @@ void reader::Impl::decode_page_headers(
   }
 }
 
-
 device_buffer<uint8_t> reader::Impl::decompress_page_data(
     const hostdevice_vector<parquet::gpu::ColumnChunkDesc> &chunks,
     const hostdevice_vector<parquet::gpu::PageInfo> &pages) {
-
   auto for_each_codec_page = [&](parquet::Compression codec,
                                  const std::function<void(size_t)> &f) {
     for (size_t c = 0, page_count = 0; c < chunks.size(); c++) {
@@ -381,7 +404,7 @@ device_buffer<uint8_t> reader::Impl::decompress_page_data(
       codecs[1].second);
 
   // Dispatch batches of pages to decompress for each codec
-  device_buffer<uint8_t> decomp_pages(total_decompressed_size);
+  device_buffer<uint8_t> decomp_pages(align_size(total_decompressed_size));
   hostdevice_vector<gpu_inflate_input_s> inflate_in(0, num_compressed_pages);
   hostdevice_vector<gpu_inflate_status_s> inflate_out(0, num_compressed_pages);
 
@@ -458,7 +481,6 @@ void reader::Impl::decode_page_data(
     const hostdevice_vector<parquet::gpu::PageInfo> &pages,
     const std::vector<gdf_column *> &chunk_map, size_t min_row,
     size_t total_rows) {
-
   auto is_dict_chunk = [](const parquet::gpu::ColumnChunkDesc &chunk) {
     return (chunk.data_type & 0x7) == parquet::BYTE_ARRAY &&
            chunk.num_dict_pages > 0;
@@ -516,29 +538,38 @@ void reader::Impl::decode_page_data(
   }
 }
 
-reader::Impl::Impl(std::unique_ptr<DataSource> source,
+reader::Impl::Impl(std::unique_ptr<datasource> source,
                    reader_options const &options)
     : source_(std::move(source)) {
-
   // Open and parse the source Parquet dataset metadata
   md_ = std::make_unique<ParquetMetadata>(source_.get());
 
   // Store the index column (PANDAS-specific)
-  index_col_ = md_->get_index_column_name();
+  pandas_index_col_ = md_->get_pandas_index_name();
 
   // Select only columns required by the options
-  selected_cols_ = md_->select_columns(options.columns, index_col_.c_str());
+  selected_cols_ = md_->select_columns(
+      options.columns, options.use_pandas_metadata, pandas_index_col_);
+
+  // Override output timestamp resolution if requested
+  if (options.timestamp_unit != TIME_UNIT_NONE) {
+    timestamp_unit_ = options.timestamp_unit;
+  }
 
   // Strings may be returned as either GDF_STRING or GDF_CATEGORY columns
   strings_to_categorical_ = options.strings_to_categorical;
 }
 
 table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
-
   // Select only row groups required
   const auto selected_row_groups =
       md_->select_row_groups(row_group, skip_rows, num_rows);
   const auto num_columns = selected_cols_.size();
+
+  // Return empty table rather than exception if nothing to load
+  if (selected_row_groups.empty() || selected_cols_.empty()) {
+    return cudf::table{};
+  }
 
   // Initialize gdf_columns, but hold off on allocating storage space
   LOG_PRINTF("[+] Selected row groups: %d\n", (int)selected_row_groups.size());
@@ -549,10 +580,10 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     auto row_group_0 = md_->row_groups[selected_row_groups[0].first];
     auto &col_schema = md_->schema[row_group_0.columns[col.first].schema_idx];
     auto dtype_info = to_dtype(col_schema.type, col_schema.converted_type,
-                               strings_to_categorical_);
+                               strings_to_categorical_, timestamp_unit_);
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows),
-                         dtype_info.first, dtype_info.second, col.second);
+    columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
+                         dtype_info.second, col.second);
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
                columns.size() - 1, columns.back()->col_name,
@@ -599,12 +630,15 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       int32_t type_width = (col_schema.type == parquet::FIXED_LEN_BYTE_ARRAY)
                                ? (col_schema.type_length << 3)
                                : 0;
+      int32_t ts_clock_rate = 0;
       if (gdf_column->dtype == GDF_INT8)
         type_width = 1;  // I32 -> I8
       else if (gdf_column->dtype == GDF_INT16)
         type_width = 2;  // I32 -> I16
       else if (gdf_column->dtype == GDF_CATEGORY)
         type_width = 4;  // str -> hash32
+      else if (gdf_column->dtype == GDF_TIMESTAMP)
+        ts_clock_rate = to_clockrate(timestamp_unit_);
 
       uint8_t *d_compdata = nullptr;
       if (col_meta.total_compressed_size != 0) {
@@ -612,7 +646,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
                                 ? std::min(col_meta.data_page_offset,
                                            col_meta.dictionary_page_offset)
                                 : col_meta.data_page_offset;
-        page_data.emplace_back(col_meta.total_compressed_size);
+        page_data.emplace_back(align_size(col_meta.total_compressed_size));
         d_compdata = page_data.back().data();
         const auto buffer = source_->get_buffer(offset, col_meta.total_compressed_size);
         CUDA_TRY(cudaMemcpyAsync(d_compdata, buffer->data(),
@@ -625,7 +659,8 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
           col_schema.type, type_width, row_group_start, row_group_rows,
           col_schema.max_definition_level, col_schema.max_repetition_level,
           required_bits(col_schema.max_definition_level),
-          required_bits(col_schema.max_repetition_level), col_meta.codec, col_schema.converted_type));
+          required_bits(col_schema.max_repetition_level), col_meta.codec,
+          col_schema.converted_type, ts_clock_rate));
 
       LOG_PRINTF(
           " %2d: %s start_row=%d, num_rows=%d, codec=%d, "
@@ -665,30 +700,22 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
       page_data.clear();
       page_data.push_back(std::move(decomp_page_data));
     }
+
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
+      column.allocate();
     }
+
     decode_page_data(chunks, pages, chunk_map, skip_rows, num_rows);
+
+    // Perform any final column preparation (may reference decoded data)
+    for (auto &column : columns) {
+      column.finalize();
+    }
   } else {
     // Columns' data's memory is still expected for an empty dataframe
     for (auto &column : columns) {
-      CUDF_EXPECTS(column.allocate() == GDF_SUCCESS, "Cannot allocate columns");
-    }
-  }
-
-  // For string dtype, allocate an NvStrings container instance, deallocating
-  // the original string list memory in the process.
-  // This container takes a list of string pointers and lengths, and copies
-  // into its own memory so the source memory must not be released yet.
-  for (auto &column : columns) {
-    if (column->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
-
-      auto str_list = static_cast<str_pair *>(column->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, num_rows),
-                       &NVStrings::destroy);
-      RMM_FREE(std::exchange(column->data, str_data.release()), 0);
+      column.allocate();
+      column.finalize();
     }
   }
 
@@ -698,21 +725,19 @@ table reader::Impl::read(int skip_rows, int num_rows, int row_group) {
     out_cols[i] = columns[i].release();
   }
 
-  return table(out_cols.data(), out_cols.size());
+  return cudf::table(out_cols.data(), out_cols.size());
 }
 
 reader::reader(std::string filepath, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(filepath.c_str()), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(filepath), options)) {}
 
 reader::reader(const char *buffer, size_t length, reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(buffer, length), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(buffer, length),
+                                   options)) {}
 
 reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
                reader_options const &options)
-    : impl_(std::make_unique<Impl>(
-          std::make_unique<DataSource>(file), options)) {}
+    : impl_(std::make_unique<Impl>(datasource::create(file), options)) {}
 
 std::string reader::get_index_column() {
   return impl_->get_index_column();
@@ -732,6 +757,6 @@ table reader::read_row_group(size_t row_group) {
 
 reader::~reader() = default;
 
-} // namespace parquet
-} // namespace io
-} // namespace cudf
+}  // namespace parquet
+}  // namespace io
+}  // namespace cudf

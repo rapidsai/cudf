@@ -19,10 +19,10 @@
 
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
-#include <cudf/table.hpp>
+#include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
-#include <utilities/type_dispatcher.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "type_info.hpp"
 
 #include <gmock/gmock.h>
@@ -57,8 +57,8 @@ inline std::pair<table, table> sort_by_key(cudf::table const& keys,
   gdf_order_by(keys.begin(), nullptr, keys.num_columns(), &gdf_sorted_indices,
                &context);
 
-  cudf::table sorted_output_keys = cudf::allocate_like(keys, true);
-  cudf::table sorted_output_values = cudf::allocate_like(values, true);
+  cudf::table sorted_output_keys = cudf::allocate_like(keys, RETAIN);
+  cudf::table sorted_output_values = cudf::allocate_like(values, RETAIN);
 
   cudf::gather(&keys, sorted_indices.data().get(), &sorted_output_keys);
   cudf::gather(&values, sorted_indices.data().get(), &sorted_output_values);
@@ -141,6 +141,41 @@ void single_column_groupby_test(column_wrapper<Key> keys,
   cudf::table sorted_expected_values;
   std::tie(sorted_expected_keys, sorted_expected_values) =
       detail::sort_by_key({expected_keys.get()}, {expected_values.get()});
+
+  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
+                                                       sorted_expected_keys));
+  CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_values,
+                                                       sorted_expected_values));
+
+  detail::destroy_table(&sorted_actual_keys);
+  detail::destroy_table(&sorted_actual_values);
+  detail::destroy_table(&sorted_expected_keys);
+  detail::destroy_table(&sorted_expected_values);
+}
+
+inline void multi_column_groupby_test(
+    cudf::table const& keys, cudf::table const& values,
+    std::vector<cudf::groupby::hash::operators> const& ops,
+    cudf::table const& expected_keys, cudf::table const& expected_values) {
+  using namespace cudf::test;
+  using namespace cudf::groupby::hash;
+
+  cudf::table actual_keys_table;
+  cudf::table actual_values_table;
+  std::tie(actual_keys_table, actual_values_table) =
+      cudf::groupby::hash::groupby(keys, values, ops);
+
+  EXPECT_EQ(cudaSuccess, cudaDeviceSynchronize());
+
+  cudf::table sorted_actual_keys;
+  cudf::table sorted_actual_values;
+  std::tie(sorted_actual_keys, sorted_actual_values) =
+      detail::sort_by_key(actual_keys_table, actual_values_table);
+
+  cudf::table sorted_expected_keys;
+  cudf::table sorted_expected_values;
+  std::tie(sorted_expected_keys, sorted_expected_values) =
+      detail::sort_by_key(expected_keys, expected_values);
 
   CUDF_EXPECT_NO_THROW(detail::expect_tables_are_equal(sorted_actual_keys,
                                                        sorted_expected_keys));

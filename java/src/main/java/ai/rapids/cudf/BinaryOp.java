@@ -45,6 +45,9 @@ public enum BinaryOp {
 
   static final EnumSet<BinaryOp> COMPARISON = EnumSet.of(
       EQUAL, NOT_EQUAL, LESS, GREATER, LESS_EQUAL, GREATER_EQUAL);
+  static final EnumSet<BinaryOp> INEQUALITY_COMPARISON = EnumSet.of(
+      LESS, GREATER, LESS_EQUAL, GREATER_EQUAL);
+
   private static final BinaryOp[] OPS = BinaryOp.values();
   final int nativeId;
 

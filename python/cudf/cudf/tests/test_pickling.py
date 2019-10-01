@@ -6,10 +6,10 @@ import sys
 import numpy as np
 import pandas as pd
 
-from librmm_cffi import librmm as rmm
+import rmm
 
-from cudf.dataframe import DataFrame, GenericIndex
-from cudf.dataframe.buffer import Buffer
+from cudf.core import DataFrame, GenericIndex
+from cudf.core.buffer import Buffer
 
 
 def check_serialization(df):

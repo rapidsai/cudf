@@ -17,8 +17,6 @@
 #include <cudf/cudf.h>
 #include <io/utilities/wrapper_utils.hpp>
 #include <utilities/error_utils.hpp>
-#include <utilities/wrapper_types.hpp>
-#include <utilities/bit_util.cuh>
 
 #include <cuda_runtime.h>
 #include <nvstrings/NVStrings.h>
@@ -37,6 +35,7 @@ struct column_to_strings_fn
     gdf_size_type row_offset, rows;
     const char* true_string;
     const char* false_string;
+
     template<typename T>
     NVStrings* operator()()
     {
@@ -192,7 +191,7 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
     }
 
     // probably could collapse this more
-    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64);
+    bool bquoted = (column->dtype==GDF_STRING || column->dtype==GDF_DATE64 || column->dtype==GDF_TIMESTAMP);
     // check for delimiters and quotes
     bool* bmatches = nullptr;
     RMM_TRY( RMM_ALLOC(&bmatches,rows*sizeof(bool),0) );
@@ -226,18 +225,21 @@ NVStrings* column_to_strings_csv(const gdf_column* column, gdf_size_type row_off
 //---------------------------------------------------------------------------
 // Creates CSV file from array of gdf_columns.
 //
-// This will create the CSV format by allocating host memory for the
-// entire output and determine pointers for each row/column entry.
+// This will create the CSV format in GPU memory (chunk of rows at a time).
 // Each column is converted to an NVStrings instance and then
 // copied into their position in the output memory. This way,
 // one column is processed at a time minimizing device memory usage.
+// Once formatted, the row group is copied to host memory so it can
+// be written to the output file.
+// Future optimization could use GDS so the memory can be written to
+// the file without going through host memory.
 //
 //---------------------------------------------------------------------------
 gdf_error write_csv(csv_write_arg* args)
 {
     // when args becomes a struct/class these can be modified
     auto columns = args->columns;
-    unsigned int count = (unsigned int)args->num_cols;
+    int count = args->num_cols;
     gdf_size_type total_rows = columns[0]->size;
     const char* filepath = args->filepath;
     char delimiter[2] = {',','\0'};
@@ -281,9 +283,12 @@ gdf_error write_csv(csv_write_arg* args)
     // instead of an arbitrary chunk count.
     // The entire CSV chunk must fit in CPU memory before writing it out.
     //
-    gdf_size_type rows_chunk = (args->rows_per_chunk/8)*8; // must be divisible by 8
+    gdf_size_type rows_chunk = args->rows_per_chunk;
+    if( rows_chunk % 8 ) // must be divisible by 8
+        rows_chunk += 8 - (rows_chunk % 8);
     CUDF_EXPECTS( rows_chunk>0, "write_csv: invalid chunk_rows; must be at least 8" );
 
+    auto execpol = rmm::exec_policy(0);
     gdf_size_type row_offset = 0;
     gdf_size_type rows = total_rows;
     while( rows > 0 )
@@ -292,15 +297,15 @@ gdf_error write_csv(csv_write_arg* args)
             rows = rows_chunk;
         //
         // Compute string lengths for each string to go into the CSV output.
-        std::unique_ptr<int[]> pstring_lengths(new int[rows*count]); // matrix of lengths
-        int* string_lengths = pstring_lengths.get(); // each string length in each row,column
+        rmm::device_vector<int> string_lengths(rows*count);  // matrix of lengths
+        int* d_string_lengths = string_lengths.data().get(); // each string length in each row,column
         size_t memsize = 0;
-        for( unsigned int idx=0; idx < count; ++idx )
+        for( int idx=0; idx < count; ++idx )
         {
             const gdf_column* col = columns[idx];
             const char* delim = ((idx+1)<count ? delimiter : terminator);
             NVStrings* strs = column_to_strings_csv(col,row_offset,rows,delim,narep,true_value,false_value);
-            memsize += strs->byte_count(string_lengths + (idx*rows),false);
+            memsize += strs->byte_count(d_string_lengths + (idx*rows));
             NVStrings::destroy(strs);
         }
 
@@ -323,48 +328,64 @@ gdf_error write_csv(csv_write_arg* args)
         //
         // This is essentially an exclusive-scan (prefix-sum) across columns.
         // Moving left-to-right, add up each column and carry each value to the next column.
-        // Looks like we could transpose the matrix, scan it, and then untranspose it.
-        // Should be able to parallelize the math for this -- will look at prefix-sum algorithms.
+        // To use scan would require transpose, scan, untranspose. The 2 transpose steps
+        // would require an extra temporary buffer the size of rows*count.
         //
-        std::vector<char> buffer(memsize+1);
-        std::vector<size_t> string_locations(rows*count); // all the memory pointers for each column
+        rmm::device_vector<size_t> string_locations(rows*count); // all the memory pointers for each column
         string_locations[0] = 0; // first one is always 0
-        // compute offsets as described above into locations matrix
-        size_t offset = 0;
-        for( gdf_size_type jdx=0; jdx < rows; ++jdx )
+        size_t* d_string_locations = string_locations.data().get();
         {
-            // add up column values for each row
-            // this is essentially an exclusive-scan across columns
-            string_locations[jdx] = (size_t)(buffer.data() + offset); // initialize first item
-            for( unsigned int idx=0; idx < count; ++idx )
+            rmm::device_vector<size_t> sums(rows);
+            size_t* d_sums = sums.data().get();
+            // do vertical scan -- add up lengths in each column
+            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<gdf_size_type>(0), rows,
+                [d_sums, d_string_lengths, rows, count, d_string_locations] __device__ (gdf_size_type idx) {
+                    size_t sum = 0;
+                    for( int column=0; column < count; ++column )
+                    {
+                        int columnar_index = (column*rows) + idx;
+                        d_string_locations[columnar_index] = sum;
+                        sum += d_string_lengths[columnar_index];
+                    }
+                    d_sums[idx] = sum;
+                });
+            // scan these intermediate sums
+            thrust::exclusive_scan(execpol->on(0), sums.begin(), sums.end(), sums.begin());
+            // finish off the full scan by adding the intermediate sums to each element
+            thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<int>(0), rows*count,
+                [d_sums, rows, d_string_locations] __device__ (int idx) {
+                    d_string_locations[idx] += d_sums[idx % rows]; 
+                });
+        }
+        rmm::device_vector<char> csv_data(memsize); // this will hold the csv data
+        char* d_csv_data = csv_data.data().get();   // for this group of rows
+        // fill in the csv_data memory one column at a time
+        {
+            rmm::device_vector<std::pair<const char*,size_t> > indices(rows); // this is used to retrieve pointers
+            std::pair<const char*,size_t>* d_indices = indices.data().get();  // to each element in strings instance
+            for( int idx=0; idx < count; ++idx )
             {
-                int* in = string_lengths + (idx*rows);
-                int len = in[jdx];
-                offset += (len > 0 ? len:0);
-                if( (idx+1) < count )
+                const gdf_column* col = columns[idx];
+                const char* delim = ((idx+1)<count ? delimiter : terminator);
+                NVStrings* strs = column_to_strings_csv(col,row_offset,rows,delim,narep,true_value,false_value);
+                if( strs )
                 {
-                    size_t* out = string_locations.data() + ((idx+1)*rows);
-                    out[jdx] = (size_t)(buffer.data() + offset);
+                    size_t* row_offsets = d_string_locations + (idx*rows);
+                    strs->create_index(d_indices); // get the internal pointers
+                    // copy each string over to its correct position in csv_data memory
+                    thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<gdf_size_type>(0), rows,
+                        [row_offsets, d_csv_data, d_indices] __device__ (gdf_size_type jdx) {
+                            memcpy(d_csv_data+row_offsets[jdx],d_indices[jdx].first,d_indices[jdx].second);
+                    });
+                    NVStrings::destroy(strs);
                 }
             }
         }
-        // now fill in the memory one column at a time
-        for( unsigned int idx=0; idx < count; ++idx )
-        {
-            const gdf_column* col = columns[idx];
-            const char* delim = ((idx+1)<count ? delimiter : terminator);
-            NVStrings* strs = column_to_strings_csv(col,row_offset,rows,delim,narep,true_value,false_value);
-            size_t* colptrs = string_locations.data() + (idx*rows);
-            // to_host places all the strings into their correct positions in host memory
-            strs->to_host((char**)colptrs,0,rows);
-            NVStrings::destroy(strs);
-        }
-        //buffer[memsize] = 0; // just so we can printf if needed
-        // now write buffer to file
+        // now we can write csv_data to the output file
         // first write the header
         if(include_header)
         {
-            for( unsigned int idx=0; idx < count; ++idx )
+            for( int idx=0; idx < count; ++idx )
             {
                 const gdf_column* col = columns[idx];
                 const char* delim = ((idx+1)<count ? delimiter : terminator);
@@ -373,8 +394,10 @@ gdf_error write_csv(csv_write_arg* args)
                 filecsv << delim;
             }
         }
-        // now write the data
-        filecsv.write(buffer.data(),memsize);
+        // copy the csv_data to host memory and write it out
+        std::vector<char> h_csv(memsize);
+        cudaMemcpyAsync(h_csv.data(), d_csv_data, memsize, cudaMemcpyDeviceToHost);
+        filecsv.write(h_csv.data(),memsize);
 
         // get ready for the next chunk of rows
         row_offset += rows_chunk;

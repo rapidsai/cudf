@@ -109,21 +109,11 @@ def test_concat_errors():
     with pytest.raises(ValueError):
         gd.concat(["bar", "foo"])
 
-    # Mismatched column dtypes
-    with pytest.raises(ValueError):
-        gd.concat([gdf.x, gdf.y])
-    with pytest.raises(ValueError):
-        gd.concat([gdf.x, gdf.z])
-
     # Mismatched index dtypes
     gdf3 = gdf2.set_index("z")
     del gdf2["z"]
     with pytest.raises(ValueError):
         gd.concat([gdf2, gdf3])
-
-    # Mismatched columns
-    with pytest.raises(ValueError):
-        gd.concat([gdf, gdf2])
 
 
 def test_concat_misordered_columns():

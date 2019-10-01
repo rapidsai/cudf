@@ -6,11 +6,23 @@ import pytest
 from numpy.testing import assert_array_equal
 
 import cudf
-from cudf.dataframe import DataFrame, Series
+from cudf.core import DataFrame, Series
 from cudf.tests.utils import assert_eq
 
+_now = np.datetime64("now")
+_tomorrow = _now + np.timedelta64(1, "D")
+_now = np.int64(_now.astype("datetime64[ns]"))
+_tomorrow = np.int64(_tomorrow.astype("datetime64[ns]"))
 
-def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
+
+def make_frame(
+    dataframe_class,
+    nelem,
+    seed=0,
+    extra_levels=(),
+    extra_vals=(),
+    with_datetime=False,
+):
     np.random.seed(seed)
 
     df = dataframe_class()
@@ -23,6 +35,11 @@ def make_frame(dataframe_class, nelem, seed=0, extra_levels=(), extra_vals=()):
     df["val"] = np.random.random(nelem)
     for val in extra_vals:
         df[val] = np.random.random(nelem)
+
+    if with_datetime:
+        df["datetime"] = np.random.randint(
+            _now, _tomorrow, nelem, dtype=np.int64
+        ).astype("datetime64[ns]")
 
     return df
 
@@ -84,12 +101,17 @@ def test_group_keys_true(pdf, gdf):
     assert_eq(pdf, gdf)
 
 
-def test_groupby_getitem_styles():
-    pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3]})
+@pytest.mark.parametrize("as_index", [True, False])
+def test_groupby_getitem_getattr(as_index):
+    pdf = pd.DataFrame({"x": [1, 3, 1], "y": [1, 2, 3], "z": [1, 4, 5]})
     gdf = cudf.from_pandas(pdf)
-    assert_eq(gdf.groupby("x")["y"].sum(), pdf.groupby("x")["y"].sum())
+    assert_eq(pdf.groupby("x")["y"].sum(), gdf.groupby("x")["y"].sum())
     assert_eq(pdf.groupby("x").y.sum(), gdf.groupby("x").y.sum())
     assert_eq(pdf.groupby("x")[["y"]].sum(), gdf.groupby("x")[["y"]].sum())
+    assert_eq(
+        pdf.groupby(["x", "y"], as_index=as_index).sum(),
+        gdf.groupby(["x", "y"], as_index=as_index).sum(),
+    )
 
 
 @pytest.mark.parametrize("nelem", get_nelem())
@@ -599,6 +621,17 @@ def test_groupby_single_var_two_aggs():
     assert_eq(pdg, gdg)
 
 
+def test_groupby_double_var_two_aggs():
+    gdf = cudf.DataFrame()
+    gdf["a"] = [0, 1, 0, 1, 2]
+    gdf["b"] = [11, 2, 15, 12, 2]
+    gdf["c"] = [11, 2, 15, 12, 2]
+    pdf = gdf.to_pandas()
+    gdg = gdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
+    pdg = pdf.groupby(["a", "b"], as_index=True).agg({"c": ["min", "max"]})
+    assert_eq(pdg, gdg)
+
+
 def test_groupby_apply_basic_agg_single_column():
     gdf = DataFrame()
     gdf["key"] = [0, 0, 1, 1, 2, 2, 0]
@@ -628,6 +661,21 @@ def test_groupby_multi_agg_multi_groupby():
     pdf = pd.DataFrame(
         {
             "a": np.random.randint(0, 5, 10),
+            "b": np.random.randint(0, 5, 10),
+            "c": np.random.randint(0, 5, 10),
+            "d": np.random.randint(0, 5, 10),
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+    pdg = pdf.groupby(["a", "b"]).agg(["sum", "max"])
+    gdg = gdf.groupby(["a", "b"]).agg(["sum", "max"])
+    assert_eq(pdg, gdg)
+
+
+def test_groupby_datetime_multi_agg_multi_groupby():
+    pdf = pd.DataFrame(
+        {
+            "a": np.random.randint(0, 5, 10).astype(np.datetime64),
             "b": np.random.randint(0, 5, 10),
             "c": np.random.randint(0, 5, 10),
             "d": np.random.randint(0, 5, 10),
@@ -742,4 +790,116 @@ def test_groupby_index_type():
     df["string_col"] = ["a", "b", "c"]
     df["counts"] = [1, 2, 3]
     res = df.groupby(by="string_col").counts.sum()
-    assert isinstance(res.index, cudf.dataframe.index.StringIndex)
+    assert isinstance(res.index, cudf.core.index.StringIndex)
+
+
+@pytest.mark.parametrize(
+    "interpolation", ["linear", "lower", "higher", "midpoint", "nearest"]
+)
+def test_groupby_quantile(interpolation):
+    raw_data = {
+        "x": [1, 2, 3, 1, 2, 2, 1, None, 3, 2],
+        "y": [None, 1, 2, 3, 4, None, 6, 7, 8, 9],
+    }
+    pdf = pd.DataFrame(raw_data)
+    gdf = DataFrame.from_pandas(pdf)
+    pdg = pdf.groupby("x")
+    gdg = gdf.groupby("x")
+    pdresult = pdg.quantile(interpolation=interpolation)
+    gdresult = gdg.quantile(interpolation=interpolation)
+
+    # There's a lot left to add to python bindings like index name
+    # so this is a temporary workaround
+    pdresult = pdresult["y"].reset_index(drop=True)
+    gdresult = gdresult["y"].reset_index(drop=True)
+    assert_eq(pdresult, gdresult)
+
+
+def test_groupby_size():
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 1, 3, 4],
+            "b": ["bob", "bob", "alice", "cooper"],
+            "c": [1, 2, 3, 4],
+        }
+    )
+    gdf = cudf.from_pandas(pdf)
+
+    assert_eq(
+        pdf.groupby("a").size(), gdf.groupby("a").size(), check_dtype=False
+    )
+
+    assert_eq(
+        pdf.groupby(["a", "b", "c"]).size(),
+        gdf.groupby(["a", "b", "c"]).size(),
+        check_dtype=False,
+    )
+
+    sr = pd.Series(range(len(pdf)))
+    assert_eq(
+        pdf.groupby(sr).size(), gdf.groupby(sr).size(), check_dtype=False
+    )
+
+
+@pytest.mark.parametrize("nelem", get_nelem())
+@pytest.mark.parametrize("as_index", [True, False])
+@pytest.mark.parametrize("agg", ["min", "max", "mean", "count"])
+def test_groupby_datetime(nelem, as_index, agg):
+    if agg == "mean" and as_index is True:
+        return
+    check_dtype = agg not in ("mean", "count")
+    pdf = make_frame(pd.DataFrame, nelem=nelem, with_datetime=True)
+    gdf = make_frame(cudf.DataFrame, nelem=nelem, with_datetime=True)
+    pdg = pdf.groupby("datetime", as_index=as_index)
+    gdg = gdf.groupby("datetime", as_index=as_index)
+    if as_index is False:
+        pdres = getattr(pdg, agg)()
+        gdres = getattr(gdg, agg)()
+    else:
+        pdres = pdg.agg({"datetime": agg})
+        gdres = gdg.agg({"datetime": agg})
+    assert_eq(pdres, gdres, check_dtype=check_dtype)
+
+
+def test_groupby_dropna():
+    df = cudf.DataFrame({"a": [1, 1, None], "b": [1, 2, 3]})
+    expect = cudf.DataFrame(
+        {"b": [3, 3]}, index=cudf.Series([1, None], name="a")
+    )
+    got = df.groupby("a", dropna=False).sum()
+    assert_eq(expect, got)
+
+    df = cudf.DataFrame(
+        {"a": [1, 1, 1, None], "b": [1, None, 1, None], "c": [1, 2, 3, 4]}
+    )
+    idx = cudf.MultiIndex.from_frame(
+        df[["a", "b"]].drop_duplicates(), names=["a", "b"]
+    )
+    expect = cudf.DataFrame({"c": [4, 2, 4]}, index=idx)
+    got = df.groupby(["a", "b"], dropna=False).sum()
+
+    assert_eq(expect, got)
+
+
+def test_groupby_dropna_getattr():
+    df = cudf.DataFrame()
+    df["id"] = [0, 1, 1, None, None, 3, 3]
+    df["val"] = [0, 1, 1, 2, 2, 3, 3]
+    got = df.groupby("id", dropna=False).val.sum()
+
+    expect = cudf.Series(
+        [0, 2, 6, 4], name="val", index=cudf.Series([0, 1, 3, None], name="id")
+    )
+
+    assert_eq(expect, got)
+
+
+def test_groupby_categorical_from_string():
+    gdf = cudf.DataFrame()
+    gdf["id"] = ["a", "b", "c"]
+    gdf["val"] = [0, 1, 2]
+    gdf["id"] = gdf["id"].astype("category")
+    assert_eq(
+        cudf.DataFrame({"val": gdf["val"]}, index=gdf["id"]),
+        gdf.groupby("id").sum(),
+    )

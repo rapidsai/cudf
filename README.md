@@ -1,6 +1,6 @@
 # <div align="left"><img src="img/rapids_logo.png" width="90px"/>&nbsp;cuDF - GPU DataFrames</div>
 
-[![Build Status](https://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI%2Fcudf%2Fbranches%2Fcudf-gpu-branch-0.9)](https://gpuci.gpuopenanalytics.com/job/gpuCI/job/cudf/job/branches/job/cudf-gpu-branch-0.9/)
+[![Build Status](https://gpuci.gpuopenanalytics.com/buildStatus/icon?job=gpuCI%2Fcudf%2Fbranches%2Fcudf-gpu-branch-0.10)](https://gpuci.gpuopenanalytics.com/job/gpuCI/job/cudf/job/branches/job/cudf-gpu-branch-0.10/)
 
 **NOTE:** For the latest stable [README.md](https://github.com/rapidsai/cudf/blob/master/README.md) ensure you are on the `master` branch.
 
@@ -35,7 +35,7 @@ size
 Name: tip_percentage, dtype: float64
 ```
 
-For additional examples, browse our complete [API documentation](https://rapidsai.github.io/projects/cudf/en/latest/index.html), or check out our more detailed [notebooks](https://github.com/rapidsai/notebooks-extended).
+For additional examples, browse our complete [API documentation](https://docs.rapids.ai/api/cudf/stable/), or check out our more detailed [notebooks](https://github.com/rapidsai/notebooks-contrib).
 
 ## Quick Start
 

@@ -8,11 +8,11 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf import concat
-from cudf.dataframe import DataFrame, Series
-from cudf.dataframe.index import StringColumn, StringIndex
+from cudf.core import DataFrame, Series
+from cudf.core.index import StringColumn, StringIndex
 from cudf.tests.utils import assert_eq
 
 data_list = [
@@ -405,6 +405,18 @@ def test_string_cat(ps_gs, others, sep, na_rep, index):
 
     expect = ps.str.cat(others=(ps.index, ps.index), sep=sep, na_rep=na_rep)
     got = gs.str.cat(others=(gs.index, gs.index), sep=sep, na_rep=na_rep)
+
+    assert_eq(expect, got)
+
+
+@pytest.mark.xfail(raises=ValueError)
+@pytest.mark.parametrize("sep", [None, "", " ", "|", ",", "|||"])
+@pytest.mark.parametrize("na_rep", [None, "", "null", "a"])
+def test_string_cat_str(ps_gs, sep, na_rep):
+    ps, gs = ps_gs
+
+    got = gs.str.cat(gs.str, sep=sep, na_rep=na_rep)
+    expect = ps.str.cat(ps.str, sep=sep, na_rep=na_rep)
 
     assert_eq(expect, got)
 
@@ -897,6 +909,19 @@ def test_string_equality():
     got = gs1 == gs2
 
     assert_eq(expect, got.fillna(False))
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got.fillna(False))
+
+    ps1 = pd.Series(["a"])
+    gs1 = Series(["a"])
+
+    expect = ps1 == "m"
+    got = gs1 == "m"
+
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
