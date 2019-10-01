@@ -80,7 +80,7 @@ column_view column::view() const {
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
-      _null_count(), 0,
+      null_count(),  0,
       child_views};
 }
 
@@ -149,11 +149,11 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
       __ballot_sync(0xFFFF'FFFF, destination_bit_index < number_of_bits);
 
   while (destination_bit_index < number_of_bits) {
-    bitmask_type const new_word_index = __ballot_sync(
+    bitmask_type const new_word = __ballot_sync(
         active_mask, bit_is_set(source, bit_offset + destination_bit_index));
 
     if (threadIdx.x % warp_size == 0) {
-      destination[word_index(destination_bit_index)] = new_word_index;
+      destination[word_index(destination_bit_index)] = new_word;
     }
 
     destination_bit_index += blockDim.x * gridDim.x;
