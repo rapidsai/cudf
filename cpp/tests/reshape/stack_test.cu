@@ -41,6 +41,7 @@ struct random_int
     return uniform(engine); }
 };
 
+// std::mt19937 random_int::engine{0};
 
 template <typename T>
 struct StackTest : GdfTest {};
@@ -50,6 +51,33 @@ using test_types =
                    cudf::bool8, cudf::nvstring_category>;
 TYPED_TEST_CASE(StackTest, test_types);
 
+// TYPED_TEST(StackTest, StackRandom)
+// {
+//   using T = TypeParam;
+
+//   // Making the ranges that will be filled
+//   gdf_size_type num_cols = 3;
+//   gdf_size_type num_rows = 10;
+
+//   std::vector<int> labels(num_cols);
+//   std::vector<std::vector<int> > values(num_cols);
+
+//   // initialize these vectors
+//   auto rand = random_int<int>(0, 10);
+//   for (auto &&v : values) {
+//     v = std::vector<int>(num_rows);
+//     std::transform(v.begin(), v.end(), v.begin(), [&](auto){ return rand(); });
+//   }
+  
+//   // // set your expectations
+//   // std::vector<int> expect_vals;
+//   // for (size_t i = 0; i < counts_data.size(); i++) {
+//   //   for (gdf_size_type j = 0; j < counts_data[i]; j++) {
+//   //     expect_vals.push_back(values_data[i]);
+//   //   }
+//   // }
+// }
+
 TYPED_TEST(StackTest, StackOrdered)
 {
   using T = TypeParam;
@@ -57,7 +85,7 @@ TYPED_TEST(StackTest, StackOrdered)
 
   // Making the ranges that will be filled
   gdf_size_type num_cols = 3;
-  gdf_size_type num_rows = 100;
+  gdf_size_type num_rows = 10;
 
   std::vector<int> labels(num_cols);
   std::vector<std::vector<int> > values(num_cols);

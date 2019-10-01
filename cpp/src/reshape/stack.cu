@@ -72,12 +72,28 @@ gdf_column stack(const cudf::table &values, cudaStream_t stream = 0)
   gdf_column output = allocate_like(*values.get_column(0),
                                     num_cols * num_rows);
 
+  // NEW PLAN:
+  // Sync column categories if they were GDF_STRING_CATEGORY and convert temp 
+  // columns to GDF_INT32 (using gdf_dtype_of). Then normal path till after scatter.
+  // Finally, do a NVCat->gather on the result column.
+
+  // Step 1: Try the above first to check correctness.
+  // Step 2: Change nvcategory_util.cu:combine_column_categories() to use NVCategory::create_from_categories()
+
+  std::vector<gdf_column *> temp_values;
   if (dtype == GDF_STRING_CATEGORY) {
-    auto categories = static_cast<NVCategory *>(values.get_column(0)->dtype_info.category);
-    // We need to initialize data in case of string category because 
-    CUDA_TRY( cudaMemset(output.data, 0, output.size * sizeof(cudf::nvstring_category)) );
-    output.dtype_info.category = 
-      categories->gather(static_cast<int*>(output.data), output.size);
+    std::transform(values.begin(), values.end(), std::back_inserter(temp_values),
+      [] (const gdf_column *c) { return new gdf_column(allocate_like(*c)); } );
+
+    sync_column_categories(values.begin(), temp_values.data(), values.num_columns());
+
+    std::for_each(temp_values.begin(), temp_values.end(),
+      [] (gdf_column* c) { c->dtype = gdf_dtype_of<gdf_nvstring_category>(); });
+    
+    output.dtype = gdf_dtype_of<gdf_nvstring_category>();
+  } else {
+    std::transform(values.begin(), values.end(), std::back_inserter(temp_values),
+      [] (const gdf_column *c) { return const_cast<gdf_column *>(c); } );
   }
 
   // Allocate scatter map
@@ -88,11 +104,20 @@ gdf_column stack(const cudf::table &values, cudaStream_t stream = 0)
   thrust::copy(strided_it, strided_it + num_rows, scatter_map.begin());
 
   cudf::table output_table{&output};
-  for (auto &&col : values) {
+  for (auto &&col : temp_values) {
     cudf::table single_col_table = { const_cast<gdf_column*>(col) };
     detail::scatter(&single_col_table, scatter_map.data().get(), &output_table);
     thrust::transform(scatter_map.begin(), scatter_map.end(), scatter_map.begin(),
       [] __device__ (auto i) { return ++i; });
+  }
+
+  if (dtype == GDF_STRING_CATEGORY)
+  {
+    output.dtype = GDF_STRING_CATEGORY;
+    output.dtype_info.category =
+      static_cast<NVCategory *>(temp_values[0]->dtype_info.category)->copy();
+    std::for_each(temp_values.begin(), temp_values.end(),
+      [] (gdf_column* c) { gdf_column_free(c); });
   }
 
   return output;

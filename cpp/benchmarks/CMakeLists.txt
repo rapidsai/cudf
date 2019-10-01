@@ -112,3 +112,11 @@ set(QUANTILES_BENCH_SRC
   "${CMAKE_CURRENT_SOURCE_DIR}/quantiles/group_quantiles_benchmark.cu")
 
 ConfigureBench(QUANTILES_BENCH "${QUANTILES_BENCH_SRC}")
+
+###################################################################################################
+# - stack benchmark -------------------------------------------------------------------------------
+
+set(STACK_BENCH_SRC
+  "${CMAKE_CURRENT_SOURCE_DIR}/reshape/stack_benchmark.cu")
+
+ConfigureBench(STACK_BENCH "${STACK_BENCH_SRC}")
