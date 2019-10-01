@@ -8,7 +8,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.arrow._cuda import CudaBuffer
 from cudf._lib.gpuarrow import (

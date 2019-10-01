@@ -18,7 +18,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -875,12 +875,14 @@ class DataFrame(object):
         Name: b, dtype: int64
 
         Selection by boolean mask.
+
         >>> print(df.loc[df.a > 2])
            a  b
         d  3  8
         e  4  9
 
         Setting values using loc.
+
         >>> df.loc[['a', 'c', 'e'], 'a'] = 0
         >>> print(df)
            a  b
@@ -1667,6 +1669,7 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='columns' only.
           * Not supporting: index, level
+
         Rename will not overwite column names. If a list with duplicates it
         passed, column names will be postfixed.
         """
@@ -2098,13 +2101,14 @@ class DataFrame(object):
             in both DataFrames.
         how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
             Type of merge to be performed.
-                left: use only keys from left frame, similar to a SQL left
-                      outer join; preserve key order.
-                right: not supported.
-                outer: use union of keys from both frames, similar to a SQL
-                       full outer join; sort keys lexicographically.
-                inner: use intersection of keys from both frames, similar to
-                       a SQL inner join; preserve the order of the left keys.
+
+            - left : use only keys from left frame, similar to a SQL left
+              outer join; preserve key order.
+            - right : not supported.
+            - outer : use union of keys from both frames, similar to a SQL
+              full outer join; sort keys lexicographically.
+            - inner: use intersection of keys from both frames, similar to
+              a SQL inner join; preserve the order of the left keys.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -2995,6 +2999,7 @@ class DataFrame(object):
         Examples
         --------
         Describing a ``Series`` containing numeric values.
+
         >>> import cudf
         >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         >>> print(s.describe())
@@ -3010,6 +3015,7 @@ class DataFrame(object):
 
         Describing a ``DataFrame``. By default all numeric fields
         are returned.
+
         >>> gdf = cudf.DataFrame()
         >>> gdf['a'] = [1,2,3]
         >>> gdf['b'] = [1.0, 2.0, 3.0]
@@ -3028,6 +3034,7 @@ class DataFrame(object):
         7    max  3.0  3.0  3.0
 
         Using the ``include`` keyword to describe only specific dtypes.
+
         >>> gdf = cudf.DataFrame()
         >>> gdf['a'] = [1,2,3]
         >>> gdf['b'] = [1.0, 2.0, 3.0]
@@ -3533,6 +3540,7 @@ class DataFrame(object):
     #
     # Stats
     #
+
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 

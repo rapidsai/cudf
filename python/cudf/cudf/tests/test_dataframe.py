@@ -8,7 +8,7 @@ import pandas as pd
 import pyarrow as pa
 import pytest
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf as gd
 from cudf.core.buffer import Buffer

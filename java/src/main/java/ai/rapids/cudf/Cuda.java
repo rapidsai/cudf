@@ -34,6 +34,22 @@ public class Cuda {
   public static native CudaMemInfo memGetInfo() throws CudaException;
 
   /**
+   * Allocate pinned memory on the host.  This call takes a long time, but can really speed up
+   * memory transfers.
+   * @param size how much memory, in bytes, to allocate.
+   * @return the address to the allocated memory.
+   * @throws CudaException on any error.
+   */
+  static native long hostAllocPinned(long size) throws CudaException;
+
+  /**
+   * Free memory allocated with hostAllocPinned.
+   * @param ptr the pointer returned by hostAllocPinned.
+   * @throws CudaException on any error.
+   */
+  static native void freePinned(long ptr) throws CudaException;
+
+  /**
    * Copies count bytes from the memory area pointed to by src to the memory area pointed to by
    * dst.
    * Calling cudaMemcpy() with dst and src pointers that do not
