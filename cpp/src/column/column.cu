@@ -78,9 +78,9 @@ column_view column::view() const {
   }
 
   return column_view{
-      _type,        _size,
+      type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
-      _null_count,  0,
+      null_count(),  0,
       child_views};
 }
 
@@ -94,16 +94,16 @@ mutable_column_view column::mutable_view() {
   }
 
   // Store the old null count
-  auto current_null_count = _null_count;
+  auto current_null_count = null_count();
 
   // The elements of a column could be changed through a `mutable_column_view`,
   // therefore the existing `null_count` is no longer valid. Reset it to
   // `UNKNOWN_NULL_COUNT` forcing it to be recomputed on the next invocation of
   // `null_count()`.
-  set_null_count(UNKNOWN_NULL_COUNT);
+  set_null_count(cudf::UNKNOWN_NULL_COUNT);
 
-  return mutable_column_view{_type,
-                             _size,
+  return mutable_column_view{type(),
+                             size(),
                              _data.data(),
                              static_cast<bitmask_type *>(_null_mask.data()),
                              current_null_count,
@@ -113,12 +113,11 @@ mutable_column_view column::mutable_view() {
 
 // If the null count is known, return it. Else, compute and return it
 size_type column::null_count() const {
-  if (_null_count > UNKNOWN_NULL_COUNT) {
-    return _null_count;
-  } else {
-    _null_count = cudf::count_unset_bits(view().null_mask(), 0, size());
-    return null_count();
+  if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
+    _null_count = cudf::count_unset_bits(
+        static_cast<bitmask_type const *>(_null_mask.data()), 0, size());
   }
+  return _null_count;
 }
 
 void column::set_null_count(size_type new_null_count) {
@@ -150,11 +149,11 @@ __global__ void copy_offset_bitmask(bitmask_type *__restrict__ destination,
       __ballot_sync(0xFFFF'FFFF, destination_bit_index < number_of_bits);
 
   while (destination_bit_index < number_of_bits) {
-    bitmask_type const new_word_index = __ballot_sync(
+    bitmask_type const new_word = __ballot_sync(
         active_mask, bit_is_set(source, bit_offset + destination_bit_index));
 
     if (threadIdx.x % warp_size == 0) {
-      destination[word_index(destination_bit_index)] = new_word_index;
+      destination[word_index(destination_bit_index)] = new_word;
     }
 
     destination_bit_index += blockDim.x * gridDim.x;

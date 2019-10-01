@@ -1608,8 +1608,8 @@ class Series(object):
         rinds = cudautils.arange_reversed(
             self._column.data.size, dtype=np.int32
         )
-        col = libcudf.copying.gather(self._column, rinds)
-        index = libcudf.copying.gather(self.index.as_column(), rinds)
+        col = self._column[rinds]
+        index = self.index.as_column()[rinds]
         return self._copy_construct(data=col, index=index)
 
     def one_hot_encoding(self, cats, dtype="float64"):

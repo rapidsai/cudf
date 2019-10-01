@@ -61,7 +61,7 @@ __device__ inline bool bit_is_set(bitmask_type const* bitmask,
  * @brief Sets the specified bit to `1`
  *
  * @note This operation requires a global atomic operation. Therefore, it is
- * not reccomended to use this function in performance critical regions. When
+ * not recommended to use this function in performance critical regions. When
  * possible, it is more efficient to compute and update an entire word at
  * once using `set_word`.
  *

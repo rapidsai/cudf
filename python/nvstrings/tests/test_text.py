@@ -225,6 +225,16 @@ def test_edit_distance():
     assert distance_outcomes == expected
 
 
+def test_edit_distance_matrix():
+
+    strs = nvstrings.to_device(
+        ["my least favorite sentence", "fish", "software"]
+    )
+    distance_outcomes = nvtext.edit_distance_matrix(strs, algo=0)
+    expected = [[0, 23, 22], [23, 0, 7], [22, 7, 0]]
+    assert distance_outcomes == expected
+
+
 def test_ngrams():
     # bigrams
     strings = ["this is my favorite", "book on my bookshelf"]

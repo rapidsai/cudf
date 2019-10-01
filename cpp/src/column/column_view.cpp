@@ -56,12 +56,10 @@ column_view_base::column_view_base(data_type type, size_type size,
 
 // If null count is known, returns it. Else, compute and return it
 size_type column_view_base::null_count() const {
-  if (_null_count > cudf::UNKNOWN_NULL_COUNT) {
-    return _null_count;
-  } else {
+  if (_null_count <= cudf::UNKNOWN_NULL_COUNT) {
     _null_count = cudf::count_unset_bits(null_mask(), offset(), size());
-    return null_count();
   }
+  return _null_count;
 }
 }  // namespace detail
 

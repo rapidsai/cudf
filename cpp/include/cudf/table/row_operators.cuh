@@ -38,7 +38,7 @@ template <bool has_nulls = true>
 class element_equality_comparator {
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Conclass type-dispatched function object for comparing equality
+   * @brief Construct type-dispatched function object for comparing equality
    * between two elements.
    *
    * @note `lhs` and `rhs` may be the same.
@@ -133,7 +133,7 @@ template <bool has_nulls = true>
 class element_relational_comparator {
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Conclass type-dispatched function object for performing a
+   * @brief Construct type-dispatched function object for performing a
    * relational comparison between two elements.
    *
    * @note `lhs` and `rhs` may be the same.
@@ -223,7 +223,7 @@ template <bool has_nulls = true>
 class row_lexicographic_comparator {
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Conclass a function object for performing a lexicographic
+   * @brief Construct a function object for performing a lexicographic
    * comparison between the rows of two tables.
    *
    * @throws cudf::logic_error if `lhs.num_columns() != rhs.num_columns()`

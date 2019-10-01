@@ -69,7 +69,7 @@ class column {
   column(column&& other);
 
   /**---------------------------------------------------------------------------*
-   * @brief Construct a new column from existing device device memory.
+   * @brief Construct a new column from existing device memory.
    *
    * @note This constructor is primarily intended for use in column factory
    * functions. 
@@ -229,7 +229,7 @@ class column {
    *`mutable_column_view`. The conversion is automatic.
 
    * @note Creating a mutable view of a `column` invalidates the `column`'s
-   * `null_count()` by setting it to `UKNOWN_NULL_COUNT`. For best performance,
+   * `null_count()` by setting it to `UNKNOWN_NULL_COUNT`. For best performance,
    * the user should explicitly update the null count with `set_null_count()`.
    * Otherwise, the null count will be recomputed on the next invocation of
    * `null_count()`.

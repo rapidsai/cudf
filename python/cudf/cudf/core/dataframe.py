@@ -340,10 +340,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                selvals, selinds = column.column_select_by_boolmask(
-                    column.as_column(self.index), Series(mask)
-                )
-                index = self.index.take(selinds.to_gpu_array())
+                index = as_index(self.index.as_column()[mask])
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
