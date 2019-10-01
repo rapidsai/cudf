@@ -185,7 +185,7 @@ table reader::Impl::read(int skip_rows, int num_rows) {
   }
 
   if (md_->total_data_size > 0) {
-    device_buffer<uint8_t> block_data(md_->total_data_size);
+    device_buffer<uint8_t> block_data(align_size(md_->total_data_size));
     const auto buffer =
         source_->get_buffer(md_->block_list[0].offset, md_->total_data_size);
     CUDA_TRY(cudaMemcpyAsync(block_data.data(), buffer->data(), buffer->size(),

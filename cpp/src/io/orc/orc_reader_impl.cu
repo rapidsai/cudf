@@ -485,7 +485,7 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
       "compressed blocks: %zd\n Codec: %d\n",
       total_decompressed_size, num_compressed_blocks, decompressor->GetKind());
 
-  device_buffer<uint8_t> decomp_data(total_decompressed_size);
+  device_buffer<uint8_t> decomp_data(align_size(total_decompressed_size));
   rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks);
   rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
 
@@ -699,7 +699,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
           md_->ff.types, use_index, &num_dict_entries, chunks, stream_info);
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
-      stripe_data.emplace_back(total_data_size);
+      stripe_data.emplace_back(align_size(total_data_size));
       uint8_t *d_data = stripe_data.back().data();
 
       // Coalesce consecutive streams into one read
