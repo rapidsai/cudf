@@ -50,7 +50,7 @@ namespace cudf
 namespace strings
 {
 
-__device__ inline string_view::string_view(const char* data, size_type bytes)
+__host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
     : _data(data), _bytes(bytes)
 {}
 
@@ -61,32 +61,27 @@ __device__ inline string_view::string_view(const char* data)
 }
 
 //
-__device__ inline size_type string_view::size() const
+__host__ __device__ inline size_type string_view::size() const
 {
     return _bytes;
 }
 
 __device__ inline size_type string_view::length() const
 {
-    return _bytes;
-}
-
-__device__ inline size_type string_view::characters() const
-{
     return detail::characters_in_string(_data,_bytes);
 }
 
-__device__ inline const char* string_view::data() const
+__host__ __device__ inline const char* string_view::data() const
 {
     return _data;
 }
 
-__device__ inline bool string_view::empty() const
+__host__ __device__ inline bool string_view::empty() const
 {
     return _bytes == 0;
 }
 
-__device__ inline bool string_view::is_null() const
+__host__ __device__ inline bool string_view::is_null() const
 {
     return _data == nullptr;
 }
@@ -149,7 +144,7 @@ __device__ inline string_view::iterator string_view::begin() const
 
 __device__ inline string_view::iterator string_view::end() const
 {
-    return iterator(*this, characters());
+    return iterator(*this, length());
 }
 
 __device__ inline char_utf8 string_view::at(size_type pos) const
@@ -253,7 +248,7 @@ __device__ inline size_type string_view::find(const char* str, size_type bytes, 
     const char* sptr = data();
     if(!str || !bytes)
         return -1;
-    size_type nchars = characters();
+    size_type nchars = length();
     if(count < 0)
         count = nchars;
     size_type end = pos + count;
@@ -283,7 +278,7 @@ __device__ inline size_type string_view::find(const char* str, size_type bytes, 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, int count) const
 {
     size_type sz = size();
-    size_type nchars = characters();
+    size_type nchars = length();
     if(count < 0)
         count = nchars;
     size_type end = pos + count;
@@ -319,7 +314,7 @@ __device__ inline size_type string_view::rfind(const char* str, size_type bytes,
     if(!str || !bytes)
         return -1;
     size_type sz = size();
-    size_type nchars = characters();
+    size_type nchars = length();
     size_type end = pos + count;
     if(end < 0 || end > nchars)
         end = nchars;
@@ -346,7 +341,7 @@ __device__ inline size_type string_view::rfind(const char* str, size_type bytes,
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, int count) const
 {
     size_type sz = size();
-    size_type nchars = characters();
+    size_type nchars = length();
     if(count < 0)
         count = nchars;
     size_type end = pos + count;
@@ -416,7 +411,7 @@ __device__ inline size_type string_view::split(const char* delim, int count, str
         count = strsCount;
     //
     size_type dchars = (bytes ? detail::characters_in_string(delim,bytes) : 1);
-    size_type nchars = characters();
+    size_type nchars = length();
     size_type spos = 0, sidx = 0;
     size_type epos = find(delim, bytes);
     while(epos >= 0)
@@ -465,8 +460,8 @@ __device__ inline size_type string_view::rsplit(const char* delim, int count, st
         count = strsCount;
     //
     unsigned int dchars = (bytes ? detail::characters_in_string(delim,bytes) : 1);
-    int epos = (int)characters(); // end pos is not inclusive
-    int sidx = count - 1;          // index for strs array
+    int epos = (int)length(); // end pos is not inclusive
+    int sidx = count - 1;     // index for strs array
     int spos = rfind(delim, bytes);
     while(spos >= 0)
     {

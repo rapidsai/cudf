@@ -99,7 +99,7 @@ void print( strings_column_view strings,
                 return 0;
             string_view d_str = d_column.element<string_view>(idx);
             size_type bytes = d_str.size();
-            if( (max_width > 0) && (d_str.characters() > max_width) )
+            if( (max_width > 0) && (d_str.length() > max_width) )
                 bytes = d_str.byte_offset(max_width);
             return bytes+1; // allow for null-terminator on non-null strings
         },

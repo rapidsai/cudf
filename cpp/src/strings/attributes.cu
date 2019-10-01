@@ -75,7 +75,7 @@ std::unique_ptr<cudf::column> characters_counts( strings_column_view strings,
                                                  cudaStream_t stream,
                                                  rmm::mr::device_memory_resource* mr )
 {
-    auto pfn = [] __device__ (const cudf::strings::string_view& d_str) { return d_str.characters(); };
+    auto pfn = [] __device__ (const cudf::strings::string_view& d_str) { return d_str.length(); };
     return counts(strings,pfn,stream,mr);
 }
 
@@ -108,7 +108,7 @@ std::unique_ptr<cudf::column> code_points( strings_column_view strings,
         [d_column] __device__(size_type idx){
             if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
-            return d_column.element<string_view>(idx).characters();
+            return d_column.element<string_view>(idx).length();
         },
         thrust::plus<unsigned int>());
 

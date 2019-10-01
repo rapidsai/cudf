@@ -64,13 +64,9 @@ class string_view
    *---------------------------------------------------------------------------**/
   __host__ __device__ size_type size() const;
   /**---------------------------------------------------------------------------*
-   * @brief Return the number of bytes in this string
+   * @brief Return the number of characters in this string
    *---------------------------------------------------------------------------**/
-  __host__ __device__ size_type length() const;
-  /**---------------------------------------------------------------------------*
-   * @brief Return the number of characters (UTF-8) in this string
-   *---------------------------------------------------------------------------**/
-  __device__ size_type characters() const;
+  __device__ size_type length() const;
   /**---------------------------------------------------------------------------*
    * @brief Return a pointer to the internal device array
    *---------------------------------------------------------------------------**/
@@ -79,12 +75,12 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Return true if string has no characters
    *---------------------------------------------------------------------------**/
-  __device__ bool empty() const;
+  __host__ __device__ bool empty() const;
   /**---------------------------------------------------------------------------*
    * @brief Return true if string pointer is null.
    * That is, `data()==nullptr` for this instance.
    *---------------------------------------------------------------------------**/
-  __device__ bool is_null() const;
+  __host__ __device__ bool is_null() const;
 
   /**---------------------------------------------------------------------------*
    * @brief Handy iterator for navigating through encoded characters.

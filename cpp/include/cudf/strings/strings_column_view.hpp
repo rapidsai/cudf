@@ -327,12 +327,12 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
 /**---------------------------------------------------------------------------*
  * @brief Row-wise concatenates the given list of strings columns with the first column.
  *
- * @code
+ * ```
  * s1 = ['aa', null, '', 'aa']
  * s2 = ['', 'bb', 'bb', null]
  * r = concatenate(s1,s2)
  * r is ['aa', null, 'bb', null]
- * @endcode
+ * ```
  *
  * @param strings 1st string column.
  * @param others List of string columns to concatenate.
