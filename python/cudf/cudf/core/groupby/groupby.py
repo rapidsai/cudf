@@ -549,7 +549,10 @@ def _align_by_and_df(obj, by, how="inner"):
     >>> import cudf
     >>> import cudf.core.groupby.groupby as grp_by
 
-    >>> gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]}, index=[1,2,3])
+    >>> gdf = cudf.DataFrame(
+            {"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]},
+            index=[1,2,3]
+        )
     >>> gsr = cudf.Series([0.0, 1.0, 2.0], name='a', index=[2,3,4])
     >>> updtd_gdf, updtd_by = grp_by._align_by_and_df(gdf, ['x', gsr])
     >>> print (gdf)
