@@ -10,7 +10,7 @@ import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push

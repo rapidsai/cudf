@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 from cudf.core.buffer import Buffer

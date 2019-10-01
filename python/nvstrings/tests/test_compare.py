@@ -3,7 +3,7 @@
 import numpy as np
 from utils import assert_eq
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import nvstrings
 

@@ -3,7 +3,7 @@ import pickle
 import numba.cuda
 import numpy as np
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils import cudautils, utils
 
