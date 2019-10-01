@@ -27,22 +27,43 @@ namespace cudf {
 
 namespace detail {
 
-    template <class Rep, intmax_t Num, intmax_t Denom = 1>
-    using duration_st =
-        simt::std::chrono::duration<Rep, simt::std::ratio<Num, Denom>>;
+    // TODO: Use chrono::utc_clock when available in libcu++?
+    template <class Duration>
+    using time_point = simt::std::chrono::time_point<simt::std::chrono::steady_clock, Duration>;
 
-    template <class Rep, intmax_t Num, intmax_t Denom = 1>
-    struct timestamp : duration_st<Rep, Num, Denom> {
+    template <class Duration>
+    struct timestamp : time_point<Duration> {
         /// Initialize timestamp to 1/1/1970:00:00:00
-        constexpr timestamp() : duration_st<Rep, Num, Denom>(0) {};
-        constexpr timestamp(Rep t) : duration_st<Rep, Num, Denom>(t) {};
+        constexpr timestamp() : time_point<Duration>(Duration(0)) {};
+        constexpr timestamp(Duration d) : time_point<Duration>(d) {};
+        constexpr timestamp(typename Duration::rep t) : time_point<Duration>(Duration(t)) {};
     };
 } // detail
 
-using timestamp_D = detail::timestamp<int32_t, 86400>;
-using timestamp_s = detail::timestamp<int64_t, 1, 1>;
-using timestamp_ms = detail::timestamp<int64_t, 1, 1000>;
-using timestamp_us = detail::timestamp<int64_t, 1, 1000000>;
-using timestamp_ns = detail::timestamp<int64_t, 1, 1000000000>;
+/**---------------------------------------------------------------------------*
+ * @brief Type alias representing an int32_t duration of days since the unix
+ * epoch.
+ *---------------------------------------------------------------------------**/
+using timestamp_D = detail::timestamp<simt::std::chrono::duration<int32_t, simt::std::ratio<86400>>>;
+/**---------------------------------------------------------------------------*
+ * @brief Type alias representing an int64_t duration of seconds since the
+ * unix epoch.
+ *---------------------------------------------------------------------------**/
+using timestamp_s = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1>>>;
+/**---------------------------------------------------------------------------*
+ * @brief Type alias representing an int64_t duration of milliseconds since
+ * the unix epoch.
+ *---------------------------------------------------------------------------**/
+using timestamp_ms = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1000>>>;
+/**---------------------------------------------------------------------------*
+ * @brief Type alias representing an int64_t duration of microseconds since
+ * the unix epoch.
+ *---------------------------------------------------------------------------**/
+using timestamp_us = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1000000>>>;
+/**---------------------------------------------------------------------------*
+ * @brief Type alias representing an int64_t duration of nanoseconds since
+ * the unix epoch.
+ *---------------------------------------------------------------------------**/
+using timestamp_ns = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1000000000>>>;
 
 }  // cudf

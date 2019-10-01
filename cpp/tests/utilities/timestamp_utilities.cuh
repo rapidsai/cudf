@@ -26,7 +26,7 @@ namespace cudf {
 namespace test {
 
 using time_point_ms = simt::std::chrono::time_point<
-  simt::std::chrono::system_clock,
+  simt::std::chrono::steady_clock,
   simt::std::chrono::milliseconds
 >;
 
@@ -45,6 +45,8 @@ struct generate_each_timestamp {
  * The period is inferred from ```count``` and difference between ```start```
  * and ```stop```.
  *
+ * @tparam Rep The arithmetic type representing the number of ticks
+ * @tparam Period A simt::std::ratio representing the tick period (i.e. the number of seconds per tick)
  * @param count The number of timestamps to create
  * @param start The first timestamp as a simt::std::chrono::time_point
  * @param stop The last timestamp as a simt::std::chrono::time_point
@@ -53,11 +55,11 @@ template <typename Rep, typename Period>
 inline thrust::device_vector<Rep> generate_timestamps(int32_t count, time_point_ms start, time_point_ms stop) {
 
   using ToDuration = simt::std::chrono::duration<Rep, Period>;
-  auto lhs = simt::std::chrono::duration_cast<ToDuration>(start.time_since_epoch());
-  auto rhs = simt::std::chrono::duration_cast<ToDuration>(stop.time_since_epoch());
+  auto lhs = simt::std::chrono::time_point_cast<ToDuration>(start).time_since_epoch().count();
+  auto rhs = simt::std::chrono::time_point_cast<ToDuration>(stop).time_since_epoch().count();
 
-  auto min = std::min(lhs.count(), rhs.count());
-  auto max = std::max(lhs.count(), rhs.count());
+  auto min = std::min(lhs, rhs);
+  auto max = std::max(lhs, rhs);
   auto range = static_cast<Rep>(std::abs(max - min));
   auto gen_ts = generate_each_timestamp<Rep>{min, range / count};
 

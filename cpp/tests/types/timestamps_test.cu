@@ -47,7 +47,7 @@ struct compare_timestamp_elements_to_primitive_representation {
     using Primitive = typename Timestamp::rep;
     auto primitive = primitives.element<Primitive>(element_index);
     auto timestamp = timestamps.element<Timestamp>(element_index);
-    return primitive == timestamp.count();
+    return primitive == timestamp.time_since_epoch().count();
   }
 };
 
