@@ -18,7 +18,7 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/column/column_device_view.cuh>
 #include <utilities/error_utils.hpp>
-#include "./utilities.h"
+#include "./utilities.hpp"
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>

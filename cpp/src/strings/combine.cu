@@ -21,7 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <utilities/error_utils.hpp>
-#include "./utilities.h"
+#include "./utilities.hpp"
 #include "./utilities.cuh"
 
 #include <rmm/thrust_rmm_allocator.h>

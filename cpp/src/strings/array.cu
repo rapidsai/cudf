@@ -20,7 +20,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include "./utilities.h"
+#include "./utilities.hpp"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/iterator/transform_iterator.h>
