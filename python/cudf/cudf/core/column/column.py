@@ -705,6 +705,9 @@ class Column(object):
             raise TypeError(msg)
         return libcudf.quantile.quantile(self, quant, interpolation, exact)
 
+    def median(self):
+        return self.quantile(0.5, interpolation='linear', exact=True) # enforce linear in case the default ever changes
+
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.
         """
