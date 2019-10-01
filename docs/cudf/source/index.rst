@@ -9,7 +9,7 @@ Welcome to cuDF's documentation!
    10min.ipynb
    dask-cudf.md
    dask-xgb-10min.ipynb
-   10min_cudf_cupy.ipynb
+   10min-cudf-cupy.ipynb
    developer.rst
 
 Indices and tables
