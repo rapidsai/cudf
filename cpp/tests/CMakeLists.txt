@@ -431,7 +431,8 @@ ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
 
 set(FILLING_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/tiling_tests.cu")
 
 ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
 

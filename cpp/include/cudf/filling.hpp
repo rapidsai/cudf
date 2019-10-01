@@ -75,6 +75,24 @@ cudf::table repeat(const cudf::table &in, const gdf_column& count);
  */
 cudf::table repeat(const cudf::table &in, const gdf_scalar& count);
 
+/**
+ * @brief Construct a new table by tiling the input table
+ * 
+ * Creates a new table that contains the rows of @p in repeated @p count times.
+ * The difference from `repeat()` is illustrated in the example below.
+ * Example:
+ * ```
+ * in = [4,5,6]
+ * count = 2
+ * return = [4,5,6,4,5,6]
+ * ```
+ *  
+ * @param in Input table
+ * @param count Number of times to tile the rows
+ * @return cudf::table The result table containing the tiled columns
+ */
+cudf::table tile(const cudf::table &in, gdf_size_type count);
+
 }; // namespace cudf
 
 #endif // FILLING_HPP
