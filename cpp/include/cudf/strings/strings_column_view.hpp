@@ -181,7 +181,7 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
 /**
  * @brief Returns new instance using the provided map values and strings.
  * The map values specify the location in the new strings instance.
- * Missing values pass through from the handler instance into those positions.
+ * Missing values pass through from the column at those positions.
  *
  * ```
  * s1 = ["a", "b", "c", "d"]
@@ -210,7 +210,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
  * @brief Returns new instance using the provided index values and a
  * single string. The map values specify where to place the string
  * in the new strings instance. Missing values pass through from
- * the handler instance at those positions.
+ * the column at those positions.
  *
  * ```
  * s1 = ["a", "b", "c", "d"]

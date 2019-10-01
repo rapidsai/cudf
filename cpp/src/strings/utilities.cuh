@@ -16,6 +16,7 @@
 
 #include <cuda_runtime.h>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/column/column_view.hpp>
 
 #include <cstring>
 
@@ -39,7 +40,6 @@ __device__ inline char* copy_string( char* buffer, const string_view& d_string )
     memcpy( buffer, d_string.data(), d_string.size() );
     return buffer + d_string.size();
 }
-
 
 } // namespace detail
 } // namespace strings

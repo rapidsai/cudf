@@ -58,15 +58,20 @@ std::unique_ptr<column> make_strings_column(
     auto offsets_column = make_numeric_column( data_type{INT32}, count+1, mask_state::UNALLOCATED, stream, mr );
     auto offsets_view = offsets_column->mutable_view();
     auto d_offsets = offsets_view.data<int32_t>();
+    // Using inclusive-scan to compute last entry which is the total size.
+    // Exclusive-scan is possible but will not compute that last entry.
+    // Rather than manually computing the final offset using values in device memory,
+    // we use inclusive-scan on a shifted output (d_offsets+1) and then set the first
+    // zero offset manually.
     thrust::transform_inclusive_scan( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), thrust::make_counting_iterator<size_type>(count),
-        d_offsets+1,
+        d_offsets+1, // fills in offsets entries [1,count]
         [d_strings] __device__ (size_type idx) {
             thrust::pair<const char*,size_t> item = d_strings[idx];
             return ( item.first ? static_cast<int32_t>(item.second) : 0 );
         },
         thrust::plus<int32_t>() );
-    int32_t offset_zero = 0;
+    int32_t offset_zero = 0; // set the first offset to 0
     cudaMemcpyAsync( d_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
 
     // create null mask
@@ -152,6 +157,5 @@ std::unique_ptr<column> make_strings_column(
         null_mask, null_count,
         std::move(children));
 }
-
 
 }  // namespace cudf
