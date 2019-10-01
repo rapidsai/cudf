@@ -6,7 +6,7 @@ from itertools import chain
 import numpy as np
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf

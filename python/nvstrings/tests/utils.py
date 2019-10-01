@@ -23,19 +23,19 @@ def assert_eq(arr1, arr2):
 
 
 def initialize_rmm_pool():
-    from librmm_cffi import librmm as rmm
-    from librmm_cffi import librmm_config as rmm_cfg
+    import rmm
+    from rmm import rmm_config
 
-    rmm_cfg.use_pool_allocator = True
+    rmm_config.use_pool_allocator = True
     # set to 2GiB. Default is 1/2 total GPU memory
-    rmm_cfg.initial_pool_size = 2 << 30
+    rmm_config.initial_pool_size = 2 << 30
     # default is false
-    rmm_cfg.use_managed_memory = False
-    rmm_cfg.enable_logging = True
+    rmm_config.use_managed_memory = False
+    rmm_config.enable_logging = True
     return rmm.initialize()
 
 
 def finalize_rmm():
-    from librmm_cffi import librmm as rmm
+    import rmm
 
     return rmm.finalize()
