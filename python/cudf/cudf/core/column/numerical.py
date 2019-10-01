@@ -9,7 +9,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_integer_dtype
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf.core._sort import get_sorted_inds
@@ -174,7 +174,7 @@ class NumericalColumn(column.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         sort_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = libcudf.copying.gather(self, sort_inds.data.mem)
+        col_keys = self[sort_inds]
         col_inds = self.replace(
             data=sort_inds.data,
             mask=sort_inds.mask,
@@ -220,7 +220,7 @@ class NumericalColumn(column.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = libcudf.copying.gather(sortedvals, segs)
+        out_col = column.as_column(sortedvals)[segs]
         return out_col
 
     def all(self):

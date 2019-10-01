@@ -6,7 +6,8 @@ import pandas as pd
 import pyarrow as pa
 from numba import njit
 
-from librmm_cffi import librmm as rmm, librmm_config as rmm_cfg
+import rmm
+from rmm import rmm_config
 
 mask_dtype = np.dtype(np.int8)
 mask_bitsize = mask_dtype.itemsize * 8
@@ -229,7 +230,14 @@ def _is_nep18_active():
         return False
 
 
-IS_NEP18_ACTIVE = _is_nep18_active()
+def _have_cupy():
+    try:
+        import cupy  # noqa: F401
+
+        _have_cupy = True
+    except ModuleNotFoundError:
+        _have_cupy = False
+    return _have_cupy
 
 
 def _set_rmm_config(
@@ -256,17 +264,17 @@ es 1/2 of total GPU memory.
         Enabling this option will introduce performance overhead.
     """
     rmm.finalize()
-    rmm_cfg.use_managed_memory = use_managed_memory
+    rmm_config.use_managed_memory = use_managed_memory
     if use_pool_allocator:
-        rmm_cfg.use_pool_allocator = use_pool_allocator
+        rmm_config.use_pool_allocator = use_pool_allocator
         if initial_pool_size is None:
             initial_pool_size = 0  # 0 means 1/2 GPU memory
         elif initial_pool_size == 0:
             initial_pool_size = 1  # Since "0" is semantic value, use 1 byte
         if not isinstance(initial_pool_size, int):
             raise TypeError("initial_pool_size must be an integer")
-        rmm_cfg.initial_pool_size = initial_pool_size
-    rmm_cfg.enable_logging = enable_logging
+        rmm_config.initial_pool_size = initial_pool_size
+    rmm_config.enable_logging = enable_logging
     rmm.initialize()
 
 
@@ -287,3 +295,7 @@ def set_allocator(allocator="default", pool=False, initial_pool_size=None):
     """
     use_managed_memory = True if allocator == "managed" else False
     _set_rmm_config(use_managed_memory, pool, initial_pool_size)
+
+
+IS_NEP18_ACTIVE = _is_nep18_active()
+_have_cupy = _have_cupy()

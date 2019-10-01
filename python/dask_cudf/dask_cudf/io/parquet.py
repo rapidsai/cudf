@@ -1,3 +1,7 @@
+from functools import partial
+
+import pyarrow.parquet as pq
+
 import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
@@ -30,6 +34,20 @@ class CudfEngine(ArrowEngine):
             columns = [c for c in columns]
         if isinstance(index, list):
             columns += index
+
+        if isinstance(piece, str):
+            # `piece` is a file-path string
+            piece = pq.ParquetDatasetPiece(
+                piece, open_file_func=partial(fs.open, mode="rb")
+            )
+        else:
+            # `piece` contains (path, row_group, partition_keys)
+            piece = pq.ParquetDatasetPiece(
+                piece[0],
+                row_group=piece[1],
+                partition_keys=piece[2],
+                open_file_func=partial(fs.open, mode="rb"),
+            )
 
         strings_to_cats = kwargs.get("strings_to_categorical", False)
         if cudf.utils.ioutils._is_local_filesystem(fs):

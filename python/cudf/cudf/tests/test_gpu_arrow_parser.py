@@ -4,7 +4,7 @@ import logging
 import numpy as np
 import pytest
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 from cudf.comm.gpuarrow import GpuArrowReader
