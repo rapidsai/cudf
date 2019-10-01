@@ -270,7 +270,7 @@ void print_gdf_column(gdf_column const * the_column, unsigned min_printing_width
 }
 
 void print_valid_data(const gdf_valid_type *validity_mask,
-                      const size_t num_rows)
+                      const size_t num_rows, std::ostream& stream)
 {
   cudaError_t error;
   cudaPointerAttributes attrib;
@@ -286,11 +286,11 @@ void print_valid_data(const gdf_valid_type *validity_mask,
 
   std::transform(
       h_mask.begin(), h_mask.begin() + gdf_num_bitmask_elements(num_rows),
-      std::ostream_iterator<std::string>(std::cout, " "), [](gdf_valid_type x) {
+      std::ostream_iterator<std::string>(stream, " "), [](gdf_valid_type x) {
         auto bits = std::bitset<GDF_VALID_BITSIZE>(x).to_string(null_signifier);
         return std::string(bits.rbegin(), bits.rend());
       });
-  std::cout << std::endl;
+  stream << std::endl;
 }
 
 gdf_size_type count_valid_bits_host(
