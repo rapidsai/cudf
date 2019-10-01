@@ -72,7 +72,7 @@
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
 - PR #2899 Use new RMM API based on Cython
-- PR #2849 CSV Reader: Avoid row offsets host vector default init
+- PR #2909 CSV Reader: Avoid row offsets host vector default init
 
 ## Bug Fixes
 
