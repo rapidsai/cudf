@@ -19,7 +19,7 @@ import pyarrow as pa
 from cudf.utils import cudautils
 from cudf.utils.dtypes import is_categorical_dtype
 from cudf.utils.utils import calc_chunk_size, mask_dtype, mask_bitsize
-from librmm_cffi import librmm as rmm
+import rmm
 import nvstrings
 import nvcategory
 
@@ -503,7 +503,7 @@ cdef gdf_column* column_view_from_string_column(
     return c_col
 
 
-cdef gdf_column** cols_view_from_cols(cols):
+cdef gdf_column** cols_view_from_cols(cols) except ? NULL:
     col_count=len(cols)
     cdef gdf_column **c_cols = <gdf_column**>malloc(
         sizeof(gdf_column*) * col_count

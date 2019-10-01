@@ -5,10 +5,11 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
+import cudf
 import cudf._lib as libcudf
 from cudf.core._sort import get_sorted_inds
 from cudf.core.buffer import Buffer
-from cudf.core.column import column
+from cudf.core.column import as_column, column
 from cudf.utils import utils
 from cudf.utils.dtypes import is_scalar, np_to_pa_dtype
 
@@ -82,10 +83,21 @@ class DatetimeColumn(column.TypedColumnBase):
                 ("Cannot infer datetime dtype " + "from np.array dtype `%s`")
                 % (array.dtype)
             )
+        null = cudf.core.column.column_empty_like(
+            array, masked=True, newsize=1
+        )
+        col = libcudf.replace.replace(
+            as_column(Buffer(array)),
+            as_column(
+                Buffer(np.array([np.datetime64("NaT")], dtype=array.dtype))
+            ),
+            null,
+        )
         if cast_dtype:
             array = array.astype(np.dtype("datetime64[ms]"))
         assert array.dtype.itemsize == 8
-        return cls(data=Buffer(array), dtype=array.dtype)
+
+        return cls(data=Buffer(array), mask=col.mask, dtype=array.dtype)
 
     @property
     def time_unit(self):
@@ -234,7 +246,7 @@ class DatetimeColumn(column.TypedColumnBase):
 
     def sort_by_values(self, ascending=True, na_position="last"):
         col_inds = get_sorted_inds(self, ascending, na_position)
-        col_keys = libcudf.copying.gather(self, col_inds)
+        col_keys = self[col_inds]
         col_inds.name = self.name
         return col_keys, col_inds
 
@@ -272,7 +284,7 @@ class DatetimeColumn(column.TypedColumnBase):
             raise NotImplementedError(msg)
         segs, sortedvals = self._unique_segments()
         # gather result
-        out_col = libcudf.copying.gather(sortedvals, segs)
+        out_col = column.as_column(sortedvals)[segs]
         return out_col
 
     @property
@@ -282,17 +294,23 @@ class DatetimeColumn(column.TypedColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = binop(
-                self[1:], self[:-1], "ge", "bool"
-            ).all()
+            if self.has_null_mask:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = libcudf.issorted.issorted(
+                    [self]
+                )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = binop(
-                self[1:], self[:-1], "le", "bool"
-            ).all()
+            if self.has_null_mask:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = libcudf.issorted.issorted(
+                    [self], [1]
+                )
         return self._is_monotonic_decreasing
 
 

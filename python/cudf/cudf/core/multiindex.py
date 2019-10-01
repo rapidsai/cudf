@@ -8,6 +8,7 @@ from collections.abc import Sequence
 import numpy as np
 import pandas as pd
 
+import cudf._lib as libcudf
 from cudf.core.column import column
 from cudf.core.index import Index, as_index
 from cudf.utils import cudautils
@@ -645,15 +646,21 @@ class MultiIndex(Index):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = self._source_data.argsort(
-                ascending=True
-            ).is_monotonic_increasing
+            self._is_monotonic_increasing = libcudf.issorted.issorted(
+                self._source_data._columns
+            )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = self._source_data.argsort(
-                ascending=True
-            ).is_monotonic_decreasing
+            self._is_monotonic_decreasing = libcudf.issorted.issorted(
+                self._source_data._columns, [1] * len(self.levels)
+            )
         return self._is_monotonic_decreasing
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        return MultiIndex.from_frame(
+            self._source_data.repeat(repeats), names=self.names
+        )

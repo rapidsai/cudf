@@ -18,6 +18,7 @@
 
 #include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "cudf.h"
@@ -174,15 +175,13 @@ enum quote_style {
 
 /**---------------------------------------------------------------------------*
  * @brief Options for the CSV reader
- * 
+ *
  * TODO: Clean-up the parameters, as it is decoupled from the `read_csv`
  * interface. That interface allows it to be more closely aligned with PANDAS'
  * for user-friendliness.
  *---------------------------------------------------------------------------**/
 struct reader_options {
-  gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
-  std::string filepath_or_buffer;               ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  std::string compression = "none";             ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
+  std::string compression = "none";         ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
 
   char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
   char          delimiter = ',';            ///< Define the field separator; Default is ','.
@@ -235,41 +234,52 @@ class reader {
 
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Constructor; throws if the arguments are not supported.
+   * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
-  explicit reader(reader_options const &args);
+  explicit reader(std::string filepath, reader_options const &options);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input CSV file as specified with the reader_options
-   * constuctor parameter.
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
    *
    * @return cudf::table object that contains the array of gdf_columns.
    *---------------------------------------------------------------------------**/
   table read();
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the specified byte range of the input CSV file.
+   * @brief Reads and returns all the rows within a byte range.
    *
-   * Reads the row that starts before or at the end of the range, even if it ends
-   * after the end of the range.
+   * The returned data includes the row that straddles the end of the range.
+   * In other words, a row is included as long as the row begins within the byte
+   * range.
    *
-   * @param[in] offset Offset of the byte range to read.
-   * @param[in] size Size of the byte range to read. Set to zero to read to
-   * the end of the file.
+   * @param[in] offset Byte offset from the start
+   * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read_byte_range(size_t offset, size_t size);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the specified rows of the input CSV file.
-   * 
+   * @brief Reads and returns a range of rows.
+   *
    * Set num_skip_footer to zero when using num_rows parameter.
    *
-   * @param[in] num_skip_header Number of rows at the start of the files to skip.
-   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
-   * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows.
-   * 
+   * @param[in] num_skip_header Number of rows at the start of the files to skip
+   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip
+   * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows
+   *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer,
@@ -373,6 +383,7 @@ namespace parquet {
 struct reader_options {
   std::vector<std::string> columns;
   bool strings_to_categorical = false;
+  bool use_pandas_metadata = false;
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;
 
   reader_options() = default;
@@ -383,12 +394,14 @@ struct reader_options {
    *
    * @param[in] cols List of columns to read. If empty, all columns are read
    * @param[in] strings_to_categorical Whether to store strings as GDF_CATEGORY
+   * @param[in] read_pandas_indexes Whether to always load PANDAS index columns
    * @param[in] timestamp_time_unit Resolution of timestamps; none for default
    *---------------------------------------------------------------------------**/
   reader_options(std::vector<std::string> cols, bool strings_as_category,
-                 gdf_time_unit timestamp_time_unit)
+                 bool read_pandas_indexes, gdf_time_unit timestamp_time_unit)
       : columns(std::move(cols)),
         strings_to_categorical(strings_as_category),
+        use_pandas_metadata(read_pandas_indexes),
         timestamp_unit(timestamp_time_unit) {}
 };
 
@@ -419,7 +432,7 @@ class reader {
                   reader_options const &options);
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns the index column derived from the dataset metadata.
+   * @brief Returns the PANDAS-specific index column derived from the metadata.
    *
    * @return std::string Name of the column if it exists.
    *---------------------------------------------------------------------------**/
