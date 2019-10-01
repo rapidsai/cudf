@@ -67,6 +67,7 @@
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #XXXX Use new RMM API based on Cython
 
 ## Bug Fixes
 

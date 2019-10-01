@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import nvstrings
 import nvtext

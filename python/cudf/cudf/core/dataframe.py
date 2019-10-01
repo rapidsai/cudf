@@ -18,7 +18,7 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf

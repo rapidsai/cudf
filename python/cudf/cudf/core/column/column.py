@@ -10,7 +10,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
