@@ -212,6 +212,7 @@ class _GroupbyHelper(object):
         frames.extend(obj_frames)
 
         header["key_names"] = self.key_names
+        header["df_key_names"] = self.df_key_names
         header["as_index"] = self.as_index
         header["sort"] = self.sort
 
@@ -233,6 +234,7 @@ class _GroupbyHelper(object):
 
         as_index = header["as_index"]
         sort = header["sort"]
+        df_key_names = header["df_key_names"]
 
         key_column_frames = frames[header["obj_frame_count"] :]
         key_columns = deserialize_columns(
@@ -242,7 +244,9 @@ class _GroupbyHelper(object):
         for col_name, col in zip(header["key_names"], key_columns):
             col.name = col_name
 
-        gby = cls(obj, by=key_columns, as_index=as_index, sort=sort)
+        by = df_key_names
+        by.extend(key_columns[len(df_key_names)::])
+        gby = cls(obj, by=by, as_index=as_index, sort=sort)
 
         return gby
 
@@ -586,7 +590,7 @@ def _align_by_and_df(obj, by, how="inner"):
                 new_obj = sr.to_frame(series_count)
             else:
                 new_obj = new_obj.join(
-                    sr.to_frame(series_count), how="inner", sort="True"
+                    sr.to_frame(series_count), how=how, sort="True"
                 )
             series_count += 1
 
@@ -595,7 +599,7 @@ def _align_by_and_df(obj, by, how="inner"):
         new_obj = new_obj.join(obj, how=how, sort="True")
         columns = new_obj.columns
         for by_col in by:
-            if isinstance(by_col, cudf.Series):
+            if not is_scalar(by_col):
                 sr, sr.name = (
                     cudf.Series(new_obj[columns[series_count]]),
                     by_col.name,
