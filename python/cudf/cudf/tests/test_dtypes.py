@@ -7,7 +7,7 @@ from cudf.tests.utils import assert_eq
 
 
 def test_cdt_basic():
-    psr = cudf.Series(["a", "b", "a", "c"], dtype="category")
+    psr = pd.Series(["a", "b", "a", "c"], dtype="category")
     sr = cudf.Series(["a", "b", "a", "c"], dtype="category")
     assert isinstance(sr.dtype, CategoricalDtype)
     assert_eq(sr.dtype.categories, psr.dtype.categories)
