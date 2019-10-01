@@ -543,14 +543,14 @@ class nvstrings:
         Examples
         --------
         >>> import nvstrings
-        >>> from librmm_cffi import librmm
+        >>> import rmm
         >>> import numpy as np
 
         Example passing device memory pointer
 
         >>> s = nvstrings.to_device(["abc","d","ef"])
         >>> arr = np.arange(s.size(),dtype=np.int32)
-        >>> d_arr = librmm.to_device(arr)
+        >>> d_arr = rmm.to_device(arr)
         >>> s.len(d_arr.device_ctypes_pointer.value)
         >>> print(d_arr.copy_to_host())
         [3,1,2]
@@ -575,13 +575,13 @@ class nvstrings:
         --------
         >>> import nvstrings
         >>> import numpy as np
-        >>> from librmm_cffi import librmm
+        >>> import rmm
 
         Example passing device memory pointer
 
         >>> s = nvstrings.to_device(["abc","d","ef"])
         >>> arr = np.arange(s.size(),dtype=np.int32)
-        >>> d_arr = librmm.to_device(arr)
+        >>> d_arr = rmm.to_device(arr)
         >>> s.byte_count(d_arr.device_ctypes_pointer.value,True)
         >>> print(d_arr.copy_to_host())
         [3,1,2]
@@ -2648,7 +2648,7 @@ class nvstrings:
         Examples
         --------
         >>> import nvstrings
-        >>> from librmm_cffi import librmm as rmm
+        >>> import rmm
         >>> import numpy as np
         >>> s = nvstrings.to_device(["a","xyz", "éee"])
         >>> s.len()

@@ -15,7 +15,7 @@ from cudf._lib.utils cimport (
     table_from_columns,
     table_to_dataframe
 )
-from librmm_cffi import librmm as rmm
+import rmm
 from cudf._lib.includes.copying cimport (
     copy as cpp_copy,
     copy_range as cpp_copy_range,
@@ -29,7 +29,7 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from libc.stdint cimport uintptr_t
 

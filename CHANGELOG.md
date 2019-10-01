@@ -32,6 +32,7 @@
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
+- PR #2872 Add Java pinned memory pool allocator
 
 ## Improvements
 
@@ -64,7 +65,9 @@
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
 - PR #2856 Update group_split_cudf to use scatter_by_map
+- PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2899 Use new RMM API based on Cython
 
 ## Bug Fixes
 
@@ -119,6 +122,7 @@
 - PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2860 Fix boolean indexing when the result is a single row
 - PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
