@@ -31,10 +31,17 @@ cdef unique_ptr[cudf_table] make_table_from_columns(columns):
     Cython function to create a `cudf_table` from an ordered dict of columns
     """
     cdef vector[gdf_column*] c_columns
-
     for idx, (col_name, col) in enumerate(columns.items()):
         check_gdf_compatibility(col._column)
-        c_columns.push_back(column_view_from_column(col._column, col_name))
+        # Workaround for string columns
+        if col.dtype.type == np.object_:
+            c_columns.push_back(
+                column_view_from_string_column(col._column, col_name)
+            )
+        else:
+            c_columns.push_back(
+                column_view_from_column(col._column, col_name)
+            )
 
     return make_unique[cudf_table](c_columns)
 
