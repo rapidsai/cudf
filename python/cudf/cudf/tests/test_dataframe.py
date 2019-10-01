@@ -3627,7 +3627,7 @@ def test_tolist_mixed_nulls():
     "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 def test_df_astype_numeric_to_numeric(dtype, as_dtype):
-    data = [1,2,3, None, 5]
+    data = [1,2,3]
     pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
     gdf = DataFrame.from_pandas(pdf)
 
@@ -3636,6 +3636,23 @@ def test_df_astype_numeric_to_numeric(dtype, as_dtype):
 
 
     assert_eq(pdf, gdf)
+
+@pytest.mark.parametrize(
+    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+@pytest.mark.parametrize(
+    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+)
+def test_df_astype_numeric_to_numeric_nulls(dtype, as_dtype):
+    data = [1, 2, None, 4]
+    pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
+    gdf = DataFrame.from_pandas(pdf)
+
+    pdf_as_dtype = pd.DataFrame(data, columns=['test'], dtype=as_dtype)
+    expect = DataFrame.from_pandas(pdf_as_dtype)
+    got = gdf.astype(as_dtype)
+
+    assert_eq(expect, got)
 
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
