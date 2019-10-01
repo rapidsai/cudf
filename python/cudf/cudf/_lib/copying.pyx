@@ -10,6 +10,7 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 
 import cudf.utils.utils as utils
+from cudf.utils.dtypes import is_string_dtype
 from cudf._lib.utils cimport (
     columns_from_table,
     table_from_columns,
@@ -87,7 +88,7 @@ def gather(source, maps, bounds_check=True):
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
 
-    if in_cols[0].dtype == np.dtype("object"):
+    if is_string_dtype(in_cols[0]):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
@@ -225,7 +226,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
 
     out_col._update_null_count(c_out_col.null_count)
 
-    if out_col.dtype == np.dtype("object") and len(out_col) > 0:
+    if is_string_dtype(out_col) and len(out_col) > 0:
         update_nvstrings_col(
             out_col,
             <uintptr_t>c_out_col.dtype_info.category)
@@ -258,7 +259,7 @@ def scatter_to_frames(source, maps):
     for i, in_col in enumerate(in_cols):
         in_cols[i] = column.as_column(in_cols[i])
 
-    if in_cols[0].dtype == np.dtype("object"):
+    if is_string_dtype(in_cols[0]):
         in_size = in_cols[0].data.size()
     else:
         in_size = in_cols[0].data.size
