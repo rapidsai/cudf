@@ -3646,10 +3646,10 @@ def test_df_astype_numeric_to_numeric(dtype, as_dtype):
 def test_df_astype_numeric_to_numeric_nulls(dtype, as_dtype):
     data = [1, 2, None, 4]
     gdf = DataFrame()
-    gdf['test'] = Series(data).astype(dtype)
+    gdf['test'] = Series(data, dtype=dtype)
 
     expect = DataFrame()
-    expect['test'] = Series(data).astype(as_dtype)
+    expect['test'] = Series(data, dtype=as_dtype)
     
     got = gdf.astype(as_dtype)
 
