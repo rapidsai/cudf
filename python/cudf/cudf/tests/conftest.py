@@ -2,16 +2,16 @@ import pathlib
 
 import pytest
 
-from librmm_cffi import librmm
+import rmm
 
 
 # Set up a fixture for the RMM memory manager to initialize and finalize it
 # before and after tests.
 @pytest.fixture(scope="session", autouse=True)
-def rmm():
-    librmm.initialize()
-    yield librmm
-    librmm.finalize()
+def setup_rmm():
+    rmm.initialize()
+    yield rmm
+    rmm.finalize()
 
 
 @pytest.fixture(scope="session")
