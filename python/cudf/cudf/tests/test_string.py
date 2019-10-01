@@ -8,7 +8,7 @@ import pyarrow as pa
 import pytest
 from numba import cuda
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf import concat
 from cudf.core import DataFrame, Series

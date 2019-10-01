@@ -16,7 +16,7 @@ from libc.stdlib cimport calloc, malloc, free
 from libcpp.map cimport map as cmap
 from libcpp.string  cimport string as cstring
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *

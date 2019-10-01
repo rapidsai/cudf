@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import is_dict_like
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf.core.column import Column, DatetimeColumn, column
