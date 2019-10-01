@@ -541,6 +541,35 @@ def _align_by_and_df(obj, by, how="inner"):
     Returns a pair of dataframes and a list may be containing
     combination of column names and Series  which are intersected
     as per their indices.
+
+    Examples
+    --------
+    Dataframe and Series in the 'by' have different indices:
+
+    >>> import cudf
+    >>> import cudf.core.groupby.groupby as grp_by
+
+    >>> gdf = cudf.DataFrame({"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]}, index=[1,2,3])
+    >>> gsr = cudf.Series([0.0, 1.0, 2.0], name='a', index=[2,3,4])
+    >>> updtd_gdf, updtd_by = grp_by._align_by_and_df(gdf, ['x', gsr])
+    >>> print (gdf)
+        x     y
+    1 	1.0   1
+    2 	2.0   2
+    3 	3.0   1
+    >>> print(updtd_gdf)
+        x     y
+    2 	2.0   2
+    3 	3.0   1
+    >>> print(by)
+    ['x', 2    0.0
+          3    1.0
+          4    2.0
+          Name: a, dtype: float64]
+    >>> print(updtd_by)
+    ['x', 2    0.0
+          3    1.0
+          Name: a, dtype: float64]
     """
     new_obj = None
     new_by = []
@@ -548,11 +577,11 @@ def _align_by_and_df(obj, by, how="inner"):
         by = [by]
 
     series_count = 0
-    for i in by:
-        if not is_scalar(i):
-            sr = i
-            if not isinstance(i, cudf.Series):
-                sr = cudf.Series(i)
+    for by_col in by:
+        if not is_scalar(by_col):
+            sr = by_col
+            if not isinstance(by_col, cudf.Series):
+                sr = cudf.Series(by_col)
             if new_obj is None:
                 new_obj = sr.to_frame(series_count)
             else:
@@ -565,16 +594,16 @@ def _align_by_and_df(obj, by, how="inner"):
     if new_obj is not None:
         new_obj = new_obj.join(obj, how=how, sort="True")
         columns = new_obj.columns
-        for i in by:
-            if isinstance(i, cudf.Series):
+        for by_col in by:
+            if isinstance(by_col, cudf.Series):
                 sr, sr.name = (
                     cudf.Series(new_obj[columns[series_count]]),
-                    i.name,
+                    by_col.name,
                 )
                 new_by.append(sr)
                 series_count += 1
             else:
-                new_by.append(i)
+                new_by.append(by_col)
 
         new_obj = new_obj[columns[series_count::]]
     else:
