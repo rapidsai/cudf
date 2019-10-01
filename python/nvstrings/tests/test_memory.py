@@ -5,8 +5,9 @@ from utils import assert_eq
 import nvstrings
 
 
-def test_from_csv():
-    tweets = nvstrings.from_csv("tests/data/tweets.csv", 7)
+def test_from_csv(datadir):
+    fname = str(datadir / "tweets.csv")
+    tweets = nvstrings.from_csv(fname, 7)
     got = tweets[:5]
     expected = [
         "@Bill_Porter nice to know that your site is back :-)",  # noqa E501

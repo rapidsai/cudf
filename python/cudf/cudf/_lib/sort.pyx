@@ -14,7 +14,7 @@ import pyarrow as pa
 
 from libc.stdint cimport uintptr_t, int8_t
 from libc.stdlib cimport malloc, free
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
