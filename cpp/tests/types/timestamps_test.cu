@@ -55,15 +55,16 @@ TYPED_TEST_CASE(TimestampColumnTest, cudf::test::TimestampTypes);
 
 TYPED_TEST(TimestampColumnTest, TimestampDurationsMatchPrimitiveRepresentation) {
 
+  using namespace cudf::test;
+  using namespace simt::std::chrono;
   using Rep = typename TypeParam::rep;
   using Period = typename TypeParam::period;
-  using time_point_ms = cudf::test::time_point_ms;
 
-  auto start = simt::std::chrono::milliseconds(-2500000000000); // Sat, 11 Oct 1890 19:33:20 GMT
-  auto stop_ = simt::std::chrono::milliseconds( 2500000000000); // Mon, 22 Mar 2049 04:26:40 GMT
-  auto test_timestamps = cudf::test::generate_timestamps<Rep, Period>(this->size(),
-                                                                      time_point_ms(start),
-                                                                      time_point_ms(stop_));
+  auto start = milliseconds(-2500000000000); // Sat, 11 Oct 1890 19:33:20 GMT
+  auto stop_ = milliseconds( 2500000000000); // Mon, 22 Mar 2049 04:26:40 GMT
+  auto test_timestamps = generate_timestamps<Rep, Period>(this->size(),
+                                                          time_point_ms(start),
+                                                          time_point_ms(stop_));
 
   auto primitive_type = cudf::data_type{cudf::exp::type_to_id<Rep>()};
 
@@ -125,22 +126,23 @@ struct compare_timestamp_elements {
 
 TYPED_TEST(TimestampColumnTest, TimestampsCanBeComparedInDeviceCode) {
 
+  using namespace cudf::test;
+  using namespace simt::std::chrono;
   using Rep = typename TypeParam::rep;
   using Period = typename TypeParam::period;
-  using time_point_ms = cudf::test::time_point_ms;
 
-  auto start_lhs = simt::std::chrono::milliseconds(-2500000000000); // Sat, 11 Oct 1890 19:33:20 GMT
-  auto start_rhs = simt::std::chrono::milliseconds(-2400000000000); // Tue, 12 Dec 1893 05:20:00 GMT
-  auto stop_lhs_ = simt::std::chrono::milliseconds( 2500000000000); // Mon, 22 Mar 2049 04:26:40 GMT
-  auto stop_rhs_ = simt::std::chrono::milliseconds( 2600000000000); // Wed, 22 May 2052 14:13:20 GMT
+  auto start_lhs = milliseconds(-2500000000000); // Sat, 11 Oct 1890 19:33:20 GMT
+  auto start_rhs = milliseconds(-2400000000000); // Tue, 12 Dec 1893 05:20:00 GMT
+  auto stop_lhs_ = milliseconds( 2500000000000); // Mon, 22 Mar 2049 04:26:40 GMT
+  auto stop_rhs_ = milliseconds( 2600000000000); // Wed, 22 May 2052 14:13:20 GMT
 
-  auto test_timestamps_lhs = cudf::test::generate_timestamps<Rep, Period>(this->size(),
-                                                                          time_point_ms(start_lhs),
-                                                                          time_point_ms(stop_lhs_));
+  auto test_timestamps_lhs = generate_timestamps<Rep, Period>(this->size(),
+                                                              time_point_ms(start_lhs),
+                                                              time_point_ms(stop_lhs_));
 
-  auto test_timestamps_rhs = cudf::test::generate_timestamps<Rep, Period>(this->size(),
-                                                                          time_point_ms(start_rhs),
-                                                                          time_point_ms(stop_rhs_));
+  auto test_timestamps_rhs = generate_timestamps<Rep, Period>(this->size(),
+                                                              time_point_ms(start_rhs),
+                                                              time_point_ms(stop_rhs_));
 
   auto timestamp_lhs_col = cudf::make_timestamp_column(this->type(), this->size(),
                                                        cudf::mask_state::ALL_VALID,
