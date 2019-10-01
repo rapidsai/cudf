@@ -38,6 +38,7 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2869 Add `cudf.CategoricalDtype`
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
@@ -131,6 +132,7 @@
 - PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2854 Fix column creation from ephemeral objects exposing __cuda_array_interface__
 - PR #2860 Fix boolean indexing when the result is a single row
 - PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.

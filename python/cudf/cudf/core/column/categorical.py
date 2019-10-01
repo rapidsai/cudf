@@ -5,11 +5,11 @@ import pickle
 import numpy as np
 import pandas as pd
 import pyarrow as pa
-from pandas.core.dtypes.dtypes import CategoricalDtype
 
 import cudf._lib as libcudf
 from cudf.core.buffer import Buffer
 from cudf.core.column import column
+from cudf.core.dtypes import CategoricalDtype
 from cudf.utils import cudautils, utils
 
 
@@ -112,7 +112,10 @@ class CategoricalAccessor(object):
                 # mutate inplace if inplace=True
                 data._categories = new_categories
                 ordered = kwargs.get("ordered", self.ordered)
-                data._dtype = CategoricalDtype(ordered=ordered)
+                data._dtype = CategoricalDtype(
+                    categories=column.as_column(new_categories),
+                    ordered=ordered,
+                )
         elif not self._categories_equal(new_categories, **kwargs):
             data = self._set_categories(new_categories, **kwargs)
         if data is not None:
@@ -232,7 +235,9 @@ class CategoricalColumn(column.TypedColumnBase):
             else column.column_empty(0, np.dtype("object"), masked=False)
         )
 
-        dtype = CategoricalDtype(ordered=ordered)
+        dtype = CategoricalDtype(
+            categories=column.as_column(categories), ordered=ordered
+        )
         kwargs.update({"dtype": dtype})
         super(CategoricalColumn, self).__init__(**kwargs)
         self._categories = categories
