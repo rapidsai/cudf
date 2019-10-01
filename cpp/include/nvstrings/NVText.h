@@ -144,6 +144,24 @@ public:
     static unsigned int edit_distance( distance_type algo, NVStrings& strs1, NVStrings& strs2, unsigned int* results, bool devmem=true );
 
     /**
+     * @brief Compute the edit distance between each pair of strings in given nvstrings object
+     * @param algorithm The edit distance algorithm to use for the computation.
+        Only `levenshtein` algorithm is supported yet.
+     * @param strings Strings to process.
+     * @result [in,out] results Array of distances, one per each pair of strings.
+     * @param device_memory True if results in device memory.
+     * @return 0 if successful.
+     *
+     * Exceptional cases for the edit_distance_matrix function are:
+     * @throws cudf::logic_error when `algorithm != levenshtein`
+     * @throws cudf::logic_error when `results == nullptr`
+     */
+    static unsigned int edit_distance_matrix( distance_type algorithm,
+                                              NVStrings& strings,
+                                              unsigned int* results,
+                                              bool device_memory=true );
+
+    /**
      * @brief Converts tokenized list of strings into instance with ngrams.
      * @param strs Tokens to make into ngrams.
      * @param ngrams The 'n' in ngrams. Example, use 2 for bigrams, 3 for trigrams, etc.
