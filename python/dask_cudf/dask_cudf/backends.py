@@ -33,3 +33,27 @@ def concat_cudf(
     assert axis == 0
     assert join == "outer"
     return cudf.concat(dfs)
+
+
+try:
+
+    from dask.dataframe.methods import group_split, hash_df
+
+    @hash_df.register(cudf.DataFrame)
+    def hash_df_cudf(dfs):
+        return dfs.hash_columns()
+
+    @hash_df.register(cudf.Index)
+    def hash_df_cudf_index(ind):
+        from cudf.core.column import column, numerical
+
+        cols = [column.as_column(ind)]
+        return cudf.Series(numerical.column_hash_values(*cols))
+
+    @group_split.register(cudf.DataFrame)
+    def group_split_cudf(df, c, k):
+        return df.scatter_by_map(c, map_size=k)
+
+
+except ImportError:
+    pass

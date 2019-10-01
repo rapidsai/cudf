@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+#include <cstdlib>
+#include <fstream>
+#include <iostream>
+#include <string>
+#include <vector>
+
 #include <cudf/cudf.h>
 #include <cudf/unary.hpp>
 #include <nvstrings/NVStrings.h>
@@ -23,11 +29,7 @@
 #include <tests/io/io_test_utils.hpp>
 #include <tests/utilities/cudf_test_fixtures.h>
 
-#include <cstdlib>
-#include <fstream>
-#include <iostream>
-#include <vector>
-#include <string>
+#include <arrow/io/api.h>
 
 TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
     ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
@@ -717,8 +719,8 @@ TEST_F(CsvTest, BlanksAndComments)
     }
 }
 
-TEST_P(CsvValueParamTest, EmptySource) {
-  const std::string fname = temp_env->get_temp_dir() + "EmptySource.csv";
+TEST_P(CsvValueParamTest, EmptyFileSource) {
+  const std::string fname = temp_env->get_temp_dir() + "EmptyFileSource.csv";
 
   std::ofstream outfile{fname, std::ofstream::out};
   outfile << GetParam();
@@ -731,6 +733,28 @@ TEST_P(CsvValueParamTest, EmptySource) {
 }
 INSTANTIATE_TEST_CASE_P(CsvReader, CsvValueParamTest,
                         testing::Values("", "\n"));
+
+TEST_F(CsvTest, ArrowFileSource) {
+  const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
+
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "A\n9\n8\n7\n6\n5\n4\n3\n2\n";
+  outfile.close();
+  ASSERT_TRUE(checkFile(fname));
+
+  std::shared_ptr<arrow::io::ReadableFile> infile;
+  ASSERT_TRUE(arrow::io::ReadableFile::Open(fname, &infile).ok());
+
+  cudf::csv_read_arg args(cudf::source_info{infile});
+  args.dtype = {"int8"};
+  const auto df = cudf::read_csv(args);
+
+  EXPECT_EQ(df.num_columns(), static_cast<gdf_size_type>(args.dtype.size()));
+  ASSERT_EQ(df.get_column(0)->dtype, GDF_INT8);
+
+  const auto col = gdf_host_column<int8_t>(df.get_column(0));
+  EXPECT_THAT(col.hostdata(), ::testing::ElementsAre(9, 8, 7, 6, 5, 4, 3, 2));
+}
 
 TEST_F(CsvTest, Writer)
 {

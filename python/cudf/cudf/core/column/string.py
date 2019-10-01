@@ -1,15 +1,15 @@
 # Copyright (c) 2019, NVIDIA CORPORATION.
 
+import functools
 import pickle
 import warnings
 
-import numba.cuda
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf._lib.nvtx import nvtx_range_pop, nvtx_range_push
@@ -63,8 +63,9 @@ class StringMethods(object):
             passed_attr = getattr(self._parent._data, attr)
             if callable(passed_attr):
 
+                @functools.wraps(passed_attr)
                 def wrapper(*args, **kwargs):
-                    ret = getattr(self._parent._data, attr)(*args, **kwargs)
+                    ret = passed_attr(*args, **kwargs)
                     if isinstance(ret, nvstrings.nvstrings):
                         ret = Series(
                             column.as_column(ret),
@@ -78,6 +79,10 @@ class StringMethods(object):
                 return passed_attr
         else:
             raise AttributeError(attr)
+
+    def __dir__(self):
+        keys = dir(type(self))
+        return set(keys + dir(self._parent._data))
 
     def len(self):
         """
@@ -640,19 +645,6 @@ class StringColumn(column.TypedColumnBase):
                 dtype = sheader["dtype"]
                 frame = np.frombuffer(frame, dtype=dtype)
                 frame = cudautils.to_device(frame)
-            elif not (
-                isinstance(frame, np.ndarray)
-                or numba.cuda.driver.is_device_memory(frame)
-            ):
-                # this is probably a ucp_py.BufferRegion memory object
-                # check the header for info -- this should be encoded from
-                # serialization process.  Lastly, `typestr` and `shape` *must*
-                # manually set *before* consuming the buffer as a DeviceNDArray
-                sheader = header["subheaders"][i]
-                frame.typestr = sheader.get("dtype", "B")
-                frame.shape = sheader.get("shape", len(frame))
-                frame = np.frombuffer(frame, dtype=dtype)
-                frame = cudautils.to_device(frame)
 
             arrays.append(libcudf.cudf.get_ctype_ptr(frame))
 
@@ -797,17 +789,23 @@ class StringColumn(column.TypedColumnBase):
     @property
     def is_monotonic_increasing(self):
         if not hasattr(self, "_is_monotonic_increasing"):
-            self._is_monotonic_increasing = _string_column_binop(
-                self[1:], self[:-1], "ge"
-            ).all()
+            if self.has_null_mask:
+                self._is_monotonic_increasing = False
+            else:
+                self._is_monotonic_increasing = libcudf.issorted.issorted(
+                    columns=[self]
+                )
         return self._is_monotonic_increasing
 
     @property
     def is_monotonic_decreasing(self):
         if not hasattr(self, "_is_monotonic_decreasing"):
-            self._is_monotonic_decreasing = _string_column_binop(
-                self[1:], self[:-1], "le"
-            ).all()
+            if self.has_null_mask:
+                self._is_monotonic_decreasing = False
+            else:
+                self._is_monotonic_decreasing = libcudf.issorted.issorted(
+                    columns=[self], descending=[1]
+                )
         return self._is_monotonic_decreasing
 
     @property
