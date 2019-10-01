@@ -1,6 +1,6 @@
 import pickle
+import types
 
-import numba.cuda
 import numpy as np
 
 import rmm
@@ -27,9 +27,7 @@ class Buffer(object):
         mem = rmm.device_array(0, dtype=dtype)
         return cls(mem, size=0, capacity=0)
 
-    def __init__(
-        self, mem, size=None, capacity=None, categorical=False, header=None
-    ):
+    def __init__(self, mem, size=None, capacity=None, categorical=False):
         if size is None:
             if categorical:
                 size = len(mem)
@@ -42,22 +40,6 @@ class Buffer(object):
                 size = mem.size
         if capacity is None:
             capacity = size
-        # memoryviews can come from UCX when the length of the DataFrame
-        # is 0 -- for example: joins resulting in empty frames or metadata
-        if isinstance(mem, memoryview):
-            mem = np.frombuffer(mem, dtype=header["dtype"])
-            size = mem.size
-        if not (
-            isinstance(mem, np.ndarray)
-            or numba.cuda.driver.is_device_memory(mem)
-        ):
-            # this is probably a ucp_py.BufferRegion memory object
-            # check the header for info -- this should be encoded from
-            # serialization process.  Lastly, `typestr` and `shape` *must*
-            # manually set *before* consuming the buffer as a DeviceNDArray
-            mem.typestr = header.get("dtype", "B")
-            mem.shape = header.get("shape", len(mem))
-            size = mem.shape[0]
         self.mem = cudautils.to_device(mem)
         _BufferSentry(self.mem).ndim(1)
         self.size = size
@@ -84,10 +66,7 @@ class Buffer(object):
         """
         header = {}
         header["type"] = pickle.dumps(type(self))
-        header["shape"] = self.mem.shape
-        header["strides"] = self.mem.strides
-        header["dtype"] = self.mem.dtype.str
-
+        header["cuda_array_interface"] = self.mem.__cuda_array_interface__
         return header, [self.mem]
 
     @classmethod
@@ -110,7 +89,28 @@ class Buffer(object):
         obj : Buffer
             Returns an instance of Buffer.
         """
-        return Buffer(frames[0], header=header)
+        assert len(frames) == 1, "Use Buffer.serialize() for serialization"
+        iface = header["cuda_array_interface"]
+        if (
+            len(iface["shape"]) == 0 or 0 in iface["shape"]
+        ):  # The array is empty
+            arr = rmm.device_array(
+                iface["shape"], dtype=np.dtype(iface["typestr"])
+            )
+        else:
+            # Updating the data pointer to the frame data.
+            iface["data"] = frames[0].__cuda_array_interface__["data"]
+
+            # We need an object that exposes __cuda_array_interface__
+            _dummy_iface = types.SimpleNamespace()
+            _dummy_iface.__cuda_array_interface__ = iface
+
+            # Allocating a new RMM CUDA array with shape and dtype as specified
+            # in `iface` and copy the frame data to it, which makes the memory
+            # survive until the new Buffer goes out of scope.
+            # TODO: when DASK supports RMM, we can simply return it as is.
+            arr, _ = rmm.auto_device(_dummy_iface)
+        return Buffer(arr)
 
     def __reduce__(self):
         cpumem = self.to_array()
