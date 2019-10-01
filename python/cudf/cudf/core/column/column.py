@@ -10,7 +10,7 @@ import pyarrow as pa
 from numba import cuda, njit
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
@@ -1180,10 +1180,14 @@ def as_column(arbitrary, nan_as_null=True, dtype=None, name=None):
             null_count = nelem - nnz
         else:
             null_count = 0
-
-        return build_column(
+        col = build_column(
             data, dtype=data.dtype, mask=mask, name=name, null_count=null_count
         )
+        # Keep a reference to `arbitrary` with the underlying
+        # RMM device array, so that the memory isn't freed out
+        # from under us
+        col.data.mem._obj = arbitrary
+        return col
 
     elif isinstance(arbitrary, np.ndarray):
         # CUDF assumes values are always contiguous
