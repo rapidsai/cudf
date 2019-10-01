@@ -236,7 +236,7 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def scatter_to_frames(source, maps):
+def scatter_to_frames(source, maps, index=None):
     """
     Scatters rows to 'n' dataframes according to maps
 
@@ -244,6 +244,7 @@ def scatter_to_frames(source, maps):
     ----------
     source : Column or list of Columns
     maps : non-null column with values ranging from 0 to n-1 for each row
+    index : Column or None
 
     Returns
     -------
@@ -252,6 +253,10 @@ def scatter_to_frames(source, maps):
     from cudf.core.column import column
 
     in_cols = source
+    if index:
+        ind_name = index.name
+        index.name = ind_name_tmp = ind_name or "_tmp_index"
+        in_cols.append(index)
     col_count=len(in_cols)
     if col_count == 0:
         return []
@@ -277,7 +282,11 @@ def scatter_to_frames(source, maps):
 
     out_tables = []
     for tab in c_out_tables:
-        out_tables.append(table_to_dataframe(&tab, int_col_names=False))
+        df = table_to_dataframe(&tab, int_col_names=False)
+        if index:
+            df = df.set_index(ind_name_tmp)
+            df.index.name = ind_name
+        out_tables.append(df)
 
     free_table(c_in_table, c_in_cols)
     free_column(c_maps)

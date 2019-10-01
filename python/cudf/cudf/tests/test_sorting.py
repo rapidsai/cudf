@@ -263,7 +263,8 @@ def test_series_nlargest_nelem(nelem):
 
 @pytest.mark.parametrize("map_size", [1, 2, 8])
 @pytest.mark.parametrize("nelem", [1, 10, 100])
-def test_dataframe_scatter_by_map(map_size, nelem):
+@pytest.mark.parametrize("keep", [True, False])
+def test_dataframe_scatter_by_map(map_size, nelem, keep):
 
     strlist = ["dog", "cat", "fish", "bird", "pig", "fox", "cow", "goat"]
     np.random.seed(0)
@@ -281,10 +282,18 @@ def test_dataframe_scatter_by_map(map_size, nelem):
             assert df[col].astype(np.int32).nunique() <= 1
         assert nrows == nelem
 
-    _check_scatter_by_map(df.scatter_by_map("a", map_size), "a")
-    _check_scatter_by_map(df.scatter_by_map("b", map_size), "b")
-    _check_scatter_by_map(df.scatter_by_map("c", map_size), "c")
-    _check_scatter_by_map(df.scatter_by_map("d", map_size), "d")
+    _check_scatter_by_map(
+        df.scatter_by_map("a", map_size, keep_index=keep), "a"
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("b", map_size, keep_index=keep), "b"
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("c", map_size, keep_index=keep), "c"
+    )
+    _check_scatter_by_map(
+        df.scatter_by_map("d", map_size, keep_index=keep), "d"
+    )
 
     if map_size == 2 and nelem == 100:
         df.scatter_by_map("a")  # Auto-detect map_size

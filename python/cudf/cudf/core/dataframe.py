@@ -3808,7 +3808,7 @@ class DataFrame(object):
             chunksize,
         )
 
-    def scatter_by_map(self, map_index, map_size=None):
+    def scatter_by_map(self, map_index, map_size=None, keep_index=True):
         """Scatter to a list of dataframes.
 
         Uses map_index to determine the destination
@@ -3820,6 +3820,8 @@ class DataFrame(object):
             Scatter assignment for each row
         map_size : int
             Length of output list. Must be >= uniques in map_index
+        keep_index : bool
+            Conserve original index values for each row
 
         Returns
         -------
@@ -3855,7 +3857,9 @@ class DataFrame(object):
 
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
-            self._columns, map_index._column
+            self._columns,
+            map_index._column,
+            (self.index.as_column() if keep_index else None),
         )
 
         if map_size:
