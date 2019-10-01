@@ -52,3 +52,10 @@ def read_orc(
         df = cudf.DataFrame.from_arrow(pa_table)
 
     return df
+
+
+@ioutils.doc_to_orc()
+def to_orc(df, fname, compression=None, *args, **kwargs):
+    """{docstring}"""
+
+    libcudf.orc.write_orc(df._cols, fname, compression)
