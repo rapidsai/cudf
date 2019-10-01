@@ -2547,7 +2547,6 @@ class DataFrame(object):
             raise TypeError(
                 "groupby() requires either by or level to be" "specified."
             )
-
         if method == "cudf":
             from cudf.core.groupby.legacy_groupby import Groupby
 
