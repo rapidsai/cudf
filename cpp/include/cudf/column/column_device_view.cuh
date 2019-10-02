@@ -328,7 +328,8 @@ class alignas(16) mutable_column_device_view
    * @return A `unique_ptr` to a `mutable_column_device_view` that makes the
    *data from `source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static auto create(mutable_column_view source_view, cudaStream_t stream = 0);
+  static std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>
+    create(mutable_column_view source_view, cudaStream_t stream = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
