@@ -21,6 +21,7 @@
 #include <memory>
 #include <utility>
 
+#include <cudf/legacy/table.hpp>
 #include "cudf.h"
 
 // Forward declarations
@@ -42,6 +43,24 @@ struct source_info {
   explicit source_info(const char* host_buffer, size_t size)
       : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
   explicit source_info(
+      const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
+      : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Output sink info for `xxx_write_arg` arguments
+ *---------------------------------------------------------------------------**/
+struct sink_info {
+  gdf_input_type type = FILE_PATH;
+  std::string filepath;
+  std::pair<const char*, size_t> buffer;
+  std::shared_ptr<arrow::io::RandomAccessFile> file;
+
+  explicit sink_info(const std::string& file_path)
+      : type(FILE_PATH), filepath(file_path) {}
+  explicit sink_info(const char* host_buffer, size_t size)
+      : type(HOST_BUFFER), buffer(std::make_pair(host_buffer, size)) {}
+  explicit sink_info(
       const std::shared_ptr<arrow::io::RandomAccessFile> arrow_file)
       : type(ARROW_RANDOM_ACCESS_FILE), file(arrow_file) {}
 };
@@ -199,6 +218,17 @@ struct orc_read_arg {
   gdf_time_unit timestamp_unit = TIME_UNIT_NONE;  ///< Resolution of timestamps
 
   explicit orc_read_arg(const source_info& src) : source(src) {}
+};
+
+/**---------------------------------------------------------------------------*
+ * @brief Input arguments to the `write_orc` interface
+ *---------------------------------------------------------------------------**/
+struct orc_write_arg {
+  sink_info sink;                           ///< Info on sink of data
+
+  cudf::table table;                        ///< Table of columns to write
+
+  explicit orc_write_arg(const sink_info& snk) : sink(snk) {}
 };
 
 /**---------------------------------------------------------------------------*

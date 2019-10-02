@@ -1,11 +1,13 @@
 # cuDF 0.10.0 (Date TBD)
 
 ## New Features
+
 - PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2507 Add GPU-accelerated ORC Writer
 - PR #2559 Add Series.tolist()
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2480 Merge `custreamz` codebase into `cudf` repo
@@ -16,6 +18,7 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2777 Add python bindings for porter stemmer measure functionality
 - PR #2781 Add issorted to is_monotonic
 - PR #2685 Add cudf::scatter_to_tables and cython binding
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
@@ -28,6 +31,11 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2869 Add `cudf.CategoricalDtype`
+- PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
+- PR #2655 CuPy-based Series and Dataframe .values property
+- PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
+- PR #2872 Add Java pinned memory pool allocator
 
 ## Improvements
 
@@ -56,10 +64,15 @@
 - PR #2806 CSV Reader: Clean-up row offset operations
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
+- PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
 - PR #2810 cudf::allocate_like can optionally always allocate a mask.
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
+- PR #2832 Using the new Python bindings for UCX
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2868 Use YYMMDD tag in dask-cudf nightly build
+- PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
+- PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2899 Use new RMM API based on Cython
 
 ## Bug Fixes
 
@@ -71,6 +84,7 @@
 - PR #2621 Fixes the floordiv issue of not promoting float type when rhs is 0
 - PR #2611 Types Test: fix static casting from negative int to string
 - PR #2618 IO Readers: Fix datasource memory map failure for multiple reads
+- PR #2628 groupby_without_aggregation non-nullable input table produces non-nullable output
 - PR #2615 fix string category partitioning in java API
 - PR #2641 fix string category and timeunit concat in the java API
 - PR #2649 Fix groupby issue resulting from column_empty bug
@@ -113,7 +127,12 @@
 - PR #2809 Add hash_df and group_split dispatch functions for dask
 - PR #2843 Parquet reader: fix skip_rows when not aligned with page or row_group boundaries
 - PR #2851 Deleted existing dask-cudf/record.txt
+- PR #2854 Fix column creation from ephemeral objects exposing __cuda_array_interface__
+- PR #2860 Fix boolean indexing when the result is a single row
+- PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
+- PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
+- PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 
 
 # cuDF 0.9.0 (21 Aug 2019)

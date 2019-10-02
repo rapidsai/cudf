@@ -97,4 +97,21 @@ cudaError_t gpu_debrotli(gpu_inflate_input_s *inputs,
                          size_t scratch_size, int count = 1,
                          cudaStream_t stream = (cudaStream_t)0);
 
+
+/**
+ * @brief Interface for compressing data with Snappy
+ *
+ * Multiple, independent chunks of compressed data can be compressed by using
+ * separate gpu_inflate_input_s/gpu_inflate_status_s pairs for each chunk.
+ *
+ * @param[in] inputs List of input argument structures
+ * @param[out] outputs List of output status structures
+ * @param[in] count Number of input/output structures, default 1
+ * @param[in] stream CUDA stream to use, default 0
+ **/
+cudaError_t gpu_snap(gpu_inflate_input_s *inputs,
+                     gpu_inflate_status_s *outputs, int count = 1,
+                     cudaStream_t stream = (cudaStream_t)0);
+
+
 #endif  // _GPUINFLATE_H_

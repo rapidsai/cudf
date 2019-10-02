@@ -116,7 +116,9 @@ set(HASH_GROUPBY_TEST_SRC
 ConfigureTest(HASH_GROUPBY_TEST "${HASH_GROUPBY_TEST_SRC}")
 
 set(GROUPBY_WO_AGG_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/groupby_wo_agg_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/groupby/without_agg/single_column_groupby.cu"
+    )
 
 ConfigureTest(GROUPBY_WO_AGG_TEST "${GROUPBY_WO_AGG_TEST_SRC}")
 
@@ -282,11 +284,15 @@ set(CSV_TEST_SRC
 set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(ORC_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
+ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
