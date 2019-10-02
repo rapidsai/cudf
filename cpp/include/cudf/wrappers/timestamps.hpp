@@ -66,4 +66,10 @@ using timestamp_us = detail::timestamp<simt::std::chrono::duration<int64_t, simt
  *---------------------------------------------------------------------------**/
 using timestamp_ns = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::nano>>;
 
+static_assert(sizeof(timestamp_D) == sizeof(typename timestamp_D::rep), "");
+static_assert(sizeof(timestamp_s) == sizeof(typename timestamp_s::rep), "");
+static_assert(sizeof(timestamp_ms) == sizeof(typename timestamp_ms::rep), "");
+static_assert(sizeof(timestamp_us) == sizeof(typename timestamp_us::rep), "");
+static_assert(sizeof(timestamp_ns) == sizeof(typename timestamp_ns::rep), "");
+
 }  // cudf
