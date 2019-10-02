@@ -12,7 +12,8 @@ endif()
 add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/cudf_test_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu")
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu")
 
 target_link_libraries(cudftestutil cudf)
 
@@ -93,6 +94,15 @@ set(LEGACY_COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/legacy/column_test.cu")
 
 ConfigureTest(LEGACY_COLUMN_TEST "${LEGACY_COLUMN_TEST_SRC}")
+
+###################################################################################################
+# - column tests ----------------------------------------------------------------------------------
+
+set(COLUMN_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_test.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
+
+ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
@@ -284,11 +294,15 @@ set(CSV_TEST_SRC
 set(JSON_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/io/json/json_test.cpp"
     "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
+set(ORC_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/orc/orc_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/io/io_test_utils.cpp")
 
 ConfigureTest(DECOMPRESSION_TEST "${DECOMPRESSION_TEST_SRC}")
 ConfigureTest(AVRO_TEST "${AVRO_TEST_SRC}")
 ConfigureTest(CSV_TEST "${CSV_TEST_SRC}")
 ConfigureTest(JSON_TEST "${JSON_TEST_SRC}")
+ConfigureTest(ORC_TEST "${ORC_TEST_SRC}")
 
 ###################################################################################################
 # - sort tests ------------------------------------------------------------------------------------
@@ -301,11 +315,11 @@ ConfigureTest(SORT_TEST "${SORT_TEST_SRC}")
 ###################################################################################################
 # - types tests -----------------------------------------------------------------------------------
 
-set(TYPES_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/types_test.cpp"
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/dispatcher_test.cu")
+set(LEGACY_TYPES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/legacy/types_test.cpp"
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/legacy/dispatcher_test.cu")
 
-ConfigureTest(TYPES_TEST "${TYPES_TEST_SRC}")
+ConfigureTest(LEGACY_TYPES_TEST "${LEGACY_TYPES_TEST_SRC}")
 
 ###################################################################################################
 # - nvcategory tests -------------------------------------------------------------------------------
@@ -380,12 +394,12 @@ set(TRANSPOSE_TEST_SRC
 ConfigureTest(TRANSPOSE_TEST "${TRANSPOSE_TEST_SRC}")
 
 ###################################################################################################
-# - table tests -----------------------------------------------------------------------------------
+# - legacy table tests -----------------------------------------------------------------------------------
 
-set(TABLE_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/table/table_tests.cu")
+set(LEGACY_TABLE_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/table/legacy/table_tests.cu")
 
-ConfigureTest(TABLE_TEST "${TABLE_TEST_SRC}")
+ConfigureTest(LEGACY_TABLE_TEST "${LEGACY_TABLE_TEST_SRC}")
 ###################################################################################################
 # - device table tests -----------------------------------------------------------------------------------
 
@@ -444,6 +458,38 @@ set(SEARCH_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/search/search_test.cu")
 
 ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
+
+###################################################################################################
+# - traits test -----------------------------------------------------------------------------------
+
+set(TRAITS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/traits_test.cpp")
+
+ConfigureTest(TRAITS_TEST "${TRAITS_TEST_SRC}")
+
+###################################################################################################
+# - factories test -----------------------------------------------------------------------------------
+
+set(FACTORIES_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/column/factories_test.cpp")
+
+ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
+
+###################################################################################################
+# - dispatcher test -----------------------------------------------------------------------------------
+
+set(DISPATCHER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/types/type_dispatcher_test.cu")
+
+ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
+
+###################################################################################################
+# - bitmask tests ---------------------------------------------------------------------------------
+
+set(BITMASK_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/bitmask/count_bitmask_tests.cu")
+
+ConfigureTest(BITMASK_TEST "${BITMASK_TEST_SRC}")
 
 ###################################################################################################
 ### enable testing ################################################################################
