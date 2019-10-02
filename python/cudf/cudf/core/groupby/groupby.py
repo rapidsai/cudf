@@ -135,13 +135,13 @@ class DataFrameGroupBy(_Groupby):
             return self.__getattr__(arg)
         else:
             arg = list(arg)
-            by_list = []
-            for by_name, by in zip(
-                self._groupby.key_names, self._groupby.key_columns
-            ):
-                by_list.append(cudf.Series(by, name=by_name))
+            by = None
+            if self._groupby.level is None:
+                by = self._groupby.key_columns
+
             return self._df[arg].groupby(
-                by_list,
+                by=by,
+                level=self._groupby.level,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
                 dropna=self._groupby.dropna,
@@ -169,7 +169,12 @@ class DataFrameGroupBy(_Groupby):
 
     def quantile(self, q=0.5, interpolation="linear"):
         # Get Key_cols from _GroupbyHelper. It's generated at init.
-        key_cols = [sr._column for sr in self._groupby.key_columns]
+        key_cols = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self._groupby.key_columns
+        ]
         # Do the things that'll make it generate the value columns
         self._groupby.normalize_agg("quantile")
         self._groupby.normalize_values()
@@ -223,7 +228,7 @@ class _GroupbyHelper(object):
         header["as_index"] = self.as_index
         header["sort"] = self.sort
 
-        key_columns = [sr._column for sr in self.key_columns]
+        key_columns = self.key_columns
         key_columns_header, key_columns_frames = serialize_columns(key_columns)
 
         header["key_columns"] = key_columns_header
@@ -304,7 +309,6 @@ class _GroupbyHelper(object):
             key_name = by
             key_column = self.obj[by]
         else:
-            by = cudf.Series(by)
             if len(by) != len(self.obj):
                 raise NotImplementedError(
                     "cuDF does not support arbitrary series index lengths "
@@ -322,7 +326,12 @@ class _GroupbyHelper(object):
         self.normalize_values()
         aggs_as_list = self.get_aggs_as_list()
 
-        key_columns = [sr._column for sr in self.key_columns]
+        key_columns = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self.key_columns
+        ]
 
         out_key_columns, out_value_columns = _groupby_engine(
             key_columns,
@@ -597,7 +606,7 @@ def _align_by_and_df(obj, by, how="inner"):
 
     series_count = 0
     for by_col in by:
-        if not is_scalar(by_col):
+        if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
             sr = by_col
             if not isinstance(by_col, cudf.Series):
                 sr = cudf.Series(by_col)
@@ -614,7 +623,7 @@ def _align_by_and_df(obj, by, how="inner"):
         new_obj = new_obj.join(obj, how=how, sort="True")
         columns = new_obj.columns
         for by_col in by:
-            if not is_scalar(by_col):
+            if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
                 sr, sr.name = (
                     cudf.Series(new_obj[columns[series_count]]),
                     by_col.name,
