@@ -169,7 +169,7 @@ class DataFrameGroupBy(_Groupby):
 
     def quantile(self, q=0.5, interpolation="linear"):
         # Get Key_cols from _GroupbyHelper. It's generated at init.
-        key_cols = self._groupby.key_columns
+        key_cols = [sr._column for sr in self._groupby.key_columns]
         # Do the things that'll make it generate the value columns
         self._groupby.normalize_agg("quantile")
         self._groupby.normalize_values()
@@ -223,9 +223,8 @@ class _GroupbyHelper(object):
         header["as_index"] = self.as_index
         header["sort"] = self.sort
 
-        key_columns_header, key_columns_frames = serialize_columns(
-            self.key_columns
-        )
+        key_columns = [sr._column for sr in self.key_columns]
+        key_columns_header, key_columns_frames = serialize_columns(key_columns)
 
         header["key_columns"] = key_columns_header
         frames.extend(key_columns_frames)
@@ -303,7 +302,7 @@ class _GroupbyHelper(object):
         if is_scalar(by):
             self.df_key_names.append(by)
             key_name = by
-            key_column = self.obj[by]._column
+            key_column = self.obj[by]
         else:
             by = cudf.Series(by)
             if len(by) != len(self.obj):
@@ -312,7 +311,7 @@ class _GroupbyHelper(object):
                     "for groupby"
                 )
             key_name = by.name
-            key_column = by._column
+            key_column = by
         return key_name, key_column
 
     def compute_result(self, agg):
@@ -323,8 +322,10 @@ class _GroupbyHelper(object):
         self.normalize_values()
         aggs_as_list = self.get_aggs_as_list()
 
+        key_columns = [sr._column for sr in self.key_columns]
+
         out_key_columns, out_value_columns = _groupby_engine(
-            self.key_columns,
+            key_columns,
             self.value_columns,
             aggs_as_list,
             self.sort,
