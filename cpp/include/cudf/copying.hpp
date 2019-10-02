@@ -169,54 +169,101 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
                 gdf_index_type in_begin);
 
 /**
- * @brief Creates a new `table` as if an in-place scatter from a `source` table 
+ * @brief Creates a new `table` as if an in-place scatter from a `source` table
  * was performed on the `target` table.
  *
- * It is the user's reponsibility to free the device memory allocated in the 
+ * It is the user's reponsibility to free the device memory allocated in the
  * returned table `destination_table`.
  *
  * The `source_table` and the `target_table` must have equal numbers of columns.
  *
- * The datatypes between coresponding columns in the source and target columns 
+ * The datatypes between coresponding columns in the source and target columns
  * must be the same.
  *
- * The number of rows in the scatter_map must equal the number of rows in
+ * The number of elements in the `scatter_map` must equal the number of rows in
  * the source columns.
  *
- * If any index in scatter_map is outside the range of [0, target.num_rows()), 
- * the result is undefined.
+ * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `destination_table`.
  *
- * If the same index appears more than once in scatter_map, the result is
+ * If the same index appears more than once in `scatter_map`, the result is
  * undefined.
- * 
- * A column in the output will only be nullable if: 
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the destination table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * A column in the output will only be nullable if:
  * - Its corresponding column in `target` is nullable
- * - Its corresponding column in `source` has `null_count > 0` 
+ * - Its corresponding column in `source` has `null_count > 0`
  *
  * @Param[in] source The columns whose rows will be scattered
- * @Param[in] scatter_map An array that maps rows in the input columns
- * to rows in the output columns.
- * @Param[in] target The table to copy and then perform an in-place scatter 
+ * @Param[in] scatter_map A non-nullable column of integral indices that map rows
+ * in the input columns to rows in the output columns.
+ * @Param[in] target The table to copy and then perform an in-place scatter
  * into the copy.
+ * @Param[in] check_bounds Optionally perform bounds checking on the values
+ * of `scatter_map` and throw an error if any of its values are out of bounds.
+ * @return[out] The result of the scatter
+ */
+table scatter(table const& source, gdf_column const& scatter_map,
+	      table const& target, bool check_bounds = false);
+
+/**
+ * @brief Creates a new `table` as if an in-place scatter from a `source` table
+ * was performed on the `target` table.
+ *
+ * It is the user's reponsibility to free the device memory allocated in the
+ * returned table `destination_table`.
+ *
+ * The `source_table` and the `target_table` must have equal numbers of columns.
+ *
+ * The datatypes between coresponding columns in the source and target columns
+ * must be the same.
+ *
+ * The number of elements in the `scatter_map` must equal the number of rows in
+ * the source columns.
+ *
+ * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `destination_table`.
+ *
+ * If the same index appears more than once in `scatter_map`, the result is
+ * undefined.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `scatter_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the destination table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * A column in the output will only be nullable if:
+ * - Its corresponding column in `target` is nullable
+ * - Its corresponding column in `source` has `null_count > 0`
+ *
+ * @Param[in] source The columns whose rows will be scattered
+ * @Param[in] scatter_map An array of integral indices that map rows
+ * in the input columns to rows in the output columns.
+ * @Param[in] target The table to copy and then perform an in-place scatter
+ * into the copy.
+ * @Param[in] check_bounds Optionally perform bounds checking on the values
+ * of `scatter_map` and throw an error if any of its values are out of bounds.
  * @return[out] The result of the scatter
  */
 table scatter(table const& source, gdf_index_type const scatter_map[],
-              table const& target);
+	      table const& target, bool check_bounds = false);
 
 /**
  * @brief Creates a new `table` as if scattering a set of `gdf_scalar`
  * values into the rows of a `target` table in-place.
  *
- * `data` and `valid` of a specific row of the target_column is kept 
+ * `data` and `valid` of a specific row of the target_column is kept
  * unchanged if the `scatter_map` does not map to that row.
- * 
+ *
  * The datatypes between coresponding columns in the source and target
  * columns must be the same.
  *
- * If any index in scatter_map is outside the range of [0, num rows in
- * target_columns), the result is undefined.
+ * A negative index `i` in the `scatter_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `destination_table`.
  *
- * If the same index appears more than once in scatter_map, the result is
+ * If the same index appears more than once in `scatter_map`, the result is
  * undefined.
  *
  * If the scalar is null (is_valid == false) and the target column does not
@@ -224,48 +271,108 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
  *
  * @Param[in] source The row to be scattered
  * @Param[in] scatter_map An array that maps to rows in the output columns.
- * @Param[in] target The table to copy and then perform an in-place scatter 
+ * @Param[in] target The table to copy and then perform an in-place scatter
  * into the copy.
  * @return[out] The result of the scatter
- *
  */
 table scatter(std::vector<gdf_scalar> const& source,
-              gdf_index_type const scatter_map[],
-              gdf_size_type num_scatter_rows, table const& target);
+	      gdf_index_type const scatter_map[],
+	      gdf_size_type num_scatter_rows, table const& target);
 
 /**
- * @brief Gathers the rows (including null values) of a set of source columns
- * into a set of destination columns.
- * 
+ * @brief Gathers the specified rows (including null values) of a set of source
+ * columns into a set of destination columns.
+ *
  * The two sets of columns must have equal numbers of columns.
  *
  * Gathers the rows of the source columns into the destination columns according
- * to a gather map such that row "i" in the destination columns will contain
+ * to `gather_map` such that row "i" in the destination columns will contain
  * row "gather_map[i]" from the source columns.
  *
  * The datatypes between coresponding columns in the source and destination
  * columns must be the same.
  *
- * The number of elements in the gather_map must equal the number of rows in the
+ * The number of elements in the `gather_map` must equal the number of rows in the
  * destination columns.
  *
- * If any index in the gather_map is outside the range [0, num rows in
- * source_columns), the result is undefined.
+ * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `source_table`.
  *
- * If the same index appears more than once in gather_map, the result is
- * undefined.
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
  *
  * @param[in] source_table The input columns whose rows will be gathered
- * @param[in] gather_map An array of indices that maps the rows in the source
- * columns to rows in the destination columns.
+ * @param[in] gather_map A non-nullable column of integral indices that maps the
+ * rows in the source columns to rows in the destination columns.
+ * @param[in] check_bounds Optionally perform bounds checking on the values
+ * of `gather_map` and throw an error if any of its values are out of bounds.
  * @param[out] destination_table A preallocated set of columns with a number
  * of rows equal in size to the number of elements in the gather_map that will
  * contain the rearrangement of the source columns based on the mapping. Can be
  * the same as `source_table` (in-place gather).
+ */
+void gather(table const* source_table, gdf_column const& gather_map,
+	    table* destination_table, bool check_bounds=false);
+
+/**
+ * @brief Gathers the specified rows (including null values) of a set of source
+ * columns into a set of destination columns.
  *
+ * The two sets of columns must have equal numbers of columns.
+ *
+ * Gathers the rows of the source columns into the destination columns according
+ * to `gather_map` such that row "i" in the destination columns will contain
+ * row "gather_map[i]" from the source columns.
+ *
+ * The datatypes between coresponding columns in the source and destination
+ * columns must be the same.
+ *
+ * The number of elements in the `gather_map` must equal the number of rows in the
+ * destination columns.
+ *
+ * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `source_table`.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param[in] source_table The input columns whose rows will be gathered
+ * @param[in] gather_map An array of integral indices that maps the
+ * rows in the source columns to rows in the destination columns.
+ * @param[in] check_bounds Optionally perform bounds checking on the values
+ * of `gather_map` and throw an error if any of its values are out of bounds.
+ * @param[out] destination_table A preallocated set of columns with a number
+ * of rows equal in size to the number of elements in the gather_map that will
+ * contain the rearrangement of the source columns based on the mapping. Can be
+ * the same as `source_table` (in-place gather).
  */
 void gather(table const* source_table, gdf_index_type const gather_map[],
-                 table* destination_table);
+	    table* destination_table, bool check_bounds=false);
+
+/**
+ * @brief Gathers the the specified rows (including null values) of a set of columns,
+ * returning the result as a `table`.
+ *
+ * Gathers the rows of the source columns according to `gather_map` such that row "i"
+ * in the resulting table will contain row "gather_map[i]" from the source columns.
+ *
+ * A negative value `i` in the `gather_map` is interpreted as `i+n`, where
+ * `n` is the number of rows in the `source_table`.
+ *
+ * @throws `cudf::logic_error` if `check_bounds == true` and an index exists in
+ * `gather_map` outside the range `[-n, n)`, where `n` is the number of rows in
+ * the source table. If `check_bounds == false`, the behavior is undefined.
+ *
+ * @param[in] source_table The input columns whose rows will be gathered
+ * @param[in] gather_map A non-nullable column of integral indices that maps the
+ * rows in the source columns to rows in the destination columns.
+ * @param[in] check_bounds Optionally perform bounds checking on the values
+ * of `gather_map` and throw an error if any of its values are out of bounds.
+ * @return cudf::table Result of the gather
+ */
+table gather(table const* source_table, gdf_column const& gather_map, bool check_bounds=false);
 
 /**
  * @brief Slices a column (including null values) into a set of columns
