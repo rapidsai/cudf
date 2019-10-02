@@ -14,33 +14,30 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include "../single_column_groupby_test.cuh"
+#include "../../common/type_info.hpp"
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
+#include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "single_column_groupby_test.cuh"
-#include "../common/type_info.hpp"
+#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-static constexpr cudf::groupby::operators op{
-    cudf::groupby::operators::COUNT};
+static constexpr cudf::groupby::operators op{cudf::groupby::operators::COUNT};
 
-template <typename T>
-struct SingleColumnCount : public GdfTest {
+template <typename T> struct SingleColumnCount : public GdfTest {
   using KeyType = T;
 
   // For COUNT, the value type doesn't matter
   using ValueType = int;
 };
 
-template <typename T>
-using column_wrapper = cudf::test::column_wrapper<T>;
+template <typename T> using column_wrapper = cudf::test::column_wrapper<T>;
 
 // TODO: tests for cudf::bool8
 using TestingTypes =
@@ -55,7 +52,8 @@ TYPED_TEST(SingleColumnCount, OneGroupNoNulls) {
   using Value = typename SingleColumnCount<TypeParam>::ValueType;
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   TypeParam key{42};
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
       column_wrapper<Key>{TypeParam(42)}, column_wrapper<ResultValue>{size});
@@ -69,7 +67,8 @@ TYPED_TEST(SingleColumnCount, OneGroupAllNullKeys) {
   TypeParam key{42};
 
   // If all keys are null, then there should be no output
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return false; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
@@ -83,7 +82,8 @@ TYPED_TEST(SingleColumnCount, OneGroupAllNullValues) {
   using ResultValue = cudf::test::expected_result_t<Value, op>;
   TypeParam key{42};
   // If all values are null, then the output count should be a non-null zero
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return false; }),
@@ -101,7 +101,8 @@ TYPED_TEST(SingleColumnCount, OneGroupEvenNullKeys) {
   EXPECT_EQ(size % 2, 0) << "Size must be multiple of 2 for this test.";
   // Odd index keys are null, means COUNT should be size/2
   // Output keys should be nullable
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; },
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); }),
@@ -119,7 +120,8 @@ TYPED_TEST(SingleColumnCount, OneGroupEvenNullValues) {
   EXPECT_EQ(size % 2, 0) << "Size must be multiple of 2 for this test.";
   // Odd index values are null, means COUNT should be size/2
   // Output values should be nullable
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>(size, [key](auto index) { return key; }),
       column_wrapper<Value>(size, [](auto index) { return Value(index); },
                             [](auto index) { return index % 2; }),
@@ -136,7 +138,8 @@ TYPED_TEST(SingleColumnCount, FourGroupsNoNulls) {
 
   // Each value needs to be casted to avoid a narrowing conversion warning for
   // the wrapper types
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
       column_wrapper<Key>{T(1), T(2), T(3), T(4)},
@@ -152,7 +155,8 @@ TYPED_TEST(SingleColumnCount, FourGroupsEvenNullKeys) {
 
   // Odd index keys are null, COUNT should be the count of each key / 2
   // Output keys should be nullable
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(8, [](auto index) { return Value(index); }),
@@ -170,7 +174,8 @@ TYPED_TEST(SingleColumnCount, FourGroupsEvenNullValues) {
 
   // Odd index values are null, COUNT should be the count of each key / 2
   // Output values should be nullable
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>{T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
       column_wrapper<Value>(8, [](auto index) { return Value(index); },
                             [](auto index) { return index % 2; }),
@@ -189,7 +194,8 @@ TYPED_TEST(SingleColumnCount, FourGroupsEvenNullValuesKeys) {
   // Odd index keys and values are null,
   //  COUNT should be the count of each key / 2 Output keys and values should be
   //  nullable
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return index % 2; }),
       column_wrapper<Value>(8, [](auto index) { return Value(index); },
@@ -209,7 +215,8 @@ TYPED_TEST(SingleColumnCount, FourGroupsEvenNullValuesOddNullKeys) {
 
   // Even keys are null & Odd values are null
   // Count for each key should thefore be 0
-  cudf::test::single_column_groupby_test<op>(
+  cudf::groupby::sort::operation operation_with_args{op, nullptr};
+  cudf::test::single_column_groupby_test<op>(std::move(operation_with_args),
       column_wrapper<Key>({T(1), T(1), T(2), T(2), T(3), T(3), T(4), T(4)},
                           [](auto index) { return not(index % 2); }),
       column_wrapper<Value>(8, [](auto index) { return Value(index); },
