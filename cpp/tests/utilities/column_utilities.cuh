@@ -48,10 +48,10 @@ void expect_equal_buffers(void const* lhs, void const* rhs,
  * @param col The column to print
  *---------------------------------------------------------------------------**/
 template <typename Element>
-void print_column(cudf::mutable_column_view col) {
+void print_column(cudf::column_view col) {
   print_typed_column<Element>(
-    static_cast<const Element*>(col.data<Element>()),
-    reinterpret_cast<gdf_valid_type*>(col.null_mask()),
+    col.data<Element>(),
+    reinterpret_cast<gdf_valid_type const*>(col.null_mask()),
     col.size(),
     1);
 }
