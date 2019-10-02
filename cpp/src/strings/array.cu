@@ -89,8 +89,8 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
             return d_offsets[idx+1] - d_offsets[idx];
         },
         thrust::plus<int32_t>());
-    int32_t offset_zero = 0; // need to set the first entry to 0
-    cudaMemcpyAsync( d_new_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
+    // need to set the first entry to 0
+    cudaMemsetAsync( d_new_offsets, 0, sizeof(*d_new_offsets), stream);
 
     // build null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),

@@ -71,8 +71,8 @@ std::unique_ptr<column> make_strings_column(
             return ( item.first ? static_cast<int32_t>(item.second) : 0 );
         },
         thrust::plus<int32_t>() );
-    int32_t offset_zero = 0; // set the first offset to 0
-    cudaMemcpyAsync( d_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
+    // set the first offset to 0
+    cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream);
 
     // create null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),

@@ -104,8 +104,7 @@ void print( strings_column_view strings,
             return bytes+1; // allow for null-terminator on non-null strings
         },
         thrust::plus<int32_t>());
-    int32_t offset_zero = 0;
-    cudaMemcpy( d_output_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice);
+    cudaMemset( d_output_offsets, 0, sizeof(*d_output_offsets));
 
     // build output buffer
     size_t buffer_size = output_offsets.back(); // last element has total size

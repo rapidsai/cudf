@@ -95,8 +95,7 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
         d_offsets+1,
         [d_strings] __device__ (size_type idx) { return d_strings[idx].size_bytes(); },
         thrust::plus<int32_t>());
-    int32_t offset_zero = 0;
-    cudaMemcpyAsync( d_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
+    cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream);
     //
     return offsets_column;
 }

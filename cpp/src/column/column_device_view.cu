@@ -69,14 +69,14 @@ mutable_column_device_view::mutable_column_device_view( mutable_column_view sour
 
 // Construct a unique_ptr that invokes `destroy()` as it's deleter
 std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> column_device_view::create(column_view source, cudaStream_t stream) {
-  //size_type num_descendants{count_descendants(source)};
-  //if( num_descendants > 0 )   {
-  //  CUDF_FAIL("Columns with children are not currently supported.");
-  // }
+  size_type num_children = source.num_children();
+  if( count_descendants(source) > num_children ) {
+    CUDF_FAIL("Columns with grand-children are not currently supported.");
+  }
   auto deleter = [](column_device_view* v) { v->destroy(); };
   std::unique_ptr<column_device_view, decltype(deleter)> p{
       new column_device_view(source), deleter};
-  size_type num_children = source.num_children();
+  
   if( num_children > 0 )
   {
     // ignore grand-children right now
@@ -84,7 +84,6 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
     for( size_type idx=0; idx < num_children; ++idx )
     {
       column_device_view child(source.child(idx));
-      CUDF_EXPECTS( child._num_children==0, "column grand-children not currently supported");
       CUDA_TRY(cudaMemcpyAsync(p->d_children+idx, &child, sizeof(column_device_view),
                                cudaMemcpyHostToDevice, stream));
     }

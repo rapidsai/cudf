@@ -42,8 +42,6 @@ column_view_base::column_view_base(data_type type, size_type size,
     CUDF_EXPECTS(nullptr == data, "EMPTY column should have no data.");
     CUDF_EXPECTS(nullptr == null_mask,
                  "EMPTY column should have no null mask.");
-  //} else if (size > 0) {
-  //  CUDF_EXPECTS(nullptr != data, "Null data pointer.");
   }
 
   CUDF_EXPECTS(offset >= 0, "Invalid offset.");

@@ -465,7 +465,7 @@ ConfigureTest(SEARCH_TEST "${SEARCH_TEST_SRC}")
 set(TRAITS_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/types/traits_test.cpp")
 
-#ConfigureTest(TRAITS_TEST "${TRAITS_TEST_SRC}")
+ConfigureTest(TRAITS_TEST "${TRAITS_TEST_SRC}")
 
 ###################################################################################################
 # - factories test -----------------------------------------------------------------------------------
@@ -473,7 +473,7 @@ set(TRAITS_TEST_SRC
 set(FACTORIES_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/factories_test.cpp")
 
-#ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
+ConfigureTest(FACTORIES_TEST "${FACTORIES_TEST_SRC}")
 
 ###################################################################################################
 # - dispatcher test -----------------------------------------------------------------------------------

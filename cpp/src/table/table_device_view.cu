@@ -48,9 +48,6 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
                 return init + ColumnDeviceView::extent(col);
             });
     
-    //CUDA_TRY(cudaMemcpyAsync(_columns, &(*source_view.begin()),
-    //                         views_size_bytes, cudaMemcpyDefault, stream));
-
     std::vector<int8_t> h_buffer(views_size_bytes);
     ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
     int8_t* h_end = (int8_t*)(h_column + _num_columns);

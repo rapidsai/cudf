@@ -110,8 +110,7 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
             return bytes;
         },
         thrust::plus<int32_t>() );
-    int32_t offset_zero = 0;
-    cudaMemcpyAsync( d_results_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
+    cudaMemsetAsync( d_results_offsets, 0, sizeof(*d_results_offsets), stream);
 
     // build chars column
     size_type bytes = thrust::device_pointer_cast(d_results_offsets)[count];
