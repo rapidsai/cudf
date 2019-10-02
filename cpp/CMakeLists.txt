@@ -330,8 +330,10 @@ add_library(cudf
             src/predicates/is_sorted.cu
             src/sort/digitize.cu
             src/groupby/hash/groupby.cu
+            src/groupby/sort/sort_helper.cu
+            src/groupby/sort/groupby.cu
             src/groupby/groupby_without_aggregation.cu
-            src/groupby/hash/aggregation_requests.cpp
+            src/groupby/common/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
@@ -359,7 +361,6 @@ add_library(cudf
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/quantiles/groupby.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
@@ -421,7 +422,17 @@ add_library(cudf
             src/copying/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
-            src/search/search.cu)
+            src/search/search.cu
+            src/column/column.cu
+            src/column/column_view.cpp
+            src/column/column_device_view.cu
+            src/column/column_factories.cpp
+            src/table/table_view.cpp
+            src/table/table_device_view.cu
+            src/table/table.cpp
+            src/bitmask/null_mask.cu
+            src/sort/sort.cu
+            src/column/legacy/interop.cpp)
 
 # Override RPATH for nvstrings
 set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")

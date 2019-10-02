@@ -4,6 +4,7 @@
 
 - PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2605 Added Sort based groupby in libcudf
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
@@ -31,6 +32,8 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2719 Series covariance and Pearson correlation
+- PR #2207 Beginning of libcudf overhaul: introduce new column and table types
 - PR #2869 Add `cudf.CategoricalDtype`
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
@@ -62,6 +65,7 @@
 - PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2640 Add dask wait/persist exmaple to 10 minute guide
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
 - PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
@@ -71,6 +75,7 @@
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 
@@ -133,6 +138,8 @@
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
+- PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
+- PR #2896 Properly handle `axis` string keywords in `concat`
 
 
 # cuDF 0.9.0 (21 Aug 2019)

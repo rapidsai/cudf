@@ -22,10 +22,11 @@
 
 #include <utility>
 #include <vector>
+#include <array>
+#include <algorithm>
 
 namespace cudf {
 namespace groupby {
-namespace hash {
 
 // Forward declaration
 using cudaStream_t = struct CUstream_st*;
@@ -51,6 +52,40 @@ using AggRequestType = std::pair<gdf_column*, operators>;
  * counter of how many times said operation is needed.
  *---------------------------------------------------------------------------**/
 using SimpleAggRequestCounter = std::pair<AggRequestType, gdf_size_type>;
+
+static constexpr std::array<operators, 4> simple_aggregations = {SUM, MIN, MAX, COUNT};
+
+static constexpr std::array<operators, 2> ordered_aggregations = {MEDIAN, QUANTILE};
+
+// Just an utility function to find the existence of on element in a constexpr array
+template <class T, size_t N>
+constexpr bool array_contains(std::array<T,N> const& haystack, T needle){
+    for(auto i = 0u; i < N; ++i){
+       if(haystack[i] == needle)
+           return true;
+    }
+    return false;
+}
+
+/**---------------------------------------------------------------------------*
+ * @brief  To verify that the input operator is part of simple_aggregations list.
+ * Note that in this kind of aggregators can be computed in a single pass scan.
+ * In the other hand the compound aggregation MEAN need to be computed by simple
+ * ones (SUM and COUNT).
+ *---------------------------------------------------------------------------**/
+inline bool is_simple(operators op) {
+  return array_contains(simple_aggregations, op);
+}
+
+
+/**---------------------------------------------------------------------------*
+ * @brief  To verify that the input operator is part of  ordered_aggregations list.
+ * Ordered aggregation is used to identify other ones like MEDIAN and  QUANTILE,
+ * which cannot be represented as a combination of single-pass aggregations. 
+ *---------------------------------------------------------------------------**/
+inline bool is_ordered(operators op) {
+  return array_contains(ordered_aggregations, op);
+}
 
 /**---------------------------------------------------------------------------*
  * @brief Converts a set of "compound" aggregation requests into a set of
@@ -100,7 +135,6 @@ table compute_original_requests(
     std::vector<SimpleAggRequestCounter> const& simple_requests, table simple_outputs,
     cudaStream_t stream);
 
-}  // namespace hash
 }  // namespace groupby
 }  // namespace cudf
 
