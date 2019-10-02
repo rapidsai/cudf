@@ -65,6 +65,7 @@
 - PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2640 Add dask wait/persist exmaple to 10 minute guide
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
 - PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
