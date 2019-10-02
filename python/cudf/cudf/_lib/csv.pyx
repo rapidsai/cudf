@@ -215,19 +215,19 @@ cpdef read_csv(
 
     # Read data into columns
     cdef cudf_table c_out_table
-    cdef int c_range_offset = byte_range[0] if byte_range is not None else 0
-    cdef int c_range_size = byte_range[1] if byte_range is not None else 0
-    cdef int c_skiprows = skiprows if skiprows is not None else 0
-    cdef int c_skipfooter = skipfooter if skipfooter is not None else 0
-    cdef int c_nrows = nrows if nrows is not None else -1
+    cdef size_t c_range_offset = byte_range[0] if byte_range is not None else 0
+    cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
+    cdef gdf_size_type c_skiprows = skiprows if skiprows is not None else 0
+    cdef gdf_size_type c_skipend = skipfooter if skipfooter is not None else 0
+    cdef gdf_size_type c_nrows = nrows if nrows is not None else -1
     with nogil:
         if c_range_offset !=0 or c_range_size != 0:
             c_out_table = reader.get().read_byte_range(
                 c_range_offset, c_range_size
             )
-        elif c_skiprows != 0 or c_skipfooter != 0 or c_nrows != -1:
+        elif c_skiprows != 0 or c_skipend != 0 or c_nrows != -1:
             c_out_table = reader.get().read_rows(
-                c_skiprows, c_skipfooter, c_nrows
+                c_skiprows, c_skipend, c_nrows
             )
         else:
             c_out_table = reader.get().read()
