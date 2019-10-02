@@ -73,16 +73,21 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
   
   if( num_children > 0 )
   {
-    // ignore grand-children right now
+    // create device memory for the children
     RMM_TRY(RMM_ALLOC(&p->d_children, sizeof(column_device_view)*num_children, stream));
+    // build the children into CPU memory first
     std::vector<uint8_t> buffer(sizeof(column_device_view)*num_children);
     auto h_ptr = buffer.data();
     for( size_type idx=0; idx < num_children; ++idx )
     {
+      // create device-view from view
       column_device_view child(source.child(idx));
+      // copy child into buffer
       memcpy(h_ptr, &child, sizeof(column_device_view));
+      // point to the next array slot
       h_ptr += sizeof(column_device_view);
     }
+    // copy the CPU memory with the children into device memory
     CUDA_TRY(cudaMemcpyAsync(p->d_children, buffer.data(), num_children*sizeof(column_device_view),
                               cudaMemcpyHostToDevice, stream));
     p->_num_children = num_children;
@@ -135,7 +140,7 @@ std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_de
 }
 
 size_type mutable_column_device_view::extent(mutable_column_view source) {
-  size_type data_size = sizeof(column_device_view);
+  size_type data_size = sizeof(mutable_column_device_view);
   for( size_type idx=0; idx < source.num_children(); ++idx )
     data_size += extent(source.child(idx));
   return data_size;

@@ -213,7 +213,7 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
    * using the device memory pointer as a base for child pointers.
    *
    * @param column Column view from which to create this instance.
-   * @param h_ptr Host memory pointer on which to place this instance.
+   * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
   column_device_view( column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr );
@@ -321,7 +321,7 @@ class alignas(16) mutable_column_device_view
    * using the device memory pointer as a base for child pointers.
    *
    * @param column Column view from which to create this instance.
-   * @param h_ptr Host memory pointer on which to place this instance.
+   * @param h_ptr Host memory pointer on which to place any child data.
    * @param d_ptr Device memory pointer on which to base any child pointers.
    *---------------------------------------------------------------------------**/
   mutable_column_device_view( mutable_column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr );
