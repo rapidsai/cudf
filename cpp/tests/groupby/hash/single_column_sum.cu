@@ -21,15 +21,15 @@
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
-#include "type_info.hpp"
+#include "../common/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-static constexpr cudf::groupby::hash::operators op{
-    cudf::groupby::hash::operators::SUM};
+static constexpr cudf::groupby::operators op{
+    cudf::groupby::operators::SUM};
 
 template <typename KV>
 struct SingleColumnSum : public GdfTest {
