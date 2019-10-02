@@ -35,6 +35,7 @@
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2918 Add cudf::column timestamp wrapper types
 
 
 ## Improvements
