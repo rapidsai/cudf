@@ -165,16 +165,16 @@ enum sort_type {
  *
  * @param strings Strings instance for this operation.
  * @param stype Specify what attribute of the string to sort on.
- * @param ascending Sort strings in ascending or descending order.
- * @param nullfirst Sort nulls to the beginning or the end of the new column.
+ * @param order Sort strings in ascending or descending order.
+ * @param null_order Sort nulls to the beginning or the end of the new column.
  * @param stream CUDA stream to use kernels in this method.
  * @param mr Resource for allocating device memory.
  * @return New strings column with sorted elements of this instance.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<cudf::column> sort( strings_column_view strings,
                                     sort_type stype,
-                                    bool ascending=true,
-                                    bool nullfirst=true,
+                                    cudf::order order=cudf::order::ASCENDING,
+                                    cudf::null_order null_order=cudf::null_order::BEFORE,
                                     cudaStream_t stream=0,
                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 

@@ -134,7 +134,8 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
 // return sorted version of the given strings column
 std::unique_ptr<cudf::column> sort( strings_column_view strings,
                                     sort_type stype,
-                                    bool ascending, bool nullfirst,
+                                    cudf::order order,
+                                    cudf::null_order null_order,
                                     cudaStream_t stream,
                                     rmm::mr::device_memory_resource* mr  )
 {
@@ -147,15 +148,15 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
     thrust::device_vector<size_type> indices(count);
     thrust::sequence( execpol->on(stream), indices.begin(), indices.end() );
     thrust::sort( execpol->on(stream), indices.begin(), indices.end(),
-        [d_column, stype, ascending, nullfirst] __device__ (size_type lhs, size_type rhs) {
+        [d_column, stype, order, null_order] __device__ (size_type lhs, size_type rhs) {
             bool lhs_null{d_column.nullable() && d_column.is_null(lhs)};
             bool rhs_null{d_column.nullable() && d_column.is_null(rhs)};
             if( lhs_null || rhs_null )
-                return (nullfirst ? !rhs_null : !lhs_null);
+                return (null_order==cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
             string_view lhs_str = d_column.element<string_view>(lhs);
             string_view rhs_str = d_column.element<string_view>(rhs);
             int cmp = lhs_str.compare(rhs_str);
-            return (ascending ? (cmp<0) : (cmp>0));
+            return (order==cudf::order::ASCENDING ? (cmp<0) : (cmp>0));
         });
 
     // create a column_view as a wrapper of these indices
