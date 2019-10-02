@@ -287,10 +287,8 @@ def scatter_to_frames(source, maps, index=None):
     for tab in c_out_tables:
         df = table_to_dataframe(&tab, int_col_names=False)
         if index:
-            if len(index) > 1:
-                df = df.set_index(ind_names_tmp)
-            else: 
-                df = df.set_index(ind_names_tmp[0])
+            df = df.set_index(ind_names_tmp)
+            if len(index) == 1:
                 df.index.name = ind_names[0]
         out_tables.append(df)
 
