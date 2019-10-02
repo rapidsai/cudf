@@ -243,9 +243,9 @@ def scatter_to_frames(source, maps, index=None):
 
     Parameters
     ----------
-    source : Column or list of Columns
+    source : list of Columns
     maps : non-null column with values ranging from 0 to n-1 for each row
-    index : Column or None
+    index : list of Columns, or None
 
     Returns
     -------
@@ -255,9 +255,11 @@ def scatter_to_frames(source, maps, index=None):
 
     in_cols = source
     if index:
-        ind_name = index.name
-        index.name = ind_name_tmp = ind_name or "_tmp_index"
-        in_cols.append(index)
+        ind_names = [ind.name for ind in index]
+        ind_names_tmp = [(ind_name or "_tmp_index") for ind_name in ind_names]
+        for i in range(len(index)):
+            index[i].name = ind_names_tmp[i]
+            in_cols.append(index[i])
     col_count=len(in_cols)
     if col_count == 0:
         return []
@@ -285,8 +287,11 @@ def scatter_to_frames(source, maps, index=None):
     for tab in c_out_tables:
         df = table_to_dataframe(&tab, int_col_names=False)
         if index:
-            df = df.set_index(ind_name_tmp)
-            df.index.name = ind_name
+            if len(index) > 1:
+                df = df.set_index(ind_names_tmp)
+            else: 
+                df = df.set_index(ind_names_tmp[0])
+                df.index.name = ind_names[0]
         out_tables.append(df)
 
     free_table(c_in_table, c_in_cols)

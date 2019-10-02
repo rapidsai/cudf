@@ -1159,13 +1159,25 @@ class DataFrame(object):
 
         Parameters
         ----------
-        index : Index, Series-convertible, or str
+        index : Index, Series-convertible, str, or list of str
             Index : the new index.
             Series-convertible : values for the new index.
             str : name of column to be used as series
+            list of str : name of columns to be converted to a MultiIndex
         drop : boolean
             whether to drop corresponding column for str index argument
         """
+        # When index is a list of column names
+        if isinstance(index, list):
+            if len(index) > 1:
+                df = self.copy(deep=False)
+                if drop:
+                    df = df.drop(columns=index)
+                return df.set_index(
+                    cudf.MultiIndex.from_frame(self[index], names=index)
+                )
+            index = index[0]
+
         # When index is a column name
         if isinstance(index, str):
             df = self.copy(deep=False)
@@ -3870,11 +3882,17 @@ class DataFrame(object):
                 "Use an integer array/column for better performance."
             )
 
+        if keep_index:
+            if isinstance(self.index, cudf.MultiIndex):
+                index = self.index.to_frame()._columns
+            else:
+                index = [self.index.as_column()]
+        else:
+            index = None
+
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
-            self._columns,
-            map_index._column,
-            (self.index.as_column() if keep_index else None),
+            self._columns, map_index._column, index,
         )
 
         if map_size:
@@ -3887,7 +3905,7 @@ class DataFrame(object):
 
             # Append empty dataframes if map_size > len(tables)
             for i in range(map_size - len(tables)):
-                tables.append(self.iloc[[]])
+                tables.append(cudf.DataFrame(columns=self.columns))
         return tables
 
     def repeat(self, repeats, axis=None):
