@@ -2634,6 +2634,7 @@ def test_ndim():
         np.random.normal(-100, 100, 1000),
         np.random.randint(-50, 50, 1000),
         np.zeros(100),
+        np.repeat([-0.6459412758761901], 100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
     ],
