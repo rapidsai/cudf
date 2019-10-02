@@ -126,12 +126,6 @@ static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
 static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{ detail::types_to_ids<TimestampTypes>() };
-    cudf::DATE32,
-    cudf::TIMESTAMP_SECONDS,
-    cudf::TIMESTAMP_MILLISECONDS,
-    cudf::TIMESTAMP_MICROSECONDS,
-    cudf::TIMESTAMP_NANOSECONDS
-};
 
 /**---------------------------------------------------------------------------*
  * @brief `std::array` of of all non-numeric `cudf::type_id`s
@@ -142,7 +136,7 @@ static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{ detail::types_
 static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
     cudf::EMPTY,
     cudf::BOOL8,
-    cudf::DATE32,
+    cudf::TIMESTAMP_DAYS,
     cudf::TIMESTAMP_SECONDS,
     cudf::TIMESTAMP_MILLISECONDS,
     cudf::TIMESTAMP_MICROSECONDS,

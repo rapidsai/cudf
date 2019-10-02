@@ -75,7 +75,7 @@ constexpr inline bool is_numeric() {
  *
  * "Numeric" types are fundamental integral/floating point types such as `INT*`
  * or `FLOAT*`. Types that wrap a numeric type are not considered numeric, e.g.,
- *`TIMESTAMP` or `DATE32`.
+ *`TIMESTAMP`.
  *
  * @param type The `data_type` to verify
  * @return true `type` is numeric

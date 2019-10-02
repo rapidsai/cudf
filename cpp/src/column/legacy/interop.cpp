@@ -23,15 +23,17 @@ namespace legacy {
 
 data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
     switch(dtype){
-        case GDF_INT8:     return data_type{INT8};
-        case GDF_INT16:    return data_type{INT16};
-        case GDF_INT32:    return data_type{INT32};
-        case GDF_INT64:    return data_type{INT64};
-        case GDF_FLOAT32:  return data_type{FLOAT32};
-        case GDF_FLOAT64:  return data_type{FLOAT64};
-        case GDF_BOOL8:    return data_type{BOOL8};
-        case GDF_DATE32:   return data_type{DATE32};
-        case GDF_CATEGORY: return data_type{CATEGORY};
+        case GDF_INT8:      return data_type{INT8};
+        case GDF_INT16:     return data_type{INT16};
+        case GDF_INT32:     return data_type{INT32};
+        case GDF_INT64:     return data_type{INT64};
+        case GDF_FLOAT32:   return data_type{FLOAT32};
+        case GDF_FLOAT64:   return data_type{FLOAT64};
+        case GDF_BOOL8:     return data_type{BOOL8};
+        case GDF_DATE32:    return data_type{TIMESTAMP_DAYS};
+        case GDF_DATE64:    return data_type{TIMESTAMP_MILLISECONDS};
+        case GDF_TIMESTAMP: return data_type{TIMESTAMP_MILLISECONDS};
+        case GDF_CATEGORY:  return data_type{CATEGORY};
         default:
           CUDF_FAIL("Unsuported gdf_dtype for converion to data_type.");
     }
@@ -39,15 +41,19 @@ data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
 
 gdf_dtype data_type_to_gdf_dtype( data_type type) {
   switch (type.id()) {
-    case INT8:     return GDF_INT8;
-    case INT16:    return GDF_INT16;
-    case INT32:    return GDF_INT32;
-    case INT64:    return GDF_INT64;
-    case FLOAT32:  return GDF_FLOAT32;
-    case FLOAT64:  return GDF_FLOAT64;
-    case BOOL8:    return GDF_BOOL8;
-    case DATE32:   return GDF_DATE32;
-    case CATEGORY: return GDF_CATEGORY;
+    case INT8:                   return GDF_INT8;
+    case INT16:                  return GDF_INT16;
+    case INT32:                  return GDF_INT32;
+    case INT64:                  return GDF_INT64;
+    case FLOAT32:                return GDF_FLOAT32;
+    case FLOAT64:                return GDF_FLOAT64;
+    case BOOL8:                  return GDF_BOOL8;
+    case TIMESTAMP_DAYS:         return GDF_DATE32;
+    case TIMESTAMP_SECONDS:      return GDF_TIMESTAMP;
+    case TIMESTAMP_MILLISECONDS: return GDF_TIMESTAMP;
+    case TIMESTAMP_MICROSECONDS: return GDF_TIMESTAMP;
+    case TIMESTAMP_NANOSECONDS:  return GDF_TIMESTAMP;
+    case CATEGORY:               return GDF_CATEGORY;
     default:
       CUDF_FAIL("Unsupported `data_type` for conversion to `gdf_dtype.");
   }

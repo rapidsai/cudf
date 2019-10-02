@@ -93,7 +93,7 @@ CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
 CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
-CUDF_TYPE_MAPPING(timestamp_D, type_id::DATE32);
+CUDF_TYPE_MAPPING(timestamp_D, type_id::TIMESTAMP_DAYS);
 CUDF_TYPE_MAPPING(timestamp_s, type_id::TIMESTAMP_SECONDS);
 CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
 CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
@@ -218,8 +218,8 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
     case FLOAT64:
       return f.template operator()<typename IdTypeMap<FLOAT64>::type>(
           std::forward<Ts>(args)...);
-    case DATE32:
-      return f.template operator()<typename IdTypeMap<DATE32>::type>(
+    case TIMESTAMP_DAYS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_DAYS>::type>(
           std::forward<Ts>(args)...);
     case TIMESTAMP_SECONDS:
       return f.template operator()<typename IdTypeMap<TIMESTAMP_SECONDS>::type>(
