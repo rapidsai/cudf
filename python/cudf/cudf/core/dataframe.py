@@ -3892,7 +3892,7 @@ class DataFrame(object):
 
         # scatter_to_frames wants a list of columns
         tables = libcudf.copying.scatter_to_frames(
-            self._columns, map_index._column, index,
+            self._columns, map_index._column, index
         )
 
         if map_size:

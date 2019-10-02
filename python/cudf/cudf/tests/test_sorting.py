@@ -274,7 +274,7 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     df["c"] = np.random.randint(map_size, size=nelem)
     df["d"] = df["a"]._column.as_categorical_column(np.int32)
 
-    def _check_scatter_by_map(dfs, col, df_ref):
+    def _check_scatter_by_map(dfs, col):
         assert len(dfs) == map_size
         nrows = 0
         for i, df in enumerate(dfs):
@@ -282,24 +282,21 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
             sr = df[col].astype(np.int32)
             assert sr.nunique() <= 1
             if sr.nunique() == 1:
-                if df[col].dtype != 'O':
+                if df[col].dtype != "O":
                     assert sr[0] == i
-                ind = df[col].index[0]
-                ## Currently Fails for Categroical columns:
-                # assert df[col].loc[ind] == df_ref[col].loc[ind]
         assert nrows == nelem
 
     _check_scatter_by_map(
-        df.scatter_by_map("a", map_size, keep_index=keep), "a", df
+        df.scatter_by_map("a", map_size, keep_index=keep), "a"
     )
     _check_scatter_by_map(
-        df.scatter_by_map("b", map_size, keep_index=keep), "b", df
+        df.scatter_by_map("b", map_size, keep_index=keep), "b"
     )
     _check_scatter_by_map(
-        df.scatter_by_map("c", map_size, keep_index=keep), "c", df
+        df.scatter_by_map("c", map_size, keep_index=keep), "c"
     )
     _check_scatter_by_map(
-        df.scatter_by_map("d", map_size, keep_index=keep), "d", df
+        df.scatter_by_map("d", map_size, keep_index=keep), "d"
     )
 
     if map_size == 2 and nelem == 100:
@@ -310,5 +307,5 @@ def test_dataframe_scatter_by_map(map_size, nelem, keep):
     # Test MultiIndex
     df = df.set_index(["a", "c"])
     _check_scatter_by_map(
-        df.scatter_by_map("b", map_size, keep_index=keep), "b", df
+        df.scatter_by_map("b", map_size, keep_index=keep), "b"
     )
