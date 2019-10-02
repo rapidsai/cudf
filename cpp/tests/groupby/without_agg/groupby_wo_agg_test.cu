@@ -36,7 +36,7 @@
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters_wo.cuh"
-#include "../groupby_test_helpers.cuh"
+#include "groupby_test_helpers.cuh"
 
 // See this header for all valid handling
 #include <bitmask/legacy/legacy_bitmask.hpp>

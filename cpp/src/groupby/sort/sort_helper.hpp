@@ -20,13 +20,15 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
+#include <cudf/groupby.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 
 
 namespace cudf {
-
-namespace detail {
+namespace groupby {
+namespace sort {
+namespace detail { 
 
 /**
  * @brief Helper class for computing sort-based groupby
@@ -39,15 +41,17 @@ namespace detail {
  * 3. Group valid sizes: The number of valid values in each group in a sorted
  *   value column
  */
-struct groupby {
+struct helper {
   using index_vector = rmm::device_vector<gdf_size_type>;
   using bitmask_vector = rmm::device_vector<bit_mask::bit_mask_t>;
   using gdf_col_pointer = std::unique_ptr<gdf_column, std::function<void(gdf_column*)>>;
   using index_vec_pointer = std::unique_ptr<index_vector>;
   using bitmask_vec_pointer = std::unique_ptr<bitmask_vector>;
+  using null_order = cudf::groupby::sort::null_order;
+
 
   /**
-   * @brief Construct a new groupby object
+   * @brief Construct a new helper object
    * 
    * If `include_nulls == false`, then any row in `keys` containing a null value
    * will effectively be discarded. I.e., any values corresponding to discarded
@@ -55,21 +59,27 @@ struct groupby {
    *
    * @param keys table to group by
    * @param include_nulls whether to include null keys in groupby
-   * @param stream used for all the computation in this groupby object
+   * @param null_sort_behavior whether to put nulls before valid values or after
+   * @param keys_pre_sorted if the keys are already sorted
+   * @param stream used for all the computation in this helper object
    */
-  groupby(cudf::table const& keys, bool include_nulls = false,
+  helper(cudf::table const& keys, bool include_nulls = false,
+          null_order null_sort_behavior = null_order::AFTER,
+          bool keys_pre_sorted = false,
           cudaStream_t stream = 0)
   : _keys(keys)
   , _num_keys(-1)
   , _include_nulls(include_nulls)
+  , _null_sort_behavior(null_sort_behavior)
+  , _keys_pre_sorted(keys_pre_sorted)
   , _stream(stream)
   {};
 
-  ~groupby() = default;
-  groupby(groupby const&) = delete;
-  groupby& operator=(groupby const&) = delete;
-  groupby(groupby&&) = default;
-  groupby& operator=(groupby&&) = default;
+  ~helper() = default;
+  helper(helper const&) = delete;
+  helper& operator=(helper const&) = delete;
+  helper(helper&&) = default;
+  helper& operator=(helper&&) = default;
 
   /**
    * @brief Groups a column of values according to `keys` and sorts within each group.
@@ -181,13 +191,16 @@ struct groupby {
   index_vec_pointer   _group_labels;
 
   gdf_size_type       _num_keys;
+  bool                _keys_pre_sorted;
   bool                _include_nulls;
+  null_order          _null_sort_behavior;
 
   cudaStream_t        _stream;
 
   bitmask_vec_pointer _keys_row_bitmask;
 };
 
-} // namespace detail
-  
-} // namespace cudf
+}  // namespace detail
+}  // namespace sort
+}  // namespace groupby
+}  // namespace cudf

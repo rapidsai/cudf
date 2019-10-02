@@ -21,7 +21,7 @@
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
-
+#include <utilities/integer_utils.hpp>
 #include <algorithm>
 
 namespace cudf {
@@ -58,8 +58,15 @@ table::table(gdf_size_type num_rows,
                       gdf_column_view_augmented(col, nullptr, nullptr, num_rows,
                                                 dtype, 0, extra_info),
                      "Invalid column parameters");
+        
+        // Allocation size should be  aligned to 4 bytes. The use of 
+        // `round_up_safe`guarantee correct execution with cuda-memcheck  
+        // for cases when the sizeof(type) is 1 or 2 bytes. 
+        size_t buffer_size = cudf::size_of(dtype) * num_rows;
+        size_t buffer_size_aligned = 
+            cudf::util::round_up_safe((size_t)buffer_size, (size_t)sizeof(int32_t));
 
-        RMM_ALLOC(&col->data, cudf::size_of(dtype) * num_rows, stream);
+        RMM_ALLOC(&col->data, buffer_size_aligned, stream);
         if (allocate_bitmasks) {
           int fill_value = (all_valid) ? 0xff : 0;
 

@@ -40,12 +40,7 @@ def test_array_func_cudf_series(np_ar, func):
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("np_ar", [np.random.random(100)])
 @pytest.mark.parametrize(
-    "func",
-    [
-        lambda x: np.cov(x, x),
-        lambda x: np.dot(x, x),
-        lambda x: np.linalg.norm(x),
-    ],
+    "func", [lambda x: np.dot(x, x), lambda x: np.linalg.norm(x)]
 )
 def test_array_func_missing_cudf_series(np_ar, func):
     cudf_ser = cudf.Series(np_ar)

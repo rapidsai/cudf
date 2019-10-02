@@ -20,15 +20,15 @@
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include "single_column_groupby_test.cuh"
-#include "../common/type_info.hpp"
+#include "../single_column_groupby_test.cuh"
+#include "../../common/type_info.hpp"
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <random>
 
-using namespace cudf::groupby::hash;
+using namespace cudf::groupby::sort;
 using namespace cudf::groupby;
 
 template <typename KV>
@@ -68,6 +68,7 @@ TYPED_TEST(SingleColumnMultiAgg, RepeatedAgg) {
   auto val_col = column_wrapper<Value>(size, [](auto index) { return Value(index); });
   auto expected_key_col = column_wrapper<Key>({key});
   auto expected_val_col = column_wrapper<ResultValue>({sum});
+  
   cudf::test::multi_column_groupby_test(
       cudf::table{key_col.get()}, cudf::table{val_col.get(), val_col.get()},
       {SUM, SUM}, cudf::table{expected_key_col.get()},
