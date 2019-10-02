@@ -4,6 +4,7 @@
 from cudf import core, datasets
 from cudf._version import get_versions
 from cudf.core import DataFrame, Index, MultiIndex, Series, from_pandas, merge
+from cudf.core.dtypes import CategoricalDtype
 from cudf.core.ops import (
     arccos,
     arcsin,
