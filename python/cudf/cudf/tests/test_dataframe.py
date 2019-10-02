@@ -3624,61 +3624,29 @@ def test_tolist_mixed_nulls():
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize(
-    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
+    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64", "str", "category", "datetime64[s]", "datetime64[ms]","datetime64[us]", "datetime64[ns]"]
 )
-def test_df_astype_numeric_to_numeric(dtype, as_dtype):
-    data = [1,2,3]
-    pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
-    gdf = DataFrame.from_pandas(pdf)
+def test_df_astype_numeric_to_all(dtype, as_dtype):
+    if 'int' in dtype:
+        data = [1, 2, None, 4]
+    elif 'float' in dtype:
+        data = [1.0, 2.0, None, 4.0]
 
-    pdf = pdf.astype(as_dtype)
-    gdf = gdf.astype(as_dtype)
-
-
-    assert_eq(pdf, gdf)
-
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-def test_df_astype_numeric_to_numeric_nulls(dtype, as_dtype):
-    data = [1, 2, None, 4]
     gdf = DataFrame()
-    gdf['test'] = Series(data, dtype=dtype)
+    gdf['foo'] = Series(data, dtype=dtype)
+    gdf['bar'] = Series(data, dtype=dtype)
 
     expect = DataFrame()
-    expect['test'] = Series(data, dtype=as_dtype)
-    
+    if as_dtype == 'str':
+        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
+    else:
+        insert_data = Series(data, dtype=as_dtype)
+    expect['foo'] = insert_data
+    expect['bar'] = insert_data
+
     got = gdf.astype(as_dtype)
 
     assert_eq(expect, got)
-
-@pytest.mark.parametrize(
-    "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
-)
-@pytest.mark.parametrize(
-    "as_dtype",
-    [
-        "str",
-        "category",
-        "datetime64[s]",
-        "datetime64[ms]",
-        "datetime64[us]",
-        "datetime64[ns]",
-    ],
-)
-def test_df_astype_numeric_to_other(dtype, as_dtype):
-    data = [1, 2, 3, None, 5]
-    pdf = pd.DataFrame(data, columns=['test'], dtype=dtype)
-    gdf = DataFrame.from_pandas(pdf)
-
-    pdf = pdf.astype(as_dtype)
-    gdf = gdf.astype(as_dtype)
-
-    assert_eq(pdf, gdf)
-    
 
 @pytest.mark.parametrize(
     "as_dtype",
