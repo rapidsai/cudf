@@ -33,8 +33,7 @@ column_device_view::column_device_view(column_view source)
 // Free device memory allocated for children
 void column_device_view::destroy() {
   // TODO Needs to handle grand-children
-  if( d_children )
-    RMM_FREE(d_children,0);
+  RMM_FREE(d_children,0);
   delete this;
 }
 
@@ -75,13 +74,17 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
   if( num_children > 0 )
   {
     // ignore grand-children right now
-    RMM_ALLOC(&p->d_children, sizeof(column_device_view)*num_children, stream);
+    RMM_TRY(RMM_ALLOC(&p->d_children, sizeof(column_device_view)*num_children, stream));
+    std::vector<uint8_t> buffer(sizeof(column_device_view)*num_children);
+    auto h_ptr = buffer.data();
     for( size_type idx=0; idx < num_children; ++idx )
     {
       column_device_view child(source.child(idx));
-      CUDA_TRY(cudaMemcpyAsync(p->d_children+idx, &child, sizeof(column_device_view),
-                               cudaMemcpyHostToDevice, stream));
+      memcpy(h_ptr, &child, sizeof(column_device_view));
+      h_ptr += sizeof(column_device_view);
     }
+    CUDA_TRY(cudaMemcpyAsync(p->d_children, buffer.data(), num_children*sizeof(column_device_view),
+                              cudaMemcpyHostToDevice, stream));
     p->_num_children = num_children;
     cudaStreamSynchronize(stream);
   }
@@ -116,8 +119,7 @@ mutable_column_device_view::mutable_column_device_view( mutable_column_view sour
 
 // Handle freeing children
 void mutable_column_device_view::destroy() {
-  if( mutable_children )
-    RMM_FREE(mutable_children,0);
+  RMM_FREE(mutable_children,0);
   delete this;
 }
 
@@ -132,7 +134,7 @@ std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_de
   return p;
 }
 
-size_type mutable_column_device_view::extent(column_view source) {
+size_type mutable_column_device_view::extent(mutable_column_view source) {
   size_type data_size = sizeof(column_device_view);
   for( size_type idx=0; idx < source.num_children(); ++idx )
     data_size += extent(source.child(idx));

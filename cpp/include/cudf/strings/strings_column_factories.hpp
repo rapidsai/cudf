@@ -37,10 +37,9 @@ namespace cudf {
  * must be a valid device address pointing to `.second` consecutive bytes.
  *
  * @throws std::bad_alloc if device memory allocation fails
- * @throws cudf::logic_error if pointers or sizes are invalid
  *
  * @param strings The pointer/size pair arrays.
- *                Each pointer must be a valid device memory address.
+ *                Each pointer must be a device memory address or `nullptr` (indicating a null string).
  *                The size must be the number of bytes.
  * @param stream Optional stream for use with all memory allocation
  *               and device kernels
@@ -48,7 +47,7 @@ namespace cudf {
  *           allocation of the column's `null_mask` and children.
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> make_strings_column(
-    const rmm::device_vector<thrust::pair<const char*,size_t>>& strings,
+    const rmm::device_vector<thrust::pair<const char*,size_type>>& strings,
     cudaStream_t stream = 0,
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
@@ -59,6 +58,8 @@ std::unique_ptr<column> make_strings_column(
  * The total number of char bytes must not exceed the maximum size of size_type.
  * Use the strings_column_view class to perform strings operations on this type
  * of column.
+ * This function makes a deep copy of the strings, offsets, null_mask to create
+ * a new column.
  *
  * @throws std::bad_alloc if device memory allocation fails
  *
