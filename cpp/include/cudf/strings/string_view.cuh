@@ -62,7 +62,7 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Return the number of bytes in this string
    *---------------------------------------------------------------------------**/
-  __host__ __device__ size_type size() const;
+  __host__ __device__ size_type size_bytes() const;
   /**---------------------------------------------------------------------------*
    * @brief Return the number of characters in this string
    *---------------------------------------------------------------------------**/

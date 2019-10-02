@@ -93,7 +93,7 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(count),
         d_offsets+1,
-        [d_strings] __device__ (size_type idx) { return d_strings[idx].size(); },
+        [d_strings] __device__ (size_type idx) { return d_strings[idx].size_bytes(); },
         thrust::plus<int32_t>());
     int32_t offset_zero = 0;
     cudaMemcpyAsync( d_offsets, &offset_zero, sizeof(int32_t), cudaMemcpyHostToDevice, stream);
@@ -126,7 +126,7 @@ std::unique_ptr<cudf::column> chars_from_string_array(
         [d_strings, d_offsets, d_chars] __device__(size_type idx){
             string_view d_str = d_strings[idx];
             if( !d_str.is_null() )
-                memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size() );
+                memcpy(d_chars + d_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 
     return chars_column;

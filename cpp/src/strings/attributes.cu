@@ -83,7 +83,7 @@ std::unique_ptr<cudf::column> bytes_counts( strings_column_view strings,
                                             cudaStream_t stream,
                                             rmm::mr::device_memory_resource* mr )
 {
-    auto pfn = [] __device__ (const cudf::strings::string_view& d_str) { return d_str.size(); };
+    auto pfn = [] __device__ (const cudf::strings::string_view& d_str) { return d_str.size_bytes(); };
     return counts(strings,pfn,stream,mr);
 }
 

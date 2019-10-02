@@ -117,7 +117,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
             if( d_column.nullable() && d_column.is_null(index) )
                 return;
             string_view d_str = d_column.element<string_view>(index);
-            memcpy(d_chars + d_new_offsets[idx], d_str.data(), d_str.size() );
+            memcpy(d_chars + d_new_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 
     // build children vector

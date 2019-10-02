@@ -98,15 +98,15 @@ std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
             size_type bytes = 0;
             // left-side
             if( !d_str1.is_null() )
-                bytes = d_str1.size();
+                bytes = d_str1.size_bytes();
             else if( !d_narep.is_null() )
-                bytes = d_narep.size();
+                bytes = d_narep.size_bytes();
             // separator
-            bytes += d_separator.size();
+            bytes += d_separator.size_bytes();
             if( !d_str2.is_null() )
-                bytes += d_str2.size();
+                bytes += d_str2.size_bytes();
             else if( !d_narep.is_null() )
-                bytes += d_narep.size();
+                bytes += d_narep.size_bytes();
             return bytes;
         },
         thrust::plus<int32_t>() );

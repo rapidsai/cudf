@@ -37,8 +37,8 @@ namespace detail
  */
 __device__ inline char* copy_string( char* buffer, const string_view& d_string )
 {
-    memcpy( buffer, d_string.data(), d_string.size() );
-    return buffer + d_string.size();
+    memcpy( buffer, d_string.data(), d_string.size_bytes() );
+    return buffer + d_string.size_bytes();
 }
 
 } // namespace detail
