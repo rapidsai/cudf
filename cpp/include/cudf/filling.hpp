@@ -39,6 +39,42 @@ namespace cudf {
 void fill(gdf_column *column, gdf_scalar const& value, 
           gdf_index_type begin, gdf_index_type end);
 
+/**
+ * @brief Repeat rows of a Table
+ * 
+ * Creates a new table by repeating the rows of @p in. The number of 
+ * repetitions of each element is defined by the value at the corresponding 
+ * index of @p count
+ * Example:
+ * ```
+ * in = [4,5,6]
+ * count = [1,2,3]
+ * return = [4,5,5,6,6,6]
+ * ```
+ * 
+ * @param in Input column
+ * @param count Non-nullable column of type `GDF_INT32`
+ * @return cudf::table The result table containing the repetitions
+ */
+cudf::table repeat(const cudf::table &in, const gdf_column& count);
+
+/**
+ * @brief Repeat rows of a Table
+ * 
+ * Creates a new table by repeating @p count times the rows of @p in.
+ * Example:
+ * ```
+ * in = [4,5,6]
+ * count = 2
+ * return = [4,4,5,5,6,6]
+ * ```
+ * 
+ * @param in Input column
+ * @param count Non-null scalar of type `GDF_INT32`
+ * @return cudf::table The result table containing the repetitions
+ */
+cudf::table repeat(const cudf::table &in, const gdf_scalar& count);
+
 }; // namespace cudf
 
 #endif // FILLING_HPP

@@ -6,7 +6,7 @@ import logging
 
 import numpy as np
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf._lib as libcudf
 from cudf.core.buffer import Buffer

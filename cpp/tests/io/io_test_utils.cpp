@@ -16,6 +16,7 @@
 
 #include "io_test_utils.hpp"
 
+#include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
 #include <nvstrings/NVStrings.h>
@@ -28,27 +29,26 @@ bool checkFile(std::string const &fname) {
 void checkStrColumn(gdf_column const *col, std::vector<std::string> const &refs) {
   ASSERT_EQ(col->dtype, GDF_STRING);
 
-  const auto stringList = reinterpret_cast<NVStrings *>(col->data);
-  ASSERT_NE(stringList, nullptr);
+  auto result = nvstrings_to_strings(static_cast<NVStrings *>(col->data));
+  EXPECT_THAT(refs, ::testing::ContainerEq(result));
+}
 
-  const auto count = stringList->size();
-  ASSERT_EQ(count, refs.size());
+std::vector<std::string> nvstrings_to_strings(NVStrings *nvstr) {
+  const auto num_strings = nvstr->size();
 
-  std::vector<int> lengths(count);
-  ASSERT_NE(stringList->byte_count(lengths.data(), false), 0u);
+  // Allocate host buffer large enough for characters + null-terminator
+  std::vector<int> lengths(num_strings);
+  auto total_mem = nvstr->byte_count(lengths.data(), false);
+  std::vector<char> buffer(total_mem + num_strings, 0);
 
-  // Check the actual strings themselves
-  std::vector<char *> strings(count);
-  for (size_t i = 0; i < count; ++i) {
-    strings[i] = new char[lengths[i] + 1];
-    strings[i][lengths[i]] = 0;
+  // Copy all strings to host memory
+  std::vector<char *> strings(num_strings);
+  size_t offset = 0;
+  for (size_t i = 0; i < num_strings; ++i) {
+    strings[i] = buffer.data() + offset;
+    offset += lengths[i] + 1;
   }
-  EXPECT_EQ(stringList->to_host(strings.data(), 0, count), 0);
+  nvstr->to_host(strings.data(), 0, num_strings);
 
-  for (size_t i = 0; i < count; ++i) {
-    EXPECT_STREQ(strings[i], refs[i].c_str());
-  }
-  for (size_t i = 0; i < count; ++i) {
-    delete[] strings[i];
-  }
+  return std::vector<std::string>(strings.data(), strings.data() + num_strings);
 }

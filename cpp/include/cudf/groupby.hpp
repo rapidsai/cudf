@@ -19,6 +19,7 @@
 
 #include "cudf.h"
 #include "types.hpp"
+#include <cudf/quantiles.hpp>
 
 #include <tuple>
 #include <vector>
@@ -74,6 +75,12 @@ struct Options {
   bool const ignore_null_keys{true};
 };
 
+/**---------------------------------------------------------------------------*
+ * @brief Supported aggregation operations
+ *
+ *---------------------------------------------------------------------------**/
+enum operators { SUM, MIN, MAX, COUNT, MEAN, MEDIAN, QUANTILE};
+
 namespace hash {
 
 /**---------------------------------------------------------------------------*
@@ -82,12 +89,7 @@ namespace hash {
 struct Options : groupby::Options {
   Options(bool _ignore_null_keys = true)
       : groupby::Options(_ignore_null_keys) {}
-};
-
-/**---------------------------------------------------------------------------*
- * @brief Supported aggregation operations
- *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT, MEAN };
+}; 
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a hash-based implementation
@@ -118,17 +120,40 @@ std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
 
 namespace sort {
 
-/**---------------------------------------------------------------------------*
- * @brief  Options unique to the sort-based groupby
- *
- *---------------------------------------------------------------------------**/
-struct Options : groupby::Options {};
+struct operation_args {};
+
+struct quantile_args : operation_args {
+  std::vector<double> quantiles;
+  cudf::interpolation interpolation;
+  
+  quantile_args(const std::vector<double> &_quantiles,  cudf::interpolation _interpolation)
+  : operation_args{}, quantiles{_quantiles}, interpolation{_interpolation}
+  {}
+};
+
+struct operation {
+  operators                         op_name;
+  std::unique_ptr<operation_args>   args;
+};
+
+enum class null_order : bool { AFTER, BEFORE }; 
 
 /**---------------------------------------------------------------------------*
- * @brief Supported aggregation operations
- *
+ * @brief  Options unique to the sort-based groupby
+ * The priority of determining the sort flags:
+ * - The `ignore_null_keys` take precedence over the `null_sort_behavior`
  *---------------------------------------------------------------------------**/
-enum operators { SUM, MIN, MAX, COUNT };
+struct Options : groupby::Options {
+  null_order null_sort_behavior; ///< Indicates how nulls are treated
+  bool input_sorted; ///< Indicates if the input data is sorted. 
+
+  Options(bool _ignore_null_keys = true,
+          null_order _null_sort_behavior = null_order::AFTER,
+          bool _input_sorted = false)
+      : groupby::Options(_ignore_null_keys),
+        input_sorted(_input_sorted),
+        null_sort_behavior(_null_sort_behavior) {}
+};
 
 /**---------------------------------------------------------------------------*
  * @brief Performs groupby operation(s) via a sort-based implementation
@@ -148,12 +173,12 @@ enum operators { SUM, MIN, MAX, COUNT };
  * @param values The table of aggregation values
  * @param ops The list of aggregation operations
  * @return A tuple whose first member contains the table of output keys, and
- * second member contains the table of reduced output values
+ * second member contains the reduced output values
  *---------------------------------------------------------------------------**/
-std::pair<cudf::table, cudf::table> groupby(cudf::table const& keys,
+std::pair<cudf::table, std::vector<gdf_column*>> groupby(cudf::table const& keys,
                                             cudf::table const& values,
-                                            std::vector<operators> const& ops,
-                                            Options options);
+                                            std::vector<operation> const& ops,
+                                            Options options = Options{});
 }  // namespace sort
 }  // namespace groupby
 }  // namespace cudf

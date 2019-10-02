@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 from cudf.core.buffer import Buffer
@@ -353,6 +353,10 @@ class Index(object):
     @property
     def __cuda_array_interface__(self):
         raise (NotImplementedError)
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        return as_index(self._values.repeat(repeats))
 
 
 class RangeIndex(Index):

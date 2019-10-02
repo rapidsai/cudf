@@ -18,13 +18,13 @@ import pandas as pd
 import pyarrow as pa
 from pandas.api.types import is_dict_like
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 import cudf._lib as libcudf
 from cudf.core import column
 from cudf.core._sort import get_sorted_inds
-from cudf.core.column import CategoricalColumn
+from cudf.core.column import CategoricalColumn, StringColumn
 from cudf.core.index import Index, RangeIndex, as_index
 from cudf.core.indexing import _DataFrameIlocIndexer, _DataFrameLocIndexer
 from cudf.core.series import Series
@@ -340,10 +340,7 @@ class DataFrame(object):
             df = DataFrame()
             if mask.dtype == "bool":
                 # New df-wide index
-                selvals, selinds = column.column_select_by_boolmask(
-                    column.as_column(self.index), Series(mask)
-                )
-                index = self.index.take(selinds.to_gpu_array())
+                index = as_index(self.index.as_column()[mask])
                 for col in self._cols:
                     df[col] = Series(self._cols[col][arg], index=index)
                 df = df.set_index(index)
@@ -445,6 +442,14 @@ class DataFrame(object):
     @property
     def empty(self):
         return not len(self)
+
+    @property
+    def values(self):
+        if not utils._have_cupy:
+            raise ModuleNotFoundError("CuPy was not found.")
+        import cupy
+
+        return cupy.asarray(self.as_gpu_matrix())
 
     def _get_numeric_data(self):
         """ Return a dataframe with only numeric data types """
@@ -870,12 +875,14 @@ class DataFrame(object):
         Name: b, dtype: int64
 
         Selection by boolean mask.
+
         >>> print(df.loc[df.a > 2])
            a  b
         d  3  8
         e  4  9
 
         Setting values using loc.
+
         >>> df.loc[['a', 'c', 'e'], 'a'] = 0
         >>> print(df)
            a  b
@@ -1007,10 +1014,7 @@ class DataFrame(object):
         """
         Return a list of Column objects backing this dataframe
         """
-        cols = [sr._column for sr in self._cols.values()]
-        for col in cols:
-            col.name = None
-        return cols
+        return [sr._column for sr in self._cols.values()]
 
     def _rename_columns(self, new_names):
         old_cols = list(self._cols.keys())
@@ -1405,7 +1409,7 @@ class DataFrame(object):
             data, forceindex=forceindex, name=name
         )
 
-    def drop(self, labels, axis=None, errors="raise"):
+    def drop(self, labels=None, axis=None, columns=None, errors="raise"):
         """Drop column(s)
 
         Parameters
@@ -1414,6 +1418,7 @@ class DataFrame(object):
             Name of column(s) to be dropped.
         axis : {0 or 'index', 1 or 'columns'}, default 0
             Only axis=1 is currently supported.
+        columns: array of column names, the same as using labels and axis=1
         errors : {'ignore', 'raise'}, default 'raise'
             This parameter is currently ignored.
 
@@ -1443,15 +1448,26 @@ class DataFrame(object):
         3    3
         4    4
         """
-        if axis == 0:
+        if axis == 0 and labels is not None:
             raise NotImplementedError("Can only drop columns, not rows")
         if errors != "raise":
             raise NotImplementedError("errors= keyword not implemented")
+        if labels is None and columns is None:
+            raise ValueError(
+                "Need to specify at least one of 'labels' or 'columns'"
+            )
+        if labels is not None and columns is not None:
+            raise ValueError("Cannot specify both 'labels' and 'columns'")
+
+        if labels is not None:
+            target = labels
+        else:
+            target = columns
 
         columns = (
-            [labels]
-            if isinstance(labels, (str, numbers.Number))
-            else list(labels)
+            [target]
+            if isinstance(target, (str, numbers.Number))
+            else list(target)
         )
         outdf = self.copy()
         for c in columns:
@@ -1653,6 +1669,7 @@ class DataFrame(object):
         Difference from pandas:
           * Support axis='columns' only.
           * Not supporting: index, level
+
         Rename will not overwite column names. If a list with duplicates it
         passed, column names will be postfixed.
         """
@@ -1763,9 +1780,12 @@ class DataFrame(object):
             raise ValueError("require at least 1 column")
         if nrow < 1:
             raise ValueError("require at least 1 row")
-        dtype = cols[0].dtype
-        if any(dtype != c.dtype for c in cols):
-            raise ValueError("all columns must have the same dtype")
+        if any(
+            (is_categorical_dtype(c) or np.issubdtype(c, np.dtype("object")))
+            for c in cols
+        ):
+            raise TypeError("non-numeric data not yet supported")
+        dtype = np.find_common_type(cols, [])
         for k, c in self._cols.items():
             if c.null_count > 0:
                 errmsg = (
@@ -1779,7 +1799,7 @@ class DataFrame(object):
                 shape=(nrow, ncol), dtype=dtype, order=order
             )
             for colidx, inpcol in enumerate(cols):
-                dense = inpcol.to_gpu_array(fillna="pandas")
+                dense = inpcol.astype(dtype).to_gpu_array(fillna="pandas")
                 matrix[:, colidx].copy_to_device(dense)
         elif order == "C":
             matrix = cudautils.row_matrix(cols, nrow, ncol, dtype)
@@ -2081,13 +2101,14 @@ class DataFrame(object):
             in both DataFrames.
         how : {‘left’, ‘outer’, ‘inner’}, default ‘inner’
             Type of merge to be performed.
-                left: use only keys from left frame, similar to a SQL left
-                      outer join; preserve key order.
-                right: not supported.
-                outer: use union of keys from both frames, similar to a SQL
-                       full outer join; sort keys lexicographically.
-                inner: use intersection of keys from both frames, similar to
-                       a SQL inner join; preserve the order of the left keys.
+
+            - left : use only keys from left frame, similar to a SQL left
+              outer join; preserve key order.
+            - right : not supported.
+            - outer : use union of keys from both frames, similar to a SQL
+              full outer join; sort keys lexicographically.
+            - inner: use intersection of keys from both frames, similar to
+              a SQL inner join; preserve the order of the left keys.
         left_on : label or list, or array-like
             Column or index level names to join on in the left DataFrame.
             Can also be an array or list of arrays of the length of the
@@ -2742,7 +2763,8 @@ class DataFrame(object):
         kwargs={},
         pessimistic_nulls=True,
         chunks=None,
-        tpb=1,
+        blkct=None,
+        tpb=None,
     ):
         """
         Transform user-specified chunks using the user-provided function.
@@ -2977,6 +2999,7 @@ class DataFrame(object):
         Examples
         --------
         Describing a ``Series`` containing numeric values.
+
         >>> import cudf
         >>> s = cudf.Series([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
         >>> print(s.describe())
@@ -2992,6 +3015,7 @@ class DataFrame(object):
 
         Describing a ``DataFrame``. By default all numeric fields
         are returned.
+
         >>> gdf = cudf.DataFrame()
         >>> gdf['a'] = [1,2,3]
         >>> gdf['b'] = [1.0, 2.0, 3.0]
@@ -3010,6 +3034,7 @@ class DataFrame(object):
         7    max  3.0  3.0  3.0
 
         Using the ``include`` keyword to describe only specific dtypes.
+
         >>> gdf = cudf.DataFrame()
         >>> gdf['a'] = [1,2,3]
         >>> gdf['b'] = [1.0, 2.0, 3.0]
@@ -3063,20 +3088,25 @@ class DataFrame(object):
 
         return output_frame
 
-    def isnull(self, **kwargs):
+    def isnull(self):
         """Identify missing values in a DataFrame.
         """
-        return self._apply_support_method("isnull", **kwargs)
+        return self._apply_support_method("isnull")
 
-    def isna(self, **kwargs):
+    def isna(self):
         """Identify missing values in a DataFrame. Alias for isnull.
         """
-        return self.isnull(**kwargs)
+        return self.isnull()
 
-    def notna(self, **kwargs):
+    def notna(self):
         """Identify non-missing values in a DataFrame.
         """
-        return self._apply_support_method("notna", **kwargs)
+        return self._apply_support_method("notna")
+
+    def notnull(self):
+        """Identify non-missing values in a DataFrame. Alias for notna.
+        """
+        return self.notna()
 
     def to_pandas(self):
         """
@@ -3510,6 +3540,7 @@ class DataFrame(object):
     #
     # Stats
     #
+
     def count(self, **kwargs):
         return self._apply_support_method("count", **kwargs)
 
@@ -3784,6 +3815,84 @@ class DataFrame(object):
             line_terminator,
             chunksize,
         )
+
+    @ioutils.doc_to_orc()
+    def to_orc(self, fname, compression=None, *args, **kwargs):
+        """{docstring}"""
+        import cudf.io.orc as orc
+
+        orc.to_orc(self, fname, compression, *args, **kwargs)
+
+    def scatter_by_map(self, map_index, map_size=None):
+        """Scatter to a list of dataframes.
+
+        Uses map_index to determine the destination
+        of each row of the original DataFrame.
+
+        Parameters
+        ----------
+        map_index : Series, str or list-like
+            Scatter assignment for each row
+        map_size : int
+            Length of output list. Must be >= uniques in map_index
+
+        Returns
+        -------
+        A list of cudf.DataFrame objects.
+        """
+
+        # map_index might be a column name or array,
+        # make it a Series
+        if isinstance(map_index, str):
+            map_index = self[map_index]
+        else:
+            map_index = Series(map_index)
+
+        # Convert float to integer
+        if map_index.dtype == np.float:
+            map_index = map_index.astype(np.int32)
+
+        # Convert string or categorical to integer
+        if isinstance(map_index._column, StringColumn):
+            map_index = Series(
+                map_index._column.as_categorical_column(np.int32).as_numerical
+            )
+            warnings.warn(
+                "Using StringColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+        elif isinstance(map_index._column, CategoricalColumn):
+            map_index = Series(map_index._column.as_numerical)
+            warnings.warn(
+                "Using CategoricalColumn for map_index in scatter_by_map. "
+                "Use an integer array/column for better performance."
+            )
+
+        # scatter_to_frames wants a list of columns
+        tables = libcudf.copying.scatter_to_frames(
+            self._columns, map_index._column
+        )
+
+        if map_size:
+            # Make sure map_size is >= the number of uniques in map_index
+            if len(tables) > map_size:
+                raise ValueError(
+                    "ERROR: map_size must be >= %d (got %d)."
+                    % (len(tables), map_size)
+                )
+
+            # Append empty dataframes if map_size > len(tables)
+            for i in range(map_size - len(tables)):
+                tables.append(self.iloc[[]])
+        return tables
+
+    def repeat(self, repeats, axis=None):
+        assert axis in (None, 0)
+        new_index = self.index.repeat(repeats)
+        cols = libcudf.filling.repeat(self._columns, repeats)
+        # to preserve col names, need to get it from old _cols dict
+        column_names = self._cols.keys()
+        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
 
 
 def from_pandas(obj):
