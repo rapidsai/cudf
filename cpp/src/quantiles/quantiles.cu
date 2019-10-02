@@ -17,7 +17,7 @@
 //Quantile (percentile) functionality
 
 #include <cudf/cudf.h>
-#include <quantiles/quantiles.hpp>
+#include <quantiles/quantiles_util.hpp>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>

@@ -14,11 +14,9 @@
 #ifdef __CUDACC__
 #define CUDA_HOST_DEVICE_CALLABLE __host__ __device__ inline
 #define CUDA_DEVICE_CALLABLE __device__ inline
-#define CUDA_LAUNCHABLE __global__
 #else
 #define CUDA_HOST_DEVICE_CALLABLE inline
 #define CUDA_DEVICE_CALLABLE inline
-#define CUDA_LAUNCHABLE
 #endif
 
 /**---------------------------------------------------------------------------*

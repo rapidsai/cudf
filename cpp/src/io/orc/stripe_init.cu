@@ -218,12 +218,6 @@ struct rowindex_state_s
     uint32_t compressed_offset[128][2];
 };
 
-enum {
-    PB_TYPE_VARINT = 0,
-    PB_TYPE_FIXED64 = 1,
-    PB_TYPE_FIXEDLEN = 2,
-    PB_TYPE_FIXED32 = 5
-};
 
 #define PB_ROWINDEXENTRY_ID     ((1*8) + PB_TYPE_FIXEDLEN)
 
@@ -323,7 +317,10 @@ static uint32_t __device__ ProtobufParseRowIndexEntry(rowindex_state_s *s, const
                 s->row_index_entry[1][ci_id] = v;
             if (cur >= start + pos_end)
                 return length;
-            state = (ci_id == CI_DATA && s->chunk.type_kind == DECIMAL) ? STORE_INDEX0 : STORE_INDEX2;
+            state = (ci_id == CI_DATA && s->chunk.encoding_kind != DICTIONARY && s->chunk.encoding_kind != DICTIONARY_V2
+                 && (s->chunk.type_kind == STRING || s->chunk.type_kind == BINARY || s->chunk.type_kind == VARCHAR || s->chunk.type_kind == CHAR
+                  || s->chunk.type_kind == DECIMAL || s->chunk.type_kind == FLOAT || s->chunk.type_kind == DOUBLE))
+                ? STORE_INDEX0 : STORE_INDEX2;
             break;
         case STORE_INDEX2:
             if (ci_id < CI_PRESENT)
