@@ -49,21 +49,21 @@ using timestamp_D = detail::timestamp<simt::std::chrono::duration<int32_t, simt:
  * @brief Type alias representing an int64_t duration of seconds since the
  * unix epoch.
  *---------------------------------------------------------------------------**/
-using timestamp_s = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1>>>;
+using timestamp_s = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1>>>;
 /**---------------------------------------------------------------------------*
  * @brief Type alias representing an int64_t duration of milliseconds since
  * the unix epoch.
  *---------------------------------------------------------------------------**/
-using timestamp_ms = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1000>>>;
+using timestamp_ms = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::milli>>;
 /**---------------------------------------------------------------------------*
  * @brief Type alias representing an int64_t duration of microseconds since
  * the unix epoch.
  *---------------------------------------------------------------------------**/
-using timestamp_us = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1000000>>>;
+using timestamp_us = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::micro>>;
 /**---------------------------------------------------------------------------*
  * @brief Type alias representing an int64_t duration of nanoseconds since
  * the unix epoch.
  *---------------------------------------------------------------------------**/
-using timestamp_ns = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::ratio<1, 1000000000>>>;
+using timestamp_ns = detail::timestamp<simt::std::chrono::duration<int64_t, simt::std::nano>>;
 
 }  // cudf
