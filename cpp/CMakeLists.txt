@@ -387,10 +387,13 @@ add_library(cudf
             src/io/csv/csv_gpu.cu
             src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader_impl.cu
+            src/io/orc/orc_writer_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
             src/io/orc/stripe_init.cu
+            src/io/orc/stripe_enc.cu
+            src/io/orc/dict_enc.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader_impl.cu
@@ -399,6 +402,7 @@ add_library(cudf
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
             src/io/comp/debrotli.cu
+            src/io/comp/snap.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/utilities/datasource.cpp

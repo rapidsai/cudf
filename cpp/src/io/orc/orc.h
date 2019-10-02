@@ -24,7 +24,7 @@
 #include <algorithm>
 #include <memory>
 
-#include <io/comp/io_uncomp.h>
+#include "io/comp/io_uncomp.h"
 #include "orc_common.h"
 
 namespace cudf {
@@ -104,9 +104,6 @@ struct StripeFooter
 
 
 
-
-#define DECL_ORC_STRUCT(st)     bool read(st *, size_t maxlen)
-
 // Minimal protobuf reader for orc metadata
 
 /**
@@ -116,17 +113,6 @@ struct StripeFooter
 
 class ProtobufReader
 {
-protected:
-    enum { // Protobuf field types
-        PB_TYPE_VARINT = 0,
-        PB_TYPE_FIXED64 = 1,
-        PB_TYPE_FIXEDLEN = 2,
-        PB_TYPE_START_GROUP = 3, // deprecated
-        PB_TYPE_END_GROUP = 4, // deprecated
-        PB_TYPE_FIXED32 = 5,
-        PB_TYPE_INVALID_6 = 6,
-        PB_TYPE_INVALID_7 = 7,
-    };
 public:
     ProtobufReader() { m_base = m_cur = m_end = nullptr; }
     ProtobufReader(const uint8_t *base, size_t len) { init(base, len); }
@@ -141,6 +127,7 @@ public:
     void skip_struct_field(int t);
 
 public:
+#define DECL_ORC_STRUCT(st)     bool read(st *, size_t maxlen)
     DECL_ORC_STRUCT(PostScript);
     DECL_ORC_STRUCT(FileFooter);
     DECL_ORC_STRUCT(StripeInformation);
@@ -157,6 +144,35 @@ protected:
     const uint8_t *m_cur;
     const uint8_t *m_end;
 };
+
+
+/**
+ * @brief Class for encoding Orc's metadata with Protocol Buffers
+ *
+ **/
+class ProtobufWriter
+{
+public:
+    ProtobufWriter() { m_buf = nullptr; }
+    ProtobufWriter(std::vector<uint8_t> *output) { m_buf = output; }
+    void putb(uint8_t v) { m_buf->push_back(v); }
+    uint32_t put_uint(uint64_t v) { int l = 1; while (v > 0x7f) { putb(static_cast<uint8_t>(v | 0x80)); v >>= 7; l++; } putb(static_cast<uint8_t>(v)); return l; }
+    uint32_t put_int(int64_t v) { int64_t s = (v < 0); return put_uint(((v ^ -s) << 1) + s); }
+    void put_row_index_entry(int32_t present_blk, int32_t present_ofs, int32_t data_blk, int32_t data_ofs, int32_t data2_blk, int32_t data2_ofs, TypeKind kind);
+public:
+#define DECL_PBW_STRUCT(st)     size_t write(const st *)
+    DECL_PBW_STRUCT(PostScript);
+    DECL_PBW_STRUCT(FileFooter);
+    DECL_PBW_STRUCT(StripeInformation);
+    DECL_PBW_STRUCT(SchemaType);
+    DECL_PBW_STRUCT(UserMetadataItem);
+    DECL_PBW_STRUCT(StripeFooter);
+    DECL_PBW_STRUCT(Stream);
+    DECL_PBW_STRUCT(ColumnEncoding);
+protected:
+    std::vector<uint8_t> *m_buf;
+};
+
 
 
 /**
