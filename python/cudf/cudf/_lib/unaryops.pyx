@@ -13,7 +13,7 @@ import numpy as np
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.string cimport string
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils import cudautils
 

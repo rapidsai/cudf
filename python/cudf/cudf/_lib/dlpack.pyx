@@ -9,7 +9,7 @@
 
 from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
-from librmm_cffi import librmm as rmm
+import rmm
 
 from libc.stdint cimport uintptr_t, int8_t
 from libc.stdlib cimport calloc, malloc, free

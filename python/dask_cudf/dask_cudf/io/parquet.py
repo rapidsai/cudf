@@ -6,6 +6,7 @@ import dask.dataframe as dd
 from dask.dataframe.io.parquet.arrow import ArrowEngine
 
 import cudf
+from cudf.core.column import CategoricalColumn
 
 
 class CudfEngine(ArrowEngine):
@@ -72,6 +73,18 @@ class CudfEngine(ArrowEngine):
 
         if index is not None and index[0] in df.columns:
             df = df.set_index(index[0])
+
+        if len(piece.partition_keys) > 0:
+            if partitions is None:
+                raise ValueError("Must pass partition sets")
+            for i, (name, index2) in enumerate(piece.partition_keys):
+                categories = [
+                    val.as_py() for val in partitions.levels[i].dictionary
+                ]
+                sr = cudf.Series(index2).astype(type(index2)).repeat(len(df))
+                df[name] = CategoricalColumn(
+                    data=sr._column.data, categories=categories, ordered=False
+                )
 
         return df
 

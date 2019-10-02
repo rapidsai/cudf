@@ -10,7 +10,7 @@ from pandas.util.testing import (
     assert_series_equal,
 )
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import cudf
 from cudf.core import DataFrame, Series

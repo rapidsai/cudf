@@ -7,7 +7,7 @@ import numpy as np
 from numba import cuda, int32, numpy_support
 
 import nvstrings
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils.utils import (
     check_equals_float,
