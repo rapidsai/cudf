@@ -21,6 +21,8 @@ from cudf._lib.includes.stream_compaction cimport (
     apply_boolean_mask as cpp_apply_boolean_mask
 )
 
+from cudf._lib.table cimport Table
+
 
 def drop_duplicates(in_index, in_cols, subset=None, keep='first'):
     """
@@ -112,20 +114,18 @@ def apply_boolean_mask(cols, mask):
     -------
     List of Columns
     """
-    cdef cudf_table  c_out_table
-    cdef cudf_table* c_in_table = table_from_columns(cols)
+    out_table = Table()
+    in_table = Table(cols)
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
 
     with nogil:
-        c_out_table = cpp_apply_boolean_mask(
-            c_in_table[0],
+        out_table.ptr[0] = cpp_apply_boolean_mask(
+            in_table.ptr[0],
             c_mask_col[0]
         )
 
-    free_table(c_in_table)
     free_column(c_mask_col)
-
-    return columns_from_table(&c_out_table)
+    return out_table.columns
 
 
 def drop_nulls(cols, how="any", subset=None, thresh=None):
