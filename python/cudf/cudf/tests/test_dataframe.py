@@ -3661,16 +3661,16 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
         "datetime64[ns]",
     ],
 )
-def test_series_astype_string_to_other(as_dtype):
+def test_df_astype_string_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05"]
         kwargs = {"format": "%Y-%m-%d"}
     else:
         data = ["1", "2", "3"]
         kwargs = {}
-    psr = pd.DataFrame(data, columns='test')
-    gsr = gd.from_pandas(psr)
-    assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
+    pdf = pd.DataFrame(data, columns=['test'])
+    gdf = gd.from_pandas(pdf)
+    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
 
 @pytest.mark.parametrize(
 "as_dtype",
