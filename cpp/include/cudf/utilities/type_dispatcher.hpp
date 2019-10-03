@@ -92,6 +92,7 @@ CUDF_TYPE_MAPPING(int32_t, type_id::INT32);
 CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
+CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
@@ -210,6 +211,9 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
           std::forward<Ts>(args)...);
     case FLOAT64:
       return f.template operator()<typename IdTypeMap<FLOAT64>::type>(
+          std::forward<Ts>(args)...);
+    case STRING:
+      return f.template operator()<typename IdTypeMap<STRING>::type>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
