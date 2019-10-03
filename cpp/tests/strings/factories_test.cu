@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/strings_column_factories.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
@@ -43,7 +43,7 @@ TEST_F(FactoriesTest, CreateColumnFromArray)
     cudf::size_type count = (cudf::size_type)h_test_strings.size();
     thrust::host_vector<char> h_buffer(memsize);
     thrust::device_vector<char> d_buffer(memsize);
-    thrust::host_vector<thrust::pair<const char*,size_t> > strings(count);
+    thrust::host_vector<thrust::pair<const char*,cudf::size_type> > strings(count);
     thrust::host_vector<cudf::size_type> h_offsets(count+1);
     cudf::size_type offset = 0;
     cudf::size_type nulls = 0;
@@ -53,19 +53,19 @@ TEST_F(FactoriesTest, CreateColumnFromArray)
         const char* str = h_test_strings[idx];
         if( !str )
         {
-            strings[idx] = thrust::pair<const char*,size_t>{nullptr,0};
+            strings[idx] = thrust::pair<const char*,cudf::size_type>{nullptr,0};
             nulls++;
         }
         else
         {
             cudf::size_type length = (cudf::size_type)strlen(str);
             memcpy( h_buffer.data() + offset, str, length );
-            strings[idx] = thrust::pair<const char*,size_t>{d_buffer.data().get()+offset,(size_t)length};
+            strings[idx] = thrust::pair<const char*,cudf::size_type>{d_buffer.data().get()+offset,length};
             offset += length;
         }
         h_offsets[idx+1] = offset;
     }
-    rmm::device_vector<thrust::pair<const char*,size_t>> d_strings(strings);
+    rmm::device_vector<thrust::pair<const char*,cudf::size_type>> d_strings(strings);
     cudaMemcpy( d_buffer.data().get(), h_buffer.data(), memsize, cudaMemcpyHostToDevice );
     auto column = cudf::make_strings_column( d_strings );
     EXPECT_EQ(column->type(), cudf::data_type{cudf::STRING});

@@ -14,20 +14,22 @@
  * limitations under the License.
  */
 
-#pragma once
+#ifndef _TYPE_INFO_HPP
+#define _TYPE_INFO_HPP
 
-#include <cudf/cudf.h>
 #include <cudf/groupby.hpp>
 
+/**---------------------------------------------------------------------------*
+ * @file type_info.hpp
+ * @brief Type info traits used in hash-based groupby.
+*---------------------------------------------------------------------------**/
 namespace cudf {
 // forward decls
 struct DeviceMin;
 struct DeviceMax;
 struct DeviceSum;
 
-namespace test {
-using namespace cudf::groupby::hash;
-
+namespace groupby {
 /**---------------------------------------------------------------------------*
  * @brief Maps a operators enum value to it's corresponding binary
  * operator functor.
@@ -49,51 +51,82 @@ using corresponding_functor_t = typename corresponding_functor<op>::type;
  * @tparam op The aggregation operation performed
  * @tparam dummy Dummy for SFINAE
  *---------------------------------------------------------------------------**/
-template <typename SourceType, operators op,
-          typename dummy = void>
-struct expected_result_type {
-  using type = void;
-};
+template <typename SourceType, operators op, typename dummy = void>
+struct target_type { using type = void; };
 
 // Computing MIN of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct expected_result_type<SourceType, MIN> {
-  using type = SourceType;
-};
+struct target_type<SourceType, MIN> { using type = SourceType; };
 
 // Computing MAX of SourceType, use SourceType accumulator
 template <typename SourceType>
-struct expected_result_type<SourceType, MAX> {
-  using type = SourceType;
-};
+struct target_type<SourceType, MAX> { using type = SourceType; };
 
 // Always use int64_t accumulator for COUNT
-// TODO Use `gdf_size_type`
 template <typename SourceType>
-struct expected_result_type<SourceType, COUNT> {
-  using type = gdf_size_type;
-};
+struct target_type<SourceType, COUNT> { using type = gdf_size_type; };
 
-// Always use `double` as output of MEAN
+// Always use `double` for MEAN
 template <typename SourceType>
-struct expected_result_type<SourceType, MEAN> { using type = double; };
+struct target_type<SourceType, MEAN> { using type = double; };
 
 // Summing integers of any type, always use int64_t accumulator
 template <typename SourceType>
-struct expected_result_type<
-    SourceType, SUM, std::enable_if_t<std::is_integral<SourceType>::value>> {
+struct target_type<SourceType, SUM,
+                   std::enable_if_t<std::is_integral<SourceType>::value>> {
   using type = int64_t;
+};
+
+// Always use `double` for quantile 
+template <typename SourceType>
+struct target_type<SourceType, QUANTILE> { using type = double; };
+
+// MEDIAN is Just and special case of a QUANTILE  
+template <typename SourceType>
+struct target_type<SourceType, MEDIAN> {
+   using type = target_type<SourceType, QUANTILE>; 
 };
 
 // Summing float/doubles, use same type accumulator
 template <typename SourceType>
-struct expected_result_type<
+struct target_type<
     SourceType, SUM,
     std::enable_if_t<std::is_floating_point<SourceType>::value>> {
   using type = SourceType;
 };
 
 template <typename SourceType, operators op>
-using expected_result_t = typename expected_result_type<SourceType, op>::type;
-}  // namespace test
+using target_type_t = typename target_type<SourceType, op>::type;
+
+/**---------------------------------------------------------------------------*
+ * @brief Functor that uses the target_type trait to map the combination of a
+ * dispatched SourceType and aggregation operation to required target gdf_dtype.
+ *---------------------------------------------------------------------------**/
+struct target_type_mapper {
+  template <typename SourceType>
+  gdf_dtype operator()(operators op) const noexcept {
+    switch (op) {
+      case MIN:
+        return gdf_dtype_of<target_type_t<SourceType, operators::MIN>>();
+      case MAX:
+        return gdf_dtype_of<target_type_t<SourceType, operators::MAX>>();
+      case SUM:
+        return gdf_dtype_of<target_type_t<SourceType, operators::SUM>>();
+      case COUNT:
+        return gdf_dtype_of<target_type_t<SourceType, operators::COUNT>>();
+      case MEAN:
+        return gdf_dtype_of<target_type_t<SourceType, operators::MEAN>>();
+      case MEDIAN:
+        return gdf_dtype_of<target_type_t<SourceType, operators::MEDIAN>>();
+      case QUANTILE:
+        return gdf_dtype_of<target_type_t<SourceType, operators::QUANTILE>>();  
+      default :
+        return GDF_invalid;
+    }
+  }
+};
+
+}  // namespace groupby
 }  // namespace cudf
+
+#endif

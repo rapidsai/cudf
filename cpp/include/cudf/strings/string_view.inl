@@ -19,7 +19,7 @@
 
 namespace
 {
-typedef unsigned char BYTE;
+using BYTE = uint8_t;
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the number of bytes used to represent the provided byte.
@@ -61,18 +61,14 @@ __device__ inline cudf::size_type string_length( const char* str )
 
 namespace cudf
 {
-namespace strings
-{
 
 __host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
     : _data(data), _bytes(bytes)
 {}
 
 __device__ inline string_view::string_view(const char* data)
-    : _data(data)
-{
-    _bytes = string_length(data);
-}
+    : _data{data}, _bytes{string_length(data)}
+{}
 
 //
 __host__ __device__ inline size_type string_view::size_bytes() const
@@ -82,7 +78,7 @@ __host__ __device__ inline size_type string_view::size_bytes() const
 
 __device__ inline size_type string_view::length() const
 {
-    return detail::characters_in_string(_data,_bytes);
+    return strings::detail::characters_in_string(_data,_bytes);
 }
 
 __host__ __device__ inline const char* string_view::data() const
@@ -101,79 +97,70 @@ __host__ __device__ inline bool string_view::is_null() const
 }
 
 // the custom iterator knows about UTF8 encoding
-__device__ inline string_view::iterator::iterator(const string_view& str, size_type pos)
-    : cpos(pos)
-{
-    p = str.data();
-    offset = str.byte_offset(cpos);
-}
+__device__ inline string_view::const_iterator::const_iterator(const string_view& str, size_type pos)
+    : cpos{pos}, p{str.data()}, offset{str.byte_offset(pos)}
+{}
 
-__device__ inline string_view::iterator& string_view::iterator::operator++()
+__device__ inline string_view::const_iterator& string_view::const_iterator::operator++()
 {
     offset += bytes_in_utf8_byte((BYTE)p[offset]);
     ++cpos;
     return *this;
 }
 
-// what is the int parm for?
-__device__ inline string_view::iterator string_view::iterator::operator++(int)
+__device__ inline string_view::const_iterator string_view::const_iterator::operator++(int)
 {
-    iterator tmp(*this);
+    const_iterator tmp(*this);
     operator++();
     return tmp;
 }
 
-__device__ inline bool string_view::iterator::operator==(const string_view::iterator& rhs) const
+__device__ inline bool string_view::const_iterator::operator==(const string_view::const_iterator& rhs) const
 {
     return (p == rhs.p) && (cpos == rhs.cpos);
 }
 
-__device__ inline bool string_view::iterator::operator!=(const string_view::iterator& rhs) const
+__device__ inline bool string_view::const_iterator::operator!=(const string_view::const_iterator& rhs) const
 {
     return (p != rhs.p) || (cpos != rhs.cpos);
 }
 
 // unsigned int can hold 1-4 bytes for the UTF8 char
-__device__ inline char_utf8 string_view::iterator::operator*() const
+__device__ inline char_utf8 string_view::const_iterator::operator*() const
 {
     char_utf8 chr = 0;
-    detail::to_char_utf8(p + offset, chr);
+    strings::detail::to_char_utf8(p + offset, chr);
     return chr;
 }
 
-__device__ inline size_type string_view::iterator::position() const
+__device__ inline size_type string_view::const_iterator::position() const
 {
     return cpos;
 }
 
-__device__ inline size_type string_view::iterator::byte_offset() const
+__device__ inline size_type string_view::const_iterator::byte_offset() const
 {
     return offset;
 }
 
-__device__ inline string_view::iterator string_view::begin() const
+__device__ inline string_view::const_iterator string_view::begin() const
 {
-    return iterator(*this, 0);
+    return const_iterator(*this, 0);
 }
 
-__device__ inline string_view::iterator string_view::end() const
+__device__ inline string_view::const_iterator string_view::end() const
 {
-    return iterator(*this, length());
+    return const_iterator(*this, length());
 }
 
-__device__ inline char_utf8 string_view::at(size_type pos) const
+__device__ inline char_utf8 string_view::operator[](size_type pos) const
 {
     unsigned int offset = byte_offset(pos);
     if(offset >= _bytes)
         return 0;
     char_utf8 chr = 0;
-    detail::to_char_utf8(data() + offset, chr);
+    strings::detail::to_char_utf8(data() + offset, chr);
     return chr;
-}
-
-__device__ inline char_utf8 string_view::operator[](size_type pos) const
-{
-    return at(pos);
 }
 
 __device__ inline size_type string_view::byte_offset(size_type pos) const
@@ -288,33 +275,11 @@ __device__ inline size_type string_view::find(const char* str, size_type bytes, 
     return -1;
 }
 
-// maybe get rid of this one
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, int count) const
 {
-    size_type sz = size_bytes();
-    size_type nchars = length();
-    if(count < 0)
-        count = nchars;
-    size_type end = pos + count;
-    if(end < 0 || end > nchars)
-        end = nchars;
-    if(pos > end || chr == 0 || sz == 0)
-        return -1;
-    size_type spos = byte_offset(pos);
-    size_type epos = byte_offset(end);
-    //
-    size_type chsz = detail::bytes_in_char_utf8(chr);
-    const char* sptr = data();
-    const char* ptr = sptr + spos;
-    size_type len = (epos - spos) - chsz;
-    for(size_type idx = 0; idx <= len; ++idx)
-    {
-        char_utf8 ch = 0;
-        detail::to_char_utf8(ptr++, ch);
-        if(chr == ch)
-            return detail::characters_in_string(sptr, idx + spos);
-    }
-    return -1;
+    char str[sizeof(char_utf8)];
+    size_type chwidth = strings::detail::from_char_utf8(chr,str);
+    return find(str,chwidth,pos,count);
 }
 
 __device__ inline size_type string_view::rfind(const string_view& str, size_type pos, int count) const
@@ -354,32 +319,10 @@ __device__ inline size_type string_view::rfind(const char* str, size_type bytes,
 
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, int count) const
 {
-    size_type sz = size_bytes();
-    size_type nchars = length();
-    if(count < 0)
-        count = nchars;
-    size_type end = pos + count;
-    if(end < 0 || end > nchars)
-        end = nchars;
-    if(pos > end || chr == 0 || sz == 0)
-        return -1;
-    size_type spos = byte_offset(pos);
-    size_type epos = byte_offset(end);
-
-    size_type chsz = detail::bytes_in_char_utf8(chr);
-    const char* sptr = data();
-    const char* ptr = sptr + epos - 1;
-    size_type len = (epos - spos) - chsz;
-    for(size_type idx = 0; idx < len; ++idx)
-    {
-        char_utf8 ch = 0;
-        detail::to_char_utf8(ptr--, ch);
-        if(chr == ch)
-            return detail::characters_in_string(sptr, epos - idx - 1);
-    }
-    return -1;
+    char str[sizeof(char_utf8)];
+    size_type chwidth = strings::detail::from_char_utf8(chr,str);
+    return rfind(str,chwidth,pos,count);
 }
-
 
 // parameters are character position values
 __device__ inline string_view string_view::substr(size_type pos, size_type length) const
@@ -424,7 +367,7 @@ __device__ inline size_type string_view::split(const char* delim, int count, str
     if(strsCount < count)
         count = strsCount;
     //
-    size_type dchars = (bytes ? detail::characters_in_string(delim,bytes) : 1);
+    size_type dchars = (bytes ? strings::detail::characters_in_string(delim,bytes) : 1);
     size_type nchars = length();
     size_type spos = 0, sidx = 0;
     size_type epos = find(delim, bytes);
@@ -473,7 +416,7 @@ __device__ inline size_type string_view::rsplit(const char* delim, int count, st
     if(strsCount < count)
         count = strsCount;
     //
-    unsigned int dchars = (bytes ? detail::characters_in_string(delim,bytes) : 1);
+    unsigned int dchars = (bytes ? strings::detail::characters_in_string(delim,bytes) : 1);
     int epos = (int)length(); // end pos is not inclusive
     int sidx = count - 1;     // index for strs array
     int spos = rfind(delim, bytes);
@@ -495,9 +438,11 @@ __device__ inline size_type string_view::rsplit(const char* delim, int count, st
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
 {
-    return detail::characters_in_string(data(), bytepos);
+    return strings::detail::characters_in_string(data(), bytepos);
 }
 
+namespace strings
+{
 namespace detail
 {
 __host__ __device__ inline size_type bytes_in_char_utf8(char_utf8 chr)

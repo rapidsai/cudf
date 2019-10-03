@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include "groupby.hpp"
+#include "sort_helper.hpp"
 
 #include <copying/scatter.hpp>
 #include <table/legacy/device_table.cuh>
@@ -80,14 +80,15 @@ struct permuted_row_equality_comparator {
 
 
 namespace cudf {
+namespace groupby {
+namespace sort {
+namespace detail { 
 
-namespace detail {
-
-gdf_size_type groupby::num_keys() {
+gdf_size_type helper::num_keys() {
   if (_num_keys > -1)
     return _num_keys;
 
-  if (has_nulls(_keys)) {
+  if (not _include_nulls and has_nulls(_keys)) {
     // The number of rows w/o null values `n` is indicated by number of valid bits
     // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
     // in the sorted order are considered for grouping. 
@@ -102,7 +103,7 @@ gdf_size_type groupby::num_keys() {
   return _num_keys; 
 }
 
-gdf_column const& groupby::key_sort_order() {
+gdf_column const& helper::key_sort_order() {
   if (_key_sorted_order)
     return *_key_sorted_order;
 
@@ -115,10 +116,24 @@ gdf_column const& groupby::key_sort_order() {
                       _stream)),
     [](gdf_column* col) { gdf_column_free(col); });
 
+  if (_keys_pre_sorted) {
+    auto d_key_sorted_order = static_cast<gdf_index_type*>(_key_sorted_order->data);
+
+    thrust::sequence(rmm::exec_policy(_stream)->on(_stream), 
+                     d_key_sorted_order,
+                     d_key_sorted_order + _key_sorted_order->size, 0);
+
+    return *_key_sorted_order;
+  }
+  
+  gdf_context context{};
+  context.flag_groupby_include_nulls = _include_nulls;
+  context.flag_null_sort_behavior = (_null_sort_behavior == null_order::AFTER)
+                                  ? GDF_NULL_AS_LARGEST
+                                  : GDF_NULL_AS_SMALLEST;
+
   if (_include_nulls ||
       !cudf::has_nulls(_keys)) {  // SQL style
-    gdf_context context{};
-    context.flag_groupby_include_nulls = true;
     CUDF_TRY(gdf_order_by(_keys.begin(), nullptr,
                           _keys.num_columns(), _key_sorted_order.get(),
                           &context));
@@ -136,12 +151,9 @@ gdf_column const& groupby::key_sort_order() {
     cudf::table modified_keys_table(modified_keys.data(),
                                     modified_keys.size());
 
-    gdf_context temp_ctx;
-    temp_ctx.flag_null_sort_behavior = GDF_NULL_AS_LARGEST;
-
     CUDF_TRY(gdf_order_by(modified_keys_table.begin(), nullptr,
                           modified_keys_table.num_columns(),
-                          _key_sorted_order.get(), &temp_ctx));
+                          _key_sorted_order.get(), &context));
 
     // All rows with one or more null values are at the end of the resulting sorted order.
   }
@@ -149,7 +161,7 @@ gdf_column const& groupby::key_sort_order() {
   return *_key_sorted_order;
 }
 
-rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
+rmm::device_vector<gdf_size_type> const& helper::group_offsets() {
   if (_group_offsets)
     return *_group_offsets;
 
@@ -180,7 +192,7 @@ rmm::device_vector<gdf_size_type> const& groupby::group_offsets() {
   return *_group_offsets;
 }
 
-rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
+rmm::device_vector<gdf_size_type> const& helper::group_labels() {
   if (_group_labels)
     return *_group_labels;
 
@@ -190,9 +202,9 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
   auto& group_labels = *_group_labels;
   auto exec = rmm::exec_policy(_stream)->on(_stream);
   thrust::scatter(exec,
-    thrust::make_constant_iterator(1, decltype(num_groups())(0)), 
+    thrust::make_constant_iterator(1, decltype(num_groups())(1)), 
     thrust::make_constant_iterator(1, num_groups()), 
-    group_offsets().begin(), 
+    group_offsets().begin() + 1, 
     group_labels.begin());
  
   thrust::inclusive_scan(exec,
@@ -203,7 +215,7 @@ rmm::device_vector<gdf_size_type> const& groupby::group_labels() {
   return group_labels;
 }
 
-gdf_column const& groupby::unsorted_keys_labels() {
+gdf_column const& helper::unsorted_keys_labels() {
   if (_unsorted_keys_labels)
     return *_unsorted_keys_labels;
 
@@ -235,7 +247,7 @@ gdf_column const& groupby::unsorted_keys_labels() {
 }
 
 rmm::device_vector<bit_mask::bit_mask_t>&
-groupby::keys_row_bitmask() {
+helper::keys_row_bitmask() {
   if (_keys_row_bitmask)
     return *_keys_row_bitmask;
 
@@ -246,7 +258,7 @@ groupby::keys_row_bitmask() {
 }
 
 std::pair<gdf_column, rmm::device_vector<gdf_size_type> >
-groupby::sort_values(gdf_column const& values) {
+helper::sort_values(gdf_column const& values) {
   CUDF_EXPECTS(values.size == _keys.num_rows(),
     "Size mismatch between keys and values.");
   auto values_sort_order = gdf_col_pointer(
@@ -300,7 +312,7 @@ groupby::sort_values(gdf_column const& values) {
   return std::make_pair(sorted_values, val_group_sizes);
 }
 
-cudf::table groupby::unique_keys() {
+cudf::table helper::unique_keys() {
   cudf::table unique_keys = allocate_like(_keys, 
                                           (gdf_size_type)num_groups(),
                                           RETAIN,
@@ -321,6 +333,7 @@ cudf::table groupby::unique_keys() {
 }
 
 
-} // namespace detail
-  
-} // namespace cudf
+}  // namespace detail
+}  // namespace sort
+}  // namespace groupby
+}  // namespace cudf

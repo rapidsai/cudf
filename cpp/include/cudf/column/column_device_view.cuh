@@ -15,11 +15,11 @@
  */
 #pragma once
 
-#include <cuda_runtime.h>
 #include <cudf/column/column_view.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/bit.cuh>
 #include <cudf/strings/string_view.cuh>
+#include <cudf/strings/strings_column_view.hpp>
 
 namespace cudf {
 
@@ -208,11 +208,21 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   column_device_view& operator=(column_device_view const&) = default;
   column_device_view& operator=(column_device_view&&) = default;
 
-  //
+  /**---------------------------------------------------------------------------*
+   * @brief Creates an instance of this class in the specified host memory
+   * using the device memory pointer as a base for child pointers.
+   *
+   * @param column Column view from which to create this instance.
+   * @param h_ptr Host memory pointer on which to place any child data.
+   * @param d_ptr Device memory pointer on which to base any child pointers.
+   *---------------------------------------------------------------------------**/
   column_device_view( column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr );
  
   /**---------------------------------------------------------------------------*
    * @brief Returns reference to element at the specified index.
+   * 
+   * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+   * then any attempt to use the result will lead to undefined behavior. 
    *
    * This function accounts for the offset.
    *
@@ -256,9 +266,8 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   void destroy();
 
   /**---------------------------------------------------------------------------*
-   * @brief Return the amount of memory needed to hold this instance in
-   * contiguous memory block. This accounts for the children as well as
-   * the object itself.
+   * @brief Return the size in bytes of the amount of memory needed to hold a
+   * device view of the specified column and it's children. 
    * 
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
@@ -307,6 +316,14 @@ class alignas(16) mutable_column_device_view
       default;
   mutable_column_device_view& operator=(mutable_column_device_view&&) = default;
 
+  /**---------------------------------------------------------------------------*
+   * @brief Creates an instance of this class in the specified host memory
+   * using the device memory pointer as a base for child pointers.
+   *
+   * @param column Column view from which to create this instance.
+   * @param h_ptr Host memory pointer on which to place any child data.
+   * @param d_ptr Device memory pointer on which to base any child pointers.
+   *---------------------------------------------------------------------------**/
   mutable_column_device_view( mutable_column_view column, ptrdiff_t h_ptr, ptrdiff_t d_ptr );
 
   /**---------------------------------------------------------------------------*
@@ -328,7 +345,8 @@ class alignas(16) mutable_column_device_view
    * @return A `unique_ptr` to a `mutable_column_device_view` that makes the
    *data from `source_view` available in device memory.
    *---------------------------------------------------------------------------**/
-  static auto create(mutable_column_view source_view, cudaStream_t stream = 0);
+  static std::unique_ptr<mutable_column_device_view, std::function<void(mutable_column_device_view*)>>
+    create(mutable_column_view source_view, cudaStream_t stream = 0);
 
   /**---------------------------------------------------------------------------*
    * @brief Returns pointer to the base device memory allocation casted to
@@ -373,7 +391,7 @@ class alignas(16) mutable_column_device_view
    * @param element_index Position of the desired element
    *---------------------------------------------------------------------------**/
   template <typename T>
-  __device__ T element(size_type element_index) noexcept {
+  __device__ T& element(size_type element_index) noexcept {
     return data<T>()[element_index];
   }
 
@@ -441,13 +459,12 @@ class alignas(16) mutable_column_device_view
   }
 
   /**---------------------------------------------------------------------------*
-   * @brief Return the amount of memory needed to hold this instance in
-   * contiguous memory block. This accounts for the children as well as
-   * the object itself.
+   * @brief Return the size in bytes of the amount of memory needed to hold a
+   * device view of the specified column and it's children. 
    * 
    * @param source_view The `column_view` to use for this calculation.
    *---------------------------------------------------------------------------**/
-  static size_type extent(column_view source_view);
+  static size_type extent(mutable_column_view source_view);
 
  private:
   mutable_column_device_view*
@@ -480,26 +497,22 @@ class alignas(16) mutable_column_device_view
 /**---------------------------------------------------------------------------*
  * @brief Returns `string_view` to the string element at the specified index.
  *
- * This function accounts for the offset. Do not call this for a null element.
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior. 
  *
- * @param element_index Position of the desired string
+ * This function accounts for the offset.
+ *
+ * @param element_index Position of the desired string element
  * @return string_view instance representing this element at this index
  *---------------------------------------------------------------------------**/
 template <>
-__device__ inline strings::string_view const column_device_view::element<strings::string_view>(
+__device__ inline string_view const column_device_view::element<string_view>(
     size_type element_index) const noexcept {
-      size_type index = element_index + _offset; // account for this view's _offset
-      const int32_t* d_offsets = d_children[0].data<int32_t>();
-      const char* d_strings = d_children[1].data<char>();
+      size_type index = element_index + offset(); // account for this view's _offset
+      const int32_t* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
+      const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
       size_type offset = d_offsets[index];
-      return strings::string_view{d_strings + offset, d_offsets[index+1] - offset};
+      return string_view{d_strings + offset, d_offsets[index+1] - offset};
 }
-
-//template <>
-//__device__ inline string_view mutable_column_device_view::element<string_view>(
-//    size_type element_index) noexcept {
-//      return string_view{};
-//}
-
 
 }  // namespace cudf

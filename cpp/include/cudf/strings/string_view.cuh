@@ -21,19 +21,17 @@
 
 namespace cudf
 {
-namespace strings
-{
 
 // UTF-8 characters are 1-4 bytes
-typedef unsigned int char_utf8;
+using char_utf8 = uint32_t;
 
 /**---------------------------------------------------------------------------*
  * @brief A non-owning, immutable view of device data that is variable length
  * character array representing a UTF-8 string. The caller must maintain the
  * device memory for the lifetime of this instance.
  *
- * It provides a simple wrapper and string operations for individual char array
- * within a strings column.
+ * It provides a simple wrapper and string operations for an individual string
+ * with a column of strings.
  *---------------------------------------------------------------------------**/
 class string_view
 {
@@ -77,7 +75,7 @@ class string_view
    *---------------------------------------------------------------------------**/
   __host__ __device__ bool empty() const;
   /**---------------------------------------------------------------------------*
-   * @brief Return true if string pointer is null.
+   * @brief Return true if string is NULL.
    * That is, `data()==nullptr` for this instance.
    *---------------------------------------------------------------------------**/
   __host__ __device__ bool is_null() const;
@@ -85,7 +83,7 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Handy iterator for navigating through encoded characters.
    *---------------------------------------------------------------------------**/
-  class iterator
+  class const_iterator
   {
     public:
       using difference_type = ptrdiff_t;
@@ -93,15 +91,15 @@ class string_view
       using reference = char_utf8&;
       using pointer = char_utf8*;
       using iterator_category = std::input_iterator_tag; // do not allow going backwards
-      __device__ iterator(const string_view& str, size_type pos);
-      iterator(const iterator& mit) = default;
-      iterator(iterator&& mit) = default;
-      iterator& operator=(const iterator&) = default;
-      iterator& operator=(iterator&&) = default;
-      __device__ iterator& operator++();
-      __device__ iterator operator++(int);
-      __device__ bool operator==(const iterator& rhs) const;
-      __device__ bool operator!=(const iterator& rhs) const;
+      __device__ const_iterator(const string_view& str, size_type pos);
+      const_iterator(const const_iterator& mit) = default;
+      const_iterator(const_iterator&& mit) = default;
+      const_iterator& operator=(const const_iterator&) = default;
+      const_iterator& operator=(const_iterator&&) = default;
+      __device__ const_iterator& operator++();
+      __device__ const_iterator operator++(int);
+      __device__ bool operator==(const const_iterator& rhs) const;
+      __device__ bool operator!=(const const_iterator& rhs) const;
       __device__ char_utf8 operator*() const;
       __device__ size_type position() const;
       __device__ size_type byte_offset() const;
@@ -113,18 +111,12 @@ class string_view
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing to the beginning of this string
    *---------------------------------------------------------------------------**/
-  __device__ iterator begin() const;
+  __device__ const_iterator begin() const;
   /**---------------------------------------------------------------------------*
    * @brief Return new iterator pointing past the end of this string
    *---------------------------------------------------------------------------**/
-  __device__ iterator end() const;
+  __device__ const_iterator end() const;
 
-  /**---------------------------------------------------------------------------*
-   * @brief Return single UTF-8 character at the given character position
-   *
-   * @param pos Character position
-   *---------------------------------------------------------------------------**/
-  __device__ char_utf8 at(size_type pos) const;
   /**---------------------------------------------------------------------------*
    * @brief Return single UTF-8 character at the given character position
    *
@@ -166,30 +158,30 @@ class string_view
    *            not match is greater in the arg string, or all compared characters
    *            match but the arg string is longer.
    *---------------------------------------------------------------------------**/
-  __device__ int compare(const char* data, size_type bytes) const;
+  __device__ int compare(const char* str, size_type bytes) const;
 
   /**---------------------------------------------------------------------------*
-   * @brief Returns true if arg string matches this string exactly.
+   * @brief Returns true if rhs matches this string exactly.
    *---------------------------------------------------------------------------**/
   __device__ bool operator==(const string_view& rhs) const;
   /**---------------------------------------------------------------------------*
-   * @brief Returns true if arg string does not match this string.
+   * @brief Returns true if rhs does not match this string.
    *---------------------------------------------------------------------------**/
   __device__ bool operator!=(const string_view& rhs) const;
   /**---------------------------------------------------------------------------*
-   * @brief Returns true if arg string sorts ascending to this string.
+   * @brief Returns true if this string is ordered before rhs.
    *---------------------------------------------------------------------------**/
   __device__ bool operator<(const string_view& rhs) const;
   /**---------------------------------------------------------------------------*
-   * @brief Returns true if arg string sorts descending to this string.
+   * @brief Returns true if rhs is ordered before this string.
    *---------------------------------------------------------------------------**/
   __device__ bool operator>(const string_view& rhs) const;
   /**---------------------------------------------------------------------------*
-   * @brief Returns true if arg string sorts ascending or matches this string.
+   * @brief Returns true if this string matches or is ordered before rhs.
    *---------------------------------------------------------------------------**/
   __device__ bool operator<=(const string_view& rhs) const;
   /**---------------------------------------------------------------------------*
-   * @brief Returns true if arg string sorts descending or matches this string.
+   * @brief Returns true if rhs matches or is ordered before this string.
    *---------------------------------------------------------------------------**/
   __device__ bool operator>=(const string_view& rhs) const;
 
@@ -310,6 +302,8 @@ private:
     __device__ size_type character_offset(size_type bytepos) const;
 };
 
+namespace strings
+{
 namespace detail
 {
 /**---------------------------------------------------------------------------*
@@ -338,7 +332,7 @@ __host__ __device__ size_type to_char_utf8( const char* str, char_utf8& characte
 __host__ __device__ size_type from_char_utf8( char_utf8 character, char* str );
 
 /**---------------------------------------------------------------------------*
- * @brief Return the number of characters in this provided char array.
+ * @brief Return the number of UTF-8 characters in this provided char array.
  *
  * @param str String with encoded char bytes.
  * @param bytes Number of bytes in str.

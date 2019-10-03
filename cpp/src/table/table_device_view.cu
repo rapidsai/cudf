@@ -25,6 +25,7 @@
 #include <algorithm>
 #include <numeric>
 
+
 namespace cudf {
 namespace detail {
 
@@ -40,27 +41,52 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     : _num_rows{source_view.num_rows()},
       _num_columns{source_view.num_columns()},
       _stream{stream} {
+
+  // The table's columns must be converted to ColumnDeviceView
+  // objects and copied into device memory for the table_device_view's
+  // _columns member.
   if (source_view.num_columns() > 0) {
     //
+    // First calculate the size of memory needed to hold the
+    // array of ColumnDeviceViews. This is done by calling extent()
+    // for each of the ColumnViews in the table_view's columns.
     size_type views_size_bytes =
         std::accumulate(source_view.begin(), source_view.end(), 0,
-            [](size_type init, column_view col) {
+            [](size_type init, auto col) {
                 return init + ColumnDeviceView::extent(col);
             });
-    
+    // A buffer of CPU memory is allocated to hold the ColumnDeviceView
+    // objects. Once filled, the CPU memory is then copied to device memory
+    // at the _columns member pointer.
     std::vector<int8_t> h_buffer(views_size_bytes);
     ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
-    int8_t* h_end = (int8_t*)(h_column + _num_columns);
+    // Each ColumnDeviceView instance may have child objects which may
+    // require setting some internal device pointers before being copied
+    // from CPU to device.
+    // Allocate the device memory to be used in the result.
+    // We need this pointer in order to pass it down when creating the
+    // ColumnDeviceViews so the column can set the pointer(s) for any
+    // of its child objects.
     RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
     ColumnDeviceView* d_column = _columns;
-    int8_t* d_end = (int8_t*)(d_column + _num_columns);
-    for( size_type idx=0; idx < _num_columns; ++idx )
+    // The beginning of the memory must be the fixed-sized ColumnDeviceView
+    // objects in order for _columns to be used as an array. Therefore,
+    // any child data is assigned to the end of this array.
+    int8_t* h_end = (int8_t*)(h_column + source_view.num_columns());
+    int8_t* d_end = (int8_t*)(d_column + source_view.num_columns());
+    // Create the ColumnDeviceView from each column within the CPU memory
+    // Any column child data should be copied into h_end and any
+    // internal pointers should be set using d_end.
+    for( auto itr=source_view.begin(); itr!=source_view.end(); ++itr )
     {
-      auto col = source_view.column(idx);
+      auto col = *itr;
+      // convert the ColumnView into ColumnDeviceView
       new(h_column) ColumnDeviceView(col,(ptrdiff_t)h_end,(ptrdiff_t)d_end);
-      h_column++;
-      h_end += (ColumnDeviceView::extent(col));
-      d_end += (ColumnDeviceView::extent(col));
+      h_column++; // point to memory slot for the next ColumnDeviceView
+      // update the pointers for holding ColumnDeviceView's child data
+      auto col_child_data_size = (ColumnDeviceView::extent(col) - sizeof(ColumnDeviceView));
+      h_end += col_child_data_size;
+      d_end += col_child_data_size;
     }
     
     CUDA_TRY(cudaMemcpyAsync(_columns, h_buffer.data(),
