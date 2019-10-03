@@ -1,6 +1,5 @@
 from cudf._lib.cudf cimport *
 
-
 cdef class Table:
     """
     Python wrapper around cudf::table
@@ -18,12 +17,7 @@ cdef class Table:
     def __init__(self, columns=None):
         pass
 
-    def release(self, own):
-        """ 
-        Releases ownership of the columns and returns
-        a list of 
-
-        """
+    def get_columns(self, own):
         cols = []
         cdef i
         cdef gdf_column* c_col
