@@ -115,9 +115,7 @@ def apply_boolean_mask(cols, mask):
     List of Columns
     """
     out_table = Table()
-    print("created table")
     in_table = TableView(cols)
-    print("created table view")
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
 
     with nogil:
