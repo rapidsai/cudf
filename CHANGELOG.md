@@ -2,6 +2,9 @@
 
 ## New Features
 
+- PR #2962 Adding support for isNULL and isNotNULL
+
+
 ## Improvements
 
 ## Bug Fixes
