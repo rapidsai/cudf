@@ -228,7 +228,12 @@ class _GroupbyHelper(object):
         header["as_index"] = self.as_index
         header["sort"] = self.sort
 
-        key_columns = self.key_columns
+        key_columns = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self.key_columns
+        ]
         key_columns_header, key_columns_frames = serialize_columns(key_columns)
 
         header["key_columns"] = key_columns_header
