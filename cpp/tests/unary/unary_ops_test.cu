@@ -2411,3 +2411,168 @@ TYPED_TEST(gdf_logical_test, LogicalNot) {
 
 	EXPECT_EQ(expectCol, outputCol);
 }
+
+template <typename T>
+using column_wrapper = cudf::test::column_wrapper<T>;
+
+template <typename T>
+struct IsNull : public GdfTest{};
+
+using test_types =
+    ::testing::Types<int64_t>;
+
+TYPED_TEST_CASE(IsNull, test_types);
+
+TYPED_TEST(IsNull, sample)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 5000;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (row%7==0 ? true: false); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{(row%7==0 ? false: true)};},
+                    false);
+
+    gdf_column got = cudf::is_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+TYPED_TEST(IsNull, all_valid)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 50;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (true); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{false};},
+                    false);
+
+    gdf_column got = cudf::is_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+TYPED_TEST(IsNull, all_in_valid)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 50;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (false); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{true};},
+                    false);
+
+    gdf_column got = cudf::is_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+TYPED_TEST(IsNull, empty_column)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 0;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (true); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{false};},
+                    false);
+
+    gdf_column got = cudf::is_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+
+template <typename T>
+struct IsNotNull : public GdfTest{};
+
+using test_types =
+    ::testing::Types<int64_t>;
+
+TYPED_TEST_CASE(IsNotNull, test_types);
+
+TYPED_TEST(IsNotNull, sample)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 5000;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (row%7==0 ? true: false); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{(row%7==0 ? true: false)};},
+                    false);
+
+    gdf_column got = cudf::is_not_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+TYPED_TEST(IsNotNull, all_valid)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 50;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (true); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{true};},
+                    false);
+
+    gdf_column got = cudf::is_not_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+TYPED_TEST(IsNotNull, all_in_valid)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 50;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (false); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{false};},
+                    false);
+
+    gdf_column got = cudf::is_not_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
+TYPED_TEST(IsNotNull, empty_column)
+{
+    using T = TypeParam;
+
+    gdf_index_type NUM_ELEM = 0;
+
+    column_wrapper <T> col(NUM_ELEM,
+                    [](auto row) { return row; },
+                    [](auto row) { return (true); });
+    column_wrapper <cudf::bool8> expected(NUM_ELEM,
+                    [](auto row) {return cudf::bool8{false};},
+                    false);
+
+    gdf_column got = cudf::is_not_null(*col.get());
+
+    EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
+}
+
