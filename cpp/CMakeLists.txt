@@ -436,6 +436,7 @@ add_library(cudf
             src/strings/strings_column_view.cu
             src/strings/utilities.cu
             src/strings/array.cu
+            src/strings/combine.cu
             src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding

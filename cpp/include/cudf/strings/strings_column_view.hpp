@@ -224,5 +224,64 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
                                        cudaStream_t stream=0,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
+/**---------------------------------------------------------------------------*
+ * @brief Row-wise concatenates two columns of strings into a new a column.
+ * The number of strings in both columns must match.
+ * @param strings 1st string column.
+ * @param others 2nd string column.
+ * @param separator Null-terminated CPU string that should appear between each element.
+ * @param narep Null-terminated CPU string that should represent any null strings found.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return New column with concatenated results
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> concatenate( strings_column_view strings,
+                                           strings_column_view others,
+                                           const char* separator="", const char* narep=nullptr,
+                                           cudaStream_t stream=0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+/**---------------------------------------------------------------------------*
+ * @brief Row-wise concatenates the given list of strings columns with the first column.
+ *
+ * ```
+ * s1 = ['aa', null, '', 'aa']
+ * s2 = ['', 'bb', 'bb', null]
+ * r = concatenate(s1,s2)
+ * r is ['aa', null, 'bb', null]
+ * ```
+ *
+ * @param strings 1st string column.
+ * @param others List of string columns to concatenate.
+ * @param separator Null-terminated CPU string that should appear between each instance.
+ *        Default is empty string.
+ * @param narep Null-terminated CPU string that should represent any null strings found.
+ *        Default of null means any null operand produces a null result.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return New column with concatenated results
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings,
+                                           const char* separator="",
+                                           const char* narep=nullptr,
+                                           cudaStream_t stream=0,
+                                           rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
+/**---------------------------------------------------------------------------*
+ * @brief Concatenates all strings in the column into one new string.
+ * This provides the Pandas strings equivalent of join().
+ * @param strings Strings for this operation.
+ * @param separator Null-terminated CPU string that should appear between each string.
+ * @param narep Null-terminated CPU string that should represent any null strings found.
+ * @param stream CUDA stream to use kernels in this method.
+ * @param mr Resource for allocating device memory.
+ * @return New column containing one string.
+ *---------------------------------------------------------------------------**/
+std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
+                                            const char* separator="",
+                                            const char* narep=nullptr,
+                                            cudaStream_t stream=0,
+                                            rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+
 } // namespace strings
 } // namespace cudf
