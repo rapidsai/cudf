@@ -1934,6 +1934,49 @@ class Series(object):
         skew = unbiased_coef * m3 / (m2 ** (3 / 2))
         return skew
 
+    def cov(self, other, min_periods=None):
+        """Calculates the sample covariance between two Series,
+        excluding missing values.
+        """
+        assert min_periods in (None,)
+
+        if self.empty or other.empty:
+            return np.nan
+
+        lhs = self.nans_to_nulls().dropna()
+        rhs = other.nans_to_nulls().dropna()
+        lhs, rhs = _align_indices(lhs, rhs, join="inner")
+
+        if lhs.empty or rhs.empty or (len(lhs) == 1 and len(rhs) == 1):
+            return np.nan
+
+        result = (lhs - lhs.mean()) * (rhs - rhs.mean())
+        cov_sample = result.sum() / (len(lhs) - 1)
+        return cov_sample
+
+    def corr(self, other, method="pearson", min_periods=None):
+        """Calculates the sample correlation between two Series,
+        excluding missing values.
+        """
+        assert method in ("pearson",) and min_periods in (None,)
+
+        if self.empty or other.empty:
+            return np.nan
+
+        lhs = self.nans_to_nulls().dropna()
+        rhs = other.nans_to_nulls().dropna()
+        lhs, rhs = _align_indices(lhs, rhs, join="inner")
+
+        if lhs.empty or rhs.empty:
+            return np.nan
+
+        cov = lhs.cov(rhs)
+        lhs_std, rhs_std = lhs.std(), rhs.std()
+
+        if not cov or lhs_std == 0 or rhs_std == 0:
+            return np.nan
+        return cov / lhs_std / rhs_std
+
     def isin(self, test):
 
         from cudf import DataFrame
@@ -2556,7 +2599,7 @@ class DatetimeProperties(object):
         return Series(data=out_column, index=self.series._index)
 
 
-def _align_indices(lhs, rhs):
+def _align_indices(lhs, rhs, join="outer"):
     """
     Internal util to align the indices of two Series. Returns a tuple of the
     aligned series, or the original arguments if the indices are the same, or
@@ -2564,5 +2607,5 @@ def _align_indices(lhs, rhs):
     """
     if isinstance(rhs, Series) and not lhs.index.equals(rhs.index):
         lhs, rhs = lhs.to_frame(0), rhs.to_frame(1)
-        lhs, rhs = lhs.join(rhs, how="outer", sort=True)._cols.values()
+        lhs, rhs = lhs.join(rhs, how=join, sort=True)._cols.values()
     return lhs, rhs

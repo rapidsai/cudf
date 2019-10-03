@@ -46,7 +46,8 @@ def make_frames(index=None, nulls="none"):
 
 @pytest.mark.parametrize("nulls", ["none", "some", "all"])
 @pytest.mark.parametrize("index", [False, "z", "y"])
-def test_concat(index, nulls):
+@pytest.mark.parametrize("axis", [0, "index"])
+def test_concat(index, nulls, axis):
     if index == "y" and nulls in ("some", "all"):
         pytest.skip("nulls in columns, dont index")
     df, df2, gdf, gdf2 = make_frames(index, nulls=nulls)
@@ -56,22 +57,22 @@ def test_concat(index, nulls):
     df_empty1 = gdf_empty1.to_pandas()
 
     # DataFrame
-    res = gd.concat([gdf, gdf2, gdf, gdf_empty1]).to_pandas()
-    sol = pd.concat([df, df2, df, df_empty1])
+    res = gd.concat([gdf, gdf2, gdf, gdf_empty1], axis=axis).to_pandas()
+    sol = pd.concat([df, df2, df, df_empty1], axis=axis)
     pd.util.testing.assert_frame_equal(
         res, sol, check_names=False, check_categorical=False
     )
 
     # Series
     for c in [i for i in ("x", "y", "z") if i != index]:
-        res = gd.concat([gdf[c], gdf2[c], gdf[c]]).to_pandas()
-        sol = pd.concat([df[c], df2[c], df[c]])
+        res = gd.concat([gdf[c], gdf2[c], gdf[c]], axis=axis).to_pandas()
+        sol = pd.concat([df[c], df2[c], df[c]], axis=axis)
         pd.util.testing.assert_series_equal(
             res, sol, check_names=False, check_categorical=False
         )
 
     # Index
-    res = gd.concat([gdf.index, gdf2.index]).to_pandas()
+    res = gd.concat([gdf.index, gdf2.index], axis=axis).to_pandas()
     sol = df.index.append(df2.index)
     pd.util.testing.assert_index_equal(
         res, sol, check_names=False, check_categorical=False
@@ -110,10 +111,15 @@ def test_concat_errors():
         gd.concat(["bar", "foo"])
 
     # Mismatched index dtypes
-    gdf3 = gdf2.set_index("z")
-    del gdf2["z"]
+    gdf3 = gdf2.copy()
+    del gdf3["z"]
+    gdf4 = gdf2.set_index("z")
     with pytest.raises(ValueError):
-        gd.concat([gdf2, gdf3])
+        gd.concat([gdf3, gdf4])
+
+    # Bad axis value
+    with pytest.raises(ValueError):
+        gd.concat([gdf, gdf2], axis="bad_value")
 
 
 def test_concat_misordered_columns():
@@ -127,3 +133,18 @@ def test_concat_misordered_columns():
     pd.util.testing.assert_frame_equal(
         res, sol, check_names=False, check_categorical=False
     )
+
+
+@pytest.mark.parametrize("axis", [1, "columns"])
+def test_concat_columns(axis):
+    pdf1 = pd.DataFrame(np.random.randint(10, size=(5, 3)), columns=[1, 2, 3])
+    pdf2 = pd.DataFrame(
+        np.random.randint(10, size=(5, 4)), columns=[4, 5, 6, 7]
+    )
+    gdf1 = gd.from_pandas(pdf1)
+    gdf2 = gd.from_pandas(pdf2)
+
+    expect = pd.concat([pdf1, pdf2], axis=axis)
+    got = gd.concat([gdf1, gdf2], axis=axis)
+
+    assert_eq(expect, got)
