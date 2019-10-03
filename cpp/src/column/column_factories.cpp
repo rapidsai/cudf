@@ -23,8 +23,7 @@ namespace cudf {
 namespace {
 struct size_of_helper {
   template <typename T>
-  constexpr std::enable_if_t<not is_fixed_width<T>(), int> operator()() const
-      noexcept {
+  constexpr std::enable_if_t<not is_fixed_width<T>(), int> operator()() const {
     CUDF_FAIL("Invalid, non fixed-width element type.");
   }
 
