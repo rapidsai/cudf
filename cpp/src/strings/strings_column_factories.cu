@@ -19,7 +19,6 @@
 #include <cudf/column/column.hpp>
 #include <cudf/functions.h>
 #include <cudf/null_mask.hpp>
-#include <cudf/strings/strings_column_factories.hpp>
 #include <utilities/error_utils.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
