@@ -18,14 +18,18 @@ cdef class Table:
     def __init__(self, columns=None):
         pass
 
-    @property
-    def columns(self):
+    def release(self, own):
+        """ 
+        Releases ownership of the columns and returns
+        a list of 
+
+        """
         cols = []
         cdef i
         cdef gdf_column* c_col
         for i in range(self.num_columns):
             c_col = self.ptr[0].get_column(i)
-            col = gdf_column_to_column(c_col)
+            col = gdf_column_to_column(c_col, False, own=own)
             cols.append(col)
         return cols
 
