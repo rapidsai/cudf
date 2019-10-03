@@ -384,7 +384,7 @@ cpdef uintptr_t column_view_pointer(col):
     return <uintptr_t> column_view_from_column(col, col.name)
 
 
-cdef gdf_column_to_column(gdf_column* c_col, int_col_name=False, bool own=True):
+cdef gdf_column_to_column(gdf_column* c_col, int_col_name=False):
     """
     Util to create a Python cudf.Column from a libcudf gdf_column.
 
@@ -403,11 +403,11 @@ cdef gdf_column_to_column(gdf_column* c_col, int_col_name=False, bool own=True):
         name = c_col.col_name.decode()
         if int_col_name:
             name = int(name)
-    data, mask = gdf_column_to_column_mem(c_col, own=own)
+    data, mask = gdf_column_to_column_mem(c_col)
     return Column.from_mem_views(data, mask, ncount, name)
 
 
-cdef gdf_column_to_column_mem(gdf_column* input_col, bool own=True):
+cdef gdf_column_to_column_mem(gdf_column* input_col):
     gdf_dtype = input_col.dtype
     data_ptr = int(<uintptr_t>input_col.data)
     if gdf_dtype == GDF_STRING:
@@ -424,32 +424,24 @@ cdef gdf_column_to_column_mem(gdf_column* input_col, bool own=True):
             data = nvstrings.to_device([])
         else:
             nvcat_ptr = int(<uintptr_t>input_col.dtype_info.category)
-            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr, own=own)
+            nvcat_obj = nvcategory.bind_cpointer(nvcat_ptr)
             data = nvcat_obj.to_strings()
     else:
-        if own:
-            finalize = rmm._make_finalizer(data_ptr, 0)
-        else:
-            finalizer = None
         data = rmm.device_array_from_ptr(
             data_ptr,
             nelem=input_col.size,
             dtype=np_dtype_from_gdf_column(input_col),
-            finalizer=finalizer
+            finalizer=rmm._make_finalizer(data_ptr, 0)
         )
 
     mask = None
     if input_col.valid:
         mask_ptr = int(<uintptr_t>input_col.valid)
-        if own:
-            finalizer = rmm._make_finalizer(mask_ptr, 0)
-        else:
-            finalizer = None
         mask = rmm.device_array_from_ptr(
             mask_ptr,
             nelem=calc_chunk_size(input_col.size, mask_bitsize),
             dtype=mask_dtype,
-            finalizer=finalizer
+            finalizer=rmm._make_finalizer(mask_ptr, 0)
         )
 
     return data, mask
