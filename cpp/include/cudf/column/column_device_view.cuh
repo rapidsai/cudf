@@ -497,10 +497,12 @@ class alignas(16) mutable_column_device_view
 /**---------------------------------------------------------------------------*
  * @brief Returns `string_view` to the string element at the specified index.
  *
- * This function accounts for the offset.
- * Calling this on a null element will result in undefined behavior.
+ * If the element at the specified index is NULL, i.e., `is_null(element_index) == true`,
+ * then any attempt to use the result will lead to undefined behavior. 
  *
- * @param element_index Position of the desired string
+ * This function accounts for the offset.
+ *
+ * @param element_index Position of the desired string element
  * @return string_view instance representing this element at this index
  *---------------------------------------------------------------------------**/
 template <>
@@ -508,7 +510,7 @@ __device__ inline strings::string_view const column_device_view::element<strings
     size_type element_index) const noexcept {
       size_type index = element_index + offset(); // account for this view's _offset
       const int32_t* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
-      const char* d_strings = d_children[strings_column_view::offsets_column_index].data<char>();
+      const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
       size_type offset = d_offsets[index];
       return strings::string_view{d_strings + offset, d_offsets[index+1] - offset};
 }

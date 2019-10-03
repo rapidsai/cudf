@@ -32,6 +32,11 @@ strings_column_view::strings_column_view( column_view strings_column )
     CUDF_EXPECTS( type().id()==STRING, "strings_column_view only supports strings");
 }
 
+column_view strings_column_view::parent() const
+{
+    return static_cast<column_view>(*this);
+}
+
 column_view strings_column_view::offsets() const
 {
     return child(offsets_column_index);
@@ -62,7 +67,7 @@ void print( strings_column_view strings,
 
     // stick with the default stream for this odd/rare stdout function
     auto execpol = rmm::exec_policy(0);
-    auto strings_column = column_device_view::create(strings);
+    auto strings_column = column_device_view::create(strings.parent());
     auto d_column = *strings_column;
     auto d_offsets = strings.offsets().data<int32_t>();
     auto d_strings = strings.chars().data<char>();

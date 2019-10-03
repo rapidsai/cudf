@@ -26,7 +26,7 @@ namespace cudf {
  * @brief Given a column-view of strings type, an instance of this class
  * provides a wrapper on this compound column for strings operations.
  *---------------------------------------------------------------------------**/
-class strings_column_view : public column_view
+class strings_column_view : private column_view
 {
 public:
     strings_column_view( column_view strings_column );
@@ -42,6 +42,11 @@ public:
     using column_view::size;
     using column_view::null_mask;
     using column_view::null_count;
+
+    /**---------------------------------------------------------------------------*
+    * @brief Returns the parent column.
+    *---------------------------------------------------------------------------**/
+    column_view parent() const;
 
     /**---------------------------------------------------------------------------*
     * @brief Returns the internal column of offsets
