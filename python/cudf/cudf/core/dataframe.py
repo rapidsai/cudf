@@ -1599,9 +1599,9 @@ class DataFrame(object):
         else:
             result_index = cudf.core.index.as_index(result_index_cols[0])
 
-            df = DataFrame._from_columns(
-                result_data_cols, index=result_index, columns=self.columns
-            )
+        df = DataFrame._from_columns(
+            result_data_cols, index=result_index, columns=self.columns
+        )
         return df
 
     def _drop_na_columns(self, how="any", subset=None, thresh=None):
@@ -3870,6 +3870,40 @@ class DataFrame(object):
         # to preserve col names, need to get it from old _cols dict
         column_names = self._cols.keys()
         return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
+
+    def tile(self, reps):
+        cols = libcudf.filling.tile(self._columns, reps)
+        column_names = self._cols.keys()
+        return DataFrame(data=dict(zip(column_names, cols)))
+
+    def stack(self, level=-1, dropna=True):
+        assert level in (None, -1)
+        index_as_cols = self.index.to_frame(index=False)._columns
+        new_index_cols = libcudf.filling.repeat(index_as_cols, self.shape[1])
+        [last_index] = libcudf.filling.tile(
+            [column.as_column(self.columns)], self.shape[0]
+        )
+        new_index_cols.append(last_index)
+        index_df = DataFrame(
+            dict(zip(range(0, len(new_index_cols)), new_index_cols))
+        )
+        new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
+
+        # Collect datatypes and cast columns as that type
+        # homogenized_cols = self._columns
+        common_type = np.result_type(*self.dtypes)
+        homogenized_cols = [
+            c.astype(common_type)
+            if not np.issubdtype(c.dtype, common_type)
+            else c
+            for c in self._columns
+        ]
+        data_col = libcudf.reshape.stack(homogenized_cols)
+        result = Series(data=data_col, index=new_index)
+        if dropna:
+            return result.dropna()
+        else:
+            return result
 
 
 def from_pandas(obj):

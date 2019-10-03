@@ -20,6 +20,7 @@ from . import (
     reduce,
     replace,
     rolling,
+    reshape,
     search,
     sort,
     stream_compaction,

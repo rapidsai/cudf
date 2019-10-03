@@ -71,6 +71,9 @@ gdf_column stack(const cudf::table &values, cudaStream_t stream = 0)
   // Allocate output
   gdf_column output = allocate_like(*values.get_column(0),
                                     num_cols * num_rows);
+  // This needs to be done because the output is unnamed in pandas
+  free(output.col_name);
+  output.col_name = nullptr;
 
   // NEW PLAN:
   // Sync column categories if they were GDF_STRING_CATEGORY and convert temp 

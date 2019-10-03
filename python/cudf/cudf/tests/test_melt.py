@@ -4,6 +4,7 @@ import pytest
 
 from cudf import melt as cudf_melt
 from cudf.core import DataFrame
+from cudf.tests.utils import assert_eq
 
 
 @pytest.mark.parametrize("num_id_vars", [0, 1, 2, 10])
@@ -68,3 +69,45 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
     pd.testing.assert_frame_equal(expect, got.to_pandas())
 
     pd.testing.assert_frame_equal(expect, got_from_melt_method.to_pandas())
+
+
+@pytest.mark.parametrize("num_cols", [1, 2, 10])
+@pytest.mark.parametrize("num_rows", [1, 2, 1000])
+@pytest.mark.parametrize(
+    "dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "datetime64[ms]",  # TODO: also test for string
+    ],
+)
+@pytest.mark.parametrize("nulls", ["none", "some", "all"])
+def test_df_stack(nulls, num_cols, num_rows, dtype):
+    if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
+        pytest.skip(msg="nulls not supported in dtype: " + dtype)
+
+    pdf = pd.DataFrame()
+    for i in range(num_cols):
+        colname = str(i)
+        data = np.random.randint(0, 26, num_rows).astype(dtype)
+        if nulls == "some":
+            idx = np.random.choice(
+                num_rows, size=int(num_rows / 2), replace=False
+            )
+            data[idx] = np.nan
+        elif nulls == "all":
+            data[:] = np.nan
+        pdf[colname] = data
+
+    gdf = DataFrame.from_pandas(pdf)
+
+    got = gdf.stack()
+
+    expect = pdf.stack()
+
+    assert_eq(expect, got)
+    pass
