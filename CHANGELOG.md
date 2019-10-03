@@ -4,6 +4,8 @@
 
 ## Improvements
 
+- PR #2951 Allow set_index to handle a list of column names
+
 ## Bug Fixes
 
 
