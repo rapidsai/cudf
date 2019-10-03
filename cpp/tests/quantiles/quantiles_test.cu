@@ -23,7 +23,7 @@
 
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
-#include <quantiles/quantiles.hpp>
+#include <quantiles/quantiles_util.hpp>
 #include <cudf/quantiles.hpp>
 #include <cudf/cudf.h>
 
