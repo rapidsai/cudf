@@ -15,6 +15,7 @@
  */
 #include "orc_common.h"
 #include "orc_gpu.h"
+#include <io/utilities/block_utils.cuh>
 
 // Apache ORC reader does not handle zero-length patch lists for RLEv2 mode2
 // Workaround replaces zero-length patch lists by a dummy zero patch
@@ -24,20 +25,6 @@ namespace cudf {
 namespace io {
 namespace orc {
 namespace gpu {
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)        __shfl_sync(~0, v, 0)
-#define SHFL(v, t)      __shfl_sync(~0, v, t)
-#define SHFL_XOR(v, m)  __shfl_xor_sync(~0, v, m)
-#define SYNCWARP()      __syncwarp()
-#define BALLOT(v)       __ballot_sync(~0, v)
-#else
-#define SHFL0(v)        __shfl(v, 0)
-#define SHFL(v, t)      __shfl(v, t)
-#define SHFL_XOR(v, m)  __shfl_xor(v, m)
-#define SYNCWARP()
-#define BALLOT(v)       __ballot(v)
-#endif
 
 #define SCRATCH_BFRSZ   (512*4)
 
