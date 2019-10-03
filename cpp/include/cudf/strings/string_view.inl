@@ -61,8 +61,6 @@ __device__ inline cudf::size_type string_length( const char* str )
 
 namespace cudf
 {
-namespace strings
-{
 
 __host__ __device__ inline string_view::string_view(const char* data, size_type bytes)
     : _data(data), _bytes(bytes)
@@ -80,7 +78,7 @@ __host__ __device__ inline size_type string_view::size_bytes() const
 
 __device__ inline size_type string_view::length() const
 {
-    return detail::characters_in_string(_data,_bytes);
+    return strings::detail::characters_in_string(_data,_bytes);
 }
 
 __host__ __device__ inline const char* string_view::data() const
@@ -131,7 +129,7 @@ __device__ inline bool string_view::const_iterator::operator!=(const string_view
 __device__ inline char_utf8 string_view::const_iterator::operator*() const
 {
     char_utf8 chr = 0;
-    detail::to_char_utf8(p + offset, chr);
+    strings::detail::to_char_utf8(p + offset, chr);
     return chr;
 }
 
@@ -161,7 +159,7 @@ __device__ inline char_utf8 string_view::operator[](size_type pos) const
     if(offset >= _bytes)
         return 0;
     char_utf8 chr = 0;
-    detail::to_char_utf8(data() + offset, chr);
+    strings::detail::to_char_utf8(data() + offset, chr);
     return chr;
 }
 
@@ -280,7 +278,7 @@ __device__ inline size_type string_view::find(const char* str, size_type bytes, 
 __device__ inline size_type string_view::find(char_utf8 chr, size_type pos, int count) const
 {
     char str[sizeof(char_utf8)];
-    size_type chwidth = detail::from_char_utf8(chr,str);
+    size_type chwidth = strings::detail::from_char_utf8(chr,str);
     return find(str,chwidth,pos,count);
 }
 
@@ -322,7 +320,7 @@ __device__ inline size_type string_view::rfind(const char* str, size_type bytes,
 __device__ inline size_type string_view::rfind(char_utf8 chr, size_type pos, int count) const
 {
     char str[sizeof(char_utf8)];
-    size_type chwidth = detail::from_char_utf8(chr,str);
+    size_type chwidth = strings::detail::from_char_utf8(chr,str);
     return rfind(str,chwidth,pos,count);
 }
 
@@ -369,7 +367,7 @@ __device__ inline size_type string_view::split(const char* delim, int count, str
     if(strsCount < count)
         count = strsCount;
     //
-    size_type dchars = (bytes ? detail::characters_in_string(delim,bytes) : 1);
+    size_type dchars = (bytes ? strings::detail::characters_in_string(delim,bytes) : 1);
     size_type nchars = length();
     size_type spos = 0, sidx = 0;
     size_type epos = find(delim, bytes);
@@ -418,7 +416,7 @@ __device__ inline size_type string_view::rsplit(const char* delim, int count, st
     if(strsCount < count)
         count = strsCount;
     //
-    unsigned int dchars = (bytes ? detail::characters_in_string(delim,bytes) : 1);
+    unsigned int dchars = (bytes ? strings::detail::characters_in_string(delim,bytes) : 1);
     int epos = (int)length(); // end pos is not inclusive
     int sidx = count - 1;     // index for strs array
     int spos = rfind(delim, bytes);
@@ -440,9 +438,11 @@ __device__ inline size_type string_view::rsplit(const char* delim, int count, st
 
 __device__ inline size_type string_view::character_offset(size_type bytepos) const
 {
-    return detail::characters_in_string(data(), bytepos);
+    return strings::detail::characters_in_string(data(), bytepos);
 }
 
+namespace strings
+{
 namespace detail
 {
 __host__ __device__ inline size_type bytes_in_char_utf8(char_utf8 chr)

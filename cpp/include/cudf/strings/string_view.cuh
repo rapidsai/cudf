@@ -21,8 +21,6 @@
 
 namespace cudf
 {
-namespace strings
-{
 
 // UTF-8 characters are 1-4 bytes
 using char_utf8 = uint32_t;
@@ -304,6 +302,8 @@ private:
     __device__ size_type character_offset(size_type bytepos) const;
 };
 
+namespace strings
+{
 namespace detail
 {
 /**---------------------------------------------------------------------------*

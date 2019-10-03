@@ -506,13 +506,13 @@ class alignas(16) mutable_column_device_view
  * @return string_view instance representing this element at this index
  *---------------------------------------------------------------------------**/
 template <>
-__device__ inline strings::string_view const column_device_view::element<strings::string_view>(
+__device__ inline string_view const column_device_view::element<string_view>(
     size_type element_index) const noexcept {
       size_type index = element_index + offset(); // account for this view's _offset
       const int32_t* d_offsets = d_children[strings_column_view::offsets_column_index].data<int32_t>();
       const char* d_strings = d_children[strings_column_view::chars_column_index].data<char>();
       size_type offset = d_offsets[index];
-      return strings::string_view{d_strings + offset, d_offsets[index+1] - offset};
+      return string_view{d_strings + offset, d_offsets[index+1] - offset};
 }
 
 }  // namespace cudf
