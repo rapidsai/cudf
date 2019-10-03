@@ -162,6 +162,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src
 {
     uint32_t len = s->src_len;
     uint32_t pos = pos0;
+    uint32_t maxpos = pos0 + MAX_LITERAL_LENGTH - 31;
     uint32_t match_mask, literal_cnt;
     if (t == 0)
     {
@@ -220,7 +221,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src
             s->hash_map[hash] = pos + t;
         }
         pos += literal_cnt;
-    } while (literal_cnt == 32 && pos < MAX_LITERAL_LENGTH - 31);
+    } while (literal_cnt == 32 && pos < maxpos);
     return min(pos, len) - pos0;
 }
 
