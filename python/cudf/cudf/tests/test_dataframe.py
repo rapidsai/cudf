@@ -3637,7 +3637,7 @@ def test_df_astype_numeric_to_all(dtype, as_dtype):
     gdf['bar'] = Series(data, dtype=dtype)
 
     expect = DataFrame()
-    if as_dtype == 'str':
+    if as_dtype == 'str': # normal constructor results in None -> 'None'
         insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
     else:
         insert_data = Series(data, dtype=as_dtype)
@@ -3671,3 +3671,30 @@ def test_series_astype_string_to_other(as_dtype):
     psr = pd.DataFrame(data, columns='test')
     gsr = gd.from_pandas(psr)
     assert_eq(psr.astype(as_dtype), gsr.astype(as_dtype, **kwargs))
+
+@pytest.mark.parametrize(
+"as_dtype",
+[
+    "category",
+    "datetime64[s]",
+    "datetime64[ms]",
+    "datetime64[us]",
+    "datetime64[ns]",
+    "str",
+],
+)
+def test_df_astype_datetime_to_other(as_dtype):
+    data = ["2001-01-01", "2002-02-02", "2001-01-05"]
+    psr = pd.Series(data)
+    gsr = gd.from_pandas(psr)
+
+    pdf = pd.DataFrame()
+    gdf = DataFrame()
+    
+    pdf['foo'] = psr
+    pdf['bar'] = psr
+
+    gdf['foo'] = gsr
+    gdf['bar'] = gsr
+
+    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, format="%Y-%m-%d"))
