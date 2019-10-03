@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include <cudf/strings/strings_column_factories.hpp>
+#include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
+#include <vector>
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <tests/utilities/cudf_test_fixtures.h>
@@ -39,7 +40,10 @@ TEST_F(CombineTest, Concatenate)
     auto d_strings2 = cudf::test::create_strings_column(h_strings2);
     auto view2 = cudf::strings_column_view(d_strings2->view());
 
-    auto results = cudf::strings::concatenate(view1,view2);
+    std::vector<cudf::strings_column_view> strings_columns;
+    strings_columns.push_back(view1);
+    strings_columns.push_back(view2);
+    auto results = cudf::strings::concatenate(strings_columns);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);
