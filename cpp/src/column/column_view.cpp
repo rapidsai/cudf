@@ -19,7 +19,6 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/traits.hpp>
 #include <utilities/error_utils.hpp>
-#include <cudf/utilities/traits.hpp>
 
 #include <exception>
 #include <vector>
