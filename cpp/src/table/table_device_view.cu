@@ -42,30 +42,30 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
       _num_columns{source_view.num_columns()},
       _stream{stream} {
 
-  // The table's columns must be converted to column_device
-  // objects and copied into device memory for the table_device's
-  // device columns.
+  // The table's columns must be converted to ColumnDeviceView
+  // objects and copied into device memory for the table_device_view's
+  // _columns member.
   if (source_view.num_columns() > 0) {
     //
     // First calculate the size of memory needed to hold the
-    // array of ColumnDeviceView's. This is done by calling extent()
-    // for each of the ColumnView's in the table's columns.
+    // array of ColumnDeviceViews. This is done by calling extent()
+    // for each of the ColumnViews in the table_view's columns.
     size_type views_size_bytes =
         std::accumulate(source_view.begin(), source_view.end(), 0,
             [](size_type init, auto col) {
                 return init + ColumnDeviceView::extent(col);
             });
-    // A buffer of CPU memory is created to hold the ColumnDeviceView
-    // objects. Once created, the CPU memory is copied to device memory
+    // A buffer of CPU memory is allocated to hold the ColumnDeviceView
+    // objects. Once filled, the CPU memory is then copied to device memory
     // at the _columns member pointer.
-    // But each ColumnDeviceView instance may have child objects which
-    // require setting an internal device pointer before being copied
-    // from CPU to device.
     std::vector<int8_t> h_buffer(views_size_bytes);
     ColumnDeviceView* h_column = reinterpret_cast<ColumnDeviceView*>(h_buffer.data());
+    // Each ColumnDeviceView instance may have child objects which may
+    // require setting some internal device pointers before being copied
+    // from CPU to device.
     // Allocate the device memory to be used in the result.
     // We need this pointer in order to pass it down when creating the
-    // ColumnDeviceViews so the column can fix the pointer(s) for any
+    // ColumnDeviceViews so the column can set the pointer(s) for any
     // of its child objects.
     RMM_TRY(RMM_ALLOC(&_columns, views_size_bytes, stream));
     ColumnDeviceView* d_column = _columns;
@@ -75,7 +75,7 @@ table_device_view_base<ColumnDeviceView, HostTableView>::table_device_view_base(
     int8_t* h_end = (int8_t*)(h_column + source_view.num_columns());
     int8_t* d_end = (int8_t*)(d_column + source_view.num_columns());
     // Create the ColumnDeviceView from each column within the CPU memory
-    // array. Any column child data should be copied into h_end and any
+    // Any column child data should be copied into h_end and any
     // internal pointers should be set using d_end.
     for( auto itr=source_view.begin(); itr!=source_view.end(); ++itr )
     {
