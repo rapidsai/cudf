@@ -543,8 +543,8 @@ class DataFrame(object):
     def __str__(self):
         return self.to_string()
 
-    def astype(self, dtype, copy=True, errors='raise'):
-        return self._apply_support_method('astype', dtype)
+    def astype(self, dtype, **kwargs):
+        return self._apply_support_method('astype', dtype, **kwargs)
 
     def get_renderable_dataframe(self):
         nrows = np.max([pd.options.display.max_rows, 1])
