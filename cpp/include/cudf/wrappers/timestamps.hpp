@@ -17,6 +17,7 @@
 #pragma once
 
 #include <simt/chrono>
+#include <simt/../details/iterator>
 
 /**---------------------------------------------------------------------------*
  * @file timestamps.hpp
