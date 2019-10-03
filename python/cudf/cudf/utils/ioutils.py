@@ -257,6 +257,22 @@ cudf.io.parquet.to_parquet
 )
 doc_read_orc = docfmt_partial(docstring=_docstring_read_orc)
 
+_docstring_to_orc = """
+Write a DataFrame to the ORC format.
+
+Parameters
+----------
+fname : str
+    File path or object where the ORC dataset will be stored.
+compression : {{ 'snappy', None }}, default None
+    Name of the compression to use. Use None for no compression.
+
+See Also
+--------
+cudf.io.orc.read_orc
+"""
+doc_to_orc = docfmt_partial(docstring=_docstring_to_orc)
+
 _docstring_read_json = """
 Load a JSON dataset into a DataFrame
 

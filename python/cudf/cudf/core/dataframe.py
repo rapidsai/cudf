@@ -3816,6 +3816,13 @@ class DataFrame(object):
             chunksize,
         )
 
+    @ioutils.doc_to_orc()
+    def to_orc(self, fname, compression=None, *args, **kwargs):
+        """{docstring}"""
+        import cudf.io.orc as orc
+
+        orc.to_orc(self, fname, compression, *args, **kwargs)
+
     def scatter_by_map(self, map_index, map_size=None):
         """Scatter to a list of dataframes.
 
