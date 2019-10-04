@@ -1865,10 +1865,10 @@ class Series(object):
     def median(self, skipna=True):
         """Compute the median of the series
         """
-        if not skipna and self.null_count > 0 :
+        if not skipna and self.null_count > 0:
             return np.nan
         # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation='linear', exact=True)
+        return self.quantile(0.5, interpolation="linear", exact=True)
 
     def round(self, decimals=0):
         """Round a Series to a configurable number of decimal places.
