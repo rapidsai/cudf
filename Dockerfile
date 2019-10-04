@@ -76,4 +76,6 @@ RUN source activate cudf && \
 RUN source activate cudf && \
     cd /cudf/python/cudf && \
     python setup.py build_ext --inplace && \
+    python setup.py install && \
+    cd /cudf/python/nvstrings && \
     python setup.py install
