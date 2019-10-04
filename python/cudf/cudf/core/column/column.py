@@ -703,17 +703,7 @@ class Column(object):
         else:
             msg = "`q` must be either a single element, list or numpy array"
             raise TypeError(msg)
-        result = libcudf.quantile.quantile(self, quant, interpolation, exact)
-        if isinstance(q, Number):
-            return result[0] if result else np.nan
-        else:
-            return result
-
-    def median(self, skipna):
-        if not skipna and self.null_count > 0 :
-            return np.nan
-        # enforce linear in case the default ever changes
-        return self.quantile(0.5, interpolation='linear', exact=True)
+        return libcudf.quantile.quantile(self, quant, interpolation, exact)
 
     def take(self, indices, ignore_index=False):
         """Return Column by taking values from the corresponding *indices*.
