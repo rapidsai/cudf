@@ -140,6 +140,7 @@
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 - PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
 
 
