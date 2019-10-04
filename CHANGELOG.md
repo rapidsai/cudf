@@ -142,6 +142,7 @@
 - PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
 - PR #2963 Fix ORC writer uncompressed block indexing
+- PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 
 
 # cuDF 0.9.0 (21 Aug 2019)
