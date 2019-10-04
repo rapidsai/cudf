@@ -19,7 +19,14 @@
 #include <thrust/for_each.h>
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
+
+// NOTE: These are cudf headers. Please be cautious.
+// Using anything from these headers besides macros or typedefs
+// will not work because this module is built before libcudf
+// and therefore will not be able to link to any functions there.
+// This module will be reworked appropriately in the future.
 #include <utilities/error_utils.hpp>
+#include <cudf/cudf.h>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
@@ -27,14 +34,15 @@
 #include "../custring_view.cuh"
 #include "../util.h"
 
-struct porter_stemmer_measure_fn
+struct stemmer_base_fn
 {
-    custring_view_array d_strings;
     custring_view* d_vowels;
     Char y_char;
-    unsigned int* d_results;
 
-    __device__ bool is_consonant( custring_view* dstr, int index )
+    stemmer_base_fn( custring_view* d_vowels, Char y_char )
+    : d_vowels(d_vowels), y_char(y_char) {}
+
+    __device__ bool is_consonant( custring_view* dstr, int index ) const
     {
         Char ch = dstr->at(index);
         if( d_vowels->find(ch) >= 0 )
@@ -44,6 +52,16 @@ struct porter_stemmer_measure_fn
         ch = dstr->at(index-1);       // only if previous char
         return d_vowels->find(ch)>=0; // is not a consonant
     }
+};
+
+struct porter_stemmer_measure_fn : public stemmer_base_fn
+{
+    custring_view_array d_strings;
+    unsigned int* d_results;
+
+    porter_stemmer_measure_fn( custring_view* d_vowels, Char y_char,
+                               custring_view_array d_strings, unsigned int* d_results )
+    : stemmer_base_fn(d_vowels,y_char), d_strings(d_strings), d_results(d_results) {}
 
     __device__ void operator()(unsigned int idx)
     {
@@ -92,7 +110,56 @@ unsigned int NVText::porter_stemmer_measure(NVStrings& strs, const char* vowels,
 
     // do the measure
     thrust::for_each_n(execpol->on(0), thrust::make_counting_iterator<unsigned int>(0), count,
-        porter_stemmer_measure_fn{d_strings,d_vowels,char_y,d_results});
+        porter_stemmer_measure_fn{d_vowels,char_y,d_strings,d_results});
+
+    // done
+    if( !bdevmem )
+    {
+        CUDA_TRY( cudaMemcpyAsync(results,d_results,count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
+        RMM_FREE(d_results,0);
+    }
+    RMM_FREE(d_vowels,0);
+    return 0;
+}
+
+unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                               NVText::letter_type ltype, int position, bool* results, bool bdevmem )
+{
+    unsigned int count = strs.size();
+    if( count==0 )
+        return 0; // nothing to do
+    auto execpol = rmm::exec_policy(0);
+    // setup results vector
+    bool* d_results = results;
+    if( !bdevmem )
+        d_results = device_alloc<bool>(count,0);
+    if( vowels==nullptr )
+        vowels = "aeiou";
+    custring_view* d_vowels = custring_from_host(vowels);
+    if( y_char==nullptr )
+        y_char = "y";
+    Char char_y;
+    custring_view::char_to_Char(y_char,char_y);
+
+    // get the string pointers
+    rmm::device_vector<custring_view*> strings(count,nullptr);
+    custring_view** d_strings = strings.data().get();
+    strs.create_custring_index(d_strings);
+
+    //
+    stemmer_base_fn pfn{d_vowels,char_y};
+    thrust::transform(execpol->on(0),
+        thrust::make_counting_iterator<unsigned int>(0),
+        thrust::make_counting_iterator<unsigned int>(count),
+        d_results,
+        [d_strings, pfn, ltype, position] __device__ (unsigned int idx) {
+            custring_view* d_str = d_strings[idx];
+            if( !d_str )
+                return false;
+            if( position >= d_str->chars_count() )
+                return false;
+            return pfn.is_consonant(d_str,position) ? ltype==NVText::consonant : ltype==NVText::vowel;
+        });
 
     // done
     if( !bdevmem )
