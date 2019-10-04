@@ -324,7 +324,6 @@ class DataFrame(object):
         if is_scalar(arg) or isinstance(arg, tuple):
             s = self._cols[arg]
             s.name = arg
-            s.index = self.index
             return s
         elif isinstance(arg, slice):
             df = DataFrame()
@@ -1181,7 +1180,7 @@ class DataFrame(object):
                 df[k] = c.set_index(index)
             return df
 
-    def reset_index(self, drop=False):
+    def reset_index(self, drop=False, inplace=False):
         out = DataFrame()
         if not drop:
             if isinstance(self.index, cudf.core.multiindex.MultiIndex):
@@ -1197,7 +1196,13 @@ class DataFrame(object):
                 out[c] = self[c]
         else:
             out = self
-        return out.set_index(RangeIndex(len(self)))
+        if inplace is True:
+            for column_name in set(out.columns) - set(self.columns):
+                self[column_name] = out[column_name]
+                self._cols.move_to_end(column_name, last=False)
+            self._index = RangeIndex(len(self))
+        else:
+            return out.set_index(RangeIndex(len(self)))
 
     def take(self, positions, ignore_index=False):
         out = DataFrame()
