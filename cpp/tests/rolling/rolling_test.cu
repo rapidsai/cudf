@@ -23,7 +23,7 @@
 
 #include <utilities/error_utils.hpp>
 #include <utilities/cudf_utils.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <gtest/gtest.h>
 

@@ -27,7 +27,7 @@
 #include <random>
 
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
 #include <utilities/device_operators.cuh>
 

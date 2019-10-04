@@ -23,7 +23,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/io/io_test_utils.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
     ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));

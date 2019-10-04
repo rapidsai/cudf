@@ -31,7 +31,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
 
 template <typename T>

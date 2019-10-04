@@ -16,7 +16,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <gmock/gmock.h>

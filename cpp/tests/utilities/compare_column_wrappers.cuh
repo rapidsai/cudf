@@ -20,7 +20,7 @@
 
 #include <tests/utilities/cudf_test_fixtures.h> // for GdfTest
 #include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <utilities/bit_util.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>

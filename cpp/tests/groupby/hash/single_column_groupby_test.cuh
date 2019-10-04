@@ -20,7 +20,7 @@
 #include <cudf/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "../common/groupby_test.hpp"

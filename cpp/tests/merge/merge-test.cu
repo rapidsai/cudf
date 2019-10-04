@@ -1,23 +1,22 @@
+#include <nvstrings/NVCategory.h>
+#include <nvstrings/NVStrings.h>
+#include <cudf/cudf.h>
+#include <cudf/functions.h>
+#include <cudf/merge.hpp>
+#include <rmm/thrust_rmm_allocator.h>
+#include <cudf/legacy/table.hpp>
+#include <cudf/utilities/legacy/nvcategory_util.hpp>
+#include "tests/utilities/legacy/column_wrapper.cuh"
+#include "tests/utilities/legacy/column_wrapper_factory.hpp"
+#include "tests/utilities/cudf_test_fixtures.h"
+#include "tests/utilities/nvcategory_utils.cuh"
+
 #include <cassert>
 #include <vector>
 #include <memory>
 #include <algorithm>
 #include <limits>
 #include <gtest/gtest.h>
-#include <nvstrings/NVCategory.h>
-#include <nvstrings/NVStrings.h>
-
-#include <cudf/cudf.h>
-#include <cudf/functions.h>
-#include <cudf/merge.hpp>
-#include <rmm/thrust_rmm_allocator.h>
-#include <cudf/legacy/table.hpp>
-
-#include <cudf/utilities/legacy/nvcategory_util.hpp>
-#include "tests/utilities/column_wrapper.cuh"
-#include "tests/utilities/column_wrapper_factory.hpp"
-#include "tests/utilities/cudf_test_fixtures.h"
-#include "tests/utilities/nvcategory_utils.cuh"
 
 template <typename T>
 class MergeTest : public GdfTest {};
