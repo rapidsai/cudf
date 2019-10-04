@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 
-#include "groupby.hpp"
+#include "group_quantiles.hpp"
 
 #include <utilities/cuda_utils.hpp>
-#include <quantiles/quantiles.hpp>
+#include <quantiles/quantiles_util.hpp>
+#include <groupby/sort/sort_helper.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <cudf/cudf.h>
@@ -79,6 +80,40 @@ struct quantiles_functor {
 
 } // namespace anonymous
 
+namespace detail {
+
+void group_quantiles(gdf_column const& values,
+                     rmm::device_vector<gdf_size_type> const& group_offsets,
+                     rmm::device_vector<gdf_size_type> const& group_sizes,
+                     gdf_column * result,
+                     std::vector<double> const& quantiles,
+                     cudf::interpolation interpolation,
+                     cudaStream_t stream)
+{
+  rmm::device_vector<double> dv_quantiles(quantiles);
+
+  type_dispatcher(values.dtype, quantiles_functor{},
+                  values, group_offsets, group_sizes, result,
+                  dv_quantiles, interpolation, stream);
+}
+
+void group_medians(gdf_column const& values,
+                   rmm::device_vector<gdf_size_type> const& group_offsets,
+                   rmm::device_vector<gdf_size_type> const& group_sizes,
+                   gdf_column * result,
+                   cudaStream_t stream)
+{
+  std::vector<double> quantiles{0.5};
+  cudf::interpolation interpolation = cudf::interpolation::LINEAR;
+
+  rmm::device_vector<double> dv_quantiles(quantiles);
+
+  type_dispatcher(values.dtype, quantiles_functor{},
+                  values, group_offsets, group_sizes, result,
+                  dv_quantiles, interpolation, stream);
+}
+
+} // namespace detail
 
 // TODO: add optional check for is_sorted. Use context.flag_sorted
 std::pair<cudf::table, cudf::table>
@@ -88,10 +123,8 @@ group_quantiles(cudf::table const& keys,
                 cudf::interpolation interpolation,
                 bool include_nulls)
 {
-  detail::groupby gb_obj(keys, include_nulls);
+  groupby::sort::detail::helper gb_obj(keys, include_nulls);
   auto group_offsets = gb_obj.group_offsets();
-
-  rmm::device_vector<double> dv_quantiles(quantiles);
 
   cudf::table result_table(gb_obj.num_groups() * quantiles.size(),
                            std::vector<gdf_dtype>(values.num_columns(), GDF_FLOAT64),
@@ -106,9 +139,8 @@ group_quantiles(cudf::table const& keys,
 
     gdf_column* result_col = result_table.get_column(i);
 
-    type_dispatcher(sorted_values.dtype, quantiles_functor{},
-                    sorted_values, group_offsets, group_sizes, result_col,
-                    dv_quantiles, interpolation);
+    detail::group_quantiles(sorted_values, group_offsets, group_sizes, 
+                            result_col, quantiles, interpolation);
 
     gdf_column_free(&sorted_values);
   }

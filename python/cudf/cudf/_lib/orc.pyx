@@ -9,10 +9,14 @@ from cudf._lib.cudf cimport *
 from cudf._lib.cudf import *
 from cudf._lib.includes.orc cimport (
     reader as orc_reader,
-    reader_options as orc_reader_options
+    reader_options as orc_reader_options,
+    writer as orc_writer,
+    writer_options as orc_writer_options,
+    compression_type
 )
+from cython.operator cimport dereference as deref
 from libc.stdlib cimport free
-from libcpp.memory cimport unique_ptr
+from libcpp.memory cimport unique_ptr, make_unique
 from libcpp.string cimport string
 
 from cudf._lib.utils cimport *
@@ -20,6 +24,26 @@ from cudf._lib.utils import *
 
 import errno
 import os
+
+
+cdef unique_ptr[cudf_table] make_table_from_columns(columns):
+    """
+    Cython function to create a `cudf_table` from an ordered dict of columns
+    """
+    cdef vector[gdf_column*] c_columns
+    for idx, (col_name, col) in enumerate(columns.items()):
+        check_gdf_compatibility(col._column)
+        # Workaround for string columns
+        if col.dtype.type == np.object_:
+            c_columns.push_back(
+                column_view_from_string_column(col._column, col_name)
+            )
+        else:
+            c_columns.push_back(
+                column_view_from_column(col._column, col_name)
+            )
+
+    return make_unique[cudf_table](c_columns)
 
 
 cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
@@ -61,9 +85,9 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
 
     # Read data into columns
     cdef cudf_table c_out_table
-    cdef int c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef int c_num_rows = num_rows if num_rows is not None else -1
-    cdef int c_stripe = stripe if stripe is not None else -1
+    cdef gdf_size_type c_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef gdf_size_type c_num_rows = num_rows if num_rows is not None else -1
+    cdef gdf_size_type c_stripe = stripe if stripe is not None else -1
     with nogil:
         if c_skip_rows != 0 or c_num_rows != -1:
             c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
@@ -73,3 +97,35 @@ cpdef read_orc(filepath_or_buffer, columns=None, stripe=None,
             c_out_table = reader.get().read_all()
 
     return table_to_dataframe(&c_out_table)
+
+
+cpdef write_orc(cols, filepath_or_buffer, compression=None):
+    """
+    Cython function to call into libcudf API, see `write_orc`.
+
+    See Also
+    --------
+    cudf.io.orc.read_orc
+    """
+
+    # Setup writer options
+    cdef orc_writer_options options = orc_writer_options()
+    if compression is None:
+        options.compression = compression_type.none
+    elif compression == "snappy":
+        options.compression = compression_type.snappy
+    else:
+        raise ValueError("Unsupported `compression` type")
+
+    # Create writer
+    cdef string filepath = <string>str(filepath_or_buffer).encode()
+    cdef unique_ptr[orc_writer] writer
+    with nogil:
+        writer = unique_ptr[orc_writer](
+            new orc_writer(filepath, options)
+        )
+
+    # Write data to output
+    cdef unique_ptr[cudf_table] c_in_table = make_table_from_columns(cols)
+    with nogil:
+        writer.get().write_all(deref(c_in_table))

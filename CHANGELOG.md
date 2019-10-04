@@ -5,6 +5,9 @@
 
 ## Improvements
 
+- PR #2904 Move gpu decompressors to cudf::io namespace
+- PR #2965 Fix slow orc reader perf with large uncompressed blocks
+
 ## Bug Fixes
 
 
@@ -14,9 +17,11 @@
 
 - PR #2423 Added `groupby.quantile()`
 - PR #2522 Add Java bindings for NVStrings backed upper and lower case mutators
+- PR #2605 Added Sort based groupby in libcudf
 - PR #2607 Add Java bindings for parsing JSON
 - PR #2629 Add dropna= parameter to groupby
 - PR #2585 ORC & Parquet Readers: Remove millisecond timestamp restriction
+- PR #2507 Add GPU-accelerated ORC Writer
 - PR #2559 Add Series.tolist()
 - PR #2653 Add Java bindings for rolling window operations
 - PR #2480 Merge `custreamz` codebase into `cudf` repo
@@ -27,6 +32,7 @@
 - PR #2394 Move `rapidsai/custrings` into `cudf`
 - PR #2734 Final sync of custrings source into cudf
 - PR #2724 Add libcudf support for __contains__
+- PR #2777 Add python bindings for porter stemmer measure functionality
 - PR #2781 Add issorted to is_monotonic
 - PR #2685 Add cudf::scatter_to_tables and cython binding
 - PR #2743 Add Java bindings for NVStrings timestamp2long as part of String ColumnVector casting
@@ -39,6 +45,8 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2719 Series covariance and Pearson correlation
+- PR #2207 Beginning of libcudf overhaul: introduce new column and table types
 - PR #2869 Add `cudf.CategoricalDtype`
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
@@ -70,6 +78,7 @@
 - PR #2817 Dask-cudf: `read_parquet` support for remote filesystems
 - PR #2823 improve java data movement debugging
 - PR #2806 CSV Reader: Clean-up row offset operations
+- PR #2640 Add dask wait/persist exmaple to 10 minute guide
 - PR #2828 Optimizations of kernel launch configuration for `DataFrame.apply_rows` and `DataFrame.apply_chunks`
 - PR #2831 Add `column` argument to `DataFrame.drop`
 - PR #2775 Various optimizations to improve __getitem__ and __setitem__ performance
@@ -79,7 +88,10 @@
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
+- PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
+- PR #2909 CSV Reader: Avoid row offsets host vector default init
 
 ## Bug Fixes
 
@@ -138,8 +150,13 @@
 - PR #2860 Fix boolean indexing when the result is a single row
 - PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
+- PR #2865 DaskIO: Fix `read_csv` and `read_orc` when input is list of files
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
+- PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
+- PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2963 Fix ORC writer uncompressed block indexing
+- PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 
 
 # cuDF 0.9.0 (21 Aug 2019)
