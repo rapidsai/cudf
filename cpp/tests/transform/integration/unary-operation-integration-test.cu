@@ -25,7 +25,7 @@
 #include <cctype>
 
 #include <tests/utilities/nvcategory_utils.cuh>
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 namespace cudf {
 namespace test {

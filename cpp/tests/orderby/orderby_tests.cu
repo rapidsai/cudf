@@ -18,7 +18,7 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 // See this header for all of the handling of valids' vectors
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include <tests/utilities/legacy/tuple_vectors.h>

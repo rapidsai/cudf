@@ -11,7 +11,7 @@ endif()
 
 add_library(cudftestutil STATIC
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/cudf_test_utils.cu"
-            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/valid_vectors.cpp"
+            "${CMAKE_CURRENT_SOURCE_DIR}/utilities/legacy/valid_vectors.cpp"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/nvcategory_utils.cu"
             "${CMAKE_CURRENT_SOURCE_DIR}/utilities/column_utilities.cu")
 

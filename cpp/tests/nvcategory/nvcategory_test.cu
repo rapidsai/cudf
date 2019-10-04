@@ -43,7 +43,7 @@
 #include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 
