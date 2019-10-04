@@ -88,6 +88,7 @@
 - PR #2830 Use YYMMDD tag in custreamz nightly build
 - PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
+- PR #2909 CSV Reader: Avoid row offsets host vector default init
 
 ## Bug Fixes
 
