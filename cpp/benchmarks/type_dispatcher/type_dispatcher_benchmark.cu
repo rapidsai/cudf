@@ -21,8 +21,8 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 

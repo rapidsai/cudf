@@ -20,8 +20,8 @@
 #include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/legacy/table.hpp>
 #include <random>
 

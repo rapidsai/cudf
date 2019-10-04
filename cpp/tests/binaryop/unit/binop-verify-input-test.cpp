@@ -19,7 +19,7 @@
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/scalar_wrapper.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/binaryop.hpp>
 #include <gtest/gtest.h>
 #include <vector>

@@ -18,8 +18,8 @@
 #ifndef CUDF_TEST_UTILITIES_COMPARE_COLUMNS_CUH_
 #define CUDF_TEST_UTILITIES_COMPARE_COLUMNS_CUH_
 
-#include <tests/utilities/cudf_test_fixtures.h> // for GdfTest
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h> // for GdfTest
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <utilities/bit_util.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>

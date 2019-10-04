@@ -28,8 +28,8 @@
 
 #include <thrust/device_vector.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
 // This is the main test feature

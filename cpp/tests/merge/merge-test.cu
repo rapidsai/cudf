@@ -8,7 +8,7 @@
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include "tests/utilities/legacy/column_wrapper.cuh"
 #include "tests/utilities/legacy/column_wrapper_factory.hpp"
-#include "tests/utilities/cudf_test_fixtures.h"
+#include "tests/utilities/legacy/cudf_test_fixtures.h"
 #include "tests/utilities/nvcategory_utils.cuh"
 
 #include <cassert>

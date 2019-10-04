@@ -15,13 +15,13 @@
  */
 #include "order_by_type_vectors.h"
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 // See this header for all of the handling of valids' vectors
 #include <tests/utilities/valid_vectors.h>
 
 // See this header for all of the recursive handling of tuples of vectors
-#include <tests/utilities/tuple_vectors.h>
+#include <tests/utilities/legacy/tuple_vectors.h>
 
 #include <utilities/bit_util.cuh>
 #include <cudf/utilities/legacy/wrapper_types.hpp>

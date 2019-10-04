@@ -17,7 +17,7 @@
 #ifndef ORDER_BY_TYPE_VECTORS_H
 #define ORDER_BY_TYPE_VECTORS_H
 
-#include <tests/utilities/tuple_vectors.h>
+#include <tests/utilities/legacy/tuple_vectors.h>
 #include <tests/utilities/valid_vectors.h>
 
 #include <utilities/cudf_utils.h>

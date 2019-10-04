@@ -37,8 +37,8 @@
 
 #include <rmm/rmm.h>
 #include <cstring>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
