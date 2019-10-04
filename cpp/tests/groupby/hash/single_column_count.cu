@@ -18,7 +18,7 @@
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/compare_column_wrappers.cuh>
+#include <tests/utilities/legacy/compare_column_wrappers.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include "single_column_groupby_test.cuh"
 #include "../common/type_info.hpp"

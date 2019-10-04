@@ -20,10 +20,10 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include "tests/utilities/compare_column_wrappers.cuh"
+#include "tests/utilities/legacy/compare_column_wrappers.cuh"
 #include <tests/utilities/cudf_test_fixtures.h>
 #include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/compare_column_wrappers.cuh>
+#include <tests/utilities/legacy/compare_column_wrappers.cuh>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
