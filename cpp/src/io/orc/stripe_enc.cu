@@ -1324,10 +1324,7 @@ gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in
             {
                 // Copy from uncompressed source
                 src = reinterpret_cast<uint8_t *>(blk_in->srcDevice);
-                if (dst_len > src_len)
-                {
-                    blk_out->bytes_written = src_len;
-                }
+                blk_out->bytes_written = src_len;
                 dst_len = src_len;
                 blk_size24 = dst_len * 2 + 1;
             }
