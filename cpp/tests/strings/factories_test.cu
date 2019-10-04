@@ -17,16 +17,15 @@
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
+#include <tests/utilities/base_fixture.hpp>
 
-#include <gtest/gtest.h>
 #include <gmock/gmock.h>
-#include <tests/utilities/cudf_test_fixtures.h>
 
 #include <vector>
 #include <cstring>
 
 
-struct FactoriesTest : public GdfTest {};
+struct FactoriesTest : public cudf::test::BaseFixture {};
 
 TEST_F(FactoriesTest, CreateColumnFromArray)
 {

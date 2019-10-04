@@ -209,8 +209,9 @@ class alignas(16) column_device_view : public detail::column_device_view_base {
   column_device_view& operator=(column_device_view&&) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Creates an instance of this class in the specified host memory
-   * using the device memory pointer as a base for child pointers.
+   * @brief Creates an instance of this class using the specified host memory
+   * pointer (h_ptr) to store child objects and the device memory pointer (d_ptr)
+   * as a base for any child object pointers.
    *
    * @param column Column view from which to create this instance.
    * @param h_ptr Host memory pointer on which to place any child data.
@@ -317,8 +318,9 @@ class alignas(16) mutable_column_device_view
   mutable_column_device_view& operator=(mutable_column_device_view&&) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Creates an instance of this class in the specified host memory
-   * using the device memory pointer as a base for child pointers.
+   * @brief Creates an instance of this class using the specified host memory
+   * pointer (h_ptr) to store child objects and the device memory pointer (d_ptr)
+   * as a base for any child object pointers.
    *
    * @param column Column view from which to create this instance.
    * @param h_ptr Host memory pointer on which to place any child data.

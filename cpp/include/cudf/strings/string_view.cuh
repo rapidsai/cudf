@@ -26,8 +26,8 @@ namespace cudf
 using char_utf8 = uint32_t;
 
 /**---------------------------------------------------------------------------*
- * @brief A non-owning, immutable view of device data that is variable length
- * character array representing a UTF-8 string. The caller must maintain the
+ * @brief A non-owning, immutable view of device data that is a variable length
+ * char array representing a UTF-8 string. The caller must maintain the
  * device memory for the lifetime of this instance.
  *
  * It provides a simple wrapper and string operations for an individual string

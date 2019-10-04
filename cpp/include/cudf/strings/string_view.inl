@@ -23,7 +23,7 @@ using BYTE = uint8_t;
 
 /**---------------------------------------------------------------------------*
  * @brief Returns the number of bytes used to represent the provided byte.
- * This could 0 to 4 bytes. 0 is returned for intermediate bytes within a
+ * This could be 0 to 4 bytes. 0 is returned for intermediate bytes within a
  * single character. For example, for the two-byte 0xC3A8 single character,
  * the first byte would return 2 and the second byte would return 0.
  *
