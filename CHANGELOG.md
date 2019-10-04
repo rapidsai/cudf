@@ -7,6 +7,8 @@
 
 ## Improvements
 
+- PR #2904 Move gpu decompressors to cudf::io namespace
+
 ## Bug Fixes
 
 
@@ -51,7 +53,6 @@
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2872 Add Java pinned memory pool allocator
-
 
 ## Improvements
 
@@ -148,9 +149,12 @@
 - PR #2860 Fix boolean indexing when the result is a single row
 - PR #2859 Fix tail method issue for string columns
 - PR #2852 Fixed `cumsum()` and `cumprod()` on boolean series.
+- PR #2865 DaskIO: Fix `read_csv` and `read_orc` when input is list of files
 - PR #2750 Fixed casting values to cudf::bool8 so non-zero values always cast to true
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
+- PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2963 Fix ORC writer uncompressed block indexing
 
 
 # cuDF 0.9.0 (21 Aug 2019)

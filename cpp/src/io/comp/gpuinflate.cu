@@ -44,24 +44,10 @@ Mark Adler    madler@alumni.caltech.edu
 */
 
 #include "gpuinflate.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
-
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d)  __nanosleep(d)
-#else
-#define NANOSLEEP(d)  clock()
-#endif
+namespace cudf {
+namespace io {
 
 #define NUMTHREADS 128  // Threads per block
 
@@ -1288,4 +1274,8 @@ cudaError_t __host__ gpuinflate(gpu_inflate_input_s *inputs, gpu_inflate_status_
 
     return cudaSuccess;
 }
+
+
+} // namespace io
+} // namespace cudf
 
