@@ -49,11 +49,20 @@ namespace detail {
       fill_end = out_column->size;
     }
 
-    detail::copy_range(out_column, detail::column_range_factory{in_column, in_start}, out_start, out_end);
-
-    if (fill_value != nullptr) {
-      detail::copy_range(out_column, detail::scalar_factory{*fill_value}, fill_start, fill_end);
+    if (std::abs(periods) < out_column->size) {
+      detail::copy_range(out_column,
+                         detail::column_range_factory{in_column, in_start},
+                         out_start,
+                         out_end);
+    } else {
+      fill_start = 0;
+      fill_end = out_column->size;
     }
+
+    detail::copy_range(out_column,
+                       detail::scalar_factory{*fill_value},
+                       fill_start,
+                       fill_end);
   }
 
 }; // namespace detail
@@ -64,11 +73,15 @@ table shift(
   const gdf_scalar* fill_value
 )
 {
+  if (periods == 0) {
+    return copy(in_table);
+  }
+
   table out_table = allocate_like(in_table, ALWAYS);
   auto valid_size = gdf_valid_allocation_size(out_table.num_rows());
 
-  for (gdf_index_type i = 0; i < out_table.num_columns(); i++)
-  {
+  for (gdf_index_type i = 0; i < out_table.num_columns(); i++) {
+
       auto out_column = const_cast<gdf_column*>(out_table.get_column(i));
       auto in_column = const_cast<gdf_column*>(in_table.get_column(i));
 

@@ -14,134 +14,117 @@
  * limitations under the License.
  */
 
- #include <tests/utilities/cudf_test_fixtures.h>
- #include <tests/utilities/column_wrapper.cuh>
- #include <tests/utilities/scalar_wrapper.cuh>
- #include <cudf/copying.hpp>
+#include <tests/copying/copying_test_helper.hpp>
+#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/scalar_wrapper.cuh>
+#include <cudf/copying.hpp>
  
- using cudf::test::column_wrapper;
- using cudf::test::scalar_wrapper;
+using cudf::test::column_wrapper;
+using cudf::test::scalar_wrapper;
 
- namespace
- {
-
- template <typename ColumnType>
- column_wrapper<ColumnType> make_column_wrapper(
-   std::vector<ColumnType> data,
-   std::vector<gdf_valid_type> mask
- )
- {
-   return column_wrapper<ColumnType>(
-     data,
-     [mask](gdf_size_type row){ return mask[row]; }
-   );
- }
-
- template <typename ColumnType>
- void test_shift(
-   gdf_index_type periods,
-   scalar_wrapper<ColumnType> fill_value,
-   column_wrapper<ColumnType> source_column,
-   column_wrapper<ColumnType> expect_column
- )
- {
-   auto source_table = cudf::table{source_column.get()};
-   auto actual_table = cudf::shift(source_table, periods, fill_value);
- 
-   print_gdf_column(source_column.get());
-   print_gdf_column(expect_column.get());
-   print_gdf_column(actual_table.get_column(0));
-
-   std::cout << "a: " << expect_column.get()->null_count << std::endl;
-   std::cout << "b: " << actual_table.get_column(0)->null_count << std::endl;
-
-   auto actual_column = column_wrapper<ColumnType>(*actual_table.get_column(0));
- 
-   ASSERT_EQ(expect_column, actual_column);
- }
-
- 
-class ShiftTest : public GdfTest {};
-
-TEST_F(ShiftTest, positive)
+namespace
 {
-  auto source_column = make_column_wrapper<int32_t>(
-    {5, 5, 5, 5, 5, 5, 5, 5, 5},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1}
-    // {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  );
 
-  auto expect_column = make_column_wrapper<int32_t>(
-    {5, 5, 5, 5, 5, 5, 5, 5, 5},
-    {0, 0, 0, 0, 0, 1, 1, 1, 1}
-    // {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  );
-
-  test_shift(
-    5,
-    scalar_wrapper<int32_t>(5, false),
-    source_column,
-    expect_column
+template <typename ColumnType>
+column_wrapper<ColumnType> make_column_wrapper(
+  std::vector<ColumnType> data,
+  std::vector<gdf_valid_type> mask
+)
+{
+  return column_wrapper<ColumnType>(
+    data,
+    [mask](gdf_size_type row){ return mask[row] != 0; }
   );
 }
 
-TEST_F(ShiftTest, negative)
+template <typename ColumnType>
+column_wrapper<ColumnType> shift(
+  gdf_index_type periods,
+  column_wrapper<ColumnType> source_column,
+  scalar_wrapper<ColumnType> fill_value
+)
 {
-  auto source_column = make_column_wrapper<int32_t>(
-    {5, 5, 5, 5, 5, 5, 5, 5, 5},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1}
-    // {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  );
+  auto source_table = cudf::table{source_column.get()};
+  auto actual_table = cudf::shift(source_table, periods, fill_value);
+  auto actual_column = column_wrapper<ColumnType>(*actual_table.get_column(0));
+  return actual_column;
+}
 
-  auto expect_column = make_column_wrapper<int32_t>(
-    {5, 5, 5, 5, 5, 5, 5, 5, 5},
-    {0, 0, 0, 0, 0, 1, 1, 1, 1}
-    // {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  );
+template <typename ColumnType>
+column_wrapper<ColumnType> shift_cpu(
+  int periods,
+  column_wrapper<ColumnType> source,
+  scalar_wrapper<ColumnType> fill_value
+){
+  auto source_column = source.get();
+  auto host = source.to_host();
+  auto data_host = std::get<0>(host);
+  std::vector<gdf_valid_type> valid_host = std::get<1>(host);
 
-  test_shift(
-    5,
-    scalar_wrapper<int32_t>(5, false),
-    source_column,
-    expect_column
+  auto size = source.size();
+
+  return column_wrapper<ColumnType>(
+    source.size(),
+    [size, periods, fill_value, data_host](gdf_size_type row){
+      return row < periods || row >= size + periods
+        ? fill_value.value()
+        : data_host[row - periods];
+    },
+    [size, periods, fill_value, valid_host](gdf_size_type row){
+      return row < periods || row >= size + periods
+        ? fill_value.is_valid()
+        : cudf::util::bit_is_set(&valid_host.front(), row - periods);
+    }
   );
 }
 
-TEST_F(ShiftTest, valid_fill)
+template <typename ColumnType>
+struct ShiftTest : public testing::Test {
+  void test_shift(const int size, const int periods) {
+    auto fill_value = scalar_wrapper<ColumnType>(0, true);
+    auto source_column = create_random_column<ColumnType>(size);
+    auto expect_column = shift_cpu(periods, source_column, fill_value);
+    auto actual_column = shift(periods, source_column, fill_value);
+  
+    ASSERT_EQ(expect_column, actual_column);
+  }
+};
+
+using TestTypes = ::testing::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+
+TYPED_TEST_CASE(ShiftTest, TestTypes);
+
+TYPED_TEST(ShiftTest, Positive)
 {
-  auto source_column = make_column_wrapper<int32_t>(
-    {5, 5, 5, 5, 5, 5, 5, 5, 5},
-    {1, 1, 1, 1, 1, 1, 1, 1, 1}
-    // {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  );
-
-  auto expect_column = make_column_wrapper<int32_t>(
-    {5, 5, 5, 5, 5, 5, 5, 5, 5},
-    {0, 0, 0, 0, 0, 1, 1, 1, 1}
-    // {0, 0, 0, 0, 0, 0, 0, 0, 0}
-  );
-
-  test_shift(
-    5,
-    scalar_wrapper<int32_t>(5, false),
-    source_column,
-    expect_column
-  );
+  const int SIZE = 2^10;
+  this->test_shift(SIZE, SIZE / 2);
 }
 
-// TEST_F(ShiftTest, zero_shift)
-// {
-//   auto source_column = make_column_wrapper<int32_t>(
-//     {7, 7, 7, 7, 7, 7, 7, 7, 7},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1}
-//   );
+TYPED_TEST(ShiftTest, Negative)
+{
+  const int SIZE = 2^10;
+  this->test_shift(SIZE, SIZE / -2);
+}
 
-//   auto expect_column = make_column_wrapper<int32_t>(
-//     {7, 7, 7, 7, 7, 7, 7, 7, 7},
-//     {1, 1, 1, 1, 1, 1, 1, 1, 1}
-//   );
+TYPED_TEST(ShiftTest, LowerBounds)
+{
+  const int SIZE = 2^10;
+  this->test_shift(SIZE, -SIZE);
+  this->test_shift(SIZE, -SIZE - 1);
+}
 
-//   test_shift(0, scalar_wrapper<int32_t>(7, true), source_column, expect_column);
-// }
+TYPED_TEST(ShiftTest, UpperBounds)
+{
+  const int SIZE = 2^10;
+  this->test_shift(SIZE, SIZE);
+  this->test_shift(SIZE, SIZE + 1);
+}
+
+TYPED_TEST(ShiftTest, Zero)
+{
+  const int SIZE = 2^10;
+  this->test_shift(SIZE, 0);
+}
 
 }
