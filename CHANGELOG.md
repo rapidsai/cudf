@@ -87,6 +87,7 @@
 - PR #2856 Update group_split_cudf to use scatter_by_map
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
+- PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
 - PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
