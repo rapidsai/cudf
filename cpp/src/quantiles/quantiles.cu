@@ -178,7 +178,7 @@ gdf_error quantile_exact( gdf_column*         col_in,       // input column
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
 
-  if (col_in->size == 0) {
+  if (col_in->size - col_in->null_count == 0) {
      result->is_valid = false;
      return GDF_SUCCESS;
   }
@@ -205,7 +205,7 @@ gdf_error quantile_approx(	gdf_column*  col_in,       // input column
 {
   GDF_REQUIRE(nullptr != col_in, GDF_DATASET_EMPTY);
   
-  if (col_in->size == 0) {
+  if (col_in->size - col_in->null_count == 0) {
      result->is_valid = false;
      return GDF_SUCCESS;
   }
