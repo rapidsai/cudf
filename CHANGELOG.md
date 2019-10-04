@@ -77,6 +77,7 @@
 - PR #2830 Use YYMMDD tag in custreamz nightly build
 - PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
+- PR #2909 CSV Reader: Avoid row offsets host vector default init
 
 ## Bug Fixes
 
@@ -140,6 +141,7 @@
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 - PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 
 
