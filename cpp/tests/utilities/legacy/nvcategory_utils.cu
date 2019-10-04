@@ -27,7 +27,7 @@
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>

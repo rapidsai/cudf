@@ -20,7 +20,7 @@
 #include <cudf/copying.hpp>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/copying/copying_test_helper.hpp>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
 void call_slice(gdf_column const*          input_column,

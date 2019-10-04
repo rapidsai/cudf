@@ -19,7 +19,7 @@
 #include <tests/utilities/legacy/column_wrapper_factory.hpp>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 
 template <typename T>
 using column_wrapper = cudf::test::column_wrapper<T>;

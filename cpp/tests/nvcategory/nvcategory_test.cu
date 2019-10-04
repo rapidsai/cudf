@@ -39,7 +39,7 @@
 #include <cstring>
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 

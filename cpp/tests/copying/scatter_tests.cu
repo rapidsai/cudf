@@ -23,7 +23,7 @@
 #include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <cudf/legacy/table.hpp>
 #include <random>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <tests/utilities/legacy/valid_vectors.h>
 
 
