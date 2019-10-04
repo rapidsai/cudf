@@ -3698,3 +3698,44 @@ def test_df_astype_datetime_to_other(as_dtype):
     gdf['bar'] = gsr
 
     assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, format="%Y-%m-%d"))
+
+@pytest.mark.parametrize(
+    "as_dtype",
+    [
+        "int32",
+        "float32",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
+)
+def test_df_astype_categorical_to_other(as_dtype):
+    if "datetime64" in as_dtype:
+        data = ["2001-01-01", "2002-02-02", "2000-01-05", "2001-01-01"]
+        kwargs = {"format": "%Y-%m-%d"}
+    else:
+        data = [1, 2, 3, 1]
+        kwargs = {}
+    psr = pd.Series(data, dtype="category")
+    pdf = pd.DataFrame()
+    pdf['foo'] = psr
+    pdf['bar'] = psr
+    gdf = DataFrame.from_pandas(pdf)
+    assert_eq(pdf.astype(as_dtype), pdf.astype(as_dtype, **kwargs))
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_df_astype_to_categorical_ordered(ordered):
+    psr = pd.Series([1, 2, 3, 1], dtype="category")
+    pdf = pd.DataFrame()
+    pdf['foo'] = psr
+    pdf['bar'] = psr
+    gdf = DataFrame.from_pandas(pdf)
+
+    assert_eq(
+        gdf.astype("int32", ordered=ordered),
+        gdf.astype("int32", ordered=ordered),
+    )
