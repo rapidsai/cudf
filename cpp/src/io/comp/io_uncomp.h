@@ -21,6 +21,10 @@
 
 #include <cudf/cudf.h>
 
+namespace cudf {
+namespace io {
+
+
 enum {
     IO_UNCOMP_STREAM_TYPE_INFER     = 0,
     IO_UNCOMP_STREAM_TYPE_GZIP      = 1,
@@ -48,3 +52,7 @@ public:
 public:
     static HostDecompressor *Create(int stream_type);
 };
+
+} // namespace io
+} // namespace cudf
+
