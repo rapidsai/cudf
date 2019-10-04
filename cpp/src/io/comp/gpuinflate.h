@@ -17,7 +17,10 @@
 #ifndef _GPUINFLATE_H_
 #define _GPUINFLATE_H_
 
-#include <cstdint>
+#include <stdint.h>
+
+namespace cudf {
+namespace io {
 
 /**
  * @brief Input parameters for the decompression interface
@@ -113,5 +116,8 @@ cudaError_t gpu_snap(gpu_inflate_input_s *inputs,
                      gpu_inflate_status_s *outputs, int count = 1,
                      cudaStream_t stream = (cudaStream_t)0);
 
+
+} // namespace io
+} // namespace cudf
 
 #endif  // _GPUINFLATE_H_
