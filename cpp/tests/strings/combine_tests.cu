@@ -33,7 +33,6 @@ TEST_F(CombineTest, Concatenate)
 {
     std::vector<const char*> h_strings1{ "eee", "bb", nullptr, "", "aa", "bbb", "ééé" };
     std::vector<const char*> h_strings2{ "xyz", "abc", "d", "éa", "", nullptr, "f" };
-    std::vector<const char*> h_expected{ "eeexyz", "bbabc", nullptr, "éa", "aa", nullptr, "éééf" };
 
     auto d_strings1 = cudf::test::create_strings_column(h_strings1);
     auto view1 = cudf::strings_column_view(d_strings1->view());
@@ -43,11 +42,69 @@ TEST_F(CombineTest, Concatenate)
     std::vector<cudf::strings_column_view> strings_columns;
     strings_columns.push_back(view1);
     strings_columns.push_back(view2);
-    auto results = cudf::strings::concatenate(strings_columns);
-    auto results_view = cudf::strings_column_view(results->view());
 
-    auto d_expected = cudf::test::create_strings_column(h_expected);
-    auto expected_view = cudf::strings_column_view(d_expected->view());
+    {
+        std::vector<const char*> h_expected{ "eeexyz", "bbabc", nullptr, "éa", "aa", nullptr, "éééf" };
+        auto d_expected = cudf::test::create_strings_column(h_expected);
+        auto expected_view = cudf::strings_column_view(d_expected->view());
 
-    cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        auto results = cudf::strings::concatenate(strings_columns);
+        auto results_view = cudf::strings_column_view(results->view());
+        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+    }
+    {
+        std::vector<const char*> h_expected{ "eee:xyz", "bb:abc", nullptr, ":éa", "aa:", nullptr, "ééé:f" };
+        auto d_expected = cudf::test::create_strings_column(h_expected);
+        auto expected_view = cudf::strings_column_view(d_expected->view());
+
+        auto results = cudf::strings::concatenate(strings_columns,":");
+        auto results_view = cudf::strings_column_view(results->view());
+        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+    }
+
+    {
+        std::vector<const char*> h_expected{ "eee:xyz", "bb:abc", "_:d", ":éa", "aa:", "bbb:_", "ééé:f" };
+        auto d_expected = cudf::test::create_strings_column(h_expected);
+        auto expected_view = cudf::strings_column_view(d_expected->view());
+
+        auto results = cudf::strings::concatenate(strings_columns,":","_");
+        auto results_view = cudf::strings_column_view(results->view());
+        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+    }
+}
+
+TEST_F(CombineTest, Join)
+{
+    std::vector<const char*> h_strings1{ "eee", "bb", nullptr, "zzzz", "", "aaa", "ééé" };
+
+    auto d_strings1 = cudf::test::create_strings_column(h_strings1);
+    auto view1 = cudf::strings_column_view(d_strings1->view());
+
+    {
+        std::vector<const char*> h_expected{ "eeebbzzzzaaaééé" };
+        auto d_expected = cudf::test::create_strings_column(h_expected);
+        auto expected_view = cudf::strings_column_view(d_expected->view());
+
+        auto results = cudf::strings::join_strings(view1);
+        auto results_view = cudf::strings_column_view(results->view());
+        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+    }
+    {
+        std::vector<const char*> h_expected{ "eee+bb+zzzz++aaa+ééé" };
+        auto d_expected = cudf::test::create_strings_column(h_expected);
+        auto expected_view = cudf::strings_column_view(d_expected->view());
+
+        auto results = cudf::strings::join_strings(view1,"+");
+        auto results_view = cudf::strings_column_view(results->view());
+        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+    }
+    {
+        std::vector<const char*> h_expected{ "eee+bb+___+zzzz++aaa+ééé" };
+        auto d_expected = cudf::test::create_strings_column(h_expected);
+        auto expected_view = cudf::strings_column_view(d_expected->view());
+
+        auto results = cudf::strings::join_strings(view1,"+","___");
+        auto results_view = cudf::strings_column_view(results->view());
+        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+    }
 }
