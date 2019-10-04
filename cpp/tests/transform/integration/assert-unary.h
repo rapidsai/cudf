@@ -20,7 +20,7 @@
 #define GDF_TESTS_UNARY_OPERATION_INTEGRATION_ASSERT_BINOPS_H
 
 #include <tests/utilities/legacy/column_wrapper.cuh>
-#include <tests/utilities/scalar_wrapper.cuh>
+#include <tests/utilities/legacy/scalar_wrapper.cuh>
 #include <gtest/gtest.h>
 
 namespace cudf {
