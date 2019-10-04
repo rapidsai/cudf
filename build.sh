@@ -77,15 +77,19 @@ fi
 # Process flags
 if hasArg -v; then
     VERBOSE=1
+    NUMARGS=$((NUMARGS-1))
 fi
 if hasArg -g; then
     BUILD_TYPE=Debug
+    NUMARGS=$((NUMARGS-1))
 fi
 if hasArg -n; then
     INSTALL_TARGET=""
+    NUMARGS=$((NUMARGS-1))
 fi
 if hasArg benchmarks; then
     BENCHMARKS="ON"
+    NUMARGS=$((NUMARGS-1))
 fi
 
 # If clean given, run it prior to any other steps
