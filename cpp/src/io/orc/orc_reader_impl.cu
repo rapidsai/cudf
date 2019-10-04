@@ -499,7 +499,7 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
     compinfo[i].uncompressed_data = decomp_data.data() + decomp_offset;
     compinfo[i].decctl = inflate_in.data().get() + start_pos;
     compinfo[i].decstatus = inflate_out.data().get() + start_pos;
-    compinfo[i].decctl = inflate_in.data().get() + start_pos_uncomp;
+    compinfo[i].copyctl = inflate_in.data().get() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
