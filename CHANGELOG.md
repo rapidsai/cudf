@@ -40,6 +40,7 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2971 Added initial gather and scatter methods for strings_column_view
 
 ## Improvements
 
