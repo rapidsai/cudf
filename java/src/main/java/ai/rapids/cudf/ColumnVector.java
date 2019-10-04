@@ -1447,7 +1447,7 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    * @return A new vector allocated on the GPU
    */
   public ColumnVector asTimestamp(TimeUnit unit) {
-    if (type == DType.STRING) {
+    if (type == DType.STRING || type == DType.STRING_CATEGORY) {
       return asTimestamp(unit, "%Y-%m-%dT%H:%M:%SZ%f");
     }
     return castTo(DType.TIMESTAMP, unit);
@@ -1484,8 +1484,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
    *         original column vector.
    */
   public ColumnVector asTimestamp(TimeUnit unit, String format) {
-    assert type == DType.STRING : "A column of type string is required " +
-                                  "for .timestampToLong() operation";
+    assert type == DType.STRING  || type == DType.STRING_CATEGORY : "A column of type string " +
+                                  "is required for .timestampToLong() operation";
     assert format != null : "Format string may not be NULL";
     if (unit == TimeUnit.NONE) {
       unit = TimeUnit.MILLISECONDS;
