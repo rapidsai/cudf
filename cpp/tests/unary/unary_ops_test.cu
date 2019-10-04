@@ -2459,7 +2459,7 @@ TYPED_TEST(IsNull, all_valid)
     EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNull, all_in_valid)
+TYPED_TEST(IsNull, all_invalid)
 {
     using T = TypeParam;
 
@@ -2540,7 +2540,7 @@ TYPED_TEST(IsNotNull, all_valid)
     EXPECT_EQ(gdf_equal_columns(got, *expected.get()), true);
 }
 
-TYPED_TEST(IsNotNull, all_in_valid)
+TYPED_TEST(IsNotNull, all_invalid)
 {
     using T = TypeParam;
 

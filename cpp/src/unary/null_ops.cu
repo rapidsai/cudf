@@ -23,23 +23,10 @@
 #include <cudf/filling.hpp>
 
 using bit_mask::bit_mask_t;
-static constexpr int BLOCK_SIZE = 256;
-
 
 namespace cudf {
 
 namespace detail {
-
-namespace unary {
-
-__global__
-void null_ops_kernel(bit_mask_t const* __restrict__ valid,
-	    bool* output, bool nulls_are_false)
-{
-    gdf_size_type i = blockIdx.x * blockDim.x + threadIdx.x;
-    output[i] = nulls_are_false == bit_mask::is_valid(valid, i);
-}
-}// unary
 
 gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStream_t stream = 0) {
     auto output = cudf::allocate_column(GDF_BOOL8, input.size, false, 
@@ -50,14 +37,14 @@ gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStr
 	cudf::fill(&output, value, 0, output.size);
     }
     else {
-        const bit_mask_t* __restrict__ typed_input_valid = reinterpret_cast<bit_mask_t*>(input.valid); 
-	cudf::util::cuda::grid_config_1d grid{output.size, BLOCK_SIZE, 1};
-	bool* out_data = static_cast<bool*>(output.data);
+        const bit_mask_t* __restrict__ typed_input_valid = reinterpret_cast<bit_mask_t*>(input.valid);
+        auto exec = rmm::exec_policy(stream)->on(stream);
 
-	unary::null_ops_kernel<<<grid.num_blocks, BLOCK_SIZE, 0, stream>>>(
-			                     typed_input_valid,
-					     out_data,
-					     nulls_are_false);
+	thrust::transform(exec,
+			  thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
+                          thrust::make_counting_iterator(static_cast<gdf_size_type>(input.size)),
+			  static_cast<bool*>(output.data),
+			  [=]__device__(auto index){return (nulls_are_false == bit_mask::is_valid(typed_input_valid, index));});
     }
 
     return output;

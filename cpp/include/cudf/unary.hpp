@@ -77,8 +77,7 @@ gdf_column cast(gdf_column const& input, gdf_dtype out_type,
  *
  * @param input A gdf_column as input
  *
- * @returns gdf_column Resturns a column with `true` representing `null` value
- * and `false` for other from `input`
+ * @returns gdf_column A column of type GDF_BOOL8 with `true` representing `null` values.
  */
 gdf_column is_null(gdf_column const& input);
 
@@ -89,8 +88,7 @@ gdf_column is_null(gdf_column const& input);
  *
  * @param input A gdf_column as input
  *
- * @returns gdf_column Resturns a column with `false` representing `null` value
- * and `true` for other from `input`
+ * @returns gdf_column A column of type GDF_BOOL8 with `false` representing `null` values.
  */
 gdf_column is_not_null(gdf_column const& input);
 
