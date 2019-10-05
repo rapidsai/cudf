@@ -78,6 +78,7 @@
 - PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
 - PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
+- PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 
 ## Bug Fixes
