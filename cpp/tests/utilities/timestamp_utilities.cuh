@@ -22,6 +22,8 @@
 #include <thrust/sequence.h>
 #include <thrust/device_vector.h>
 
+#include <rmm/thrust_rmm_allocator.h>
+
 namespace cudf {
 namespace test {
 
@@ -29,14 +31,6 @@ using time_point_ms = simt::std::chrono::time_point<
   simt::std::chrono::steady_clock,
   simt::std::chrono::milliseconds
 >;
-
-template <typename Rep>
-struct generate_each_timestamp {
-    const Rep base;
-    const Rep step;
-    generate_each_timestamp(Rep _base, Rep _step) : base(_base), step(_step) {}
-    __host__ __device__ Rep operator()(const int32_t& i) const { return base + (step * i); }
-};
 
 /**---------------------------------------------------------------------------*
  * @brief Creates a ```thrust::device_vector``` with ascending timesamps in the
@@ -61,10 +55,10 @@ inline thrust::device_vector<Rep> generate_timestamps(int32_t count, time_point_
   auto min = std::min(lhs, rhs);
   auto max = std::max(lhs, rhs);
   auto range = static_cast<Rep>(std::abs(max - min));
-  auto gen_ts = generate_each_timestamp<Rep>{min, range / count};
+  auto gen_ts = [=] __device__ (int i) { return min + (range / count) * i; };
 
   thrust::device_vector<Rep> timestamps(count);
-  thrust::tabulate(timestamps.begin(), timestamps.end(), gen_ts);
+  thrust::tabulate(rmm::exec_policy(0)->on(0), timestamps.begin(), timestamps.end(), gen_ts);
 
   return timestamps;
 }
