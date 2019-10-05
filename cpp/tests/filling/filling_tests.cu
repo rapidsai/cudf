@@ -33,7 +33,7 @@ using test_types =
                    cudf::bool8>;
 TYPED_TEST_CASE(FillingTest, test_types);
 
-constexpr gdf_size_type column_size{1000};
+constexpr cudf::size_type column_size{1000};
 
 auto all_valid = [](gdf_index_type row) { return true; };
 

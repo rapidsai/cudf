@@ -28,7 +28,7 @@ inline void set_null_count(gdf_column& column) {
         column.null_count = 0;
     }
     else {
-        gdf_size_type valid_count;
+        cudf::size_type valid_count;
         CUDF_TRY(gdf_count_nonzero_mask(column.valid, column.size, &valid_count));
         column.null_count = column.size - valid_count;
     }

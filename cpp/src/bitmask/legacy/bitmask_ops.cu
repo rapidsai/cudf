@@ -96,7 +96,7 @@ __global__ void count_valid_bits(valid32_t const* const masks32,
 }  // namespace
 
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
-                                 gdf_size_type num_rows, gdf_size_type* count) {
+                                 cudf::size_type num_rows, cudf::size_type* count) {
   // TODO: add a default parameter cudaStream_t stream = 0 when we move API to
   // C++
 
@@ -120,13 +120,13 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
                 "gdf_valid_type is assumed to be <= 4B type");
 
   // Number of gdf_valid_types in the validity bitmask
-  gdf_size_type const num_masks{gdf_num_bitmask_elements(num_rows)};
+  cudf::size_type const num_masks{gdf_num_bitmask_elements(num_rows)};
 
   // Number of 4 byte types in the validity bit mask
-  gdf_size_type num_masks32{static_cast<gdf_size_type>(
+  cudf::size_type num_masks32{static_cast<cudf::size_type>(
       std::ceil(static_cast<float>(num_masks) / RATIO))};
 
-  gdf_size_type h_count{0};
+  cudf::size_type h_count{0};
   if (num_masks32 > 0) {
     // TODO: Probably shouldn't create/destroy the stream every time
     cudaStream_t count_stream;
@@ -136,17 +136,17 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
     // Cast validity buffer to 4 byte type
     valid32_t const* masks32{reinterpret_cast<valid32_t const*>(masks)};
 
-    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(gdf_size_type), count_stream));
-    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(gdf_size_type), count_stream));
+    RMM_TRY(RMM_ALLOC((void**)&d_count, sizeof(cudf::size_type), count_stream));
+    CUDA_TRY(cudaMemsetAsync(d_count, 0, sizeof(cudf::size_type), count_stream));
 
-    gdf_size_type const grid_size{(num_masks32 + block_size - 1) / block_size};
+    cudf::size_type const grid_size{(num_masks32 + block_size - 1) / block_size};
 
     count_valid_bits<<<grid_size, block_size, 0, count_stream>>>(
         masks32, num_masks32, num_rows, d_count);
 
     CUDA_TRY(cudaGetLastError());
 
-    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(gdf_size_type),
+    CUDA_TRY(cudaMemcpyAsync(&h_count, d_count, sizeof(cudf::size_type),
                              cudaMemcpyDeviceToHost, count_stream));
     RMM_TRY(RMM_FREE(d_count, count_stream));
     CUDA_TRY(cudaStreamSynchronize(count_stream));
@@ -162,25 +162,25 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
 }
 
 gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
-                          gdf_size_type output_column_length,
+                          cudf::size_type output_column_length,
                           gdf_column *columns_to_concat[],
-                          gdf_size_type num_columns) {
+                          cudf::size_type num_columns) {
   std::vector<gdf_valid_type*> h_masks(num_columns);
-  std::vector<gdf_size_type> h_column_lengths(num_columns);
+  std::vector<cudf::size_type> h_column_lengths(num_columns);
   std::transform(columns_to_concat, columns_to_concat + num_columns,
                  h_masks.begin(), [](auto col) { return col->valid; });
   std::transform(columns_to_concat, columns_to_concat + num_columns,
                 h_column_lengths.begin(), [](auto col) { return col->size; });
 
   rmm::device_vector<gdf_valid_type*> d_masks(h_masks);
-  rmm::device_vector<gdf_size_type> d_column_lengths(h_column_lengths);
+  rmm::device_vector<cudf::size_type> d_column_lengths(h_column_lengths);
 
   gdf_valid_type** masks_to_concat = thrust::raw_pointer_cast(d_masks.data());
-  gdf_size_type* column_lengths = thrust::raw_pointer_cast(d_column_lengths.data());
+  cudf::size_type* column_lengths = thrust::raw_pointer_cast(d_column_lengths.data());
 
   // This lambda is executed in a thrust algorithm. Each thread computes and
   // returns one gdf_valid_type element for the concatenated output mask
-  auto mask_concatenator = [=] __device__(gdf_size_type mask_index) {
+  auto mask_concatenator = [=] __device__(cudf::size_type mask_index) {
     gdf_valid_type output_m = 0;
 
     int cur_mask_index = 0, cur_mask_start = 0;
@@ -188,7 +188,7 @@ gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
 
     // Each thread processes one GDF_VALID_BITSIZE worth of valid bits
     for (int bit = 0; bit < GDF_VALID_BITSIZE; ++bit) {
-      gdf_size_type output_index = mask_index * GDF_VALID_BITSIZE + bit;
+      cudf::size_type output_index = mask_index * GDF_VALID_BITSIZE + bit;
 
       // stop when we are beyond the length of the output column (in elements)
       if (output_index >= output_column_length) break;
@@ -205,7 +205,7 @@ gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
       // gdf_valid_type Note: gdf_is_valid returns true when the input mask is a
       // null pointer This makes it behave as if columns with null validity
       // masks have masks of all 1s, which is the desired behavior.
-      gdf_size_type index = output_index - cur_mask_start;
+      cudf::size_type index = output_index - cur_mask_start;
       if (gdf_is_valid(masks_to_concat[cur_mask_index], index)) {
         output_m |= (1 << bit);
       }
@@ -226,9 +226,9 @@ gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
 }
 
 gdf_error all_bitmask_on(gdf_valid_type* valid_out,
-                         gdf_size_type& out_null_count,
-                         gdf_size_type num_values, cudaStream_t stream) {
-  gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
+                         cudf::size_type& out_null_count,
+                         cudf::size_type num_values, cudaStream_t stream) {
+  cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   gdf_valid_type max_char = 255;
   thrust::fill(rmm::exec_policy(stream)->on(stream), valid_out,
@@ -238,19 +238,19 @@ gdf_error all_bitmask_on(gdf_valid_type* valid_out,
   return GDF_SUCCESS;
 }
 
-gdf_error apply_bitmask_to_bitmask(gdf_size_type& out_null_count,
+gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
                                    gdf_valid_type* valid_out,
                                    const gdf_valid_type* valid_left,
                                    const gdf_valid_type* valid_right,
                                    cudaStream_t stream,
-                                   gdf_size_type num_values) {
-  gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
+                                   cudf::size_type num_values) {
+  cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   thrust::transform(rmm::exec_policy(stream)->on(stream), valid_left,
                     valid_left + num_bitmask_elements, valid_right, valid_out,
                     thrust::bit_and<gdf_valid_type>());
 
-  gdf_size_type non_nulls;
+  cudf::size_type non_nulls;
   auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
   out_null_count = num_values - non_nulls;
   return error;
@@ -263,20 +263,20 @@ namespace {
  * @brief  Computes a bitmask from the bitwise AND of a set of bitmasks.
  */
 struct bitwise_and {
-  bitwise_and(bit_mask::bit_mask_t** _masks, gdf_size_type _num_masks)
+  bitwise_and(bit_mask::bit_mask_t** _masks, cudf::size_type _num_masks)
       : masks{_masks}, num_masks(_num_masks) {}
 
   __device__ inline bit_mask::bit_mask_t operator()(
-      gdf_size_type mask_element_index) {
+      cudf::size_type mask_element_index) {
     using namespace bit_mask;
     bit_mask_t result_mask{~bit_mask_t{0}};  // all 1s
-    for (gdf_size_type i = 0; i < num_masks; ++i) {
+    for (cudf::size_type i = 0; i < num_masks; ++i) {
       result_mask &= masks[i][mask_element_index];
     }
     return result_mask;
   }
 
-  gdf_size_type num_masks;
+  cudf::size_type num_masks;
   bit_mask::bit_mask_t** masks;
 };
 }  // namespace

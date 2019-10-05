@@ -51,7 +51,7 @@ gdf_column transform(const gdf_column &input,
  * @param input The input column to generate bitmask from
  * @return An `std::pair` of `bit_mask_t*`, the output bitmask, and its null count
 */
-std::pair<bit_mask::bit_mask_t*, gdf_size_type> nans_to_nulls(gdf_column const& input);
+std::pair<bit_mask::bit_mask_t*, cudf::size_type> nans_to_nulls(gdf_column const& input);
 
 }  // namespace cudf
 

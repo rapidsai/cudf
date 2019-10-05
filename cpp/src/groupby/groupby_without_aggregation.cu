@@ -29,8 +29,8 @@
 
 gdf_column gdf_unique_indices(cudf::table const& input_table,
                               gdf_context const& context) {
-  gdf_size_type ncols = input_table.num_columns();
-  gdf_size_type nrows = input_table.num_rows();
+  cudf::size_type ncols = input_table.num_columns();
+  cudf::size_type nrows = input_table.num_rows();
 
   rmm::device_vector<void*> d_cols(ncols);
   rmm::device_vector<int> d_types(ncols, 0);
@@ -48,7 +48,7 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
       RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type) * nrows, nullptr));
   unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
 
-  auto counting_iter = thrust::make_counting_iterator<gdf_size_type>(0);
+  auto counting_iter = thrust::make_counting_iterator<cudf::size_type>(0);
   auto device_input_table = device_table::create(input_table);
   bool nullable = device_input_table.get()->has_nulls();
   if (nullable) {
@@ -77,7 +77,7 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
 }
 
 std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
-    cudf::table const& input_table, gdf_size_type num_key_cols,
+    cudf::table const& input_table, cudf::size_type num_key_cols,
     gdf_index_type const* key_col_indices, gdf_context* context) {
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols,
@@ -89,7 +89,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
     return std::make_pair(cudf::empty_like(input_table), unique_indices);
   }
 
-  gdf_size_type nrows = input_table.num_rows();
+  cudf::size_type nrows = input_table.num_rows();
 
   // Ask if input table has nulls
   std::vector<gdf_column *> key_columns(num_key_cols);
@@ -97,7 +97,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
       key_col_indices, 
       key_col_indices + num_key_cols, 
       key_columns.begin(),
-      [&input_table](gdf_size_type target_index) { 
+      [&input_table](cudf::size_type target_index) { 
         return const_cast<gdf_column*>(input_table.get_column(target_index)); 
       }
   );
@@ -116,7 +116,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
       });
   cudf::table key_col_table(key_cols_vect.data(), key_cols_vect.size());
 
-  rmm::device_vector<gdf_size_type> sorted_indices(nrows);
+  rmm::device_vector<cudf::size_type> sorted_indices(nrows);
   gdf_column sorted_indices_col{};
   CUDF_TRY(gdf_column_view(&sorted_indices_col,
                            (void*)(sorted_indices.data().get()), nullptr, nrows,

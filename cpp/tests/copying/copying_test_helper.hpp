@@ -25,11 +25,11 @@
 #include <cudf/types.hpp>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 
-constexpr gdf_size_type INPUT_SIZE{107};
-constexpr gdf_size_type BITSET_SIZE{128};
+constexpr cudf::size_type INPUT_SIZE{107};
+constexpr cudf::size_type BITSET_SIZE{128};
 
 template <typename ColumnType>
-cudf::test::column_wrapper<ColumnType> create_random_column(gdf_size_type size) {
+cudf::test::column_wrapper<ColumnType> create_random_column(cudf::size_type size) {
   
   return cudf::test::column_wrapper<ColumnType>(size, 
             [](gdf_index_type row) { return static_cast <ColumnType>(rand()); }, 
@@ -37,13 +37,13 @@ cudf::test::column_wrapper<ColumnType> create_random_column(gdf_size_type size) 
 }
 
 
-template <gdf_size_type SIZE>
-std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
+template <cudf::size_type SIZE>
+std::vector<gdf_valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
                                              std::vector<gdf_valid_type> const& input_valid,
-                                             gdf_size_type index_start,
-                                             gdf_size_type index_final) {
+                                             cudf::size_type index_start,
+                                             cudf::size_type index_final) {
   // delta of the indexes
-  gdf_size_type bits_length = index_final - index_start;
+  cudf::size_type bits_length = index_final - index_start;
   if (bits_length == 0) {
     return std::vector<gdf_valid_type>();
   }
@@ -52,7 +52,7 @@ std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
   std::bitset<SIZE> bitset{};
 
   // populate data into bitset
-  gdf_size_type bit_index{0};
+  cudf::size_type bit_index{0};
   auto put_data_bitset = [&bitset, &bit_index](gdf_valid_type value) {
     for (int k = 0; k < 8; ++k) {
       if (SIZE <= bit_index) {
@@ -69,7 +69,7 @@ std::vector<gdf_valid_type> slice_cpu_valids(gdf_size_type& bit_set_counter,
   bitset >>= index_start;
 
   // calculate result byte size with padding
-  gdf_size_type result_byte_size_padding = gdf_valid_allocation_size(bits_length);
+  cudf::size_type result_byte_size_padding = gdf_valid_allocation_size(bits_length);
 
   // extract data from bitset
   bit_index = 0;
@@ -107,11 +107,11 @@ auto slice_columns(
   
   std::vector<std::vector<ColumnType>> output_cols_data;
   std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-  std::vector<gdf_size_type> output_cols_null_count;
+  std::vector<cudf::size_type> output_cols_null_count;
 
   for (std::size_t i = 0; i < indexes.size(); i += 2) {
-    gdf_size_type init_index = indexes[i];
-    gdf_size_type end_index = indexes[i + 1];
+    cudf::size_type init_index = indexes[i];
+    cudf::size_type end_index = indexes[i + 1];
 
     if (init_index == end_index) {
       output_cols_data.emplace_back(std::vector<ColumnType>());
@@ -123,7 +123,7 @@ auto slice_columns(
           std::vector<ColumnType>(input_col_data.begin() + init_index,
                                   input_col_data.begin() + end_index));
 
-      gdf_size_type bit_set_counter=0;
+      cudf::size_type bit_set_counter=0;
       output_cols_bitmask.emplace_back(
         slice_cpu_valids<BITSET_SIZE>(bit_set_counter,
                                         input_col_bitmask,
@@ -144,14 +144,14 @@ auto split_columns(
 
   std::vector<std::vector<ColumnType>> output_cols_data;
   std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-  std::vector<gdf_size_type> output_cols_null_count;
+  std::vector<cudf::size_type> output_cols_null_count;
 
   for (std::size_t i = 0; i <= indexes.size(); ++i) {
-    gdf_size_type init_index{0};
+    cudf::size_type init_index{0};
     if (i != 0) {
       init_index = indexes[i - 1];
     }
-    gdf_size_type end_index = input_col_data.size();
+    cudf::size_type end_index = input_col_data.size();
     if (i < indexes.size()) {
       end_index = indexes[i];
     }
@@ -165,7 +165,7 @@ auto split_columns(
           std::vector<ColumnType>(input_col_data.begin() + init_index,
                                   input_col_data.begin() + end_index));
 
-      gdf_size_type bit_set_counter=0;
+      cudf::size_type bit_set_counter=0;
       output_cols_bitmask.emplace_back(
         slice_cpu_valids<BITSET_SIZE>(bit_set_counter,
                                         input_col_bitmask,

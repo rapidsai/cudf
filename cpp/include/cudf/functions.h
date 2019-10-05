@@ -56,7 +56,7 @@ gdf_error gdf_nvtx_range_pop();
  * @param[in] column_size The number of elements
  * @return the number of bytes necessary to allocate for validity bitmask
  */
-gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
+cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size);
 
 /**
  * @brief Computes the number of `gdf_valid_type` elements required to provide
@@ -73,7 +73,7 @@ gdf_size_type gdf_valid_allocation_size(gdf_size_type column_size);
  * @return The minimum number of `gdf_valid_type` elements to provide sufficient
  * bits to represent elements in a column of size @p column_size
  */
-gdf_size_type gdf_num_bitmask_elements(gdf_size_type column_size);
+cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size);
 
 
 /* context operations */
@@ -145,7 +145,7 @@ const char * gdf_cuda_error_name(int cuda_error);
  * @param[out] out_cols[] Preallocated output_table of (nrows) columns each of size (ncols)
  * @returns gdf_error GDF_SUCCESS if successful, else appropriate error code
  */
-gdf_error gdf_transpose(gdf_size_type ncols,
+gdf_error gdf_transpose(cudf::size_type ncols,
                         gdf_column** in_cols,
                         gdf_column** out_cols);
 
@@ -355,7 +355,7 @@ typedef struct DLManagedTensor DLManagedTensor_;
  * @return gdf_error GDF_SUCCESS if conversion is successful
  */
 gdf_error gdf_from_dlpack(gdf_column** columns,
-                          gdf_size_type *num_columns,
+                          cudf::size_type *num_columns,
                           DLManagedTensor_ const * tensor);
 
 /**
@@ -377,6 +377,6 @@ gdf_error gdf_from_dlpack(gdf_column** columns,
  */
 gdf_error gdf_to_dlpack(DLManagedTensor_ *tensor,
                         gdf_column const * const * columns,
-                        gdf_size_type num_columns);
+                        cudf::size_type num_columns);
 
 

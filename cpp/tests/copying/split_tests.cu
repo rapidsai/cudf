@@ -25,7 +25,7 @@
 
 void call_split(gdf_column const*          input_column,
                 gdf_index_type const*      indices,
-                gdf_size_type              num_indices,
+                cudf::size_type              num_indices,
                 std::vector<gdf_column*> & output){
 
   output = cudf::split(*input_column, indices, num_indices); 
@@ -136,7 +136,7 @@ TYPED_TEST(SplitTest, MultipleSplits) {
     // Perform split in cpu
     std::vector<std::vector<TypeParam>> output_cols_data;
     std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-    std::vector<gdf_size_type> output_cols_null_count;
+    std::vector<cudf::size_type> output_cols_null_count;
     std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
                                                                                 input_col_bitmask, indices_host);
 
@@ -189,7 +189,7 @@ TYPED_TEST(SplitTest, RangeIndexPosition) {
         // Perform split in cpu
         std::vector<std::vector<TypeParam>> output_cols_data;
         std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-        std::vector<gdf_size_type> output_cols_null_count;
+        std::vector<cudf::size_type> output_cols_null_count;
         std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
                                                                                     input_col_bitmask, indices_host);
 
@@ -236,7 +236,7 @@ TEST_F(SplitInputTest, NVCategoryMultipleSlices)  {
     std::vector<std::string> input_col_data;
     std::vector<gdf_valid_type> input_col_bitmask;
     std::tie(input_col_data, input_col_bitmask) = cudf::test::nvcategory_column_to_host(input_column);
-    for(gdf_size_type i=0;i<INPUT_SIZE;i++){
+    for(cudf::size_type i=0;i<INPUT_SIZE;i++){
         ASSERT_EQ(orig_strings_vector[i], input_col_data[i]);
     }
 
@@ -250,7 +250,7 @@ TEST_F(SplitInputTest, NVCategoryMultipleSlices)  {
     // Perform slice in cpu
     std::vector<std::vector<std::string>> output_cols_data;
     std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
-    std::vector<gdf_size_type> output_cols_null_count;
+    std::vector<cudf::size_type> output_cols_null_count;
     std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<std::string>(input_col_data, 
                                                                                 input_col_bitmask, indices_host);
 

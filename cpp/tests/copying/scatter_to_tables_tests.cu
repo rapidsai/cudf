@@ -33,9 +33,9 @@ TYPED_TEST_CASE(ScatterToTablesTest, test_types);
 
 //  All Pass test cases 
 TYPED_TEST(ScatterToTablesTest, PassTest) {
-  constexpr gdf_size_type table_n_cols{2};
-  constexpr gdf_size_type table_n_rows{1000};
-  constexpr gdf_size_type scatter_size{table_n_rows};
+  constexpr cudf::size_type table_n_cols{2};
+  constexpr cudf::size_type table_n_rows{1000};
+  constexpr cudf::size_type scatter_size{table_n_rows};
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(table_n_cols, {table_n_rows, 
   [](gdf_index_type row) {return static_cast<TypeParam>(row);},
@@ -64,9 +64,9 @@ TYPED_TEST(ScatterToTablesTest, PassTest) {
 
 // Test Failure if scatter_map is not `GDF_INT32` column
 TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
-  constexpr gdf_size_type table_n_cols{2};
-  constexpr gdf_size_type table_n_rows{1000};
-  constexpr gdf_size_type scatter_size{table_n_rows};
+  constexpr cudf::size_type table_n_cols{2};
+  constexpr cudf::size_type table_n_rows{1000};
+  constexpr cudf::size_type scatter_size{table_n_rows};
 
   //data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
@@ -93,9 +93,9 @@ TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
 
 // Test Failure if scatter_map column has null entries
 TYPED_TEST(ScatterToTablesTest, NullMapTest) {
-  constexpr gdf_size_type table_n_cols{2};
-  constexpr gdf_size_type table_n_rows{1000};
-  constexpr gdf_size_type scatter_size{table_n_rows};
+  constexpr cudf::size_type table_n_cols{2};
+  constexpr cudf::size_type table_n_rows{1000};
+  constexpr cudf::size_type scatter_size{table_n_rows};
 
   //data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
@@ -131,8 +131,8 @@ TYPED_TEST(ScatterToTablesTest, NullMapTest) {
 
 // Test Failure if scatter_map and input_table number of rows mismatch are not equal
 TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
-  constexpr gdf_size_type table_n_cols{2};
-  constexpr gdf_size_type table_n_rows{1000};
+  constexpr cudf::size_type table_n_cols{2};
+  constexpr cudf::size_type table_n_rows{1000};
 
   //data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
@@ -179,9 +179,9 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
 *
 */
 TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
-  gdf_size_type table_n_cols=1;
-  for(gdf_size_type table_n_rows : {0, 1}) {
-    for(gdf_size_type scatter_size : {0, 1}) {
+  cudf::size_type table_n_cols=1;
+  for(cudf::size_type table_n_rows : {0, 1}) {
+    for(cudf::size_type scatter_size : {0, 1}) {
       //std::cout << table_n_cols << table_n_rows << scatter_size << std::endl;
 
       //data
@@ -221,7 +221,7 @@ auto scatter_columns(
   auto max = *std::max_element(scatter_map.begin(), scatter_map.end());
   std::vector<std::vector<std::vector<T>>> output_cols_data(max+1);
   std::vector<std::vector<std::vector<gdf_valid_type>>> output_cols_bitmask(max+1);
-  std::vector<std::vector<gdf_size_type>> output_cols_null_count(max+1);
+  std::vector<std::vector<cudf::size_type>> output_cols_null_count(max+1);
   auto num_cols = input_cols_data.size();
   for (auto g = 0; g <= max; g++)
   {
@@ -264,8 +264,8 @@ auto scatter_columns(
 
 TEST(ScatterToTablesTest, FunctionalTest) {
   using TypeParam = gdf_index_type;
-  constexpr gdf_size_type table_n_cols{2};
-  constexpr gdf_size_type table_n_rows{1000};
+  constexpr cudf::size_type table_n_cols{2};
+  constexpr cudf::size_type table_n_rows{1000};
   constexpr size_t scatter_size{table_n_rows};
   // table data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
@@ -285,7 +285,7 @@ TEST(ScatterToTablesTest, FunctionalTest) {
   }
   std::vector<std::vector<std::vector<TypeParam>>> output_cols_data;
   std::vector<std::vector<std::vector<gdf_valid_type>>> output_cols_bitmask;
-  std::vector<std::vector<gdf_size_type>> output_cols_null_count;
+  std::vector<std::vector<cudf::size_type>> output_cols_null_count;
   // run for all different ranges of value of scatter_map
   for (auto scatter_case : std::vector<std::pair<size_t, std::function<gdf_index_type(gdf_index_type)>>>{
            // range 0-0

@@ -4,6 +4,7 @@
 #include <cstdlib>
 #include <cstdint>
 #include "types.h"
+#include "types.hpp"
 #include "io_types.h"
 #include "convert_types.h"
 #include "io_types.hpp"

@@ -38,10 +38,10 @@ class Gather: public cudf::benchmark {
 
 template<class TypeParam, bool coalesce>
 void BM_gather(benchmark::State& state){
-  const gdf_size_type source_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type destination_size{(gdf_size_type)state.range(0)};
+  const cudf::size_type source_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type destination_size{(cudf::size_type)state.range(0)};
 
-  const gdf_size_type n_cols = (gdf_size_type)state.range(1);
+  const cudf::size_type n_cols = (cudf::size_type)state.range(1);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,

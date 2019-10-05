@@ -90,7 +90,7 @@ void DropNulls(column_wrapper<T> const& source,
   result.destroy();
 }
 
-constexpr gdf_size_type column_size{100};
+constexpr cudf::size_type column_size{100};
 
 template <typename T>
 struct DropNullsTest : GdfTest 
@@ -167,7 +167,7 @@ static cudf::test::column_wrapper_factory<cudf::nvstring_category> string_factor
 void DropNullsTable(cudf::table const &source,
                     cudf::table const &keys,
                     cudf::table const &expected,
-                    gdf_size_type keep_thresh = -1)
+                    cudf::size_type keep_thresh = -1)
 {
   cudf::table result;
   if (keep_thresh >= 0)

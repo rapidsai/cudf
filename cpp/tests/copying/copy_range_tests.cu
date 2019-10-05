@@ -27,7 +27,7 @@ using column_wrapper = cudf::test::column_wrapper<T>;
 template <typename T>
 struct CopyRangeTest : GdfTest 
 {
-  static constexpr gdf_size_type column_size{1000};
+  static constexpr cudf::size_type column_size{1000};
 
   void test(column_wrapper<T> const &dest,
             column_wrapper<T> const &source,
@@ -73,7 +73,7 @@ TYPED_TEST(CopyRangeTest, CopyWithNulls)
 {
   using T = TypeParam;
 
-  gdf_size_type size = this->column_size;
+  cudf::size_type size = this->column_size;
   gdf_index_type out_begin = 30;
   gdf_index_type out_end = size - 20;
   gdf_index_type in_begin = 9;
@@ -102,7 +102,7 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
 {
   using T = TypeParam;
 
-  gdf_size_type size = this->column_size;
+  cudf::size_type size = this->column_size;
   gdf_index_type out_begin = 30;
   gdf_index_type out_end = size - 20;
   gdf_index_type in_begin = 9;

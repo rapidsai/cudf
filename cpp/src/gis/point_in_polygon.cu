@@ -129,8 +129,8 @@ __device__ T orientation( const T & p1_x, const T & p1_y,
                                           const T* const __restrict__ poly_lons,
                                           const T* const __restrict__ point_lats,
                                           const T* const __restrict__ point_lons,
-                                          gdf_size_type poly_size,
-                                          gdf_size_type points_size,
+                                          cudf::size_type poly_size,
+                                          cudf::size_type points_size,
                                           cudf::bool8* const __restrict__ point_is_in_polygon )
 {
     gdf_index_type start_idx = blockIdx.x * blockDim.x + threadIdx.x;
@@ -139,7 +139,7 @@ __device__ T orientation( const T & p1_x, const T & p1_y,
     {
         T point_lat = point_lats[idx];
         T point_lon = point_lons[idx];
-        gdf_size_type count = 0;
+        cudf::size_type count = 0;
  
         for(gdf_index_type poly_side = 0; poly_side < poly_size - 1; poly_side++) 
         {
@@ -180,7 +180,7 @@ struct point_in_polygon_functor {
         RMM_TRY( RMM_ALLOC(&data, d_point_lats.size * sizeof(cudf::bool8), 0) );
         gdf_column_view(&d_point_is_in_polygon, data, nullptr, d_point_lats.size, GDF_BOOL8);
 
-        gdf_size_type min_grid_size = 0, block_size = 0;
+        cudf::size_type min_grid_size = 0, block_size = 0;
         CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, point_in_polygon_kernel<col_type>) );
 
         cudf::util::cuda::grid_config_1d grid{d_point_lats.size, block_size, 1};
@@ -235,7 +235,7 @@ gdf_column point_in_polygon( gdf_column const & polygon_lats, gdf_column const &
                                                             reinterpret_cast<bit_mask::bit_mask_t*>(point_lats.valid), 
                                                             point_lats.size, cudaMemcpyDeviceToDevice );
 
-        gdf_size_type null_count;
+        cudf::size_type null_count;
         auto err = apply_bitmask_to_bitmask( null_count, inside_polygon.valid,
                                              inside_polygon.valid, point_lons.valid, 
                                              stream, inside_polygon.size );

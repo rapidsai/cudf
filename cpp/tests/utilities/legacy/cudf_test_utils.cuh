@@ -98,8 +98,8 @@ try{ statement; } catch (std::exception& e)             \
  * @returns The number of valid bits in [0, num_rows) in the host vector of
  * masks
  **/
-gdf_size_type count_valid_bits_host(
-  std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows);
+cudf::size_type count_valid_bits_host(
+  std::vector<gdf_valid_type> const& masks, cudf::size_type const num_rows);
 
 
 /**

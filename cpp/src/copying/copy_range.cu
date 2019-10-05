@@ -57,7 +57,7 @@ void copy_range(gdf_column *out_column, gdf_column const &in_column,
                 gdf_index_type out_begin, gdf_index_type out_end, 
                 gdf_index_type in_begin)
 {
-  gdf_size_type num_elements = out_end - out_begin;
+  cudf::size_type num_elements = out_end - out_begin;
   if (num_elements != 0) { // otherwise no-op
     validate(in_column);
     validate(out_column);

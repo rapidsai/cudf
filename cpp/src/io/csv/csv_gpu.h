@@ -27,8 +27,8 @@ namespace gpu {
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
-                               gdf_size_type num_rows,
-                               gdf_size_type num_columns,
+                               cudf::size_type num_rows,
+                               cudf::size_type num_columns,
                                const ParseOptions &options,
                                column_parse::flags *flags,
                                column_parse::stats *stats,
@@ -52,10 +52,10 @@ cudaError_t DetectCsvDataTypes(const char *data, const uint64_t *row_starts,
  * @return cudaSuccess if successful, a CUDA error code otherwise
  **/
 cudaError_t DecodeCsvColumnData(
-    const char *data, const uint64_t *row_starts, gdf_size_type num_rows,
-    gdf_size_type num_columns, const ParseOptions &options,
+    const char *data, const uint64_t *row_starts, cudf::size_type num_rows,
+    cudf::size_type num_columns, const ParseOptions &options,
     const column_parse::flags *flags, gdf_dtype *dtypes, void **columns,
-    gdf_valid_type **valids, gdf_size_type *num_valid,
+    gdf_valid_type **valids, cudf::size_type *num_valid,
     cudaStream_t stream = (cudaStream_t)0);
 
 }  // namespace gpu

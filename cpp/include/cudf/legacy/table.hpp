@@ -47,7 +47,7 @@ struct table {
    * @param cols The array of columns wrapped by the table
    * @param num_cols  The number of columns in the array
    *---------------------------------------------------------------------------**/
-  table(gdf_column* cols[], gdf_size_type num_cols);
+  table(gdf_column* cols[], cudf::size_type num_cols);
 
   /**---------------------------------------------------------------------------*
    * @brief Construct a table from an initializer_list of `gdf_column` pointers
@@ -70,7 +70,7 @@ struct table {
    * @param[in] allocate_bitmasks If `true`, each column will be allocated an
    * appropriately sized bitmask
    *---------------------------------------------------------------------------**/
-  table(gdf_size_type num_rows,
+  table(cudf::size_type num_rows,
         std::vector<gdf_dtype> const& dtypes,
         std::vector<gdf_dtype_extra_info> const& dtype_infos,
         bool allocate_bitmasks = false, bool all_valid = false,
@@ -130,13 +130,13 @@ struct table {
    * @brief Returns the number of _columns in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type num_columns() const { return _columns.size(); }
+  cudf::size_type num_columns() const { return _columns.size(); }
 
   /**---------------------------------------------------------------------------*
    * @brief Returns the number of rows in the table
    *
    *---------------------------------------------------------------------------**/
-  gdf_size_type num_rows() const {
+  cudf::size_type num_rows() const {
     if (not _columns.empty()) {
       return this->get_column(0)->size;
     }
@@ -154,7 +154,7 @@ struct table {
    * @param column_indices Indices of the desired columns
    * @return table New table containing only the desired columns
    *---------------------------------------------------------------------------**/
-  table select(std::vector<gdf_size_type> const& column_indices) const;
+  table select(std::vector<cudf::size_type> const& column_indices) const;
 
   /**---------------------------------------------------------------------------*
    * @brief Destroys the `gdf_column`s in the table.

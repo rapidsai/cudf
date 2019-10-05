@@ -64,7 +64,7 @@ enum : bool {
  */
 template <typename E>
 void expect_column_values_are_equal(
-    gdf_size_type common_size, const E* lhs_data_on_host,
+    cudf::size_type common_size, const E* lhs_data_on_host,
     const gdf_valid_type* lhs_validity_on_host, const std::string& lhs_name,
     const E* rhs_data_on_host, const gdf_valid_type* rhs_validity_on_host,
     const std::string& rhs_name,
@@ -74,14 +74,14 @@ void expect_column_values_are_equal(
   auto rhs_non_nullable = (rhs_validity_on_host == nullptr);
   auto max_name_length = std::max(lhs_name.length(), rhs_name.length());
 
-  for (gdf_size_type i = 0; i < common_size; i++) {
+  for (cudf::size_type i = 0; i < common_size; i++) {
     auto lhs_element_is_valid =
         lhs_non_nullable or
-        cudf::util::bit_is_set<gdf_valid_type, gdf_size_type>(
+        cudf::util::bit_is_set<gdf_valid_type, cudf::size_type>(
             lhs_validity_on_host, i);
     auto rhs_element_is_valid =
         rhs_non_nullable or
-        cudf::util::bit_is_set<gdf_valid_type, gdf_size_type>(
+        cudf::util::bit_is_set<gdf_valid_type, cudf::size_type>(
             rhs_validity_on_host, i);
     if (not lhs_element_is_valid and not rhs_element_is_valid) {
       EXPECT_TRUE(treat_distinct_nulls_as_equal);

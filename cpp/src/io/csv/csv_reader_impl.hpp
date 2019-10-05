@@ -42,7 +42,7 @@ private:
   device_buffer<char> data;         ///< device: the raw unprocessed CSV data - loaded as a large char * array.
   rmm::device_vector<uint64_t> row_offsets;
 
-  gdf_size_type num_records = 0;    ///< Number of rows with actual data
+  cudf::size_type num_records = 0;    ///< Number of rows with actual data
 
  // dataframe dimensions
   long num_bits = 0;       ///< The number of 64-bit bitmaps (different than valid).
@@ -81,8 +81,8 @@ public:
   *
   * @return Object that contains the array of gdf_columns
   **/
- table read(size_t range_offset, size_t range_size, gdf_size_type skip_rows,
-            gdf_size_type skip_end_rows, gdf_size_type num_rows);
+ table read(size_t range_offset, size_t range_size, cudf::size_type skip_rows,
+            cudf::size_type skip_end_rows, cudf::size_type num_rows);
 
  private:
   /**
@@ -113,9 +113,9 @@ public:
    **/
   std::pair<uint64_t, uint64_t> select_rows(const char *h_data, size_t h_size,
                                             size_t range_size,
-                                            gdf_size_type skip_rows,
-                                            gdf_size_type skip_end_rows,
-                                            gdf_size_type num_rows);
+                                            cudf::size_type skip_rows,
+                                            cudf::size_type skip_end_rows,
+                                            cudf::size_type num_rows);
 
   void setColumnNamesFromCsv();
 

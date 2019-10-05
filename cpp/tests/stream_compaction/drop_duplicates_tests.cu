@@ -61,7 +61,7 @@ void TypedDropDuplicatesTest(cudf::test::column_wrapper<T> source,
   gdf_column_free(&result);
 }
 
-constexpr gdf_size_type column_size{1000000};
+constexpr cudf::size_type column_size{1000000};
 
 TYPED_TEST(DropDuplicatesTest, Empty)
 {
@@ -72,7 +72,7 @@ TYPED_TEST(DropDuplicatesTest, Empty)
 
 TYPED_TEST(DropDuplicatesTest, Distinct)
 {
-  constexpr gdf_size_type column_size = 
+  constexpr cudf::size_type column_size = 
     std::numeric_limits<TypeParam>::max() >1000000? 1000000:
     std::numeric_limits<TypeParam>::max();
   TypedDropDuplicatesTest<TypeParam>(

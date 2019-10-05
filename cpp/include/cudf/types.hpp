@@ -16,10 +16,10 @@
 
 #pragma once
 
-#include "cudf.h"
 #include "utilities/cuda.cuh"
 
 #include <cstddef>
+#include <cstdint>
 
 /**---------------------------------------------------------------------------*
  * @file types.hpp

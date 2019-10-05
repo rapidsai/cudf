@@ -34,7 +34,7 @@
  *
  */
 gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
-                                 gdf_size_type num_rows, gdf_size_type* count);
+                                 cudf::size_type num_rows, cudf::size_type* count);
 
 /** ---------------------------------------------------------------------------*
  * @brief Concatenate the validity bitmasks of multiple columns
@@ -54,10 +54,10 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
  *
  ---------------------------------------------------------------------------**/
 gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
-                          gdf_size_type output_column_length,
+                          cudf::size_type output_column_length,
                           gdf_valid_type* masks_to_concat[],
-                          gdf_size_type* column_lengths,
-                          gdf_size_type num_columns);
+                          cudf::size_type* column_lengths,
+                          cudf::size_type num_columns);
 
 
 #endif

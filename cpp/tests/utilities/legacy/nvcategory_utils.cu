@@ -50,12 +50,12 @@ std::string random_string(size_t len, std::string const &allowed_chars) {
   return ret;
 }
 
-gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strings){
+gdf_column * create_nv_category_column(cudf::size_type num_rows, bool repeat_strings){
 
   const char ** string_host_data = new const char *[num_rows];
 
 
-  for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+  for(cudf::size_type row_index = 0; row_index < num_rows; row_index++){
     string_host_data[row_index] = new char[(num_rows + 25) / 26]; //allows string to grow depending on numbe of rows
     std::string temp_string = "";
     int num_chars = repeat_strings ? 1 : (row_index / 26) + 1;
@@ -88,7 +88,7 @@ gdf_column * create_nv_category_column(gdf_size_type num_rows, bool repeat_strin
   return column;
 }
 
-gdf_column * create_nv_category_column_strings(const char ** string_host_data, gdf_size_type num_rows){
+gdf_column * create_nv_category_column_strings(const char ** string_host_data, cudf::size_type num_rows){
   NVCategory* category = NVCategory::create_from_array(string_host_data, num_rows);
 
   gdf_column * column = new gdf_column{};
@@ -108,10 +108,10 @@ gdf_column * create_nv_category_column_strings(const char ** string_host_data, g
   return column;
 }
 
-const char ** generate_string_data(gdf_size_type num_rows, size_t length, bool print){
+const char ** generate_string_data(cudf::size_type num_rows, size_t length, bool print){
   const char ** string_host_data = new const char *[num_rows];
 
-  for(gdf_size_type row_index = 0; row_index < num_rows; row_index++){
+  for(cudf::size_type row_index = 0; row_index < num_rows; row_index++){
     string_host_data[row_index] = new char[length+1];
 
     std::string rand_string = cudf::test::random_string(length);

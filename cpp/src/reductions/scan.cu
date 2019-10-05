@@ -15,9 +15,9 @@ template <class T>
 __global__
     void gpu_copy_and_replace_nulls(
         const T *data, const gdf_valid_type *mask,
-        gdf_size_type size, T *results, T identity)
+        cudf::size_type size, T *results, T identity)
 {
-    gdf_size_type id = threadIdx.x + blockIdx.x * blockDim.x;
+    cudf::size_type id = threadIdx.x + blockIdx.x * blockDim.x;
 
     while (id < size) {
         results[id] = (gdf_is_valid(mask, id)) ? data[id] : identity;
@@ -43,7 +43,7 @@ template <typename T>
 inline
 void copy_and_replace_nulls(
         const T *data, const gdf_valid_type *mask,
-        gdf_size_type size, T *results, T identity, cudaStream_t stream)
+        cudf::size_type size, T *results, T identity, cudaStream_t stream)
 {
     int blockSize=0, minGridSize, gridSize;
     CUDA_TRY( cudaOccupancyMaxPotentialBlockSize(

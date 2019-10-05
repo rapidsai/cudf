@@ -51,7 +51,7 @@ struct column_printer {
   void operator()(gdf_column const* the_column, unsigned min_printing_width,
                   std::ostream& stream)
   {
-    gdf_size_type num_rows { the_column->size };
+    cudf::size_type num_rows { the_column->size };
 
     Element const* column_data { static_cast<Element const*>(the_column->data) };
 
@@ -59,14 +59,14 @@ struct column_printer {
     cudaMemcpy(host_side_data.data(), column_data, num_rows * sizeof(Element),
                cudaMemcpyDeviceToHost);
 
-    gdf_size_type const num_masks { gdf_valid_allocation_size(num_rows) };
+    cudf::size_type const num_masks { gdf_valid_allocation_size(num_rows) };
     std::vector<gdf_valid_type> h_mask(num_masks, ~gdf_valid_type { 0 });
     if (nullptr != the_column->valid) {
       cudaMemcpy(h_mask.data(), the_column->valid, num_masks * sizeof(gdf_valid_type),
                  cudaMemcpyDeviceToHost);
     }
 
-    for (gdf_size_type i = 0; i < num_rows; ++i) {
+    for (cudf::size_type i = 0; i < num_rows; ++i) {
       stream << std::setw(min_printing_width);
       if (gdf_is_valid(h_mask.data(), i)) {
         stream << detail::promote_for_streaming(host_side_data[i]);
@@ -293,17 +293,17 @@ void print_valid_data(const gdf_valid_type *validity_mask,
   stream << std::endl;
 }
 
-gdf_size_type count_valid_bits_host(
-    std::vector<gdf_valid_type> const& masks, gdf_size_type const num_rows)
+cudf::size_type count_valid_bits_host(
+    std::vector<gdf_valid_type> const& masks, cudf::size_type const num_rows)
 {
   if ((0 == num_rows) || (0 == masks.size())) {
     return 0;
   }
 
-  gdf_size_type count{0};
+  cudf::size_type count{0};
 
   // Count the valid bits for all masks except the last one
-  for (gdf_size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
+  for (cudf::size_type i = 0; i < (gdf_num_bitmask_elements(num_rows) - 1); ++i) {
     gdf_valid_type current_mask = masks[i];
 
     while (current_mask > 0) {

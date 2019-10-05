@@ -38,7 +38,7 @@ using test_types =
 TYPED_TEST_CASE(CopyTest, test_types);
 
 TYPED_TEST(CopyTest, BasicCopy) {
-  constexpr gdf_size_type source_size{1000};
+  constexpr cudf::size_type source_size{1000};
   cudf::test::column_wrapper<TypeParam> source{
       source_size, [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }};
@@ -48,7 +48,7 @@ TYPED_TEST(CopyTest, BasicCopy) {
 }
 
 TYPED_TEST(CopyTest, NoNullMask) {
-  constexpr gdf_size_type source_size{1000};
+  constexpr cudf::size_type source_size{1000};
   // No null mask
   std::vector<TypeParam> data(source_size, TypeParam{0});
   std::iota(data.begin(), data.end(), TypeParam{0});
@@ -60,7 +60,7 @@ TYPED_TEST(CopyTest, NoNullMask) {
 }
 
 TYPED_TEST(CopyTest, EmptyInput) {
-  constexpr gdf_size_type source_size{0};
+  constexpr cudf::size_type source_size{0};
   cudf::test::column_wrapper<TypeParam> source{
       source_size, [](gdf_index_type row) { return row; },
       [](gdf_index_type row) { return true; }};
@@ -70,7 +70,7 @@ TYPED_TEST(CopyTest, EmptyInput) {
 }
 
 TYPED_TEST(CopyTest, EmptyTable) {
-  constexpr gdf_size_type source_size{0};
+  constexpr cudf::size_type source_size{0};
 
   cudf::test::column_wrapper<TypeParam> source0{
       source_size, [](gdf_index_type row) { return row; },
@@ -89,7 +89,7 @@ TYPED_TEST(CopyTest, EmptyTable) {
 }
 
 TYPED_TEST(CopyTest, TableNoNullMask) {
-  constexpr gdf_size_type source_size{1000};
+  constexpr cudf::size_type source_size{1000};
   cudf::test::column_wrapper<TypeParam> source0{
       source_size, [](gdf_index_type row) { return row; }};
   cudf::test::column_wrapper<TypeParam> source1{
@@ -104,7 +104,7 @@ TYPED_TEST(CopyTest, TableNoNullMask) {
 }
 
 TYPED_TEST(CopyTest, TableCopy) {
-  constexpr gdf_size_type source_size{1000};
+  constexpr cudf::size_type source_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source0{
       source_size, [](gdf_index_type row) { return row; },

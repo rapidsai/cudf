@@ -129,7 +129,7 @@ gdf_error nvcategory_gather(gdf_column* column, NVCategory* nv_category){
   return GDF_SUCCESS;
 }
 
-gdf_error validate_categories(const gdf_column* const input_columns[], int num_columns, gdf_size_type & total_count){
+gdf_error validate_categories(const gdf_column* const input_columns[], int num_columns, cudf::size_type & total_count){
   total_count = 0;
   for (int i = 0; i < num_columns; ++i) {
     const gdf_column* current_column = input_columns[i];
@@ -145,7 +145,7 @@ gdf_error validate_categories(const gdf_column* const input_columns[], int num_c
 
 gdf_error concat_categories(const gdf_column* const input_columns[], gdf_column* output_column, int num_columns){
 
-  gdf_size_type total_count;
+  cudf::size_type total_count;
   gdf_error err = validate_categories(input_columns,num_columns,total_count);
   GDF_REQUIRE(err == GDF_SUCCESS,err);
   GDF_REQUIRE(total_count <= output_column->size,GDF_COLUMN_SIZE_MISMATCH);
@@ -169,7 +169,7 @@ gdf_error concat_categories(const gdf_column* const input_columns[], gdf_column*
 gdf_error sync_column_categories(const gdf_column* const input_columns[], gdf_column* output_columns[], int num_columns){
 
   GDF_REQUIRE(num_columns > 0,GDF_DATASET_EMPTY);
-  gdf_size_type total_count;
+  cudf::size_type total_count;
 
   gdf_error err = validate_categories(input_columns,num_columns,total_count);
   GDF_REQUIRE(GDF_SUCCESS == err, err);
@@ -183,10 +183,10 @@ gdf_error sync_column_categories(const gdf_column* const input_columns[], gdf_co
 
   NVCategory * combined_category = combine_column_categories(input_columns,num_columns);
 
-  gdf_size_type current_column_start_position = 0;
+  cudf::size_type current_column_start_position = 0;
   for(int column_index = 0; column_index < num_columns; column_index++){
-    gdf_size_type column_size = output_columns[column_index]->size;
-    gdf_size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
+    cudf::size_type column_size = output_columns[column_index]->size;
+    cudf::size_type size_to_copy =  column_size * sizeof(nv_category_index_type);
     CUDA_TRY( cudaMemcpy(output_columns[column_index]->data,
                           combined_category->values_cptr() + current_column_start_position,
                          size_to_copy,

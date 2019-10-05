@@ -29,8 +29,8 @@
 class Search : public cudf::benchmark {};
 
 void BM_non_null_column(benchmark::State& state){
-  const gdf_size_type column_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type values_size = column_size;
+  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type values_size = column_size;
 
   cudf::test::column_wrapper<float> column(column_size,
     [=](gdf_index_type row) { return static_cast<float>(row); }
@@ -56,8 +56,8 @@ BENCHMARK_REGISTER_F(Search, AllValidColumn)
   ->Arg(100000000);
 
 void BM_nullable_column(benchmark::State& state){
-  const gdf_size_type column_size{(gdf_size_type)state.range(0)};
-  const gdf_size_type values_size = column_size;
+  const cudf::size_type column_size{(cudf::size_type)state.range(0)};
+  const cudf::size_type values_size = column_size;
 
   cudf::test::column_wrapper<float> column(column_size,
     [=](gdf_index_type row) { return static_cast<float>(row); },
@@ -110,17 +110,17 @@ void sort_table(cudf::table& t, std::vector<bool>& desc_flags) {
 void BM_table(benchmark::State& state){
   using wrapper = cudf::test::column_wrapper<float>;
 
-  const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
-  const gdf_size_type column_size{(gdf_size_type)state.range(1)};
-  const gdf_size_type values_size = column_size;
+  const cudf::size_type num_columns{(cudf::size_type)state.range(0)};
+  const cudf::size_type column_size{(cudf::size_type)state.range(1)};
+  const cudf::size_type values_size = column_size;
 
   std::vector<wrapper> columns;
   std::vector<wrapper> values;
 
   auto make_table = [&] (std::vector<wrapper>& cols,
-                         gdf_size_type col_size) -> cudf::table
+                         cudf::size_type col_size) -> cudf::table
   {
-    for (gdf_size_type i = 0; i < num_columns; i++) {
+    for (cudf::size_type i = 0; i < num_columns; i++) {
       cols.emplace_back(col_size,
         [=](gdf_index_type row) { return random_int(0, 100); },
         [=](gdf_index_type row) { return random_int(0, 100) < 90; }

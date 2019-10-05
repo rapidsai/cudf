@@ -29,7 +29,7 @@ template<typename T, typename Tout, typename F>
 __global__
 void gpu_binary_op(const T *lhs_data, const gdf_valid_type *lhs_valid,
                    const T *rhs_data, const gdf_valid_type *rhs_valid,
-                   gdf_size_type size, Tout *results, F functor) {
+                   cudf::size_type size, Tout *results, F functor) {
     int tid = threadIdx.x;
     int blkid = blockIdx.x;
     int blksz = blockDim.x;

@@ -58,11 +58,11 @@ namespace binops {
  * @param num_values number of values in each input mask valid_left and
  *valid_right
  *---------------------------------------------------------------------------**/
-void binary_valid_mask_and(gdf_size_type& out_null_count,
+void binary_valid_mask_and(cudf::size_type& out_null_count,
                            gdf_valid_type* valid_out,
                            const gdf_valid_type* valid_left,
                            const gdf_valid_type* valid_right,
-                           gdf_size_type num_values) {
+                           cudf::size_type num_values) {
   if (num_values == 0) {
     out_null_count = 0;
     return;
@@ -86,7 +86,7 @@ void binary_valid_mask_and(gdf_size_type& out_null_count,
     CUDF_EXPECTS(error == GDF_SUCCESS, "Unable to combine bitmasks");
   }
 
-  gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
+  cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   if (valid_left == nullptr && valid_right != nullptr) {
     CUDA_TRY(cudaMemcpy(valid_out, valid_right, num_bitmask_elements,
@@ -98,7 +98,7 @@ void binary_valid_mask_and(gdf_size_type& out_null_count,
     CUDA_TRY(cudaMemset(valid_out, 0xff, num_bitmask_elements));
   }
 
-  gdf_size_type non_nulls;
+  cudf::size_type non_nulls;
   auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
   CUDF_EXPECTS(error == GDF_SUCCESS, "Unable to count number of valids");
   out_null_count = num_values - non_nulls;
@@ -113,10 +113,10 @@ void binary_valid_mask_and(gdf_size_type& out_null_count,
  * @param valid_scalar bool indicating if scalar is valid
  * @param num_values number of values in input mask valid_col
  *---------------------------------------------------------------------------**/
-void scalar_col_valid_mask_and(gdf_size_type& out_null_count,
+void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
                                gdf_valid_type* valid_out,
                                gdf_valid_type* valid_col, bool valid_scalar,
-                               gdf_size_type num_values) {
+                               cudf::size_type num_values) {
   if (num_values == 0) {
     out_null_count = 0;
     return;
@@ -131,7 +131,7 @@ void scalar_col_valid_mask_and(gdf_size_type& out_null_count,
 
   CUDF_EXPECTS((valid_out != nullptr), "Output valid mask pointer is null");
 
-  gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
+  cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   if (valid_scalar == false) {
     CUDA_TRY(cudaMemset(valid_out, 0x00, num_bitmask_elements));
@@ -142,7 +142,7 @@ void scalar_col_valid_mask_and(gdf_size_type& out_null_count,
     CUDA_TRY(cudaMemset(valid_out, 0xff, num_bitmask_elements));
   }
 
-  gdf_size_type non_nulls;
+  cudf::size_type non_nulls;
   auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);
   CUDF_EXPECTS(error == GDF_SUCCESS, "Unable to count number of valids");
   out_null_count = num_values - non_nulls;

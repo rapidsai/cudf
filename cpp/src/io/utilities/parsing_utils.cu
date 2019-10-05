@@ -50,7 +50,7 @@ constexpr T divCeil(T dividend, T divisor) noexcept { return (dividend + divisor
  *---------------------------------------------------------------------------**/
 template<class T, class V>
 __device__ __forceinline__
-void setElement(T* array, gdf_size_type idx, const T& t, const V& v){
+void setElement(T* array, cudf::size_type idx, const T& t, const V& v){
 	array[idx] = t;
 }
 
@@ -60,7 +60,7 @@ void setElement(T* array, gdf_size_type idx, const T& t, const V& v){
  *---------------------------------------------------------------------------**/
 template<class T, class V>
 __device__ __forceinline__
-void setElement(thrust::pair<T, V>* array, gdf_size_type idx, const T& t, const V& v) {
+void setElement(thrust::pair<T, V>* array, cudf::size_type idx, const T& t, const V& v) {
 	array[idx] = {t, v};
 }
 
@@ -70,7 +70,7 @@ void setElement(thrust::pair<T, V>* array, gdf_size_type idx, const T& t, const 
  *---------------------------------------------------------------------------**/
 template<class T, class V>
 __device__ __forceinline__
-void setElement(void* array, gdf_size_type idx, const T& t, const V& v) {
+void setElement(void* array, cudf::size_type idx, const T& t, const V& v) {
 }
 
 /**---------------------------------------------------------------------------*
@@ -89,7 +89,7 @@ void setElement(void* array, gdf_size_type idx, const T& t, const V& v) {
  *---------------------------------------------------------------------------**/
 template<class T>
  __global__ 
- void countAndSetPositions(char *data, uint64_t size, uint64_t offset, const char key, gdf_size_type* count,
+ void countAndSetPositions(char *data, uint64_t size, uint64_t offset, const char key, cudf::size_type* count,
 	T* positions) {
 
 	// thread IDs range per block, so also need the block id
@@ -105,7 +105,7 @@ template<class T>
 	// Process the data
 	for (long i = 0; i < byteToProcess; i++) {
 		if (raw[i] == key) {
-			const auto idx = atomicAdd(count, (gdf_size_type)1);
+			const auto idx = atomicAdd(count, (cudf::size_type)1);
 			setElement(positions, idx, did + offset + i, key);
 		}
 	}
@@ -125,15 +125,15 @@ template<class T>
  * @param[in] result_offset Offset to add to the output positions
  * @param[out] positions Array containing the output positions
  * 
- * @return gdf_size_type total number of occurrences
+ * @return cudf::size_type total number of occurrences
  *---------------------------------------------------------------------------**/
 template<class T>
-gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions) {
 
 	device_buffer<char> d_chunk(std::min(max_chunk_bytes, h_size));
-	device_buffer<gdf_size_type> d_count(1);
-	CUDA_TRY(cudaMemsetAsync(d_count.data(), 0ull, sizeof(gdf_size_type)));
+	device_buffer<cudf::size_type> d_count(1);
+	CUDA_TRY(cudaMemsetAsync(d_count.data(), 0ull, sizeof(cudf::size_type)));
 
 	int block_size = 0;		// suggested thread count to use
 	int min_grid_size = 0;	// minimum block count required
@@ -157,8 +157,8 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
 		}
 	}
 
-	gdf_size_type h_count = 0;
-	CUDA_TRY(cudaMemcpy(&h_count, d_count.data(), sizeof(gdf_size_type), cudaMemcpyDefault));
+	cudf::size_type h_count = 0;
+	CUDA_TRY(cudaMemcpy(&h_count, d_count.data(), sizeof(cudf::size_type), cudaMemcpyDefault));
 	return h_count;
 }
 
@@ -173,16 +173,16 @@ gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vecto
  * @param[in] h_size Size of the input data, in bytes
  * @param[in] keys Vector containing the keys to count in the buffer
  *
- * @return gdf_size_type total number of occurrences
+ * @return cudf::size_type total number of occurrences
  *---------------------------------------------------------------------------**/
-gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys) {
+cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys) {
 	return findAllFromSet<void>(h_data, h_size, keys, 0, nullptr);
 }
 
-template gdf_size_type findAllFromSet<uint64_t>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+template cudf::size_type findAllFromSet<uint64_t>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	uint64_t *positions);
 
-template gdf_size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+template cudf::size_type findAllFromSet<pos_key_pair>(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	pos_key_pair *positions);
 
 /**

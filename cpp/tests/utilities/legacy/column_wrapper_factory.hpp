@@ -58,13 +58,13 @@ template <typename T>
 struct column_wrapper_factory
 {
   template<typename DataInitializer>
-  column_wrapper<T> make(gdf_size_type size, DataInitializer data_init) {
+  column_wrapper<T> make(cudf::size_type size, DataInitializer data_init) {
     return column_wrapper<T>(size,
       [&](gdf_index_type row) { return convert(data_init(row)); });
   }
 
   template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<T> make(gdf_size_type size,
+  column_wrapper<T> make(cudf::size_type size,
                          DataInitializer data_init, BitInitializer bit_init) {
     return column_wrapper<T>(size,
       [&](gdf_index_type row) { return convert(data_init(row)); },
@@ -80,7 +80,7 @@ template <>
 struct column_wrapper_factory<cudf::nvstring_category>
 {
   template<typename DataInitializer>
-  column_wrapper<cudf::nvstring_category> make(gdf_size_type size,
+  column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
                                                DataInitializer data_init) {
     std::vector<const char*> strings = generate_strings(size, data_init);
     auto c =  column_wrapper<cudf::nvstring_category>{size, strings.data()};
@@ -89,7 +89,7 @@ struct column_wrapper_factory<cudf::nvstring_category>
   }
 
   template<typename DataInitializer, typename BitInitializer>
-  column_wrapper<cudf::nvstring_category> make(gdf_size_type size,
+  column_wrapper<cudf::nvstring_category> make(cudf::size_type size,
                                                DataInitializer data_init,
                                                BitInitializer bit_init) {
     std::vector<const char*> strings = generate_strings(size, data_init);
@@ -111,7 +111,7 @@ protected:
   }
 
   template <typename DataInitializer>
-  std::vector<const char*> generate_strings(gdf_size_type size,
+  std::vector<const char*> generate_strings(cudf::size_type size,
                                             DataInitializer data_init)
   {
     std::vector<const char*> strings(size);

@@ -110,7 +110,7 @@ gdf_column transform(const gdf_column& input,
       "Invalid/Unsupported input datatype" );
   
   if (input.valid != nullptr) {
-    gdf_size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
+    cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(input.size);
     CUDA_TRY(cudaMemcpy(output.valid, input.valid, num_bitmask_elements, cudaMemcpyDeviceToDevice));
   }
 

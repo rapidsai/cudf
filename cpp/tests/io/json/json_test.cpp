@@ -54,7 +54,7 @@ TEST_F(gdf_json_test, SquareBrackets) {
                          "\"index\":[\"row 1\",\"row 2\"] , "
                          "\"data\":[[\"a\",1,1.0],[\"b\",2,2.0]]}");
 
-  const gdf_size_type count = countAllFromSet(json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'});
+  const cudf::size_type count = countAllFromSet(json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'});
   ASSERT_TRUE(count == 10);
 
   device_buffer<uint64_t> d_pos(count);
@@ -86,7 +86,7 @@ TEST_F(gdf_json_test, BracketsLevels) {
   expected.push_back(2);
   expected.push_back(1);
 
-  const gdf_size_type count = countAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'});
+  const cudf::size_type count = countAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'});
   device_buffer<pos_key_pair> d_pos(count);
   findAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'}, 0, d_pos.data());
   const auto d_lvls = getBracketLevels(d_pos.data(), count, string("[{"), string("]}"));

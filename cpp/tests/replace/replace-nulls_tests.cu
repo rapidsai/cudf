@@ -56,7 +56,7 @@ void ReplaceNullsScalar(cudf::test::column_wrapper<T> input,
 
 TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 {
-  constexpr gdf_size_type column_size{10};
+  constexpr cudf::size_type column_size{10};
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
@@ -73,7 +73,7 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 
 TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 {
-  constexpr gdf_size_type column_size{10};
+  constexpr cudf::size_type column_size{10};
 
   ReplaceNullsScalar<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,

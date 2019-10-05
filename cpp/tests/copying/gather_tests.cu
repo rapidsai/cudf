@@ -37,13 +37,13 @@ using test_types =
 TYPED_TEST_CASE(GatherTest, test_types);
 
 TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   static_assert(source_size == destination_size,
                 "Source and destination columns must be the same size.");
 
-  constexpr gdf_size_type n_cols = 3;
+  constexpr cudf::size_type n_cols = 3;
  
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,
@@ -107,15 +107,15 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
 }
 
 TYPED_TEST(GatherTest, MultiColNullTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
   
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");
   static_assert(source_size == destination_size,
                 "Source and destination columns must be equal size.");
   
-  constexpr gdf_size_type n_cols = 3;
+  constexpr cudf::size_type n_cols = 3;
  
   // elements with even indices are null
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
@@ -132,7 +132,7 @@ TYPED_TEST(GatherTest, MultiColNullTest) {
   
   // Create gather_map that reverses order of source_column
   std::vector<gdf_index_type> host_gather_map(source_size);
-  for (gdf_size_type i = 0; i < destination_size / 2; ++i) {
+  for (cudf::size_type i = 0; i < destination_size / 2; ++i) {
     host_gather_map[i] = i * 2 + 1;
     host_gather_map[destination_size / 2 + i] = i * 2;
   }
@@ -182,12 +182,12 @@ TYPED_TEST(GatherTest, MultiColNullTest) {
 }
 
 TYPED_TEST(GatherTest, MultiColInPlaceTest) {
-  constexpr gdf_size_type source_size{1000};
+  constexpr cudf::size_type source_size{1000};
   
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");
   
-  constexpr gdf_size_type n_cols = 3;
+  constexpr cudf::size_type n_cols = 3;
  
   // elements with even indices are null
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
@@ -204,7 +204,7 @@ TYPED_TEST(GatherTest, MultiColInPlaceTest) {
   
   // Create gather_map that reverses order of source_column
   std::vector<gdf_index_type> host_gather_map(source_size);
-  for (gdf_size_type i = 0; i < source_size / 2; ++i) {
+  for (cudf::size_type i = 0; i < source_size / 2; ++i) {
     host_gather_map[i] = i * 2 + 1;
     host_gather_map[source_size / 2 + i] = i * 2;
   }
@@ -241,8 +241,8 @@ TYPED_TEST(GatherTest, MultiColInPlaceTest) {
 }
 
 TYPED_TEST(GatherTest, DtypeMistach){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   cudf::test::column_wrapper<int32_t> source{source_size};
   cudf::test::column_wrapper<float> destination{destination_size};
@@ -260,8 +260,8 @@ TYPED_TEST(GatherTest, DtypeMistach){
 }
 
 TYPED_TEST(GatherTest, DestMissingValid){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source(source_size, true);
   cudf::test::column_wrapper<TypeParam> destination(destination_size, false);
@@ -279,8 +279,8 @@ TYPED_TEST(GatherTest, DestMissingValid){
 }
 
 TYPED_TEST(GatherTest, NumColumnsMismatch){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source0(source_size, true);
   cudf::test::column_wrapper<TypeParam> source1(source_size, true);
@@ -300,8 +300,8 @@ TYPED_TEST(GatherTest, NumColumnsMismatch){
 }
 
 TYPED_TEST(GatherTest, IdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column{
       source_size, [](gdf_index_type row) { return static_cast<TypeParam>(row); },
@@ -326,8 +326,8 @@ TYPED_TEST(GatherTest, IdentityTest) {
 }
 
 TYPED_TEST(GatherTest, ReverseIdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   static_assert(source_size == destination_size,
                 "Source and destination columns must be the same size.");
@@ -378,8 +378,8 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
 }
 
 TYPED_TEST(GatherTest, AllNull) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type destination_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type destination_size{1000};
 
   // source column has all null values
   cudf::test::column_wrapper<TypeParam> source_column{
@@ -418,8 +418,8 @@ TYPED_TEST(GatherTest, AllNull) {
 }
 
 TYPED_TEST(GatherTest, EveryOtherNull) {
-  constexpr gdf_size_type source_size{1234};
-  constexpr gdf_size_type destination_size{source_size};
+  constexpr cudf::size_type source_size{1234};
+  constexpr cudf::size_type destination_size{source_size};
 
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");
@@ -433,7 +433,7 @@ TYPED_TEST(GatherTest, EveryOtherNull) {
 
   // Gather null values to the last half of the destination column
   std::vector<gdf_index_type> host_gather_map(source_size);
-  for (gdf_size_type i = 0; i < destination_size / 2; ++i) {
+  for (cudf::size_type i = 0; i < destination_size / 2; ++i) {
     host_gather_map[i] = i * 2 + 1;
     host_gather_map[destination_size / 2 + i] = i * 2;
   }

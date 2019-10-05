@@ -31,7 +31,7 @@ namespace {
 enum class side : bool { LEFT, RIGHT };
 
 using bit_mask::bit_mask_t;
-using index_type = thrust::tuple<side, gdf_size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
+using index_type = thrust::tuple<side, cudf::size_type>; // `thrust::get<0>` indicates left/right side, `thrust::get<1>` indicates the row index
 
 /**
  * @brief Merges the bits of two validity bitmasks.
@@ -59,7 +59,7 @@ __global__ void materialize_merged_bitmask_kernel(
     bit_mask_t const* const __restrict__ source_left_mask,
     bit_mask_t const* const __restrict__ source_right_mask,
     bit_mask_t* const destination_mask,
-    gdf_size_type const num_destination_rows,
+    cudf::size_type const num_destination_rows,
     index_type const* const __restrict__ merged_indices) {
 
   gdf_index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
@@ -70,7 +70,7 @@ __global__ void materialize_merged_bitmask_kernel(
   while (destination_row < num_destination_rows) {
     index_type const& merged_idx = merged_indices[destination_row];
     side const src_side = thrust::get<0>(merged_idx);
-    gdf_size_type const src_row  = thrust::get<1>(merged_idx);
+    cudf::size_type const src_row  = thrust::get<1>(merged_idx);
     bool const from_left{src_side == side::LEFT};
     bool source_bit_is_valid{true};
     if (left_have_valids && from_left) {
@@ -103,7 +103,7 @@ void materialize_bitmask(gdf_column const* left_col,
                         gdf_column* out_col,
                         index_type const* merged_indices,
                         cudaStream_t stream) {
-    constexpr gdf_size_type BLOCK_SIZE{256};
+    constexpr cudf::size_type BLOCK_SIZE{256};
     cudf::util::cuda::grid_config_1d grid_config {out_col->size, BLOCK_SIZE };
 
     bit_mask_t* left_valid = reinterpret_cast<bit_mask_t*>(left_col->valid);
@@ -141,15 +141,15 @@ generate_merged_indices(device_table const& left_table,
                         bool nulls_are_smallest,
                         cudaStream_t stream) {
 
-    const gdf_size_type left_size  = left_table.num_rows();
-    const gdf_size_type right_size = right_table.num_rows();
-    const gdf_size_type total_size = left_size + right_size;
+    const cudf::size_type left_size  = left_table.num_rows();
+    const cudf::size_type right_size = right_table.num_rows();
+    const cudf::size_type total_size = left_size + right_size;
 
     thrust::constant_iterator<side> left_side(side::LEFT);
     thrust::constant_iterator<side> right_side(side::RIGHT);
 
-    auto left_indices = thrust::make_counting_iterator(static_cast<gdf_size_type>(0));
-    auto right_indices = thrust::make_counting_iterator(static_cast<gdf_size_type>(0));
+    auto left_indices = thrust::make_counting_iterator(static_cast<cudf::size_type>(0));
+    auto right_indices = thrust::make_counting_iterator(static_cast<cudf::size_type>(0));
 
     auto left_begin_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(left_side, left_indices));
     auto right_begin_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(right_side, right_indices));
@@ -167,8 +167,8 @@ generate_merged_indices(device_table const& left_table,
                     right_begin_zip_iterator,
                     right_end_zip_iterator,
                     merged_indices.begin(),
-                    [=] __device__ (thrust::tuple<side, gdf_size_type> const & right_tuple,
-                                    thrust::tuple<side, gdf_size_type> const & left_tuple) {
+                    [=] __device__ (thrust::tuple<side, cudf::size_type> const & right_tuple,
+                                    thrust::tuple<side, cudf::size_type> const & left_tuple) {
                         return ineq_op(thrust::get<1>(right_tuple), thrust::get<1>(left_tuple));
                     });			        
     } else {
@@ -179,8 +179,8 @@ generate_merged_indices(device_table const& left_table,
                     right_begin_zip_iterator,
                     right_end_zip_iterator,
                     merged_indices.begin(),
-                    [=] __device__ (thrust::tuple<side, gdf_size_type> const & right_tuple,
-                                    thrust::tuple<side, gdf_size_type> const & left_tuple) {
+                    [=] __device__ (thrust::tuple<side, cudf::size_type> const & right_tuple,
+                                    thrust::tuple<side, cudf::size_type> const & left_tuple) {
                         return ineq_op(thrust::get<1>(right_tuple), thrust::get<1>(left_tuple));
                     });					        
     }
@@ -197,7 +197,7 @@ namespace detail {
 
 table merge(table const& left_table,
             table const& right_table,
-            std::vector<gdf_size_type> const& key_cols,
+            std::vector<cudf::size_type> const& key_cols,
             std::vector<order_by_type> const& asc_desc,
             bool nulls_are_smallest,
             cudaStream_t stream = 0) {
@@ -224,7 +224,7 @@ table merge(table const& left_table,
     std::vector<gdf_col_ptr> temp_columns_to_free;
     std::vector<gdf_column*> left_cols_sync(const_cast<gdf_column**>(left_table.begin()), const_cast<gdf_column**>(left_table.end()));
     std::vector<gdf_column*> right_cols_sync(const_cast<gdf_column**>(right_table.begin()), const_cast<gdf_column**>(right_table.end()));
-    for (gdf_size_type i = 0; i < left_table.num_columns(); i++) {
+    for (cudf::size_type i = 0; i < left_table.num_columns(); i++) {
         gdf_column * left_col = const_cast<gdf_column*>(left_table.get_column(i));
         gdf_column * right_col = const_cast<gdf_column*>(right_table.get_column(i));
         
@@ -282,7 +282,7 @@ table merge(table const& left_table,
                             column_dtypes(left_sync_table),
                             column_dtype_infos(left_sync_table),
                             nullable, false, stream);
-    for (gdf_size_type i = 0; i < destination_table.num_columns(); i++) {
+    for (cudf::size_type i = 0; i < destination_table.num_columns(); i++) {
         gdf_column const* left_col = left_sync_table.get_column(i);
         gdf_column * out_col = destination_table.get_column(i);
         
@@ -303,20 +303,20 @@ table merge(table const& left_table,
     auto& output_device_table = *output_device_table_ptr;
 
     auto index_start_it = thrust::make_zip_iterator(thrust::make_tuple(
-                                                    thrust::make_counting_iterator(static_cast<gdf_size_type>(0)), 
+                                                    thrust::make_counting_iterator(static_cast<cudf::size_type>(0)), 
                                                     merged_indices.begin()));
     auto index_end_it = thrust::make_zip_iterator(thrust::make_tuple(
-                                                thrust::make_counting_iterator(static_cast<gdf_size_type>(merged_indices.size())),
+                                                thrust::make_counting_iterator(static_cast<cudf::size_type>(merged_indices.size())),
                                                 merged_indices.end()));
 
     thrust::for_each(rmm::exec_policy(stream)->on(stream),
                     index_start_it,
                     index_end_it,
                     [=] __device__ (auto const & idx_tuple){
-                        gdf_size_type dest_row = thrust::get<0>(idx_tuple);
+                        cudf::size_type dest_row = thrust::get<0>(idx_tuple);
                         index_type merged_idx = thrust::get<1>(idx_tuple);
                         side src_side = thrust::get<0>(merged_idx);
-                        gdf_size_type src_row  = thrust::get<1>(merged_idx);
+                        cudf::size_type src_row  = thrust::get<1>(merged_idx);
                         device_table const & src_device_table = src_side == side::LEFT ? left_device_table : right_device_table;
                         copy_row<false>(output_device_table, dest_row, src_device_table, src_row);
                     });
@@ -324,7 +324,7 @@ table merge(table const& left_table,
     CHECK_STREAM(0);
 
     if (nullable) {
-        for (gdf_size_type i = 0; i < destination_table.num_columns(); i++) {
+        for (cudf::size_type i = 0; i < destination_table.num_columns(); i++) {
             gdf_column const* left_col = left_sync_table.get_column(i);
             gdf_column const* right_col = right_sync_table.get_column(i);
             gdf_column* out_col = destination_table.get_column(i);
@@ -342,7 +342,7 @@ table merge(table const& left_table,
 
 table merge(table const& left_table,
             table const& right_table,
-            std::vector<gdf_size_type> const& key_cols,
+            std::vector<cudf::size_type> const& key_cols,
             std::vector<order_by_type> const& asc_desc,
             bool nulls_are_smallest) {
     return detail::merge(left_table, right_table, key_cols, asc_desc, nulls_are_smallest);

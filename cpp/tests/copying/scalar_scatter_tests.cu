@@ -33,7 +33,7 @@ using test_types =
 TYPED_TEST_CASE(ScalarScatterTest, test_types);
 
 TYPED_TEST(ScalarScatterTest, DestMissingValid) {
-  constexpr gdf_size_type target_size{1920};
+  constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3,
                 "Size of source data must be a multiple of 3.");
@@ -46,7 +46,7 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
 
   // Scatter null values to the last half of the target column
   std::vector<gdf_index_type> host_scatter_map(target_size/3);
-  for (gdf_size_type i = 0; i < target_size/3; ++i) {
+  for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3;
   }
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
@@ -79,15 +79,15 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
 }
 
 TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
-  constexpr gdf_size_type target_size{1920};
-  constexpr gdf_size_type n_cols = 3;
+  constexpr cudf::size_type target_size{1920};
+  constexpr cudf::size_type n_cols = 3;
 
   static_assert(0 == target_size % 3,
                 "Size of source data must be a multiple of 3.");
 
   // Scatter null values to the last half of the target column
   std::vector<gdf_index_type> host_scatter_map(target_size/3);
-  for (gdf_size_type i = 0; i < target_size/3; ++i) {
+  for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3;
   }
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
@@ -137,14 +137,14 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
 }
 
 TYPED_TEST(ScalarScatterTest, ScatterValid) {
-  constexpr gdf_size_type target_size{1920};
+  constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3,
                 "Size of source data must be a multiple of 3.");
 
   // Scatter null values to the last half of the target column
   std::vector<gdf_index_type> host_scatter_map(target_size/3);
-  for (gdf_size_type i = 0; i < target_size/3; ++i) {
+  for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3;
   }
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
@@ -183,14 +183,14 @@ TYPED_TEST(ScalarScatterTest, ScatterValid) {
 }
 
 TYPED_TEST(ScalarScatterTest, ScatterNull) {
-  constexpr gdf_size_type target_size{1920};
+  constexpr cudf::size_type target_size{1920};
 
   static_assert(0 == target_size % 3,
                 "Size of source data must be a multiple of 3.");
 
   // Scatter null values to the last half of the target column
   std::vector<gdf_index_type> host_scatter_map(target_size/3);
-  for (gdf_size_type i = 0; i < target_size/3; ++i) {
+  for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3+1;
   }
   thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);

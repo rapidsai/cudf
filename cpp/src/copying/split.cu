@@ -27,7 +27,7 @@ namespace cudf {
 
 rmm::device_vector<gdf_index_type> splits_to_slice_indices(
                                gdf_index_type const*  splits,
-                               gdf_size_type const    num_splits,
+                               cudf::size_type const    num_splits,
                                gdf_index_type const   split_end) {
     rmm::device_vector<gdf_index_type> slice_indices((num_splits + 1) * 2);
     slice_indices[0] = 0;
@@ -40,7 +40,7 @@ rmm::device_vector<gdf_index_type> splits_to_slice_indices(
 
 std::vector<gdf_column*> split(gdf_column const &         input_column,
                                gdf_index_type const*      splits,
-                               gdf_size_type              num_splits) {
+                               cudf::size_type              num_splits) {
 
     if (num_splits == 0 || splits== nullptr){
       return std::vector<gdf_column*>();

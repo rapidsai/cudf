@@ -34,9 +34,9 @@ template <bool nullable = true>
 struct elements_are_equal {
   template <typename ColumnType>
   __device__ __forceinline__ bool operator()(gdf_column const& lhs,
-                                             gdf_size_type lhs_index,
+                                             cudf::size_type lhs_index,
                                              gdf_column const& rhs,
-                                             gdf_size_type rhs_index,
+                                             cudf::size_type rhs_index,
                                              bool nulls_are_equal = false) {
     if (nullable) {
       bool const lhs_is_valid{gdf_is_valid(lhs.valid, lhs_index)};
@@ -73,9 +73,9 @@ struct elements_are_equal {
  */
 template <bool nullable = true>
 __device__ inline bool rows_equal(device_table const& lhs,
-                                  const gdf_size_type lhs_index,
+                                  const cudf::size_type lhs_index,
                                   device_table const& rhs,
-                                  const gdf_size_type rhs_index,
+                                  const cudf::size_type rhs_index,
                                   bool nulls_are_equal = false) {
   auto equal_elements = [lhs_index, rhs_index, nulls_are_equal](
                             gdf_column const& l, gdf_column const& r) {
@@ -243,7 +243,7 @@ struct row_inequality_comparator
   {
 
     State state = State::Undecided;
-    for (gdf_size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index)
+    for (cudf::size_type col_index = 0; col_index < _lhs.num_columns(); ++col_index)
     {
       gdf_dtype col_type = _lhs.get_column(col_index)->dtype;
 

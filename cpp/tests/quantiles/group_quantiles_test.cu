@@ -117,7 +117,7 @@ TEST_F(group_quantile, SingleColumnNullable)
     );
 
     auto expect_keys = cudf::test::column_wrapper<int32_t> ( expect_keys_data,
-        []( gdf_size_type i ) { return true; } 
+        []( cudf::size_type i ) { return true; } 
     );
 
     cudf::table key_table;

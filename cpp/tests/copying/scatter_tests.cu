@@ -36,8 +36,8 @@ TYPED_TEST_CASE(ScatterTest, test_types);
 
 
 TYPED_TEST(ScatterTest, DtypeMistach){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<int32_t> source(source_size);
   cudf::test::column_wrapper<float> destination(target_size);
@@ -60,8 +60,8 @@ TYPED_TEST(ScatterTest, DtypeMistach){
 }
 
 TYPED_TEST(ScatterTest, NumColumnsMismatch){
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source0(source_size, true);
   cudf::test::column_wrapper<TypeParam> source1(source_size, true);
@@ -87,8 +87,8 @@ TYPED_TEST(ScatterTest, NumColumnsMismatch){
 // This also test the case where the source column has a valid bitmask while
 // the target column does not.
 TYPED_TEST(ScatterTest, IdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column(
       source_size,
@@ -119,8 +119,8 @@ TYPED_TEST(ScatterTest, IdentityTest) {
 }
 
 TYPED_TEST(ScatterTest, ReverseIdentityTest) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   cudf::test::column_wrapper<TypeParam> source_column(
       source_size,
@@ -170,8 +170,8 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
 }
 
 TYPED_TEST(ScatterTest, AllNull) {
-  constexpr gdf_size_type source_size{1000};
-  constexpr gdf_size_type target_size{1000};
+  constexpr cudf::size_type source_size{1000};
+  constexpr cudf::size_type target_size{1000};
 
   // source column has all null values
   cudf::test::column_wrapper<TypeParam> source_column(
@@ -217,8 +217,8 @@ TYPED_TEST(ScatterTest, AllNull) {
 }
 
 TYPED_TEST(ScatterTest, EveryOtherNull) {
-  constexpr gdf_size_type source_size{1234};
-  constexpr gdf_size_type target_size{source_size};
+  constexpr cudf::size_type source_size{1234};
+  constexpr cudf::size_type target_size{source_size};
 
   static_assert(0 == source_size % 2,
                 "Size of source data must be a multiple of 2.");
@@ -233,7 +233,7 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
 
   // Scatter null values to the last half of the destination column
   std::vector<gdf_index_type> host_scatter_map(source_size);
-  for (gdf_size_type i = 0; i < source_size / 2; ++i) {
+  for (cudf::size_type i = 0; i < source_size / 2; ++i) {
     host_scatter_map[i * 2] = target_size / 2 + i;
     host_scatter_map[i * 2 + 1] = i;
   }

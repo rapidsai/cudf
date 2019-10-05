@@ -36,8 +36,8 @@ namespace {
 template <typename DataIterator, typename ValuesIterator, typename Comparator>
 void launch_search(DataIterator it_data,
                     ValuesIterator it_vals,
-                    gdf_size_type data_size,
-                    gdf_size_type values_size,
+                    cudf::size_type data_size,
+                    cudf::size_type values_size,
                     void* output,
                     Comparator comp,
                     bool find_first,

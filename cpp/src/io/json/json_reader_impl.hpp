@@ -31,12 +31,12 @@ namespace io {
 namespace json {
 
 struct ColumnInfo {
-  gdf_size_type float_count;
-  gdf_size_type datetime_count;
-  gdf_size_type string_count;
-  gdf_size_type int_count;
-  gdf_size_type bool_count;
-  gdf_size_type null_count;
+  cudf::size_type float_count;
+  cudf::size_type datetime_count;
+  cudf::size_type string_count;
+  cudf::size_type int_count;
+  cudf::size_type bool_count;
+  cudf::size_type null_count;
 };
 
 /**---------------------------------------------------------------------------*
@@ -165,7 +165,7 @@ private:
    * @return void
    *---------------------------------------------------------------------------**/
   void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, gdf_valid_type *const *valid_fields,
-                            gdf_size_type *num_valid_fields);
+                            cudf::size_type *num_valid_fields);
 
  public:
   /**

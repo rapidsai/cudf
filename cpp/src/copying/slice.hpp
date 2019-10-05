@@ -71,7 +71,7 @@ namespace detail {
  */
 std::vector<gdf_column*> slice(gdf_column const &                input_column,
                                gdf_index_type const*             indices,
-                               gdf_size_type                     num_indices,
+                               cudf::size_type                     num_indices,
                                std::vector<cudaStream_t> const & streams = std::vector<cudaStream_t>{});
 
 }  // namespace detail

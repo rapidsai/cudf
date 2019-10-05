@@ -50,11 +50,11 @@ void slice_data_kernel(ColumnType*           output_data,
                        gdf_index_type const  indices_position) {
   
   gdf_index_type input_offset = indices[indices_position*2];    /**< The start index position of the input data. */
-  gdf_size_type row_size = indices[indices_position*2 + 1] - input_offset; 
+  cudf::size_type row_size = indices[indices_position*2 + 1] - input_offset; 
 
   // Calculate kernel parameters
-  gdf_size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
-  gdf_size_type row_step = blockDim.x * gridDim.x;
+  cudf::size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type row_step = blockDim.x * gridDim.x;
 
   // Perform the copying operation
   while (row_index < row_size) {
@@ -72,11 +72,11 @@ void slice_data_kernel(ColumnType*           output_data,
 */
 __global__
 void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
-                          gdf_size_type*        output_null_count,
+                          cudf::size_type*        output_null_count,
                           bit_mask_t const*     input_bitmask,
-                          gdf_size_type const   input_size,
+                          cudf::size_type const   input_size,
                           gdf_index_type const* indices,
-                          gdf_size_type const   indices_size,
+                          cudf::size_type const   indices_size,
                           gdf_index_type const  indices_position) {
   // Obtain the indices for copying
   gdf_index_type input_index_begin = indices[indices_position * 2];
@@ -86,12 +86,12 @@ void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
   gdf_index_type rotate_input = cudf::util::detail::intra_container_index<bit_mask_t, gdf_index_type>(input_index_begin);
   bit_mask_t mask_last = (bit_mask_t{1} << ((input_index_end - input_index_begin) % bit_mask::bits_per_element)) - bit_mask_t{1};
 
-  gdf_size_type input_block_length = bit_mask::num_elements(input_size);
-  gdf_size_type partition_block_length = bit_mask::num_elements(input_index_end - input_index_begin);
+  cudf::size_type input_block_length = bit_mask::num_elements(input_size);
+  cudf::size_type partition_block_length = bit_mask::num_elements(input_index_end - input_index_begin);
 
   // Calculate kernel parameters
-  gdf_size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
-  gdf_size_type row_step = blockDim.x * gridDim.x;
+  cudf::size_type row_index = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type row_step = blockDim.x * gridDim.x;
 
   // Perform the copying operation
   while (row_index < partition_block_length) {
@@ -127,7 +127,7 @@ class Slice {
 public:
   Slice(gdf_column const &                input_column,
         gdf_index_type const*             indices,
-        gdf_size_type                     num_indices,
+        cudf::size_type                     num_indices,
         std::vector<gdf_column*> const &  output_columns,
         std::vector<cudaStream_t> const & streams)
   : input_column_(input_column), indices_(indices), num_indices_(num_indices),
@@ -138,7 +138,7 @@ public:
   template <typename ColumnType>
   void operator()() {
 
-    gdf_size_type columns_quantity = output_columns_.size();
+    cudf::size_type columns_quantity = output_columns_.size();
     
     // Perform operation
     for (gdf_index_type index = 0; index < columns_quantity; ++index) {
@@ -149,7 +149,7 @@ public:
       }
 
       // Create a new cuda variable for null count in the bitmask
-      rmm::device_vector<gdf_size_type> bit_set_counter(1, 0);
+      rmm::device_vector<cudf::size_type> bit_set_counter(1, 0);
 
       // Gather stream
       cudaStream_t stream = get_stream(index);
@@ -206,8 +206,8 @@ public:
         CHECK_STREAM(stream);
 
         // Update the other fields in the output column
-        gdf_size_type num_nulls;
-        CUDA_TRY(cudaMemcpyAsync(&num_nulls, bit_set_counter.data().get(), sizeof(gdf_size_type), 
+        cudf::size_type num_nulls;
+        CUDA_TRY(cudaMemcpyAsync(&num_nulls, bit_set_counter.data().get(), sizeof(cudf::size_type), 
                     cudaMemcpyDeviceToHost, stream));
         output_column->null_count = output_column->size - num_nulls;
       } else {
@@ -232,7 +232,7 @@ public:
 
     gdf_column const                input_column_;
     gdf_index_type const*           indices_;
-    gdf_size_type                   num_indices_;
+    cudf::size_type                   num_indices_;
     std::vector<gdf_column*> const  output_columns_;
     std::vector<cudaStream_t>      streams_; 
 };
@@ -242,7 +242,7 @@ namespace detail {
 
 std::vector<gdf_column*> slice(gdf_column const &         input_column,
                                gdf_index_type const*      indices,
-                               gdf_size_type              num_indices,
+                               cudf::size_type              num_indices,
                                std::vector<cudaStream_t> const & streams) {
   
   std::vector<gdf_column*> output_columns;
@@ -257,13 +257,13 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
   CUDF_EXPECTS((num_indices % 2) == 0, "indices size must be even");
   
   // Get indexes on host side
-  std::vector<gdf_size_type> host_indices(num_indices);
-  CUDA_TRY( cudaMemcpy(host_indices.data(), indices, num_indices * sizeof(gdf_size_type), cudaMemcpyDeviceToHost) );
+  std::vector<cudf::size_type> host_indices(num_indices);
+  CUDA_TRY( cudaMemcpy(host_indices.data(), indices, num_indices * sizeof(cudf::size_type), cudaMemcpyDeviceToHost) );
 
   // Initialize output_columns
   output_columns.resize(num_indices/2);
   //TODO: optimize to launch all slices in parallel
-  for (gdf_size_type i = 0; i < num_indices/2; i++){
+  for (cudf::size_type i = 0; i < num_indices/2; i++){
     output_columns[i] = new gdf_column{};
     gdf_column_view_augmented(output_columns[i],
                               nullptr,
@@ -288,7 +288,7 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
 
 std::vector<gdf_column*> slice(gdf_column const &         input_column,
                                gdf_index_type const*      indices,
-                               gdf_size_type              num_indices) {
+                               cudf::size_type              num_indices) {
 
   return cudf::detail::slice(input_column, indices, num_indices);
 }

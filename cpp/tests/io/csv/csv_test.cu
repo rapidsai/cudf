@@ -749,7 +749,7 @@ TEST_F(CsvTest, ArrowFileSource) {
   args.dtype = {"int8"};
   const auto df = cudf::read_csv(args);
 
-  EXPECT_EQ(df.num_columns(), static_cast<gdf_size_type>(args.dtype.size()));
+  EXPECT_EQ(df.num_columns(), static_cast<cudf::size_type>(args.dtype.size()));
   ASSERT_EQ(df.get_column(0)->dtype, GDF_INT8);
 
   const auto col = gdf_host_column<int8_t>(df.get_column(0));

@@ -63,7 +63,7 @@ gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_al
  * @param stream Optional stream in which to perform copies
  * @return gdf_column An allocated column of same size and type of input
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
+gdf_column allocate_like(gdf_column const& input, cudf::size_type size, mask_allocation_policy mask_alloc = RETAIN,
                          cudaStream_t stream = 0);
 
 
@@ -126,7 +126,7 @@ table allocate_like(table const& t, mask_allocation_policy mask_alloc = RETAIN,
  * @param stream Optional stream in which to perform allocations
  * @return table A table of columns with same type as @p t and specified @p size
  */
-table allocate_like(table const& t, gdf_size_type size, mask_allocation_policy mask_alloc = RETAIN,
+table allocate_like(table const& t, cudf::size_type size, mask_allocation_policy mask_alloc = RETAIN,
                     cudaStream_t stream = 0);
 
 
@@ -277,7 +277,7 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
  */
 table scatter(std::vector<gdf_scalar> const& source,
 	      gdf_index_type const scatter_map[],
-	      gdf_size_type num_scatter_rows, table const& target);
+	      cudf::size_type num_scatter_rows, table const& target);
 
 /**
  * @brief Gathers the specified rows (including null values) of a set of source
@@ -412,7 +412,7 @@ table gather(table const* source_table, gdf_column const& gather_map, bool check
  */
 std::vector<gdf_column*> slice(gdf_column const &         input,
                                gdf_index_type const*      indices,
-                               gdf_size_type              num_indices);
+                               cudf::size_type              num_indices);
 
 /**
  * @brief Splits a column (including null values) into a set of columns
@@ -460,7 +460,7 @@ std::vector<gdf_column*> slice(gdf_column const &         input,
  */
 std::vector<gdf_column*> split(gdf_column const &         input,
                                gdf_index_type const*      splits,
-                               gdf_size_type              num_splits);
+                               cudf::size_type              num_splits);
 
 /**
  * @brief Scatters the rows of a table to `n` tables according to a scatter map

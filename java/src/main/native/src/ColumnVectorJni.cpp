@@ -379,7 +379,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_concatenate(JNIEnv *env
       // Should be checking for null_count != 0 but libcudf is checking valid != nullptr
       need_validity |= columns[i]->valid != nullptr;
     }
-    if (total_size != static_cast<gdf_size_type>(total_size)) {
+    if (total_size != static_cast<cudf::size_type>(total_size)) {
       cudf::jni::throw_java_exception(env, "java/lang/IllegalArgumentException",
                                       "resulting column is too large");
     }
@@ -437,15 +437,15 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
     gdf_column *n_forward_window_col = reinterpret_cast<gdf_column *>(forward_window_col);
 
     gdf_column *result = cudf::rolling_window(
-        *n_input_column, static_cast<gdf_size_type>(window),
-        static_cast<gdf_size_type>(min_periods), static_cast<gdf_size_type>(forward_window),
+        *n_input_column, static_cast<cudf::size_type>(window),
+        static_cast<cudf::size_type>(min_periods), static_cast<cudf::size_type>(forward_window),
         static_cast<gdf_agg_op>(agg_type),
-        n_window_col == nullptr ? nullptr : reinterpret_cast<gdf_size_type *>(n_window_col->data),
+        n_window_col == nullptr ? nullptr : reinterpret_cast<cudf::size_type *>(n_window_col->data),
         n_min_periods_col == nullptr ? nullptr :
-                                       reinterpret_cast<gdf_size_type *>(n_min_periods_col->data),
+                                       reinterpret_cast<cudf::size_type *>(n_min_periods_col->data),
         n_forward_window_col == nullptr ?
             nullptr :
-            reinterpret_cast<gdf_size_type *>(n_forward_window_col->data));
+            reinterpret_cast<cudf::size_type *>(n_forward_window_col->data));
     return reinterpret_cast<jlong>(result);
   }
   CATCH_STD(env, 0);

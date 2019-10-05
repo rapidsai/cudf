@@ -43,8 +43,8 @@ namespace cudf {
 namespace detail {
 
 template <typename index_type, typename scatter_map_type>
-__global__ void invert_map(index_type gather_map[], const gdf_size_type destination_rows,
-    scatter_map_type const scatter_map, const gdf_size_type source_rows){
+__global__ void invert_map(index_type gather_map[], const cudf::size_type destination_rows,
+    scatter_map_type const scatter_map, const cudf::size_type source_rows){
   index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   if(tid < source_rows){
     index_type destination_row = *(scatter_map + tid);
@@ -170,9 +170,9 @@ void scatter(table const* source_table, gdf_index_type const scatter_map[],
 template<bool mark_true>
 __global__ void marking_bitmask_kernel(
     bit_mask_t* destination_mask,
-    gdf_size_type num_destination_rows,
+    cudf::size_type num_destination_rows,
     const gdf_index_type scatter_map[],
-    gdf_size_type num_scatter_rows
+    cudf::size_type num_scatter_rows
 ){
   
   gdf_index_type row = threadIdx.x + blockIdx.x * blockDim.x;
@@ -205,7 +205,7 @@ struct scalar_scatterer {
    *---------------------------------------------------------------------------**/
   template <typename ColumnType>
   void operator()(gdf_scalar const& source,
-                  gdf_index_type const scatter_map[], const gdf_size_type num_scatter_rows,
+                  gdf_index_type const scatter_map[], const cudf::size_type num_scatter_rows,
                   gdf_column* destination_column, cudaStream_t stream = 0) {
     
     const ColumnType source_data {
@@ -225,7 +225,7 @@ struct scalar_scatterer {
 
 void scalar_scatter(const std::vector<gdf_scalar>& source, 
                     gdf_index_type const scatter_map[],
-                    gdf_size_type num_scatter_rows, table* destination_table){
+                    cudf::size_type num_scatter_rows, table* destination_table){
  
   CUDF_EXPECTS(source.size() == (size_t)destination_table->num_columns(),
     "scalar vector and destination table size mismatch.");
@@ -298,17 +298,17 @@ ordered_scatter_to_tables(cudf::table const& input,
 table scatter(table const& source, gdf_column const& scatter_map,
     table const& target, bool check_bounds) {
 
-  const gdf_size_type n_cols = target.num_columns();
+  const cudf::size_type n_cols = target.num_columns();
 
   table output = copy(target);
   for(int i = 0; i < n_cols; ++i){
     // Allocate bitmask for each column
     if(cudf::has_nulls(*source.get_column(i)) && !is_nullable(*target.get_column(i))){
 
-      gdf_size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
+      cudf::size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
       RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
 
-      gdf_size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
+      cudf::size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
       CUDA_TRY(cudaMemset(output.get_column(i)->valid, 0xff, valid_size_set));
 
     }
@@ -325,17 +325,17 @@ table scatter(table const& source, gdf_column const& scatter_map,
 table scatter(table const& source, gdf_index_type const scatter_map[], 
     table const& target, bool check_bounds) {
   
-  const gdf_size_type n_cols = target.num_columns();
+  const cudf::size_type n_cols = target.num_columns();
 
   table output = copy(target);
   for(int i = 0; i < n_cols; ++i){
     // Allocate bitmask for each column
     if(cudf::has_nulls(*source.get_column(i)) && !is_nullable(*target.get_column(i))){
       
-      gdf_size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
+      cudf::size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
       RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
       
-      gdf_size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
+      cudf::size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
       CUDA_TRY(cudaMemset(output.get_column(i)->valid, 0xff, valid_size_set));
     
     }
@@ -350,19 +350,19 @@ table scatter(table const& source, gdf_index_type const scatter_map[],
 
 table scatter(std::vector<gdf_scalar> const& source, 
               gdf_index_type const scatter_map[],
-              gdf_size_type num_scatter_rows, table const& target){
+              cudf::size_type num_scatter_rows, table const& target){
 
-  const gdf_size_type n_cols = target.num_columns();
+  const cudf::size_type n_cols = target.num_columns();
 
   table output = copy(target);
   for(int i = 0; i < n_cols; ++i){
     // Allocate bitmask for each column
     if(source[i].is_valid == false && !is_nullable(*target.get_column(i))){
       
-      gdf_size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
+      cudf::size_type valid_size = gdf_valid_allocation_size(target.get_column(i)->size);
       RMM_TRY(RMM_ALLOC(&output.get_column(i)->valid, valid_size, 0));
     	
-      gdf_size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
+      cudf::size_type valid_size_set = gdf_num_bitmask_elements(target.get_column(i)->size);
       CUDA_TRY(cudaMemset(output.get_column(i)->valid, 0xff, valid_size_set));
     
     }

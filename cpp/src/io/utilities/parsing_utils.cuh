@@ -39,10 +39,10 @@
 #include <io/utilities/wrapper_utils.hpp>
 #include <io/csv/type_conversion.cuh>
 
-gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
+cudf::size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
 
 template<class T>
-gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
+cudf::size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
 
 device_buffer<int16_t> getBracketLevels(

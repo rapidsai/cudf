@@ -35,7 +35,7 @@ struct ApplyBooleanMaskErrorTest : GdfTest {};
 
 TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
 {
-  constexpr gdf_size_type column_size{1000};
+  constexpr cudf::size_type column_size{1000};
 
   gdf_column bad_input, bad_mask;
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
@@ -91,8 +91,8 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
 
 TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch)
 {
-  constexpr gdf_size_type column_size{1000};
-  constexpr gdf_size_type mask_size{500};
+  constexpr cudf::size_type column_size{1000};
+  constexpr cudf::size_type mask_size{500};
 
   column_wrapper<int32_t> source(column_size);
   column_wrapper<cudf::bool8> mask(mask_size);
@@ -107,7 +107,7 @@ TEST_F(ApplyBooleanMaskErrorTest, SizeMismatch)
 
 TEST_F(ApplyBooleanMaskErrorTest, NonBooleanMask)
 {
-  constexpr gdf_size_type column_size{1000};
+  constexpr cudf::size_type column_size{1000};
 
   column_wrapper<int32_t> source(column_size);
   column_wrapper<float> nonbool_mask(column_size);
@@ -237,7 +237,7 @@ TEST_F(ApplyBooleanMaskErrorTest, Gaps)
       [](gdf_index_type row) { return true; }));
 }
 
-constexpr gdf_size_type column_size{100000};
+constexpr cudf::size_type column_size{100000};
 
 TYPED_TEST(ApplyBooleanMaskTest, Identity)
 {
@@ -315,7 +315,7 @@ TYPED_TEST(ApplyBooleanMaskTest, MaskEvensFalseOrNull)
 
 TYPED_TEST(ApplyBooleanMaskTest, NonalignedGap)
 {
-  std::vector<gdf_size_type> column_sizes{8, 20, 60, 2700, 100000, 1000000};
+  std::vector<cudf::size_type> column_sizes{8, 20, 60, 2700, 100000, 1000000};
 
   for (auto column_size : column_sizes) {
     const int start{1}, end{column_size / 4};

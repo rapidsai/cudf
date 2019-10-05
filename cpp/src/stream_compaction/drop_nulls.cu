@@ -41,7 +41,7 @@ struct valid_table_filter
   }
 
   static auto create(cudf::table const &table,
-                     gdf_size_type keep_threshold,
+                     cudf::size_type keep_threshold,
                      cudaStream_t stream = 0)
   {
     std::vector<bit_mask_t*> h_masks(table.num_columns());
@@ -80,14 +80,14 @@ struct valid_table_filter
 protected:
 
   valid_table_filter(bit_mask_t **masks,
-                     gdf_size_type num_columns,
-                     gdf_size_type keep_threshold) 
+                     cudf::size_type num_columns,
+                     cudf::size_type keep_threshold) 
   : keep_threshold(keep_threshold),
     num_columns(num_columns),
     d_masks(masks) {}
 
-  gdf_size_type keep_threshold;
-  gdf_size_type num_columns;
+  cudf::size_type keep_threshold;
+  cudf::size_type num_columns;
   bit_mask_t **d_masks;
 };
 
@@ -100,7 +100,7 @@ namespace cudf {
  */
 table drop_nulls(table const &input,
                  table const &keys,
-                 gdf_size_type keep_threshold) {
+                 cudf::size_type keep_threshold) {
   if (keys.num_columns() == 0 || keys.num_rows() == 0 ||
       not cudf::has_nulls(keys))
     return cudf::copy(input);

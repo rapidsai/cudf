@@ -63,7 +63,7 @@ gdf_error gdf_order_by(gdf_column const* const* cols,
   
   cudaStream_t stream = 0;
   gdf_index_type* d_indx = static_cast<gdf_index_type*>(output_indices->data);
-  gdf_size_type nrows = cols[0]->size;
+  cudf::size_type nrows = cols[0]->size;
 
   thrust::sequence(rmm::exec_policy(stream)->on(stream), d_indx, d_indx+nrows, 0);
   auto table = device_table::create(num_inputs, cols, stream);

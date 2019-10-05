@@ -203,8 +203,8 @@ writer::Impl::Impl(std::string filepath, writer_options const &options) {
 }
 
 void writer::Impl::write(const cudf::table &table) {
-  gdf_size_type num_columns = table.num_columns();
-  gdf_size_type num_rows = 0;
+  cudf::size_type num_columns = table.num_columns();
+  cudf::size_type num_rows = 0;
 
   // Mapping of string columns for quick look-up
   std::vector<int> str_col_ids;
@@ -563,7 +563,7 @@ std::vector<Stream> writer::Impl::gather_streams(
     int64_t data2_stream_size = 0;
     int64_t dict_stream_size = 0;
     if (columns[i]->null_count != 0 ||
-        columns[i]->size != static_cast<gdf_size_type>(num_rows)) {
+        columns[i]->size != static_cast<cudf::size_type>(num_rows)) {
       present_stream_size = ((row_index_stride_ + 7) >> 3);
       present_stream_size += (present_stream_size + 0x7f) >> 7;
     }
