@@ -36,6 +36,11 @@ package ai.rapids.cudf;
  */
 public class NvtxRange implements AutoCloseable {
   private static final boolean isEnabled = Boolean.getBoolean("ai.rapids.cudf.nvtx.enabled");
+  static {
+    if (isEnabled) {
+      NativeDepsLoader.loadNativeDeps();
+    }
+  }
 
   public NvtxRange(String name, NvtxColor color) {
     this(name, color.colorBits);
