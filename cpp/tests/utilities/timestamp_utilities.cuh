@@ -33,11 +33,11 @@ using time_point_ms = simt::std::chrono::time_point<
 >;
 
 /**---------------------------------------------------------------------------*
- * @brief Creates a ```thrust::device_vector``` with ascending timesamps in the
- * range ```[start, stop)```.
+ * @brief Creates a `thrust::device_vector` with ascending timestamps in the
+ * range `[start, stop)`.
  * 
- * The period is inferred from ```count``` and difference between ```start```
- * and ```stop```.
+ * The period is inferred from `count` and difference between `start`
+ * and `stop`.
  *
  * @tparam Rep The arithmetic type representing the number of ticks
  * @tparam Period A simt::std::ratio representing the tick period (i.e. the number of seconds per tick)
@@ -65,4 +65,3 @@ inline thrust::device_vector<Rep> generate_timestamps(int32_t count, time_point_
 
 }  // namespace test
 }  // namespace cudf
- 

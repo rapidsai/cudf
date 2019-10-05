@@ -69,7 +69,7 @@ constexpr auto types_to_ids() {
  * Example:
  * ```
  * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::NumericTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using NumericTypes =
@@ -82,7 +82,7 @@ using NumericTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all timestamp types in libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::TimestampTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::TimestampTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using TimestampTypes =
@@ -98,13 +98,13 @@ using TimestampTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all types supported by libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::AllTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using AllTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all `cudf::type_id`s
+ * @brief `std::array` of all `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
@@ -112,7 +112,7 @@ using AllTypes = Concat<NumericTypes, TimestampTypes>;
 static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all numeric `cudf::type_id`s
+ * @brief `std::array` of all numeric `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
@@ -120,7 +120,7 @@ static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
 static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all timestamp `cudf::type_id`s
+ * @brief `std::array` of all timestamp `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
@@ -128,7 +128,7 @@ static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
 static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{ detail::types_to_ids<TimestampTypes>() };
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all non-numeric `cudf::type_id`s
+ * @brief `std::array` of all non-numeric `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
