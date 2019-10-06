@@ -269,6 +269,7 @@ def test_skew(data, null_flag):
     expected = pdata.skew()
     np.testing.assert_array_almost_equal(got, expected)
 
+
 @pytest.mark.parametrize("dtype", params_dtypes)
 @pytest.mark.parametrize("num_na", [0, 1, 50, 99, 100])
 def test_series_median(dtype, num_na):
