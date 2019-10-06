@@ -8,7 +8,7 @@
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 
 ## Bug Fixes
-
+- PR #2981 enable build all targets without installation.
 
 # cuDF 0.10.0 (Date TBD)
 
