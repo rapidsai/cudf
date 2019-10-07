@@ -302,8 +302,10 @@ class Series(object):
         """ Reset index to RangeIndex """
         if not drop:
             if inplace is True:
-                raise TypeError("Cannot reset_index inplace on a Series "
-                                "to create a DataFrame")
+                raise TypeError(
+                    "Cannot reset_index inplace on a Series "
+                    "to create a DataFrame"
+                )
             return self.to_frame().reset_index(drop=drop)
         else:
             if inplace is True:
