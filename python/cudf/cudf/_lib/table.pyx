@@ -28,7 +28,7 @@ cdef class Table:
     """
     def __cinit__(self):
         self.ptr = new cudf_table()
-    
+
     def __init__(self):
         pass
 
@@ -47,6 +47,12 @@ cdef class Table:
             cols.append(col)
         self.ptr = new cudf_table()
         return cols
+
+    @staticmethod
+    cdef Table from_ptr(cudf_table* ptr):
+        cdef Table tbl = Table.__new__(Table)
+        tbl.ptr = ptr
+        return tbl
 
     @property
     def num_columns(self):

@@ -114,18 +114,19 @@ def apply_boolean_mask(cols, mask):
     -------
     List of Columns
     """
-    out_table = Table()
     in_table = TableView(cols)
     cdef gdf_column* c_mask_col = column_view_from_column(mask)
 
+    cdef cudf_table result
     with nogil:
-        out_table.ptr[0] = cpp_apply_boolean_mask(
+        result = cpp_apply_boolean_mask(
             in_table.ptr[0],
             c_mask_col[0]
         )
-
     free_column(c_mask_col)
-    return out_table.release()
+
+    result_table = Table.from_ptr(&result)
+    return result_table.release()
 
 
 def drop_nulls(cols, how="any", subset=None, thresh=None):
