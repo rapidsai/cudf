@@ -4,7 +4,6 @@
 
 - PR #2962 Adding support for isNULL and isNotNULL
 
-
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace

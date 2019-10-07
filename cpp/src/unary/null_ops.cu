@@ -35,16 +35,18 @@ gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStr
     if (not cudf::is_nullable(input)) {
 	gdf_scalar value {nulls_are_false, GDF_BOOL8, true}; 
 	cudf::fill(&output, value, 0, output.size);
-    }
-    else {
+    } else {
         const bit_mask_t* __restrict__ typed_input_valid = reinterpret_cast<bit_mask_t*>(input.valid);
         auto exec = rmm::exec_policy(stream)->on(stream);
 
-	thrust::transform(exec,
-			  thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
+        thrust::transform(exec,
+                          thrust::make_counting_iterator(static_cast<gdf_size_type>(0)),
                           thrust::make_counting_iterator(static_cast<gdf_size_type>(input.size)),
-			  static_cast<bool*>(output.data),
-			  [=]__device__(auto index){return (nulls_are_false == bit_mask::is_valid(typed_input_valid, index));});
+                          static_cast<bool*>(output.data),
+                          [=]__device__(auto index){
+                              return (nulls_are_false ==
+                                      bit_mask::is_valid(typed_input_valid, index));
+                          });
     }
 
     return output;
@@ -52,12 +54,10 @@ gdf_column null_op(gdf_column const& input, bool nulls_are_false = true, cudaStr
 }// detail
 
 gdf_column is_null(gdf_column const& input) {
-
     return detail::null_op(input, false, 0);
 }
 
 gdf_column is_not_null(gdf_column const& input) {
-
     return detail::null_op(input, true, 0);
 }
 

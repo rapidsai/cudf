@@ -1278,15 +1278,12 @@ class Series(object):
     def isnull(self):
         """Identify missing values in a Series.
         """
-        if not self.has_null_mask:
-            return Series(
-                cudautils.zeros(len(self), np.bool_),
-                name=self.name,
-                index=self.index,
-            )
-
-        mask = cudautils.isnull_mask(self.data, self.nullmask.mem)
-        return Series(mask, name=self.name, index=self.index)
+        result = Series(
+            libcudf.unaryops.isNULL(self._column),
+            name=self.name,
+            index=self.index,
+        )
+        return result
 
     def isna(self):
         """Identify missing values in a Series. Alias for isnull.
@@ -1296,15 +1293,12 @@ class Series(object):
     def notna(self):
         """Identify non-missing values in a Series.
         """
-        if not self.has_null_mask:
-            return Series(
-                cudautils.ones(len(self), np.bool_),
-                name=self.name,
-                index=self.index,
-            )
-
-        mask = cudautils.notna_mask(self.data, self.nullmask.mem)
-        return Series(mask, name=self.name, index=self.index)
+        result = Series(
+            libcudf.unaryops.isNotNULL(self._column),
+            name=self.name,
+            index=self.index,
+        )
+        return result
 
     def notnull(self):
         """Identify non-missing values in a Series. Alias for notna.
