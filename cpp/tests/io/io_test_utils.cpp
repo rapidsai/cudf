@@ -19,6 +19,7 @@
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 
+#include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 
 bool checkFile(std::string const &fname) {
@@ -51,4 +52,8 @@ std::vector<std::string> nvstrings_to_strings(NVStrings *nvstr) {
   nvstr->to_host(strings.data(), 0, num_strings);
 
   return std::vector<std::string>(strings.data(), strings.data() + num_strings);
+}
+
+std::vector<std::string> nvcategory_to_strings(NVCategory *nvcat) {
+  return nvstrings_to_strings(nvcat->to_strings());
 }
