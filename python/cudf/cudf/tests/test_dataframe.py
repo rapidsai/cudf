@@ -1856,16 +1856,28 @@ def test_tail_for_string():
 
 @pytest.mark.parametrize("drop", [True, False])
 def test_reset_index(pdf, gdf, drop):
-    assert_eq(pdf.reset_index(drop=drop, inplace=False), gdf.reset_index(drop=drop, inplace=False))
-    assert_eq(pdf.x.reset_index(drop=drop, inplace=False), gdf.x.reset_index(drop=drop, inplace=False))
+    assert_eq(
+        pdf.reset_index(drop=drop, inplace=False),
+        gdf.reset_index(drop=drop, inplace=False),
+    )
+    assert_eq(
+        pdf.x.reset_index(drop=drop, inplace=False),
+        gdf.x.reset_index(drop=drop, inplace=False),
+    )
 
 
 @pytest.mark.parametrize("drop", [True, False])
 def test_reset_named_index(pdf, gdf, drop):
     pdf.index.name = "cudf"
     gdf.index.name = "cudf"
-    assert_eq(pdf.reset_index(drop=drop, inplace=False), gdf.reset_index(drop=drop, inplace=False))
-    assert_eq(pdf.x.reset_index(drop=drop, inplace=False), gdf.x.reset_index(drop=drop, inplace=False))
+    assert_eq(
+        pdf.reset_index(drop=drop, inplace=False),
+        gdf.reset_index(drop=drop, inplace=False),
+    )
+    assert_eq(
+        pdf.x.reset_index(drop=drop, inplace=False),
+        gdf.x.reset_index(drop=drop, inplace=False),
+    )
 
 
 @pytest.mark.parametrize("drop", [True, False])

@@ -82,7 +82,7 @@ def test_repeat_dataframe():
 
     # pd.DataFrame doesn't have repeat() so as a workaround, we are
     # comparing pd.Series.repeat() with cudf.DataFrame.repeat()['a']
-    assert_eq(psr["a"].repeat(repeats), gsr.repeat(repeats)["a"])
+    assert_eq(psr["a"].repeat(repeats), gsr["a"].repeat(repeats))
 
 
 @pytest.mark.parametrize(
