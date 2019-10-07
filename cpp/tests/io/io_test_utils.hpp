@@ -29,6 +29,7 @@
 
 // Forward declarations
 class NVStrings;
+class NVCategory;
 
 /**---------------------------------------------------------------------------*
  * @brief Checks if a file exists.
@@ -89,4 +90,9 @@ private:
 /**
  * @brief Returns list of strings from an NVString instance
  **/
-std::vector<std::string> nvstrings_to_strings(NVStrings* nvstr);
+std::vector<std::string> nvstrings_to_strings(NVStrings *nvstr);
+
+/**
+ * @brief Returns list of strings from an NVCategory instance
+ **/
+std::vector<std::string> nvcategory_to_strings(NVCategory *nvcat);

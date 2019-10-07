@@ -61,9 +61,13 @@ class _Groupby(object):
     def deserialize(cls, header, frames):
         groupby_type = pickle.loads(header["type"])
         _groupby = _GroupbyHelper.deserialize(header, frames)
+        by = None
+        if _groupby.level is None:
+            by = _groupby.by
         return groupby_type(
             _groupby.obj,
-            by=_groupby.by,
+            by=by,
+            level=_groupby.level,
             sort=_groupby.sort,
             as_index=_groupby.as_index,
         )
@@ -105,6 +109,9 @@ class DataFrameGroupBy(_Groupby):
         method="hash",
         dropna=True,
     ):
+
+        if by is not None and level is None:
+            df, by = _align_by_and_df(df, by)
         self._df = df
         self._groupby = _GroupbyHelper(
             obj=self._df,
@@ -128,13 +135,13 @@ class DataFrameGroupBy(_Groupby):
             return self.__getattr__(arg)
         else:
             arg = list(arg)
-            by_list = []
-            for by_name, by in zip(
-                self._groupby.key_names, self._groupby.key_columns
-            ):
-                by_list.append(cudf.Series(by, name=by_name))
+            by = None
+            if self._groupby.level is None:
+                by = self._groupby.key_columns
+
             return self._df[arg].groupby(
-                by_list,
+                by=by,
+                level=self._groupby.level,
                 as_index=self._groupby.as_index,
                 sort=self._groupby.sort,
                 dropna=self._groupby.dropna,
@@ -162,7 +169,12 @@ class DataFrameGroupBy(_Groupby):
 
     def quantile(self, q=0.5, interpolation="linear"):
         # Get Key_cols from _GroupbyHelper. It's generated at init.
-        key_cols = self._groupby.key_columns
+        key_cols = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self._groupby.key_columns
+        ]
         # Do the things that'll make it generate the value columns
         self._groupby.normalize_agg("quantile")
         self._groupby.normalize_values()
@@ -194,6 +206,7 @@ class _GroupbyHelper(object):
             if by is not None:
                 raise TypeError("Cannot use both 'by' and 'level'")
             by = self.get_by_from_level(level)
+        self.level = level
         self.by = by
         self.as_index = as_index
         self.sort = sort
@@ -210,12 +223,18 @@ class _GroupbyHelper(object):
         frames.extend(obj_frames)
 
         header["key_names"] = self.key_names
+        header["level"] = self.level
+        header["df_key_names"] = self.df_key_names
         header["as_index"] = self.as_index
         header["sort"] = self.sort
 
-        key_columns_header, key_columns_frames = serialize_columns(
-            self.key_columns
-        )
+        key_columns = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self.key_columns
+        ]
+        key_columns_header, key_columns_frames = serialize_columns(key_columns)
 
         header["key_columns"] = key_columns_header
         frames.extend(key_columns_frames)
@@ -231,6 +250,8 @@ class _GroupbyHelper(object):
 
         as_index = header["as_index"]
         sort = header["sort"]
+        df_key_names = header["df_key_names"]
+        level = header["level"]
 
         key_column_frames = frames[header["obj_frame_count"] :]
         key_columns = deserialize_columns(
@@ -240,7 +261,12 @@ class _GroupbyHelper(object):
         for col_name, col in zip(header["key_names"], key_columns):
             col.name = col_name
 
-        gby = cls(obj, by=key_columns, as_index=as_index, sort=sort)
+        by = None
+        if level is None:
+            by = df_key_names
+            by.extend(key_columns[len(df_key_names) : :])
+
+        gby = cls(obj, by=by, level=level, as_index=as_index, sort=sort)
 
         return gby
 
@@ -265,6 +291,7 @@ class _GroupbyHelper(object):
         """
         Sets self.key_names and self.key_columns
         """
+        self.df_key_names = []
         if isinstance(self.by, (list, tuple)):
             self.key_names = []
             self.key_columns = []
@@ -283,17 +310,17 @@ class _GroupbyHelper(object):
         Get (key_name, key_column) pair from a single *by* argument
         """
         if is_scalar(by):
+            self.df_key_names.append(by)
             key_name = by
-            key_column = self.obj[by]._column
+            key_column = self.obj[by]
         else:
-            by = cudf.Series(by)
             if len(by) != len(self.obj):
                 raise NotImplementedError(
                     "cuDF does not support arbitrary series index lengths "
                     "for groupby"
                 )
             key_name = by.name
-            key_column = by._column
+            key_column = by
         return key_name, key_column
 
     def compute_result(self, agg):
@@ -304,8 +331,15 @@ class _GroupbyHelper(object):
         self.normalize_values()
         aggs_as_list = self.get_aggs_as_list()
 
+        key_columns = [
+            sr._column
+            if isinstance(sr, cudf.Series)
+            else cudf.Series(sr)._column
+            for sr in self.key_columns
+        ]
+
         out_key_columns, out_value_columns = _groupby_engine(
-            self.key_columns,
+            key_columns,
             self.value_columns,
             aggs_as_list,
             self.sort,
@@ -334,9 +368,11 @@ class _GroupbyHelper(object):
         else:
             value_col_names = []
             # add all non-key columns to value_col_names,
-            # dropping "nuisance columns":
+            # dropping "nuisance columns".
+            # But don't drop if keys are supplied from
+            # some other individual series.
             for col_name in self.obj.columns:
-                if col_name not in self.key_names:
+                if col_name not in self.df_key_names:
                     drop = False
                     if isinstance(
                         self.obj[col_name]._column,
@@ -528,3 +564,83 @@ def _add_prefixes(names, prefixes):
         for i, (prefix, col_name) in enumerate(zip(prefixes, names)):
             prefixed_names[i] = f"{prefix}_{col_name}"
     return prefixed_names
+
+
+def _align_by_and_df(obj, by, how="inner"):
+    """
+    Returns a pair of dataframes and a list may be containing
+    combination of column names and Series  which are intersected
+    as per their indices.
+
+    Examples
+    --------
+    Dataframe and Series in the 'by' have different indices:
+
+    >>> import cudf
+    >>> import cudf.core.groupby.groupby as grp_by
+
+    >>> gdf = cudf.DataFrame(
+            {"x": [1.0, 2.0, 3.0], "y": [1, 2, 1]},
+            index=[1,2,3]
+        )
+    >>> gsr = cudf.Series([0.0, 1.0, 2.0], name='a', index=[2,3,4])
+    >>> updtd_gdf, updtd_by = grp_by._align_by_and_df(gdf, ['x', gsr])
+    >>> print (gdf)
+        x     y
+    1 	1.0   1
+    2 	2.0   2
+    3 	3.0   1
+    >>> print(updtd_gdf)
+        x     y
+    2 	2.0   2
+    3 	3.0   1
+    >>> print(by)
+    ['x', 2    0.0
+          3    1.0
+          4    2.0
+          Name: a, dtype: float64]
+    >>> print(updtd_by)
+    ['x', 2    0.0
+          3    1.0
+          Name: a, dtype: float64]
+    """
+    new_obj = None
+    new_by = []
+    if not isinstance(by, (list, tuple)):
+        by = [by]
+
+    series_count = 0
+    for by_col in by:
+        if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
+            sr = by_col
+            if not isinstance(by_col, cudf.Series):
+                sr = cudf.Series(by_col)
+            if new_obj is None:
+                new_obj = sr.to_frame(series_count)
+            else:
+                new_obj = new_obj.join(
+                    sr.to_frame(series_count), how=how, sort="True"
+                )
+            series_count += 1
+
+    series_count = 0
+    if new_obj is not None:
+        new_obj = new_obj.join(obj, how=how, sort="True")
+        columns = new_obj.columns
+        for by_col in by:
+            if not is_scalar(by_col) and not isinstance(by_col, cudf.Index):
+                sr, sr.name = (
+                    cudf.Series(new_obj[columns[series_count]]),
+                    by_col.name,
+                )
+                new_by.append(sr)
+                series_count += 1
+            else:
+                new_by.append(by_col)
+
+        new_obj = new_obj[columns[series_count::]]
+    else:
+        new_obj = obj
+        new_by = by
+
+    return new_obj, new_by

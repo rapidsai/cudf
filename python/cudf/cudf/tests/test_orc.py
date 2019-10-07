@@ -272,3 +272,22 @@ def test_orc_writer(datadir, tmpdir, reference_file, columns, compression):
     got = pa.orc.ORCFile(gdf_fname).read(columns=columns).to_pandas()
 
     assert_eq(expect, got)
+
+
+@pytest.mark.parametrize(
+    "dtypes",
+    [
+        {"c": str, "a": int},
+        {"c": int, "a": str},
+        {"c": int, "a": str, "b": float},
+        {"c": str, "a": object},
+    ],
+)
+def test_orc_writer_strings(tmpdir, dtypes):
+    gdf_fname = tmpdir.join("gdf_strings.orc")
+
+    expect = cudf.datasets.randomdata(nrows=10, dtypes=dtypes, seed=1)
+    expect.to_orc(gdf_fname)
+    got = pa.orc.ORCFile(gdf_fname).read().to_pandas()
+
+    assert_eq(expect, got)

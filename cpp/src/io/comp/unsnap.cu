@@ -15,24 +15,10 @@
 */
 
 #include "gpuinflate.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
-
-#if (__CUDA_ARCH__ >= 700)
-#define NANOSLEEP(d)  __nanosleep(d)
-#else
-#define NANOSLEEP(d)  clock()
-#endif
+namespace cudf {
+namespace io {
 
 // Not supporting streams longer than this (not what snappy is intended for)
 #define SNAPPY_MAX_STREAM_SIZE	0xefffffff
@@ -283,6 +269,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
             if (blen <= 64)
             {
                 uint8_t b0, b1;
+                SYNCWARP();
                 // Copy
                 if (t < blen)
                 {
@@ -304,7 +291,6 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
                 {
                     out[32 + t] = b1;
                 }
-                SYNCWARP();
             }
             else
             {
@@ -466,4 +452,8 @@ cudaError_t __host__ gpu_unsnap(gpu_inflate_input_s *inputs, gpu_inflate_status_
 
     return cudaSuccess;
 }
+
+
+} // namespace io
+} // namespace cudf
 
