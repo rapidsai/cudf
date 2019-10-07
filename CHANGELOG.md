@@ -6,6 +6,7 @@
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2988 Removing GIS fucntionality
 
 ## Bug Fixes
 
