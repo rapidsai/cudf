@@ -122,6 +122,7 @@ unsigned int NVText::porter_stemmer_measure(NVStrings& strs, const char* vowels,
     return 0;
 }
 
+// check individual characters are vowels or consonants
 unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* y_char,
                                NVText::letter_type ltype, int position, bool* results, bool bdevmem )
 {
@@ -164,7 +165,7 @@ unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* 
     // done
     if( !bdevmem )
     {
-        CUDA_TRY( cudaMemcpyAsync(results,d_results,count*sizeof(unsigned int),cudaMemcpyDeviceToHost))
+        CUDA_TRY( cudaMemcpyAsync(results,d_results,count*sizeof(bool),cudaMemcpyDeviceToHost))
         RMM_FREE(d_results,0);
     }
     RMM_FREE(d_vowels,0);
