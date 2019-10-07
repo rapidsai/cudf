@@ -171,7 +171,7 @@ cudf::table compute_simple_aggregations(const cudf::table &input_keys,
   cudf::groupby::sort::aggregate_all_rows<keys_have_nulls, values_have_nulls><<<
     grid_params.num_blocks, grid_params.num_threads_per_block, 0, stream>>>(
       *d_input_values, *d_output_values,
-      static_cast<gdf_index_type const*>(key_sorted_order.data),
+      static_cast<cudf::index_type const*>(key_sorted_order.data),
       group_labels.data().get(), options.ignore_null_keys,
       d_ops.data().get(), row_bitmask.data().get());
   

@@ -52,8 +52,8 @@ cudf::test::column_wrapper<T> construct_null_column(std::vector<T> const & value
     }
     return cudf::test::column_wrapper<T>(
         values.size(),
-        [&values](gdf_index_type row) { return values[row]; },
-        [&bools](gdf_index_type row) { return bools[row]; });
+        [&values](cudf::index_type row) { return values[row]; },
+        [&bools](cudf::index_type row) { return bools[row]; });
 }
 
 template <typename T>

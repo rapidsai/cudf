@@ -37,10 +37,10 @@ namespace detail {
  *---------------------------------------------------------------------------**/
 template <typename map_type>
 struct bounds_checker {
-  gdf_index_type begin;
-  gdf_index_type end;
+  cudf::index_type begin;
+  cudf::index_type end;
 
-  __device__ bounds_checker(gdf_index_type begin_, gdf_index_type end_)
+  __device__ bounds_checker(cudf::index_type begin_, cudf::index_type end_)
     : begin{begin_}, end{end_} {}
 
   __device__ __forceinline__ bool operator()(map_type const index) {
@@ -57,7 +57,7 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
 				      cudf::size_type num_destination_rows,
 				      cudf::size_type *d_count,
 				      cudf::size_type num_columns) {
-  for (gdf_index_type i = 0; i < num_columns; i++) {
+  for (cudf::index_type i = 0; i < num_columns; i++) {
     const bit_mask_t *__restrict__ source_valid_col = source_valid[i];
     bit_mask_t *__restrict__ destination_valid_col = destination_valid[i];
 
@@ -65,15 +65,15 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
     const bool dest_has_nulls = destination_valid_col != nullptr;
 
     if (dest_has_nulls) {
-      gdf_index_type destination_row_base = blockIdx.x * blockDim.x;
+      cudf::index_type destination_row_base = blockIdx.x * blockDim.x;
 
       cudf::size_type valid_count_accumulate = 0;
 
       while (destination_row_base < num_destination_rows) {
-	gdf_index_type destination_row = destination_row_base + threadIdx.x;
+	cudf::index_type destination_row = destination_row_base + threadIdx.x;
 
 	const bool thread_active = destination_row < num_destination_rows;
-	gdf_index_type source_row =
+	cudf::index_type source_row =
 	  thread_active ? gather_map[destination_row] : 0;
 
 	const uint32_t active_threads =
@@ -102,7 +102,7 @@ __global__ void gather_bitmask_kernel(const bit_mask_t *const *source_valid,
 	const uint32_t valid_warp =
 	  __ballot_sync(active_threads, source_bit_is_valid);
 
-	const gdf_index_type valid_index =
+	const cudf::index_type valid_index =
 	  cudf::util::detail::bit_container_index<bit_mask_t>(
 	      destination_row);
 	// Only one thread writes output

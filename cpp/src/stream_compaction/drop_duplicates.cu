@@ -110,7 +110,7 @@ get_unique_ordered_indices(const cudf::table& keys,
         &context));
 
   // extract unique indices 
-  rmm::device_vector<gdf_index_type> unique_indices(nrows);
+  rmm::device_vector<cudf::index_type> unique_indices(nrows);
   auto exec = rmm::exec_policy(stream)->on(stream);
   auto device_input_table = device_table::create(keys, stream);
   rmm::device_vector<cudf::size_type>::iterator result_end;
@@ -203,7 +203,7 @@ rows in input table should be equal to number of rows in key colums table");
       ) {
     return cudf::empty_like(input);
   }
-  rmm::device_vector<gdf_index_type> unique_indices;
+  rmm::device_vector<cudf::index_type> unique_indices;
   cudf::size_type unique_count; 
   std::tie(unique_indices, unique_count) =
     detail::get_unique_ordered_indices(keys, keep, nulls_are_equal);

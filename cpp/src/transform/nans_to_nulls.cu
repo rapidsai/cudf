@@ -24,7 +24,7 @@ template <typename T>
 struct predicate_not_nan{
 
   CUDA_HOST_DEVICE_CALLABLE
-  bool operator()(gdf_index_type index) const {
+  bool operator()(cudf::index_type index) const {
       return !isnan(static_cast<T*>(input.data)[index]);
   }
 

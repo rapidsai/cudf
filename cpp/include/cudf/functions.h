@@ -325,7 +325,7 @@ gdf_error gdf_order_by(gdf_column const* const* input_columns,
 gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
-                       gdf_index_type out_indices[]);
+                       cudf::index_type out_indices[]);
 
 // forward declaration for DLPack functions below
 // This approach is necessary to satisfy CFFI

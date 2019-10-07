@@ -63,8 +63,8 @@ __global__ void compute_block_counts(cudf::size_type  * __restrict__ block_count
 
 // Compute the exclusive prefix sum of each thread's mask value within each block
 template <int block_size>
-__device__ gdf_index_type block_scan_mask(bool mask_true, 
-                                          gdf_index_type &block_sum)
+__device__ cudf::index_type block_scan_mask(bool mask_true, 
+                                          cudf::index_type &block_sum)
 {
   int offset = 0;
 
@@ -118,8 +118,8 @@ __global__ void scatter_kernel(T* __restrict__ output_data,
     bool mask_true = (tid < size) && filter(tid);
 
     // get output location using a scan of the mask result
-    gdf_index_type block_sum = 0;
-    const gdf_index_type local_index = block_scan_mask<block_size>(mask_true,
+    cudf::index_type block_sum = 0;
+    const cudf::index_type local_index = block_scan_mask<block_size>(mask_true,
                                                                    block_sum);
 
     if (has_validity) {
@@ -312,7 +312,7 @@ namespace detail {
  * @brief Filters a column using a Filter function object
  * 
  * @p filter must be a functor or lambda with the following signature:
- * __device__ bool operator()(gdf_index_type i);
+ * __device__ bool operator()(cudf::index_type i);
  * It return true if element i of @p input should be copied, false otherwise.
  *
  * @tparam Filter the filter functor type

@@ -24,7 +24,7 @@
 #include <bitmask/legacy/bit_mask.cuh>
 
 void call_split(gdf_column const*          input_column,
-                gdf_index_type const*      indices,
+                cudf::index_type const*      indices,
                 cudf::size_type              num_indices,
                 std::vector<gdf_column*> & output){
 
@@ -55,12 +55,12 @@ TEST_F(SplitInputTest, InputColumnSizeNull) {
   input_column.size = 0;
 
   // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+  std::vector<cudf::index_type> indices_host{SIZE / 2};
+  cudf::test::column_wrapper<cudf::index_type> indices(indices_host);
 
    // Perform test
   std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_split(&input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_NO_THROW(call_split(&input_column, static_cast<cudf::index_type*>(indices.get()->data), indices.get()->size, output));
   ASSERT_EQ(output.size(), std::size_t(0));
 }
 
@@ -74,12 +74,12 @@ TEST_F(SplitInputTest, InputColumnDataNull) {
   input_column_test->data = nullptr;
 
   // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+  std::vector<cudf::index_type> indices_host{SIZE / 2};
+  cudf::test::column_wrapper<cudf::index_type> indices(indices_host);
 
   // Perform test
   std::vector<gdf_column*> output;
-  ASSERT_ANY_THROW(call_split(input_column_test, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_ANY_THROW(call_split(input_column_test, static_cast<cudf::index_type*>(indices.get()->data), indices.get()->size, output));
 }
 
 TEST_F(SplitInputTest, InputColumnBitmaskNull) {
@@ -92,12 +92,12 @@ TEST_F(SplitInputTest, InputColumnBitmaskNull) {
   input_column_test->valid = nullptr;
 
   // Create indices
-  std::vector<gdf_index_type> indices_host{SIZE / 2};
-  cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+  std::vector<cudf::index_type> indices_host{SIZE / 2};
+  cudf::test::column_wrapper<cudf::index_type> indices(indices_host);
 
   // Perform test
   std::vector<gdf_column*> output;
-  ASSERT_NO_THROW(call_split(input_column_test, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output));
+  ASSERT_NO_THROW(call_split(input_column_test, static_cast<cudf::index_type*>(indices.get()->data), indices.get()->size, output));
 }
 
 template <typename ColumnType>
@@ -121,12 +121,12 @@ TYPED_TEST(SplitTest, MultipleSplits) {
     auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
     // Create indices
-    std::vector<gdf_index_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
-    cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+    std::vector<cudf::index_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
+    cudf::test::column_wrapper<cudf::index_type> indices(indices_host);
 
     // Perform operation
     std::vector<gdf_column*> output_column_ptrs;
-    ASSERT_NO_THROW(call_split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+    ASSERT_NO_THROW(call_split(input_column.get(), static_cast<cudf::index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
     // Transfer input column to host
     std::vector<TypeParam> input_col_data;
@@ -166,20 +166,20 @@ TYPED_TEST(SplitTest, MultipleSplits) {
  */
 TYPED_TEST(SplitTest, RangeIndexPosition) {
     // Test parameters
-    constexpr gdf_index_type init_index{0};
-    constexpr gdf_index_type final_index{INPUT_SIZE};
+    constexpr cudf::index_type init_index{0};
+    constexpr cudf::index_type final_index{INPUT_SIZE};
 
     // Create input column
     auto input_column = create_random_column<TypeParam>(INPUT_SIZE);
 
-    for (gdf_index_type index = init_index; index < final_index; ++index) {
+    for (cudf::index_type index = init_index; index < final_index; ++index) {
         // Create indices
-        std::vector<gdf_index_type> indices_host{index};
-        cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+        std::vector<cudf::index_type> indices_host{index};
+        cudf::test::column_wrapper<cudf::index_type> indices(indices_host);
 
         // Perform operation
         std::vector<gdf_column*> output_column_ptrs;
-        ASSERT_NO_THROW(call_split(input_column.get(), static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+        ASSERT_NO_THROW(call_split(input_column.get(), static_cast<cudf::index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
         // Transfer input column to host
         std::vector<TypeParam> input_col_data;
@@ -225,12 +225,12 @@ TEST_F(SplitInputTest, NVCategoryMultipleSlices)  {
     gdf_column * input_column = cudf::test::create_nv_category_column_strings(orig_string_data, INPUT_SIZE);
 
     // Create indices
-    std::vector<gdf_index_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
-    cudf::test::column_wrapper<gdf_index_type> indices(indices_host);
+    std::vector<cudf::index_type> indices_host{0, 13, 31, 31, 32, INPUT_SIZE};
+    cudf::test::column_wrapper<cudf::index_type> indices(indices_host);
 
     // Perform operation
     std::vector<gdf_column*> output_column_ptrs;
-    ASSERT_NO_THROW(call_split(input_column, static_cast<gdf_index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
+    ASSERT_NO_THROW(call_split(input_column, static_cast<cudf::index_type*>(indices.get()->data), indices.get()->size, output_column_ptrs));
 
     // Transfer input column to host
     std::vector<std::string> input_col_data;

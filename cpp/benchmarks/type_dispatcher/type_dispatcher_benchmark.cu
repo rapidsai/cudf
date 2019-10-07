@@ -64,7 +64,7 @@ constexpr int block_size = 256;
 template<FunctorType functor_type, class T>
 __global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_type n_cols){
   using F = Functor<T, functor_type>;
-  gdf_index_type index = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::index_type index = blockIdx.x * blockDim.x + threadIdx.x;
   while(index < n_rows){
     for(int c = 0; c < n_cols; c++){
       A[c][index] = F::f(A[c][index]);
@@ -77,7 +77,7 @@ __global__ void no_dispatching_kernel(T** A, cudf::size_type n_rows, cudf::size_
 template<FunctorType functor_type, class T>
 __global__ void host_dispatching_kernel(T* A, cudf::size_type n_rows){
   using F = Functor<T, functor_type>;
-  gdf_index_type index = blockIdx.x * blockDim.x + threadIdx.x;
+  cudf::index_type index = blockIdx.x * blockDim.x + threadIdx.x;
   while(index < n_rows){
     A[index] = F::f(A[index]);
     index += blockDim.x * gridDim.x;
@@ -105,7 +105,7 @@ struct ColumnHandle {
 template<FunctorType functor_type>
 struct RowHandle {
   template<typename T>
-  __device__ void operator()(const gdf_column& source, gdf_index_type index){
+  __device__ void operator()(const gdf_column& source, cudf::index_type index){
     using F = Functor<T, functor_type>;
     static_cast<T*>(source.data)[index] = 
       F::f(static_cast<T*>(source.data)[index]);
@@ -116,8 +116,8 @@ struct RowHandle {
 template<FunctorType functor_type>
 __global__ void device_dispatching_kernel(device_table source){
 
-  const gdf_index_type n_rows = source.num_rows();
-  gdf_index_type index = threadIdx.x + blockIdx.x * blockDim.x;
+  const cudf::index_type n_rows = source.num_rows();
+  cudf::index_type index = threadIdx.x + blockIdx.x * blockDim.x;
   
   while(index < n_rows){
     for(cudf::size_type i = 0; i < source.num_columns(); i++){
@@ -166,8 +166,8 @@ void type_dispatcher_benchmark(benchmark::State& state){
       n_cols,
       {
         source_size,
-        [](gdf_index_type row){ return static_cast<TypeParam>(row); },
-        [](gdf_index_type row) { return true; }
+        [](cudf::index_type row){ return static_cast<TypeParam>(row); },
+        [](cudf::index_type row) { return true; }
       }
   );
   

@@ -32,8 +32,8 @@ struct CopyRangeTest : GdfTest
   void test(column_wrapper<T> const &dest,
             column_wrapper<T> const &source,
             column_wrapper<T> const &expected,
-            gdf_index_type out_begin, gdf_index_type out_end,
-            gdf_index_type in_begin)
+            cudf::index_type out_begin, cudf::index_type out_end,
+            cudf::index_type in_begin)
   {
     gdf_column dest_cpy = cudf::copy(*dest.get());
 
@@ -63,21 +63,21 @@ TYPED_TEST_CASE(CopyRangeTest, test_types);
 
 struct row_value {
   int scale;
-  gdf_index_type operator()(gdf_index_type row) { return row * scale; }
+  cudf::index_type operator()(cudf::index_type row) { return row * scale; }
 };
 
-auto valid = [](gdf_index_type row) { return true; };
-auto depends = [](gdf_index_type row) { return (row % 2 == 0); };
+auto valid = [](cudf::index_type row) { return true; };
+auto depends = [](cudf::index_type row) { return (row % 2 == 0); };
 
 TYPED_TEST(CopyRangeTest, CopyWithNulls)
 {
   using T = TypeParam;
 
   cudf::size_type size = this->column_size;
-  gdf_index_type out_begin = 30;
-  gdf_index_type out_end = size - 20;
-  gdf_index_type in_begin = 9;
-  gdf_index_type row_diff = in_begin - out_begin;
+  cudf::index_type out_begin = 30;
+  cudf::index_type out_end = size - 20;
+  cudf::index_type in_begin = 9;
+  cudf::index_type row_diff = in_begin - out_begin;
 
   cudf::test::column_wrapper_factory<T> factory;
 
@@ -87,11 +87,11 @@ TYPED_TEST(CopyRangeTest, CopyWithNulls)
     dest,
     factory.make(size, row_value{2}, depends),
     factory.make(size,
-      [&](gdf_index_type row) {
+      [&](cudf::index_type row) {
         return ((row >= out_begin) && (row < out_end)) ?
           row_value{2}(row + row_diff) : row_value{1}(row);
       },
-      [&](gdf_index_type row) {
+      [&](cudf::index_type row) {
         return ((row >= out_begin) && (row < out_end)) ?
           depends(row + row_diff) : true;
       }),
@@ -103,10 +103,10 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
   using T = TypeParam;
 
   cudf::size_type size = this->column_size;
-  gdf_index_type out_begin = 30;
-  gdf_index_type out_end = size - 20;
-  gdf_index_type in_begin = 9;
-  gdf_index_type row_diff = in_begin - out_begin;
+  cudf::index_type out_begin = 30;
+  cudf::index_type out_end = size - 20;
+  cudf::index_type in_begin = 9;
+  cudf::index_type row_diff = in_begin - out_begin;
 
   cudf::test::column_wrapper_factory<T> factory;
 
@@ -117,7 +117,7 @@ TYPED_TEST(CopyRangeTest, CopyNoNulls)
     dest,
     factory.make(size, row_value{2}),
     factory.make(size,
-      [&](gdf_index_type row) {
+      [&](cudf::index_type row) {
         return ((row >= out_begin) && (row < out_end)) ?
           row_value{2}(row + row_diff) : row_value{1}(row);
       }),

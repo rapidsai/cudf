@@ -37,7 +37,7 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
   void** d_col_data = d_cols.data().get();
   int* d_col_types = d_types.data().get();
 
-  gdf_index_type* result_end;
+  cudf::index_type* result_end;
   cudaStream_t stream;
   cudaStreamCreate(&stream);
   auto exec = rmm::exec_policy(stream)->on(stream);
@@ -45,8 +45,8 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
   // Allocating memory for GDF column
   gdf_column unique_indices{};
   RMM_TRY(
-      RMM_ALLOC(&unique_indices.data, sizeof(gdf_index_type) * nrows, nullptr));
-  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
+      RMM_ALLOC(&unique_indices.data, sizeof(cudf::index_type) * nrows, nullptr));
+  unique_indices.dtype = cudf::gdf_dtype_of<cudf::index_type>();
 
   auto counting_iter = thrust::make_counting_iterator<cudf::size_type>(0);
   auto device_input_table = device_table::create(input_table);
@@ -55,17 +55,17 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
     auto comp = row_equality_comparator<true>(*device_input_table, true);
     result_end = thrust::unique_copy(
         exec, counting_iter, counting_iter + nrows,
-        static_cast<gdf_index_type*>(unique_indices.data), comp);
+        static_cast<cudf::index_type*>(unique_indices.data), comp);
   } else {
     auto comp = row_equality_comparator<false>(*device_input_table, true);
     result_end = thrust::unique_copy(
         exec, counting_iter, counting_iter + nrows,
-        static_cast<gdf_index_type*>(unique_indices.data), comp);
+        static_cast<cudf::index_type*>(unique_indices.data), comp);
   }
 
   // size of the GDF column is being resized
   unique_indices.size = thrust::distance(
-      static_cast<gdf_index_type*>(unique_indices.data), result_end);
+      static_cast<cudf::index_type*>(unique_indices.data), result_end);
   gdf_column resized_unique_indices = cudf::copy(unique_indices);
   // Free old column, as we have resized (implicitly)
   gdf_column_free(&unique_indices);
@@ -78,12 +78,12 @@ gdf_column gdf_unique_indices(cudf::table const& input_table,
 
 std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
     cudf::table const& input_table, cudf::size_type num_key_cols,
-    gdf_index_type const* key_col_indices, gdf_context* context) {
+    cudf::index_type const* key_col_indices, gdf_context* context) {
   CUDF_EXPECTS(nullptr != key_col_indices, "key_col_indices is null");
   CUDF_EXPECTS(0 < num_key_cols,
                "number of key colums should be greater than zero");
   gdf_column unique_indices{};
-  unique_indices.dtype = cudf::gdf_dtype_of<gdf_index_type>();
+  unique_indices.dtype = cudf::gdf_dtype_of<cudf::index_type>();
 
   if (0 == input_table.num_rows()) {
     return std::make_pair(cudf::empty_like(input_table), unique_indices);
@@ -111,7 +111,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   std::vector<gdf_column*> key_cols_vect(num_key_cols);
   std::transform(
       key_col_indices, key_col_indices + num_key_cols, key_cols_vect.begin(),
-      [&input_table](gdf_index_type const index) {
+      [&input_table](cudf::index_type const index) {
         return const_cast<gdf_column*>(input_table.get_column(index));
       });
   cudf::table key_col_table(key_cols_vect.data(), key_cols_vect.size());
@@ -178,7 +178,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
   std::vector<gdf_column*> key_cols_vect_out(num_key_cols);
   std::transform(key_col_indices, key_col_indices + num_key_cols,
                  key_cols_vect_out.begin(),
-                 [&destination_table](gdf_index_type const index) {
+                 [&destination_table](cudf::index_type const index) {
                    return destination_table.get_column(index);
                  });
   cudf::table key_col_sorted_table(key_cols_vect_out.data(),

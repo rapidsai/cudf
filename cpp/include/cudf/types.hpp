@@ -62,6 +62,7 @@ class table_view;
 class mutable_table_view;
 
 using size_type = int32_t;
+using index_type = size_type;
 using bitmask_type = uint32_t;
 
 /**---------------------------------------------------------------------------*

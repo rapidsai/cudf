@@ -60,13 +60,13 @@ TYPED_TEST(ReplaceNullsTest, ReplaceColumn)
 
   ReplaceNullsColumn<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return row; },
-      [](gdf_index_type row) { return (row < column_size/2) ? false : true; }},
+      [](cudf::index_type row) { return row; },
+      [](cudf::index_type row) { return (row < column_size/2) ? false : true; }},
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return 1; },
+      [](cudf::index_type row) { return 1; },
       false},
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return (row < column_size/2) ? 1 : row; },
+      [](cudf::index_type row) { return (row < column_size/2) ? 1 : row; },
       false});
 }
 
@@ -77,10 +77,10 @@ TYPED_TEST(ReplaceNullsTest, ReplaceScalar)
 
   ReplaceNullsScalar<TypeParam>(
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return row; },
-      [](gdf_index_type row) { return (row < column_size/2) ? false : true; }},
+      [](cudf::index_type row) { return row; },
+      [](cudf::index_type row) { return (row < column_size/2) ? false : true; }},
     cudf::test::scalar_wrapper<TypeParam> {1, true},
     cudf::test::column_wrapper<TypeParam> {column_size,
-      [](gdf_index_type row) { return (row < column_size/2) ? 1 : row; },
+      [](cudf::index_type row) { return (row < column_size/2) ? 1 : row; },
       false});
 }

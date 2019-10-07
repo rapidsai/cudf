@@ -80,7 +80,7 @@ void gather(table const* source_table, gdf_column const& gather_map,
  * @overload This function accepts `gather_map` as an array instead of
  * a `gdf_column`.
  */
-void gather(table const* source_table, gdf_index_type const gather_map[],
+void gather(table const* source_table, cudf::index_type const gather_map[],
 	    table* destination_table, bool check_bounds = false,
 	    bool ignore_out_of_bounds = false, bool sync_nvstring_category = false,
 	    bool allow_negative_indices = false);

@@ -41,15 +41,15 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
   // elements with indices = 1,2 mod 3 are null
   cudf::test::column_wrapper<TypeParam> target_column(
       target_size,
-      [](gdf_index_type row) { return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return row % 3 != 0; });
+      [](cudf::index_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::index_type row) { return row % 3 != 0; });
 
   // Scatter null values to the last half of the target column
-  std::vector<gdf_index_type> host_scatter_map(target_size/3);
+  std::vector<cudf::index_type> host_scatter_map(target_size/3);
   for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3;
   }
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::index_type> scatter_map(host_scatter_map);
 
   gdf_column* raw_target = target_column.get();
 
@@ -71,7 +71,7 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
   
   EXPECT_EQ(destination_column.get()->null_count, 0);
 
-  for (gdf_index_type i = 0; i < target_size/3; i++) {
+  for (cudf::index_type i = 0; i < target_size/3; i++) {
     EXPECT_EQ(static_cast<TypeParam>(1), result_data[i*3]);
   }
   
@@ -86,17 +86,17 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
                 "Size of source data must be a multiple of 3.");
 
   // Scatter null values to the last half of the target column
-  std::vector<gdf_index_type> host_scatter_map(target_size/3);
+  std::vector<cudf::index_type> host_scatter_map(target_size/3);
   for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3;
   }
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::index_type> scatter_map(host_scatter_map);
   
   std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
     n_cols,
     { target_size, 
-      [](gdf_index_type row){return static_cast<TypeParam>(row);},
-      [](gdf_index_type row) { return false; }
+      [](cudf::index_type row){return static_cast<TypeParam>(row);},
+      [](cudf::index_type row) { return false; }
     }
   );
   std::vector<gdf_column*> vp_dest {n_cols};
@@ -126,7 +126,7 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
     
     EXPECT_EQ(destination_column.get()->null_count, target_size*2/3);
 
-    for (gdf_index_type i = 0; i < target_size/3; i++) {
+    for (cudf::index_type i = 0; i < target_size/3; i++) {
       EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i*3))
           << "Value at index " << i << " should be non-null!\n";
       EXPECT_EQ(static_cast<TypeParam>(c), result_data[i*3]);
@@ -143,11 +143,11 @@ TYPED_TEST(ScalarScatterTest, ScatterValid) {
                 "Size of source data must be a multiple of 3.");
 
   // Scatter null values to the last half of the target column
-  std::vector<gdf_index_type> host_scatter_map(target_size/3);
+  std::vector<cudf::index_type> host_scatter_map(target_size/3);
   for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3;
   }
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::index_type> scatter_map(host_scatter_map);
 
   cudf::test::column_wrapper<TypeParam> target_column(target_size,
                                                            true);
@@ -173,7 +173,7 @@ TYPED_TEST(ScalarScatterTest, ScatterValid) {
   
   EXPECT_EQ(destination_column.get()->null_count, target_size*2/3);
 
-  for (gdf_index_type i = 0; i < target_size/3; i++) {
+  for (cudf::index_type i = 0; i < target_size/3; i++) {
     EXPECT_TRUE(gdf_is_valid(result_bitmask.data(), i*3))
         << "Value at index " << i << " should be non-null!\n";
     EXPECT_EQ(static_cast<TypeParam>(1), result_data[i*3]);
@@ -189,11 +189,11 @@ TYPED_TEST(ScalarScatterTest, ScatterNull) {
                 "Size of source data must be a multiple of 3.");
 
   // Scatter null values to the last half of the target column
-  std::vector<gdf_index_type> host_scatter_map(target_size/3);
+  std::vector<cudf::index_type> host_scatter_map(target_size/3);
   for (cudf::size_type i = 0; i < target_size/3; ++i) {
     host_scatter_map[i] = i*3+1;
   }
-  thrust::device_vector<gdf_index_type> scatter_map(host_scatter_map);
+  thrust::device_vector<cudf::index_type> scatter_map(host_scatter_map);
 
   cudf::test::column_wrapper<TypeParam> target_column(target_size, false);
 
@@ -218,7 +218,7 @@ TYPED_TEST(ScalarScatterTest, ScatterNull) {
 
   EXPECT_EQ(destination_column.get()->null_count, target_size/3);
   
-  for (gdf_index_type i = 0; i < target_size/3; i++) {
+  for (cudf::index_type i = 0; i < target_size/3; i++) {
     EXPECT_FALSE(gdf_is_valid(result_bitmask.data(), i*3+1))
         << "Value at index " << i << " should be null!\n";
     EXPECT_EQ(static_cast<TypeParam>(1), result_data[i*3+1]);

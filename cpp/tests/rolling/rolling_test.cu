@@ -109,8 +109,8 @@ protected:
     CUDF_EXPECTS(data.size() == mask.size(), "Validity array size != input column size");
     cudf::test::column_wrapper<T> input{
 	(cudf::size_type)data.size(),
-	[&](gdf_index_type row) { return data[row]; },
-	[&](gdf_index_type row) { return mask[row]; }
+	[&](cudf::index_type row) { return data[row]; },
+	[&](cudf::index_type row) { return mask[row]; }
     };
     run_test_col(input, w, m, f, window, min_periods, forward_window, agg);
   }
@@ -228,8 +228,8 @@ private:
     CUDA_TRY(cudaMemcpy(out_col_mask.data(), static_cast<gdf_valid_type*>(out_gdf_col->valid), nmasks * sizeof(gdf_valid_type), cudaMemcpyDefault));
       
     // create column wrappers and compare
-    cudf::test::column_wrapper<T> out(out_col, [&](gdf_index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
-    cudf::test::column_wrapper<T> ref(ref_data, [&](gdf_index_type i) { return ref_data_valid[i]; } );
+    cudf::test::column_wrapper<T> out(out_col, [&](cudf::index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );
+    cudf::test::column_wrapper<T> ref(ref_data, [&](cudf::index_type i) { return ref_data_valid[i]; } );
 
     // print the columns for debugging
     //out.print();
@@ -407,7 +407,7 @@ TYPED_TEST(RollingTest, RandomStaticAllValid)
   std::mt19937 rng(1);
   cudf::test::column_wrapper<TypeParam> input{
 	num_rows,
-	[&](gdf_index_type row) { return this->random_value(rng); }
+	[&](cudf::index_type row) { return this->random_value(rng); }
   };
 
   this->run_test_col_agg(input,
@@ -428,8 +428,8 @@ TYPED_TEST(RollingTest, RandomStaticWithInvalid)
   std::mt19937 rng(1);
   cudf::test::column_wrapper<TypeParam> input{
 	num_rows,
-	[&](gdf_index_type row) { return this->random_value(rng); },
-	[&](gdf_index_type row) { return static_cast<bool>(rng() % 2); }
+	[&](cudf::index_type row) { return this->random_value(rng); },
+	[&](cudf::index_type row) { return static_cast<bool>(rng() % 2); }
   };
 
   this->run_test_col_agg(input,
@@ -449,7 +449,7 @@ TYPED_TEST(RollingTest, RandomDynamicAllValid)
   std::mt19937 rng(1);
   cudf::test::column_wrapper<TypeParam> input{
 	num_rows,
-	[&](gdf_index_type row) { return this->random_value(rng); }
+	[&](cudf::index_type row) { return this->random_value(rng); }
   };
 
   // random parameters
@@ -480,8 +480,8 @@ TYPED_TEST(RollingTest, RandomDynamicWithInvalid)
   std::mt19937 rng(1);
   cudf::test::column_wrapper<TypeParam> input{
 	num_rows,
-	[&](gdf_index_type row) { return this->random_value(rng); },
-	[&](gdf_index_type row) { return static_cast<bool>(rng() % 2); }
+	[&](cudf::index_type row) { return this->random_value(rng); },
+	[&](cudf::index_type row) { return static_cast<bool>(rng() % 2); }
   };
 
   // random parameters
@@ -513,8 +513,8 @@ TYPED_TEST(RollingTest, RandomDynamicWindowStaticPeriods)
   std::mt19937 rng(1);
   cudf::test::column_wrapper<TypeParam> input{
 	num_rows,
-	[&](gdf_index_type row) { return this->random_value(rng); },
-	[&](gdf_index_type row) { return static_cast<bool>(rng() % 2); }
+	[&](cudf::index_type row) { return this->random_value(rng); },
+	[&](cudf::index_type row) { return static_cast<bool>(rng() % 2); }
   };
 
   // random parameters
@@ -623,8 +623,8 @@ TYPED_TEST(RollingTestNonArithmetic, SumAvgNonArithmetic)
   constexpr cudf::size_type size{1000};
   cudf::test::column_wrapper<TypeParam> input{
 	size,
-	[](gdf_index_type row) { return static_cast<TypeParam>(row); },
-	[](gdf_index_type row) { return row % 2; }
+	[](cudf::index_type row) { return static_cast<TypeParam>(row); },
+	[](cudf::index_type row) { return row % 2; }
   };
   EXPECT_THROW(this->run_test_col(
 			 input,
@@ -650,8 +650,8 @@ TYPED_TEST(RollingTestNonArithmetic, MinMaxCountNonArithmetic)
   constexpr cudf::size_type size{1000};
   cudf::test::column_wrapper<TypeParam> input{
 	size,
-	[](gdf_index_type row) { return static_cast<TypeParam>(row); },
-	[](gdf_index_type row) { return row % 2; }
+	[](cudf::index_type row) { return static_cast<TypeParam>(row); },
+	[](cudf::index_type row) { return row % 2; }
   };
   this->run_test_col(input,
 		     2, 2, 0,
@@ -746,8 +746,8 @@ BB0_3:
   constexpr cudf::size_type size{12};
   cudf::test::column_wrapper<int> input{
     size,
-    [](gdf_index_type row) { return static_cast<int>(row); },
-    [](gdf_index_type row) { return true; }
+    [](cudf::index_type row) { return static_cast<int>(row); },
+    [](cudf::index_type row) { return true; }
   };
 
   gdf_column output;
@@ -758,8 +758,8 @@ BB0_3:
 
   cudf::test::column_wrapper<int64_t> expect{
     size,
-    [](gdf_index_type row) { return static_cast<int>(row*4+2); },
-    [](gdf_index_type row) { return (row != 0 && row != size-2 && row != size-1); }
+    [](cudf::index_type row) { return static_cast<int>(row*4+2); },
+    [](cudf::index_type row) { return (row != 0 && row != size-2 && row != size-1); }
   };
 
   EXPECT_TRUE(output_wrapper == expect);

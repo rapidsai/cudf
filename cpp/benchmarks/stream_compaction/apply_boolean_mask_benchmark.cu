@@ -98,15 +98,15 @@ void BM_apply_boolean_mask(benchmark::State& state, cudf::size_type num_columns)
 
   for (int i = 0; i < num_columns; i++) {
     columns.emplace_back(column_size,
-      [](gdf_index_type row) { return static_cast<T>(row); },
-      [](gdf_index_type row) { return true; });
+      [](cudf::index_type row) { return static_cast<T>(row); },
+      [](cudf::index_type row) { return true; });
   }
 
   mask_wrapper mask { column_size,
-    [&](gdf_index_type row) { 
+    [&](cudf::index_type row) { 
       return cudf::bool8{random_int(0, 100) < percent_true}; 
     },
-    [](gdf_index_type row)  { return true; }
+    [](cudf::index_type row)  { return true; }
   };
 
   std::vector<gdf_column*> raw_columns(num_columns, nullptr);

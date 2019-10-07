@@ -70,7 +70,7 @@ namespace detail {
  * consecutive indices in the indices array.
  */
 std::vector<gdf_column*> slice(gdf_column const &                input_column,
-                               gdf_index_type const*             indices,
+                               cudf::index_type const*             indices,
                                cudf::size_type                     num_indices,
                                std::vector<cudaStream_t> const & streams = std::vector<cudaStream_t>{});
 

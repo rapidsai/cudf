@@ -46,8 +46,8 @@ void BM_gather(benchmark::State& state){
   std::vector<cudf::test::column_wrapper<TypeParam>> v_src(
     n_cols,
     { source_size, 
-      [](gdf_index_type row){ return static_cast<TypeParam>(row); },
-      [](gdf_index_type row) { return true; }
+      [](cudf::index_type row){ return static_cast<TypeParam>(row); },
+      [](cudf::index_type row) { return true; }
     }
   );
   std::vector<gdf_column*> vp_src(n_cols);
@@ -56,20 +56,20 @@ void BM_gather(benchmark::State& state){
   }
   
   // Create gather_map that reverses order of source_column
-  std::vector<gdf_index_type> host_gather_map(source_size);
+  std::vector<cudf::index_type> host_gather_map(source_size);
   std::iota(host_gather_map.begin(), host_gather_map.end(), 0);
   if(coalesce){
     std::reverse(host_gather_map.begin(), host_gather_map.end());
   }else{
     std::random_shuffle(host_gather_map.begin(), host_gather_map.end());
   }
-  thrust::device_vector<gdf_index_type> gather_map(host_gather_map);
+  thrust::device_vector<cudf::index_type> gather_map(host_gather_map);
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_dest(
     n_cols,
     { source_size, 
-      [](gdf_index_type row){return static_cast<TypeParam>(row);},
-      [](gdf_index_type row) { return true; }
+      [](cudf::index_type row){return static_cast<TypeParam>(row);},
+      [](cudf::index_type row) { return true; }
     }
   );
   std::vector<gdf_column*> vp_dest (n_cols);

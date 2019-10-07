@@ -32,8 +32,8 @@ template <typename ColumnType>
 cudf::test::column_wrapper<ColumnType> create_random_column(cudf::size_type size) {
   
   return cudf::test::column_wrapper<ColumnType>(size, 
-            [](gdf_index_type row) { return static_cast <ColumnType>(rand()); }, 
-            [](gdf_index_type row) { return (rand() % 3 == 0) ? false : true; });
+            [](cudf::index_type row) { return static_cast <ColumnType>(rand()); }, 
+            [](cudf::index_type row) { return (rand() % 3 == 0) ? false : true; });
 }
 
 
@@ -103,7 +103,7 @@ template <typename ColumnType>
 auto slice_columns(
       std::vector<ColumnType>& input_col_data,
       std::vector<gdf_valid_type>& input_col_bitmask,
-      std::vector<gdf_index_type>& indexes) {
+      std::vector<cudf::index_type>& indexes) {
   
   std::vector<std::vector<ColumnType>> output_cols_data;
   std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
@@ -140,7 +140,7 @@ template <typename ColumnType>
 auto split_columns(
       std::vector<ColumnType>& input_col_data,
       std::vector<gdf_valid_type>& input_col_bitmask,
-      std::vector<gdf_index_type>& indexes) {
+      std::vector<cudf::index_type>& indexes) {
 
   std::vector<std::vector<ColumnType>> output_cols_data;
   std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;

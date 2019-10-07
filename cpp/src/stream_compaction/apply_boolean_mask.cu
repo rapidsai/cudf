@@ -32,7 +32,7 @@ struct boolean_mask_filter
     {}
 
   __device__ inline 
-  bool operator()(gdf_index_type i)
+  bool operator()(cudf::index_type i)
   {
     bool valid = !has_nulls || bit_mask::is_valid(bitmask, i);
     bool is_true = !has_data || (cudf::true_v == data[i]);
