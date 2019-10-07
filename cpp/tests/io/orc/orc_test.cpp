@@ -286,19 +286,29 @@ INSTANTIATE_TEST_CASE_P(OrcWriter, OrcWriterValueParamTest,
                                         TIME_UNIT_ns));
 
 TEST_F(OrcWriterTest, Strings) {
-  std::vector<const char *> data{"M", "M", "F", "M", "F", "F", "F"};
+  std::vector<const char *> data{"Monday", "Monday", "Friday", "Monday",
+                                 "Friday", "Friday", "Friday", "Funday"};
   gdf_size_type column_size = data.size();
 
-  cudf::test::column_wrapper<cudf::nvstring_category> col{column_size,
-                                                          data.data()};
-  column_set_name(col.get(), "col_string");
+  cudf::test::column_wrapper<int> col0{random_values<int>(column_size),
+                                       [](size_t row) { return true; }};
+  cudf::test::column_wrapper<cudf::nvstring_category> col1{column_size,
+                                                           data.data()};
+  cudf::test::column_wrapper<float> col2{random_values<float>(column_size),
+                                         [](size_t row) { return true; }};
 
-  auto gdf_col = col.get();
-  auto expected = cudf::table{&gdf_col, 1};
-  EXPECT_EQ(1, expected.num_columns());
+  column_set_name(col0.get(), "col_other");
+  column_set_name(col1.get(), "col_string");
+  column_set_name(col2.get(), "col_another");
 
-  auto filepath =
-      temp_env->get_temp_filepath("OrcWriterStrings") + gdf_col->col_name;
+  std::vector<gdf_column *> columns;
+  columns.push_back(col0.get());
+  columns.push_back(col1.get());
+  columns.push_back(col2.get());
+  auto expected = cudf::table{columns.data(), 3};
+  EXPECT_EQ(3, expected.num_columns());
+
+  auto filepath = temp_env->get_temp_filepath("OrcWriterStrings");
 
   cudf::orc_write_arg out_args{cudf::sink_info{filepath}};
   out_args.table = expected;
@@ -310,10 +320,10 @@ TEST_F(OrcWriterTest, Strings) {
 
   // Need to compare the string data themselves as the column types are
   // different (GDF_STRING_CATEGORY vs GDF_STRING)
-  auto expect_strs = nvstrings_to_strings(
-      static_cast<NVCategory *>(gdf_col->dtype_info.category)->to_strings());
+  auto expect_strs = nvcategory_to_strings(
+      static_cast<NVCategory *>(expected.get_column(1)->dtype_info.category));
   auto result_strs = nvstrings_to_strings(
-      static_cast<NVStrings *>(result.get_column(0)->data));
+      static_cast<NVStrings *>(result.get_column(1)->data));
 
   ASSERT_THAT(expect_strs, ::testing::ContainerEq(result_strs));
 }
