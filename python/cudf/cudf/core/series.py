@@ -2594,6 +2594,10 @@ class DatetimeProperties(object):
     def second(self):
         return self.get_dt_field("second")
 
+    @property
+    def weekday(self):
+        return self.get_dt_field("weekday")
+
     def get_dt_field(self, field):
         out_column = self.series._column.get_dt_field(field)
         return Series(data=out_column, index=self.series._index)

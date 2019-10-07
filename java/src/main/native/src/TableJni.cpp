@@ -544,9 +544,9 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfGroupByAggregate(
     cudf::table const n_keys_table(n_keys_cols);
     cudf::table const n_values_table(n_values_cols);
 
-    std::vector<cudf::groupby::hash::operators> ops;
+    std::vector<cudf::groupby::operators> ops;
     for (int i = 0; i < n_ops.size(); i++) {
-      ops.push_back(static_cast<cudf::groupby::hash::operators>(n_ops[i]));
+      ops.push_back(static_cast<cudf::groupby::operators>(n_ops[i]));
     }
 
     std::pair<cudf::table, cudf::table> result = cudf::groupby::hash::groupby(
