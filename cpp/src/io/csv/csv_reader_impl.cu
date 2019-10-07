@@ -46,11 +46,8 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#include <thrust/scan.h>
-#include <thrust/reduce.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
-
 #include <thrust/host_vector.h>
 
 #include "type_conversion.cuh"
@@ -360,7 +357,7 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
   }
 
   // User can specify which columns should be parsed
-  if (not args_.use_cols_indexes.empty() || not args_.use_cols_names.empty()) {
+  if (!args_.use_cols_indexes.empty() || !args_.use_cols_names.empty()) {
     std::fill(h_column_flags.begin(), h_column_flags.end(), column_parse::disabled);
 
     for (const auto index : args_.use_cols_indexes) {
@@ -378,11 +375,12 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
   }
 
   // User can specify which columns should be inferred as datetime
-  if (not args_.infer_date_indexes.empty() || not args_.infer_date_names.empty()) {
-    for (auto index : args_.infer_date_indexes) {
+  if (!args_.infer_date_indexes.empty() || !args_.infer_date_names.empty()) {
+    for (const auto index : args_.infer_date_indexes) {
       h_column_flags[index] |= column_parse::as_datetime;
     }
-    for (auto name : args_.infer_date_names) {
+    
+    for (const auto name : args_.infer_date_names) {
       auto it = std::find(col_names.begin(), col_names.end(), name);
       if (it != col_names.end()) {
         h_column_flags[it - col_names.begin()] |= column_parse::as_datetime;
@@ -416,27 +414,19 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
     decode_data(columns);
   }
 
-  for (int i = 0; i < num_active_cols; ++i) {
-    if (columns[i]->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+  // Perform any final column preparation (may reference decoded data)
+  for (auto &column : columns) {
+    column.finalize();
 
-      auto str_list = static_cast<str_pair *>(columns[i]->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, columns[i]->size),
-                       &NVStrings::destroy);
-      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
-      RMM_TRY(RMM_FREE(columns[i]->data, 0));
-
-      // PANDAS' default behavior of enabling doublequote for two consecutive
-      // quotechars in quoted fields results in reduction to a single quotechar
-      if ((opts.quotechar != '\0') && (opts.doublequote == true)) {
-        const std::string quotechar(1, opts.quotechar);
-        const std::string doublequotechar(2, opts.quotechar);
-        columns[i]->data =
-            str_data->replace(doublequotechar.c_str(), quotechar.c_str());
-      } else {
-        columns[i]->data = str_data.release();
-      }
+    // PANDAS' default behavior of enabling doublequote for two consecutive
+    // quotechars in quoted fields results in reduction to a single quotechar
+    if (column->dtype == GDF_STRING &&
+        (opts.quotechar != '\0' && opts.doublequote == true)) {
+      const std::string quotechar(1, opts.quotechar);
+      const std::string dblquotechar(2, opts.quotechar);
+      auto str_data = static_cast<NVStrings *>(column->data);
+      column->data = str_data->replace(dblquotechar.c_str(), quotechar.c_str());
+      NVStrings::destroy(str_data);
     }
   }
 
@@ -512,15 +502,10 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(
     const char *h_data, size_t h_size, size_t range_size,
     gdf_size_type skip_rows, gdf_size_type skip_end_rows,
     gdf_size_type num_rows) {
-  std::vector<uint64_t> h_row_offsets(row_offsets.size());
+  thrust::host_vector<uint64_t> h_row_offsets = row_offsets;
   auto it_begin = h_row_offsets.begin();
   auto it_end = h_row_offsets.end();
-
   assert(std::distance(it_begin, it_end) >= 1);
-  CUDA_TRY(cudaMemcpyAsync(h_row_offsets.data(), row_offsets.data().get(),
-                           row_offsets.size() * sizeof(uint64_t),
-                           cudaMemcpyDeviceToHost));
-  CUDA_TRY(cudaStreamSynchronize(0));
 
   // Currently, ignoring lineterminations within quotes is handled by recording
   // the records of both, and then filtering out the records that is a quotechar
