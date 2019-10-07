@@ -92,6 +92,7 @@
 - PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
 - PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
+- PR #2788 Guide to Python UDFs
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 
@@ -439,6 +440,7 @@
 - PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 - PR #2104 Add a functional ``sort=`` keyword argument to groupby
 - PR #2108 Add `find_and_replace` for StringColumn for replacing single values
+- PR #1803 cuDF/CuPy interoperability documentation
 
 ## Bug Fixes
 
