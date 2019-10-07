@@ -25,6 +25,7 @@
 #include "./utilities.cuh"
 
 #include <algorithm>
+#include <numeric>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
 #include <thrust/logical.h>
