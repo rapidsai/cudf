@@ -37,20 +37,24 @@ def concat_cudf(
 
 try:
 
-    from dask.dataframe.methods import group_split, hash_df
+    from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 
-    @hash_df.register(cudf.DataFrame)
-    def hash_df_cudf(dfs):
+    @hash_object_dispatch.register(cudf.DataFrame)
+    def hash_object_cudf(
+        dfs, index=None, encoding=None, hash_key=None, categorize=None
+    ):
         return dfs.hash_columns()
 
-    @hash_df.register(cudf.Index)
-    def hash_df_cudf_index(ind):
+    @hash_object_dispatch.register(cudf.Index)
+    def hash_object_cudf_index(
+        ind, index=None, encoding=None, hash_key=None, categorize=None
+    ):
         from cudf.core.column import column, numerical
 
         cols = [column.as_column(ind)]
         return cudf.Series(numerical.column_hash_values(*cols))
 
-    @group_split.register(cudf.DataFrame)
+    @group_split_dispatch.register(cudf.DataFrame)
     def group_split_cudf(df, c, k):
         return df.scatter_by_map(c, map_size=k)
 

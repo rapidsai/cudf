@@ -36,12 +36,12 @@ __version__ = get_versions()["version"]
 del get_versions
 
 
-# Import dask_cudf dispatch functions
-try:
-    from dask_cudf.backends import (
-        hash_df_cudf,
-        hash_df_cudf_index,
-        group_split_cudf,
-    )
-except ImportError:
-    pass
+# # Import dask_cudf dispatch functions
+# try:
+#     from dask_cudf.backends import (
+#         hash_df_cudf,
+#         hash_df_cudf_index,
+#         group_split_cudf,
+#     )
+# except ImportError:
+#     pass
