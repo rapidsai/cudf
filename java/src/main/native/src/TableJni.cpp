@@ -22,7 +22,12 @@
 #include "cudf/utilities/legacy/nvcategory_util.hpp"
 #include "cudf/legacy/copying.hpp"
 #include "cudf/groupby.hpp"
+<<<<<<< 60aa78cabe3913b61fe247cc5d84808702a52b50
 #include "cudf/legacy/io_readers.hpp"
+=======
+#include "cudf/io_readers.hpp"
+#include "cudf/io_types.hpp"
+>>>>>>> orc writer
 #include "cudf/legacy/table.hpp"
 #include "cudf/stream_compaction.hpp"
 #include "cudf/types.hpp"
@@ -315,6 +320,35 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfReadORC(
     return native_handles.get_jArray();
   }
   CATCH_STD(env, NULL);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_Table_gdfWriteORC(JNIEnv *env, jclass,
+                                                              jstring outputfilepath, jlong buffer,
+                                                              jlong buffer_length, jlong table) {
+  bool write_buffer = true;
+  if (buffer == 0) {
+    JNI_NULL_CHECK(env, outputfilepath, "output file or buffer must be supplied", 0);
+    write_buffer = false;
+  } else if (outputfilepath != NULL) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
+                  "cannot pass in both a buffer and an outputfilepath", 0);
+  } else if (buffer_length <= 0) {
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "An empty buffer is not supported", 0);
+  }
+
+  try {
+    cudf::jni::native_jstring filename(env, outputfilepath);
+    std::unique_ptr<cudf::sink_info> info;
+    if (write_buffer) {
+      info.reset(new cudf::sink_info(reinterpret_cast<char *>(buffer), buffer_length));
+    } else {
+      info.reset(new cudf::sink_info(filename.get()));
+    }
+    cudf::orc_write_arg args(*info.get());
+    args.table = *reinterpret_cast<cudf::table *>(table);
+    cudf::write_orc(args);
+  }
+  CATCH_STD(env, 0);
 }
 
 JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_Table_gdfLeftJoin(
