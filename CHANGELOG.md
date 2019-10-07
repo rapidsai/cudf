@@ -9,6 +9,7 @@
 
 ## Bug Fixes
 
+- PR #2994 Fix split_out-support but with hash_object_dispatch
 
 # cuDF 0.10.0 (Date TBD)
 
