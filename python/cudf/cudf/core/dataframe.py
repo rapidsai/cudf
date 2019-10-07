@@ -3897,7 +3897,8 @@ class DataFrame(object):
         cols = libcudf.filling.repeat(self._columns, repeats)
         # to preserve col names, need to get it from old _cols dict
         column_names = self._cols.keys()
-        return DataFrame(data=dict(zip(column_names, cols)), index=new_index)
+        result = DataFrame(data=dict(zip(column_names, cols)))
+        return result.set_index(new_index)
 
 
 def from_pandas(obj):
