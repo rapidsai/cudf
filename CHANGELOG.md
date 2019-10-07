@@ -44,6 +44,7 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2870 Add support for grouping by Series of arbitrary length
 - PR #2719 Series covariance and Pearson correlation
 - PR #2207 Beginning of libcudf overhaul: introduce new column and table types
 - PR #2869 Add `cudf.CategoricalDtype`
@@ -51,6 +52,7 @@
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2814 Add Datetimeindex.weekday
 
 ## Improvements
 
@@ -159,6 +161,7 @@
 - PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
+- PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
 
 
 # cuDF 0.9.0 (21 Aug 2019)
