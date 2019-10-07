@@ -248,7 +248,7 @@ cudf::size_type unique_count(gdf_column const& input,
   //if (nan_as_null)
   if ((col.dtype == GDF_FLOAT32 || col.dtype == GDF_FLOAT64)) {
     auto temp = nans_to_nulls(col);
-    col.valid = reinterpret_cast<gdf_valid_type*>(temp.first);
+    col.valid = reinterpret_cast<cudf::valid_type*>(temp.first);
     col.null_count = temp.second;
   }
   bool const has_nans{col.null_count > input.null_count};

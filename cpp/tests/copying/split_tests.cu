@@ -130,12 +130,12 @@ TYPED_TEST(SplitTest, MultipleSplits) {
 
     // Transfer input column to host
     std::vector<TypeParam> input_col_data;
-    std::vector<gdf_valid_type> input_col_bitmask;
+    std::vector<cudf::valid_type> input_col_bitmask;
     std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
 
     // Perform split in cpu
     std::vector<std::vector<TypeParam>> output_cols_data;
-    std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+    std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
     std::vector<cudf::size_type> output_cols_null_count;
     std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
                                                                                 input_col_bitmask, indices_host);
@@ -183,12 +183,12 @@ TYPED_TEST(SplitTest, RangeIndexPosition) {
 
         // Transfer input column to host
         std::vector<TypeParam> input_col_data;
-        std::vector<gdf_valid_type> input_col_bitmask;
+        std::vector<cudf::valid_type> input_col_bitmask;
         std::tie(input_col_data, input_col_bitmask) = input_column.to_host();
 
         // Perform split in cpu
         std::vector<std::vector<TypeParam>> output_cols_data;
-        std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+        std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
         std::vector<cudf::size_type> output_cols_null_count;
         std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<TypeParam>(input_col_data, 
                                                                                     input_col_bitmask, indices_host);
@@ -234,7 +234,7 @@ TEST_F(SplitInputTest, NVCategoryMultipleSlices)  {
 
     // Transfer input column to host
     std::vector<std::string> input_col_data;
-    std::vector<gdf_valid_type> input_col_bitmask;
+    std::vector<cudf::valid_type> input_col_bitmask;
     std::tie(input_col_data, input_col_bitmask) = cudf::test::nvcategory_column_to_host(input_column);
     for(cudf::size_type i=0;i<INPUT_SIZE;i++){
         ASSERT_EQ(orig_strings_vector[i], input_col_data[i]);
@@ -242,14 +242,14 @@ TEST_F(SplitInputTest, NVCategoryMultipleSlices)  {
 
     // Transfer output to host
     std::vector<std::vector<std::string>> host_output_string_vector(output_column_ptrs.size());
-    std::vector<std::vector<gdf_valid_type>> host_output_bitmask(output_column_ptrs.size());
+    std::vector<std::vector<cudf::valid_type>> host_output_bitmask(output_column_ptrs.size());
     for(std::size_t i=0;i<output_column_ptrs.size();i++){
         std::tie(host_output_string_vector[i], host_output_bitmask[i]) = cudf::test::nvcategory_column_to_host(output_column_ptrs[i]);
     }
 
     // Perform slice in cpu
     std::vector<std::vector<std::string>> output_cols_data;
-    std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+    std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
     std::vector<cudf::size_type> output_cols_null_count;
     std::tie(output_cols_data, output_cols_bitmask, output_cols_null_count) = split_columns<std::string>(input_col_data, 
                                                                                 input_col_bitmask, indices_host);

@@ -686,7 +686,7 @@ reader::Impl::gather_column_dtypes() {
 void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
   thrust::host_vector<gdf_dtype> h_dtypes(num_active_cols);
   thrust::host_vector<void*> h_data(num_active_cols);
-  thrust::host_vector<gdf_valid_type*> h_valid(num_active_cols);
+  thrust::host_vector<cudf::valid_type*> h_valid(num_active_cols);
 
   for (int i = 0; i < num_active_cols; ++i) {
     h_dtypes[i] = columns[i]->dtype;
@@ -696,7 +696,7 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
 
   rmm::device_vector<gdf_dtype> d_dtypes = h_dtypes;
   rmm::device_vector<void*> d_data = h_data;
-  rmm::device_vector<gdf_valid_type*> d_valid = h_valid;
+  rmm::device_vector<cudf::valid_type*> d_valid = h_valid;
   rmm::device_vector<cudf::size_type> d_valid_counts(num_active_cols, 0);
   d_column_flags = h_column_flags;
 

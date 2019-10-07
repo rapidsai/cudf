@@ -31,7 +31,7 @@
 struct column_to_strings_fn
 {
     const gdf_column* column;
-    gdf_valid_type* valid;
+    cudf::valid_type* valid;
     cudf::size_type row_offset, rows;
     const char* true_string;
     const char* false_string;
@@ -171,7 +171,7 @@ NVStrings* column_to_strings_csv(const gdf_column* column, cudf::size_type row_o
 {
     NVStrings* rtn = nullptr;
     // point the null bitmask to the next set of bits associated with this chunk of rows
-    gdf_valid_type* valid = column->valid;
+    cudf::valid_type* valid = column->valid;
     if( valid )                                    // normalize row_offset (number of bits here)
         valid += (row_offset / GDF_VALID_BITSIZE); // to appropriate pointer for the bitmask
 

@@ -124,7 +124,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewAugmented(
   JNI_NULL_CHECK(env, handle, "column is null", );
   gdf_column *column = reinterpret_cast<gdf_column *>(handle);
   void *data = reinterpret_cast<void *>(data_ptr);
-  gdf_valid_type *valid = reinterpret_cast<gdf_valid_type *>(j_valid);
+  cudf::valid_type *valid = reinterpret_cast<cudf::valid_type *>(j_valid);
   gdf_dtype c_dtype = static_cast<gdf_dtype>(dtype);
   gdf_dtype_extra_info info{};
   info.time_unit = static_cast<gdf_time_unit>(time_unit);
@@ -150,7 +150,7 @@ JNIEXPORT void JNICALL Java_ai_rapids_cudf_ColumnVector_cudfColumnViewStrings(
       data_size -= host_offsets[0];
     }
 
-    gdf_valid_type *valid = reinterpret_cast<gdf_valid_type *>(device_valid_ptr);
+    cudf::valid_type *valid = reinterpret_cast<cudf::valid_type *>(device_valid_ptr);
     gdf_dtype dtype = static_cast<gdf_dtype>(jdtype);
     gdf_dtype_extra_info info{};
 
@@ -287,8 +287,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *en
         return reinterpret_cast<jlong>(output.release());
       }
 
-      cudf::jni::jni_rmm_unique_ptr<gdf_valid_type> valid_copy =
-          cudf::jni::jni_rmm_alloc<gdf_valid_type>(env, gdf_valid_allocation_size(column->size));
+      cudf::jni::jni_rmm_unique_ptr<cudf::valid_type> valid_copy =
+          cudf::jni::jni_rmm_alloc<cudf::valid_type>(env, gdf_valid_allocation_size(column->size));
       CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid, gdf_num_bitmask_elements(column->size),
                           cudaMemcpyDeviceToDevice));
       cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
@@ -329,8 +329,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lowerStrings(JNIEnv *en
         return reinterpret_cast<jlong>(output.release());
       }
 
-      cudf::jni::jni_rmm_unique_ptr<gdf_valid_type> valid_copy =
-          cudf::jni::jni_rmm_alloc<gdf_valid_type>(env, gdf_valid_allocation_size(column->size));
+      cudf::jni::jni_rmm_unique_ptr<cudf::valid_type> valid_copy =
+          cudf::jni::jni_rmm_alloc<cudf::valid_type>(env, gdf_valid_allocation_size(column->size));
       CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid, gdf_num_bitmask_elements(column->size),
                           cudaMemcpyDeviceToDevice));
       cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,

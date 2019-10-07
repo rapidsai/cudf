@@ -33,7 +33,7 @@
 #include <nvstrings/NVStrings.h>
 
 // forward decl -- see validops.cu
-gdf_error gdf_mask_concat(gdf_valid_type *output_mask,
+gdf_error gdf_mask_concat(cudf::valid_type *output_mask,
                           cudf::size_type output_column_length,
                           gdf_column *columns_to_concat[],
                           cudf::size_type num_columns);
@@ -115,7 +115,7 @@ gdf_error gdf_column_concat(gdf_column *output_column,
     // TODO: async
     CUDA_TRY( cudaMemset(output_column->valid, 
                          0xff, 
-                         gdf_num_bitmask_elements(total_size) * sizeof(gdf_valid_type)) );
+                         gdf_num_bitmask_elements(total_size) * sizeof(cudf::valid_type)) );
   }
 
   return GDF_SUCCESS;
@@ -129,7 +129,7 @@ cudf::size_type gdf_column_sizeof() {
 // Constructor for the gdf_context struct
 gdf_error gdf_column_view(gdf_column *column,
                           void *data,
-                          gdf_valid_type *valid,
+                          cudf::valid_type *valid,
                           cudf::size_type size,
                           gdf_dtype dtype)
 {
@@ -149,7 +149,7 @@ gdf_error gdf_column_view(gdf_column *column,
 //        datatype, and count of null (non-valid) elements
 gdf_error gdf_column_view_augmented(gdf_column *column,
                                     void *data,
-                                    gdf_valid_type *valid,
+                                    cudf::valid_type *valid,
                                     cudf::size_type size,
                                     gdf_dtype dtype,
                                     cudf::size_type null_count,

@@ -27,8 +27,8 @@ namespace compiled {
 
 template<typename T, typename Tout, typename F>
 __global__
-void gpu_binary_op(const T *lhs_data, const gdf_valid_type *lhs_valid,
-                   const T *rhs_data, const gdf_valid_type *rhs_valid,
+void gpu_binary_op(const T *lhs_data, const cudf::valid_type *lhs_valid,
+                   const T *rhs_data, const cudf::valid_type *rhs_valid,
                    cudf::size_type size, Tout *results, F functor) {
     int tid = threadIdx.x;
     int blkid = blockIdx.x;

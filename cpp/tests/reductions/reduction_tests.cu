@@ -536,7 +536,7 @@ TEST(ReductionErrorTest, empty_column)
     // expect result.is_valid() is false
     int col_size = 5;
     std::vector<T> col_data(col_size);
-    std::vector<gdf_valid_type> valids(gdf_valid_allocation_size(col_size));
+    std::vector<cudf::valid_type> valids(gdf_valid_allocation_size(col_size));
     std::fill(valids.begin(), valids.end(), 0);
 
     cudf::test::column_wrapper<T> col_empty(col_data, valids);

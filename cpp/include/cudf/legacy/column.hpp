@@ -61,7 +61,7 @@ cudf::size_type gdf_column_sizeof();
  *
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
-gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
+gdf_error gdf_column_view(gdf_column *column, void *data, cudf::valid_type *valid,
                           cudf::size_type size, gdf_dtype dtype);
 
 /** 
@@ -80,7 +80,7 @@ gdf_error gdf_column_view(gdf_column *column, void *data, gdf_valid_type *valid,
  * @returns gdf_error returns GDF_SUCCESS upon successful creation.
  */
 gdf_error gdf_column_view_augmented(gdf_column *column, void *data,
-                                    gdf_valid_type *valid, cudf::size_type size,
+                                    cudf::valid_type *valid, cudf::size_type size,
                                     gdf_dtype dtype, cudf::size_type null_count,
                                     gdf_dtype_extra_info extra_info,
                                     const char *name = nullptr);

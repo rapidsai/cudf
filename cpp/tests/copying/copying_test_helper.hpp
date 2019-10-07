@@ -38,14 +38,14 @@ cudf::test::column_wrapper<ColumnType> create_random_column(cudf::size_type size
 
 
 template <cudf::size_type SIZE>
-std::vector<gdf_valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
-                                             std::vector<gdf_valid_type> const& input_valid,
+std::vector<cudf::valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
+                                             std::vector<cudf::valid_type> const& input_valid,
                                              cudf::size_type index_start,
                                              cudf::size_type index_final) {
   // delta of the indexes
   cudf::size_type bits_length = index_final - index_start;
   if (bits_length == 0) {
-    return std::vector<gdf_valid_type>();
+    return std::vector<cudf::valid_type>();
   }
 
   // bitset data
@@ -53,7 +53,7 @@ std::vector<gdf_valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
 
   // populate data into bitset
   cudf::size_type bit_index{0};
-  auto put_data_bitset = [&bitset, &bit_index](gdf_valid_type value) {
+  auto put_data_bitset = [&bitset, &bit_index](cudf::valid_type value) {
     for (int k = 0; k < 8; ++k) {
       if (SIZE <= bit_index) {
           break;
@@ -75,12 +75,12 @@ std::vector<gdf_valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
   bit_index = 0;
   bit_set_counter = 0;
   auto get_data_bitset = [&bitset, &bit_index, &bits_length, &bit_set_counter]() {
-    gdf_valid_type value = 0;
+    cudf::valid_type value = 0;
     for (int k = 0; k < 8; ++k) {
       if (bits_length <= bit_index) {
           return value;
       }
-      gdf_valid_type tmp = bitset[bit_index];
+      cudf::valid_type tmp = bitset[bit_index];
       value |= (tmp << k);
       bit_index++;
       if ((tmp & 1) == 0) {
@@ -91,7 +91,7 @@ std::vector<gdf_valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
   };
 
   // create and store bitset into result
-  std::vector<gdf_valid_type> result(result_byte_size_padding, 0);
+  std::vector<cudf::valid_type> result(result_byte_size_padding, 0);
   std::generate_n(result.begin(), result_byte_size_padding, get_data_bitset);
 
   // done
@@ -102,11 +102,11 @@ std::vector<gdf_valid_type> slice_cpu_valids(cudf::size_type& bit_set_counter,
 template <typename ColumnType>
 auto slice_columns(
       std::vector<ColumnType>& input_col_data,
-      std::vector<gdf_valid_type>& input_col_bitmask,
+      std::vector<cudf::valid_type>& input_col_bitmask,
       std::vector<cudf::index_type>& indexes) {
   
   std::vector<std::vector<ColumnType>> output_cols_data;
-  std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+  std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
   std::vector<cudf::size_type> output_cols_null_count;
 
   for (std::size_t i = 0; i < indexes.size(); i += 2) {
@@ -115,7 +115,7 @@ auto slice_columns(
 
     if (init_index == end_index) {
       output_cols_data.emplace_back(std::vector<ColumnType>());
-      output_cols_bitmask.emplace_back(std::vector<gdf_valid_type>());
+      output_cols_bitmask.emplace_back(std::vector<cudf::valid_type>());
       output_cols_null_count.emplace_back(0);
     } else {
 
@@ -139,11 +139,11 @@ auto slice_columns(
 template <typename ColumnType>
 auto split_columns(
       std::vector<ColumnType>& input_col_data,
-      std::vector<gdf_valid_type>& input_col_bitmask,
+      std::vector<cudf::valid_type>& input_col_bitmask,
       std::vector<cudf::index_type>& indexes) {
 
   std::vector<std::vector<ColumnType>> output_cols_data;
-  std::vector<std::vector<gdf_valid_type>> output_cols_bitmask;
+  std::vector<std::vector<cudf::valid_type>> output_cols_bitmask;
   std::vector<cudf::size_type> output_cols_null_count;
 
   for (std::size_t i = 0; i <= indexes.size(); ++i) {
@@ -158,7 +158,7 @@ auto split_columns(
 
     if (init_index == end_index) {
       output_cols_data.emplace_back(std::vector<ColumnType>());
-      output_cols_bitmask.emplace_back(std::vector<gdf_valid_type>());
+      output_cols_bitmask.emplace_back(std::vector<cudf::valid_type>());
       output_cols_null_count.emplace_back(0);
     } else {
       output_cols_data.emplace_back(

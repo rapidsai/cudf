@@ -14,7 +14,7 @@ namespace { //anonymous
 template <class T>
 __global__
     void gpu_copy_and_replace_nulls(
-        const T *data, const gdf_valid_type *mask,
+        const T *data, const cudf::valid_type *mask,
         cudf::size_type size, T *results, T identity)
 {
     cudf::size_type id = threadIdx.x + blockIdx.x * blockDim.x;
@@ -42,7 +42,7 @@ __global__
 template <typename T>
 inline
 void copy_and_replace_nulls(
-        const T *data, const gdf_valid_type *mask,
+        const T *data, const cudf::valid_type *mask,
         cudf::size_type size, T *results, T identity, cudaStream_t stream)
 {
     int blockSize=0, minGridSize, gridSize;

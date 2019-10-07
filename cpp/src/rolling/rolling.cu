@@ -184,8 +184,8 @@ struct rolling_window_launcher
   template <typename ColumnType>
   void operator()(cudf::size_type nrows,
       gdf_agg_op agg_type,
-      void *out_col_data_ptr, gdf_valid_type *out_col_valid_ptr,
-      void *in_col_data_ptr, gdf_valid_type *in_col_valid_ptr,
+      void *out_col_data_ptr, cudf::valid_type *out_col_valid_ptr,
+      void *in_col_data_ptr, cudf::valid_type *in_col_valid_ptr,
       cudf::size_type window,
       cudf::size_type min_periods,
       cudf::size_type forward_window,

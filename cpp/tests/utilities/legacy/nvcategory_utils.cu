@@ -81,7 +81,7 @@ gdf_column * create_nv_category_column(cudf::size_type num_rows, bool repeat_str
 
   gdf_error err = gdf_column_view(column,
       (void *) data,
-      (gdf_valid_type *)valid,
+      (cudf::valid_type *)valid,
       num_rows,
       GDF_STRING_CATEGORY);
   column->dtype_info.category = category;
@@ -101,7 +101,7 @@ gdf_column * create_nv_category_column_strings(const char ** string_host_data, c
 
   gdf_error err = gdf_column_view(column,
       (void *) data,
-      (gdf_valid_type *)valid,
+      (cudf::valid_type *)valid,
       num_rows,
       GDF_STRING_CATEGORY);
   column->dtype_info.category = category;
@@ -126,7 +126,7 @@ const char ** generate_string_data(cudf::size_type num_rows, size_t length, bool
   return string_host_data;
 }
 
-std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_column_to_host(gdf_column * column){
+std::tuple<std::vector<std::string>, std::vector<cudf::valid_type>> nvcategory_column_to_host(gdf_column * column){
 
   if (column->dtype == GDF_STRING_CATEGORY && column->dtype_info.category != nullptr && column->size > 0) {
     NVStrings* tptr = static_cast<NVCategory*>(column->dtype_info.category)->gather_strings(static_cast<nv_category_index_type*>(column->data),
@@ -135,7 +135,7 @@ std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_col
 
     unsigned int count = tptr->size();
     if( count==0 )
-        return std::make_tuple(std::vector<std::string>(), std::vector<gdf_valid_type>());
+        return std::make_tuple(std::vector<std::string>(), std::vector<cudf::valid_type>());
 
     std::vector<char*> list(count);
     char** plist = list.data();
@@ -164,16 +164,16 @@ std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_col
     NVStrings::destroy(tptr);
     std::vector<std::string> host_strings_vector(plist, plist + column->size);
    
-    std::vector<gdf_valid_type> host_bitmask(gdf_valid_allocation_size(column->size));
+    std::vector<cudf::valid_type> host_bitmask(gdf_valid_allocation_size(column->size));
     if (cudf::is_nullable(*column)) {
       CUDA_TRY(cudaMemcpy(host_bitmask.data(),
                           column->valid,
-                          host_bitmask.size()*sizeof(gdf_valid_type),
+                          host_bitmask.size()*sizeof(cudf::valid_type),
                           cudaMemcpyDeviceToHost));
     }
     return std::make_tuple(host_strings_vector, host_bitmask);
   } else {
-    return std::make_tuple(std::vector<std::string>(), std::vector<gdf_valid_type>());
+    return std::make_tuple(std::vector<std::string>(), std::vector<cudf::valid_type>());
   }
 }
 

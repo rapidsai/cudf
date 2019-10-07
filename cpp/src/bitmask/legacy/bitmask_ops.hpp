@@ -36,7 +36,7 @@
  * @param stream cuda stream to run in
  * @return gdf_error
  *---------------------------------------------------------------------------**/
-gdf_error all_bitmask_on(gdf_valid_type* valid_out,
+gdf_error all_bitmask_on(cudf::valid_type* valid_out,
                          cudf::size_type& out_null_count,
                          cudf::size_type num_values, cudaStream_t stream);
 
@@ -53,9 +53,9 @@ gdf_error all_bitmask_on(gdf_valid_type* valid_out,
  * @return gdf_error
  *---------------------------------------------------------------------------**/
 gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
-                                   gdf_valid_type* valid_out,
-                                   const gdf_valid_type* valid_left,
-                                   const gdf_valid_type* valid_right,
+                                   cudf::valid_type* valid_out,
+                                   const cudf::valid_type* valid_left,
+                                   const cudf::valid_type* valid_right,
                                    cudaStream_t stream,
                                    cudf::size_type num_values);
 

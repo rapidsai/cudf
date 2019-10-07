@@ -57,8 +57,8 @@ void gpu_transpose(ColumnType **in_cols, ColumnType **out_cols,
  * @param[in] nrows  number of rows in input table
  */
 __global__
-void gpu_transpose_valids(gdf_valid_type **in_cols_valid,
-                          gdf_valid_type **out_cols_valid,
+void gpu_transpose_valids(cudf::valid_type **in_cols_valid,
+                          cudf::valid_type **out_cols_valid,
                           cudf::size_type *out_cols_null_count,
                           cudf::size_type ncols, cudf::size_type nrows)
 {
@@ -107,7 +107,7 @@ struct launch_kernel{
   template <typename ColumnType>
   gdf_error operator()(
     void **in_cols_data_ptr, void **out_cols_data_ptr,
-    gdf_valid_type **in_cols_valid_ptr, gdf_valid_type **out_cols_valid_ptr,
+    cudf::valid_type **in_cols_valid_ptr, cudf::valid_type **out_cols_valid_ptr,
     cudf::size_type *out_cols_nullct_ptr,
     cudf::size_type ncols, cudf::size_type nrows, bool has_null)
   {
@@ -171,30 +171,30 @@ gdf_error gdf_transpose(cudf::size_type ncols, gdf_column** in_cols,
 
   // Copy input columns `data` and `valid` pointers to device
   std::vector<void*> in_columns_data(ncols);
-  std::vector<gdf_valid_type*> in_columns_valid(ncols);
+  std::vector<cudf::valid_type*> in_columns_valid(ncols);
   for (cudf::size_type i = 0; i < ncols; ++i) {
     in_columns_data[i] = in_cols[i]->data;
     in_columns_valid[i] = in_cols[i]->valid;
   }
   rmm::device_vector<void*> d_in_columns_data(in_columns_data);
-  rmm::device_vector<gdf_valid_type*> d_in_columns_valid(in_columns_valid);
+  rmm::device_vector<cudf::valid_type*> d_in_columns_valid(in_columns_valid);
 
   void** in_cols_data_ptr = d_in_columns_data.data().get();
-  gdf_valid_type** in_cols_valid_ptr = d_in_columns_valid.data().get();
+  cudf::valid_type** in_cols_valid_ptr = d_in_columns_valid.data().get();
 
   // Copy output columns `data` and `valid` pointers to device
   std::vector<void*> out_columns_data(out_ncols);
-  std::vector<gdf_valid_type*> out_columns_valid(out_ncols);
+  std::vector<cudf::valid_type*> out_columns_valid(out_ncols);
   for (cudf::size_type i = 0; i < out_ncols; ++i) {
     out_columns_data[i] = out_cols[i]->data;
     out_columns_valid[i] = out_cols[i]->valid;
   }
   rmm::device_vector<void*> d_out_columns_data(out_columns_data);
-  rmm::device_vector<gdf_valid_type*> d_out_columns_valid(out_columns_valid);
+  rmm::device_vector<cudf::valid_type*> d_out_columns_valid(out_columns_valid);
   rmm::device_vector<cudf::size_type> d_out_columns_nullct(out_ncols);
 
   void** out_cols_data_ptr = d_out_columns_data.data().get();
-  gdf_valid_type** out_cols_valid_ptr = d_out_columns_valid.data().get();
+  cudf::valid_type** out_cols_valid_ptr = d_out_columns_valid.data().get();
   cudf::size_type* out_cols_nullct_ptr = d_out_columns_nullct.data().get();
 
   cudf::type_dispatcher(dtype,

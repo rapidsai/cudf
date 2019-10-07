@@ -357,7 +357,7 @@ void reader::Impl::convertDataToColumns() {
 
   thrust::host_vector<gdf_dtype> h_dtypes(num_columns);
   thrust::host_vector<void *> h_data(num_columns);
-  thrust::host_vector<gdf_valid_type *> h_valid(num_columns);
+  thrust::host_vector<cudf::valid_type *> h_valid(num_columns);
 
   for (size_t i = 0; i < num_columns; ++i) {
     h_dtypes[i] = columns_[i]->dtype;
@@ -367,7 +367,7 @@ void reader::Impl::convertDataToColumns() {
 
   rmm::device_vector<gdf_dtype> d_dtypes = h_dtypes;
   rmm::device_vector<void *> d_data = h_data;
-  rmm::device_vector<gdf_valid_type *> d_valid = h_valid;
+  rmm::device_vector<cudf::valid_type *> d_valid = h_valid;
   rmm::device_vector<cudf::size_type> d_valid_counts(num_columns, 0);
 
   convertJsonToColumns(d_dtypes.data().get(), d_data.data().get(), d_valid.data().get(), d_valid_counts.data().get());
@@ -498,7 +498,7 @@ __device__ long seekFieldNameEnd(const char *data, const ParseOptions opts, long
  *---------------------------------------------------------------------------**/
 __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint64_t *rec_starts,
                                  cudf::size_type num_records, const gdf_dtype *dtypes, ParseOptions opts,
-                                 void *const *gdf_columns, int num_columns, gdf_valid_type *const *valid_fields,
+                                 void *const *gdf_columns, int num_columns, cudf::valid_type *const *valid_fields,
                                  cudf::size_type *num_valid_fields) {
   const long rec_id = threadIdx.x + (blockDim.x * blockIdx.x);
   if (rec_id >= num_records)
@@ -545,7 +545,7 @@ __global__ void convertJsonToGdf(const char *data, size_t data_size, const uint6
 }
 
 void reader::Impl::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns,
-                                            gdf_valid_type *const *valid_fields, cudf::size_type *num_valid_fields) {
+                                            cudf::valid_type *const *valid_fields, cudf::size_type *num_valid_fields) {
   int block_size;
   int min_grid_size;
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&min_grid_size, &block_size, convertJsonToGdf));

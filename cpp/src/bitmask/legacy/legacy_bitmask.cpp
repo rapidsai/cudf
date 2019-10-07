@@ -43,8 +43,8 @@ static cudf::size_type PaddedLength(int64_t nbytes,
 // Calculates number of bytes for valid bitmask for a column of a specified
 // size
 cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size) {
-  static_assert(sizeof(gdf_valid_type) == 1,
-                "gdf_valid_type assumed to be 1 byte");
+  static_assert(sizeof(cudf::valid_type) == 1,
+                "cudf::valid_type assumed to be 1 byte");
   return PaddedLength(
       (column_size + (GDF_VALID_BITSIZE - 1)) / GDF_VALID_BITSIZE,
       kArrowAlignment);

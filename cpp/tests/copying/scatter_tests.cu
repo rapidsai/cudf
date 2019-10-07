@@ -149,13 +149,13 @@ TYPED_TEST(ScatterTest, ReverseIdentityTest) {
   
   // Expected result is the reversal of the source column
   std::vector<TypeParam> expected_data;
-  std::vector<gdf_valid_type> expected_bitmask;
+  std::vector<cudf::valid_type> expected_bitmask;
   std::tie(expected_data, expected_bitmask) = source_column.to_host();
   std::reverse(expected_data.begin(), expected_data.end());
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
@@ -203,7 +203,7 @@ TYPED_TEST(ScatterTest, AllNull) {
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
@@ -256,7 +256,7 @@ TYPED_TEST(ScatterTest, EveryOtherNull) {
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 

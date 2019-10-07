@@ -537,8 +537,8 @@ cudf::table join_call_compute_df(
         int col_width = cudf::byte_width(*new_left_column_ptr);
         RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->data), col_width * left_original_column->size, 0) ); // TODO: non-default stream?
         if(left_original_column->valid != nullptr){
-          RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(left_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_left_column_ptr->valid, left_original_column->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(left_original_column->size),cudaMemcpyDeviceToDevice) );
+          RMM_TRY( RMM_ALLOC(&(new_left_column_ptr->valid), sizeof(cudf::valid_type)*gdf_valid_allocation_size(left_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_left_column_ptr->valid, left_original_column->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(left_original_column->size),cudaMemcpyDeviceToDevice) );
         }else{
           new_left_column_ptr->valid = nullptr;
         }
@@ -547,8 +547,8 @@ cudf::table join_call_compute_df(
 
         RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->data), col_width * right_original_column->size, 0) ); // TODO: non-default stream?
         if(right_original_column->valid != nullptr){
-          RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(right_original_column->size), 0) );
-          CUDA_TRY( cudaMemcpy(new_right_column_ptr->valid, right_original_column->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(right_original_column->size),cudaMemcpyDeviceToDevice) );
+          RMM_TRY( RMM_ALLOC(&(new_right_column_ptr->valid), sizeof(cudf::valid_type)*gdf_valid_allocation_size(right_original_column->size), 0) );
+          CUDA_TRY( cudaMemcpy(new_right_column_ptr->valid, right_original_column->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(right_original_column->size),cudaMemcpyDeviceToDevice) );
         }else{
           new_right_column_ptr->valid = nullptr;
         }

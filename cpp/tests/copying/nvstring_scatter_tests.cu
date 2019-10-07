@@ -69,7 +69,7 @@ TEST(ScatterTest, ScatterNVString)
   }
 
   std::vector<std::string> strs;
-  std::vector<gdf_valid_type> valids;
+  std::vector<cudf::valid_type> valids;
   std::tie(strs, valids) = cudf::test::nvcategory_column_to_host(destination_table.get_column(0));
   
   EXPECT_EQ((int)strs.size(), rows_size*2); 

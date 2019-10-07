@@ -294,7 +294,7 @@ namespace detail {
     gdf_column output = cudf::allocate_like(input_col, RETAIN, stream);
 
     if (nullptr == input_col.valid && replacement_values.valid != nullptr) {
-      gdf_valid_type *valid = nullptr;
+      cudf::valid_type *valid = nullptr;
       cudf::size_type bytes = gdf_valid_allocation_size(input_col.size);
       RMM_ALLOC(&valid, bytes, stream);
       CUDA_TRY(cudaMemsetAsync(valid, 0, bytes, stream));
@@ -395,7 +395,7 @@ struct replace_nulls_column_kernel_forwarder {
   template <typename col_type>
   void operator()(cudf::size_type    nrows,
                   void*            d_in_data,
-                  gdf_valid_type*  d_in_valid,
+                  cudf::valid_type*  d_in_valid,
                   const void*      d_replacement,
                   void*            d_out_data,
                   cudaStream_t     stream = 0)
@@ -423,7 +423,7 @@ struct replace_nulls_scalar_kernel_forwarder {
   template <typename col_type>
   void operator()(cudf::size_type    nrows,
                   void*            d_in_data,
-                  gdf_valid_type*  d_in_valid,
+                  cudf::valid_type*  d_in_valid,
                   const void*      replacement,
                   void*            d_out_data,
                   cudaStream_t     stream = 0)

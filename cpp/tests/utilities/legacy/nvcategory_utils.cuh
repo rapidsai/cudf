@@ -37,7 +37,7 @@ gdf_column * create_nv_category_column_strings(const char ** string_host_data, c
 
 const char ** generate_string_data(cudf::size_type num_rows, size_t length, bool print=false);
 
-std::tuple<std::vector<std::string>, std::vector<gdf_valid_type>> nvcategory_column_to_host(gdf_column * column);
+std::tuple<std::vector<std::string>, std::vector<cudf::valid_type>> nvcategory_column_to_host(gdf_column * column);
 
 } // namespace test
 } // namespace cudf

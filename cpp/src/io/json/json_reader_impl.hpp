@@ -164,7 +164,7 @@ private:
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, gdf_valid_type *const *valid_fields,
+  void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, cudf::valid_type *const *valid_fields,
                             cudf::size_type *num_valid_fields);
 
  public:

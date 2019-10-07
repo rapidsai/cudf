@@ -171,7 +171,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_smallest)
     using element_type = int64_t;
 
     std::vector<element_type>   column_data     { 10, 60, 10, 20, 30, 40, 50 };
-    std::vector<gdf_valid_type> column_valids   {  0,  0,  1,  1,  1,  1,  1 };
+    std::vector<cudf::valid_type> column_valids   {  0,  0,  1,  1,  1,  1,  1 };
     std::vector<element_type>   values_data     {  8,  8, 10, 11, 30, 32, 40, 47, 50, 90 };
     std::vector<element_type>   value_valids    {  0,  1,  1,  1,  1,  1,  1,  1,  1,  1 };
 
@@ -205,7 +205,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_smallest)
     using element_type = int64_t;
 
     std::vector<element_type>   column_data     { 10, 60, 10, 20, 30, 40, 50 };
-    std::vector<gdf_valid_type> column_valids   {  0,  0,  1,  1,  1,  1,  1 };
+    std::vector<cudf::valid_type> column_valids   {  0,  0,  1,  1,  1,  1,  1 };
     std::vector<element_type>   values_data     {  8,  8, 10, 11, 30, 32, 40, 47, 50, 90 };
     std::vector<element_type>   value_valids    {  0,  1,  1,  1,  1,  1,  1,  1,  1,  1 };
 
@@ -239,7 +239,7 @@ TEST_F(SearchTest, nullable_column__find_last__nulls_as_largest)
     using element_type = int64_t;
 
     std::vector<element_type>   column_data     { 10, 20, 30, 40, 50, 10, 60 };
-    std::vector<gdf_valid_type> column_valids   {  1,  1,  1,  1,  1,  0,  0 };
+    std::vector<cudf::valid_type> column_valids   {  1,  1,  1,  1,  1,  0,  0 };
     std::vector<element_type>   values_data     {  8, 10, 11, 30, 32, 40, 47, 50, 90,  8 };
     std::vector<element_type>   value_valids    {  1,  1,  1,  1,  1,  1,  1,  1,  1,  0 };
 
@@ -273,7 +273,7 @@ TEST_F(SearchTest, nullable_column__find_first__nulls_as_largest)
     using element_type = int64_t;
 
     std::vector<element_type>   column_data     { 10, 20, 30, 40, 50, 10, 60 };
-    std::vector<gdf_valid_type> column_valids   {  1,  1,  1,  1,  1,  0,  0 };
+    std::vector<cudf::valid_type> column_valids   {  1,  1,  1,  1,  1,  0,  0 };
     std::vector<element_type>   values_data     {  8, 10, 11, 30, 32, 40, 47, 50, 90,  8 };
     std::vector<element_type>   value_valids    {  1,  1,  1,  1,  1,  1,  1,  1,  1,  0 };
 
@@ -761,7 +761,7 @@ TEST_F(SearchTest, contains_nullable_column_true)
     bool expect = true;
 
     std::vector<element_type>   column_data     { 0, 1, 17, 19, 23, 29, 71};
-    std::vector<gdf_valid_type> column_valids   { 0,  0,  1,  1,  1,  1,  1 };
+    std::vector<cudf::valid_type> column_valids   { 0,  0,  1,  1,  1,  1,  1 };
     auto value = scalar_wrapper<element_type> {23};
 
     auto column = column_wrapper<element_type> ( column_data,
@@ -782,7 +782,7 @@ TEST_F(SearchTest, contains_nullable_column_false)
     bool expect = false;
 
     std::vector<element_type>   column_data     { 0, 1, 17, 19, 23, 29, 71};
-    std::vector<gdf_valid_type> column_valids   { 0, 0, 1, 1, 0, 1, 1};
+    std::vector<cudf::valid_type> column_valids   { 0, 0, 1, 1, 0, 1, 1};
     auto value = scalar_wrapper<element_type> {23};
 
     auto column = column_wrapper<element_type> ( column_data,

@@ -241,13 +241,13 @@ table merge(table const& left_table,
 
         *new_left_column_ptr = allocate_like(*left_col, RETAIN, stream);
         if (new_left_column_ptr->valid) {
-            CUDA_TRY( cudaMemcpyAsync(new_left_column_ptr->valid, left_col->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(left_col->size), cudaMemcpyDefault, stream) );
+            CUDA_TRY( cudaMemcpyAsync(new_left_column_ptr->valid, left_col->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(left_col->size), cudaMemcpyDefault, stream) );
             new_left_column_ptr->null_count = left_col->null_count;
         }
         
         *new_right_column_ptr = allocate_like(*right_col, RETAIN, stream);
         if (new_right_column_ptr->valid) {
-            CUDA_TRY( cudaMemcpyAsync(new_right_column_ptr->valid, right_col->valid, sizeof(gdf_valid_type)*gdf_num_bitmask_elements(right_col->size), cudaMemcpyDefault, stream) );
+            CUDA_TRY( cudaMemcpyAsync(new_right_column_ptr->valid, right_col->valid, sizeof(cudf::valid_type)*gdf_num_bitmask_elements(right_col->size), cudaMemcpyDefault, stream) );
             new_right_column_ptr->null_count = right_col->null_count;
         }
 

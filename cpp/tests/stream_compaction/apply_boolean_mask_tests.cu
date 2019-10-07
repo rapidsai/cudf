@@ -58,7 +58,7 @@ TEST_F(ApplyBooleanMaskErrorTest, NullPtrs)
   }
 
   {
-    bad_input.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
+    bad_input.valid = reinterpret_cast<cudf::valid_type*>(0x0badf00d);
     bad_input.null_count = 2;
     bad_input.size = column_size; 
     std::vector<gdf_column*> cols;

@@ -246,7 +246,7 @@ __global__ void convertCsvToGdf(const char *raw_csv, const ParseOptions opts,
                                 cudf::size_type num_records, int num_columns,
                                 const column_parse::flags *flags,
                                 const uint64_t *recStart, gdf_dtype *dtype,
-                                void **data, gdf_valid_type **valid,
+                                void **data, cudf::valid_type **valid,
                                 cudf::size_type *num_valid) {
   // thread IDs range per block, so also need the block id
   long rec_id =
@@ -344,7 +344,7 @@ cudaError_t __host__ DecodeCsvColumnData(
     const char *data, const uint64_t *row_starts, cudf::size_type num_rows,
     cudf::size_type num_columns, const ParseOptions &options,
     const column_parse::flags *flags, gdf_dtype *dtypes, void **columns,
-    gdf_valid_type **valids, cudf::size_type *num_valid, cudaStream_t stream) {
+    cudf::valid_type **valids, cudf::size_type *num_valid, cudaStream_t stream) {
   int blockSize;    // suggested thread count to use
   int minGridSize;  // minimum block count required
   CUDA_TRY(cudaOccupancyMaxPotentialBlockSize(&minGridSize, &blockSize,

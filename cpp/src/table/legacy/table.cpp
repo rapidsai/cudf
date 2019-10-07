@@ -72,12 +72,12 @@ table::table(cudf::size_type num_rows,
 
           RMM_ALLOC(
               &col->valid,
-              gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
+              gdf_valid_allocation_size(num_rows) * sizeof(cudf::valid_type),
               stream);
 
           CUDA_TRY(cudaMemsetAsync(
               col->valid, fill_value,
-              gdf_valid_allocation_size(num_rows) * sizeof(gdf_valid_type),
+              gdf_valid_allocation_size(num_rows) * sizeof(cudf::valid_type),
               stream));
         }
         return col;

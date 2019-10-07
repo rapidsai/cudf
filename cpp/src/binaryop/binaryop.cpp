@@ -59,9 +59,9 @@ namespace binops {
  *valid_right
  *---------------------------------------------------------------------------**/
 void binary_valid_mask_and(cudf::size_type& out_null_count,
-                           gdf_valid_type* valid_out,
-                           const gdf_valid_type* valid_left,
-                           const gdf_valid_type* valid_right,
+                           cudf::valid_type* valid_out,
+                           const cudf::valid_type* valid_left,
+                           const cudf::valid_type* valid_right,
                            cudf::size_type num_values) {
   if (num_values == 0) {
     out_null_count = 0;
@@ -114,8 +114,8 @@ void binary_valid_mask_and(cudf::size_type& out_null_count,
  * @param num_values number of values in input mask valid_col
  *---------------------------------------------------------------------------**/
 void scalar_col_valid_mask_and(cudf::size_type& out_null_count,
-                               gdf_valid_type* valid_out,
-                               gdf_valid_type* valid_col, bool valid_scalar,
+                               cudf::valid_type* valid_out,
+                               cudf::valid_type* valid_col, bool valid_scalar,
                                cudf::size_type num_values) {
   if (num_values == 0) {
     out_null_count = 0;

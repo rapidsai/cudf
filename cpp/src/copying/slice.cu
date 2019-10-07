@@ -159,7 +159,7 @@ public:
       auto col_width { cudf::byte_width(*output_column) };
       RMM_TRY( RMM_ALLOC(&(output_column->data), col_width * output_column->size, stream) );
       if(input_column_.valid != nullptr){
-        RMM_TRY( RMM_ALLOC(&(output_column->valid), sizeof(gdf_valid_type)*gdf_valid_allocation_size(output_column->size), stream) );
+        RMM_TRY( RMM_ALLOC(&(output_column->valid), sizeof(cudf::valid_type)*gdf_valid_allocation_size(output_column->size), stream) );
       } else {
         output_column->valid = nullptr;
       }

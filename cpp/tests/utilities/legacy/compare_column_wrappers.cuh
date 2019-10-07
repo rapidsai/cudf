@@ -65,8 +65,8 @@ enum : bool {
 template <typename E>
 void expect_column_values_are_equal(
     cudf::size_type common_size, const E* lhs_data_on_host,
-    const gdf_valid_type* lhs_validity_on_host, const std::string& lhs_name,
-    const E* rhs_data_on_host, const gdf_valid_type* rhs_validity_on_host,
+    const cudf::valid_type* lhs_validity_on_host, const std::string& lhs_name,
+    const E* rhs_data_on_host, const cudf::valid_type* rhs_validity_on_host,
     const std::string& rhs_name,
     bool treat_distinct_nulls_as_equal = distinct_nulls_are_equal,
     bool print_all_unequal_pairs = dont_print_unequal_pairs) {
@@ -77,11 +77,11 @@ void expect_column_values_are_equal(
   for (cudf::size_type i = 0; i < common_size; i++) {
     auto lhs_element_is_valid =
         lhs_non_nullable or
-        cudf::util::bit_is_set<gdf_valid_type, cudf::size_type>(
+        cudf::util::bit_is_set<cudf::valid_type, cudf::size_type>(
             lhs_validity_on_host, i);
     auto rhs_element_is_valid =
         rhs_non_nullable or
-        cudf::util::bit_is_set<gdf_valid_type, cudf::size_type>(
+        cudf::util::bit_is_set<cudf::valid_type, cudf::size_type>(
             rhs_validity_on_host, i);
     if (not lhs_element_is_valid and not rhs_element_is_valid) {
       EXPECT_TRUE(treat_distinct_nulls_as_equal);
@@ -147,9 +147,9 @@ void expect_columns_are_equal(
     const E* lhs_data_on_host  = std::get<0>(lhs_on_host).data();
     const E* rhs_data_on_host  = std::get<0>(rhs_on_host).data();
 
-    const gdf_valid_type* lhs_validity_on_host =
+    const cudf::valid_type* lhs_validity_on_host =
         cudf::is_nullable(lhs) ? std::get<1>(lhs_on_host).data() : nullptr;
-    const gdf_valid_type* rhs_validity_on_host =
+    const cudf::valid_type* rhs_validity_on_host =
         cudf::is_nullable(rhs) ? std::get<1>(rhs_on_host).data() : nullptr;
 
     return expect_column_values_are_equal(

@@ -54,11 +54,11 @@ device_buffer<int16_t> getBracketLevels(
  * @brief Sets the specified bit in a device memory bitmap.
  * Uses atomics for synchronization.
  */
-__device__ __inline__ void setBitmapBit(gdf_valid_type *bitmap, long bit_idx) {
+__device__ __inline__ void setBitmapBit(cudf::valid_type *bitmap, long bit_idx) {
   constexpr int32_t bit_mask[8] = {1, 2, 4, 8, 16, 32, 64, 128};
   const auto address = bitmap + bit_idx / 8;
 
-  int32_t *const base_address = (int32_t *)((gdf_valid_type *)address - ((size_t)address & 3));
+  int32_t *const base_address = (int32_t *)((cudf::valid_type *)address - ((size_t)address & 3));
   const int32_t mask = bit_mask[bit_idx % 8] << (((size_t)address & 3) * 8);
 
   atomicOr(base_address, mask);

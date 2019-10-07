@@ -63,7 +63,7 @@ protected:
     CUDF_EXPECTS(forward_window.size() == 0 || forward_window.size() == (size_t)input.size(), "Forward window array size != input column size");
 
     // copy the input to host
-    std::vector<gdf_valid_type> valid;
+    std::vector<cudf::valid_type> valid;
     std::tie(in_col, valid) = input.to_host();
     in_col_valid.resize(in_col.size());
     for (size_t row = 0; row < in_col.size(); row++)
@@ -224,8 +224,8 @@ private:
       
     // copy output valid mask to host
     cudf::size_type nmasks = gdf_valid_allocation_size(nrows);
-    std::vector<gdf_valid_type> out_col_mask(nmasks);
-    CUDA_TRY(cudaMemcpy(out_col_mask.data(), static_cast<gdf_valid_type*>(out_gdf_col->valid), nmasks * sizeof(gdf_valid_type), cudaMemcpyDefault));
+    std::vector<cudf::valid_type> out_col_mask(nmasks);
+    CUDA_TRY(cudaMemcpy(out_col_mask.data(), static_cast<cudf::valid_type*>(out_gdf_col->valid), nmasks * sizeof(cudf::valid_type), cudaMemcpyDefault));
       
     // create column wrappers and compare
     cudf::test::column_wrapper<T> out(out_col, [&](cudf::index_type i) { return gdf_is_valid(out_col_mask.data(), i); } );

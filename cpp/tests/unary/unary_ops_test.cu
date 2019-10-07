@@ -313,13 +313,13 @@ void fill_with_random_values(std::vector<TFROM>& input, size_t size)
 }
 
 // Generates random bitmaps
-void fill_random_bitmap(std::vector<gdf_valid_type>& valid_input, size_t size)
+void fill_random_bitmap(std::vector<cudf::valid_type>& valid_input, size_t size)
 {
 	std::random_device rd;
 	std::default_random_engine eng(rd());
 
-	std::uniform_int_distribution<gdf_valid_type> int_dis;
-	int_dis = std::uniform_int_distribution<gdf_valid_type>(std::numeric_limits<gdf_valid_type>::min(), std::numeric_limits<gdf_valid_type>::max());
+	std::uniform_int_distribution<cudf::valid_type> int_dis;
+	int_dis = std::uniform_int_distribution<cudf::valid_type>(std::numeric_limits<cudf::valid_type>::min(), std::numeric_limits<cudf::valid_type>::max());
 
 	std::generate(valid_input.begin(), valid_input.end(), [int_dis, eng]() mutable {
 		return int_dis(eng);
@@ -474,10 +474,10 @@ DEF_CAST_SWAP_TEST_TO_TIMESTAMP(date64, GDF_DATE64, int64_t)
 struct generateValidRandom
 {
     __host__ __device__
-    gdf_valid_type operator () (int idx)
+    cudf::valid_type operator () (int idx)
     {
         thrust::default_random_engine eng;
-        thrust::uniform_int_distribution<gdf_valid_type> int_dis;
+        thrust::uniform_int_distribution<cudf::valid_type> int_dis;
         eng.discard(idx);
         return int_dis(eng);
     }

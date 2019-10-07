@@ -101,7 +101,7 @@ struct OrderByTest : public GdfTest
   * @returns A unique_ptr wrapping the new gdf_column
   * --------------------------------------------------------------------------*/
   template <typename col_type>
-  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, gdf_valid_type* host_valid,
+  gdf_col_pointer create_gdf_column(std::vector<col_type> const & host_vector, cudf::valid_type* host_valid,
           const cudf::size_type n_count)
   {
     // Deduce the type and set the gdf_dtype accordingly

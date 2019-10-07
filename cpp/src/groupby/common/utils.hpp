@@ -131,7 +131,7 @@ struct identity_initializer {
     if ((nullptr != col.valid) and (COUNT == op)) {
       CUDA_TRY(cudaMemsetAsync(
           col.valid, 0xff,
-          sizeof(gdf_valid_type) * gdf_valid_allocation_size(col.size),
+          sizeof(cudf::valid_type) * gdf_valid_allocation_size(col.size),
           stream));
     }
   }

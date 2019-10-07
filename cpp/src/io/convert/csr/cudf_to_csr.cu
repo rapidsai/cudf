@@ -36,18 +36,18 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type
 
 //--- private CUDA functions / kernels
 template<typename T>
-__global__ void cudaCreateCSR(void *data, gdf_valid_type *valid, gdf_dtype dtype, int colID, T *A, int64_t *JA, cudf::size_type *offsets, cudf::size_type numRows);
+__global__ void cudaCreateCSR(void *data, cudf::valid_type *valid, gdf_dtype dtype, int colID, T *A, int64_t *JA, cudf::size_type *offsets, cudf::size_type numRows);
 
-__global__ void determineValidRecCount(gdf_valid_type *validArray, cudf::size_type numRows, cudf::size_type numCol, cudf::size_type * offset);
+__global__ void determineValidRecCount(cudf::valid_type *validArray, cudf::size_type numRows, cudf::size_type numCol, cudf::size_type * offset);
 
 template<typename T>
 __device__ T convertDataElement(gdf_column *gdf, int idx, gdf_dtype dtype);
 
 __device__ int whichBitmapCSR(int record) { return (record/8);  }
 __device__ int whichBitCSR(int bit) { return (bit % 8);  }
-__device__ int checkBitCSR(gdf_valid_type data, int bit) {
+__device__ int checkBitCSR(cudf::valid_type data, int bit) {
 
-	gdf_valid_type bitMask[8] 		= {1, 2, 4, 8, 16, 32, 64, 128};
+	cudf::valid_type bitMask[8] 		= {1, 2, 4, 8, 16, 32, 64, 128};
 	return (data & bitMask[bit]);
 }
 
@@ -227,7 +227,7 @@ gdf_error runConverter(gdf_column **gdfData, csr_gdf *csrReturn, cudf::size_type
  */
 template<typename T>
 __global__ void cudaCreateCSR(
-		void *data, gdf_valid_type *valid, gdf_dtype dtype, int colId,
+		void *data, cudf::valid_type *valid, gdf_dtype dtype, int colId,
 		T *A, int64_t *JA, cudf::size_type *offsets, cudf::size_type numRows)
 {
 	int tid = threadIdx.x + (blockDim.x * blockIdx.x);			// get the tread ID which is also the row number
@@ -238,7 +238,7 @@ __global__ void cudaCreateCSR(
 	int bitmapIdx 	= whichBitmapCSR(tid);  						// which bitmap
 	int bitIdx		= whichBitCSR(tid);								// which bit - over an 8-bit index
 
-	gdf_valid_type	bitmap	= valid[bitmapIdx];
+	cudf::valid_type	bitmap	= valid[bitmapIdx];
 
 	if ( checkBitCSR( bitmap, bitIdx) ) {
 
@@ -260,7 +260,7 @@ __global__ void cudaCreateCSR(
  * the number of elements a valid array is actually ceil(numRows / 8) since it is a bitmap.  the total number of bits checked is equal to numRows
  *
  */
-__global__ void determineValidRecCount(gdf_valid_type *valid, cudf::size_type numRows, cudf::size_type numCol, cudf::size_type * offset) {
+__global__ void determineValidRecCount(cudf::valid_type *valid, cudf::size_type numRows, cudf::size_type numCol, cudf::size_type * offset) {
 
 	int tid = threadIdx.x + (blockDim.x * blockIdx.x);				// get the tread ID which is also the row number
 
@@ -270,7 +270,7 @@ __global__ void determineValidRecCount(gdf_valid_type *valid, cudf::size_type nu
 	int bitmapIdx 	= whichBitmapCSR(tid);  						// want the floor of the divide
 	int bitIdx		= whichBitCSR(tid);								// which bit - over an 8-bit index
 
-	gdf_valid_type	bitmap	= valid[bitmapIdx];
+	cudf::valid_type	bitmap	= valid[bitmapIdx];
 
 	if (checkBitCSR( bitmap, bitIdx) )
 		++offset[tid];

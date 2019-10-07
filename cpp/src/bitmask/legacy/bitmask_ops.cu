@@ -19,11 +19,11 @@
 #include <vector>
 #include <algorithm>
 
-// To account for if gdf_valid_type is not a 4 byte type,
-// compute the RATIO of the number of bytes in gdf_valid_type
+// To account for if cudf::valid_type is not a 4 byte type,
+// compute the RATIO of the number of bytes in cudf::valid_type
 // to the 4 byte type being used for casting
 using valid32_t = uint32_t;
-constexpr size_t RATIO = sizeof(valid32_t) / sizeof(gdf_valid_type);
+constexpr size_t RATIO = sizeof(valid32_t) / sizeof(cudf::valid_type);
 constexpr int BITS_PER_MASK32 = GDF_VALID_BITSIZE * RATIO;
 
 constexpr int block_size = 256;
@@ -78,8 +78,8 @@ __global__ void count_valid_bits(valid32_t const* const masks32,
 
   // Handle the remainder rows
   if (idx < num_rows_last_mask) {
-    gdf_valid_type const* const valids{
-        reinterpret_cast<gdf_valid_type const*>(masks32)};
+    cudf::valid_type const* const valids{
+        reinterpret_cast<cudf::valid_type const*>(masks32)};
     int const my_row{num_rows - idx - 1};
 
     if (true == gdf_is_valid(valids, my_row)) ++my_count;
@@ -95,7 +95,7 @@ __global__ void count_valid_bits(valid32_t const* const masks32,
 }
 }  // namespace
 
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
+gdf_error gdf_count_nonzero_mask(cudf::valid_type const* masks,
                                  cudf::size_type num_rows, cudf::size_type* count) {
   // TODO: add a default parameter cudaStream_t stream = 0 when we move API to
   // C++
@@ -116,10 +116,10 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
 
   // Masks will be proccessed as 4B types, therefore we require that the
   // underlying type be less than or equal to 4B
-  static_assert(sizeof(valid32_t) >= sizeof(gdf_valid_type),
-                "gdf_valid_type is assumed to be <= 4B type");
+  static_assert(sizeof(valid32_t) >= sizeof(cudf::valid_type),
+                "cudf::valid_type is assumed to be <= 4B type");
 
-  // Number of gdf_valid_types in the validity bitmask
+  // Number of cudf::valid_types in the validity bitmask
   cudf::size_type const num_masks{gdf_num_bitmask_elements(num_rows)};
 
   // Number of 4 byte types in the validity bit mask
@@ -161,27 +161,27 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
   return GDF_SUCCESS;
 }
 
-gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
+gdf_error gdf_mask_concat(cudf::valid_type* output_mask,
                           cudf::size_type output_column_length,
                           gdf_column *columns_to_concat[],
                           cudf::size_type num_columns) {
-  std::vector<gdf_valid_type*> h_masks(num_columns);
+  std::vector<cudf::valid_type*> h_masks(num_columns);
   std::vector<cudf::size_type> h_column_lengths(num_columns);
   std::transform(columns_to_concat, columns_to_concat + num_columns,
                  h_masks.begin(), [](auto col) { return col->valid; });
   std::transform(columns_to_concat, columns_to_concat + num_columns,
                 h_column_lengths.begin(), [](auto col) { return col->size; });
 
-  rmm::device_vector<gdf_valid_type*> d_masks(h_masks);
+  rmm::device_vector<cudf::valid_type*> d_masks(h_masks);
   rmm::device_vector<cudf::size_type> d_column_lengths(h_column_lengths);
 
-  gdf_valid_type** masks_to_concat = thrust::raw_pointer_cast(d_masks.data());
+  cudf::valid_type** masks_to_concat = thrust::raw_pointer_cast(d_masks.data());
   cudf::size_type* column_lengths = thrust::raw_pointer_cast(d_column_lengths.data());
 
   // This lambda is executed in a thrust algorithm. Each thread computes and
-  // returns one gdf_valid_type element for the concatenated output mask
+  // returns one cudf::valid_type element for the concatenated output mask
   auto mask_concatenator = [=] __device__(cudf::size_type mask_index) {
-    gdf_valid_type output_m = 0;
+    cudf::valid_type output_m = 0;
 
     int cur_mask_index = 0, cur_mask_start = 0;
     int cur_mask_len = column_lengths[0];
@@ -202,7 +202,7 @@ gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
       }
 
       // Set each valid bit at the right location in this thread's output
-      // gdf_valid_type Note: gdf_is_valid returns true when the input mask is a
+      // cudf::valid_type Note: gdf_is_valid returns true when the input mask is a
       // null pointer This makes it behave as if columns with null validity
       // masks have masks of all 1s, which is the desired behavior.
       cudf::size_type index = output_index - cur_mask_start;
@@ -225,30 +225,30 @@ gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
   return GDF_SUCCESS;
 }
 
-gdf_error all_bitmask_on(gdf_valid_type* valid_out,
+gdf_error all_bitmask_on(cudf::valid_type* valid_out,
                          cudf::size_type& out_null_count,
                          cudf::size_type num_values, cudaStream_t stream) {
   cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
-  gdf_valid_type max_char = 255;
+  cudf::valid_type max_char = 255;
   thrust::fill(rmm::exec_policy(stream)->on(stream), valid_out,
                valid_out + num_bitmask_elements, max_char);
-  // we have no nulls so set all the bits in gdf_valid_type to 1
+  // we have no nulls so set all the bits in cudf::valid_type to 1
   out_null_count = 0;
   return GDF_SUCCESS;
 }
 
 gdf_error apply_bitmask_to_bitmask(cudf::size_type& out_null_count,
-                                   gdf_valid_type* valid_out,
-                                   const gdf_valid_type* valid_left,
-                                   const gdf_valid_type* valid_right,
+                                   cudf::valid_type* valid_out,
+                                   const cudf::valid_type* valid_left,
+                                   const cudf::valid_type* valid_right,
                                    cudaStream_t stream,
                                    cudf::size_type num_values) {
   cudf::size_type num_bitmask_elements = gdf_num_bitmask_elements(num_values);
 
   thrust::transform(rmm::exec_policy(stream)->on(stream), valid_left,
                     valid_left + num_bitmask_elements, valid_right, valid_out,
-                    thrust::bit_and<gdf_valid_type>());
+                    thrust::bit_and<cudf::valid_type>());
 
   cudf::size_type non_nulls;
   auto error = gdf_count_nonzero_mask(valid_out, num_values, &non_nulls);

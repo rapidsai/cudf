@@ -286,7 +286,7 @@ Generic reduction implementation with support for validity mask
 */
 template<typename T_in, typename T_out, typename F>
 __global__
-void gpu_reduction_op(const T_in *data, const gdf_valid_type *mask,
+void gpu_reduction_op(const T_in *data, const cudf::valid_type *mask,
                       cudf::size_type size, T_out *result,
                       F functor, T_out identity)
 {

@@ -65,7 +65,7 @@ TYPED_TEST(ScalarScatterTest, DestMissingValid) {
 
   // Copy result of target column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
   
@@ -120,7 +120,7 @@ TYPED_TEST(ScalarScatterTest, ScatterMultiColValid) {
   for(int c = 0; c < n_cols; c++){
     // Copy result of target column to host
     std::vector<TypeParam> result_data;
-    std::vector<gdf_valid_type> result_bitmask;
+    std::vector<cudf::valid_type> result_bitmask;
     cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(c));
     std::tie(result_data, result_bitmask) = destination_column.to_host();
     
@@ -167,7 +167,7 @@ TYPED_TEST(ScalarScatterTest, ScatterValid) {
 
   // Copy result of target column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
   
@@ -212,7 +212,7 @@ TYPED_TEST(ScalarScatterTest, ScatterNull) {
 
   // Copy result of target column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   cudf::test::column_wrapper<TypeParam> destination_column(*destination_table.get_column(0));
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 

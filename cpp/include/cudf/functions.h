@@ -51,7 +51,7 @@ gdf_error gdf_nvtx_range_pop();
  * @note Note that this function assumes the bitmask needs to be allocated to be
  * padded to a multiple of 64 bytes
  * 
- * @note This function assumes that the size of gdf_valid_type is 1 byte
+ * @note This function assumes that the size of cudf::valid_type is 1 byte
  *
  * @param[in] column_size The number of elements
  * @return the number of bytes necessary to allocate for validity bitmask
@@ -59,18 +59,18 @@ gdf_error gdf_nvtx_range_pop();
 cudf::size_type gdf_valid_allocation_size(cudf::size_type column_size);
 
 /**
- * @brief Computes the number of `gdf_valid_type` elements required to provide
+ * @brief Computes the number of `cudf::valid_type` elements required to provide
  * enough bits to represent the specified number of column elements.
  *
- * @note Note that this function assumes that the size of `gdf_valid_type` is 1
+ * @note Note that this function assumes that the size of `cudf::valid_type` is 1
  * byte
  * @note This function is different gdf_valid_allocation_size
  * because gdf_valid_allocation_size returns the number of bytes required to
  * satisfy 64B padding. This function should be used when needing to access the
- * last `gdf_valid_type` element in the validity bitmask.
+ * last `cudf::valid_type` element in the validity bitmask.
  *
  * @param[in] column_size the number of elements
- * @return The minimum number of `gdf_valid_type` elements to provide sufficient
+ * @return The minimum number of `cudf::valid_type` elements to provide sufficient
  * bits to represent elements in a column of size @p column_size
  */
 cudf::size_type gdf_num_bitmask_elements(cudf::size_type column_size);

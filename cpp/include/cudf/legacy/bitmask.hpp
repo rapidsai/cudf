@@ -33,14 +33,14 @@
  * @returns  GDF_SUCCESS upon successful completion
  *
  */
-gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
+gdf_error gdf_count_nonzero_mask(cudf::valid_type const* masks,
                                  cudf::size_type num_rows, cudf::size_type* count);
 
 /** ---------------------------------------------------------------------------*
  * @brief Concatenate the validity bitmasks of multiple columns
  *
  * Accounts for the differences between lengths of columns and their bitmasks
- * (e.g. because gdf_valid_type is larger than one bit).
+ * (e.g. because cudf::valid_type is larger than one bit).
  *
  * @param[out] output_mask The concatenated mask
  * @param[in] output_column_length The total length (in data elements) of the
@@ -53,9 +53,9 @@ gdf_error gdf_count_nonzero_mask(gdf_valid_type const* masks,
            error
  *
  ---------------------------------------------------------------------------**/
-gdf_error gdf_mask_concat(gdf_valid_type* output_mask,
+gdf_error gdf_mask_concat(cudf::valid_type* output_mask,
                           cudf::size_type output_column_length,
-                          gdf_valid_type* masks_to_concat[],
+                          cudf::valid_type* masks_to_concat[],
                           cudf::size_type* column_lengths,
                           cudf::size_type num_columns);
 

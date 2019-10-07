@@ -215,12 +215,12 @@ TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
 template <typename T>
 auto scatter_columns(
     std::vector<std::vector<T>> input_cols_data,
-    std::vector<std::vector<gdf_valid_type>> input_cols_bitmask,
+    std::vector<std::vector<cudf::valid_type>> input_cols_bitmask,
     std::vector<cudf::index_type> scatter_map)
 {
   auto max = *std::max_element(scatter_map.begin(), scatter_map.end());
   std::vector<std::vector<std::vector<T>>> output_cols_data(max+1);
-  std::vector<std::vector<std::vector<gdf_valid_type>>> output_cols_bitmask(max+1);
+  std::vector<std::vector<std::vector<cudf::valid_type>>> output_cols_bitmask(max+1);
   std::vector<std::vector<cudf::size_type>> output_cols_null_count(max+1);
   auto num_cols = input_cols_data.size();
   for (auto g = 0; g <= max; g++)
@@ -229,7 +229,7 @@ auto scatter_columns(
     for (size_t c = 0; c < num_cols; c++)
     {
       std::vector<T> output_col_data(n_output);
-      std::vector<gdf_valid_type> output_col_bitmask(gdf_valid_allocation_size(n_output), ~gdf_valid_type(0));
+      std::vector<cudf::valid_type> output_col_bitmask(gdf_valid_allocation_size(n_output), ~cudf::valid_type(0));
       cudf::index_type j = 0, nullc=0;
       for (size_t r=0; r< scatter_map.size(); r++)
       {
@@ -279,12 +279,12 @@ TEST(ScatterToTablesTest, FunctionalTest) {
 
   // Transfer input columns to host
   std::vector<std::vector<TypeParam>> input_cols_data(table_n_cols);
-  std::vector<std::vector<gdf_valid_type>> input_cols_bitmask(table_n_cols);
+  std::vector<std::vector<cudf::valid_type>> input_cols_bitmask(table_n_cols);
   for(int i=0; i < table_n_cols ; i++) {
     std::tie(input_cols_data[i], input_cols_bitmask[i]) = v_colwrap[i].to_host();
   }
   std::vector<std::vector<std::vector<TypeParam>>> output_cols_data;
-  std::vector<std::vector<std::vector<gdf_valid_type>>> output_cols_bitmask;
+  std::vector<std::vector<std::vector<cudf::valid_type>>> output_cols_bitmask;
   std::vector<std::vector<cudf::size_type>> output_cols_null_count;
   // run for all different ranges of value of scatter_map
   for (auto scatter_case : std::vector<std::pair<size_t, std::function<cudf::index_type(cudf::index_type)>>>{

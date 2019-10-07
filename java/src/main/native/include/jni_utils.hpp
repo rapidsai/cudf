@@ -638,7 +638,7 @@ public:
 
 
   gdf_column_wrapper(cudf::size_type size, gdf_dtype dtype, int null_count, void *data,
-                     gdf_valid_type *valid, void *cat = NULL) {
+                     cudf::valid_type *valid, void *cat = NULL) {
     col = new gdf_column();
     gdf_column_view(col, data, valid, size, dtype);
     col->dtype_info.category = cat;

@@ -149,7 +149,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
     modified_fist_key_col.dtype = key_cols_vect[0]->dtype;
     modified_fist_key_col.null_count = key_cols_vect[0]->null_count;
     modified_fist_key_col.valid =
-        reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get());
+        reinterpret_cast<cudf::valid_type*>(key_cols_bitmask.data().get());
 
     std::vector<gdf_column*> modified_key_cols_vect = key_cols_vect;
     modified_key_cols_vect[0] = &modified_fist_key_col;
@@ -165,7 +165,7 @@ std::pair<cudf::table, gdf_column> gdf_group_by_without_aggregations(
 
     int valid_count;
     CUDF_TRY(gdf_count_nonzero_mask(
-        reinterpret_cast<gdf_valid_type*>(key_cols_bitmask.data().get()), nrows,
+        reinterpret_cast<cudf::valid_type*>(key_cols_bitmask.data().get()), nrows,
         &valid_count));
 
     std::for_each(destination_table.begin(), destination_table.end(),

@@ -43,7 +43,7 @@ TEST_F(DropNullsErrorTest, EmptyInput)
   EXPECT_EQ(output.num_rows(), 0);
   EXPECT_EQ(output.get_column(0)->null_count, 0);
 
-  bad_input.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
+  bad_input.valid = reinterpret_cast<cudf::valid_type*>(0x0badf00d);
   bad_input.null_count = 1;
   bad_input.size = 2; 
 
@@ -53,7 +53,7 @@ TEST_F(DropNullsErrorTest, EmptyInput)
 
   gdf_column bad_keys{};
   gdf_column_view(&bad_input, 0, 0, 0, GDF_INT32);
-  bad_keys.valid = reinterpret_cast<gdf_valid_type*>(0x0badf00d);
+  bad_keys.valid = reinterpret_cast<cudf::valid_type*>(0x0badf00d);
   bad_keys.null_count = 1;
   bad_keys.size = 1;
 

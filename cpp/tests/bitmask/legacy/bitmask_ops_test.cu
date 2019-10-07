@@ -35,7 +35,7 @@ TEST_F(ValidsTest, NoValids) {
   const int num_rows = 100;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x00);
+  std::vector<cudf::valid_type> valid(num_masks, 0x00);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -61,7 +61,7 @@ TEST_F(ValidsTest, NullValids) {
 
 TEST_F(ValidsTest, NullCount) {
   std::vector<int> data(0);
-  std::vector<gdf_valid_type> valid{0x0};
+  std::vector<cudf::valid_type> valid{0x0};
   auto input_gdf_col = create_gdf_column(data, valid);
   gdf_error error_code =
       gdf_count_nonzero_mask(input_gdf_col->valid, 1, nullptr);
@@ -72,7 +72,7 @@ TEST_F(ValidsTest, NullCount) {
 
 TEST_F(ValidsTest, FirstRowValid) {
   std::vector<int> data(4);
-  std::vector<gdf_valid_type> valid{0x1};
+  std::vector<cudf::valid_type> valid{0x1};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -88,7 +88,7 @@ TEST_F(ValidsTest, FirstRowValid) {
 
 TEST_F(ValidsTest, EightRowsValid) {
   std::vector<int> data(8);
-  std::vector<gdf_valid_type> valid{0xFF};
+  std::vector<cudf::valid_type> valid{0xFF};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -104,7 +104,7 @@ TEST_F(ValidsTest, EightRowsValid) {
 
 TEST_F(ValidsTest, EveryOtherBit) {
   std::vector<int> data(8);
-  std::vector<gdf_valid_type> valid{0xAA};
+  std::vector<cudf::valid_type> valid{0xAA};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -120,7 +120,7 @@ TEST_F(ValidsTest, EveryOtherBit) {
 
 TEST_F(ValidsTest, OtherEveryOtherBit) {
   std::vector<int> data(8);
-  std::vector<gdf_valid_type> valid{0x55};
+  std::vector<cudf::valid_type> valid{0x55};
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -138,7 +138,7 @@ TEST_F(ValidsTest, 15rows) {
   const int num_rows = 15;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x01);
+  std::vector<cudf::valid_type> valid(num_masks, 0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -156,7 +156,7 @@ TEST_F(ValidsTest, 5rows) {
   const int num_rows = 5;
   std::vector<int> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x01);
+  std::vector<cudf::valid_type> valid(num_masks, 0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -174,7 +174,7 @@ TEST_F(ValidsTest, 10ValidRows) {
   const int num_rows = 10;
   std::vector<float> data(num_rows);
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0xFF);
+  std::vector<cudf::valid_type> valid(num_masks, 0xFF);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -193,7 +193,7 @@ TEST_F(ValidsTest, MultipleOfEight) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x01);
+  std::vector<cudf::valid_type> valid(num_masks, 0x01);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -212,7 +212,7 @@ TEST_F(ValidsTest, NotMultipleOfEight) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0x80);
+  std::vector<cudf::valid_type> valid(num_masks, 0x80);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -231,7 +231,7 @@ TEST_F(ValidsTest, TenThousandRows) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / static_cast<float>(8));
-  std::vector<gdf_valid_type> valid(num_masks, 0xFF);
+  std::vector<cudf::valid_type> valid(num_masks, 0xFF);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 
@@ -250,7 +250,7 @@ TEST_F(ValidsTest, DISABLED_PerformanceTest) {
   std::vector<int> data(num_rows);
 
   const int num_masks = std::ceil(num_rows / 8);
-  std::vector<gdf_valid_type> valid(num_masks, 0x55);
+  std::vector<cudf::valid_type> valid(num_masks, 0x55);
 
   auto input_gdf_col = create_gdf_column(data, valid);
 

@@ -62,7 +62,7 @@ struct ColumnConcatTest : public testing::Test
     for (auto sz : column_sizes) total_size += sz;
 
     std::vector<ColumnType> output_data(total_size);
-    std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
+    std::vector<cudf::valid_type> output_valid(gdf_valid_allocation_size(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
@@ -76,7 +76,7 @@ struct ColumnConcatTest : public testing::Test
       std::copy(the_columns[i].begin(), the_columns[i].end(), std::back_inserter(ref_data));
       
     cudf::size_type ref_null_count = 0;
-    std::vector<gdf_valid_type> ref_valid(gdf_valid_allocation_size(total_size));
+    std::vector<cudf::valid_type> ref_valid(gdf_valid_allocation_size(total_size));
     for (cudf::size_type index = 0, col = 0, row = 0; index < total_size; ++index)
     {
       if (null_init(row, col)) cudf::util::turn_bit_on(ref_valid.data(), index);
@@ -117,7 +117,7 @@ struct ColumnConcatTest : public testing::Test
     for (auto sz : column_sizes) total_size += sz;
 
     std::vector<ColumnType> output_data(total_size);
-    std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
+    std::vector<cudf::valid_type> output_valid(gdf_valid_allocation_size(total_size));
     
     auto output_gdf_col = create_gdf_column(output_data, output_valid);
     
@@ -183,12 +183,12 @@ TYPED_TEST(ColumnConcatTest, OutputWrongSize){
   for (int i = 0; i < num_columns; ++i) {
     cudf::size_type size = column_sizes[i];
     std::vector<TypeParam> data(size);
-    std::vector<gdf_valid_type> valid(gdf_valid_allocation_size(size));
+    std::vector<cudf::valid_type> valid(gdf_valid_allocation_size(size));
     input_column_pointers[i] = create_gdf_column(data, valid);
     input_columns[i] = input_column_pointers[i].get();
   }
   std::vector<TypeParam> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
+  std::vector<cudf::valid_type> output_valid(gdf_valid_allocation_size(total_size));
   auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
   // test mismatched sizes
@@ -205,7 +205,7 @@ TYPED_TEST(ColumnConcatTest, NullInputData){
       std::accumulate(column_sizes.begin(), column_sizes.end(), 0)};
 
   std::vector<TypeParam> output_data(total_size);
-  std::vector<gdf_valid_type> output_valid(gdf_valid_allocation_size(total_size));
+  std::vector<cudf::valid_type> output_valid(gdf_valid_allocation_size(total_size));
   auto output_gdf_col = create_gdf_column(output_data, output_valid);
 
   std::vector<gdf_column> cols(num_columns);

@@ -274,14 +274,14 @@ auto make_iterator(const ElementType *data, const bit_mask::bit_mask_t *valid = 
 
 /** -------------------------------------------------------------------------*
  * @overload auto make_iterator(const ElementType *data,
- *                     const gdf_valid_type *valid, ResultType identity,
+ *                     const cudf::valid_type *valid, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
- * make iterator from the pointer of null bitmask of column as gdf_valid_type
+ * make iterator from the pointer of null bitmask of column as cudf::valid_type
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<cudf::index_type> >
-auto make_iterator(const ElementType *data, const gdf_valid_type *valid = nullptr,
+auto make_iterator(const ElementType *data, const cudf::valid_type *valid = nullptr,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     return make_iterator<has_nulls, ElementType, ResultType, Iterator_Index>
@@ -343,14 +343,14 @@ auto make_pair_iterator(const ElementType *data, const bit_mask::bit_mask_t *val
 
 /** -------------------------------------------------------------------------*
  * @overload auto make_pair_iterator(const ElementType *data,
- *                     const gdf_valid_type *valid, ResultType identity,
+ *                     const cudf::valid_type *valid, ResultType identity,
  *                     Iterator_Index const it = Iterator_Index(0))
  *
- * make iterator from the pointer of null bitmask of column as gdf_valid_type
+ * make iterator from the pointer of null bitmask of column as cudf::valid_type
  * -------------------------------------------------------------------------**/
 template <bool has_nulls, typename ElementType, typename ResultType = ElementType,
     typename Iterator_Index=thrust::counting_iterator<cudf::index_type> >
-auto make_pair_iterator(const ElementType *data, const gdf_valid_type *valid = nullptr,
+auto make_pair_iterator(const ElementType *data, const cudf::valid_type *valid = nullptr,
     ResultType identity=ResultType{0}, Iterator_Index const it = Iterator_Index(0))
 {
     return make_pair_iterator<has_nulls, ElementType, ResultType, Iterator_Index>

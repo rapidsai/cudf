@@ -84,13 +84,13 @@ TYPED_TEST(GatherTest, MultiColReverseIdentityTest) {
   for(size_t i = 0; i < n_cols; i++){
     // Expected result is the reversal of the source column
     std::vector<TypeParam> expected_data;
-    std::vector<gdf_valid_type> expected_bitmask;
+    std::vector<cudf::valid_type> expected_bitmask;
     std::tie(expected_data, expected_bitmask) = v_src[i].to_host();
     std::reverse(expected_data.begin(), expected_data.end());
 
     // Copy result of destination column to host
     std::vector<TypeParam> result_data;
-    std::vector<gdf_valid_type> result_bitmask;
+    std::vector<cudf::valid_type> result_bitmask;
     std::tie(result_data, result_bitmask) = v_dest[i].to_host();
 
     auto print_all_unequal_pairs { true };
@@ -159,7 +159,7 @@ TYPED_TEST(GatherTest, MultiColNullTest) {
   for(size_t c = 0; c < n_cols; c++){
     // Copy result of destination column to host
     std::vector<TypeParam> result_data;
-    std::vector<gdf_valid_type> result_bitmask;
+    std::vector<cudf::valid_type> result_bitmask;
     std::tie(result_data, result_bitmask) = v_dest[c].to_host();
     
     EXPECT_EQ(v_dest[c].null_count(), destination_size/2) 
@@ -218,7 +218,7 @@ TYPED_TEST(GatherTest, MultiColInPlaceTest) {
   for(size_t c = 0; c < n_cols; c++){
     // Copy result of source column to host
     std::vector<TypeParam> result_data;
-    std::vector<gdf_valid_type> result_bitmask;
+    std::vector<cudf::valid_type> result_bitmask;
     std::tie(result_data, result_bitmask) = v_src[c].to_host();
     
     EXPECT_EQ(v_src[c].null_count(), source_size/2) 
@@ -356,13 +356,13 @@ TYPED_TEST(GatherTest, ReverseIdentityTest) {
 
   // Expected result is the reversal of the source column
   std::vector<TypeParam> expected_data;
-  std::vector<gdf_valid_type> expected_bitmask;
+  std::vector<cudf::valid_type> expected_bitmask;
   std::tie(expected_data, expected_bitmask) = source_column.to_host();
   std::reverse(expected_data.begin(), expected_data.end());
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
   auto print_all_unequal_pairs { true };
@@ -407,7 +407,7 @@ TYPED_TEST(GatherTest, AllNull) {
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
   // All values of result should be null
@@ -454,7 +454,7 @@ TYPED_TEST(GatherTest, EveryOtherNull) {
 
   // Copy result of destination column to host
   std::vector<TypeParam> result_data;
-  std::vector<gdf_valid_type> result_bitmask;
+  std::vector<cudf::valid_type> result_bitmask;
   std::tie(result_data, result_bitmask) = destination_column.to_host();
 
   for (cudf::index_type i = 0; i < destination_size; i++) {

@@ -93,7 +93,7 @@ cudf::size_type helper::num_keys() {
     // in the row bitmask. When `include_nulls == false`, then only rows `[0, n)` 
     // in the sorted order are considered for grouping. 
     CUDF_TRY(gdf_count_nonzero_mask(
-      reinterpret_cast<gdf_valid_type*>(keys_row_bitmask().data().get()),
+      reinterpret_cast<cudf::valid_type*>(keys_row_bitmask().data().get()),
       _keys.num_rows(),
       &_num_keys));
   } else {
@@ -143,7 +143,7 @@ gdf_column const& helper::key_sort_order() {
    // a null value to the end of the sorted order. 
     gdf_column null_row_representative = *(_keys.get_column(0));
     null_row_representative.valid =
-        reinterpret_cast<gdf_valid_type*>(keys_row_bitmask().data().get());
+        reinterpret_cast<cudf::valid_type*>(keys_row_bitmask().data().get());
 
     cudf::table keys{_keys};
     std::vector<gdf_column*> modified_keys(keys.begin(), keys.end());
