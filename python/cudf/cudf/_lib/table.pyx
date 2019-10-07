@@ -3,7 +3,7 @@ from cudf._lib.cudf cimport *
 
 cdef class TableView:
     """
-    A non-owning Table
+    A non-owning view into a set of Columns
     """
     def __cinit__(self, columns):
         cdef gdf_column* c_col
@@ -24,7 +24,7 @@ cdef class TableView:
 
 cdef class Table:
     """
-    Python wrapper around cudf::table
+    A set of Columns. Wraps cudf::table.
     """
     def __cinit__(self):
         self.ptr = new cudf_table()
@@ -33,6 +33,11 @@ cdef class Table:
         pass
 
     def release(self):
+        """
+        Releases ownership of the Columns and returns
+        them as a list. After `release()` is called,
+        the Table is empty.
+        """
         cols = []
         cdef i
         cdef gdf_column* c_col
@@ -60,5 +65,3 @@ cdef class Table:
         for i in range(self.ptr[0].num_columns()):
             free_column(self.ptr[0].get_column(i))
         del self.ptr
-
-
