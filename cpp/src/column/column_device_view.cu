@@ -37,7 +37,8 @@ void column_device_view::destroy() {
   delete this;
 }
 
-// For use with inplace-new to pre-fill memory to be copied to device
+// Place any child objects in host memory (h_ptr) and use the device
+// memory ptr (d_ptr) to set any child object pointers.
 column_device_view::column_device_view( column_view source, ptrdiff_t h_ptr, ptrdiff_t d_ptr )
     : detail::column_device_view_base{source.type(),       source.size(),
                                       source.head(),       source.null_mask(),
@@ -70,7 +71,7 @@ std::unique_ptr<column_device_view, std::function<void(column_device_view*)>> co
   auto deleter = [](column_device_view* v) { v->destroy(); };
   std::unique_ptr<column_device_view, decltype(deleter)> p{
       new column_device_view(source), deleter};
-  
+
   if( num_children > 0 )
   {
     // create device memory for the children

@@ -107,7 +107,8 @@ class orc_column {
    * @brief Constructor that extracts out the string position + length pairs
    * for building dictionaries for string columns
    **/
-  explicit orc_column(size_t id, const gdf_column *col) : id(id), col(col) {
+  explicit orc_column(size_t id, size_t str_id, const gdf_column *col)
+      : id(id), str_id(str_id), col(col) {
     if (col->dtype == GDF_STRING) {
       auto *str = static_cast<NVStrings *>(col->data);
       index.resize(col->size);
@@ -139,7 +140,7 @@ class orc_column {
   }
   auto host_dict_chunk(size_t rowgroup) {
     assert(col->dtype == GDF_STRING || col->dtype == GDF_STRING_CATEGORY);
-    return &dict[rowgroup * dict_stride + id];
+    return &dict[rowgroup * dict_stride + str_id];
   }
   auto device_dict_chunk() const { return d_dict; }
 
@@ -153,7 +154,7 @@ class orc_column {
   }
   auto host_stripe_dict(size_t stripe) const {
     assert(col->dtype == GDF_STRING || col->dtype == GDF_STRING_CATEGORY);
-    return &stripe_dict[stripe * dict_stride + id];
+    return &stripe_dict[stripe * dict_stride + str_id];
   }
   auto device_stripe_dict() const { return d_stripe_dict; }
 
@@ -174,7 +175,9 @@ class orc_column {
   }
 
  private:
+  // Identifier within set of columns and string columns, respectively
   size_t id = 0;
+  size_t str_id = 0;
 
   // cudf-related members
   const gdf_column *col = nullptr;
@@ -210,11 +213,14 @@ void writer::Impl::write(const cudf::table &table) {
   std::vector<orc_column> orc_columns;
   for (auto it = table.begin(); it < table.end(); ++it) {
     const auto col = *it;
+    const auto current_id = orc_columns.size();
+    const auto current_str_id = str_col_ids.size();
+
     num_rows = std::max(num_rows, col->size);
+    orc_columns.emplace_back(current_id, current_str_id, col);
     if (col->dtype == GDF_STRING || col->dtype == GDF_STRING_CATEGORY) {
-      str_col_ids.push_back(orc_columns.size());
+      str_col_ids.push_back(current_id);
     }
-    orc_columns.emplace_back(orc_columns.size(), col);
   }
 
   device_buffer<uint32_t> dict_index(str_col_ids.size() * num_rows);
@@ -453,20 +459,20 @@ void writer::Impl::init_dictionaries(
 
   // Setup per-rowgroup dictionary indexes for each dictionary-aware column
   for (size_t i = 0; i < str_col_ids.size(); ++i) {
-    columns[str_col_ids[i]].set_dict_stride(str_col_ids.size());
-    columns[str_col_ids[i]].attach_dict_chunk(dict.host_ptr(),
-                                              dict.device_ptr());
+    auto& str_column = columns[str_col_ids[i]];
+    str_column.set_dict_stride(str_col_ids.size());
+    str_column.attach_dict_chunk(dict.host_ptr(), dict.device_ptr());
 
     for (size_t g = 0; g < num_rowgroups; g++) {
-      auto *ck = &dict[g * str_col_ids.size() + str_col_ids[i]];
-      ck->valid_map_base = columns[i].orc_valid();
-      ck->column_data_base = columns[i].orc_data();
+      auto *ck = &dict[g * str_col_ids.size() + i];
+      ck->valid_map_base = str_column.orc_valid();
+      ck->column_data_base = str_column.orc_data();
       ck->dict_data = dict_data.data() + i * num_rows + g * row_index_stride_;
       ck->dict_index = dict_index.data() + i * num_rows;  // Indexed by abs row
       ck->start_row = g * row_index_stride_;
       ck->num_rows = std::min<uint32_t>(
           row_index_stride_,
-          std::max<int>(columns[i]->size - ck->start_row, 0));
+          std::max<int>(str_column->size - ck->start_row, 0));
       ck->num_strings = 0;
       ck->string_char_count = 0;
       ck->num_dict_strings = 0;
@@ -493,14 +499,15 @@ void writer::Impl::build_dictionaries(
 
   for (size_t i = 0; i < str_col_ids.size(); i++) {
     size_t direct_cost = 0, dict_cost = 0;
-    columns[str_col_ids[i]].attach_stripe_dict(stripe_dict.host_ptr(),
-                                               stripe_dict.device_ptr());
+    auto &str_column = columns[str_col_ids[i]];
+    str_column.attach_stripe_dict(stripe_dict.host_ptr(),
+                                  stripe_dict.device_ptr());
 
     for (size_t j = 0, g = 0; j < stripe_list.size(); j++) {
       const auto num_chunks = stripe_list[j];
       auto *sd = &stripe_dict[j * str_col_ids.size() + i];
-      sd->column_data_base = columns[i].host_dict_chunk(0)->column_data_base;
-      sd->dict_data = columns[i].host_dict_chunk(g)->dict_data;
+      sd->column_data_base = str_column.host_dict_chunk(0)->column_data_base;
+      sd->dict_data = str_column.host_dict_chunk(g)->dict_data;
       sd->dict_index = dict_index.data() + i * num_rows;  // Indexed by abs row
       sd->column_id = str_col_ids[i];
       sd->start_chunk = (uint32_t)g;
@@ -510,7 +517,6 @@ void writer::Impl::build_dictionaries(
       for (size_t k = g; k < g + num_chunks; k++) {
         const auto &dt = dict[k * str_col_ids.size() + i];
         sd->num_strings += dt.num_dict_strings;
-
         direct_cost += dt.string_char_count;
         dict_cost += dt.dict_char_count + dt.num_dict_strings;
       }

@@ -123,6 +123,9 @@ std::unique_ptr<column> make_strings_column(
     size_type num_strings = offsets.size()-1;
     CUDF_EXPECTS( num_strings > 0, "strings count must be greater than 0");
     CUDF_EXPECTS( null_count < num_strings, "null strings column not yet supported");
+    if( null_count > 0 ) {
+        CUDF_EXPECTS( !valid_mask.empty(), "Cannot have null elements without a null mask." );
+    }
 
     auto execpol = rmm::exec_policy(stream);
     size_type bytes = offsets.back() - offsets[0];
