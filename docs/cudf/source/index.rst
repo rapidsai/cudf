@@ -10,6 +10,7 @@ Welcome to cuDF's documentation!
    dask-cudf.md
    dask-xgb-10min.ipynb
    10min-cudf-cupy.ipynb
+   guide-to-udfs.ipynb
    developer.rst
 
 Indices and tables
