@@ -14,17 +14,20 @@
  * limitations under the License.
  */
 
+#include "orc.h"
+#include "orc_gpu.h"
 #include "orc_reader_impl.hpp"
-#include "timezone.h"
 
+#include "timezone.h"
 #include <io/comp/gpuinflate.h>
-#include <cuda_runtime.h>
 
 #include <algorithm>
 #include <cstring>
 #include <iostream>
 #include <numeric>
 #include <utility>
+
+#include <rmm/device_buffer.hpp>
 
 namespace cudf {
 namespace io {
@@ -448,19 +451,20 @@ size_t reader::Impl::gather_stream_info(
   return dst_offset;
 }
 
-device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
+rmm::device_buffer reader::Impl::decompress_stripe_data(
     const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-    const std::vector<device_buffer<uint8_t>> &stripe_data,
+    const std::vector<rmm::device_buffer> &stripe_data,
     const orc::OrcDecompressor *decompressor,
     std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
     rmm::device_vector<orc::gpu::RowGroup> &row_groups,
     size_t row_index_stride) {
   // Parse the columns' compressed info
   hostdevice_vector<orc::gpu::CompressedStreamInfo> compinfo(0, stream_info.size());
-  for (size_t i = 0; i < compinfo.max_size(); ++i) {
+  for (const auto &info : stream_info) {
     compinfo.insert(orc::gpu::CompressedStreamInfo(
-        stripe_data[stream_info[i].stripe_idx].data() + stream_info[i].dst_pos,
-        stream_info[i].length));
+        static_cast<const uint8_t *>(stripe_data[info.stripe_idx].data()) +
+            info.dst_pos,
+        info.length));
   }
   CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(), compinfo.host_ptr(),
                            compinfo.memory_size(), cudaMemcpyHostToDevice));
@@ -487,7 +491,7 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
       "compressed blocks: %zd\n Codec: %d\n",
       total_decompressed_size, num_compressed_blocks, decompressor->GetKind());
 
-  device_buffer<uint8_t> decomp_data(align_size(total_decompressed_size));
+  rmm::device_buffer decomp_data(align_size(total_decompressed_size));
   rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks + num_uncompressed_blocks);
   rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
 
@@ -496,7 +500,8 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
   uint32_t start_pos = 0;
   uint32_t start_pos_uncomp = (uint32_t)num_compressed_blocks;
   for (size_t i = 0; i < compinfo.size(); ++i) {
-    compinfo[i].uncompressed_data = decomp_data.data() + decomp_offset;
+    auto dst_base = static_cast<uint8_t *>(decomp_data.data());
+    compinfo[i].uncompressed_data = dst_base + decomp_offset;
     compinfo[i].decctl = inflate_in.data().get() + start_pos;
     compinfo[i].decstatus = inflate_out.data().get() + start_pos;
     compinfo[i].copyctl = inflate_in.data().get() + start_pos_uncomp;
@@ -676,7 +681,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
   std::vector<OrcStreamInfo> stream_info;
 
   // Tracker for eventually deallocating compressed and uncompressed data
-  std::vector<device_buffer<uint8_t>> stripe_data;
+  std::vector<rmm::device_buffer> stripe_data;
 
   if (num_rows > 0) {
     const auto num_column_chunks = selected_stripes.size() * num_columns;
@@ -708,11 +713,11 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
       CUDF_EXPECTS(total_data_size > 0, "Expected streams data within stripe");
 
       stripe_data.emplace_back(align_size(total_data_size));
-      uint8_t *d_data = stripe_data.back().data();
+      auto dst_base = static_cast<uint8_t *>(stripe_data.back().data());
 
       // Coalesce consecutive streams into one read
       while (stream_count < stream_info.size()) {
-        const auto d_dst = d_data + stream_info[stream_count].dst_pos;
+        const auto d_dst = dst_base + stream_info[stream_count].dst_pos;
         const auto offset = stream_info[stream_count].offset;
         auto len = stream_info[stream_count].length;
         stream_count++;
@@ -742,7 +747,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
         }
         for (int k = 0; k < orc::gpu::CI_NUM_STREAMS; k++) {
           if (chunk.strm_len[k] > 0) {
-            chunk.streams[k] = d_data + stream_info[chunk.strm_id[k]].dst_pos;
+            chunk.streams[k] = dst_base + stream_info[chunk.strm_id[k]].dst_pos;
           }
         }
       }

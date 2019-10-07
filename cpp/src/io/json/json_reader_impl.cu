@@ -16,41 +16,22 @@
 
 #include "json_reader_impl.hpp"
 
-#include <cuda_runtime.h>
-
 #include <algorithm>
 #include <iostream>
 #include <map>
 #include <memory>
 #include <numeric>
-#include <string>
-#include <vector>
 #include <tuple>
-#include <iterator>
 #include <utility>
+#include <vector>
 
-#include <fcntl.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
-
-#include <thrust/host_vector.h>
-
-#include <cudf/cudf.h>
 #include <utilities/cudf_utils.h>
 #include <utilities/error_utils.hpp>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 
 #include <io/comp/io_uncomp.h>
-#include <rmm/rmm.h>
-#include <rmm/thrust_rmm_allocator.h>
-
 #include <io/cuio_common.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include <io/utilities/wrapper_utils.hpp>
 
 namespace cudf {
 namespace io {
@@ -108,7 +89,7 @@ table reader::Impl::read() {
   CUDF_EXPECTS(!rec_starts_.empty(), "Error enumerating records.\n");
 
   uploadDataToDevice();
-  CUDF_EXPECTS(!d_data_.empty(), "Error uploading input data to the GPU.\n");
+  CUDF_EXPECTS(data_.size() != 0, "Error uploading input data to the GPU.\n");
 
   setColumnNames();
   CUDF_EXPECTS(!column_names_.empty(), "Error determining column names.\n");
@@ -184,13 +165,13 @@ void reader::Impl::setRecordStarts() {
   const auto prefilter_count =
       countAllFromSet(uncomp_data_, uncomp_size_, chars_to_count) + ((byte_range_offset_ == 0) ? 1 : 0);
 
-  rec_starts_ = device_buffer<uint64_t>(prefilter_count);
+  rec_starts_.resize(prefilter_count);
 
-  auto *find_result_ptr = rec_starts_.data();
+  auto *find_result_ptr = rec_starts_.data().get();
   // Manually adding an extra row to account for the first row in the file
   if (byte_range_offset_ == 0) {
     find_result_ptr++;
-    CUDA_TRY(cudaMemsetAsync(rec_starts_.data(), 0ull, sizeof(uint64_t)));
+    CUDA_TRY(cudaMemsetAsync(rec_starts_.data().get(), 0ull, sizeof(uint64_t)));
   }
 
   std::vector<char> chars_to_find{'\n'};
@@ -203,14 +184,12 @@ void reader::Impl::setRecordStarts() {
   // Previous call stores the record pinput_file.typeositions as encountered by all threads
   // Sort the record positions as subsequent processing may require filtering
   // certain rows or other processing on specific records
-  thrust::sort(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + prefilter_count);
+  thrust::sort(rmm::exec_policy()->on(0), rec_starts_.begin(),
+               rec_starts_.end());
 
   auto filtered_count = prefilter_count;
   if (allow_newlines_in_strings_) {
-    std::vector<uint64_t> h_rec_starts(prefilter_count);
-    CUDA_TRY(
-        cudaMemcpy(h_rec_starts.data(), rec_starts_.data(), sizeof(uint64_t) * prefilter_count, cudaMemcpyDefault));
-
+    thrust::host_vector<uint64_t> h_rec_starts = rec_starts_;
     bool quotation = false;
     for (gdf_size_type i = 1; i < prefilter_count; ++i) {
       if (uncomp_data_[h_rec_starts[i] - 1] == '\"') {
@@ -223,8 +202,9 @@ void reader::Impl::setRecordStarts() {
       }
     }
 
-    CUDA_TRY(cudaMemcpy(rec_starts_.data(), h_rec_starts.data(), prefilter_count, cudaMemcpyHostToDevice));
-    thrust::sort(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + prefilter_count);
+    rec_starts_ = h_rec_starts;
+    thrust::sort(rmm::exec_policy()->on(0), rec_starts_.begin(),
+                 rec_starts_.end());
   }
 
   // Exclude the ending newline as it does not precede a record start
@@ -241,9 +221,7 @@ void reader::Impl::uploadDataToDevice() {
 
   // Trim lines that are outside range
   if (byte_range_size_ != 0 || byte_range_offset_ != 0) {
-    std::vector<uint64_t> h_rec_starts(rec_starts_.size());
-    CUDA_TRY(
-        cudaMemcpy(h_rec_starts.data(), rec_starts_.data(), sizeof(uint64_t) * h_rec_starts.size(), cudaMemcpyDefault));
+    thrust::host_vector<uint64_t> h_rec_starts = rec_starts_;
 
     if (byte_range_size_ != 0) {
       auto it = h_rec_starts.end() - 1;
@@ -254,19 +232,21 @@ void reader::Impl::uploadDataToDevice() {
       h_rec_starts.erase(it + 1, h_rec_starts.end());
     }
 
-    // Resize to exclude rows outside of the range; adjust row start positions to account for the data subcopy
+    // Resize to exclude rows outside of the range
+    // Adjust row start positions to account for the data subcopy
     start_offset = h_rec_starts.front();
     rec_starts_.resize(h_rec_starts.size());
-    thrust::transform(rmm::exec_policy()->on(0), rec_starts_.data(), rec_starts_.data() + rec_starts_.size(),
-                      thrust::make_constant_iterator(start_offset), rec_starts_.data(), thrust::minus<uint64_t>());
+    thrust::transform(rmm::exec_policy()->on(0), rec_starts_.begin(),
+                      rec_starts_.end(),
+                      thrust::make_constant_iterator(start_offset),
+                      rec_starts_.begin(), thrust::minus<uint64_t>());
   }
 
   const size_t bytes_to_upload = end_offset - start_offset;
   CUDF_EXPECTS(bytes_to_upload <= uncomp_size_, "Error finding the record within the specified byte range.\n");
 
   // Upload the raw data that is within the rows of interest
-  d_data_ = device_buffer<char>(bytes_to_upload);
-  CUDA_TRY(cudaMemcpy(d_data_.data(), uncomp_data_ + start_offset, bytes_to_upload, cudaMemcpyHostToDevice));
+  data_ = rmm::device_buffer(uncomp_data_ + start_offset, bytes_to_upload);
 }
 
 /**---------------------------------------------------------------------------*
@@ -312,13 +292,17 @@ std::vector<std::string> getNamesFromJsonObject(const std::vector<char> &json_ob
 
 void reader::Impl::setColumnNames() {
   // If file only contains one row, use the file size for the row size
-  uint64_t first_row_len = d_data_.size() / sizeof(char);
+  uint64_t first_row_len = data_.size() / sizeof(char);
   if (rec_starts_.size() > 1) {
     // Set first_row_len to the offset of the second row, if it exists
-    CUDA_TRY(cudaMemcpy(&first_row_len, rec_starts_.data() + 1, sizeof(uint64_t), cudaMemcpyDefault));
+    CUDA_TRY(cudaMemcpyAsync(&first_row_len, rec_starts_.data().get() + 1,
+                             sizeof(uint64_t), cudaMemcpyDeviceToHost));
   }
   std::vector<char> first_row(first_row_len);
-  CUDA_TRY(cudaMemcpy(first_row.data(), d_data_.data(), first_row_len * sizeof(char), cudaMemcpyDefault));
+  CUDA_TRY(cudaMemcpyAsync(first_row.data(), data_.data(),
+                           first_row_len * sizeof(char),
+                           cudaMemcpyDeviceToHost));
+  CUDA_TRY(cudaStreamSynchronize(0));
 
   // Determine the row format between:
   //   JSON array - [val1, val2, ...] and
@@ -555,9 +539,10 @@ void reader::Impl::convertJsonToColumns(gdf_dtype *const dtypes, void *const *gd
 
   const int grid_size = (rec_starts_.size() + block_size - 1) / block_size;
 
-  convertJsonToGdf<<<grid_size, block_size>>>(d_data_.data(), d_data_.size(), rec_starts_.data(), rec_starts_.size(),
-                                              dtypes, opts_, gdf_columns, columns_.size(), valid_fields,
-                                              num_valid_fields);
+  convertJsonToGdf <<< grid_size, block_size >>> (
+      static_cast<char *>(data_.data()), data_.size(),
+      rec_starts_.data().get(), rec_starts_.size(), dtypes, opts_, gdf_columns,
+      columns_.size(), valid_fields, num_valid_fields);
 
   CUDA_TRY(cudaGetLastError());
 }
@@ -696,8 +681,10 @@ void reader::Impl::detectDataTypes(ColumnInfo *column_infos) {
   // Calculate actual block count to use based on records count
   const int grid_size = (rec_starts_.size() + block_size - 1) / block_size;
 
-  detectJsonDataTypes<<<grid_size, block_size>>>(d_data_.data(), d_data_.size(), opts_, column_names_.size(),
-                                                 rec_starts_.data(), rec_starts_.size(), column_infos);
+  detectJsonDataTypes <<< grid_size, block_size >>> (
+      static_cast<char *>(data_.data()), data_.size(), opts_,
+      column_names_.size(), rec_starts_.data().get(), rec_starts_.size(),
+      column_infos);
 
   CUDA_TRY(cudaGetLastError());
 }
