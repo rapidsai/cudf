@@ -149,6 +149,7 @@
 - PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
+- PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
 
 
 # cuDF 0.9.0 (21 Aug 2019)
