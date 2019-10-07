@@ -84,8 +84,11 @@ namespace{ // anonymous
     
     if( ctxt->flag_sort_inplace  && ctxt->flag_sorted )
     {
-      return select_quantile(col_data,
-                             n,
+      auto data_begin = ctxt->flag_null_sort_behavior == GDF_NULL_AS_LARGEST
+                            ? col_data
+                            : col_data + col_in->null_count;
+      return select_quantile(data_begin,
+                             n-col_in->null_count,
                              quant, 
                              interpolation,
                              *ptr_res,
