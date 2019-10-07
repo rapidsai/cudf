@@ -6,6 +6,7 @@
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 
 ## Bug Fixes
 
