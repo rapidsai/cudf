@@ -85,6 +85,7 @@
 - PR #2788 Guide to Python UDFs
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
+- PR #2991 Added strings column functions concatenate and join_strings
 
 ## Bug Fixes
 

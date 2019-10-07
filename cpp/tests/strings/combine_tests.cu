@@ -18,16 +18,14 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/types.hpp>
 
-#include <vector>
-#include <gtest/gtest.h>
-#include <gmock/gmock.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/base_fixture.hpp>
 #include "./utilities.h"
 
 #include <vector>
+#include <gmock/gmock.h>
 
 
-struct CombineTest : public GdfTest {};
+struct CombineTest : public cudf::test::BaseFixture {};
 
 TEST_F(CombineTest, Concatenate)
 {

@@ -27,7 +27,6 @@
 #include <algorithm>
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/transform_scan.h>
-#include <thrust/transform_reduce.h>
 #include <thrust/logical.h>
 
 namespace cudf
