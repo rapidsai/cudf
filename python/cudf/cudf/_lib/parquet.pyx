@@ -63,9 +63,9 @@ cpdef read_parquet(filepath_or_buffer, columns=None, row_group=None,
 
     # Read data into columns
     cdef cudf_table c_out_table
-    cdef int c_skip_rows = skip_rows if skip_rows is not None else 0
-    cdef int c_num_rows = num_rows if num_rows is not None else -1
-    cdef int c_row_group = row_group if row_group is not None else -1
+    cdef gdf_size_type c_skip_rows = skip_rows if skip_rows is not None else 0
+    cdef gdf_size_type c_num_rows = num_rows if num_rows is not None else -1
+    cdef gdf_size_type c_row_group = row_group if row_group is not None else -1
     with nogil:
         if c_skip_rows != 0 or c_num_rows != -1:
             c_out_table = reader.get().read_rows(c_skip_rows, c_num_rows)
