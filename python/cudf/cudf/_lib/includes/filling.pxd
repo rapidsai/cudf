@@ -13,8 +13,8 @@ cdef extern from "cudf/filling.hpp" namespace "cudf" nogil:
     cdef void fill(
         gdf_column * column,
         const gdf_scalar & value,
-        gdf_index_type begin,
-        gdf_index_type end
+        index_type begin,
+        index_type end
     ) except +
 
     cdef cudf_table repeat(
