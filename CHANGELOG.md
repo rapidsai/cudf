@@ -42,6 +42,7 @@
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
 - PR #2814 Add Datetimeindex.weekday
+- PR #2999 Add timestamp conversion support for string categories
 
 ## Improvements
 
