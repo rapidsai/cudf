@@ -122,9 +122,9 @@ unsigned int NVText::porter_stemmer_measure(NVStrings& strs, const char* vowels,
     return 0;
 }
 
-// check individual characters are vowels or consonants
-unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* y_char,
-                               NVText::letter_type ltype, int position, bool* results, bool bdevmem )
+//
+unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                       NVText::letter_type ltype, int index, int* d_indices, bool* results, bool bdevmem )
 {
     unsigned int count = strs.size();
     if( count==0 )
@@ -153,10 +153,15 @@ unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* 
         thrust::make_counting_iterator<unsigned int>(0),
         thrust::make_counting_iterator<unsigned int>(count),
         d_results,
-        [d_strings, pfn, ltype, position] __device__ (unsigned int idx) {
+        [d_strings, pfn, ltype, index, d_indices, count] __device__ (unsigned int idx) {
             custring_view* d_str = d_strings[idx];
             if( !d_str )
                 return false;
+            int position = index;
+            if( d_indices )
+                position = d_indices[idx];
+            // handles positive or negative index
+            position = (position + count) % count;
             if( position >= d_str->chars_count() )
                 return false;
             return pfn.is_consonant(d_str,position) ? ltype==NVText::consonant : ltype==NVText::vowel;
@@ -170,4 +175,19 @@ unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* 
     }
     RMM_FREE(d_vowels,0);
     return 0;
+}                               
+
+
+// check individual characters are vowels or consonants
+unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                               NVText::letter_type ltype, int position, bool* results, bool bdevmem )
+{
+    return ::is_letter(strs,vowels,y_char,ltype,position,nullptr,results,bdevmem);
+}
+
+//
+unsigned int NVText::is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                               NVText::letter_type ltype, int* d_indices, bool* results, bool bdevmem )
+{
+    return ::is_letter(strs,vowels,y_char,ltype,0,d_indices,results,bdevmem);
 }

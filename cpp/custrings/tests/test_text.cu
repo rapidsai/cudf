@@ -1,6 +1,8 @@
 #include <gtest/gtest.h>
 #include <vector>
 #include <thrust/device_vector.h>
+#include <thrust/execution_policy.h>
+#include <thrust/sequence.h>
 
 #include "nvstrings/NVStrings.h"
 #include "nvstrings/NVText.h"
@@ -184,7 +186,7 @@ TEST(TestText, PorterStemmerMeasure)
     NVStrings::destroy(strs);
 }
 
-TEST(TestText, PorterStemmerVowels)
+TEST(TestText, VowelsAndConsonants)
 {
     std::vector<const char*> hstrs{ "abandon", nullptr, "abbey", "cleans",
                                     "trouble", "", "yearly" };
@@ -200,6 +202,21 @@ TEST(TestText, PorterStemmerVowels)
     {
         NVText::is_letter(*strs, nullptr, nullptr, NVText::consonant, 5, results.data().get());
         bool expected[] = { false, false, false, true, true, false, false };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    thrust::device_vector<int> indices(hstrs.size());
+    thrust::sequence( thrust::device, indices.begin(), indices.end() );
+    indices[hstrs.size()-1] = -1; // throw in a negative index too
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::vowel, indices.data().get(), results.data().get());
+        bool expected[] = { true, false, false, true, false, false, false };
+        for( unsigned int idx=0; idx < hstrs.size(); ++idx )
+            EXPECT_EQ(results[idx],expected[idx]);
+    }
+    {
+        NVText::is_letter(*strs, nullptr, nullptr, NVText::consonant, indices.data().get(), results.data().get());
+        bool expected[] = { false, false, true, false, true, false, false };
         for( unsigned int idx=0; idx < hstrs.size(); ++idx )
             EXPECT_EQ(results[idx],expected[idx]);
     }

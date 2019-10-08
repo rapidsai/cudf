@@ -204,8 +204,25 @@ public:
      * @return 0 if successful
      */
     static unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
-                                  letter_type ltype,
-                                  int character_index,
+                                  letter_type ltype, int character_index,
+                                  bool* results, bool devmem=true );
+
+    /**
+     * @brief Returns boolean array indicating whether the specified character index is a consonant or vowel.
+     * False is returned if the index is beyond the end of the string.
+     *
+     * @param strs Words that preprocessed to lowercase with no punctuation and no whitespace.
+     * @param vowels Characters to check as vowels.
+     * @param y_char The 'y' character used for extra vowel checking.
+     * @param ltype Specify letter type
+     * @param indices The 0-based character positions to check in each string.
+     *        Must point to device memory with at least strs.size() elements.
+     * @param results Array of boolena values.
+     * @param devmem True if results in device memory.
+     * @return 0 if successful
+     */
+    static unsigned int is_letter(NVStrings& strs, const char* vowels, const char* y_char,
+                                  letter_type ltype, int* indices,
                                   bool* results, bool devmem=true );
 
      /**
