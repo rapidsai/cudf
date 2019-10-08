@@ -1279,7 +1279,7 @@ class Series(object):
         """Identify missing values in a Series.
         """
         result = Series(
-            libcudf.unaryops.isNULL(self._column),
+            self._column.isnull(),
             name=self.name,
             index=self.index,
         )
@@ -1294,7 +1294,7 @@ class Series(object):
         """Identify non-missing values in a Series.
         """
         result = Series(
-            libcudf.unaryops.isNotNULL(self._column),
+            self._column.notna(),
             name=self.name,
             index=self.index,
         )

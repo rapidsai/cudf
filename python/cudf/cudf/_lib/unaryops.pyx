@@ -163,7 +163,7 @@ def nans_to_nulls(py_col):
     return mask
 
 
-def isNULL(col):
+def is_null(col):
     from cudf.core.column import as_column, Column
 
     if (not isinstance(col, Column)):
@@ -175,7 +175,7 @@ def isNULL(col):
     return gdf_column_to_column(&result)
 
 
-def isNotNULL(col):
+def is_not_null(col):
     from cudf.core.column import as_column, Column
 
     if (not isinstance(col, Column)):

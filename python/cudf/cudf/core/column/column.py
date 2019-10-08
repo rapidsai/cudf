@@ -618,6 +618,26 @@ class Column(object):
         )
         return self.replace(data=Buffer(out), mask=None, null_count=0)
 
+    def isnull(self):
+        """Identify missing values in a Column.
+        """
+        return libcudf.unaryops.is_null(self)
+
+    def isna(self):
+        """Identify missing values in a Column. Alias for isnull.
+        """
+        return self.isnull()
+
+    def notna(self):
+        """Identify non-missing values in a Column.
+        """
+        return libcudf.unaryops.is_not_null(self)
+
+    def notnull(self):
+        """Identify non-missing values in a Column. Alias for notna.
+        """
+        return self.notna()
+
     def to_dense_buffer(self, fillna=None):
         """Get dense (no null values) ``Buffer`` of the data.
 
