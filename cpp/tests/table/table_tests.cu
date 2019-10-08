@@ -14,23 +14,18 @@
  * limitations under the License.
  */
 
-#include <cudf/cudf.h>
-#include <cuda_runtime.h>
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
+
+#include <thrust/sequence.h>
+#include <random>
 
 #include <gmock/gmock.h>
-#include <gtest/gtest.h>
-
-#include <tests/io/io_test_utils.hpp>
-#include <tests/utilities/legacy/cudf_test_fixtures.h>
-
-TempDirTestEnvironment *const temp_env = static_cast<TempDirTestEnvironment *>(
-    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-struct avro_test : GdfTest {};
-
-TEST_F(avro_test, DISABLED_Basic) {
-  std::string data = "\n";
-
-  cudf::avro_read_arg args(cudf::source_info(data.c_str(), data.size()));
-
-  const auto df = cudf::read_avro(args);
-}

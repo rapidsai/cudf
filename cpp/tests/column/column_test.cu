@@ -22,8 +22,8 @@
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/column_utilities.cuh>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list.hpp>
-#include <tests/utilities/typed_tests.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <thrust/sequence.h>
 #include <random>
