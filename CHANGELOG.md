@@ -8,6 +8,7 @@
 - PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 - PR #2995 Move JIT type utilities to legacy directory
+- PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
 
 ## Bug Fixes
 
