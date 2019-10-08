@@ -128,7 +128,7 @@ def apply_boolean_mask(cols, mask):
             )
         )
     free_column(c_mask_col)
-    
+
     result = Table.from_ptr(move(c_result))
     return result.release()
 
