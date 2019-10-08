@@ -206,6 +206,7 @@ Many functions are not meant for public use. Such functions should be placed in 
 
 For functions or objects that will be used across *multiple* translation units (i.e., source files), they should be exposed in an internal header file and placed in the `detail` namespace. Example:
 ```c++
+// some_utilities.hpp
 namespace cudf{
 namespace detail{
 void reusable_helper_function(...);
@@ -216,20 +217,13 @@ void reusable_helper_function(...);
 
 If a function or class will only be used in a *single* translation unit, it should be put in an *anonymous* namespace within source file where it is used. Example:
 ```c++
+// some_file.cpp
 namespace{
 void isolated_helper_function(...);
 } // anonymous namespace
 ```
 
 [**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file) 
-
-
-
-
-
-
-
-
 
 # Error Handling
 
@@ -279,11 +273,15 @@ void trivial_types_only(T t){
 
 # Testing
 
+TBD
+
 
 
 # Porting Guide
 
-For example, porting the API:
+This section provides the high-level steps necessary to port an existing `libcudf` API into a `libcudf++` function. 
+
+For example, given the example function `old_function`:
 ```
 // cpp/include/cudf/utilities/old.hpp
 
