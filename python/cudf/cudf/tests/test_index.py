@@ -233,25 +233,15 @@ def test_index_copy(idx, deep):
     assert type(idx) == type(idx_copy)
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
-        [1, None, 3, None, 5],
-    ],
-)
+@pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
 def test_index_isna(idx):
-    pidx = pd.Index(idx, name='idx')
-    gidx = cudf.core.index.GenericIndex(idx, name='idx')
+    pidx = pd.Index(idx, name="idx")
+    gidx = cudf.core.index.GenericIndex(idx, name="idx")
     assert_eq(gidx.isna().to_array(), pidx.isna())
 
 
-@pytest.mark.parametrize(
-    "idx",
-    [
-        [1, None, 3, None, 5],
-    ],
-)
-def test_index_isna(idx):
-    pidx = pd.Index(idx, name='idx')
-    gidx = cudf.core.index.GenericIndex(idx, name='idx')
+@pytest.mark.parametrize("idx", [[1, None, 3, None, 5]])
+def test_index_notna(idx):
+    pidx = pd.Index(idx, name="idx")
+    gidx = cudf.core.index.GenericIndex(idx, name="idx")
     assert_eq(gidx.notna().to_array(), pidx.notna())

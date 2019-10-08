@@ -297,6 +297,7 @@ class Index(object):
         """Identify missing values in an Index.
         """
         from cudf.core.series import Series
+
         return Series(self.as_column().isnull(), name=self.name)
 
     def isna(self):
@@ -308,6 +309,7 @@ class Index(object):
         """Identify non-missing values in an Index.
         """
         from cudf.core.series import Series
+
         return Series(self.as_column().notna(), name=self.name)
 
     def notnull(self):

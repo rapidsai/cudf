@@ -1279,9 +1279,7 @@ class Series(object):
         """Identify missing values in a Series.
         """
         result = Series(
-            self._column.isnull(),
-            name=self.name,
-            index=self.index,
+            self._column.isnull(), name=self.name, index=self.index
         )
         return result
 
@@ -1293,11 +1291,7 @@ class Series(object):
     def notna(self):
         """Identify non-missing values in a Series.
         """
-        result = Series(
-            self._column.notna(),
-            name=self.name,
-            index=self.index,
-        )
+        result = Series(self._column.notna(), name=self.name, index=self.index)
         return result
 
     def notnull(self):
