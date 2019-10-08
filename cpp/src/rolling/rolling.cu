@@ -39,6 +39,7 @@
 #include "jit/util/type.h"
 
 #include <types.h.jit>
+#include <types.hpp.jit>
 
 namespace
 {
@@ -348,7 +349,7 @@ gdf_column rolling_window(gdf_column const& input,
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
-    { cudf::rolling::jit::code::operation_h , cudf_types_h },
+    { cudf::rolling::jit::code::operation_h , cudf_types_h, cudf_types_hpp },
     { "-std=c++14" }, nullptr
   ).set_kernel_inst(
     "gpu_rolling", // name of the kernel we are launching

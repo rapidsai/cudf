@@ -39,6 +39,7 @@
 #include <cudf/datetime.hpp>
 
 #include <types.h.jit>
+#include <types.hpp.jit>
 
 namespace cudf {
 namespace binops {
@@ -154,7 +155,7 @@ namespace jit {
 
   const std::vector<std::string> compiler_flags { "-std=c++14" };
   const std::vector<std::string> headers_name
-        { "operation.h" , "traits.h", cudf_types_h };
+        { "operation.h" , "traits.h", cudf_types_h, cudf_types_hpp };
   
   std::istream* headers_code(std::string filename, std::iostream& stream) {
       if (filename == "operation.h") {

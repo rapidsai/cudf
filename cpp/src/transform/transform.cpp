@@ -33,6 +33,7 @@
 #include "jit/code/code.h"
 
 #include <types.h.jit>
+#include <types.hpp.jit>
 
 namespace cudf {
 namespace transformation {
@@ -70,7 +71,7 @@ void unary_operation(gdf_column& output, const gdf_column& input,
   // Launch the jitify kernel
   cudf::jit::launcher(
     hash, cuda_source,
-    { cudf_types_h },
+    { cudf_types_h, cudf_types_hpp },
     { "-std=c++14" }, nullptr
   ).set_kernel_inst(
     "kernel", // name of the kernel we are launching
