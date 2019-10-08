@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2980 Added nvtext is_vowel/is_consonant functions
+
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
