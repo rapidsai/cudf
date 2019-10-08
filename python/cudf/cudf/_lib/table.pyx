@@ -1,5 +1,5 @@
 from cudf._lib.cudf cimport *
-
+from libcpp.memory cimport unique_ptr, make_unique
 
 cdef class TableView:
     """
@@ -29,11 +29,16 @@ cdef class Table:
     A set of Columns. Wraps cudf::table.
     """
     def __cinit__(self):
-        self.ptr = new cudf_table()
-        self.own_ptr = True
+        self.ptr = make_unique[cudf_table]()
 
     def __init__(self):
         pass
+
+    @staticmethod
+    cdef from_ptr(unique_ptr[cudf_table]&& ptr):
+        cdef Table tbl = Table.__new__(Table)
+        tbl.ptr = move(ptr)
+        return tbl
 
     def release(self):
         """
@@ -45,34 +50,25 @@ cdef class Table:
         cdef i
         cdef gdf_column* c_col
         for i in range(self.num_columns):
-            c_col = self.ptr[0].get_column(i)
+            c_col = self.ptr.get().get_column(i)
             col = gdf_column_to_column(c_col)
             cols.append(col)
-        self.ptr = new cudf_table()
+        self.ptr = make_unique[cudf_table]()
         return cols
-
-    @staticmethod
-    cdef Table from_ptr(cudf_table* ptr, bool own=True):
-        cdef Table tbl = Table.__new__(Table)
-        tbl.ptr = ptr
-        tbl.own_ptr = own
-        return tbl
 
     @property
     def num_columns(self):
-        if self.ptr is not NULL:
-            return self.ptr[0].num_columns()
+        if self.ptr.get() is not NULL:
+            return self.ptr.get().num_columns()
         return 0
 
     @property
     def num_rows(self):
-        if self.ptr is not NULL:
-            return self.ptr[0].num_rows()
+        if self.ptr.get() is not NULL:
+            return self.ptr.get().num_rows()
         return 0
 
     def __dealloc__(self):
         cdef i
-        if self.own_ptr:
-            for i in range(self.ptr[0].num_columns()):
-                free_column(self.ptr[0].get_column(i))
-            del self.ptr
+        for i in range(self.ptr.get().num_columns()):
+            free_column(self.ptr.get().get_column(i))

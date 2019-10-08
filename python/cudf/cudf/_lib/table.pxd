@@ -1,3 +1,4 @@
+from libcpp.memory cimport unique_ptr
 from cudf._lib.cudf cimport *
 
 cdef class TableView:
@@ -6,9 +7,12 @@ cdef class TableView:
     cdef bool own_ptr
 
 cdef class Table:
-    cdef cudf_table* ptr
+    cdef unique_ptr[cudf_table] ptr
     cdef vector[gdf_column*] c_columns
-    cdef bool own_ptr
 
     @staticmethod
-    cdef Table from_ptr(cudf_table* ptr, bool own=*)
+    cdef from_ptr(unique_ptr[cudf_table]&& ptr)
+
+cdef extern from "<utility>" namespace "std" nogil:
+    cdef cudf_table move(cudf_table)
+    cdef unique_ptr[cudf_table] move(unique_ptr[cudf_table])
