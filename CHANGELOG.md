@@ -153,7 +153,7 @@
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
-- PR #3007 Java tests: disable a test that expected an error from Rmm but now it doesn't get it
+- PR #3007 Java: Disable unit test that frees invalid pointer until RMM issue is fixed
 
 
 # cuDF 0.9.0 (21 Aug 2019)
