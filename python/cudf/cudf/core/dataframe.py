@@ -163,6 +163,8 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+        for col in self._cols:
+            self._cols[col]._index = self._index
 
     @property
     def _constructor(self):
