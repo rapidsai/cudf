@@ -53,6 +53,7 @@ struct table;
 class column;
 class column_view;
 class mutable_column_view;
+class string_view;
 
 namespace exp {
 class table;
