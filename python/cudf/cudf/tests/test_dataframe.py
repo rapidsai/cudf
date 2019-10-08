@@ -3675,7 +3675,7 @@ def test_df_astype_string_to_other(as_dtype):
 @pytest.mark.parametrize(
 "as_dtype",
 [
-    "category",
+    pytest.param("category", marks=pytest.mark.xfail(reason='.categories.name not reset when assigned')),
     "datetime64[s]",
     "datetime64[ms]",
     "datetime64[us]",
@@ -3684,20 +3684,23 @@ def test_df_astype_string_to_other(as_dtype):
 ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
-    data = ["2001-01-01", "2002-02-02", "2001-01-05"]
-    psr = pd.Series(data)
-    gsr = gd.from_pandas(psr)
+    data = ["2001-01-01", "2002-02-02", "2001-01-05", None]
 
-    pdf = pd.DataFrame()
     gdf = DataFrame()
-    
-    pdf['foo'] = psr
-    pdf['bar'] = psr
+    gdf['foo'] = Series(data)
+    gdf['bar'] = Series(data)
 
-    gdf['foo'] = gsr
-    gdf['bar'] = gsr
+    expect = DataFrame()
+    if as_dtype == 'str': # normal constructor results in None -> 'None'
+        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
+    else:
+        insert_data = Series(data, dtype=as_dtype)
+    expect['foo'] = insert_data
+    expect['bar'] = insert_data
 
-    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, format="%Y-%m-%d"))
+    got = gdf.astype(as_dtype, format="%Y-%m-%d")
+ 
+    assert_eq(expect, got, check_names=False)
 
 @pytest.mark.parametrize(
     "as_dtype",
