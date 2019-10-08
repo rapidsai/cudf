@@ -46,16 +46,7 @@ def test_porter_stemmer_measure_value_error():
 def test_vowels():
 
     strs = nvstrings.to_device(
-        [
-            "toys",
-            "syzygy",
-            "buddy",
-            "county",
-            "counties",
-            "private",
-            "",
-            None,
-        ]
+        ["toys", "syzygy", "buddy", "county", "counties", "private", "", None]
     )
     got = nvtext.is_vowel(strs, 2, y_char="y", vowels="aeiou")
     expect = [False, False, False, True, True, True, False, False]
@@ -69,16 +60,7 @@ def test_vowels():
 def test_consonants():
 
     strs = nvstrings.to_device(
-        [
-            "toys",
-            "syzygy",
-            "buddy",
-            "county",
-            "counties",
-            "private",
-            "",
-            None,
-        ]
+        ["toys", "syzygy", "buddy", "county", "counties", "private", "", None]
     )
     got = nvtext.is_consonant(strs, 2, y_char="y", vowels="aeiou")
     expect = [True, True, True, False, False, False, False, False]
