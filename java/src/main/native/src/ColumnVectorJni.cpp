@@ -15,6 +15,7 @@
  */
 #include "cudf/copying.hpp"
 #include "cudf/quantiles.hpp"
+#include "cudf/replace.hpp"
 #include "cudf/rolling.hpp"
 
 #include "jni_utils.hpp"
@@ -217,15 +218,12 @@ NVStrings::timestamp_units translateTimestampUnit(gdf_time_unit time_unit) {
   throw std::logic_error("UNSUPPORTED COLUMN VECTOR TIMESTAMP UNIT");
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimestamp(JNIEnv *env,
-                                                                                    jobject j_object,
-                                                                                    jlong handle,
-                                                                                    jint time_unit,
-                                                                                    jstring formatObj) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimestamp(
+    JNIEnv *env, jobject j_object, jlong handle, jint time_unit, jstring formatObj) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
   if (formatObj == NULL) {
-    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException",
-                  "must pass a timestamp format string", 0)
+    JNI_THROW_NEW(env, "java/lang/IllegalArgumentException", "must pass a timestamp format string",
+                  0)
   }
 
   try {
@@ -249,8 +247,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
           throw std::logic_error("timestamp2long returned with errors");
         }
         if (column->null_count > 0) {
-          CUDA_TRY(cudaMemcpy(output->valid, column->valid,
-                              gdf_num_bitmask_elements(column->size),
+          CUDA_TRY(cudaMemcpy(output->valid, column->valid, gdf_num_bitmask_elements(column->size),
                               cudaMemcpyDeviceToDevice));
           output->null_count = column->null_count;
         }
@@ -265,8 +262,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
   return 0;
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *env,
-                                                                      jobject j_object,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *env, jobject j_object,
                                                                       jlong handle) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
 
@@ -275,8 +271,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *en
 
     if (column->dtype == GDF_STRING) {
       if (column->size == 0) {
-        cudf::jni::gdf_column_wrapper output(0, column->dtype, 0,
-                                             nullptr, nullptr,
+        cudf::jni::gdf_column_wrapper output(0, column->dtype, 0, nullptr, nullptr,
                                              column->dtype_info.category);
         return reinterpret_cast<jlong>(output.release());
       }
@@ -288,16 +283,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *en
 
       if (column->null_count == 0) {
         cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
-                                             res.release(), nullptr,
-                                             column->dtype_info.category);
+                                             res.release(), nullptr, column->dtype_info.category);
         return reinterpret_cast<jlong>(output.release());
       }
 
-      cudf::jni::jni_rmm_unique_ptr<gdf_valid_type>
-        valid_copy = cudf::jni::jni_rmm_alloc<gdf_valid_type>(env,
-                                  gdf_valid_allocation_size(column->size));
-      CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid,
-                          gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToDevice));
+      cudf::jni::jni_rmm_unique_ptr<gdf_valid_type> valid_copy =
+          cudf::jni::jni_rmm_alloc<gdf_valid_type>(env, gdf_valid_allocation_size(column->size));
+      CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid, gdf_num_bitmask_elements(column->size),
+                          cudaMemcpyDeviceToDevice));
       cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
                                            res.release(), valid_copy.release(),
                                            column->dtype_info.category);
@@ -311,8 +304,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_upperStrings(JNIEnv *en
   return 0;
 }
 
-JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lowerStrings(JNIEnv *env,
-                                                                      jobject j_object,
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lowerStrings(JNIEnv *env, jobject j_object,
                                                                       jlong handle) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
 
@@ -321,8 +313,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lowerStrings(JNIEnv *en
 
     if (column->dtype == GDF_STRING) {
       if (column->size == 0) {
-        cudf::jni::gdf_column_wrapper output(0, column->dtype, 0,
-                                             nullptr, nullptr,
+        cudf::jni::gdf_column_wrapper output(0, column->dtype, 0, nullptr, nullptr,
                                              column->dtype_info.category);
         return reinterpret_cast<jlong>(output.release());
       }
@@ -334,16 +325,14 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_lowerStrings(JNIEnv *en
 
       if (column->null_count == 0) {
         cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
-                                             res.release(), nullptr,
-                                             column->dtype_info.category);
+                                             res.release(), nullptr, column->dtype_info.category);
         return reinterpret_cast<jlong>(output.release());
       }
 
-      cudf::jni::jni_rmm_unique_ptr<gdf_valid_type>
-        valid_copy = cudf::jni::jni_rmm_alloc<gdf_valid_type>(env,
-                                  gdf_valid_allocation_size(column->size));
-      CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid,
-                          gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToDevice));
+      cudf::jni::jni_rmm_unique_ptr<gdf_valid_type> valid_copy =
+          cudf::jni::jni_rmm_alloc<gdf_valid_type>(env, gdf_valid_allocation_size(column->size));
+      CUDA_TRY(cudaMemcpy(valid_copy.get(), column->valid, gdf_num_bitmask_elements(column->size),
+                          cudaMemcpyDeviceToDevice));
       cudf::jni::gdf_column_wrapper output(column->size, column->dtype, column->null_count,
                                            res.release(), valid_copy.release(),
                                            column->dtype_info.category);
@@ -435,13 +424,10 @@ JNIEXPORT jobject JNICALL Java_ai_rapids_cudf_ColumnVector_approxQuantile(JNIEnv
   CATCH_STD(env, NULL);
 }
 
-JNIEXPORT jlong JNICALL
-Java_ai_rapids_cudf_ColumnVector_rollingWindow(JNIEnv *env, jclass clazz,
-                                               jlong input_column,
-                                               jint window, jint min_periods,
-                                               jint forward_window, jint agg_type,
-                                               jlong window_col, jlong min_periods_col,
-                                               jlong forward_window_col) {
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_rollingWindow(
+    JNIEnv *env, jclass clazz, jlong input_column, jint window, jint min_periods,
+    jint forward_window, jint agg_type, jlong window_col, jlong min_periods_col,
+    jlong forward_window_col) {
 
   JNI_NULL_CHECK(env, input_column, "native handle is null", 0);
   try {
@@ -451,17 +437,15 @@ Java_ai_rapids_cudf_ColumnVector_rollingWindow(JNIEnv *env, jclass clazz,
     gdf_column *n_forward_window_col = reinterpret_cast<gdf_column *>(forward_window_col);
 
     gdf_column *result = cudf::rolling_window(
-                             *n_input_column,
-                             static_cast<gdf_size_type>(window),
-                             static_cast<gdf_size_type>(min_periods),
-                             static_cast<gdf_size_type>(forward_window),
-                             static_cast<gdf_agg_op>(agg_type),
-                             n_window_col == nullptr ? nullptr :
-                             reinterpret_cast<gdf_size_type *> (n_window_col->data),
-                             n_min_periods_col == nullptr ? nullptr :
-                             reinterpret_cast<gdf_size_type *> (n_min_periods_col->data),
-                             n_forward_window_col == nullptr ? nullptr :
-                             reinterpret_cast<gdf_size_type *> (n_forward_window_col->data));
+        *n_input_column, static_cast<gdf_size_type>(window),
+        static_cast<gdf_size_type>(min_periods), static_cast<gdf_size_type>(forward_window),
+        static_cast<gdf_agg_op>(agg_type),
+        n_window_col == nullptr ? nullptr : reinterpret_cast<gdf_size_type *>(n_window_col->data),
+        n_min_periods_col == nullptr ? nullptr :
+                                       reinterpret_cast<gdf_size_type *>(n_min_periods_col->data),
+        n_forward_window_col == nullptr ?
+            nullptr :
+            reinterpret_cast<gdf_size_type *>(n_forward_window_col->data));
     return reinterpret_cast<jlong>(result);
   }
   CATCH_STD(env, 0);
@@ -499,8 +483,8 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_cudfLengths(JNIEnv *env
                     "NVStrings size and gdf_column size mismatch", 0);
       strings->len(static_cast<int *>(lengths->data));
       if (n_column->null_count > 0) {
-        CUDA_TRY(cudaMemcpy(lengths->valid, n_column->valid, gdf_num_bitmask_elements(n_column->size),
-                            cudaMemcpyDeviceToDevice));
+        CUDA_TRY(cudaMemcpy(lengths->valid, n_column->valid,
+                            gdf_num_bitmask_elements(n_column->size), cudaMemcpyDeviceToDevice));
         lengths->null_count = n_column->null_count;
       }
     }
@@ -565,19 +549,20 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jclas
       }
       // Do the operation on the dictionary
       NVCategory *cats = static_cast<NVCategory *>(n_column->dtype_info.category);
-      unique_nvstr_ptr keys (cats->get_keys(), &NVStrings::destroy);
+      unique_nvstr_ptr keys(cats->get_keys(), &NVStrings::destroy);
       unsigned int dict_size = keys->size();
 
       cudf::jni::gdf_column_wrapper dict_result(dict_size, gdf_dtype::GDF_INT32, false);
       keys->hash(static_cast<unsigned int *>(dict_result->data));
 
       // Now we need to gather the data to a final answer
-      std::vector<gdf_column*> vec {dict_result.get()};
+      std::vector<gdf_column *> vec{dict_result.get()};
       cudf::table tmp_table(vec);
 
-      cudf::jni::gdf_column_wrapper result(n_column->size, gdf_dtype::GDF_INT32, n_column->null_count > 0);
-      gdf_column * result_ptr = result.get();
-      std::vector<gdf_column*> out_vec {result_ptr};
+      cudf::jni::gdf_column_wrapper result(n_column->size, gdf_dtype::GDF_INT32,
+                                           n_column->null_count > 0);
+      gdf_column *result_ptr = result.get();
+      std::vector<gdf_column *> out_vec{result_ptr};
       cudf::table output_table(out_vec);
 
       gather(&tmp_table, static_cast<gdf_index_type *>(n_column->data), &output_table);
@@ -588,10 +573,11 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jclas
       }
       return reinterpret_cast<jlong>(result.release());
     } else { // all others
-      cudf::jni::gdf_column_wrapper result(n_column->size, gdf_dtype::GDF_INT32, n_column->null_count > 0);
+      cudf::jni::gdf_column_wrapper result(n_column->size, gdf_dtype::GDF_INT32,
+                                           n_column->null_count > 0);
       CUDF_TRY(gdf_hash(1, &n_column, hash_func, nullptr, result.get()));
       if (n_column->null_count > 0) {
-        gdf_column * result_ptr = result.get();
+        gdf_column *result_ptr = result.get();
         CUDA_TRY(cudaMemcpy(result_ptr->valid, n_column->valid,
                             gdf_num_bitmask_elements(n_column->size), cudaMemcpyDeviceToDevice));
         result_ptr->null_count = n_column->null_count;
@@ -599,6 +585,34 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jclas
 
       return reinterpret_cast<jlong>(result.release());
     }
+  }
+  CATCH_STD(env, 0);
+}
+
+JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_findAndReplaceAll(JNIEnv *env,
+                                                                           jclass clazz,
+                                                                           jlong old_values_handle,
+                                                                           jlong new_values_handle,
+                                                                           jlong input_handle) {
+  JNI_NULL_CHECK(env, old_values_handle, "values column is null", 0);
+  JNI_NULL_CHECK(env, new_values_handle, "replace column is null", 0);
+  JNI_NULL_CHECK(env, input_handle, "input column is null", 0);
+
+  try {
+    gdf_column *input_column = reinterpret_cast<gdf_column *>(input_handle);
+    gdf_column *old_values_column = reinterpret_cast<gdf_column *>(old_values_handle);
+    gdf_column *new_values_column = reinterpret_cast<gdf_column *>(new_values_handle);
+
+    std::unique_ptr<gdf_column, decltype(free) *> result(
+        static_cast<gdf_column *>(calloc(1, sizeof(gdf_column))), free);
+    if (result.get() == nullptr) {
+      cudf::jni::throw_java_exception(env, "java/lang/OutOfMemoryError",
+                                      "Could not allocate native memory");
+    }
+    *result.get() =
+        cudf::find_and_replace_all(*input_column, *old_values_column, *new_values_column);
+
+    return reinterpret_cast<jlong>(result.release());
   }
   CATCH_STD(env, 0);
 }
