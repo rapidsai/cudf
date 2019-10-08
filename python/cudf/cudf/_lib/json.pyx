@@ -12,19 +12,13 @@ from cudf._lib.includes.json cimport (
     reader as json_reader,
     reader_options as json_reader_options
 )
-from cudf._lib.includes.io cimport FILE_PATH, HOST_BUFFER
-
-from libc.stdlib cimport free
-from libcpp.vector cimport vector
 from libcpp.string cimport string
 from libcpp.memory cimport unique_ptr
 
 from cudf._lib.utils cimport *
 from cudf._lib.utils import *
 
-import nvstrings
-import numpy as np
-import collections.abc
+import collections.abc as abc
 import os
 
 
@@ -36,72 +30,63 @@ def is_file_like(obj):
     return True
 
 
-cpdef read_json(path_or_buf, dtype, lines, compression, byte_range):
+cpdef read_json(filepath_or_buffer, dtype, lines, compression, byte_range):
     """
     Cython function to call into libcudf API, see `read_json`.
+
     See Also
     --------
     cudf.io.json.read_json
     cudf.io.json.to_json
     """
 
-    if dtype is False:
-        raise ValueError("cudf engine does not support dtype==False. "
-                         "Pass True to enable data type inference, or "
-                         "pass a list/dict of types to specify them manually.")
-    arr_dtypes = []
-    if dtype is not True:
-        if isinstance(dtype, collections.abc.Mapping):
-            for col, dt in dtype.items():
-                arr_dtypes.append(str(str(col) + ":" + str(dt)).encode())
-        elif not isinstance(dtype, collections.abc.Iterable):
-            msg = '''dtype must be 'list like' or 'dict' '''
-            raise TypeError(msg)
-        else:
-            for dt in dtype:
-                arr_dtypes.append(dt.encode())
-
     # Setup arguments
     cdef json_reader_options args = json_reader_options()
-
-    if is_file_like(path_or_buf):
-        source = path_or_buf.read()
-        # check if StringIO is used
-        if hasattr(source, 'encode'):
-            args.source = source.encode()
-        else:
-            args.source = source
-    else:
-        # file path or a string
-        args.source = str(path_or_buf).encode()
-
-    if not is_file_like(path_or_buf) and os.path.exists(path_or_buf):
-        if not os.path.isfile(path_or_buf):
-            raise(FileNotFoundError)
-        args.source_type = FILE_PATH
-    else:
-        args.source_type = HOST_BUFFER
-
-    if compression is None:
-        args.compression = b'none'
-    else:
-        args.compression = compression.encode()
-
     args.lines = lines
+    if compression is not None:
+        args.compression = compression.encode()
+    if dtype is False:
+        raise ValueError("False value is unsupported for `dtype`")
+    elif dtype is not True:
+        if isinstance(dtype, abc.Mapping):
+            for k, v in dtype.items():
+                args.dtype.push_back(str(str(k) + ":" + str(v)).encode())
+        elif not isinstance(dtype, abc.Iterable):
+            raise TypeError("`dtype` must be 'list like' or 'dict'")
+        else:
+            for col_dtype in dtype:
+                args.dtype.push_back(str(col_dtype).encode())
 
-    if dtype is not None:
-        args.dtype = arr_dtypes
+    # Create reader from source
+    cdef const unsigned char[::1] buffer = view_of_buffer(filepath_or_buffer)
+    cdef string filepath
+    if buffer is None:
+        if os.path.isfile(filepath_or_buffer):
+            filepath = <string>str(filepath_or_buffer).encode()
+        else:
+            buffer = filepath_or_buffer.encode()
 
     cdef unique_ptr[json_reader] reader
     with nogil:
-        reader = unique_ptr[json_reader](new json_reader(args))
+        if buffer is None:
+            reader = unique_ptr[json_reader](
+                new json_reader(filepath, args)
+            )
+        else:
+            reader = unique_ptr[json_reader](
+                new json_reader(<char *>&buffer[0], buffer.shape[0], args)
+            )
 
+    # Read data into columns
     cdef cudf_table c_out_table
-    if byte_range is None:
-        c_out_table = reader.get().read()
-    else:
-        c_out_table = reader.get().read_byte_range(
-            byte_range[0], byte_range[1]
-        )
+    cdef size_t c_range_offset = byte_range[0] if byte_range is not None else 0
+    cdef size_t c_range_size = byte_range[1] if byte_range is not None else 0
+    with nogil:
+        if c_range_offset !=0 or c_range_size != 0:
+            c_out_table = reader.get().read_byte_range(
+                c_range_offset, c_range_size
+            )
+        else:
+            c_out_table = reader.get().read()
 
     return table_to_dataframe(&c_out_table)

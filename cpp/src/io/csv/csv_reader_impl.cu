@@ -77,43 +77,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 
-/**
- * @brief Returns the compression type based upon the user-specified parameter
- * or from the filename extension.
- *
- * @param[in] compression_arg User-supplied string specifying compression type
- * @param[in] filename Name of the file to infer if necessary
- *
- * @return Compression type
- **/
-std::string infer_compression_type(const std::string &compression_arg,
-                                   const std::string &filename) {
-  std::unordered_map<std::string, std::string> ext_to_compression = {
-      {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}};
-
-  auto str_tolower = [](const auto &begin, const auto &end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  // Attempt to infer from user-supplied argument
-  const auto arg = str_tolower(compression_arg.begin(), compression_arg.end());
-  if (arg != "infer") {
-    return arg;
-  }
-
-  // Attempt to infer from the file extension
-  const auto pos = filename.find_last_of('.');
-  if (pos != std::string::npos) {
-    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
-    if (ext_to_compression.find(ext) != ext_to_compression.end()) {
-      return ext_to_compression.find(ext)->second;
-    }
-  }
-
-  return "none";
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number 
@@ -782,7 +745,9 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
   CUDF_EXPECTS(opts.thousands != opts.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
-  compression_type_ = infer_compression_type(args_.compression, filepath);
+  compression_type_ = infer_compression_type(
+      args_.compression, filepath,
+      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
   // Handle user-defined booleans, whereby field data are substituted with
   // true/false values; for numeric dtypes, they are mapped to 1/0 respectively

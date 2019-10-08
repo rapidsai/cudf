@@ -36,12 +36,18 @@
 #include <io/utilities/parsing_utils.cuh>
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 
+#include <arrow/io/api.h>
+
 using std::string;
 using std::vector;
 
-TempDirTestEnvironment *const temp_env =
-    static_cast<TempDirTestEnvironment *>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-struct gdf_json_test : GdfTest {};
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+
+/**
+ * @brief Base test fixture for JSON reader tests
+ **/
+struct gdf_json_test : public GdfTest {};
 
 TEST_F(gdf_json_test, SquareBrackets) {
   const string json_file("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
@@ -257,4 +263,27 @@ TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
   EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2));
 
   checkStrColumn(df.get_column(2), {"aaa", "bbb"});
+}
+
+TEST_F(gdf_json_test, ArrowFileSource) {
+  const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
+
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "[9]\n[8]\n[7]\n[6]\n[5]\n[4]\n[3]\n[2]\n";
+  outfile.close();
+  ASSERT_TRUE(checkFile(fname));
+
+  std::shared_ptr<arrow::io::ReadableFile> infile;
+  ASSERT_TRUE(arrow::io::ReadableFile::Open(fname, &infile).ok());
+
+  cudf::json_read_arg args(cudf::source_info{infile});
+  args.lines = true;
+  args.dtype = {"int8"};
+  const auto df = cudf::read_json(args);
+
+  EXPECT_EQ(df.num_columns(), static_cast<gdf_size_type>(args.dtype.size()));
+  ASSERT_EQ(df.get_column(0)->dtype, GDF_INT8);
+
+  const auto col = gdf_host_column<int8_t>(df.get_column(0));
+  EXPECT_THAT(col.hostdata(), ::testing::ElementsAre(9, 8, 7, 6, 5, 4, 3, 2));
 }

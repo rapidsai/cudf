@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
