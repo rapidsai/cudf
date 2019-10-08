@@ -1,5 +1,5 @@
 import functools
-from math import ceil, isinf, isnan
+from math import ceil, floor, isinf, isnan
 
 import numpy as np
 import pandas as pd
@@ -38,6 +38,26 @@ def check_equals_float(a, b):
         or ((isinf(a) and a < 0) and (isinf(b) and b < 0))
         or ((isinf(a) and a > 0) and (isinf(b) and b > 0))
     )
+
+
+@njit
+def rint(x):
+    """Round to the nearest integer.
+
+    Returns
+    -------
+    The nearest integer, as a float.
+    """
+    y = floor(x)
+    r = x - y
+
+    if r > 0.5:
+        y += 1.0
+    if r == 0.5:
+        r = y - 2.0 * floor(0.5 * y)
+        if r == 1.0:
+            y += 1.0
+    return y
 
 
 @njit
