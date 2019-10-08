@@ -499,6 +499,12 @@ set(DISPATCHER_TEST_SRC
 ConfigureTest(DISPATCHER_TEST "${DISPATCHER_TEST_SRC}")
 
 ###################################################################################################
+# - strings test --------------------------------------------------------------------------------------
+
+set(STRINGS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/strings/factories_test.cu")
+
+ConfigureTest(STRINGS_TEST "${STRINGS_TEST_SRC}")
 # - bitmask tests ---------------------------------------------------------------------------------
 
 set(BITMASK_TEST_SRC

@@ -52,6 +52,7 @@
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
+- PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
 - PR #2814 Add Datetimeindex.weekday
 
@@ -159,6 +160,7 @@
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 - PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2926 Update rounding algorithm to avoid using fmod
 - PR #2968 Fix Java dependency loading when using NVTX
 - PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
