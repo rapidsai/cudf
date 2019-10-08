@@ -15,7 +15,7 @@
  */
 
 #include <cudf/cudf.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <hash/concurrent_unordered_map.cuh>
 
 #include <gtest/gtest.h>

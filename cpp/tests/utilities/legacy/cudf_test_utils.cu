@@ -17,11 +17,11 @@
  * limitations under the License.
  */
 
-#include "cudf_test_utils.cuh"
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <nvstrings/NVCategory.h>
 #include <nvstrings/NVStrings.h>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <cudf/functions.h>
 
 namespace {

@@ -21,7 +21,7 @@
 #define COLUMN_WRAPPER_H
 
 #include <cudf/cudf.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include <utilities/bit_util.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 

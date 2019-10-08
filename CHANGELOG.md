@@ -2,10 +2,14 @@
 
 ## New Features
 
+- PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
+- PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2995 Move JIT type utilities to legacy directory
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 
 ## Bug Fixes
@@ -54,6 +58,7 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 
 ## Improvements

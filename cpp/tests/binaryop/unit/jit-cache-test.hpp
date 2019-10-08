@@ -16,7 +16,7 @@
 
 #pragma once
 
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <jit/cache.h>
 #include <cudf/cudf.h>
 #include <gtest/gtest.h>

@@ -39,9 +39,10 @@ namespace json {
 
 using string_pair = std::pair<const char *, size_t>;
 
-reader::Impl::Impl(reader_options const &args) : args_(args) {
-  // Check if the passed arguments are supported
-  CUDF_EXPECTS(args_.lines, "Only Json Lines format is currently supported.\n");
+reader::Impl::Impl(std::unique_ptr<datasource> source, std::string filepath,
+                   reader_options const &options)
+    : source_(std::move(source)), filepath_(filepath), args_(options) {
+  CUDF_EXPECTS(args_.lines, "Only JSON Lines format is currently supported.\n");
 
   d_true_trie_ = createSerializedTrie({"true"});
   opts_.trueValuesTrie = d_true_trie_.data().get();
@@ -77,8 +78,8 @@ constexpr size_t calculateMaxRowSize(int num_columns = 0) noexcept {
   }
 }
 
-table reader::Impl::read() {
-  ingestRawInput();
+table reader::Impl::read(size_t range_offset, size_t range_size) {
+  ingestRawInput(range_offset, range_size);
   CUDF_EXPECTS(buffer_ != nullptr, "Ingest failed: input data is null.\n");
 
   decompressInput();
@@ -109,35 +110,31 @@ table reader::Impl::read() {
   return table(out_cols.data(), out_cols.size());
 }
 
-table reader::Impl::read_byte_range(size_t offset, size_t size) {
-  byte_range_offset_ = offset;
-  byte_range_size_ = size;
-  return read();
-}
-
-void reader::Impl::ingestRawInput() {
-  size_t range_size = 0;
-  if (byte_range_size_ != 0) {
-    range_size = byte_range_size_ + calculateMaxRowSize(args_.dtype.size());
+void reader::Impl::ingestRawInput(size_t range_offset, size_t range_size) {
+  size_t map_range_size = 0;
+  if (range_size != 0) {
+    map_range_size = range_size + calculateMaxRowSize(args_.dtype.size());
   }
 
-  source_ = [&] {
-    if (args_.source_type == FILE_PATH) {
-      return datasource::create(args_.source, byte_range_offset_, range_size);
-    } else if (args_.source_type == HOST_BUFFER) {
-      return datasource::create(args_.source.c_str(), args_.source.size());
-    } else {
-      CUDF_FAIL("Invalid input type");
-    }
-  }();
+  // Support delayed opening of the file if using memory mapping datasource
+  // This allows only mapping of a subset of the file if using byte range
+  if (source_ == nullptr) {
+    assert(!filepath_.empty());
+    source_ = datasource::create(filepath_, range_offset, map_range_size);
+  }
 
-  buffer_ = source_->get_buffer(byte_range_offset_,
-                                std::max(byte_range_size_, source_->size()));
+  if (!source_->empty()) {
+    auto data_size = (map_range_size != 0) ? map_range_size : source_->size();
+    buffer_ = source_->get_buffer(range_offset, data_size);
+  }
+
+  byte_range_offset_ = range_offset;
+  byte_range_size_ = range_size;
 }
 
 void reader::Impl::decompressInput() {
-  const auto compression_type = inferCompressionType(
-      args_.compression, args_.source_type, args_.source,
+  const auto compression_type = infer_compression_type(
+      args_.compression, filepath_,
       {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
   if (compression_type == "none") {
     // Do not use the owner vector here to avoid extra copy
@@ -752,13 +749,24 @@ void reader::Impl::setDataTypes() {
   }
 }
 
-reader::reader(reader_options const &args)
-    : impl_(std::make_unique<Impl>(args)) {}
+reader::reader(std::string filepath, reader_options const &options)
+    : impl_(std::make_unique<Impl>(nullptr, filepath, options)) {
+  // Delay actual instantiation of data source until read to allow for
+  // partial memory mapping of file using byte ranges
+}
 
-table reader::read() { return impl_->read(); }
+reader::reader(const char *buffer, size_t length, reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(buffer, length), "",
+                                   options)) {}
+
+reader::reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+               reader_options const &options)
+    : impl_(std::make_unique<Impl>(datasource::create(file), "", options)) {}
+
+table reader::read() { return impl_->read(0, 0); }
 
 table reader::read_byte_range(size_t offset, size_t size) {
-  return impl_->read_byte_range(offset, size);
+  return impl_->read(offset, size);
 }
 
 reader::~reader() = default;

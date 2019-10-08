@@ -53,6 +53,7 @@ private:
   const reader_options args_{};
 
   std::unique_ptr<datasource> source_;
+  std::string filepath_;
   std::shared_ptr<arrow::Buffer> buffer_;
 
   const char *uncomp_data_ = nullptr;
@@ -81,11 +82,14 @@ private:
   /**---------------------------------------------------------------------------*
    * @brief Ingest input JSON file/buffer, without decompression
    *
-   * Sets the input_data_ and input_size_ data members
+   * Sets the source_, byte_range_offset_, and byte_range_size_ data members
+   *
+   * @param[in] range_offset Number of bytes offset from the start
+   * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
    * @return void
    *---------------------------------------------------------------------------**/
-  void ingestRawInput();
+  void ingestRawInput(size_t range_offset, size_t range_size);
 
   /**---------------------------------------------------------------------------*
    * @brief Decompress the input data, if needed
@@ -166,34 +170,24 @@ private:
   void convertJsonToColumns(gdf_dtype *const dtypes, void *const *gdf_columns, gdf_valid_type *const *valid_fields,
                             gdf_size_type *num_valid_fields);
 
-public:
-  /**---------------------------------------------------------------------------*
-   * @brief Constructor; throws if the arguments are not supported
-   *---------------------------------------------------------------------------**/
-  explicit Impl(reader_options const &args);
+ public:
+  /**
+   * @brief Constructor from a dataset source with reader options.
+   **/
+  explicit Impl(std::unique_ptr<datasource> source, std::string filepath,
+                reader_options const &args);
 
-  /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the args_ data member
+  /**
+   * @brief Read an entire set or a subset of data from the source
    *
-   * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
-  table read();
-
-  /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the args_ data member
+   * @param[in] range_offset Number of bytes offset from the start
+   * @param[in] range_size Bytes to read; use `0` for all remaining data
    *
-   * Stores the parsed gdf columns in an internal data member
-   * @param[in] offset ///< Offset of the byte range to read.
-   * @param[in] size   ///< Size of the byte range to read. If set to zero,
-   * all data after byte_range_offset is read.
-   *
-   * @return cudf::table object that contains the array of gdf_columns
-   *---------------------------------------------------------------------------**/
-  table read_byte_range(size_t offset, size_t size);
-
-  auto getArgs() const { return args_; }
+   * @return Object that contains the array of gdf_columns
+   **/
+  table read(size_t range_offset, size_t range_size);
 };
 
-} // namespace json
-} // namespace io
-} // namespace cudf
+}  // namespace json
+}  // namespace io
+}  // namespace cudf
