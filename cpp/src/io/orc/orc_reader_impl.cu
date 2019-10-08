@@ -655,7 +655,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
     // Map each ORC column to its gdf_column
     orc_col_map[col] = columns.size();
 
-    columns.emplace_back(static_cast<gdf_size_type>(num_rows), dtype_info.first,
+    columns.emplace_back(static_cast<gdf_size_type>(selected_stripes.size() > 0 ? num_rows : 0), dtype_info.first,
                          dtype_info.second, md_->ff.GetColumnName(col));
 
     LOG_PRINTF(" %2zd: name=%s size=%zd type=%d data=%lx valid=%lx\n",
@@ -670,7 +670,7 @@ table reader::Impl::read(int skip_rows, int num_rows, int stripe) {
   // Tracker for eventually deallocating compressed and uncompressed data
   std::vector<device_buffer<uint8_t>> stripe_data;
 
-  if (num_rows > 0) {
+  if (num_rows > 0 && selected_stripes.size() > 0) {
     const auto num_column_chunks = selected_stripes.size() * num_columns;
     hostdevice_vector<orc::gpu::ColumnDesc> chunks(num_column_chunks);
     memset(chunks.host_ptr(), 0, chunks.memory_size());
