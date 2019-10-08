@@ -35,7 +35,7 @@ data_type gdf_dtype_to_data_type(gdf_dtype dtype) {
         case GDF_TIMESTAMP: return data_type{TIMESTAMP_MILLISECONDS};
         case GDF_CATEGORY:  return data_type{CATEGORY};
         default:
-          CUDF_FAIL("Unsuported gdf_dtype for converion to data_type.");
+           CUDF_FAIL("Unsupported `gdf_dtype` for conversion to `data_type`.");
     }
 }
 
