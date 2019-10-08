@@ -16,6 +16,8 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/sorting.hpp>
+#include <cudf/strings/copying.hpp>
 #include <cudf/types.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -35,7 +37,7 @@ TEST_F(ArrayTest, Sort)
     auto d_strings = cudf::test::create_strings_column(h_strings);
     auto strings_view = cudf::strings_column_view(d_strings->view());
 
-    auto results = cudf::strings::sort(strings_view, cudf::strings::name);
+    auto results = cudf::strings::detail::sort(strings_view, cudf::strings::detail::name);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);
@@ -62,7 +64,7 @@ TEST_P(ArrayTestParms1, Sublist)
     auto d_strings = cudf::test::create_strings_column(h_strings);
     auto strings_view = cudf::strings_column_view(d_strings->view());
 
-    auto results = cudf::strings::sublist(strings_view,start,end);
+    auto results = cudf::strings::detail::sublist(strings_view,start,end);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);
@@ -88,7 +90,7 @@ TEST_F(ArrayTest, Gather)
     cudf::column_view gather_map_view( cudf::data_type{cudf::INT32}, gather_map.size(),
                                        gather_map.data().get(), nullptr, 0);
 
-    auto results = cudf::strings::gather(strings_view,gather_map_view);
+    auto results = cudf::strings::detail::gather(strings_view,gather_map_view);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);
@@ -114,7 +116,7 @@ TEST_F(ArrayTest, Scatter)
     cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
                                         scatter_map.data().get(), nullptr, 0);
 
-    auto results = cudf::strings::scatter(view1,view2,scatter_map_view);
+    auto results = cudf::strings::detail::scatter(view1,view2,scatter_map_view);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);
@@ -137,7 +139,7 @@ TEST_F(ArrayTest, ScatterScalar)
     cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
                                         scatter_map.data().get(), nullptr, 0);
 
-    auto results = cudf::strings::scatter(view,"---",scatter_map_view);
+    auto results = cudf::strings::detail::scatter(view,"---",scatter_map_view);
     auto results_view = cudf::strings_column_view(results->view());
 
     auto d_expected = cudf::test::create_strings_column(h_expected);

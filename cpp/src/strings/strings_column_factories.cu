@@ -29,7 +29,7 @@
 
 namespace cudf {
 
-// Create a strings-type column from array of pointer/size pairs
+// Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<thrust::pair<const char*,size_type>>& strings,
     cudaStream_t stream,
@@ -99,19 +99,11 @@ std::unique_ptr<column> make_strings_column(
                   memcpy(d_chars + d_offsets[idx], item.first, item.second );
           });
 
-    // build children vector
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(offsets_column));
-    children.emplace_back(std::move(chars_column));
-
-    // no data-ptr with num_strings elements plus children
-    return std::make_unique<column>(
-        data_type{STRING}, num_strings, rmm::device_buffer{0,stream,mr},
-        null_mask, null_count,
-        std::move(children));
+    return make_strings_column(num_strings, offsets_column, chars_column,
+                               null_count, std::move(null_mask), stream, mr);
 }
 
-// Create a strings-type column from array of chars and array of offsets.
+// Create a strings-type column from vector of chars and vector of offsets.
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<char>& strings,
     const rmm::device_vector<size_type>& offsets,
@@ -151,12 +143,23 @@ std::unique_ptr<column> make_strings_column(
     CUDA_TRY(cudaMemcpyAsync( chars_view.data<char>(), strings.data().get(), bytes,
                               cudaMemcpyDeviceToDevice, stream ));
 
-    // build children vector
+    return make_strings_column(num_strings, offsets_column, chars_column,
+                               null_count, std::move(null_mask), stream, mr);
+}
+
+//
+std::unique_ptr<column> make_strings_column(
+    size_type num_strings,
+    std::unique_ptr<column>& offsets_column,
+    std::unique_ptr<column>& chars_column,
+    size_type null_count,
+    rmm::device_buffer&& null_mask,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
+{
     std::vector<std::unique_ptr<column>> children;
     children.emplace_back(std::move(offsets_column));
     children.emplace_back(std::move(chars_column));
-
-    //
     return std::make_unique<column>(
         data_type{STRING}, num_strings, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,

@@ -38,9 +38,9 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
 {
     if( !str )
         return nullptr;
-    size_type length = (size_type)std::strlen(str);
+    auto length = std::strlen(str);
 
-    char* d_str;
+    char* d_str{};
     RMM_TRY(RMM_ALLOC( &d_str, length, stream ));
     CUDA_TRY(cudaMemcpyAsync( d_str, str, length,
                               cudaMemcpyHostToDevice, stream ));
@@ -51,8 +51,8 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
         decltype(deleter)>{ new string_view(d_str,length), deleter};
 }
 
-// build an array of string_view objects from a strings column
-rmm::device_vector<string_view> create_string_array_from_column(
+// build a vector of string_view objects from a strings column
+rmm::device_vector<string_view> create_string_vector_from_column(
     cudf::strings_column_view strings,
     cudaStream_t stream )
 {
@@ -61,8 +61,8 @@ rmm::device_vector<string_view> create_string_array_from_column(
     auto d_column = *strings_column;
 
     auto count = strings.size();
-    rmm::device_vector<string_view> strings_array(count);
-    string_view* d_strings = strings_array.data().get();
+    rmm::device_vector<string_view> strings_vector(count);
+    string_view* d_strings = strings_vector.data().get();
     thrust::for_each_n( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_strings] __device__ (size_type idx) {
@@ -71,11 +71,11 @@ rmm::device_vector<string_view> create_string_array_from_column(
             else
                 d_strings[idx] = d_column.element<string_view>(idx);
         });
-    return strings_array;
+    return strings_vector;
 }
 
-// build a strings offsets column from an array of string_views
-std::unique_ptr<cudf::column> offsets_from_string_array(
+// build a strings offsets column from a vector of string_views
+std::unique_ptr<cudf::column> offsets_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {
@@ -88,20 +88,20 @@ std::unique_ptr<cudf::column> offsets_from_string_array(
                                                stream, mr );
     auto offsets_view = offsets_column->mutable_view();
     auto d_offsets = offsets_view.data<int32_t>();
-    // create new offsets array -- last entry includes the total size
+    // create new offsets vector -- last entry includes the total size
     thrust::transform_inclusive_scan( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0),
         thrust::make_counting_iterator<size_type>(count),
         d_offsets+1,
         [d_strings] __device__ (size_type idx) { return d_strings[idx].size_bytes(); },
         thrust::plus<int32_t>());
-    cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream);
+    CUDA_TRY(cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream));
     //
     return offsets_column;
 }
 
-// build a strings chars column from an array of string_views
-std::unique_ptr<cudf::column> chars_from_string_array(
+// build a strings chars column from an vector of string_views
+std::unique_ptr<cudf::column> chars_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     const int32_t* d_offsets, cudf::size_type null_count,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
