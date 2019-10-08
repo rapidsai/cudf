@@ -159,3 +159,17 @@ def test_reset_index_multiindex():
         .reset_index()
         .merge(ddf_lookup, on="id_1"),
     )
+
+
+@pytest.mark.parametrize("split_out", [1, 2, 3])
+def test_groupby_split_out(split_out):
+    df = pd.DataFrame({"id": [0, 1, 0, 1, 0], "x": [0, 1, 2, 3, 4]})
+    gdf = cudf.from_pandas(df)
+
+    ddf = dd.from_pandas(df, npartitions=3)
+    gddf = dask_cudf.from_cudf(gdf, npartitions=3)
+
+    dd.assert_eq(
+        gddf.groupby("id").x.mean(split_out=split_out),
+        ddf.groupby("id").x.mean(split_out=split_out),
+    )
