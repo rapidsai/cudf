@@ -11,15 +11,17 @@ cdef class TableView:
             c_col = column_view_from_column(col)
             self.c_columns.push_back(c_col)
         self.ptr = new cudf_table(self.c_columns)
+        self.own_ptr = True
 
     def __init__(self, columns):
         pass
 
     def __dealloc__(self):
         cdef i
-        for i in range(self.ptr[0].num_columns()):
-            free_column(self.ptr[0].get_column(i))
-        del self.ptr
+        if self.own_ptr:
+            for i in range(self.ptr[0].num_columns()):
+                free_column(self.ptr[0].get_column(i))
+            del self.ptr
 
 
 cdef class Table:
@@ -28,6 +30,7 @@ cdef class Table:
     """
     def __cinit__(self):
         self.ptr = new cudf_table()
+        self.own_ptr = True
 
     def __init__(self):
         pass
@@ -49,9 +52,10 @@ cdef class Table:
         return cols
 
     @staticmethod
-    cdef Table from_ptr(cudf_table* ptr):
+    cdef Table from_ptr(cudf_table* ptr, bool own=True):
         cdef Table tbl = Table.__new__(Table)
         tbl.ptr = ptr
+        tbl.own_ptr = own
         return tbl
 
     @property
@@ -68,6 +72,7 @@ cdef class Table:
 
     def __dealloc__(self):
         cdef i
-        for i in range(self.ptr[0].num_columns()):
-            free_column(self.ptr[0].get_column(i))
-        del self.ptr
+        if self.own_ptr:
+            for i in range(self.ptr[0].num_columns()):
+                free_column(self.ptr[0].get_column(i))
+            del self.ptr
