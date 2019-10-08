@@ -19,17 +19,17 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <cudf/wrappers/timestamps.hpp>
-#include <tests/utilities/type_list.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
 
 #include <array>
 #include <tuple>
 
 /**---------------------------------------------------------------------------*
- * @filename typed_tests.hpp
- * @brief Provides centralized abstractions for use in Google Test
+ * @filename type_lists.hpp
+ * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
- * These abstractions should be used for consistency across tests as well as
+ * These lists should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  *---------------------------------------------------------------------------**/
 namespace cudf {

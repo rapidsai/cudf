@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 #include <cudf/search.hpp>
 #include <cudf/copying.hpp>

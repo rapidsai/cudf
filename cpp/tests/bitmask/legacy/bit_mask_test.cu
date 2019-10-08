@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <bitmask/legacy/bit_mask.cuh>
 #include <bitmask/legacy/BitMask.cuh>
 
