@@ -23,7 +23,7 @@
 #include <cstdlib>
 #include <algorithm>
 #include <cudf/types.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 constexpr gdf_size_type INPUT_SIZE{107};
 constexpr gdf_size_type BITSET_SIZE{128};

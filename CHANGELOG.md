@@ -5,7 +5,9 @@
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
+- PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2995 Move JIT type utilities to legacy directory
 
 ## Bug Fixes
 
@@ -44,13 +46,16 @@
 - PR #2836 Add nvstrings.code_points method
 - PR #2844 Add Series/DataFrame notnull
 - PR #2858 Add GTest type list utilities
+- PR #2870 Add support for grouping by Series of arbitrary length
 - PR #2719 Series covariance and Pearson correlation
 - PR #2207 Beginning of libcudf overhaul: introduce new column and table types
 - PR #2869 Add `cudf.CategoricalDtype`
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
+- PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2814 Add Datetimeindex.weekday
 
 ## Improvements
 
@@ -90,6 +95,7 @@
 - PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
 - PR #2887 Minor snappy decompression optimization
 - PR #2899 Use new RMM API based on Cython
+- PR #2788 Guide to Python UDFs
 - PR #2919 Change java API to use operators in groupby namespace
 - PR #2909 CSV Reader: Avoid row offsets host vector default init
 
@@ -155,10 +161,12 @@
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 - PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2926 Update rounding algorithm to avoid using fmod
 - PR #2968 Fix Java dependency loading when using NVTX
 - PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
+- PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
 
 
 # cuDF 0.9.0 (21 Aug 2019)
@@ -436,6 +444,7 @@
 - PR #2050 Namespace IO readers and add back free-form `read_xxx` functions
 - PR #2104 Add a functional ``sort=`` keyword argument to groupby
 - PR #2108 Add `find_and_replace` for StringColumn for replacing single values
+- PR #1803 cuDF/CuPy interoperability documentation
 
 ## Bug Fixes
 

@@ -17,7 +17,7 @@
  * limitations under the License.
  */
 
-#include <jit/type.h>
+#include <jit/legacy/type.h>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <string>
 

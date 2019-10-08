@@ -18,7 +18,7 @@
 #include "cudf_gtest.hpp"
 
 /**---------------------------------------------------------------------------*
- * @file type_list.hpp
+ * @file type_list_utilities.hpp
  * @brief Utilities for creating type lists for typed tests in Google Test
  *
  * A "type list" is a list of types passed to a Google Test type-parameterized
