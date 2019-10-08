@@ -8,4 +8,5 @@
 	branch = feature/api_v2_v0.10
 [submodule "thirdparty/libcudacxx"]
 	path = thirdparty/libcudacxx
-	url = https://github.com/ogiroux/freestanding.git
+	url = https://github.com/rapidsai/thirdparty-freestanding.git
+	branch = cudf
