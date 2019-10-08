@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #3011 Added libcudf++ transition guide
+
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
