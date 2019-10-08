@@ -251,8 +251,13 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
 
 /**---------------------------------------------------------------------------*
  * @brief Concatenates all strings in the column into one new string.
- * This provides the Pandas strings equivalent of join().
- * 
+ *
+ * ```
+ * s = ['aa', null, '', 'zz' ]
+ * r = join_strings(s,':','_')
+ * r is ['aa:_::zz']
+ * ```
+ *
  * @param strings Strings for this operation.
  * @param separator Null-terminated CPU string that should appear between each string.
  * @param narep Null-terminated CPU string that should represent any null strings found.

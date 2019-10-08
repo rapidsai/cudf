@@ -201,17 +201,7 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
         std::move(children));
 }
 
-/**---------------------------------------------------------------------------*
- * @brief Concatenates all strings in the column into one new string.
- * This provides the Pandas strings equivalent of join().
- *
- * @param strings Strings for this operation.
- * @param separator Null-terminated CPU string that should appear between each string.
- * @param narep Null-terminated CPU string that should represent any null strings found.
- * @param stream CUDA stream to use kernels in this method.
- * @param mr Resource for allocating device memory.
- * @return New column containing one string.
- *---------------------------------------------------------------------------**/
+//
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                                             const char* separator,
                                             const char* narep,
