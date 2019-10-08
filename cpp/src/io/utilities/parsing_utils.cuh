@@ -33,15 +33,13 @@
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
 
-#include <rmm/device_buffer.hpp>
-
 gdf_size_type countAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys);
 
 template<class T>
 gdf_size_type findAllFromSet(const char *h_data, size_t h_size, const std::vector<char>& keys, uint64_t result_offset,
 	T *positions);
 
-rmm::device_buffer getBracketLevels(
+rmm::device_vector<int16_t> getBracketLevels(
 	thrust::pair<uint64_t,char>* brackets, int count, 
 	const std::string& open_chars, const std::string& close_chars);
 

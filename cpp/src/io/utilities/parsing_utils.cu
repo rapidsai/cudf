@@ -482,9 +482,9 @@ void assignLevels(pos_key_pair* brackets, uint64_t count,
  * @param[in] open_chars string of characters to treat as open brackets
  * @param[in] close_chars string of characters to treat as close brackets
  * 
- * @return rmm::device_buffer Device buffer containing list of levels
+ * @return rmm::device_vector<int16_t> Device vector containing bracket levels
  *---------------------------------------------------------------------------**/
-rmm::device_buffer getBracketLevels(
+rmm::device_vector<int16_t> getBracketLevels(
 	pos_key_pair* brackets, int count,
 	const std::string& open_chars, const std::string& close_chars){
 	// TODO: consider moving sort() out of this function
@@ -509,12 +509,12 @@ rmm::device_buffer getBracketLevels(
 			aggregateSum(aggregated_sums[level_idx - 1], aggregated_sums[level_idx]);
 	}
 
-	rmm::device_buffer d_levels(count * sizeof(int16_t));
+	rmm::device_vector<int16_t> d_levels(count);
 	assignLevels(
 		brackets, count, aggregated_sums,
 		static_cast<char *>(d_open_chars.data()),
 		static_cast<char *>(d_close_chars.data()),
-		open_chars.size(), static_cast<int16_t *>(d_levels.data()));
+		open_chars.size(), d_levels.data().get());
 
 	return std::move(d_levels);
 }

@@ -90,14 +90,12 @@ TEST_F(gdf_json_test, BracketsLevels) {
   findAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char),
                  {'[', ']', '{', '}'}, 0,
                  static_cast<pos_key_pair *>(d_pos.data()));
-  const auto d_lvls =
+
+  thrust::host_vector<int16_t> h_lvls =
       getBracketLevels(static_cast<pos_key_pair *>(d_pos.data()), count,
                        std::string("[{"), std::string("]}"));
 
-  std::vector<int16_t> h_lvls(count);
-  cudaMemcpy(h_lvls.data(), d_lvls.data(), count * sizeof(int16_t),
-             cudaMemcpyDefault);
-  EXPECT_THAT(h_lvls, ::testing::ContainerEq(expected));
+  EXPECT_THAT(h_lvls, ::testing::ElementsAreArray(expected));
 }
 
 TEST_F(gdf_json_test, BasicJsonLines) {
