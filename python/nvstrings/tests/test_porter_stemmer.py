@@ -41,3 +41,49 @@ def test_porter_stemmer_measure_value_error():
     # Raise Value Error is not a instance of nvstrings class
     with pytest.raises(ValueError):
         nvtext.porter_stemmer_measure(strs)
+
+
+def test_vowels():
+
+    strs = nvstrings.to_device(
+        [
+            "toys",
+            "syzygy",
+            "buddy",
+            "county",
+            "counties",
+            "private",
+            "",
+            None,
+        ]
+    )
+    got = nvtext.is_vowel(strs, 2, y_char="y", vowels="aeiou")
+    expect = [False, False, False, True, True, True, False, False]
+    assert got == expect
+
+    got = nvtext.is_vowel(strs, 5)
+    expect = [False, True, False, True, True, False, False, False]
+    assert got == expect
+
+
+def test_consonants():
+
+    strs = nvstrings.to_device(
+        [
+            "toys",
+            "syzygy",
+            "buddy",
+            "county",
+            "counties",
+            "private",
+            "",
+            None,
+        ]
+    )
+    got = nvtext.is_consonant(strs, 2, y_char="y", vowels="aeiou")
+    expect = [True, True, True, False, False, False, False, False]
+    assert got == expect
+
+    got = nvtext.is_consonant(strs, 5)
+    expect = [False, False, False, False, False, True, False, False]
+    assert got == expect
