@@ -2634,6 +2634,7 @@ def test_ndim():
         np.random.normal(-100, 100, 1000),
         np.random.randint(-50, 50, 1000),
         np.zeros(100),
+        np.repeat([-0.6459412758761901], 100),
         np.repeat(np.nan, 100),
         np.array([1.123, 2.343, np.nan, 0.0]),
     ],
@@ -2652,6 +2653,13 @@ def test_ndim():
         8,
         9,
         10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
         pytest.param(
             -1,
             marks=[
@@ -2665,9 +2673,8 @@ def test_round(arr, decimal):
     ser = Series(arr)
     result = ser.round(decimal)
     expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+
+    assert_eq(result, expected)
 
     # with nulls, maintaining existing null mask
     arr = arr.astype("float64")  # for pandas nulls
@@ -2678,9 +2685,8 @@ def test_round(arr, decimal):
     ser = Series(arr)
     result = ser.round(decimal)
     expected = pser.round(decimal)
-    np.testing.assert_array_almost_equal(
-        result.to_pandas(), expected, decimal=10
-    )
+
+    assert_eq(result, expected)
     np.array_equal(ser.nullmask.to_array(), result.nullmask.to_array())
 
 

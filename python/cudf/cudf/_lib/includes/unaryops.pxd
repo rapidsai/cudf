@@ -29,6 +29,11 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_column *output
     ) except +
 
+    cdef gdf_error gdf_extract_datetime_weekday(
+        gdf_column *input,
+        gdf_column *output
+    ) except +
+
     cdef gdf_error gdf_extract_datetime_hour(
         gdf_column *input,
         gdf_column *output

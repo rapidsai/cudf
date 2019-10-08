@@ -15,7 +15,7 @@
  */
 
 #include <cudf/utilities/traits.hpp>
-#include <tests/utilities/typed_tests.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>

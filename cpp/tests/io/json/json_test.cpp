@@ -34,7 +34,7 @@
 
 #include <tests/io/io_test_utils.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 using std::string;
 using std::vector;

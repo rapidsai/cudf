@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <cudf/cudf.h>
 #include <thrust/device_vector.h>

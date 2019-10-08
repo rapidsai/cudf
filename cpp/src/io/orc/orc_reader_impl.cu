@@ -473,9 +473,11 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
 
   // Count the exact number of compressed blocks
   size_t num_compressed_blocks = 0;
+  size_t num_uncompressed_blocks = 0;
   size_t total_decompressed_size = 0;
   for (size_t i = 0; i < compinfo.size(); ++i) {
     num_compressed_blocks += compinfo[i].num_compressed_blocks;
+    num_uncompressed_blocks += compinfo[i].num_uncompressed_blocks;
     total_decompressed_size += compinfo[i].max_uncompressed_size;
   }
   CUDF_EXPECTS(total_decompressed_size > 0, "No decompressible data found");
@@ -486,21 +488,23 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
       total_decompressed_size, num_compressed_blocks, decompressor->GetKind());
 
   device_buffer<uint8_t> decomp_data(align_size(total_decompressed_size));
-  rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks);
+  rmm::device_vector<gpu_inflate_input_s> inflate_in(num_compressed_blocks + num_uncompressed_blocks);
   rmm::device_vector<gpu_inflate_status_s> inflate_out(num_compressed_blocks);
 
   // Parse again to populate the decompression input/output buffers
   size_t decomp_offset = 0;
   uint32_t start_pos = 0;
+  uint32_t start_pos_uncomp = (uint32_t)num_compressed_blocks;
   for (size_t i = 0; i < compinfo.size(); ++i) {
     compinfo[i].uncompressed_data = decomp_data.data() + decomp_offset;
     compinfo[i].decctl = inflate_in.data().get() + start_pos;
     compinfo[i].decstatus = inflate_out.data().get() + start_pos;
-    compinfo[i].max_compressed_blocks = compinfo[i].num_compressed_blocks;
+    compinfo[i].copyctl = inflate_in.data().get() + start_pos_uncomp;
 
     stream_info[i].dst_pos = decomp_offset;
     decomp_offset += compinfo[i].max_uncompressed_size;
     start_pos += compinfo[i].num_compressed_blocks;
+    start_pos_uncomp += compinfo[i].num_uncompressed_blocks;
   }
   CUDA_TRY(cudaMemcpyAsync(compinfo.device_ptr(), compinfo.host_ptr(),
                            compinfo.memory_size(), cudaMemcpyHostToDevice));
@@ -523,6 +527,10 @@ device_buffer<uint8_t> reader::Impl::decompress_stripe_data(
         CUDF_EXPECTS(false, "Unexpected decompression dispatch");
         break;
     }
+  }
+  if (num_uncompressed_blocks > 0) {
+    CUDA_TRY(gpu_copy_uncompressed_blocks(inflate_in.data().get() + num_compressed_blocks,
+                                          num_uncompressed_blocks));
   }
   CUDA_TRY(PostDecompressionReassemble(compinfo.device_ptr(), compinfo.size()));
 
