@@ -27,7 +27,7 @@
  * and concrete C++ types.
  *---------------------------------------------------------------------------**/
 namespace cudf {
-namespace exp {
+namespace experimental {
 /**---------------------------------------------------------------------------*
  * @brief Maps a C++ type to it's corresponding `cudf::type_id`
  *
@@ -235,5 +235,5 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
   }
 }
 
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

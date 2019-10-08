@@ -37,7 +37,7 @@ struct size_of_helper {
 
 std::size_t size_of(data_type element_type) {
   CUDF_EXPECTS(is_fixed_width(element_type), "Invalid element type.");
-  return cudf::exp::type_dispatcher(element_type, size_of_helper{});
+  return cudf::experimental::type_dispatcher(element_type, size_of_helper{});
 }
 
 // Allocate storage for a specified number of numeric elements

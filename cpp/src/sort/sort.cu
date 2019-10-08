@@ -26,7 +26,7 @@
 #include <thrust/sequence.h>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 namespace detail {
 
@@ -86,5 +86,5 @@ std::unique_ptr<column> sorted_order(table_view input,
                                      rmm::mr::device_memory_resource* mr) {
   return detail::sorted_order(input, column_order, null_precedence, 0, mr);
 }
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf
