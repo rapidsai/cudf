@@ -11,17 +11,12 @@ cdef class TableView:
             c_col = column_view_from_column(col)
             self.c_columns.push_back(c_col)
         self.ptr = new cudf_table(self.c_columns)
-        self.own_ptr = True
 
     def __init__(self, columns):
         pass
 
     def __dealloc__(self):
-        cdef i
-        if self.own_ptr:
-            for i in range(self.ptr[0].num_columns()):
-                free_column(self.ptr[0].get_column(i))
-            del self.ptr
+        del self.ptr
 
 
 cdef class Table:

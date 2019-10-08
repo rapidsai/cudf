@@ -4,7 +4,6 @@ from cudf._lib.cudf cimport *
 cdef class TableView:
     cdef cudf_table* ptr
     cdef vector[gdf_column*] c_columns
-    cdef bool own_ptr
 
 cdef class Table:
     cdef unique_ptr[cudf_table] ptr
