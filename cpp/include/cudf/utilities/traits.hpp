@@ -110,6 +110,13 @@ constexpr inline bool is_timestamp() {
     std::is_same<cudf::timestamp_ns, T>::value );
 }
 
+struct is_timestamp_impl {
+  template <typename T>
+  bool operator()() {
+    return is_timestamp<T>();
+  }
+};
+
 /**---------------------------------------------------------------------------*
  * @brief Indicates whether `type` is a timestamp `data_type`.
  *
@@ -120,8 +127,7 @@ constexpr inline bool is_timestamp() {
  * @return false `type` is not a timestamp
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_timestamp(data_type type) {
-  return cudf::exp::type_dispatcher(
-      type, [](auto dummy) { return is_timestamp<decltype(dummy)>(); }, 0);
+  return cudf::exp::type_dispatcher(type, is_timestamp_impl{});
 }
 
 /**---------------------------------------------------------------------------*
