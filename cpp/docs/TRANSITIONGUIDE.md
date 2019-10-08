@@ -1,114 +1,166 @@
-## Overview
+# libcudf++ C++ Transition Guide
+This document serves as a guide for the set of new features introduced revolving around `cudf::column` (colloquially known as `libucdf++`) as well as how to transition from from "old" `gdf_column` based APIs to the new types. 
 
-As libcudf transitions from a C API to C++ API, this is a list of guidance on what should be done for all new PRs against libcudf. 
+This guide assumes familiarity with the concepts and types introduced in the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing) 
 
-## File Structure
+# Directory Structure and File Naming
 
-In lieu of the monolithic `functions.h`, external function APIs should be grouped based on functionality into an appropriately 
-titled header file `cudf/cpp/include/`. 
-For example, `cudf/cpp/include/copying.hpp` contains the APIs for functions related to copying from one column to another. Note the `.hpp` file extension used to indicate a C++ header file. 
+External APIs should be grouped based on functionality into an appropriately titled header file  in `cudf/cpp/include/cudf/`. For example,  `cudf/cpp/include/cudf/copying.hpp` contains the APIs for functions related to copying from one column to another. Note the  `.hpp`  file extension used to indicate a C++ header file. These header files should use the `#pragma once` include guard. 
 
-As existing functions are ported from a C to C++ API, new header files will need to be added to `cudf/cpp/include/`. For naming of these headers, it should be consistent with the name of the folder that contains the implementation of the API. For example, the implementation of the APIs found in `cudf/cpp/include/copying.hpp` are located in `cudf/src/copying`. 
+The naming of these headers should be consistent with the name of the folder that contains the source files that implement  the API. For example, the implementation of the APIs found in  `cudf/cpp/include/cudf/copying.hpp`  are located in  `cudf/src/copying`. Likewise, the unit tests for the APIs reside in `cudf/tests/copying/`. 
+
+ ## Legacy Directories
+
+When an old API is replaced by a new `libcudf++` API, it should be moved into a `legacy/` directory within it's current directory.
+
+For example, when porting the implementation of `gather` in `cudf/src/copying/gather.cu`, the existing implementation should be moved to `cudf/src/copying/legacy/gather.cu`. Likewise, the header `cudf/cpp/include/cudf/copying.hpp` should be moved to `cudf/cpp/include/cudf/legacy/copying.hpp`. 
 
 
-# API Design
+# libcudf++ Data Structures
 
-## Namespaces
+## Views and Ownership
 
-All external APIs should be placed in the `cudf` namespace. For example:
+Resource ownership is an essential concept in `libcudf++`. In short, an "owning" object owns some resource (such as device memory). It acquires that resource during construction and releases the resource in destruction (RAII). A "non-owning" object does not own resources. Any class in `libcudf++` with the `*_view` suffix is non-owning. For more detail see the [`libcudf++` presentation.](https://docs.google.com/presentation/d/1zKzAtc1AWFKfMhiUlV5yRZxSiPLwsObxMlWRWz_f5hA/edit?usp=sharing) 
 
-```
-namespace cudf{
 
-  void some_function(...);
+## `rmm::device_memory_resource`
 
-} // namespace cudf
+Abstract interface class based on [`std::pmr::memory_resource`](https://en.cppreference.com/w/cpp/memory/memory_resource) for allocating device memory. 
 
-```
+Provides `allocate` and `deallocate` member functions for device memory allocation. Creating a new class that derives from `rmm::device_memory_resource` and overriding the `do_allocate` and `do_deallocate` pure-virtual functions allows customization of device memory allocation. 
 
-### `detail` Namespace
+### Default Memory Resources
 
-Utility functions that are for use only in libcudf internals, but can be reused in many places should be placed in the `cudf::detail` namespace. For example:
+RMM provides a "default" memory resource that can be accessed and updated via the `rmm::mr::get_default_resource()` and `rmm::mr::set_default_resource(...)` functions, respectively. All memory resource arguments should be defaulted to use the return value of `rmm::mr::get_default_resource()`. 
 
-```
-namespace cudf{
-namespace detail{
-void reusable_utility_function(...);
-} // namespace detail
-} // namespace cudf
-```
 
-### Anonymous Namespaces
+## `rmm::device_buffer`
 
-All functions specific to a translation unit should be placed in an anonymous namespace.
+The fundamental device memory owning class in `libcudf++`. 
+
+Allocates non-typed, uninitialized device memory using a `device_memory_resource`. If no resource is explicitly provided, uses `rmm::mr::get_default_resource()`. 
+
+Movable and copyable. A copy performs a deep copy of the `device_buffer`'s device memory, whereas a move moves ownership of the device memory from one `device_buffer` to another.
 
 Example:
-```
-namespace {
-void some_specific_helper_function(...);
-} // namespace
-```
+```c++
+rmm::device_buffer buff(100); // Allocates at least 100 bytes of uninitialized device memory
+void * raw_data = buff.data(); // Raw pointer to underlying device memory
 
-## Data Structures
+rmm::device_buffer copy(buff); // Deep copies `buff` into `copy`
+rmm::device_buffer moved_to(std::move(buff)); // Moves contents of `buff` into `moved_to`
 
-### `cudf::column`
-
-A replacement abstraction for `gdf_column` is actively being designed: https://github.com/rapidsai/cudf/issues/1443
-
-Until that design is complete, continue to use `gdf_column`s as usual. 
-
-### `cudf::table`
-
-It is common for an API to work on a set of `N` `gdf_column`s of equal size which required an API to do something like the following: 
-
-```
-void some_multi_col_function(gdf_column * cols[], int num_cols);
+custom_memory_resource mr;
+rmm::device_buffer custom_buff(100, &mr); // Allocates 100 bytes from the custom memory resource
 ```
 
-A simple wrapper class called `cudf::table` is defined in `cudf/cpp/src/table/table.hpp` to provide a convenient abstraction for the above use case. This class should be used any time a function is operating on a collection of `gdf_column`s of equal size.
+## `cudf::column`
 
-For example, the above becomes:
-```
-void some_multi_col_function(cudf::table & table);
+Contains `device_buffer`s which own the device memory for the elements of a column and it's optional null indicator bitmask. 
+
+Implicitly convertible to `column_view` and `mutable_column_view`. 
+
+Movable and copyable. A copy performs a deep copy of the column's contents, whereas a move moves the contents from one column to another.
+
+Example:
+```c++
+cudf::column col{...};
+
+cudf::column copy{col}; // Copies the contents of `col`
+cudf::column const moved_to{std::move(col)}; // Moves contents from `col`
+
+column_view v = moved_to; // Implicit conversion to non-owning column_view
+// mutable_column_view m = moved_to; // Cannot create mutable view to const column
 ```
 
+### `cudf::column_view`
+
+An immutable, non-owning view of device memory as a column. 
+
+Trivially-copyable and should be passed by value. 
+
+### `cudf::mutable_column_view`
+
+A *mutable*, non-owning view of device memory as a column. 
+
+Trivially-copyable and should be passed by value. 
+
+## `cudf::table`
+
+Owning class for a set of `cudf::column`s all with equal number of elements. This is the C++ corollary to a DataFrame. 
+
+### `cudf::table_view`
+
+An *immutable*, non-owning view of a table. 
+
+### `cudf::mutable_table_view`
+
+A *mutable*, non-owning view of a table. 
+
+# libcudf++ API
+### Old libcudf API
+```c++
+/**
+* @brief This is an example of an old API.
+*
+* @param input Immutable input column
+* @param in_out Mutable column modified in place
+* @param input_table Immutable input table
+* @param in_out_table Mutable table modified in place
+* @return gdf_column Newly allocated output column
+**/
+
+gdf_column  some_function(gdf_column const& input, 
+                          gdf_column* in_out,
+                          cudf::table const& input_table,
+                          cudf::table* in_out_table);
+```
+
+### New libcudf API
+```c++
+/**
+ * @brief This is an example of a new API.
+ *
+ * @param input Immutable view of input column
+ * @param in_out Mutable view of column modified in place
+ * @param input_table Immutable view of input table
+ * @param in_out_table Mutable view of table modified in place
+ * @param mr Memory resource used to allocate device memory for the returned
+ * output column
+ * @return std::unique_ptr<column> Newly allocated output column
+ **/
+std::unique_ptr<column> some_function(cudf::column_view input, 
+                                      cudf::mutable_column_view in_out, 
+                                      cudf::table_view input_table,
+                                      cudf::mutable_table_view in_out_table,
+                                      device_memory_resource* mr = rmm::get_default_resource());
+```
 ## Input/Output Style
 
+All `*_view` objects are trivially copyable and are intended to be passed by value.
+
 The preferred style for how inputs are passed in and outputs are returned is the following:
+-   Inputs
+	- Columns:
+		- `column_view`
+	- Tables:
+		- `table_view`
+-   In/Outs  
+	- Columns:
+		- `mutable_column_view`
+	- Tables:
+		- `mutable_table_view`
+-   Outputs 
+	- Outputs should be *returned*, i.e., no output parameters
+	- Columns:
+		- `std::unique_ptr<column>`
+	- Tables:
+		- `std::unique_ptr<table>`
 
-* Inputs 
-   * Expensive to copy types --- pass by constant reference
-   * Inexpensive to copy types --- pass by value
-* In/Outs - Pass via pointer
-* Outputs - Returned by value
-   * Returning outputs by value will not incur a copy in most cases. For more details, see: https://stackoverflow.com/questions/12953127/what-are-copy-elision-and-return-value-optimization
-   * **NOTE:** This may mean returning a `gdf_column` whose device memory was allocated within a `libcudf` function and it is the caller's responsibility to free the underlying memory. This is a temporary headache until a `cudf::column` abstraction is designed to allieviate it. 
-
-For example:
-
-```
-namespace cudf{
-column some_function( cudf::table const& input_table, cudf::table * input_output_table, int size){
-  column col;
-  // Do stuff to create output col
-  ...
-  // Return the result column of this function
-  return col;
-}
-}
-```
-
-And the usage would be:
-```
-cudf::table input;
-cudf::table in_out;
-int size;
-column output = cudf::some_function(input, &in_out, size);
-```
 
 ### Multiple Return Values
 
-Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be done in C++ (including creating a `struct` for the output). One convenient way to do this is using `std::tie` and `std::make_pair`.
+Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be done in C++ (including creating a  `struct`  for the output). One convenient way to do this is using  `std::tie`  and  `std::make_pair`.
 
 ```
 auto return_two_outputs(void){
@@ -125,84 +177,201 @@ auto return_two_outputs(void){
 cudf::table out0;
 cudf::table out1;
 std::tie(out0, out1) = cudf::return_two_outputs();
-```
-
-Note: `std::tuple` *could* be used if not for the fact that Cython does not support `std::tuple`. Therefore, libcudf APIs must use `std::pair`, and are therefore limited to return only two objects of different types. Multiple objects of the same type may be returned via a `std::vector<T>`.
-
-
-## Error Checking
-
-The `gdf_error` codes are deprecated. Instead, `libcudf` functions should prefer throwing exceptions.
-
-In place of the `GDF_REQUIRES` convenience macro, the `CUDF_EXPECTS` macro is provided in `cudf/cpp/src/utilities/error_utils.hpp`. 
-
-Similar to `GDF_REQUIRES`, `CUDF_EXPECTS` will throw an exception if a condition is violated. The first argument is the conditional expression that can be evaluated as a `boolean` expression and is expected to resolve to `true` under normal conditions. If the conditional evaluates to `false`, then an error has occurred and an instance of `cudf::logic_error` is thrown. The second argument to `CUDF_EXPECTS` is a short description of the error that has occurred if the conditional is false. 
-
-Example usage: 
 
 ```
-CUDF_EXPECTS(lhs->dtype == rhs->dtype, "Column type mismatch");
+
+Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not support  `std::tuple`. Therefore, libcudf APIs must use  `std::pair`, and are therefore limited to return only two objects of different types. Multiple objects of the same type may be returned via a  `std::vector<T>`.
+
+## Namespaces
+
+
+### External
+All public libcudf APIs should be placed in the `cudf` namespace*. Example:
+```c++
+namespace cudf{
+   void public_function(...);
+} // namespace cudf
 ```
 
-There are times where a particular code path, if reached, should indicate an error no matter what. For example, in the `default` case of a `switch` statement where the only valid code paths are in one of the `case` statements. 
+For most functions, the top-level `cudf` namespace is sufficient. However, for logically grouping a broad set of functions, further namespaces may be used. For example, there are numerous functions that are specific to columns of Strings. These functions are put in the `cudf::strings::` namespace. Similarly, functionality used exclusively for unit testing is placed in the `cudf::test::` namespace. 
 
-For these cases, the `CUDF_FAIL` convenience macro should be used. This is effectively the same as doing `CUDF_EXPECTS(false, reason)`. 
+### `experimental`
+During the transition period, symbols in `libcudf++` that conflict with old symbol names should be placed in the `cudf::experimental` namespace to prevent collision with the old symbols, e.g., `cudf::experimental::table` and `cudf::experimental::type_dispatcher`. Once the transition is complete, the `experimental` namespace will be removed.
+
+### Internal
+
+Many functions are not meant for public use. Such functions should be placed in either the `detail` or an *anonymous* namespace depending on the situation.
+
+#### `detail`
+
+For functions or objects that will be used across *multiple* translation units (i.e., source files), they should be exposed in an internal header file and placed in the `detail` namespace. Example:
+```c++
+namespace cudf{
+namespace detail{
+void reusable_helper_function(...);
+} // namespace detail
+} // namespace cudf
+```
+#### Anonymous 
+
+If a function or class will only be used in a *single* translation unit, it should be put in an *anonymous* namespace within source file where it is used. Example:
+```c++
+namespace{
+void isolated_helper_function(...);
+} // anonymous namespace
+```
+
+[**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file) 
+
+
+
+
+
+
+
+
+
+# Error Handling
+
+## Runtime Conditions
+
+For ensuring runtime conditions necessary for correct execution, the `CUDF_EXPECTS` macro should be used.
+
+Example usage:
+```c++
+CUDF_EXPECTS(lhs.type() == rhs.type(), "Column type mismatch");
+```
+
+The first argument is the conditional expression expected to resolve to  `true`  under normal conditions. If the conditional evaluates to  `false`, then an error has occurred and an instance of  `cudf::logic_error`  is thrown. The second argument to  `CUDF_EXPECTS`  is a short description of the error that has occurred and is used for the exceptions `what()` message. 
+
+There are times where a particular code path, if reached, should indicate an error no matter what. For example, in the  `default`  case of a  `switch`  statement where the only valid code paths are in one of the  `case`  statements.
+
+For these cases, the  `CUDF_FAIL`  convenience macro should be used. This is effectively the same as doing  `CUDF_EXPECTS(false, reason)`.
 
 Example:
-
-```
+```c++
 CUDF_FAIL("This code path should not be reached.");
 ```
 
 ### CUDA Error Checking
 
-Checking for the succesful completion of CUDA runtime API functions should continue to be done via the `CUDA_TRY` macro. Note that this macro has been updated to throw an exception of type `cudf::cuda_error` if the return value of the CUDA API does not return `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's `what()` message.
+Checking for the succesful completion of CUDA runtime API functions should be done via the  `CUDA_TRY`  macro. This macro throw a `cudf::cuda_error` exception  if the return value of the CUDA API does not return  `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's  `what()`  message.
 
 Example:
 
-```
+```c++
 CUDA_TRY( cudaMemcpy(&dst, &src, num_bytes) );
 ```
 
-## Testing
 
-### ```column_wrapper```
+## Compile-Time Conditions
 
-The `column_wrapper<T>` class template is defined in `cudf/cpp/tests/utilities/legacy/column_wrapper.cuh` to simplify the creation and management of `gdf_column`s for the purposes of unit testing. 
+Some conditions can be verified at compile time. These should be done using `static_assert`. For example,
 
-`column_wrapper<T>` provides a number of constructors that allow easily constructing a `gdf_column` with the appropriate `gdf_dtype` enum set based on mapping `T` to an enum, e.g., `column_wrapper<int>` will correspond to a `gdf_column` whose `gdf_dtype` is set to `GDF_INT32`.
-
-The simplest constructor creates an unitilized `gdf_column` of a specified type with a specified size:
-
-```
-cudf::test::column_wrapper<T>  col(size);
-```
-
-You can also construct a `gdf_column` that uses a `std::vector` to initialize the `data` and `valid` bitmask of the `gdf_column`.
-
-```
- std::vector<T> values(size);
-
- std::vector<gdf_valid_type> expected_bitmask(gdf_valid_allocation_size(size), 0xFF);
-
- cudf::test::column_wrapper<T> const col(values, bitmask);
+```c++
+template <typename T>
+void trivial_types_only(T t){
+   static_assert(std::is_trivial<T>::value, "This function requires a trivial type.");
+...
+}
 ```
 
-Another constructor allows passing in an initializer function that accepts a row index that will be invoked for every index `[0, size)` in the column:
 
+# Testing
+
+
+
+# Porting Guide
+
+For example, porting the API:
 ```
-  // This creates a gdf_column with data elements {0, 1, ..., size-1} with a valid bitmask
-  // that indicates all of the values are non-null
-  cudf::test::column_wrapper<T> col(size, 
-      [](auto row) { return row; },
-      [](auto row) { return true; });
+// cpp/include/cudf/utilities/old.hpp
+
+namespace cudf{
+/**
+* @brief This is an example of an old API.
+*
+* @param input Immutable input column
+* @param in_out Mutable column modified in place
+* @param input_table Immutable input table
+* @param in_out_table Mutable table modified in place
+* @return gdf_column Newly allocated output column
+**/
+
+gdf_column  old_function(gdf_column const& input, 
+                         gdf_column* in_out,
+                         cudf::table const& input_table,
+                         cudf::table* in_out_table);
+} // namespace cudf
 ```
 
-To access the underlying `gdf_column` for passing into a libcudf function, the `column_wrapper::get` function can be used to provide a pointer to the underlying `gdf_column`.
+ 1. Move old header and source/tests into `legacy/` directories
+	 - `mkdir -p cudf/cpp/include/cudf/utilities/legacy`
+	 - `mkdir -p cudf/cpp/src/utilities/legacy`
+	 - `mkdir -p cudf/cpp/tests/utilities/legacy`
+	 - `mv cudf/cpp/include/cudf/utilities/old.hpp cudf/cpp/include/cudf/utilities/legacy/`
+	 - `mv cudf/cpp/src/utilities/old.cpp cudf/cpp/include/cudf/utilities/legacy/`
+	 - `mv cudf/cpp/tests/utilities/old_tests.cpp cudf/cpp/tests/utilities/legacy/`
+ 2. Update paths to `old.hpp`, `old.cpp`, and `old_tests.cpp` 
+	 - `cudf/cpp/CMakeLists.txt` 
+	 - `cudf/cpp/tests/CMakeLists.txt`
+	 - Include paths
+	 - Cython include paths (see Python transition guide)
+ 3. Create new header and source files
+	 - `touch cudf/cpp/include/cudf/utilities/new.hpp`
+	 - `touch cudf/cpp/src/utilities/new.cpp`
+	 - `touch cudf/cpp/tests/utilities/new_tests.cpp`
+ 4. Update API to use new data structures
+	 - See [replacement guide](#replacement_guide) for common replacements. 
+5. Update implementation to use new data structures
 
-```
-column_wrapper<T> col(size);
-gdf_column* gdf_col = col.get();
-some_libcudf_function(gdf_col...);
+
+Example of the completed port of `old_function` to `new_function`. 
+```c++
+// cpp/include/cudf/utilities/new.hpp
+	
+namespace cudf{
+namespace experimental{
+/**
+ * @brief This is an example of a new API.
+ *
+ * @param input Immutable view of input column
+ * @param in_out Mutable view of column modified in place
+ * @param input_table Immutable view of input table
+ * @param in_out_table Mutable view of table modified in place
+ * @param mr Memory resource used to allocate device memory for the returned
+ * output column
+ * @return std::unique_ptr<column> Newly allocated output column
+ **/
+std::unique_ptr<column> new_function(cudf::column_view input, 
+                                     cudf::mutable_column_view in_out, 
+                                     cudf::table_view input_table,
+                                     cudf::mutable_table_view in_out_table,
+                                     device_memory_resource* mr = rmm::get_default_resource());
+ } // namespace experimental
+ } // namespace cudf
 ```
 
+## Replacement Guide<a name="replacment_guide"></a>
+
+### Data Structures
+|          Old         |                New                |                      Notes                      |
+|:--------------------:|:---------------------------------:|:-----------------------------------------------:|
+|  `gdf_column const&` |        `cudf::column_view`        |                                                 |
+|    `gdf_column *`    |    `cudf::mutable_column_view`    | Only use when in/out is actually needed (rare). |
+|  `gdf_column const*` |        `cudf::column_view`        |                                                 |
+| `cudf::table const&` |         `cudf::table_view`        |                                                 |
+|    `cudf::table *`   |     `cudf::mutable_table_view`    |                                                 |
+| `cudf::device_table` |     `cudf::table_device_view`     |                    Immutable                    |
+| `cudf::device_table` | `cudf::mutable_table_device_view` |                     Mutable                     |
+
+### Functions
+
+|              Old             |                    New                    |                                    Notes                                    |
+|:----------------------------:|:-----------------------------------------:|:---------------------------------------------------------------------------:|
+|       `gdf_is_valid()`       |     `column_device_view::is_valid()`     |                                                                             |
+|    `bit_mask::is_valid()`    | `column_device_view::is_valid_nocheck()` | Does not verify the existence of the bitmask  before attempting to read it. |
+| `gdf_vald_allocation_size()` |     `bitmask_allocation_size_bytes()`     |                                                                             |
+|        `is_nullable()`       |            `*view::nullable()`            |                                                                             |
+|         `has_nulls()`        |            `*view::has_nulls()`           |                                                                             |
+|        `cudf::copy()`        |          `column::column(const&)`         |                               Copy constructor                              |
