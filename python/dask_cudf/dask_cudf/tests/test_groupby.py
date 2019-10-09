@@ -162,7 +162,7 @@ def test_reset_index_multiindex():
 
 
 @pytest.mark.parametrize("split_out", [1, 2, 3])
-@pytest.mark.parametrize("column", ["c", "d", ["b", "c"]])
+@pytest.mark.parametrize("column", ["c", "d", "e", ["b", "c"], ["b", "d"]])
 def test_groupby_split_out(split_out, column):
     size = 10
     df = pd.DataFrame(
@@ -179,10 +179,16 @@ def test_groupby_split_out(split_out, column):
     ddf = dd.from_pandas(df, npartitions=3)
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
 
-    # TODO: Support categorical ("e" & ["b", "e"])
-    check_names = column != "d"  # Name mismatch for string column
-    dd.assert_eq(
-        gddf.groupby(column).a.mean(split_out=split_out),
-        ddf.groupby(column).a.mean(split_out=split_out),
-        check_names=check_names,
-    )
+    # TODO: Support multiple columns with categorical(s) (e.g. ["b", "e"])
+    if column == "e":
+        assert not set(
+            gddf.groupby(column).a.mean(split_out=split_out).dropna()
+        ).difference(
+            set(ddf.groupby(column).a.mean(split_out=split_out).dropna())
+        )
+    else:
+        dd.assert_eq(
+            gddf.groupby(column).a.mean(split_out=split_out),
+            ddf.groupby(column).a.mean(split_out=split_out),
+            check_names=False,
+        )
