@@ -10,6 +10,7 @@
 - PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 - PR #2995 Move JIT type utilities to legacy directory
+- PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
 
 ## Bug Fixes
 
@@ -59,6 +60,7 @@
 - PR #2872 Add Java pinned memory pool allocator
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
+- PR #2999 Add timestamp conversion support for string categories
 - PR #2918 Add cudf::column timestamp wrapper types
 
 ## Improvements
@@ -171,6 +173,9 @@
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3007 Java: Remove unit test that frees RMM invalid pointer
+- PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
+- PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
 
 
 # cuDF 0.9.0 (21 Aug 2019)
