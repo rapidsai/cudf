@@ -101,23 +101,21 @@ table read_csv(csv_read_arg const &args) {
 
 table read_json(json_read_arg const &args) {
   namespace json = cudf::io::json;
-  CUDF_EXPECTS(args.lines == true, "Only JSONLines are currently supported");
+  CUDF_EXPECTS(args.lines == true, "Only JSON Lines are currently supported");
 
   auto reader = [&]() {
-    json::reader_options options{};
+    json::reader_options options{args.lines, args.compression, args.dtype};
 
-    options.source_type = args.source.type;
-    if (options.source_type == HOST_BUFFER) {
-      options.source =
-          std::string(args.source.buffer.first, args.source.buffer.second);
+    if (args.source.type == FILE_PATH) {
+      return std::make_unique<json::reader>(args.source.filepath, options);
+    } else if (args.source.type == HOST_BUFFER) {
+      return std::make_unique<json::reader>(args.source.buffer.first,
+                                            args.source.buffer.second, options);
+    } else if (args.source.type == ARROW_RANDOM_ACCESS_FILE) {
+      return std::make_unique<json::reader>(args.source.file, options);
     } else {
-      options.source = args.source.filepath;
+      CUDF_FAIL("Unsupported source type");
     }
-    options.compression = args.compression;
-    options.dtype = args.dtype;
-    options.lines = args.lines;
-
-    return std::make_unique<json::reader>(options);
   }();
 
   if (args.byte_range_offset != 0 || args.byte_range_size != 0) {

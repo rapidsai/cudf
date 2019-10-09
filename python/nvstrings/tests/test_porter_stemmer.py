@@ -1,5 +1,8 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
+import numpy as np
+
+import rmm
 import pytest
 
 import nvstrings
@@ -56,6 +59,16 @@ def test_vowels():
     expect = [False, True, False, True, True, False, False, False]
     assert got == expect
 
+    got = nvtext.is_vowel(strs, -1)
+    expect = [False, True, True, True, False, True, False, False]
+    assert got == expect
+
+    indices_array = np.array([1, 2, 3, 4, 5, 6, 7, 8], dtype=np.int32)
+    darr = rmm.to_device(indices_array)
+    got = nvtext.is_vowel(strs, darr.device_ctypes_pointer.value, True)
+    expect = [True, False, False, False, True, True, False, False]
+    assert got == expect
+
 
 def test_consonants():
 
@@ -68,4 +81,14 @@ def test_consonants():
 
     got = nvtext.is_consonant(strs, 5)
     expect = [False, False, False, False, False, True, False, False]
+    assert got == expect
+
+    got = nvtext.is_consonant(strs, -2)
+    expect = [True, True, True, True, False, True, False, False]
+    assert got == expect
+
+    indices_array = np.array([1, 2, 3, 4, -5, 6, 7, 8], dtype=np.int32)
+    darr = rmm.to_device(indices_array)
+    got = nvtext.is_vowel(strs, darr.device_ctypes_pointer.value, True)
+    expect = [True, False, False, False, False, True, False, False]
     assert got == expect

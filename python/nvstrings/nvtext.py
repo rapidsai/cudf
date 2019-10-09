@@ -416,7 +416,9 @@ def porter_stemmer_measure(strs, vowels="aeiou", y_char="y", devptr=0):
     return rtn
 
 
-def is_consonant(strs, index, vowels="aeiou", y_char="y", devptr=0):
+def is_consonant(
+    strs, index, index_is_ptr=False, vowels="aeiou", y_char="y", devptr=0
+):
     """
     Returns a bool array with True if the character at the specified
     (0-based) index position is a consonant.
@@ -425,16 +427,24 @@ def is_consonant(strs, index, vowels="aeiou", y_char="y", devptr=0):
     ----------
     strs : nvstrings
         The strings for this operation
+
     index : int
         The position of character to check in each string.
+        This may also be a device pointer to memory containing
+        index values of type int32 for each of the strings.
+        The number of values must be at least strs.size().
+
+    index_is_ptr : boolean
+        Set to True if index parameter is device memory pointer
+        instead of an character position.
 
     vowels: str
-     Characters to consider as vowels
-     Default is 'aeiou'
+        Characters to consider as vowels
+        Default is 'aeiou'
 
     y_char: str
-     Characters to treat as 'y' for vowel-specific algorithm.
-     Default is 'y'
+        Characters to treat as 'y' for vowel-specific algorithm.
+        Default is 'y'
 
     devptr : GPU memory pointer
         Must be able to hold at least strs.size() of int8 values.
@@ -450,11 +460,15 @@ def is_consonant(strs, index, vowels="aeiou", y_char="y", devptr=0):
     if not isinstance(strs, nvs.nvstrings):
         raise ValueError("strs must be nvstrings object")
 
-    rtn = pyniNVText.n_is_letter(strs, False, index, vowels, y_char, devptr)
+    rtn = pyniNVText.n_is_letter(
+        strs, False, index, index_is_ptr, vowels, y_char, devptr
+    )
     return rtn
 
 
-def is_vowel(strs, index, vowels="aeiou", y_char="y", devptr=0):
+def is_vowel(
+    strs, index, index_is_ptr=False, vowels="aeiou", y_char="y", devptr=0
+):
     """
     Returns a bool array with True if the character at the specified
     (0-based) index position is a vowel.
@@ -462,17 +476,25 @@ def is_vowel(strs, index, vowels="aeiou", y_char="y", devptr=0):
     Parameters
     ----------
     strs : nvstrings
-        The strings for this operation
+        The strings for this operation.
+
     index : int
         The position of character to check in each string.
+        This may also be a device pointer to memory containing
+        index values of type int32 for each of the strings.
+        The number of values must be at least strs.size().
+
+    index_is_ptr : boolean
+        Set to True if index parameter is device memory pointer
+        instead of an character position.
 
     vowels: str
-     Characters to consider as vowels
-     Default is 'aeiou'
+        Characters to consider as vowels
+        Default is 'aeiou'
 
     y_char: str
-     Characters to treat as 'y' for vowel-specific algorithm.
-     Default is 'y'
+        Characters to treat as 'y' for vowel-specific algorithm.
+        Default is 'y'
 
     devptr : GPU memory pointer
         Must be able to hold at least strs.size() of int8 values.
@@ -488,5 +510,7 @@ def is_vowel(strs, index, vowels="aeiou", y_char="y", devptr=0):
     if not isinstance(strs, nvs.nvstrings):
         raise ValueError("strs must be nvstrings object")
 
-    rtn = pyniNVText.n_is_letter(strs, True, index, vowels, y_char, devptr)
+    rtn = pyniNVText.n_is_letter(
+        strs, True, index, index_is_ptr, vowels, y_char, devptr
+    )
     return rtn

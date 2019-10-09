@@ -773,24 +773,33 @@ static PyObject* n_is_letter( PyObject* self, PyObject* args )
         PyErr_Format(PyExc_ValueError,"nvtext: parameter index is required");
         Py_RETURN_NONE;
     }
-    int position = (int)PyLong_AsLong(argIndex);
+
+    int position = 0;
+    int* positions = nullptr;
+    if( PyObject_IsTrue(PyTuple_GetItem(args,3)) )
+        positions = (int*)PyLong_AsVoidPtr(argIndex);
+    else
+        position = (int)PyLong_AsLong(argIndex);
 
     const char* vowels = "aeiou";
-    PyObject* argVowels = PyTuple_GetItem(args,3);
+    PyObject* argVowels = PyTuple_GetItem(args,4);
     if( argVowels != Py_None )
         vowels = PyUnicode_AsUTF8(argVowels);
 
     const char* y_char  = "y";
-    PyObject* argYChar = PyTuple_GetItem(args,4);
+    PyObject* argYChar = PyTuple_GetItem(args,5);
     if( argYChar != Py_None )
         y_char = PyUnicode_AsUTF8(argYChar);
 
     // get device pointer
-    bool* devptr = (bool*)PyLong_AsVoidPtr(PyTuple_GetItem(args,5));
+    bool* devptr = (bool*)PyLong_AsVoidPtr(PyTuple_GetItem(args,6));
     if( devptr )
     {
         Py_BEGIN_ALLOW_THREADS
-        NVText::is_letter(*strs, vowels, y_char, ltype, position, devptr);
+        if( positions )
+            NVText::is_letter(*strs, vowels, y_char, ltype, positions, devptr);
+        else
+            NVText::is_letter(*strs, vowels, y_char, ltype, position, devptr);
         Py_END_ALLOW_THREADS
         return PyLong_FromVoidPtr((void*)devptr);
     }
@@ -802,7 +811,10 @@ static PyObject* n_is_letter( PyObject* self, PyObject* args )
         return ret;
     bool* rtn = new bool[count];
     Py_BEGIN_ALLOW_THREADS
-    NVText::is_letter(*strs, vowels, y_char, ltype, position, rtn, false);
+    if( positions )
+        NVText::is_letter(*strs, vowels, y_char, ltype, positions, rtn, false);
+    else
+        NVText::is_letter(*strs, vowels, y_char, ltype, position, rtn, false);
     Py_END_ALLOW_THREADS
     for(unsigned int idx=0; idx < count; idx++)
         PyList_SetItem(ret, idx, PyBool_FromLong((long)rtn[idx]));
