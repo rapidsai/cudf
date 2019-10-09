@@ -80,7 +80,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
 
     // build offsets column
     auto offsets_transformer = [d_column, d_offsets] __device__ (size_type idx) {
-            if( d_column.is_null(idx) )
+            if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
             return d_offsets[idx+1] - d_offsets[idx];
         };
@@ -94,7 +94,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
     // build null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
         [d_column, d_indices] __device__ (size_type idx) {
-            return !d_column.is_null(d_indices[idx]);
+            return !d_column.nullable() || !d_column.is_null(d_indices[idx]);
         },
         num_strings, stream );
     rmm::device_buffer null_mask;
@@ -116,7 +116,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
     thrust::for_each_n(execpol->on(stream), thrust::make_counting_iterator<size_type>(0), num_strings,
         [d_column, d_indices, d_new_offsets, d_chars] __device__(size_type idx){
             size_type index = d_indices[idx];
-            if( d_column.is_null(index) )
+            if( d_column.nullable() && d_column.is_null(index) )
                 return;
             string_view d_str = d_column.element<string_view>(index);
             memcpy(d_chars + d_new_offsets[idx], d_str.data(), d_str.size_bytes() );
@@ -200,11 +200,9 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr )
 {
-    printf("scatter\n");
     size_type num_strings = strings.size();
     CUDF_EXPECTS( num_strings > 0, "Column has no strings.");
     size_type elements = scatter_map.size();
-    printf("strings=%d, elements=%d\n", (int)num_strings, (int)elements);
     auto execpol = rmm::exec_policy(0);
     // TODO use index-normalizing iterator to allow any numeric type for gather_map
     CUDF_EXPECTS( scatter_map.type().id()==cudf::INT32, "strings scatter method only supports int32 indices right now");
@@ -222,8 +220,6 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
         [d_indices, d_replace, d_strings] __device__ (unsigned int idx) {
             d_strings[d_indices[idx]] = d_replace;
         });
-
-    printf("strings=%d, elements=%d\n", (int)num_strings, (int)elements);
 
     // create strings column
     // build null mask

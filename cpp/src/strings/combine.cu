@@ -119,9 +119,12 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
             return( !null_element || !d_narep.is_null() );
         },
         num_strings, stream );
+    rmm::device_buffer null_mask;
     auto null_count = valid_mask.second;
-    auto null_size = gdf_valid_allocation_size(num_strings);
-    rmm::device_buffer null_mask(valid_mask.first,null_size,stream,mr); // does deep copy
+    if( null_count > 0 )
+        null_mask = rmm::device_buffer(valid_mask.first,
+                                       gdf_valid_allocation_size(num_strings),
+                                       stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build offsets column by computing sizes of each string in the output
@@ -288,7 +291,6 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                 d_buffer = detail::copy_string(d_buffer, d_separator);
         });
 
-    printf("null-mask = %d/%p\n", (int)null_mask.size(), null_mask.data());
     return make_strings_column(1, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }

@@ -49,8 +49,8 @@ std::unique_ptr<cudf::column> sort( strings_column_view strings,
     thrust::sequence( execpol->on(stream), indices.begin(), indices.end() );
     thrust::sort( execpol->on(stream), indices.begin(), indices.end(),
         [d_column, stype, order, null_order] __device__ (size_type lhs, size_type rhs) {
-            bool lhs_null{d_column.is_null(lhs)};
-            bool rhs_null{d_column.is_null(rhs)};
+            bool lhs_null{d_column.nullable() && d_column.is_null(lhs)};
+            bool rhs_null{d_column.nullable() && d_column.is_null(rhs)};
             if( lhs_null || rhs_null )
                 return (null_order==cudf::null_order::BEFORE ? !rhs_null : !lhs_null);
             string_view lhs_str = d_column.element<string_view>(lhs);

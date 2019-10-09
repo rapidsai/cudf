@@ -88,7 +88,7 @@ TEST_P(SliceParmsTest, SliceAllNulls)
 
 TEST_P(SliceParmsTest, SliceAllEmpty)
 {
-    std::vector<const char*> h_strings{ "", "", "", "", "", "", "" };
+    std::vector<const char*> h_strings{ nullptr, "", "", "", "", "", "" };
     cudf::size_type start = 3;
     cudf::size_type end = GetParam();
     std::vector<const char*> h_expected;
@@ -156,10 +156,7 @@ TEST_F(StringsColumnTest, Scatter)
     cudf::column_view scatter_map_view( cudf::data_type{cudf::INT32}, scatter_map.size(),
                                         scatter_map.data().get(), nullptr, 0);
 
-    printf("%d:%d:%d\n", (int)h_strings1.size(), (int)h_strings2.size(), (int)h_expected.size());
-
     auto results = cudf::strings::detail::scatter(view1,view2,scatter_map_view);
-    printf("%d:%d:%d\n", (int)h_strings1.size(), (int)h_strings2.size(), (int)h_expected.size());
     cudf::test::expect_strings_equal(*results, h_expected);
 }
 

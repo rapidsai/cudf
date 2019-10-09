@@ -79,7 +79,7 @@ void print( strings_column_view strings,
         thrust::make_counting_iterator<size_type>(end),
         d_output_offsets+1,
         [d_column, max_width] __device__ (size_type idx) {
-            if( d_column.is_null(idx) )
+            if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
             string_view d_str = d_column.element<string_view>(idx);
             size_type bytes = d_str.size_bytes();
