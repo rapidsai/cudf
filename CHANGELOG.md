@@ -2,6 +2,8 @@
 
 ## New Features
 
+- PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
@@ -9,6 +11,7 @@
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
+- PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
 
 ## Bug Fixes
 
@@ -56,7 +59,9 @@
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
+- PR #2999 Add timestamp conversion support for string categories
 
 ## Improvements
 
@@ -168,6 +173,8 @@
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3007 Java: Remove unit test that frees RMM invalid pointer
+- PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
 
 
 # cuDF 0.9.0 (21 Aug 2019)
