@@ -254,7 +254,7 @@ CUDF_FAIL("This code path should not be reached.");
 
 ### CUDA Error Checking
 
-Checking for the succesful completion of CUDA runtime API functions should be done via the  `CUDA_TRY`  macro. This macro throw a `cudf::cuda_error` exception  if the return value of the CUDA API does not return  `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's  `what()`  message.
+Checking for the succesful completion of CUDA runtime API functions should be done via the  `CUDA_TRY`  macro. This macro throws a `cudf::cuda_error` exception if the return value of the CUDA API does not return  `cudaSuccess`. The thrown exception will include a description of the CUDA error code that occurred in it's  `what()`  message.
 
 Example:
 
@@ -427,11 +427,11 @@ gdf_column  old_function(gdf_column const& input,
     - `touch cudf/cpp/src/utilities/new.cpp`
     - `touch cudf/cpp/tests/utilities/new_tests.cpp`
 5. Update API to use new data structures
-    - See [replacement guide](#replacement_guide) for common replacements. 
+    - See [replacement guide](#replacements) for common replacements. 
     - Many old APIs still use output parameters (e.g., `gdf_column *`). These must be updated to *return* outputs as specified in [the section on input/output style](#inout_style).
     - Likewise, many old APIs are inconsistent with `const` correctness and how input parameters are passed, e.g., `gdf_column*` may be used for what should be an immutable input column. Use your best judgement to determine how the parameter is being used and select the appropriate `libucdf++` type accordingly.
 6. Update implementation to use new data structures
-    - See [replacement guide](#replacement_guide) for replacements of commonly used functions.
+    - See [replacement guide](#replacements) for replacements of commonly used functions.
     - Use this as an opportunity to improve and cleanup the implementation
 
 
@@ -461,7 +461,7 @@ std::unique_ptr<column> new_function(cudf::column_view input,
  } // namespace cudf
 ```
 
-## Replacement Guide<a name="replacment_guide"></a>
+## Common Replacements<a name="replacements"></a>
 
 ### Data Structures
 |          Old         |                New                |                      Notes                      |
