@@ -29,7 +29,7 @@
 
 namespace cudf {
 
-// Create a strings-type column from array of pointer/size pairs
+// Create a strings-type column from vector of pointer/size pairs
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<thrust::pair<const char*,size_type>>& strings,
     cudaStream_t stream,
@@ -74,12 +74,15 @@ std::unique_ptr<column> make_strings_column(
     CUDA_TRY(cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream));
 
     // create null mask
+    rmm::device_buffer null_mask;
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
         [d_strings] __device__ (size_type idx) { return d_strings[idx].first!=nullptr; },
         num_strings, stream );
     auto null_count = valid_mask.second;
-    rmm::device_buffer null_mask(valid_mask.first, gdf_valid_allocation_size(num_strings),
-                                 stream, mr);
+    if( null_count > 0 )
+        null_mask = rmm::device_buffer(valid_mask.first,
+                                       gdf_valid_allocation_size(num_strings),
+                                       stream, mr);
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
     // if we have all nulls, a null chars column is allowed
     // if all non-null strings are empty strings, we need a non-null chars column
@@ -99,19 +102,11 @@ std::unique_ptr<column> make_strings_column(
                   memcpy(d_chars + d_offsets[idx], item.first, item.second );
           });
 
-    // build children vector
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(offsets_column));
-    children.emplace_back(std::move(chars_column));
-
-    // no data-ptr with num_strings elements plus children
-    return std::make_unique<column>(
-        data_type{STRING}, num_strings, rmm::device_buffer{0,stream,mr},
-        null_mask, null_count,
-        std::move(children));
+    return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
+                               null_count, std::move(null_mask), stream, mr);
 }
 
-// Create a strings-type column from array of chars and array of offsets.
+// Create a strings-type column from vector of chars and vector of offsets.
 std::unique_ptr<column> make_strings_column(
     const rmm::device_vector<char>& strings,
     const rmm::device_vector<size_type>& offsets,
@@ -151,12 +146,29 @@ std::unique_ptr<column> make_strings_column(
     CUDA_TRY(cudaMemcpyAsync( chars_view.data<char>(), strings.data().get(), bytes,
                               cudaMemcpyDeviceToDevice, stream ));
 
-    // build children vector
+    return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
+                               null_count, std::move(null_mask), stream, mr);
+}
+
+//
+std::unique_ptr<column> make_strings_column(
+    size_type num_strings,
+    std::unique_ptr<column> offsets_column,
+    std::unique_ptr<column> chars_column,
+    size_type null_count,
+    rmm::device_buffer&& null_mask,
+    cudaStream_t stream,
+    rmm::mr::device_memory_resource* mr)
+{
+    if( null_count > 0 )
+        CUDF_EXPECTS( null_mask.size() > 0, "Column with nulls must be nullable.");
+    CUDF_EXPECTS( num_strings == offsets_column->size()-1, "Invalid offsets column size for strings column." );
+    CUDF_EXPECTS( offsets_column->null_count()==0, "Offsets column should not contain nulls");
+    CUDF_EXPECTS( chars_column->null_count()==0, "Chars column should not contain nulls");
+
     std::vector<std::unique_ptr<column>> children;
     children.emplace_back(std::move(offsets_column));
     children.emplace_back(std::move(chars_column));
-
-    //
     return std::make_unique<column>(
         data_type{STRING}, num_strings, rmm::device_buffer{0,stream,mr},
         null_mask, null_count,

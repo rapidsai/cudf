@@ -916,7 +916,6 @@ static __device__ uint32_t Integer_RLEv2(orc_bytestream_s *bs, volatile orc_rlev
                     uint32_t tmp = SHFL(patch_pos, (tr & ~k) | (k-1));
                     patch_pos += (tr & k) ? tmp : 0;
                 }
-                patch_pos += tr;
                 if (tr < pll && patch_pos < n)
                 {
                     vals[base + patch_pos] += patch;

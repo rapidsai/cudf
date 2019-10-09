@@ -17,8 +17,7 @@
 #include "./utilities.h"
 
 #include <cudf/column/column_factories.hpp>
-#include <cudf/table/row_operators.cuh>
-#include <cudf/table/table_device_view.cuh>
+#include <tests/utilities/column_utilities.cuh>
 
 #include <cstring>
 #include <thrust/execution_policy.h>
@@ -60,45 +59,12 @@ std::unique_ptr<cudf::column> create_strings_column( const std::vector<const cha
     return cudf::make_strings_column( d_strings );
 }
 
-struct compare_strings_fn
+void expect_strings_equal(cudf::column_view strings_column, const std::vector<const char*>& h_expected )
 {
-    __device__ bool operator()(int lidx, int ridx)
-    {
-        if( (d_lhs.nullable() && d_lhs.is_null(lidx)) ||
-            (d_rhs.nullable() && d_rhs.is_null(ridx)) )
-            return d_lhs.is_null(lidx)==d_rhs.is_null(ridx);
-        cudf::string_view lstr = d_lhs.element<cudf::string_view>(lidx);
-        cudf::string_view rstr = d_rhs.element<cudf::string_view>(ridx);
-        return lstr.compare(rstr)==0;
-    }
-    column_device_view d_lhs;
-    column_device_view d_rhs;
-};
-
-//
-void expect_strings_columns_equal(cudf::strings_column_view lhs, cudf::strings_column_view rhs)
-{
-  EXPECT_EQ(lhs.size(), rhs.size());
-  EXPECT_EQ(lhs.null_count(), rhs.null_count());
-
-  // this almost works
-  //auto d_lhs = cudf::table_device_view::create(table_view{{lhs.parent()}});
-  //auto d_rhs = cudf::table_device_view::create(table_view{{rhs.parent()}});
-  //EXPECT_TRUE(
-  //    thrust::equal(thrust::device, thrust::make_counting_iterator(0),
-  //                  thrust::make_counting_iterator(lhs.size()),
-  //                  thrust::make_counting_iterator(0),
-  //                  cudf::exp::row_equality_comparator<true>{*d_lhs, *d_rhs}));
-  //CUDA_TRY(cudaDeviceSynchronize());
-
-  auto col_lhs = column_device_view::create(lhs.parent());
-  auto col_rhs = column_device_view::create(rhs.parent());
-
-  EXPECT_TRUE(
-      thrust::equal(thrust::device, thrust::make_counting_iterator<int>(0),
-                    thrust::make_counting_iterator<int>((int)lhs.size()),
-                    thrust::make_counting_iterator<int>(0),
-                    compare_strings_fn{*col_lhs,*col_rhs}));
+    auto results_view = cudf::strings_column_view(strings_column);
+    auto d_expected = cudf::test::create_strings_column(h_expected);
+    auto expected_view = cudf::strings_column_view(d_expected->view());
+    cudf::test::expect_columns_equal(results_view.parent(), d_expected->view());
 }
 
 }  // namespace test

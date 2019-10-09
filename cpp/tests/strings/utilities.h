@@ -32,15 +32,13 @@ namespace test {
 std::unique_ptr<cudf::column> create_strings_column( const std::vector<const char*>& h_strings );
 
 /**---------------------------------------------------------------------------*
- * @brief Verifies the element-wise equality of two strings columns.
+ * @brief Utility will verify the given column string elements match the
+ * expected vector of host strings.
  *
- * Treats null elements as equivalent.
- * Based on `expect_columns_equal()` in tests/utilities/column_utilities.cu
- *
- * @param lhs The first column
- * @param rhs The second column
+ * @param strings_column Column of strings to check
+ * @param h_strings Vector of host strings
  *---------------------------------------------------------------------------**/
-void expect_strings_columns_equal(cudf::strings_column_view lhs, cudf::strings_column_view rhs);
+void expect_strings_equal(cudf::column_view strings_column, const std::vector<const char*>& h_expected );
 
 }  // namespace test
 }  // namespace cudf

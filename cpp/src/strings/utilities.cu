@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <utilities/error_utils.hpp>
 #include "./utilities.hpp"
+#include "./utilities.cuh"
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -38,9 +39,9 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
 {
     if( !str )
         return nullptr;
-    size_type length = (size_type)std::strlen(str);
+    auto length = std::strlen(str);
 
-    char* d_str;
+    char* d_str{};
     RMM_TRY(RMM_ALLOC( &d_str, length, stream ));
     CUDA_TRY(cudaMemcpyAsync( d_str, str, length,
                               cudaMemcpyHostToDevice, stream ));
@@ -51,8 +52,8 @@ std::unique_ptr<string_view, std::function<void(string_view*)>>
         decltype(deleter)>{ new string_view(d_str,length), deleter};
 }
 
-// build an array of string_view objects from a strings column
-rmm::device_vector<string_view> create_string_array_from_column(
+// build a vector of string_view objects from a strings column
+rmm::device_vector<string_view> create_string_vector_from_column(
     cudf::strings_column_view strings,
     cudaStream_t stream )
 {
@@ -61,47 +62,34 @@ rmm::device_vector<string_view> create_string_array_from_column(
     auto d_column = *strings_column;
 
     auto count = strings.size();
-    rmm::device_vector<string_view> strings_array(count);
-    string_view* d_strings = strings_array.data().get();
+    rmm::device_vector<string_view> strings_vector(count);
+    string_view* d_strings = strings_vector.data().get();
     thrust::for_each_n( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_strings] __device__ (size_type idx) {
-            if( d_column.nullable() && d_column.is_null(idx) )
+            if( d_column.is_null(idx) )
                 d_strings[idx] = string_view(nullptr,0);
             else
                 d_strings[idx] = d_column.element<string_view>(idx);
         });
-    return strings_array;
+    printf("count=%d\n", (int)count);
+    CUDA_TRY(cudaStreamSynchronize(stream));
+    printf("strings_vector = %d\n", (int)strings_vector.size());
+    return strings_vector;
 }
 
-// build a strings offsets column from an array of string_views
-std::unique_ptr<cudf::column> offsets_from_string_array(
+// build a strings offsets column from a vector of string_views
+std::unique_ptr<cudf::column> offsets_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {
-    size_type count = strings.size();
-    auto d_strings = strings.data().get();
-    auto execpol = rmm::exec_policy(stream);
-    // offsets elements is the number of strings + 1
-    auto offsets_column = make_numeric_column( data_type{INT32}, count+1,
-                                               mask_state::UNALLOCATED,
-                                               stream, mr );
-    auto offsets_view = offsets_column->mutable_view();
-    auto d_offsets = offsets_view.data<int32_t>();
-    // create new offsets array -- last entry includes the total size
-    thrust::transform_inclusive_scan( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(count),
-        d_offsets+1,
-        [d_strings] __device__ (size_type idx) { return d_strings[idx].size_bytes(); },
-        thrust::plus<int32_t>());
-    cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream);
-    //
-    return offsets_column;
+    auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
+    auto begin = thrust::make_transform_iterator(strings.begin(), transformer);
+    return make_offsets(begin, begin + strings.size(), mr, stream);
 }
 
-// build a strings chars column from an array of string_views
-std::unique_ptr<cudf::column> chars_from_string_array(
+// build a strings chars column from an vector of string_views
+std::unique_ptr<cudf::column> chars_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     const int32_t* d_offsets, cudf::size_type null_count,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )

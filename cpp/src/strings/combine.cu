@@ -34,13 +34,14 @@ namespace cudf
 {
 namespace strings
 {
-
+namespace detail
+{
 //
 std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
                                            const char* separator,
                                            const char* narep,
-                                           cudaStream_t stream,
-                                           rmm::mr::device_memory_resource* mr )
+                                           rmm::mr::device_memory_resource* mr,
+                                           cudaStream_t stream = 0)
 {
     auto num_columns = strings_columns.size();
     CUDF_EXPECTS( num_columns>1, "concatenate requires at least 2 columns");
@@ -190,23 +191,16 @@ std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& str
             }
         });
 
-    // build children vector
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(offsets_column));
-    children.emplace_back(std::move(chars_column));
-
-    return std::make_unique<column>(
-        data_type{STRING}, num_strings, rmm::device_buffer{0,stream,mr},
-        null_mask, null_count,
-        std::move(children));
+    return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
+                               null_count, std::move(null_mask), stream, mr);
 }
 
 //
 std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                                             const char* separator,
                                             const char* narep,
-                                            cudaStream_t stream,
-                                            rmm::mr::device_memory_resource* mr )
+                                            rmm::mr::device_memory_resource* mr,
+                                            cudaStream_t stream=0 )
 {
     auto execpol = rmm::exec_policy(stream);
     if( !separator )
@@ -294,16 +288,31 @@ std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
                 d_buffer = detail::copy_string(d_buffer, d_separator);
         });
 
-    // build children vector
-    std::vector<std::unique_ptr<column>> children;
-    children.emplace_back(std::move(offsets_column));
-    children.emplace_back(std::move(chars_column));
-    // return the single-string column
-    return std::make_unique<column>(
-        data_type{STRING}, 1, rmm::device_buffer{0,stream,mr},
-        null_mask, null_count,
-        std::move(children));
+    printf("null-mask = %d/%p\n", (int)null_mask.size(), null_mask.data());
+    return make_strings_column(1, std::move(offsets_column), std::move(chars_column),
+                               null_count, std::move(null_mask), stream, mr);
 }
+
+} // namespace detail
+
+//
+std::unique_ptr<cudf::column> concatenate( std::vector<strings_column_view>& strings_columns,
+                                           const char* separator,
+                                           const char* narep,
+                                           rmm::mr::device_memory_resource* mr )
+{
+    return detail::concatenate( strings_columns, separator, narep, mr );
+}
+
+//
+std::unique_ptr<cudf::column> join_strings( strings_column_view strings,
+                                            const char* separator,
+                                            const char* narep,
+                                            rmm::mr::device_memory_resource* mr )
+{
+    return detail::join_strings( strings, separator, narep, mr );
+}
+
 
 } // namespace strings
 } // namespace cudf

@@ -16,6 +16,7 @@
 
 #include <cudf/column/column_factories.hpp>
 #include <cudf/strings/strings_column_view.hpp>
+#include <cudf/strings/combine.hpp>
 #include <cudf/types.hpp>
 
 #include <tests/utilities/base_fixture.hpp>
@@ -47,8 +48,7 @@ TEST_F(CombineTest, Concatenate)
         auto expected_view = cudf::strings_column_view(d_expected->view());
 
         auto results = cudf::strings::concatenate(strings_columns);
-        auto results_view = cudf::strings_column_view(results->view());
-        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        cudf::test::expect_strings_equal(*results, h_expected);
     }
     {
         std::vector<const char*> h_expected{ "eee:xyz", "bb:abc", nullptr, ":éa", "aa:", nullptr, "ééé:f" };
@@ -56,18 +56,15 @@ TEST_F(CombineTest, Concatenate)
         auto expected_view = cudf::strings_column_view(d_expected->view());
 
         auto results = cudf::strings::concatenate(strings_columns,":");
-        auto results_view = cudf::strings_column_view(results->view());
-        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        cudf::test::expect_strings_equal(*results, h_expected);
     }
-
     {
         std::vector<const char*> h_expected{ "eee:xyz", "bb:abc", "_:d", ":éa", "aa:", "bbb:_", "ééé:f" };
         auto d_expected = cudf::test::create_strings_column(h_expected);
         auto expected_view = cudf::strings_column_view(d_expected->view());
 
         auto results = cudf::strings::concatenate(strings_columns,":","_");
-        auto results_view = cudf::strings_column_view(results->view());
-        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        cudf::test::expect_strings_equal(*results, h_expected);
     }
 }
 
@@ -84,8 +81,7 @@ TEST_F(CombineTest, Join)
         auto expected_view = cudf::strings_column_view(d_expected->view());
 
         auto results = cudf::strings::join_strings(view1);
-        auto results_view = cudf::strings_column_view(results->view());
-        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        cudf::test::expect_strings_equal(*results, h_expected);
     }
     {
         std::vector<const char*> h_expected{ "eee+bb+zzzz++aaa+ééé" };
@@ -93,8 +89,7 @@ TEST_F(CombineTest, Join)
         auto expected_view = cudf::strings_column_view(d_expected->view());
 
         auto results = cudf::strings::join_strings(view1,"+");
-        auto results_view = cudf::strings_column_view(results->view());
-        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        cudf::test::expect_strings_equal(*results, h_expected);
     }
     {
         std::vector<const char*> h_expected{ "eee+bb+___+zzzz++aaa+ééé" };
@@ -102,7 +97,6 @@ TEST_F(CombineTest, Join)
         auto expected_view = cudf::strings_column_view(d_expected->view());
 
         auto results = cudf::strings::join_strings(view1,"+","___");
-        auto results_view = cudf::strings_column_view(results->view());
-        cudf::test::expect_strings_columns_equal(results_view, expected_view);
+        cudf::test::expect_strings_equal(*results, h_expected);
     }
 }

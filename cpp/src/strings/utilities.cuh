@@ -19,6 +19,7 @@
 #include <cudf/column/column_view.hpp>
 
 #include <cstring>
+#include <thrust/scan.h>
 
 namespace cudf
 {
@@ -39,6 +40,35 @@ __device__ inline char* copy_string( char* buffer, const string_view& d_string )
 {
     memcpy( buffer, d_string.data(), d_string.size_bytes() );
     return buffer + d_string.size_bytes();
+}
+
+/**
+ * @brief Create an offsets column to be a child of a strings column.
+ * This will set the offsets values by executing scan on the provided
+ * Iterator.
+ *
+ * @tparam Iterator Used as input to scan to set the offset values.
+ * @param begin The beginning of the input sequence
+ * @param end The end of the input sequence
+ * @param mr Memory resource to use.
+ * @stream Stream to use for any kernel calls.
+ * @return offsets child column for strings column
+ */
+template <typename Iterator>
+std::unique_ptr<column> make_offsets( Iterator begin, Iterator end,
+    rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource(),
+    cudaStream_t stream = 0)
+{
+    CUDF_EXPECTS(begin <= end, "Invalid iterator range");
+    auto count = thrust::distance(begin, end);
+    auto offsets_column = make_numeric_column(
+          data_type{INT32}, count + 1, mask_state::UNALLOCATED, stream, mr);
+    auto offsets_view = offsets_column->mutable_view();
+    auto d_offsets = offsets_view.template data<int32_t>();
+    thrust::inclusive_scan(rmm::exec_policy(stream)->on(stream), begin, end,
+                           d_offsets+1);
+    CUDA_TRY(cudaMemsetAsync(d_offsets, 0, sizeof(int32_t), stream));
+    return offsets_column;
 }
 
 } // namespace detail
