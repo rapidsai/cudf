@@ -37,10 +37,10 @@ cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
         gdf_index_type in_begin
     ) except +
 
-    cdef cudf_table shift(
-        const cudf_table& in_column,
+    cdef gdf_column shift(
+        const gdf_column& in_column,
         gdf_index_type periods,
-        const gdf_scalar* fill_value
+        const gdf_scalar fill_value
     ) except +
 
     cdef vector[cudf_table] scatter_to_tables(

@@ -239,53 +239,25 @@ def copy_range(out_col, in_col, int out_begin, int out_end,
     return out_col
 
 
-def shift_table(df, periods, fill_value):
-    """
-        Call cudf::shift
-    """
-    cdef cudf_table* c_input_table = table_from_dataframe(df)
-    cdef gdf_index_type c_periods = periods
-    cdef gdf_scalar* c_fill_value = NULL
-    cdef cudf_table c_output_table
-
-    if fill_value is not None:
-        c_fill_value = gdf_scalar_from_scalar(fill_value)
-
-    with nogil:
-        c_output_table = cpp_shift(
-            c_input_table[0],
-            c_periods,
-            c_fill_value
-        )
-
-    free_table(c_input_table)
-
-    return table_to_dataframe(&c_output_table)
-
 def shift_column(column, periods, fill_value):
     """
         Call cudf::shift
     """
-    cdef cudf_table* c_input_table = table_from_columns([column])
+    cdef gdf_column* c_column_view = column_view_from_column(column)
     cdef gdf_index_type c_periods = periods
-    cdef gdf_scalar* c_fill_value = NULL
-    cdef cudf_table c_output_table
+    cdef gdf_scalar* c_fill_value
+    cdef gdf_column c_output_column
 
-    if fill_value is not None:
-        c_fill_value = gdf_scalar_from_scalar(fill_value)
+    c_fill_value = gdf_scalar_from_scalar(fill_value, dtype=column.dtype)
 
     with nogil:
-        c_output_table = cpp_shift(
-            c_input_table[0],
+        c_output_column = cpp_shift(
+            c_column_view[0],
             c_periods,
-            c_fill_value
+            c_fill_value[0]
         )
 
-    columns = columns_from_table(&c_output_table)
-
-    free_table(c_input_table)
-
-    return columns[0]
+    return gdf_column_to_column(&c_output_column)
 
 
 def scatter_to_frames(source, maps):

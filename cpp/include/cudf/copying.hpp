@@ -462,9 +462,9 @@ std::vector<gdf_column*> split(gdf_column const &         input,
                                gdf_index_type const*      splits,
                                gdf_size_type              num_splits);
 
-table shift(const table& in_table,
-            gdf_index_type periods,
-            const gdf_scalar* fill_value);
+gdf_column shift(const gdf_column& input,
+                 gdf_index_type periods,
+                 const gdf_scalar fill_value);
 
 /**
  * @brief Scatters the rows of a table to `n` tables according to a scatter map

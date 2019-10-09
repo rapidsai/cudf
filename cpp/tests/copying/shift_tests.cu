@@ -41,14 +41,12 @@ column_wrapper<ColumnType> make_column_wrapper(
 template <typename ColumnType>
 column_wrapper<ColumnType> shift(
   gdf_index_type periods,
-  column_wrapper<ColumnType> source_column,
+  column_wrapper<ColumnType> source,
   scalar_wrapper<ColumnType> fill_value
 )
 {
-  auto source_table = cudf::table{source_column.get()};
-  auto actual_table = cudf::shift(source_table, periods, fill_value);
-  auto actual_column = column_wrapper<ColumnType>(*actual_table.get_column(0));
-  return actual_column;
+  gdf_column actual = cudf::shift(source, periods, fill_value);
+  return column_wrapper<ColumnType>(actual);
 }
 
 template <typename ColumnType>

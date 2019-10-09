@@ -15,7 +15,6 @@
  */
  
 #include <cudf/cudf.h>
-#include <cudf/legacy/table.hpp>
 #include <cudf/copying.hpp>
 #include <cudf/filling.hpp>
 
@@ -32,7 +31,7 @@ namespace detail {
     gdf_column *out_column,
     gdf_column const &in_column,
     gdf_index_type periods,
-    gdf_scalar const *fill_value
+    gdf_scalar const fill_value
   )
   {
     gdf_index_type in_start = 0;
@@ -60,41 +59,37 @@ namespace detail {
     }
 
     detail::copy_range(out_column,
-                       detail::scalar_factory{*fill_value},
+                       detail::scalar_factory{fill_value},
                        fill_start,
                        fill_end);
   }
 
 }; // namespace detail
 
-table shift(
-  const table& in_table,
+gdf_column shift(
+  const gdf_column& in,
   gdf_index_type periods,
-  const gdf_scalar* fill_value
+  const gdf_scalar fill_value
 )
 {
-  if (periods == 0) {
-    return copy(in_table);
+  if (in.size == 0 || periods == 0) {
+    return copy(in);
   }
 
-  table out_table = allocate_like(in_table, ALWAYS);
-  auto valid_size = gdf_valid_allocation_size(out_table.num_rows());
+  gdf_column out;
 
-  for (gdf_index_type i = 0; i < out_table.num_columns(); i++) {
-
-      auto out_column = const_cast<gdf_column*>(out_table.get_column(i));
-      auto in_column = const_cast<gdf_column*>(in_table.get_column(i));
-
-      // null_count must corrospond to the bit mask, so initialize them.
-      out_column->null_count = 0;
-      if (is_nullable(*out_column)) {
-        CUDA_TRY(cudaMemset(out_column->valid, 0xff, valid_size));
-      }
-
-      detail::shift(out_column, *in_column, periods, fill_value);
+  if (fill_value.is_valid == false || is_nullable(in)) {
+    out = allocate_like(in, ALWAYS);
+    auto valid_size = gdf_valid_allocation_size(out.size);
+    out.null_count = 0;
+    CUDA_TRY(cudaMemset(out.valid, 0xff, valid_size));
+  } else {
+    out = allocate_like(in, NEVER);
   }
 
-  return out_table;
+  detail::shift(&out, in, periods, fill_value);
+
+  return out;
 }
 
 }; // namespace cudf

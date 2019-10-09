@@ -144,6 +144,7 @@ cpdef gdf_dtype gdf_dtype_from_value(col, dtype=None) except? GDF_invalid:
     dtype : numpy.dtype; optional
         The dtype to convert to a gdf_dtype.  Defaults to *col.dtype*.
     """
+
     dtype = col.dtype if dtype is None else pd.api.types.pandas_dtype(dtype)
 
     # if dtype is pd.CategoricalDtype, use the codes' gdf_dtype
@@ -177,10 +178,11 @@ cdef gdf_scalar* gdf_scalar_from_scalar(val, dtype=None) except? NULL:
     if s is NULL:
         raise MemoryError
 
-    set_scalar_value(s, val)
+    if val is not None:
+        set_scalar_value(s, val)
 
     s[0].is_valid = is_valid
-    s[0].dtype = gdf_dtype_from_value(val, dtype)
+    s[0].dtype = gdf_dtype_from_value(val, dtype=dtype)
 
     return s
 
