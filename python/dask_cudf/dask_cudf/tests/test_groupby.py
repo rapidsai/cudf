@@ -162,14 +162,27 @@ def test_reset_index_multiindex():
 
 
 @pytest.mark.parametrize("split_out", [1, 2, 3])
-def test_groupby_split_out(split_out):
-    df = pd.DataFrame({"id": [0, 1, 0, 1, 0], "x": [0, 1, 2, 3, 4]})
+@pytest.mark.parametrize("column", ["c", "d", ["b", "c"]])
+def test_groupby_split_out(split_out, column):
+    size = 10
+    df = pd.DataFrame(
+        {
+            "a": np.arange(size),
+            "b": np.random.randint(0, 4, size=size),
+            "c": np.random.randint(0, 2, size=size),
+            "d": np.random.choice(["dog", "cat", "bird"], size=size),
+        }
+    )
+    df["e"] = df["d"].astype("category")
     gdf = cudf.from_pandas(df)
 
     ddf = dd.from_pandas(df, npartitions=3)
     gddf = dask_cudf.from_cudf(gdf, npartitions=3)
 
+    # TODO: Support categorical ("e" & ["b", "e"])
+    check_names = column != "d"  # Name mismatch for string column
     dd.assert_eq(
-        gddf.groupby("id").x.mean(split_out=split_out),
-        ddf.groupby("id").x.mean(split_out=split_out),
+        gddf.groupby(column).a.mean(split_out=split_out),
+        ddf.groupby(column).a.mean(split_out=split_out),
+        check_names=check_names,
     )

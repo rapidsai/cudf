@@ -40,19 +40,24 @@ try:
     from dask.dataframe.utils import group_split_dispatch, hash_object_dispatch
 
     @hash_object_dispatch.register(cudf.DataFrame)
-    def hash_object_cudf(
-        dfs, index=None, encoding=None, hash_key=None, categorize=None
-    ):
+    def hash_object_cudf(dfs, index=True):
+        if index:
+            return dfs.reset_index.hash_columns()
         return dfs.hash_columns()
 
     @hash_object_dispatch.register(cudf.Index)
-    def hash_object_cudf_index(
-        ind, index=None, encoding=None, hash_key=None, categorize=None
-    ):
-        from cudf.core.column import column, numerical
+    def hash_object_cudf_index(ind, index=None):
+        from cudf.core.column import column, CategoricalColumn, StringColumn
 
-        cols = [column.as_column(ind)]
-        return cudf.Series(numerical.column_hash_values(*cols))
+        if isinstance(ind, cudf.MultiIndex):
+            return ind.to_frame().hash_columns()
+
+        col = column.as_column(ind)
+        if isinstance(col, StringColumn):
+            col = col.as_numerical_column("int32")
+        elif isinstance(col, CategoricalColumn):
+            col = col.as_numerical
+        return cudf.Series(col).hash_values()
 
     @group_split_dispatch.register(cudf.DataFrame)
     def group_split_cudf(df, c, k):
