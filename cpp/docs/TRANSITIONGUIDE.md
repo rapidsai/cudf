@@ -314,7 +314,7 @@ gdf_column  old_function(gdf_column const& input,
 	 - `cudf/cpp/CMakeLists.txt` 
 	 - `cudf/cpp/tests/CMakeLists.txt`
 	 - Include paths
-	 - Cython include paths (see Python transition guide)
+	 - Cython include paths (see [Cython changes](#cython_changes))
  3. Create new header and source files
 	 - `touch cudf/cpp/include/cudf/utilities/new.hpp`
 	 - `touch cudf/cpp/src/utilities/new.cpp`
@@ -373,3 +373,21 @@ std::unique_ptr<column> new_function(cudf::column_view input,
 |        `is_nullable()`       |            `*view::nullable()`            |                                                                             |
 |         `has_nulls()`        |            `*view::has_nulls()`           |                                                                             |
 |        `cudf::copy()`        |          `column::column(const&)`         |                               Copy constructor                              |
+
+
+## Cython changes<a name="cython_changes"></a>
+
+In the short-term, Python will continue to use legacy `libcudf` functions and data structures.
+All that needs to be changed in Cython are the paths to legacy headers.
+For example, after moving `cudf/copying.hpp` to `cudf/legacy/copying.hpp`, the following line in
+`python/cudf/cudf/_lib/includes.copying.pxd` will be changed from:
+
+```python
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+```
+
+to:
+
+```python
+cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
+```
