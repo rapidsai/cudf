@@ -273,26 +273,45 @@ void trivial_types_only(T t){
 
 # Type Dispatcher
 
-Invokes an `operator()` template with the type instantiation based on
-the specified `cudf::data_type`'s `id()`.
+The device memory for a column's elements is stored in a `void*`. 
+This is known as *type-erasure*, because the data's type we are pointing to is not known at compile time.
+In order to determine the type, we must use the runtime information stored in the columns `type()`. 
+We can then use that type information to reconstruct the data's type `T`, i.e., casting the `void*` to the appropriate `T*`.
 
-Example usage with a functor that returns the size of the dispatched type:
+This type "reconstruction" or *type dispatching* is pervasive throughout `libcudf`. 
+The `type_dispatcher` is a centralized utility that automates the process of mapping the runtime type information in `data_type` to a concrete C++ type.
+
+At a high level, you give the `type_dispatcher` a `data_type` and a function object (sometimes known as a *functor*) with an `operator()` template. 
+Then, based on the value of `data_type::id()`, it will invoke the corresponding instantiation of the `operator()` template. 
+
+This simplified example of how the `type_dispatcher` works shows how the value of `data_type::id()` determines which instantiation of the `F::operator()` template is invoked. 
+```c++
+template <typename F>
+void type_dispatcher(data_type t, F f){
+    switch(t.id())
+       case INT32: f.template operator()<int32_t>()
+       case INT64: f.template operator()<int64_t>()
+       case FLOAT: f.template operator()<float>()
+       ...
+}
+```
+
+The below example shows a function object called `size_of_functor` that returns the size of the dispatched type:
 
 ```c++
 struct size_of_functor{
 template <typename T>
-int operator()(){
-    return sizeof(T);
-}
+int operator()(){ return sizeof(T); }
 };
-cudf::data_type t{INT32};
-cudf::type_dispatcher(t, size_of_functor{});  // returns 4
+cudf::type_dispatcher(data_type{INT8}, size_of_functor{});  // returns 1
+cudf::type_dispatcher(data_type{INT32}, size_of_functor{});  // returns 4
+cudf::type_dispatcher(data_type{FLOAT64}, size_of_functor{});  // returns 8
 ```
 
-The `type_dispatcher` uses `cudf::type_to_id<t>` to provide a default mapping
-of `cudf::type_id`s to dispatched C++ types. However, this mapping may be
-customized by explicitly specifying a user-defined trait struct for the
-`IdTypeMap`. For example, to always dispatch `int32_t`
+By default, the `type_dispatcher` uses `cudf::type_to_id<t>` to provide the mapping
+of `cudf::type_id`s to dispatched C++ types.
+However, this mapping may be customized by explicitly specifying a user-defined trait for the `IdTypeMap`.
+For example, to always dispatch `int32_t` for all values of `cudf::type_id`:
 
 ```c++
 template<cudf::type_id t> struct always_int{ using type = int32_t; }
@@ -301,13 +320,13 @@ template<cudf::type_id t> struct always_int{ using type = int32_t; }
 cudf::type_dispatcher<always_int>(data_type, f);
 ```
 
-It is sometimes necessary to customize the dispatched functor's
-`operator()` for different types.  This can be done in several ways.
+It is often necessary to customize the dispatched `operator()` for different types. 
+This can be done in several ways.
 
-The first method is to use explicit template specialization. This is useful
-for specializing behavior for single types. For example, a functor that
-prints `int32_t` or `double` when invoked with either of those types, else it
-prints `unhandled type`:
+The first method is to use explicit, full template specialization. This is useful
+for specializing behavior for single types. For example, a function object that
+prints `"int32_t"` or `"double"` when invoked with either of those types, else it
+prints `"unhandled type"`:
 
 ```c++
 struct type_printer {
@@ -325,27 +344,30 @@ void type_printer::operator()<double>() { std::cout << "double\n"; }
 ```
 
 A second method is to use SFINAE with `std::enable_if_t`. This is useful for
-specializing for a set of types that share some property. For example, a
+partially specializing for a set of types that share some property. For example, a
 functor that prints `integral` or `floating point` for integral or floating
 point types:
 
 ```c++
 struct integral_or_floating_point {
 template <typename ColumnType,
-            std::enable_if_t<not std::is_integral<ColumnType>::value and
-                            not std::is_floating_point<ColumnType>::value>*
-= nullptr> void operator()() { std::cout << "neither integral nor floating
-point\n"; }
+          std::enable_if_t<not std::is_integral<ColumnType>::value and
+                           not std::is_floating_point<ColumnType>::value>* = nullptr> 
+void operator()() { std::cout << "neither integral nor floating point\n"; }
 
 template <typename ColumnType,
-            std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
+          std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
 void operator()() { std::cout << "integral\n"; }
 
 template < typename ColumnType,
-            std::enable_if_t<std::is_floating_point<ColumnType>::value>* =
-nullptr> void operator()() { std::cout << "floating point\n"; }
+           std::enable_if_t<std::is_floating_point<ColumnType>::value>* = nullptr> 
+void operator()() { std::cout << "floating point\n"; }
 };
-```
+``` 
+For more info on SFINAE and `std::enable_if`, see https://eli.thegreenplace.net/2014/sfinae-and-enable_if
+
+There are a number of traits defined in `cpp/include/cudf/utilities/traits.hpp` that are useful for partially specializing dispatched function objects. 
+For example `is_numeric<T>()` can be used to specialize for any numeric type.
 
 
 # Testing
