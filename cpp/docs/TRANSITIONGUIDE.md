@@ -282,7 +282,7 @@ TBD
 This section provides the high-level steps necessary to port an existing `libcudf` API into a `libcudf++` function. 
 
 For example, given the example function `old_function`:
-```
+```c++
 // cpp/include/cudf/utilities/old.hpp
 
 namespace cudf{
@@ -307,21 +307,28 @@ gdf_column  old_function(gdf_column const& input,
 	 - `mkdir -p cudf/cpp/include/cudf/utilities/legacy`
 	 - `mkdir -p cudf/cpp/src/utilities/legacy`
 	 - `mkdir -p cudf/cpp/tests/utilities/legacy`
-	 - `mv cudf/cpp/include/cudf/utilities/old.hpp cudf/cpp/include/cudf/utilities/legacy/`
-	 - `mv cudf/cpp/src/utilities/old.cpp cudf/cpp/include/cudf/utilities/legacy/`
-	 - `mv cudf/cpp/tests/utilities/old_tests.cpp cudf/cpp/tests/utilities/legacy/`
+    - `git mv cudf/cpp/include/cudf/utilities/old.hpp cudf/cpp/include/cudf/utilities/legacy/`
+    - `git mv cudf/cpp/src/utilities/old.cpp cudf/cpp/include/cudf/utilities/legacy/`
+    - `git mv cudf/cpp/tests/utilities/old_tests.cpp cudf/cpp/tests/utilities/legacy/`
  2. Update paths to `old.hpp`, `old.cpp`, and `old_tests.cpp` 
 	 - `cudf/cpp/CMakeLists.txt` 
 	 - `cudf/cpp/tests/CMakeLists.txt`
 	 - Include paths
 	 - Cython include paths (see Python transition guide)
- 3. Create new header and source files
+3. Update test names
+    - Rename `OLD_TESTS` to `LEGACY_OLD_TESTS` in `cudf/cpp/tests/CMakeLists.txt`
+4. Create new header and source files
 	 - `touch cudf/cpp/include/cudf/utilities/new.hpp`
+        - Remember to use `#pragma once` for the include guard
 	 - `touch cudf/cpp/src/utilities/new.cpp`
 	 - `touch cudf/cpp/tests/utilities/new_tests.cpp`
- 4. Update API to use new data structures
+5. Update API to use new data structures
 	 - See [replacement guide](#replacement_guide) for common replacements. 
-5. Update implementation to use new data structures
+    - Many old APIs still use output parameters (e.g., `gdf_column *`). These must be updated to *return* outputs as specified in [the section on input/output style](#inout_style).
+    - Likewise, many old APIs are inconsistent with `const` correctness and how input parameters are passed, e.g., `gdf_column*` may be used for what should be an immutable input column. Use your best judgement to determine how the parameter is being used and select the appropriate `libucdf++` type accordingly.
+6. Update implementation to use new data structures
+    - See [replacement guide](#replacement_guide) for replacements of commonly used functions.
+    - Use this as an opportunity to improve and cleanup the implementation
 
 
 Example of the completed port of `old_function` to `new_function`. 
