@@ -46,11 +46,8 @@
 #include <sys/stat.h>
 #include <sys/mman.h>
 
-#include <thrust/scan.h>
-#include <thrust/reduce.h>
 #include <thrust/device_ptr.h>
 #include <thrust/execution_policy.h>
-
 #include <thrust/host_vector.h>
 
 #include "type_conversion.cuh"
@@ -80,43 +77,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 
-/**
- * @brief Returns the compression type based upon the user-specified parameter
- * or from the filename extension.
- *
- * @param[in] compression_arg User-supplied string specifying compression type
- * @param[in] filename Name of the file to infer if necessary
- *
- * @return Compression type
- **/
-std::string infer_compression_type(const std::string &compression_arg,
-                                   const std::string &filename) {
-  std::unordered_map<std::string, std::string> ext_to_compression = {
-      {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}};
-
-  auto str_tolower = [](const auto &begin, const auto &end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  // Attempt to infer from user-supplied argument
-  const auto arg = str_tolower(compression_arg.begin(), compression_arg.end());
-  if (arg != "infer") {
-    return arg;
-  }
-
-  // Attempt to infer from the file extension
-  const auto pos = filename.find_last_of('.');
-  if (pos != std::string::npos) {
-    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
-    if (ext_to_compression.find(ext) != ext_to_compression.end()) {
-      return ext_to_compression.find(ext)->second;
-    }
-  }
-
-  return "none";
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number 
@@ -360,7 +320,7 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
   }
 
   // User can specify which columns should be parsed
-  if (not args_.use_cols_indexes.empty() || not args_.use_cols_names.empty()) {
+  if (!args_.use_cols_indexes.empty() || !args_.use_cols_names.empty()) {
     std::fill(h_column_flags.begin(), h_column_flags.end(), column_parse::disabled);
 
     for (const auto index : args_.use_cols_indexes) {
@@ -378,11 +338,12 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
   }
 
   // User can specify which columns should be inferred as datetime
-  if (not args_.infer_date_indexes.empty() || not args_.infer_date_names.empty()) {
-    for (auto index : args_.infer_date_indexes) {
+  if (!args_.infer_date_indexes.empty() || !args_.infer_date_names.empty()) {
+    for (const auto index : args_.infer_date_indexes) {
       h_column_flags[index] |= column_parse::as_datetime;
     }
-    for (auto name : args_.infer_date_names) {
+    
+    for (const auto name : args_.infer_date_names) {
       auto it = std::find(col_names.begin(), col_names.end(), name);
       if (it != col_names.end()) {
         h_column_flags[it - col_names.begin()] |= column_parse::as_datetime;
@@ -416,27 +377,19 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
     decode_data(columns);
   }
 
-  for (int i = 0; i < num_active_cols; ++i) {
-    if (columns[i]->dtype == GDF_STRING) {
-      using str_pair = std::pair<const char *, size_t>;
-      using str_ptr = std::unique_ptr<NVStrings, decltype(&NVStrings::destroy)>;
+  // Perform any final column preparation (may reference decoded data)
+  for (auto &column : columns) {
+    column.finalize();
 
-      auto str_list = static_cast<str_pair *>(columns[i]->data);
-      str_ptr str_data(NVStrings::create_from_index(str_list, columns[i]->size),
-                       &NVStrings::destroy);
-      CUDF_EXPECTS(str_data != nullptr, "Cannot create `NvStrings` instance");
-      RMM_TRY(RMM_FREE(columns[i]->data, 0));
-
-      // PANDAS' default behavior of enabling doublequote for two consecutive
-      // quotechars in quoted fields results in reduction to a single quotechar
-      if ((opts.quotechar != '\0') && (opts.doublequote == true)) {
-        const std::string quotechar(1, opts.quotechar);
-        const std::string doublequotechar(2, opts.quotechar);
-        columns[i]->data =
-            str_data->replace(doublequotechar.c_str(), quotechar.c_str());
-      } else {
-        columns[i]->data = str_data.release();
-      }
+    // PANDAS' default behavior of enabling doublequote for two consecutive
+    // quotechars in quoted fields results in reduction to a single quotechar
+    if (column->dtype == GDF_STRING &&
+        (opts.quotechar != '\0' && opts.doublequote == true)) {
+      const std::string quotechar(1, opts.quotechar);
+      const std::string dblquotechar(2, opts.quotechar);
+      auto str_data = static_cast<NVStrings *>(column->data);
+      column->data = str_data->replace(dblquotechar.c_str(), quotechar.c_str());
+      NVStrings::destroy(str_data);
     }
   }
 
@@ -512,15 +465,10 @@ std::pair<uint64_t, uint64_t> reader::Impl::select_rows(
     const char *h_data, size_t h_size, size_t range_size,
     gdf_size_type skip_rows, gdf_size_type skip_end_rows,
     gdf_size_type num_rows) {
-  std::vector<uint64_t> h_row_offsets(row_offsets.size());
+  thrust::host_vector<uint64_t> h_row_offsets = row_offsets;
   auto it_begin = h_row_offsets.begin();
   auto it_end = h_row_offsets.end();
-
   assert(std::distance(it_begin, it_end) >= 1);
-  CUDA_TRY(cudaMemcpyAsync(h_row_offsets.data(), row_offsets.data().get(),
-                           row_offsets.size() * sizeof(uint64_t),
-                           cudaMemcpyDeviceToHost));
-  CUDA_TRY(cudaStreamSynchronize(0));
 
   // Currently, ignoring lineterminations within quotes is handled by recording
   // the records of both, and then filtering out the records that is a quotechar
@@ -797,7 +745,9 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
   CUDF_EXPECTS(opts.thousands != opts.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
-  compression_type_ = infer_compression_type(args_.compression, filepath);
+  compression_type_ = infer_compression_type(
+      args_.compression, filepath,
+      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
   // Handle user-defined booleans, whereby field data are substituted with
   // true/false values; for numeric dtypes, they are mapped to 1/0 respectively

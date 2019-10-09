@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2018, NVIDIA CORPORATION.
+ * Copyright (c) 2018-2019, NVIDIA CORPORATION.
  *
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
@@ -16,10 +16,10 @@
 
 #pragma once
 
+#include <memory>
+
 #include "cudf.h"
 #include <cudf/legacy/table.hpp>
-
-#include <memory>
 
 namespace cudf {
 
@@ -60,6 +60,13 @@ cudf::table read_json(json_read_arg const &args);
 cudf::table read_orc(orc_read_arg const &args);
 
 /*
+ * @brief Interface to output cuDF columns to ORC format
+ *
+ * @param[in] args Arguments for controlling writing behavior
+ */
+void write_orc(orc_write_arg const &args);
+
+/*
  * @brief Interface to parse Parquet data to cuDF columns.
  *
  * @param[in] args Arguments for controlling reading behavior
@@ -68,4 +75,4 @@ cudf::table read_orc(orc_read_arg const &args);
  */
 cudf::table read_parquet(parquet_read_arg const &args);
 
-} // namespace cudf
+}  // namespace cudf

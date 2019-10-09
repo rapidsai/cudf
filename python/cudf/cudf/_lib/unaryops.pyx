@@ -13,7 +13,7 @@ import numpy as np
 from libcpp.pair cimport pair
 from libcpp.vector cimport vector
 from libcpp.string cimport string
-from librmm_cffi import librmm as rmm
+import rmm
 
 from cudf.utils import cudautils
 
@@ -113,6 +113,11 @@ def apply_dt_extract_op(incol, outcol, op):
             )
         elif op == 'day':
             result = cpp_unaryops.gdf_extract_datetime_day(
+                <gdf_column*>c_incol,
+                <gdf_column*>c_outcol
+            )
+        elif op == 'weekday':
+            result = cpp_unaryops.gdf_extract_datetime_weekday(
                 <gdf_column*>c_incol,
                 <gdf_column*>c_outcol
             )
