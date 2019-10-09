@@ -13,6 +13,7 @@
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3014 Snappy decompression optimizations
 
 ## Bug Fixes
 
