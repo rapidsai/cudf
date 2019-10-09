@@ -141,7 +141,7 @@ class DataFrame(object):
     3 3 0.3
     """
 
-    def __init__(self, data=None, index=None, columns=None):
+    def __init__(self, data=None, index=None, columns=None, dtype=None):
         keys = index
         if index is None:
             index = RangeIndex(start=0)
@@ -163,6 +163,9 @@ class DataFrame(object):
                 self.add_column(col_name, series, forceindex=index is not None)
 
         self._add_empty_columns(columns, index)
+
+        if dtype:
+            self._cols = self.astype(dtype)._cols
 
     @property
     def _constructor(self):
