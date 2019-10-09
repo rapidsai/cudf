@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2956 Add `cudf::stack` and `cudf::tile`
 
 ## Improvements
 
