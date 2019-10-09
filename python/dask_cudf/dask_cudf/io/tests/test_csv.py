@@ -1,3 +1,4 @@
+import os
 import warnings
 
 import numpy as np
@@ -47,6 +48,13 @@ def test_read_csv(tmp_path):
     stmp_path = str(tmp_path / "data-*.csv")
     df3 = dask_cudf.read_csv(f"file://{stmp_path}")
     dd.assert_eq(df2, df3)
+
+    # file list test
+    list_paths = [
+        os.path.join(tmp_path, fname) for fname in sorted(os.listdir(tmp_path))
+    ]
+    df4 = dask_cudf.read_csv(list_paths)
+    dd.assert_eq(df, df4)
 
 
 def test_raises_FileNotFoundError():

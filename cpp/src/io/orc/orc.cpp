@@ -223,12 +223,187 @@ bool ProtobufReader::InitSchema(FileFooter *ff)
     return true;
 }
 
+/* ----------------------------------------------------------------------------*/
+/**
+ * @Brief ORC Protobuf Writer class
+ *
+ */
+/* ----------------------------------------------------------------------------*/
+
+#define PBW_BEGIN_STRUCT(st)                            \
+    size_t ProtobufWriter::write(const st *s) {         \
+        size_t struct_size = 0;                         \
+
+#define PBW_FLD_UINT(id, m)                             \
+        struct_size += put_uint((id)*8+PB_TYPE_VARINT); \
+        struct_size += put_uint(static_cast<uint64_t>(s->m));
+
+#define PBW_FLD_PACKED_UINT(id, m) {                    \
+        size_t cnt = s->m.size(), sz = 0, lpos;          \
+        struct_size += put_uint((id)*8+PB_TYPE_FIXEDLEN);\
+        lpos = m_buf->size();                           \
+        putb(0);                                        \
+        for (size_t i = 0; i < cnt; i++)                \
+            sz += put_uint(s->m[i]);                    \
+        struct_size += sz + 1;                          \
+        for (; sz > 0x7f; sz >>= 7, struct_size++) \
+            m_buf->insert(m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80)); \
+        (*m_buf)[lpos] = static_cast<uint8_t>(sz); \
+        }
+
+#define PBW_FLD_STRING(id, m) {                 \
+        size_t len = s->m.length();             \
+        struct_size += put_uint((id)*8+PB_TYPE_FIXEDLEN);\
+        struct_size += put_uint(len) + len;     \
+        for (size_t i = 0; i < len; i++)        \
+            putb(s->m[i]);                      \
+        }
+
+#define PBW_FLD_STRUCT(id, m) {                 \
+        size_t sz, lpos;                        \
+        struct_size += put_uint((id)*8+PB_TYPE_FIXEDLEN);\
+        lpos = m_buf->size();                   \
+        putb(0);                                \
+        sz = write(&s->m);                      \
+        struct_size += sz + 1;                  \
+        for (; sz > 0x7f; sz >>= 7, struct_size++) \
+            m_buf->insert(m_buf->begin() + (lpos++), static_cast<uint8_t>((sz & 0x7f) | 0x80)); \
+        (*m_buf)[lpos] = static_cast<uint8_t>(sz); \
+        }
+
+#define PBW_FLD_REPEATED_STRING(id, m) {        \
+        for (size_t k = 0; k < s->m.size(); k++) \
+            PBW_FLD_STRING(id, m[k]);           \
+        }
+
+#define PBW_FLD_REPEATED_STRUCT(id, m) {        \
+        for (size_t k = 0; k < s->m.size(); k++) \
+            PBW_FLD_STRUCT(id, m[k]);           \
+        }
+
+#define PBW_END_STRUCT()                        \
+        return struct_size;                     \
+    }
+
+
+/**
+ * @Brief Add a single rowIndexEntry, negative input values treated as not present
+ *
+ */
+void ProtobufWriter::put_row_index_entry(int32_t present_blk, int32_t present_ofs, int32_t data_blk, int32_t data_ofs, int32_t data2_blk, int32_t data2_ofs, TypeKind kind)
+{
+    size_t sz = 0, lpos;
+    putb(1*8+PB_TYPE_FIXEDLEN); // 1:RowIndex.entry
+    lpos = m_buf->size();
+    putb(0xcd); // sz+2
+    putb(1*8+PB_TYPE_FIXEDLEN); // 1:positions[packed=true]
+    putb(0xcd); // sz
+    if (present_blk >= 0)
+        sz += put_uint(present_blk);
+    if (present_ofs >= 0)
+    {
+        sz += put_uint(present_ofs) + 2;
+        putb(0); // run pos = 0
+        putb(0); // bit pos = 0
+    }
+    if (data_blk >= 0)
+    {
+        sz += put_uint(data_blk);
+    }
+    if (data_ofs >= 0)
+    {
+        sz += put_uint(data_ofs);
+        if (kind != STRING && kind != FLOAT && kind != DOUBLE)
+        {
+            putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+            sz++;
+            if (kind == BOOLEAN)
+            {
+                putb(0); // bit position in byte, always zero
+                sz++;
+            }
+        }
+    }
+    if (kind != INT) // INT kind can be passed in to bypass 2nd stream index (dictionary length streams)
+    {
+        if (data2_blk >= 0)
+        {
+            sz += put_uint(data2_blk);
+        }
+        if (data2_ofs >= 0)
+        {
+            sz += put_uint(data2_ofs) + 1;
+            putb(0); // RLE run pos always zero (assumes RLE aligned with row index boundaries)
+        }
+    }
+    m_buf->data()[lpos] = (uint8_t)(sz + 2);
+    m_buf->data()[lpos+2] = (uint8_t)(sz);
+}
+
+
+PBW_BEGIN_STRUCT(PostScript)
+    PBW_FLD_UINT(1, footerLength)
+    PBW_FLD_UINT(2, compression)
+    if (s->compression != NONE) { PBW_FLD_UINT(3, compressionBlockSize) }
+    PBW_FLD_PACKED_UINT(4, version)
+    PBW_FLD_UINT(5, metadataLength)
+    PBW_FLD_STRING(8000, magic)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(FileFooter)
+    PBW_FLD_UINT(1, headerLength)
+    PBW_FLD_UINT(2, contentLength)
+    PBW_FLD_REPEATED_STRUCT(3, stripes)
+    PBW_FLD_REPEATED_STRUCT(4, types)
+    PBW_FLD_REPEATED_STRUCT(5, metadata)
+    PBW_FLD_UINT(6, numberOfRows)
+    PBW_FLD_UINT(8, rowIndexStride)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(StripeInformation)
+    PBW_FLD_UINT(1, offset)
+    PBW_FLD_UINT(2, indexLength)
+    PBW_FLD_UINT(3, dataLength)
+    PBW_FLD_UINT(4, footerLength)
+    PBW_FLD_UINT(5, numberOfRows)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(SchemaType)
+    PBW_FLD_UINT(1, kind)
+    PBW_FLD_PACKED_UINT(2, subtypes)
+    PBW_FLD_REPEATED_STRING(3, fieldNames)
+    //PBW_FLD_UINT(4, maximumLength)
+    //PBW_FLD_UINT(5, precision)
+    //PBW_FLD_UINT(6, scale)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(UserMetadataItem)
+    PBW_FLD_STRING(1, name)
+    PBW_FLD_STRING(2, value)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(StripeFooter)
+    PBW_FLD_REPEATED_STRUCT(1, streams)
+    PBW_FLD_REPEATED_STRUCT(2, columns)
+    if (s->writerTimezone != "") { PBW_FLD_STRING(3, writerTimezone) }
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(Stream)
+    PBW_FLD_UINT(1, kind)
+    PBW_FLD_UINT(2, column)
+    PBW_FLD_UINT(3, length)
+PBW_END_STRUCT()
+
+PBW_BEGIN_STRUCT(ColumnEncoding)
+    PBW_FLD_UINT(1, kind)
+    if (s->kind == DICTIONARY || s->kind == DICTIONARY_V2) { PBW_FLD_UINT(2, dictionarySize) }
+PBW_END_STRUCT()
 
 /* ----------------------------------------------------------------------------*/
 /**
-* @Brief ORC decompression class
-*
-*/
+ * @Brief ORC decompression class
+ *
+ */
 /* ----------------------------------------------------------------------------*/
 
 OrcDecompressor::OrcDecompressor(CompressionKind kind, uint32_t blockSize):
@@ -278,14 +453,14 @@ OrcDecompressor::~OrcDecompressor()
 
 /* --------------------------------------------------------------------------*/
 /**
-* @Brief ORC block decompression
-*
-* @param srcBytes[in] compressed data
-* @param srcLen[in] length of compressed data
-* @param dstLen[out] length of uncompressed data
-*
-* @returns pointer to uncompressed data, nullptr if error
-*/
+ * @Brief ORC block decompression
+ *
+ * @param srcBytes[in] compressed data
+ * @param srcLen[in] length of compressed data
+ * @param dstLen[out] length of uncompressed data
+ *
+ * @returns pointer to uncompressed data, nullptr if error
+ */
 /* ----------------------------------------------------------------------------*/
 
 const uint8_t *OrcDecompressor::Decompress(const uint8_t *srcBytes, size_t srcLen, size_t *dstLen)

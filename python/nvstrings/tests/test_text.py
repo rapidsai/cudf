@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from librmm_cffi import librmm as rmm
+import rmm
 
 import nvstrings
 import nvtext
@@ -222,6 +222,16 @@ def test_edit_distance():
     )
     distance_outcomes = nvtext.edit_distance(strs, comparators, algo=0)
     expected = [6, 5, 7]
+    assert distance_outcomes == expected
+
+
+def test_edit_distance_matrix():
+
+    strs = nvstrings.to_device(
+        ["my least favorite sentence", "fish", "software"]
+    )
+    distance_outcomes = nvtext.edit_distance_matrix(strs, algo=0)
+    expected = [[0, 23, 22], [23, 0, 7], [22, 7, 0]]
     assert distance_outcomes == expected
 
 

@@ -239,6 +239,16 @@ gdf_error gdf_extract_datetime_month(gdf_column *input, gdf_column *output);
 gdf_error gdf_extract_datetime_day(gdf_column *input, gdf_column *output);
 
 /**
+ * @brief  Extracts day from any date time type and places results into a preallocated GDF_INT16 column
+ *
+ * @param[in] gdf_column of the input
+ * @param[out] output gdf_column. The output memory needs to be preallocated
+ *
+ * @returns GDF_SUCCESS upon successful compute, otherwise returns appropriate error code
+ */
+gdf_error gdf_extract_datetime_weekday(gdf_column *input, gdf_column *output);
+
+/**
  * @brief  Extracts hour from either GDF_DATE64 or GDF_TIMESTAMP type and places results into a preallocated GDF_INT16 column
  *
  * @param[in] gdf_column of the input
