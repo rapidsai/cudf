@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 #include "avro_gpu.h"
+#include <io/utilities/block_utils.cuh>
 
 namespace cudf {
 namespace io {
 namespace avro {
 namespace gpu {
-
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SYNCWARP()      __syncwarp()
-#define SHFL0(v)        __shfl_sync(~0, v, 0)
-#else
-#define SYNCWARP()
-#define SHFL0(v)        __shfl(v, 0)
-#endif
 
 #define NWARPS                  16
 #define MAX_SHARED_SCHEMA_LEN   1000

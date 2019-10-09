@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.10.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -324,14 +324,16 @@ add_library(cudf
             src/column/legacy/column.cpp
             src/column/legacy/context.cpp
             src/table/legacy/table.cpp
-            src/string/nvcategory_util.cpp
+            src/strings/nvcategory_util.cpp
             src/join/joining.cu
             src/orderby/orderby.cu
             src/predicates/is_sorted.cu
             src/sort/digitize.cu
             src/groupby/hash/groupby.cu
+            src/groupby/sort/sort_helper.cu
+            src/groupby/sort/groupby.cu
             src/groupby/groupby_without_aggregation.cu
-            src/groupby/hash/aggregation_requests.cpp
+            src/groupby/common/aggregation_requests.cpp
             src/rolling/rolling.cu
             src/rolling/jit/code/kernel.cpp
             src/rolling/jit/code/operation.cpp
@@ -343,7 +345,7 @@ add_library(cudf
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
-            src/jit/type.cpp
+            src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
@@ -359,7 +361,6 @@ add_library(cudf
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/quantiles/groupby.cu
             src/reductions/reductions.cu
             src/reductions/min.cu
             src/reductions/max.cu
@@ -388,10 +389,13 @@ add_library(cudf
             src/io/csv/csv_gpu.cu
             src/io/json/json_reader_impl.cu
             src/io/orc/orc_reader_impl.cu
+            src/io/orc/orc_writer_impl.cu
             src/io/orc/orc.cpp
             src/io/orc/timezone.cpp
             src/io/orc/stripe_data.cu
             src/io/orc/stripe_init.cu
+            src/io/orc/stripe_enc.cu
+            src/io/orc/dict_enc.cu
             src/io/parquet/page_data.cu
             src/io/parquet/page_hdr.cu
             src/io/parquet/parquet_reader_impl.cu
@@ -400,6 +404,7 @@ add_library(cudf
             src/io/comp/uncomp.cpp
             src/io/comp/brotli_dict.cpp
             src/io/comp/debrotli.cu
+            src/io/comp/snap.cu
             src/io/comp/unsnap.cu
             src/io/comp/gpuinflate.cu
             src/io/utilities/datasource.cpp
@@ -419,12 +424,19 @@ add_library(cudf
             src/filling/fill.cu
             src/filling/repeat.cu
             src/filling/tile.cu
-            src/search/search.cu)
-
-# Override RPATH for nvstrings
-set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
-set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
+            src/search/search.cu
+            src/column/column.cu
+            src/column/column_view.cpp
+            src/column/column_device_view.cu
+            src/column/column_factories.cpp
+            src/table/table_view.cpp
+            src/table/table_device_view.cu
+            src/table/table.cpp
+            src/bitmask/null_mask.cu
+            src/sort/sort.cu
+            src/strings/strings_column_factories.cu
+            src/strings/strings_column_view.cu
+            src/column/legacy/interop.cpp)
 
 # Rename installation to proper names for later finding
 set_target_properties(libNVStrings PROPERTIES OUTPUT_NAME "NVStrings")
@@ -433,6 +445,11 @@ set_target_properties(libNVText PROPERTIES OUTPUT_NAME "NVText")
 
 # Override RPATH for cudf
 set_target_properties(cudf PROPERTIES BUILD_RPATH "\$ORIGIN")
+
+# Override RPATH for nvstrings
+set_target_properties(libNVStrings PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVCategory PROPERTIES BUILD_RPATH "\$ORIGIN")
+set_target_properties(libNVText PROPERTIES BUILD_RPATH "\$ORIGIN")
 
 ###################################################################################################
 # - jitify ----------------------------------------------------------------------------------------

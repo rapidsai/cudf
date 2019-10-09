@@ -97,34 +97,30 @@ class reader {
 
 namespace json {
 /**---------------------------------------------------------------------------*
- * @brief Arguments to the read_json interface.
+ * @brief Options for the JSON reader
  *---------------------------------------------------------------------------**/
 struct reader_options {
-  gdf_input_type  source_type = HOST_BUFFER;      ///< Type of the data source.
-  std::string     source;                         ///< If source_type is FILE_PATH, contains the filepath. If source_type is HOST_BUFFER, contains the input JSON data.
-
-  std::vector<std::string>  dtype;                ///< Ordered list of data types; pass an empty vector to use data type deduction.
-  std::string               compression = "infer";///< Compression type ("none", "infer", "gzip", "zip"); default is "infer".
-  bool                      lines = false;        ///< Read the file as a json object per line; default is false.
+  bool lines = false;
+  std::string compression = "infer";
+  std::vector<std::string> dtype;
 
   reader_options() = default;
-
   reader_options(reader_options const &) = default;
 
   /**---------------------------------------------------------------------------*
-   * @brief Constructor that sets the source data members.
+   * @brief Constructor to populate reader options.
    *
-   * @param[in] src_type Enum describing the type of the data source.
-   * @param[in] src If src_type is FILE_PATH, contains the filepath.
-   * If source_type is HOST_BUFFER, contains the input JSON data.
+   * @param[in] lines Restrict to `JSON Lines` format rather than full JSON
+   * @param[in] compression Compression type: "none", "infer", "gzip", "zip"
+   * @param[in] dtype Ordered list of data types; deduced from dataset if empty
    *---------------------------------------------------------------------------**/
-  reader_options(gdf_input_type src_type, std::string const &src)
-      : source_type(src_type), source(src) {}
+  reader_options(bool lines, std::string compression,
+                 std::vector<std::string> dtype)
+      : lines(lines), compression(compression), dtype(std::move(dtype)) {}
 };
 
 /**---------------------------------------------------------------------------*
- * @brief Class used to parse Json input and convert it into gdf columns.
- *
+ * @brief Class used to parse JSON input and convert it into a cudf::table.
  *---------------------------------------------------------------------------**/
 class reader {
  private:
@@ -133,27 +129,40 @@ class reader {
 
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Constructor; throws if the arguments are not supported.
+   * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
-  explicit reader(reader_options const &args);
+  explicit reader(std::string filepath, reader_options const &options);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the reader_options
-   * constuctor parameter.
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
    *
    * @return cudf::table object that contains the array of gdf_columns.
    *---------------------------------------------------------------------------**/
   table read();
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input JSON file as specified with the args_ data member.
+   * @brief Reads and returns all the rows within a byte range.
    *
-   * Stores the parsed gdf columns in an internal data member.
-   * @param[in] offset ///< Offset of the byte range to read.
-   * @param[in] size   ///< Size of the byte range to read. If set to zero,
-   * all data after byte_range_offset is read.
+   * The returned data includes the row that straddles the end of the range.
+   * In other words, a row is included as long as the row begins within the byte
+   * range.
    *
-   * @return cudf::table object that contains the array of gdf_columns.
+   * @param[in] offset Byte offset from the start
+   * @param[in] size Number of bytes from the offset; set to 0 for all remaining
+   *
+   * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read_byte_range(size_t offset, size_t size);
 
@@ -175,15 +184,13 @@ enum quote_style {
 
 /**---------------------------------------------------------------------------*
  * @brief Options for the CSV reader
- * 
+ *
  * TODO: Clean-up the parameters, as it is decoupled from the `read_csv`
  * interface. That interface allows it to be more closely aligned with PANDAS'
  * for user-friendliness.
  *---------------------------------------------------------------------------**/
 struct reader_options {
-  gdf_input_type input_data_form = HOST_BUFFER; ///< Type of source of CSV data
-  std::string filepath_or_buffer;               ///< If input_data_form is FILE_PATH, contains the filepath. If input_data_type is HOST_BUFFER, points to the host memory buffer
-  std::string compression = "none";             ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
+  std::string compression = "none";         ///< Compression type ("none", "infer", "bz2", "gz", "xz", "zip"); with the default value, "infer", infers the compression from the file extension.
 
   char          lineterminator = '\n';      ///< Define the line terminator character; Default is '\n'.
   char          delimiter = ',';            ///< Define the field separator; Default is ','.
@@ -236,41 +243,52 @@ class reader {
 
  public:
   /**---------------------------------------------------------------------------*
-   * @brief Constructor; throws if the arguments are not supported.
+   * @brief Constructor for a file path source.
    *---------------------------------------------------------------------------**/
-  explicit reader(reader_options const &args);
+  explicit reader(std::string filepath, reader_options const &options);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the input CSV file as specified with the reader_options
-   * constuctor parameter.
+   * @brief Constructor for an existing memory buffer source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(const char *buffer, size_t length,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Constructor for an Arrow file source.
+   *---------------------------------------------------------------------------**/
+  explicit reader(std::shared_ptr<arrow::io::RandomAccessFile> file,
+                  reader_options const &options);
+
+  /**---------------------------------------------------------------------------*
+   * @brief Reads and returns the entire data set.
    *
    * @return cudf::table object that contains the array of gdf_columns.
    *---------------------------------------------------------------------------**/
   table read();
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the specified byte range of the input CSV file.
+   * @brief Reads and returns all the rows within a byte range.
    *
-   * Reads the row that starts before or at the end of the range, even if it ends
-   * after the end of the range.
+   * The returned data includes the row that straddles the end of the range.
+   * In other words, a row is included as long as the row begins within the byte
+   * range.
    *
-   * @param[in] offset Offset of the byte range to read.
-   * @param[in] size Size of the byte range to read. Set to zero to read to
-   * the end of the file.
+   * @param[in] offset Byte offset from the start
+   * @param[in] size Number of bytes from the offset; set to 0 for all remaining
    *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read_byte_range(size_t offset, size_t size);
 
   /**---------------------------------------------------------------------------*
-   * @brief Parse the specified rows of the input CSV file.
-   * 
+   * @brief Reads and returns a range of rows.
+   *
    * Set num_skip_footer to zero when using num_rows parameter.
    *
-   * @param[in] num_skip_header Number of rows at the start of the files to skip.
-   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip.
-   * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows.
-   * 
+   * @param[in] num_skip_header Number of rows at the start of the files to skip
+   * @param[in] num_skip_footer Number of rows at the bottom of the file to skip
+   * @param[in] num_rows Number of rows to read. Value of -1 indicates all rows
+   *
    * @return cudf::table object that contains the array of gdf_columns
    *---------------------------------------------------------------------------**/
   table read_rows(gdf_size_type num_skip_header, gdf_size_type num_skip_footer,

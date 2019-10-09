@@ -15,8 +15,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <utilities/cudf_utils.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 #include <cudf/cudf.h>
@@ -187,6 +187,21 @@ TEST_F(col_cast_test, usage_example) {
 		// Output column
 		auto outputInt32Col = cudf::test::column_wrapper<int32_t>(output);
 		EXPECT_TRUE( results == outputInt32Col );
+	}
+
+
+	// example for cudf::cast int64 to bool8
+	{
+		std::vector<int64_t> inputData = { 0x12345678, 0x12345600 };
+		auto inputCol = cudf::test::column_wrapper<int64_t>(inputData);
+		gdf_column output;
+		EXPECT_NO_THROW( output = cudf::cast(inputCol, GDF_BOOL8) );
+		auto outputCol = cudf::test::column_wrapper<cudf::bool8>(output);
+		auto out_h = outputCol.to_host();
+		auto out_data = std::get<0>(out_h);
+		ASSERT_TRUE(out_data.size() == 2);
+		ASSERT_TRUE(out_data[0]);
+		ASSERT_TRUE(out_data[1]);
 	}
 
 	// example for cudf::cast generic to date32

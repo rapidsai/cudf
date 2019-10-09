@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 #include <cudf/utilities/legacy/type_dispatcher.hpp>
 #include <cudf/utilities/legacy/wrapper_types.hpp>
 
