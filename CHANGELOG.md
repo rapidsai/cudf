@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #3022 adds DataFrame.astype for cuDF dataframes
 
 ## Improvements
 
