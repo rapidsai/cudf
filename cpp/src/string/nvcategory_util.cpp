@@ -15,7 +15,9 @@ namespace {
   NVCategory * combine_column_categories(const gdf_column* const input_columns[], int num_columns){
     std::vector<NVCategory *> cats;
     std::transform(input_columns, input_columns + num_columns, std::back_inserter(cats), 
-      [&](const gdf_column* c) { return const_cast<NVCategory *>(static_cast<const NVCategory *>(c->dtype_info.category)); });
+      [&](const gdf_column* c) {
+        return const_cast<NVCategory *>(static_cast<const NVCategory *>(c->dtype_info.category));
+      });
 
     return NVCategory::create_from_categories(cats);
   }
