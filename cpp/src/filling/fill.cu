@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <copying/copy_range.cuh>
+#include <copying/legacy/copy_range.cuh>
 
 namespace cudf {
 

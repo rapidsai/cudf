@@ -355,25 +355,25 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 
-set(COPYING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+set(LEGACY_COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/copy_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/copy_range_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scalar_scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_to_tables_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/slice_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/split_tests.cu")
 
-ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+ConfigureTest(LEGACY_COPYING_TEST "${LEGACY_COPYING_TEST_SRC}")
 
 ###################################################################################################
 # - nvstring scatter tests ------------------------------------------------------------------------
 
-set(NVSTRING_SCATTER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/nvstring_scatter_tests.cu")
+set(LEGACY_NVSTRING_SCATTER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/nvstring_scatter_tests.cu")
 
-  ConfigureTest(NVSTRING_SCATTER_TEST "${NVSTRING_SCATTER_TEST_SRC}")
+  ConfigureTest(LEGACY_NVSTRING_SCATTER_TEST "${LEGACY_NVSTRING_SCATTER_TEST_SRC}")
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
