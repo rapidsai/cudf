@@ -18,17 +18,17 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/type_list.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
 
 #include <array>
 #include <tuple>
 
 /**---------------------------------------------------------------------------*
- * @filename typed_tests.hpp
- * @brief Provides centralized abstractions for use in Google Test
+ * @filename type_lists.hpp
+ * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
- * These abstractions should be used for consistency across tests as well as
+ * These lists should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  *---------------------------------------------------------------------------**/
 namespace cudf {
@@ -115,7 +115,7 @@ static constexpr std::array<cudf::type_id, 6> non_numeric_type_ids{
     cudf::EMPTY,     cudf::BOOL8,    cudf::DATE32,
     cudf::TIMESTAMP, cudf::CATEGORY, cudf::STRING};
 
-//static_assert(cudf::type_id::NUM_TYPE_IDS == all_type_ids.size(),
+// static_assert(cudf::type_id::NUM_TYPE_IDS == all_type_ids.size(),
 //              "Mismatch in number of types");
 
 }  // namespace test

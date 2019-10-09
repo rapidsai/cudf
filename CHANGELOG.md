@@ -2,10 +2,16 @@
 
 ## New Features
 
+- PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+
 ## Improvements
 
 - PR #2904 Move gpu decompressors to cudf::io namespace
+- PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2995 Move JIT type utilities to legacy directory
+- PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
 
 ## Bug Fixes
 
@@ -51,9 +57,11 @@
 - PR #2838 CSV Reader: Support ARROW_RANDOM_FILE input
 - PR #2655 CuPy-based Series and Dataframe .values property
 - PR #2803 Added `edit_distance_matrix()` function to calculate pairwise edit distance for each string on a given nvstrings object.
+- PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
+- PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
-- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+- PR #2999 Add timestamp conversion support for string categories
 
 ## Improvements
 
@@ -159,11 +167,15 @@
 - PR #2873 Fixed dask_cudf read_partition bug by generating ParquetDatasetPiece
 - PR #2850 Fixes dask_cudf.read_parquet on partitioned datasets
 - PR #2896 Properly handle `axis` string keywords in `concat`
+- PR #2926 Update rounding algorithm to avoid using fmod
 - PR #2968 Fix Java dependency loading when using NVTX
 - PR #2963 Fix ORC writer uncompressed block indexing
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3007 Java: Remove unit test that frees RMM invalid pointer
+- PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
+- PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
 
 
 # cuDF 0.9.0 (21 Aug 2019)

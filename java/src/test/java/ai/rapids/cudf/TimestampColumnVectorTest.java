@@ -27,37 +27,53 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 public class TimestampColumnVectorTest {
   static final long[] TIMES_S = {-131968728L,   //'1965-10-26 14:01:12'
                                  1530705600L,   //'2018-07-04 12:00:00'
-                                 1674631932L};  //'2023-01-25 07:32:12'
+                                 1674631932L,   //'2023-01-25 07:32:12'
+                                 -131968728L,   //'1965-10-26 14:01:12'
+                                 1530705600L};  //'2018-07-04 12:00:00'
 
   static final long[] TIMES_MS = {-131968727762L,   //'1965-10-26 14:01:12.238'
                                   1530705600115L,   //'2018-07-04 12:00:00.115'
-                                  1674631932929L};  //'2023-01-25 07:32:12.929'
+                                  1674631932929L,   //'2023-01-25 07:32:12.929'
+                                  -131968727762L,   //'1965-10-26 14:01:12.238'
+                                  1530705600115L};  //'2018-07-04 12:00:00.115'
 
   static final long[] TIMES_US = {-131968727761703L,   //'1965-10-26 14:01:12.238297'
                                   1530705600115254L,   //'2018-07-04 12:00:00.115254'
-                                  1674631932929861L};  //'2023-01-25 07:32:12.929861'
+                                  1674631932929861L,   //'2023-01-25 07:32:12.929861'
+                                  -131968727761703L,   //'1965-10-26 14:01:12.238297'
+                                  1530705600115254L};  //'2018-07-04 12:00:00.115254'
 
   static final long[] TIMES_NS = {-131968727761702469L,   //'1965-10-26 14:01:12.238297531'
                                   1530705600115254330L,   //'2018-07-04 12:00:00.115254330'
-                                  1674631932929861604L};  //'2023-01-25 07:32:12.929861604'
+                                  1674631932929861604L,   //'2023-01-25 07:32:12.929861604'
+                                  -131968727761702469L,   //'1965-10-26 14:01:12.238297531'
+                                  1530705600115254330L};  //'2018-07-04 12:00:00.115254330'
 
   static final String[] TIMES_S_STRING = {"1965-10-26 14:01:12",
                                           "2018-07-04 12:00:00",
-                                          "2023-01-25 07:32:12"};
+                                          "2023-01-25 07:32:12",
+                                          "1965-10-26 14:01:12",
+                                          "2018-07-04 12:00:00"};
 
   static final String[] TIMES_MS_STRING = {"1965-10-26 14:01:12.238000000",
                                            "2018-07-04 12:00:00.115000000",
-                                           "2023-01-25 07:32:12.929000000"};
+                                           "2023-01-25 07:32:12.929000000",
+                                           "1965-10-26 14:01:12.238000000",
+                                           "2018-07-04 12:00:00.115000000"};
 
   static final String[] TIMES_US_STRING = {"1965-10-26 14:01:12.238297000",
                                            "2018-07-04 12:00:00.115254000",
-                                           "2023-01-25 07:32:12.929861000"};
+                                           "2023-01-25 07:32:12.929861000",
+                                           "1965-10-26 14:01:12.238297000",
+                                           "2018-07-04 12:00:00.115254000"};
 
   static final String[] TIMES_NS_STRING = {"1965-10-26 14:01:12.238297531",
                                            "2018-07-04 12:00:00.115254330",
-                                           "2023-01-25 07:32:12.929861604"};
+                                           "2023-01-25 07:32:12.929861604",
+                                           "1965-10-26 14:01:12.238297531",
+                                           "2018-07-04 12:00:00.115254330"};
 
-  static final long[] THOUSAND = {1000L, 1000L, 1000L};
+  static final long[] THOUSAND = {1000L, 1000L, 1000L, 1000L, 1000L};
 
   @Test
   public void getYear() {
@@ -291,6 +307,47 @@ public class TimestampColumnVectorTest {
          ColumnVector us_result = us_string_times.asTimestamp(TimeUnit.NANOSECONDS, "%Y-%m-%d %H:%M:%S.%f");
          ColumnVector ns_result = ns_string_times.asTimestamp(TimeUnit.NANOSECONDS, "%Y-%m-%d %H:%M:%S.%f")) {
       assertColumnsAreEqual(s_expected, s_result);
+      assertColumnsAreEqual(ms_expected, ms_result);
+      assertColumnsAreEqual(us_expected, us_result);
+      assertColumnsAreEqual(ns_expected, ns_result);
+    }
+  }
+
+  @Test
+  public void testCategoryTimestampToLongSecond() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+
+    try (ColumnVector s_string_times = ColumnVector.categoryFromStrings(TIMES_S_STRING);
+         ColumnVector ms_string_times = ColumnVector.categoryFromStrings(TIMES_MS_STRING);
+         ColumnVector us_string_times = ColumnVector.categoryFromStrings(TIMES_US_STRING);
+         ColumnVector ns_string_times = ColumnVector.categoryFromStrings(TIMES_NS_STRING);
+         ColumnVector s_expected = ColumnVector.timestampsFromLongs(TimeUnit.SECONDS, TIMES_S);
+         ColumnVector s_result = s_string_times.asTimestamp(TimeUnit.SECONDS, "%Y-%m-%d %H:%M:%S");
+         ColumnVector ms_result = ms_string_times.asTimestamp(TimeUnit.SECONDS, "%Y-%m-%d %H:%M:%S.%f");
+         ColumnVector us_result = us_string_times.asTimestamp(TimeUnit.SECONDS, "%Y-%m-%d %H:%M:%S.%f");
+         ColumnVector ns_result = ns_string_times.asTimestamp(TimeUnit.SECONDS, "%Y-%m-%d %H:%M:%S.%f")) {
+      assertColumnsAreEqual(s_expected, s_result);
+      assertColumnsAreEqual(s_expected, ms_result);
+      assertColumnsAreEqual(s_expected, us_result);
+      assertColumnsAreEqual(s_expected, ns_result);
+    }
+  }
+
+  @Test
+  public void testCategoryTimestampToSubsecond() {
+    assumeTrue(Cuda.isEnvCompatibleForTesting());
+
+    try (ColumnVector ms_string_times = ColumnVector.categoryFromStrings(TIMES_MS_STRING);
+         ColumnVector us_string_times = ColumnVector.categoryFromStrings(TIMES_US_STRING);
+         ColumnVector ns_string_times = ColumnVector.categoryFromStrings(TIMES_NS_STRING);
+         ColumnVector ms_expected = ColumnVector.timestampsFromLongs(TimeUnit.MILLISECONDS, TIMES_MS);
+         ColumnVector us_expected = ColumnVector.timestampsFromLongs(TimeUnit.MICROSECONDS, TIMES_US);
+         ColumnVector ns_expected = ColumnVector.timestampsFromLongs(TimeUnit.NANOSECONDS, TIMES_NS);
+         ColumnVector ms_result = ms_string_times.asTimestamp(TimeUnit.MILLISECONDS, "%Y-%m-%d %H:%M:%S.%f");
+         ColumnVector ms_result_null = ms_string_times.asTimestamp(TimeUnit.NONE, "%Y-%m-%d %H:%M:%S.%f");
+         ColumnVector us_result = us_string_times.asTimestamp(TimeUnit.MICROSECONDS, "%Y-%m-%d %H:%M:%S.%f");
+         ColumnVector ns_result = ns_string_times.asTimestamp(TimeUnit.NANOSECONDS, "%Y-%m-%d %H:%M:%S.%f")) {
+      assertColumnsAreEqual(ms_expected, ms_result_null);
       assertColumnsAreEqual(ms_expected, ms_result);
       assertColumnsAreEqual(us_expected, us_result);
       assertColumnsAreEqual(ns_expected, ns_result);
