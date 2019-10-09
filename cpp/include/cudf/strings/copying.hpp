@@ -79,22 +79,22 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**
- * @brief Returns new strings column by replacing specific strings elements
- * as indicated by the indices in the scatter_map.
+ * @brief Creates a new strings column as if an in-place scatter from the source
+ * `strings` column was performed on that column.
  *
  * The size of the `values` must match the size of the `scatter_map`.
+ * The values in `scatter_map` must be in the range [0,strings.size()).
  *
  * If the same index appears more than once in `scatter_map` the result is undefined.
  *
- * The operation is similar to cudf scatter but the output is pre-filled with the
- * `strings` elements first and then selected items are replaced by `values` at
- * the indices specified by `scatter_map`.
+ * This operation basically pre-fills the output column with elements from `strings`. 
+ * Then, for each value `i` in range `[0,values.size())`, the `values[i]` element is
+ * assigned to `output[scatter_map[i]]`.
  *
  * The output column will have null entries at the `scatter_map` indices if the
  * `values` element at the corresponding entry is null. Also, any values from the
  * original `strings` that are null and not included in the `scatter_map` will
  * remain null.
- *
  *
  * ```
  * s1 = ["a", "b", "c", "d"]
@@ -120,14 +120,17 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
                                        cudaStream_t stream=0,
                                        rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 /**
- * @brief Returns new strings column using the provided indices and a
- * single string. The `scatter_map` values specify where to place the string
- * in the output strings column.
+ * @brief Creates a new strings column as if an in-place scatter from the source
+ * `strings` column was performed using the same string `value` for each index
+ * in `scatter_map`.
  *
  * If the same index appears more than once in `scatter_map` the result is undefined.
  *
- * The `scatter_map` indices must be in the range [0,strings.size()).
- * No bounds checking is performed.
+ * The values in `scatter_map` must be in the range [0,strings.size()).
+ * 
+ * This operation basically pre-fills the output column with elements from `strings`. 
+ * Then, for each value `i` in range `[0,values.size())`, the `value` element is
+ * assigned to `output[scatter_map[i]]`.
  *
  * The output column will have null entries at the `scatter_map` indices if the
  * `value` parameter is null. Also, any values from the original `strings` that
