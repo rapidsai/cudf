@@ -17,7 +17,7 @@
 #ifndef FILLING_HPP
 #define FILLING_HPP
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 namespace cudf {
 
