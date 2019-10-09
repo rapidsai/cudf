@@ -11,6 +11,7 @@
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3029 Update gdf_ numeric types with stdint and move to cudf namespace
 
 ## Bug Fixes
 
