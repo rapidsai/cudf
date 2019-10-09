@@ -18,7 +18,7 @@
 #define CUDF_REDUCTION_CUH
 
 #include <cudf/cudf.h>
-#include <cudf/reduction.hpp>
+#include <cudf/legacy/reduction.hpp>
 #include "reduction_operators.cuh"
 
 #include <rmm/rmm.h>

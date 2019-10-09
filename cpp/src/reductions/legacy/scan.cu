@@ -7,7 +7,7 @@
 
 #include <utilities/device_atomics.cuh>
 #include <cub/device/device_scan.cuh>
-#include <cudf/reduction.hpp>
+#include <cudf/legacy/reduction.hpp>
 
 namespace { //anonymous
 

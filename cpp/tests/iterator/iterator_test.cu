@@ -36,7 +36,7 @@
 // for reduction tests
 #include <cub/device/device_reduce.cuh>
 #include <thrust/device_vector.h>
-#include <cudf/reduction.hpp>
+#include <cudf/legacy/reduction.hpp>
 
 // ---------------------------------------------------------------------------
 

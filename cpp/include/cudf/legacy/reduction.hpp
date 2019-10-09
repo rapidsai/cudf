@@ -17,7 +17,7 @@
 #ifndef REDUCTION_HPP
 #define REDUCTION_HPP
 
-#include "cudf.h"
+#include <cudf/cudf.h>
 
 /**
  * @brief These enums indicate the supported operations of prefix scan that can be

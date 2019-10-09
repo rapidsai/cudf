@@ -361,17 +361,17 @@ add_library(cudf
             src/hash/hashing.cu
             src/quantiles/quantiles.cu
             src/quantiles/group_quantiles.cu
-            src/reductions/reductions.cu
-            src/reductions/min.cu
-            src/reductions/max.cu
-            src/reductions/sum.cu
-            src/reductions/product.cu
-            src/reductions/sum_of_squares.cu
-            src/reductions/mean.cu
-            src/reductions/var.cu
-            src/reductions/std.cu
+            src/reductions/legacy/reductions.cu
+            src/reductions/legacy/min.cu
+            src/reductions/legacy/max.cu
+            src/reductions/legacy/sum.cu
+            src/reductions/legacy/product.cu
+            src/reductions/legacy/sum_of_squares.cu
+            src/reductions/legacy/mean.cu
+            src/reductions/legacy/var.cu
+            src/reductions/legacy/std.cu
             src/replace/replace.cu
-            src/reductions/scan.cu
+            src/reductions/legacy/scan.cu
             src/transpose/transpose.cu
             src/merge/merge.cu
             src/unary/math_ops.cu

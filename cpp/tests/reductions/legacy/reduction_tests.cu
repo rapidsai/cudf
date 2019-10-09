@@ -25,7 +25,7 @@
 #include <gtest/gtest.h>
 
 #include <cudf/cudf.h>
-#include <cudf/reduction.hpp>
+#include <cudf/legacy/reduction.hpp>
 
 #include <thrust/device_vector.h>
 
