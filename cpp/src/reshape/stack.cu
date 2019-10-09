@@ -24,29 +24,6 @@
 
 #include <algorithm>
 
-template <typename T>
-void print(rmm::device_vector<T> const& d_vec, std::string label = "") {
-  thrust::host_vector<T> h_vec = d_vec;
-  printf("%s \t", label.c_str());
-  for (auto &&i : h_vec)  std::cout << i << " ";
-  printf("\n");
-}
-
-struct printer
-{
-  template <typename T>
-  void operator()(gdf_column const& col, std::string label = "") {
-    auto col_data = reinterpret_cast<T*>(col.data);
-    auto d_vec = rmm::device_vector<T>(col_data, col_data+col.size);
-    print(d_vec, label);
-  }
-};
-
-#include <cudf/utilities/legacy/type_dispatcher.hpp>
-void print(gdf_column const& col, std::string label = "") {
-  cudf::type_dispatcher(col.dtype, printer{}, col, label);
-}
-
 namespace cudf {
 
 namespace detail {
@@ -75,13 +52,10 @@ gdf_column stack(const cudf::table &values, cudaStream_t stream = 0)
   free(output.col_name);
   output.col_name = nullptr;
 
-  // NEW PLAN:
-  // Sync column categories if they were GDF_STRING_CATEGORY and convert temp 
+  // PLAN:
+  // Sync column categories if they were GDF_STRING_CATEGORY and convert temporary 
   // columns to GDF_INT32 (using gdf_dtype_of). Then normal path till after scatter.
-  // Finally, do a NVCat->gather on the result column.
-
-  // Step 1: Try the above first to check correctness.
-  // Step 2: Change nvcategory_util.cu:combine_column_categories() to use NVCategory::create_from_categories()
+  // Finally, do a NVCategory->gather on the result column.
 
   std::vector<gdf_column *> temp_values;
   if (dtype == GDF_STRING_CATEGORY) {

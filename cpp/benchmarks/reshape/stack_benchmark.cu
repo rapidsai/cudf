@@ -46,8 +46,7 @@ void BM_stack(benchmark::State& state){
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
   const gdf_size_type column_size{(gdf_size_type)state.range(1)};
 
-  std::vector<wrapper> key_columns;
-  std::vector<wrapper> val_columns;
+  std::vector<wrapper> columns;
 
   auto make_table = [&] (std::vector<wrapper>& cols,
                          gdf_size_type col_size) -> cudf::table
@@ -57,7 +56,7 @@ void BM_stack(benchmark::State& state){
     for (gdf_size_type i = 0; i < num_columns; i++) {
       cols.emplace_back(factory.make(col_size,
         [=](gdf_index_type row) { return random_int(0, 10); }
-        // ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+        ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
       ));
     }
 
@@ -68,31 +67,30 @@ void BM_stack(benchmark::State& state){
     return cudf::table{raw_cols.data(), num_columns};
   };
 
-  auto key_table = make_table(key_columns, column_size);
-  // auto val_table = make_table(val_columns, column_size);
+  auto table = make_table(columns, column_size);
 
   for(auto _ : state){
     cuda_event_timer timer(state, true);
-    auto col = cudf::stack(key_table);
+    auto col = cudf::stack(table);
     gdf_column_free(&col);
   }
 }
 
 static void CustomArguments(benchmark::internal::Benchmark* b) {
   for (int num_cols = 2; num_cols <= 10; num_cols*=2)
-    for (int col_size = 1000; col_size <= 10000000; col_size *= 10)
+    for (int col_size = 1000; col_size <= 1000000; col_size *= 10)
       b->Args({num_cols, col_size});
 }
 
-// BENCHMARK_TEMPLATE_DEFINE_F(Reshape, IntStack, int64_t)
-// (::benchmark::State& state) {
-//   BM_stack<TypeParam>(state);
-// }
+BENCHMARK_TEMPLATE_DEFINE_F(Reshape, IntStack, int64_t)
+(::benchmark::State& state) {
+  BM_stack<TypeParam>(state);
+}
 
-// BENCHMARK_REGISTER_F(Reshape, IntStack)
-//   ->UseManualTime()
-//   ->Unit(benchmark::kMillisecond)
-//   ->Apply(CustomArguments);
+BENCHMARK_REGISTER_F(Reshape, IntStack)
+  ->UseManualTime()
+  ->Unit(benchmark::kMillisecond)
+  ->Apply(CustomArguments);
 
 
 BENCHMARK_TEMPLATE_DEFINE_F(Reshape, StrStack, cudf::nvstring_category)
@@ -103,10 +101,21 @@ BENCHMARK_TEMPLATE_DEFINE_F(Reshape, StrStack, cudf::nvstring_category)
 BENCHMARK_REGISTER_F(Reshape, StrStack)
   ->UseManualTime()
   ->Unit(benchmark::kMillisecond)
-  ->Args({8, 1000000});
+  ->Apply(CustomArguments);
 
 
+/**
+ * @brief Benchmarks for approach towards combining NVCategories
+ * 
+ * The below benchmarks are to compare the performance of two approaches towards
+ * combining NVCategories. One is a cumulative call to `NVCategory.merge_and_remap`
+ * for each pair of columns. The other is to call `NVCategory::create_from_categories`
+ * on all the categories together.
+ * 
+ * To run the benchmarks, uncomment the following #define
+ */
 
+// #define COMPARE_CATEGORY_MERGE
 
 class String : public ::benchmark::Fixture {};
 
@@ -116,19 +125,19 @@ void BM_mar(benchmark::State& state){
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
   const gdf_size_type column_size{(gdf_size_type)state.range(1)};
 
-  std::vector<wrapper> key_columns;
+  std::vector<wrapper> columns;
 
   cudf::test::column_wrapper_factory<cudf::nvstring_category> factory;
 
   for (gdf_size_type i = 0; i < num_columns; i++) {
-    key_columns.emplace_back(factory.make(column_size,
+    columns.emplace_back(factory.make(column_size,
       [=](gdf_index_type row) { return random_int(0, 10); }
-      // ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+      ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
     ));
   }
 
   std::vector<gdf_column*> raw_cols(num_columns, nullptr);
-  std::transform(key_columns.begin(), key_columns.end(), raw_cols.begin(),
+  std::transform(columns.begin(), columns.end(), raw_cols.begin(),
                   [](wrapper &c) { return c.get(); });
 
   for(auto _ : state){
@@ -156,11 +165,12 @@ BENCHMARK_DEFINE_F(String, MAR)(::benchmark::State& state) {
   BM_mar(state);
 }
 
-// BENCHMARK_REGISTER_F(String, MAR)
-//   ->UseManualTime()
-//   ->Unit(benchmark::kMillisecond)
-//   ->Apply(CustomArguments);
-
+#ifdef COMPARE_CATEGORY_MERGE
+BENCHMARK_REGISTER_F(String, MAR)
+  ->UseManualTime()
+  ->Unit(benchmark::kMillisecond)
+  ->Apply(CustomArguments);
+#endif
 
 void BM_cfc(benchmark::State& state){
   using wrapper = cudf::test::column_wrapper<cudf::nvstring_category>;
@@ -168,19 +178,19 @@ void BM_cfc(benchmark::State& state){
   const gdf_size_type num_columns{(gdf_size_type)state.range(0)};
   const gdf_size_type column_size{(gdf_size_type)state.range(1)};
 
-  std::vector<wrapper> key_columns;
+  std::vector<wrapper> columns;
 
   cudf::test::column_wrapper_factory<cudf::nvstring_category> factory;
 
   for (gdf_size_type i = 0; i < num_columns; i++) {
-    key_columns.emplace_back(factory.make(column_size,
+    columns.emplace_back(factory.make(column_size,
       [=](gdf_index_type row) { return random_int(0, 10); }
-      // ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
+      ,[=](gdf_index_type row) { return random_int(0, 10) < 90; }
     ));
   }
 
   std::vector<gdf_column*> raw_cols(num_columns, nullptr);
-  std::transform(key_columns.begin(), key_columns.end(), raw_cols.begin(),
+  std::transform(columns.begin(), columns.end(), raw_cols.begin(),
                   [](wrapper &c) { return c.get(); });
 
   for(auto _ : state){
@@ -198,7 +208,9 @@ BENCHMARK_DEFINE_F(String, CFC)(::benchmark::State& state) {
   BM_cfc(state);
 }
 
-// BENCHMARK_REGISTER_F(String, CFC)
-//   ->UseManualTime()
-//   ->Unit(benchmark::kMillisecond)
-//   ->Apply(CustomArguments);
+#ifdef COMPARE_CATEGORY_MERGE
+BENCHMARK_REGISTER_F(String, CFC)
+  ->UseManualTime()
+  ->Unit(benchmark::kMillisecond)
+  ->Apply(CustomArguments);
+#endif

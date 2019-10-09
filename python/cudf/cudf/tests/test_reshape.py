@@ -82,7 +82,7 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         "int64",
         "float32",
         "float64",
-        "datetime64[ms]",  # TODO: also test for string
+        "datetime64[ms]",
         "str",
     ],
 )
