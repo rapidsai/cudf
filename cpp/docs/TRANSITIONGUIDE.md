@@ -385,6 +385,18 @@ TBD
 
 This section provides the high-level steps necessary to port an existing `libcudf` API into a `libcudf++` function. 
 
+## Pull Request Process
+
+Porting an old API should be broken up into two PRs:
+1. Moving the old API/implementation to `legacy/`
+    - This is [steps 1-3 below](#legacy_changes)
+    - This PR should not introduce any functional changes, and therefore be trivial to review and merged quickly.
+2. Creating and implementing the new API
+    - This is [steps 4-6 below](#new_changes)
+    - This PR should be opened as soon as steps 4 & 5 are complete (i.e., once the API is created, but before beginning on the implementation). This is to allow early feedback on the API and make sure it is solid before effort is put into implementation.
+
+## C++ Changes
+
 For example, given the example function `old_function`:
 ```c++
 // cpp/include/cudf/utilities/old.hpp
@@ -407,7 +419,7 @@ gdf_column  old_function(gdf_column const& input,
 } // namespace cudf
 ```
 
-1. Move old header and source/tests into `legacy/` directories
+1. Move old header and source/tests into `legacy/` directories<a name="legacy_changes"></a>
     - `mkdir -p cudf/cpp/include/cudf/utilities/legacy`
     - `mkdir -p cudf/cpp/src/utilities/legacy`
     - `mkdir -p cudf/cpp/tests/utilities/legacy`
@@ -418,10 +430,10 @@ gdf_column  old_function(gdf_column const& input,
     - `cudf/cpp/CMakeLists.txt` 
     - `cudf/cpp/tests/CMakeLists.txt`
     - Include paths
-    - Cython include paths (see [Cython changes](#cython_changes)
+    - Cython include paths (see [Cython changes](#cython_changes))
 3. Update test names
     - Rename `OLD_TESTS` to `LEGACY_OLD_TESTS` in `cudf/cpp/tests/CMakeLists.txt`
-4. Create new header and source files
+4. Create new header and source files<a name="new_changes"></a>
     - `touch cudf/cpp/include/cudf/utilities/new.hpp`
         - Remember to use `#pragma once` for the include guard
     - `touch cudf/cpp/src/utilities/new.cpp`
@@ -433,6 +445,7 @@ gdf_column  old_function(gdf_column const& input,
 6. Update implementation to use new data structures
     - See [replacement guide](#replacements) for replacements of commonly used functions.
     - Use this as an opportunity to improve and cleanup the implementation
+    - Likely the most dramatic algorithmic change will be adding native string column support. See the [section on string support](#string_support).
 
 
 Example of the completed port of `old_function` to `new_function`. 
@@ -461,6 +474,23 @@ std::unique_ptr<column> new_function(cudf::column_view input,
  } // namespace cudf
 ```
 
+## Cython changes<a name="cython_changes"></a>
+
+In the short-term, Python will continue to use legacy `libcudf` functions and data structures.
+All that needs to be changed in Cython are the paths to legacy headers.
+For example, after moving `cudf/copying.hpp` to `cudf/legacy/copying.hpp`, the following line in
+`python/cudf/cudf/_lib/includes.copying.pxd` will be changed from:
+
+```python
+cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
+```
+
+to:
+
+```python
+cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
+```
+
 ## Common Replacements<a name="replacements"></a>
 
 ### Data Structures
@@ -485,23 +515,11 @@ std::unique_ptr<column> new_function(cudf::column_view input,
 |         `has_nulls()`        |            `*view::has_nulls()`           |                                                                             |
 |        `cudf::copy()`        |          `column::column(const&)`         |                               Copy constructor                              |
 
-## Strings Support
+## Strings Support<a name="string_support"></a>
+
+// TODO
 
 ### NVCategory
 
-## Cython changes<a name="cython_changes"></a>
+// TODO
 
-In the short-term, Python will continue to use legacy `libcudf` functions and data structures.
-All that needs to be changed in Cython are the paths to legacy headers.
-For example, after moving `cudf/copying.hpp` to `cudf/legacy/copying.hpp`, the following line in
-`python/cudf/cudf/_lib/includes.copying.pxd` will be changed from:
-
-```python
-cdef extern from "cudf/copying.hpp" namespace "cudf" nogil:
-```
-
-to:
-
-```python
-cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
-```
