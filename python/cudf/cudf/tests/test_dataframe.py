@@ -3728,14 +3728,6 @@ def test_df_astype_datetime_to_other(as_dtype):
         expect['foo'] = Series(data, dtype=as_dtype)
         expect['bar'] = Series(data, dtype=as_dtype)
 
-    #expect = DataFrame()
-    #if as_dtype == "str":  # normal constructor results in None -> 'None'
-    #    insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
-    #else:
-    #    insert_data = Series(data, dtype=as_dtype)
-    #expect["foo"] = insert_data
-    #expect["bar"] = insert_data
-
     got = gdf.astype(as_dtype, format="%Y-%m-%d")
 
     assert_eq(expect, got, check_names=False)
