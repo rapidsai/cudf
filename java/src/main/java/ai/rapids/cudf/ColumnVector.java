@@ -612,6 +612,32 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
   }
 
   /**
+   * Returns a vector with all values "oldValues[i]" replaced with "newValues[i]".
+   * Warning:
+   *    Currently this function doesn't work for Strings or StringCategories.
+   *    NaNs can't be replaced in the original vector but regular values can be replaced with NaNs
+   *    Nulls can't be replaced in the original vector but regular values can be replaced with Nulls
+   *    Mixing of types isn't allowed, the resulting vector will be the same type as the original.
+   *      e.g. You can't replace an integer vector with values from a long vector
+   *
+   * Usage:
+   *    this = {1, 4, 5, 1, 5}
+   *    oldValues = {1, 5, 7}
+   *    newValues = {2, 6, 9}
+   *
+   *    result = this.findAndReplaceAll(oldValues, newValues);
+   *    result = {2, 4, 6, 2, 6}  (1 and 5 replaced with 2 and 6 but 7 wasn't found so no change)
+   *
+   * @param oldValues - A vector containing values that should be replaced
+   * @param newValues - A vector containing new values
+   * @return - A new vector containing the old values replaced with new values
+   */
+  public ColumnVector findAndReplaceAll(ColumnVector oldValues, ColumnVector newValues) {
+    assert this.type != DType.STRING_CATEGORY : "STRING_CATEGORY isn't supported at this time";
+    return new ColumnVector(findAndReplaceAll(oldValues.getNativeCudfColumnAddress(), newValues.getNativeCudfColumnAddress(), this.getNativeCudfColumnAddress()));
+  }
+
+  /**
    * Returns a Boolean vector with the same number of rows as this instance, that has
    * FALSE for any entry that is not null, and TRUE for any null entry (as per the validity mask)
    *
@@ -1598,6 +1624,8 @@ public final class ColumnVector implements AutoCloseable, BinaryOperable {
                                                      int timeUnit) throws CudfException;
 
   private native long[] cudfSlice(long nativeHandle, long indices) throws CudfException;
+
+  private native long findAndReplaceAll(long valuesHandle, long replaceHandle, long myself) throws CudfException;
 
   /**
    * Translate the host side string representation of strings into the device side representation
