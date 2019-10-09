@@ -135,7 +135,7 @@ std::unique_ptr<column> some_function(cudf::column_view input,
                                       cudf::mutable_table_view in_out_table,
                                       device_memory_resource* mr = rmm::get_default_resource());
 ```
-## Input/Output Style
+## Input/Output Style<a name="inout_style"></a>
 
 All `*_view` objects are trivially copyable and are intended to be passed by value.
 
@@ -271,6 +271,83 @@ void trivial_types_only(T t){
 ```
 
 
+# Type Dispatcher
+
+Invokes an `operator()` template with the type instantiation based on
+the specified `cudf::data_type`'s `id()`.
+
+Example usage with a functor that returns the size of the dispatched type:
+
+```c++
+struct size_of_functor{
+template <typename T>
+int operator()(){
+    return sizeof(T);
+}
+};
+cudf::data_type t{INT32};
+cudf::type_dispatcher(t, size_of_functor{});  // returns 4
+```
+
+The `type_dispatcher` uses `cudf::type_to_id<t>` to provide a default mapping
+of `cudf::type_id`s to dispatched C++ types. However, this mapping may be
+customized by explicitly specifying a user-defined trait struct for the
+`IdTypeMap`. For example, to always dispatch `int32_t`
+
+```c++
+template<cudf::type_id t> struct always_int{ using type = int32_t; }
+
+// This will always invoke `operator()<int32_t>`
+cudf::type_dispatcher<always_int>(data_type, f);
+```
+
+It is sometimes necessary to customize the dispatched functor's
+`operator()` for different types.  This can be done in several ways.
+
+The first method is to use explicit template specialization. This is useful
+for specializing behavior for single types. For example, a functor that
+prints `int32_t` or `double` when invoked with either of those types, else it
+prints `unhandled type`:
+
+```c++
+struct type_printer {
+template <typename ColumnType>
+void operator()() { std::cout << "unhandled type\n"; }
+};
+
+// Due to a bug in g++, explicit member function specializations need to be
+// defined outside of the class definition
+template <>
+void type_printer::operator()<int32_t>() { std::cout << "int32_t\n"; }
+
+template <>
+void type_printer::operator()<double>() { std::cout << "double\n"; }
+```
+
+A second method is to use SFINAE with `std::enable_if_t`. This is useful for
+specializing for a set of types that share some property. For example, a
+functor that prints `integral` or `floating point` for integral or floating
+point types:
+
+```c++
+struct integral_or_floating_point {
+template <typename ColumnType,
+            std::enable_if_t<not std::is_integral<ColumnType>::value and
+                            not std::is_floating_point<ColumnType>::value>*
+= nullptr> void operator()() { std::cout << "neither integral nor floating
+point\n"; }
+
+template <typename ColumnType,
+            std::enable_if_t<std::is_integral<ColumnType>::value>* = nullptr>
+void operator()() { std::cout << "integral\n"; }
+
+template < typename ColumnType,
+            std::enable_if_t<std::is_floating_point<ColumnType>::value>* =
+nullptr> void operator()() { std::cout << "floating point\n"; }
+};
+```
+
+
 # Testing
 
 TBD
@@ -303,27 +380,27 @@ gdf_column  old_function(gdf_column const& input,
 } // namespace cudf
 ```
 
- 1. Move old header and source/tests into `legacy/` directories
-	 - `mkdir -p cudf/cpp/include/cudf/utilities/legacy`
-	 - `mkdir -p cudf/cpp/src/utilities/legacy`
-	 - `mkdir -p cudf/cpp/tests/utilities/legacy`
+1. Move old header and source/tests into `legacy/` directories
+    - `mkdir -p cudf/cpp/include/cudf/utilities/legacy`
+    - `mkdir -p cudf/cpp/src/utilities/legacy`
+    - `mkdir -p cudf/cpp/tests/utilities/legacy`
     - `git mv cudf/cpp/include/cudf/utilities/old.hpp cudf/cpp/include/cudf/utilities/legacy/`
     - `git mv cudf/cpp/src/utilities/old.cpp cudf/cpp/include/cudf/utilities/legacy/`
     - `git mv cudf/cpp/tests/utilities/old_tests.cpp cudf/cpp/tests/utilities/legacy/`
- 2. Update paths to `old.hpp`, `old.cpp`, and `old_tests.cpp` 
-	 - `cudf/cpp/CMakeLists.txt` 
-	 - `cudf/cpp/tests/CMakeLists.txt`
-	 - Include paths
-	 - Cython include paths (see Python transition guide)
+2. Update paths to `old.hpp`, `old.cpp`, and `old_tests.cpp` 
+    - `cudf/cpp/CMakeLists.txt` 
+    - `cudf/cpp/tests/CMakeLists.txt`
+    - Include paths
+    - Cython include paths (see Python transition guide)
 3. Update test names
     - Rename `OLD_TESTS` to `LEGACY_OLD_TESTS` in `cudf/cpp/tests/CMakeLists.txt`
 4. Create new header and source files
-	 - `touch cudf/cpp/include/cudf/utilities/new.hpp`
+    - `touch cudf/cpp/include/cudf/utilities/new.hpp`
         - Remember to use `#pragma once` for the include guard
-	 - `touch cudf/cpp/src/utilities/new.cpp`
-	 - `touch cudf/cpp/tests/utilities/new_tests.cpp`
+    - `touch cudf/cpp/src/utilities/new.cpp`
+    - `touch cudf/cpp/tests/utilities/new_tests.cpp`
 5. Update API to use new data structures
-	 - See [replacement guide](#replacement_guide) for common replacements. 
+    - See [replacement guide](#replacement_guide) for common replacements. 
     - Many old APIs still use output parameters (e.g., `gdf_column *`). These must be updated to *return* outputs as specified in [the section on input/output style](#inout_style).
     - Likewise, many old APIs are inconsistent with `const` correctness and how input parameters are passed, e.g., `gdf_column*` may be used for what should be an immutable input column. Use your best judgement to determine how the parameter is being used and select the appropriate `libucdf++` type accordingly.
 6. Update implementation to use new data structures
@@ -380,3 +457,7 @@ std::unique_ptr<column> new_function(cudf::column_view input,
 |        `is_nullable()`       |            `*view::nullable()`            |                                                                             |
 |         `has_nulls()`        |            `*view::has_nulls()`           |                                                                             |
 |        `cudf::copy()`        |          `column::column(const&)`         |                               Copy constructor                              |
+
+## Strings Support
+
+### NVCategory
