@@ -28,7 +28,7 @@ using bit_mask_t = bit_mask::bit_mask_t;
 struct valid_table_filter
 {
   __device__ inline 
-  bool operator()(cudf::index_type i)
+  bool operator()(cudf::size_type i)
   {
     auto valid = [i](auto mask) { 
       return (mask == nullptr) || bit_mask::is_valid(mask, i);

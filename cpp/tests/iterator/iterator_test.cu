@@ -173,7 +173,7 @@ TYPED_TEST(IteratorTest, null_iterator)
 
     // create a column with bool vector
     cudf::test::column_wrapper<T> w_col({0, 6, 0, -14, 13, 64, -13, -20, 45},
-        [&](cudf::index_type row) { return host_bools[row]; });
+        [&](cudf::size_type row) { return host_bools[row]; });
 
     // copy back data and valid arrays
     auto hos = w_col.to_host();
@@ -209,8 +209,8 @@ TYPED_TEST(IteratorTest, null_iterator_upcast)
 
     cudf::test::column_wrapper<T> w_col(
         column_size,
-        [](cudf::index_type row) { return T{random_int<T>(-128, 127)}; },
-        [&](cudf::index_type row) { return host_bools[row]; } );
+        [](cudf::size_type row) { return T{random_int<T>(-128, 127)}; },
+        [&](cudf::size_type row) { return host_bools[row]; } );
 
     // copy back data and valid arrays
     auto hos = w_col.to_host();
@@ -247,8 +247,8 @@ TYPED_TEST(IteratorTest, null_iterator_square)
 
     cudf::test::column_wrapper<T> w_col(
         column_size,
-        [](cudf::index_type row) { return T{random_int<T>(-128, 127)}; },
-        [&](cudf::index_type row) { return host_bools[row]; } );
+        [](cudf::size_type row) { return T{random_int<T>(-128, 127)}; },
+        [&](cudf::size_type row) { return host_bools[row]; } );
 
     // copy back data and valid arrays
     auto hos = w_col.to_host();
@@ -280,7 +280,7 @@ TYPED_TEST(IteratorTest, null_iterator_square)
 TYPED_TEST(IteratorTest, indexed_iterator)
 {
     using T = int32_t;
-    using T_index = cudf::index_type;
+    using T_index = cudf::size_type;
 
     std::vector<T> hos_array({0, 6, 0, -14, 13, 64, -13, -20, 45});
     thrust::device_vector<T> dev_array(hos_array);
@@ -316,8 +316,8 @@ TYPED_TEST(IteratorTest, large_size_reduction)
 
     cudf::test::column_wrapper<TypeParam> w_col(
         column_size,
-        [](cudf::index_type row) { return T{random_int(-128, 128)}; },
-        [&](cudf::index_type row) { return host_bools[row]; } );
+        [](cudf::size_type row) { return T{random_int(-128, 128)}; },
+        [&](cudf::size_type row) { return host_bools[row]; } );
 
     // copy back data and valid arrays
     auto hos = w_col.to_host();
@@ -368,8 +368,8 @@ TYPED_TEST(IteratorTest, mean_var_output)
 
     cudf::test::column_wrapper<TypeParam> w_col(
         column_size,
-        [](cudf::index_type row) { return T{random_int(-128, 128)}; },
-        [&](cudf::index_type row) { return host_bools[row]; } );
+        [](cudf::size_type row) { return T{random_int(-128, 128)}; },
+        [&](cudf::size_type row) { return host_bools[row]; } );
 
     // copy back data and valid arrays
     auto hos = w_col.to_host();
@@ -408,7 +408,7 @@ TYPED_TEST(IteratorTest, error_handling)
 
     cudf::test::column_wrapper<T> w_col_no_null(hos_array);
     cudf::test::column_wrapper<T> w_col_null(hos_array,
-        [&](cudf::index_type row) { return true; });
+        [&](cudf::size_type row) { return true; });
 
     // expects error: data type mismatch
     CUDF_EXPECT_THROW_MESSAGE((cudf::make_iterator<false, double>( *w_col_null.get(), double{0}) ),

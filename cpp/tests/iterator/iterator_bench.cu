@@ -368,12 +368,12 @@ struct benchmark
   {
     cudf::test::column_wrapper<T> hasnull_F(
       column_size,
-      [](cudf::index_type row) { return T(row); });
+      [](cudf::size_type row) { return T(row); });
 
     cudf::test::column_wrapper<T> hasnull_T(
       column_size,
-      [](cudf::index_type row) { return T(row); },
-      [](cudf::index_type row) { return row % 2 == 0; });
+      [](cudf::size_type row) { return T(row); },
+      [](cudf::size_type row) { return row % 2 == 0; });
 
     rmm::device_vector<T> dev_result(1, T{0});
 

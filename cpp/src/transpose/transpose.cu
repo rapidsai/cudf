@@ -85,7 +85,7 @@ void gpu_transpose_valids(cudf::valid_type **in_cols_valid,
       MaskType* const __restrict__ out_mask32 =
         reinterpret_cast<MaskType*>(out_cols_valid[j]);
 
-      cudf::index_type const out_location = i / BITS_PER_MASK;
+      cudf::size_type const out_location = i / BITS_PER_MASK;
 
       // Only one thread writes output
       if (0 == threadIdx.x % warpSize) {

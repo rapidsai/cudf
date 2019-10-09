@@ -228,7 +228,7 @@ struct column_wrapper {
     std::vector<ColumnType> host_data(column_size);
     std::vector<cudf::valid_type> host_bitmask;
 
-    for (cudf::index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = value_initalizer(row);
     }
 
@@ -338,7 +338,7 @@ struct column_wrapper {
 
     // Initialize the valid mask for this column using the initializer
     std::vector<cudf::valid_type> host_bitmask(num_masks, 0);
-    for (cudf::index_type row = 0; row < num_rows; ++row) {
+    for (cudf::size_type row = 0; row < num_rows; ++row) {
       if (true == bit_initializer(row)) {
         cudf::util::turn_bit_on(host_bitmask.data(), row);
       }
@@ -391,7 +391,7 @@ struct column_wrapper {
     std::vector<ColumnType> host_data(column_size);
     std::vector<cudf::valid_type> host_bitmask(num_masks, 0);
 
-    for (cudf::index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = value_initalizer(row);
 
       if (true == bit_initializer(row)) {
@@ -424,7 +424,7 @@ struct column_wrapper {
     gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
     category->get_values(category_data, false);
 
-    for (cudf::index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = ColumnType{category_data[row]};
     }
     initialize_with_host_data(host_data);
@@ -464,7 +464,7 @@ struct column_wrapper {
     gdf_nvstring_category *category_data = new gdf_nvstring_category[column_size];
     category->get_values(category_data, false);
 
-    for (cudf::index_type row = 0; row < column_size; ++row) {
+    for (cudf::size_type row = 0; row < column_size; ++row) {
       host_data[row] = ColumnType{category_data[row]};
 
       if (true == bit_initializer(row)) {

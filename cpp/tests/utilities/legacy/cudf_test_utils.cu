@@ -151,7 +151,7 @@ struct elements_equal {
                                      bool nulls_are_equal = true)
       : lhs_col{lhs}, rhs_col{rhs}, nulls_are_equivalent{nulls_are_equal} {}
 
-  __device__ bool operator()(cudf::index_type row) {
+  __device__ bool operator()(cudf::size_type row) {
     bool const lhs_is_valid{gdf_is_valid(lhs_col.valid, row)};
     bool const rhs_is_valid{gdf_is_valid(rhs_col.valid, row)};
 

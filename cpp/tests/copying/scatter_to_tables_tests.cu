@@ -38,12 +38,12 @@ TYPED_TEST(ScatterToTablesTest, PassTest) {
   constexpr cudf::size_type scatter_size{table_n_rows};
 
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(table_n_cols, {table_n_rows, 
-  [](cudf::index_type row) {return static_cast<TypeParam>(row);},
-  [](cudf::index_type row) { return false;}
+  [](cudf::size_type row) {return static_cast<TypeParam>(row);},
+  [](cudf::size_type row) { return false;}
   });
   
-  cudf::test::column_wrapper<cudf::index_type> scatter_map(scatter_size, 
-  [](cudf::index_type row) {return static_cast<cudf::index_type>(row%2);},
+  cudf::test::column_wrapper<cudf::size_type> scatter_map(scatter_size, 
+  [](cudf::size_type row) {return static_cast<cudf::size_type>(row%2);},
   false
   );
   
@@ -71,11 +71,11 @@ TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
   //data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
     table_n_cols, {table_n_rows,
-      [](cudf::index_type row) { return static_cast<TypeParam>(row); },
-      [](cudf::index_type row) { return false; }});
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return false; }});
 
   cudf::test::column_wrapper<TypeParam> scatter_map(scatter_size, 
-  [](cudf::index_type row) {return static_cast<TypeParam>(row%2);}, false); 
+  [](cudf::size_type row) {return static_cast<TypeParam>(row%2);}, false); 
 
   std::vector<gdf_column*> v_cols(table_n_cols);
   for(size_t i=0; i<v_colwrap.size(); i++)
@@ -84,7 +84,7 @@ TYPED_TEST(ScatterToTablesTest, ScatterTypeFailTest) {
   //input datatypes
   cudf::table input_table{v_cols};
   //test
-  if (std::is_same<cudf::index_type, TypeParam>())
+  if (std::is_same<cudf::size_type, TypeParam>())
     EXPECT_NO_THROW(cudf::scatter_to_tables(input_table, scatter_map));
   else
     CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map),
@@ -100,8 +100,8 @@ TYPED_TEST(ScatterToTablesTest, NullMapTest) {
   //data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
     table_n_cols, {table_n_rows,
-      [](cudf::index_type row) { return static_cast<TypeParam>(row); },
-      [](cudf::index_type row) { return false; }});
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return false; }});
 
   std::vector<gdf_column*> v_cols(table_n_cols);
   for(size_t i=0; i<v_colwrap.size(); i++)
@@ -111,20 +111,20 @@ TYPED_TEST(ScatterToTablesTest, NullMapTest) {
   cudf::table input_table{v_cols};
  
   //1. No-Null
-  cudf::test::column_wrapper<cudf::index_type> scatter_map1(scatter_size, 
-  [](cudf::index_type row) {return row%2;}, 
-  [](cudf::index_type row) { return true;}); 
+  cudf::test::column_wrapper<cudf::size_type> scatter_map1(scatter_size, 
+  [](cudf::size_type row) {return row%2;}, 
+  [](cudf::size_type row) { return true;}); 
  EXPECT_NO_THROW(cudf::scatter_to_tables(input_table, scatter_map1));
   //2. All-Null
-  cudf::test::column_wrapper<cudf::index_type> scatter_map2(scatter_size, 
-  [](cudf::index_type row) {return row%2;}, 
-  [](cudf::index_type row) { return false;}); 
+  cudf::test::column_wrapper<cudf::size_type> scatter_map2(scatter_size, 
+  [](cudf::size_type row) {return row%2;}, 
+  [](cudf::size_type row) { return false;}); 
  CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map2),
                            "Scatter map cannot contain null elements.");
   //3. Some-Null
-  cudf::test::column_wrapper<cudf::index_type> scatter_map3(scatter_size, 
-  [](cudf::index_type row) {return row%2;}, 
-  [](cudf::index_type row) { return rand()%3==0;}); 
+  cudf::test::column_wrapper<cudf::size_type> scatter_map3(scatter_size, 
+  [](cudf::size_type row) {return row%2;}, 
+  [](cudf::size_type row) { return rand()%3==0;}); 
  CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map3),
                            "Scatter map cannot contain null elements.");
  }
@@ -137,8 +137,8 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
   //data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
     table_n_cols, {table_n_rows,
-      [](cudf::index_type row) { return static_cast<TypeParam>(row); },
-      [](cudf::index_type row) { return false; }});
+      [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+      [](cudf::size_type row) { return false; }});
 
   std::vector<gdf_column*> v_cols(table_n_cols);
   for(size_t i=0; i<v_colwrap.size(); i++)
@@ -148,17 +148,17 @@ TYPED_TEST(ScatterToTablesTest, SizeMismatchTest) {
   cudf::table input_table{v_cols};
  
   //1. Equal
-  cudf::test::column_wrapper<cudf::index_type> scatter_map1(table_n_rows, 
-      [](cudf::index_type row) { return row; }, false);
+  cudf::test::column_wrapper<cudf::size_type> scatter_map1(table_n_rows, 
+      [](cudf::size_type row) { return row; }, false);
  EXPECT_NO_THROW(cudf::scatter_to_tables(input_table, scatter_map1));
   //2. Lesser
-  cudf::test::column_wrapper<cudf::index_type> scatter_map2(table_n_rows/2, 
-      [](cudf::index_type row) { return row; }, false);
+  cudf::test::column_wrapper<cudf::size_type> scatter_map2(table_n_rows/2, 
+      [](cudf::size_type row) { return row; }, false);
   CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map2),
     "scatter_map length is not equal to number of rows in input table.");
   //3. Greater
-  cudf::test::column_wrapper<cudf::index_type> scatter_map3(table_n_rows * 2,
-      [](cudf::index_type row) { return row; }, false);
+  cudf::test::column_wrapper<cudf::size_type> scatter_map3(table_n_rows * 2,
+      [](cudf::size_type row) { return row; }, false);
   CUDF_EXPECT_THROW_MESSAGE(cudf::scatter_to_tables(input_table, scatter_map3),
     "scatter_map length is not equal to number of rows in input table.");
  }
@@ -187,16 +187,16 @@ TYPED_TEST(ScatterToTablesTest, ZeroSizeTest) {
       //data
       std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
           table_n_cols, {table_n_rows,
-          [](cudf::index_type row) { return static_cast<TypeParam>(row); },
-          [](cudf::index_type row) { return false; }});
+          [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+          [](cudf::size_type row) { return false; }});
       std::vector<gdf_column *> v_cols(table_n_cols);
       for (size_t i = 0; i < v_colwrap.size(); i++)
         v_cols[i] = v_colwrap[i].get();
 
       //input datatypes
       cudf::table input_table{v_cols};
-      cudf::test::column_wrapper<cudf::index_type> scatter_map(scatter_size,
-          [](cudf::index_type row) { return row; }, false);
+      cudf::test::column_wrapper<cudf::size_type> scatter_map(scatter_size,
+          [](cudf::size_type row) { return row; }, false);
       std::vector<cudf::table> output_tables;
       if (table_n_cols == 0) table_n_rows=0;
       if(scatter_size != table_n_rows) {
@@ -216,7 +216,7 @@ template <typename T>
 auto scatter_columns(
     std::vector<std::vector<T>> input_cols_data,
     std::vector<std::vector<cudf::valid_type>> input_cols_bitmask,
-    std::vector<cudf::index_type> scatter_map)
+    std::vector<cudf::size_type> scatter_map)
 {
   auto max = *std::max_element(scatter_map.begin(), scatter_map.end());
   std::vector<std::vector<std::vector<T>>> output_cols_data(max+1);
@@ -230,7 +230,7 @@ auto scatter_columns(
     {
       std::vector<T> output_col_data(n_output);
       std::vector<cudf::valid_type> output_col_bitmask(gdf_valid_allocation_size(n_output), ~cudf::valid_type(0));
-      cudf::index_type j = 0, nullc=0;
+      cudf::size_type j = 0, nullc=0;
       for (size_t r=0; r< scatter_map.size(); r++)
       {
         if (g == scatter_map[r])
@@ -263,15 +263,15 @@ auto scatter_columns(
 }
 
 TEST(ScatterToTablesTest, FunctionalTest) {
-  using TypeParam = cudf::index_type;
+  using TypeParam = cudf::size_type;
   constexpr cudf::size_type table_n_cols{2};
   constexpr cudf::size_type table_n_rows{1000};
   constexpr size_t scatter_size{table_n_rows};
   // table data
   std::vector<cudf::test::column_wrapper<TypeParam>> v_colwrap(
       table_n_cols, {table_n_rows,
-                     [](cudf::index_type row) { return static_cast<TypeParam>(row); },
-                     [](cudf::index_type row) { return rand()%3==0;}}); 
+                     [](cudf::size_type row) { return static_cast<TypeParam>(row); },
+                     [](cudf::size_type row) { return rand()%3==0;}}); 
   std::vector<gdf_column *> v_cols(table_n_cols);
   for (size_t i = 0; i < v_colwrap.size(); i++)
     v_cols[i] = v_colwrap[i].get();
@@ -287,19 +287,19 @@ TEST(ScatterToTablesTest, FunctionalTest) {
   std::vector<std::vector<std::vector<cudf::valid_type>>> output_cols_bitmask;
   std::vector<std::vector<cudf::size_type>> output_cols_null_count;
   // run for all different ranges of value of scatter_map
-  for (auto scatter_case : std::vector<std::pair<size_t, std::function<cudf::index_type(cudf::index_type)>>>{
+  for (auto scatter_case : std::vector<std::pair<size_t, std::function<cudf::size_type(cudf::size_type)>>>{
            // range 0-0
-           {1U, [](cudf::index_type row) { return 0; }},
+           {1U, [](cudf::size_type row) { return 0; }},
            // range 0-1
-           {2U, [](cudf::index_type row) { return row % 2; }},
+           {2U, [](cudf::size_type row) { return row % 2; }},
            // range 0-(r/2-1)
-           {scatter_size / 2, [](cudf::index_type row) { return row / 2; }},
+           {scatter_size / 2, [](cudf::size_type row) { return row / 2; }},
            // range 0-(r-1)
-           {scatter_size, [](cudf::index_type row) { return row; }},
+           {scatter_size, [](cudf::size_type row) { return row; }},
            // range 0-(2*(r-1))
-           {2 * scatter_size - 1, [](cudf::index_type row) { return 2 * row; }}})
+           {2 * scatter_size - 1, [](cudf::size_type row) { return 2 * row; }}})
   {
-    cudf::test::column_wrapper<cudf::index_type> scatter_map(
+    cudf::test::column_wrapper<cudf::size_type> scatter_map(
         scatter_size,
         scatter_case.second, false);
     std::vector<cudf::table> output_tables;

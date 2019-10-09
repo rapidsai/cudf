@@ -37,7 +37,7 @@
 
 // Size limit due to use of int32 as join output.
 // FIXME: upgrade to 64-bit
-using output_index_type = cudf::index_type;
+using output_index_type = cudf::size_type;
 constexpr output_index_type MAX_JOIN_SIZE{std::numeric_limits<output_index_type>::max()};
 
 namespace cudf {

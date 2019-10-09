@@ -46,10 +46,10 @@ template <typename ColumnType>
 __global__
 void slice_data_kernel(ColumnType*           output_data,
                        ColumnType const*     input_data,
-                       cudf::index_type const* indices,
-                       cudf::index_type const  indices_position) {
+                       cudf::size_type const* indices,
+                       cudf::size_type const  indices_position) {
   
-  cudf::index_type input_offset = indices[indices_position*2];    /**< The start index position of the input data. */
+  cudf::size_type input_offset = indices[indices_position*2];    /**< The start index position of the input data. */
   cudf::size_type row_size = indices[indices_position*2 + 1] - input_offset; 
 
   // Calculate kernel parameters
@@ -75,15 +75,15 @@ void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
                           cudf::size_type*        output_null_count,
                           bit_mask_t const*     input_bitmask,
                           cudf::size_type const   input_size,
-                          cudf::index_type const* indices,
+                          cudf::size_type const* indices,
                           cudf::size_type const   indices_size,
-                          cudf::index_type const  indices_position) {
+                          cudf::size_type const  indices_position) {
   // Obtain the indices for copying
-  cudf::index_type input_index_begin = indices[indices_position * 2];
-  cudf::index_type input_index_end = indices[indices_position * 2 + 1];
+  cudf::size_type input_index_begin = indices[indices_position * 2];
+  cudf::size_type input_index_end = indices[indices_position * 2 + 1];
 
-  cudf::index_type input_offset = cudf::util::detail::bit_container_index<bit_mask_t, cudf::index_type>(input_index_begin);
-  cudf::index_type rotate_input = cudf::util::detail::intra_container_index<bit_mask_t, cudf::index_type>(input_index_begin);
+  cudf::size_type input_offset = cudf::util::detail::bit_container_index<bit_mask_t, cudf::size_type>(input_index_begin);
+  cudf::size_type rotate_input = cudf::util::detail::intra_container_index<bit_mask_t, cudf::size_type>(input_index_begin);
   bit_mask_t mask_last = (bit_mask_t{1} << ((input_index_end - input_index_begin) % bit_mask::bits_per_element)) - bit_mask_t{1};
 
   cudf::size_type input_block_length = bit_mask::num_elements(input_size);
@@ -126,7 +126,7 @@ void slice_bitmask_kernel(bit_mask_t*           output_bitmask,
 class Slice {
 public:
   Slice(gdf_column const &                input_column,
-        cudf::index_type const*             indices,
+        cudf::size_type const*             indices,
         cudf::size_type                     num_indices,
         std::vector<gdf_column*> const &  output_columns,
         std::vector<cudaStream_t> const & streams)
@@ -141,7 +141,7 @@ public:
     cudf::size_type columns_quantity = output_columns_.size();
     
     // Perform operation
-    for (cudf::index_type index = 0; index < columns_quantity; ++index) {
+    for (cudf::size_type index = 0; index < columns_quantity; ++index) {
       
       // Empty output column
       if (output_columns_[index]->size == 0) {
@@ -222,7 +222,7 @@ public:
 
   private:
 
-    cudaStream_t get_stream(cudf::index_type index) {
+    cudaStream_t get_stream(cudf::size_type index) {
       if (streams_.size() == 0) {
         return cudaStream_t{nullptr};
       }
@@ -231,7 +231,7 @@ public:
 
 
     gdf_column const                input_column_;
-    cudf::index_type const*           indices_;
+    cudf::size_type const*           indices_;
     cudf::size_type                   num_indices_;
     std::vector<gdf_column*> const  output_columns_;
     std::vector<cudaStream_t>      streams_; 
@@ -241,7 +241,7 @@ public:
 namespace detail {
 
 std::vector<gdf_column*> slice(gdf_column const &         input_column,
-                               cudf::index_type const*      indices,
+                               cudf::size_type const*      indices,
                                cudf::size_type              num_indices,
                                std::vector<cudaStream_t> const & streams) {
   
@@ -287,7 +287,7 @@ std::vector<gdf_column*> slice(gdf_column const &         input_column,
 
 
 std::vector<gdf_column*> slice(gdf_column const &         input_column,
-                               cudf::index_type const*      indices,
+                               cudf::size_type const*      indices,
                                cudf::size_type              num_indices) {
 
   return cudf::detail::slice(input_column, indices, num_indices);

@@ -34,11 +34,11 @@ __global__
 void copy_range_kernel(T * __restrict__ const data,
                        bit_mask_t * __restrict__ const bitmask,
                        cudf::size_type * __restrict__ const null_count,
-                       cudf::index_type begin,
-                       cudf::index_type end,
+                       cudf::size_type begin,
+                       cudf::size_type end,
                        InputFunctor input)
 {
-  const cudf::index_type tid = threadIdx.x + blockIdx.x * blockDim.x;
+  const cudf::size_type tid = threadIdx.x + blockIdx.x * blockDim.x;
   constexpr size_t mask_size = warp_size;
 
   const cudf::size_type masks_per_grid = gridDim.x * blockDim.x / mask_size;
@@ -46,15 +46,15 @@ void copy_range_kernel(T * __restrict__ const data,
   const int warp_null_change_id = threadIdx.x / warp_size;
   const int lane_id = threadIdx.x % warp_size;
 
-  const cudf::index_type begin_mask_idx =
+  const cudf::size_type begin_mask_idx =
       cudf::util::detail::bit_container_index<bit_mask_t>(begin);
-  const cudf::index_type end_mask_idx =
+  const cudf::size_type end_mask_idx =
       cudf::util::detail::bit_container_index<bit_mask_t>(end);
 
-  cudf::index_type mask_idx = begin_mask_idx + warp_id;
+  cudf::size_type mask_idx = begin_mask_idx + warp_id;
 
-  cudf::index_type output_offset = begin_mask_idx * mask_size - begin;
-  cudf::index_type input_idx = tid + output_offset; 
+  cudf::size_type output_offset = begin_mask_idx * mask_size - begin;
+  cudf::size_type input_idx = tid + output_offset; 
 
   // each warp shares its total change in null count to shared memory to ease
   // computing the total change to null_count.
@@ -67,7 +67,7 @@ void copy_range_kernel(T * __restrict__ const data,
 
   while (mask_idx <= end_mask_idx)
   {
-    cudf::index_type index = mask_idx * mask_size + lane_id;
+    cudf::size_type index = mask_idx * mask_size + lane_id;
     bool in_range = (index >= begin && index < end);
 
     // write data
@@ -120,7 +120,7 @@ struct copy_range_dispatch {
 
   template <typename T>
   void operator()(gdf_column *column,
-                  cudf::index_type begin, cudf::index_type end,
+                  cudf::size_type begin, cudf::size_type end,
                   cudaStream_t stream = 0)
   {
     static_assert(warp_size == cudf::util::size_in_bits<bit_mask_t>(), 
@@ -180,8 +180,8 @@ namespace detail {
  * of @p out_column. @p out_column is modified in place.
  * 
  * InputFunctor must have these accessors:
- * __device__ T data(cudf::index_type index);
- * __device__ bool valid(cudf::index_type index);
+ * __device__ T data(cudf::size_type index);
+ * __device__ bool valid(cudf::size_type index);
  * 
  * @tparam InputFunctor the type of the input function object
  * @p out_column the column to copy into
@@ -191,7 +191,7 @@ namespace detail {
  */
 template <typename InputFunctor>
 void copy_range(gdf_column *out_column, InputFunctor input,
-                cudf::index_type begin, cudf::index_type end)
+                cudf::size_type begin, cudf::size_type end)
 {
   validate(out_column);
   CUDF_EXPECTS(end - begin > 0, "Range is empty or reversed");

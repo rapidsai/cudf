@@ -110,7 +110,7 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
-  gdf_column* get_column(cudf::index_type index) {
+  gdf_column* get_column(cudf::size_type index) {
     assert(index < _columns.size());
     return _columns[index];
   }
@@ -121,7 +121,7 @@ struct table {
    * @param index The index of the desired column
    * @return gdf_column* Pointer to the column at `index`
    *---------------------------------------------------------------------------**/
-  gdf_column const* get_column(cudf::index_type index) const {
+  gdf_column const* get_column(cudf::size_type index) const {
     assert(index < _columns.size());
     return _columns[index];
   }

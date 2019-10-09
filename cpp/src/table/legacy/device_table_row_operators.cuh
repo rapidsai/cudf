@@ -131,7 +131,7 @@ struct row_equality_comparator
  * @returns true      If the two rows are element-wise equal
  * @returns false     If any element differs between the two rows
  */
-  __device__ inline bool operator()(cudf::index_type lhs_index, cudf::index_type rhs_index) const
+  __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const
   {
     return rows_equal<nullable>(_lhs, lhs_index, _rhs, rhs_index, _nulls_are_equal);    
   }
@@ -150,7 +150,7 @@ struct typed_row_inequality_comparator
   template <typename ColType>
   __device__
       State
-      operator()(cudf::index_type lhs_row, cudf::index_type rhs_row,
+      operator()(cudf::size_type lhs_row, cudf::size_type rhs_row,
                  gdf_column const *lhs_column, gdf_column const *rhs_column,
                  bool nulls_are_smallest)
   {
@@ -239,7 +239,7 @@ struct row_inequality_comparator
  * @returns false     If the elements from the two rows do not fulfill the inequality as defined by 
  *                        asc_desc_flags and nulls_are_smallest
  */
-  __device__ inline bool operator()(cudf::index_type lhs_index, cudf::index_type rhs_index) const
+  __device__ inline bool operator()(cudf::size_type lhs_index, cudf::size_type rhs_index) const
   {
 
     State state = State::Undecided;

@@ -71,7 +71,7 @@ TYPED_TEST(RepeatTest, RepeatScalarCount)
   scalar_wrapper<cudf::size_type> count{repeat_count};
 
   column_wrapper<T> expected = factory.make(column_size,
-    [&](cudf::index_type row) { return expect_vals[row]; });
+    [&](cudf::size_type row) { return expect_vals[row]; });
 
   cudf::table result = cudf::repeat({values.get()}, *count.get());
   column_wrapper<T> actual(*result.get_column(0));
@@ -114,7 +114,7 @@ TYPED_TEST(RepeatTest, Repeat)
   column_wrapper<cudf::size_type> counts(counts_data);
 
   column_wrapper<T> expected = factory.make(column_size,
-    [&](cudf::index_type row) { return expect_vals[row]; });
+    [&](cudf::size_type row) { return expect_vals[row]; });
 
   cudf::table result = cudf::repeat({values.get()}, *counts.get());
   column_wrapper<T> actual(*result.get_column(0));
@@ -161,8 +161,8 @@ TYPED_TEST(RepeatTest, RepeatNullable)
   column_wrapper<cudf::size_type> counts(counts_data);
 
   column_wrapper<T> expected = factory.make(column_size,
-    [&](cudf::index_type row) { return expect_vals[row]; },
-    [&](cudf::index_type row) { 
+    [&](cudf::size_type row) { return expect_vals[row]; },
+    [&](cudf::size_type row) { 
       auto corresponding_value_it = std::upper_bound(offsets.begin(), offsets.end(), row);
       return (corresponding_value_it - offsets.begin()) % 2; });
 

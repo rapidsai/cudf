@@ -47,14 +47,14 @@ static void join_benchmark(benchmark::State& state)
 
     cudf::test::column_wrapper<payload_type> build_payload_column(
         build_table_size,
-        [] (cudf::index_type row_index) {
+        [] (cudf::size_type row_index) {
             return row_index;
         }
     );
 
     cudf::test::column_wrapper<payload_type> probe_payload_column(
         probe_table_size,
-        [] (cudf::index_type row_index) {
+        [] (cudf::size_type row_index) {
             return row_index;
         }
     );

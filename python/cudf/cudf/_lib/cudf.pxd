@@ -70,7 +70,6 @@ cpdef check_gdf_error(errcode)
 cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
 
     ctypedef int32_t       size_type
-    ctypedef size_type     index_type
     ctypedef uint8_t       valid_type
 
 cdef extern from "cudf/cudf.h" nogil:
@@ -328,7 +327,7 @@ cdef extern from "cudf/cudf.h" nogil:
         gdf_column* col,
         gdf_column* bins,
         bool right,
-        index_type* out_indices
+        size_type* out_indices
     ) except +
 
     cdef gdf_error gdf_nvtx_range_push(
@@ -370,7 +369,7 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
         gdf_column** end() except +
 
-        gdf_column* get_column(index_type index) except +
+        gdf_column* get_column(size_type index) except +
 
         size_type num_columns() except +
 
@@ -379,6 +378,6 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 # Todo? add const overloads
 #        const gdf_column* const* begin() const except +
 #        gdf_column const* const* end() const
-#        gdf_column const* get_column(index_type index) const except +
+#        gdf_column const* get_column(size_type index) const except +
 
 cpdef gdf_dtype gdf_dtype_from_value(col, dtype=*) except? GDF_invalid

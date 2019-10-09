@@ -60,15 +60,15 @@ __global__ void materialize_merged_bitmask_kernel(
     bit_mask_t const* const __restrict__ source_right_mask,
     bit_mask_t* const destination_mask,
     cudf::size_type const num_destination_rows,
-    ::index_type const* const __restrict__ merged_indices) {
+    index_type const* const __restrict__ merged_indices) {
 
-  cudf::index_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
+  cudf::size_type destination_row = threadIdx.x + blockIdx.x * blockDim.x;
 
   auto active_threads =
       __ballot_sync(0xffffffff, destination_row < num_destination_rows);
 
   while (destination_row < num_destination_rows) {
-    ::index_type const& merged_idx = merged_indices[destination_row];
+    index_type const& merged_idx = merged_indices[destination_row];
     side const src_side = thrust::get<0>(merged_idx);
     cudf::size_type const src_row  = thrust::get<1>(merged_idx);
     bool const from_left{src_side == side::LEFT};
@@ -85,7 +85,7 @@ __global__ void materialize_merged_bitmask_kernel(
     bit_mask_t const result_mask{
         __ballot_sync(active_threads, source_bit_is_valid)};
 
-    cudf::index_type const output_element = cudf::util::detail::bit_container_index<bit_mask_t, cudf::index_type>(destination_row);
+    cudf::size_type const output_element = cudf::util::detail::bit_container_index<bit_mask_t, cudf::size_type>(destination_row);
     
     // Only one thread writes output
     if (0 == threadIdx.x % warpSize) {
@@ -101,7 +101,7 @@ __global__ void materialize_merged_bitmask_kernel(
 void materialize_bitmask(gdf_column const* left_col,
                         gdf_column const* right_col,
                         gdf_column* out_col,
-                        ::index_type const* merged_indices,
+                        index_type const* merged_indices,
                         cudaStream_t stream) {
     constexpr cudf::size_type BLOCK_SIZE{256};
     cudf::util::cuda::grid_config_1d grid_config {out_col->size, BLOCK_SIZE };
@@ -134,7 +134,7 @@ void materialize_bitmask(gdf_column const* left_col,
     CHECK_STREAM(stream);
 }
 
-rmm::device_vector<::index_type>
+rmm::device_vector<index_type>
 generate_merged_indices(device_table const& left_table,
                         device_table const& right_table,
                         rmm::device_vector<int8_t> const& asc_desc,
@@ -157,7 +157,7 @@ generate_merged_indices(device_table const& left_table,
     auto left_end_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(left_side + left_size, left_indices + left_size));
     auto right_end_zip_iterator = thrust::make_zip_iterator(thrust::make_tuple(right_side + right_size, right_indices + right_size));
 
-    rmm::device_vector<::index_type> merged_indices(total_size);
+    rmm::device_vector<index_type> merged_indices(total_size);
     bool nullable = left_table.has_nulls() || right_table.has_nulls();
     if (nullable){
         auto ineq_op = row_inequality_comparator<true>(right_table, left_table, nulls_are_smallest, asc_desc.data().get()); 
@@ -264,17 +264,17 @@ table merge(table const& left_table,
 
     std::vector<gdf_column*> left_key_cols_vect(key_cols.size());
     std::transform(key_cols.cbegin(), key_cols.cend(), left_key_cols_vect.begin(),
-                  [&] (cudf::index_type const index) { return left_sync_table.get_column(index); });
+                  [&] (cudf::size_type const index) { return left_sync_table.get_column(index); });
     
     std::vector<gdf_column*> right_key_cols_vect(key_cols.size());
     std::transform(key_cols.cbegin(), key_cols.cend(), right_key_cols_vect.begin(),
-                  [&] (cudf::index_type const index) { return right_sync_table.get_column(index); });
+                  [&] (cudf::size_type const index) { return right_sync_table.get_column(index); });
 
     auto left_key_table = device_table::create(left_key_cols_vect.size(), left_key_cols_vect.data());
     auto right_key_table = device_table::create(right_key_cols_vect.size(), right_key_cols_vect.data());
     rmm::device_vector<int8_t> asc_desc_d(asc_desc);
 
-    rmm::device_vector<::index_type> merged_indices = generate_merged_indices(*left_key_table, *right_key_table, asc_desc_d, nulls_are_smallest, stream);
+    rmm::device_vector<index_type> merged_indices = generate_merged_indices(*left_key_table, *right_key_table, asc_desc_d, nulls_are_smallest, stream);
 
     // Allocate output table
     bool nullable = has_nulls(left_sync_table) || has_nulls(right_sync_table);
@@ -314,7 +314,7 @@ table merge(table const& left_table,
                     index_end_it,
                     [=] __device__ (auto const & idx_tuple){
                         cudf::size_type dest_row = thrust::get<0>(idx_tuple);
-                        ::index_type merged_idx = thrust::get<1>(idx_tuple);
+                        index_type merged_idx = thrust::get<1>(idx_tuple);
                         side src_side = thrust::get<0>(merged_idx);
                         cudf::size_type src_row  = thrust::get<1>(merged_idx);
                         device_table const & src_device_table = src_side == side::LEFT ? left_device_table : right_device_table;

@@ -37,7 +37,7 @@ namespace cudf {
  * @return void
  */
 void fill(gdf_column *column, gdf_scalar const& value, 
-          cudf::index_type begin, cudf::index_type end);
+          cudf::size_type begin, cudf::size_type end);
 
 /**
  * @brief Repeat rows of a Table

@@ -28,7 +28,7 @@ R"***(operation.h
   struct numba_generic_aggregator {
     template <typename OutType, typename InType>
     static OutType operate(
-      const InType* in_col, cudf::index_type start, cudf::index_type count)
+      const InType* in_col, cudf::size_type start, cudf::size_type count)
     {
       OutType ret;
       NUMBA_GENERIC_AGGREGATOR(
@@ -40,7 +40,7 @@ R"***(operation.h
   struct cuda_generic_aggregator {
     template <typename OutType, typename InType>
     static OutType operate(
-      const InType* in_col, cudf::index_type start, cudf::index_type count)
+      const InType* in_col, cudf::size_type start, cudf::size_type count)
     {
       OutType ret;
       CUDA_GENERIC_AGGREGATOR(

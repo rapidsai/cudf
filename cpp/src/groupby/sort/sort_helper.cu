@@ -109,7 +109,7 @@ gdf_column const& helper::key_sort_order() {
 
   _key_sorted_order = gdf_col_pointer(
     new gdf_column(
-      allocate_column(gdf_dtype_of<cudf::index_type>(),
+      allocate_column(gdf_dtype_of<cudf::size_type>(),
                       _keys.num_rows(),
                       false,
                       gdf_dtype_extra_info{},
@@ -117,7 +117,7 @@ gdf_column const& helper::key_sort_order() {
     [](gdf_column* col) { gdf_column_free(col); });
 
   if (_keys_pre_sorted) {
-    auto d_key_sorted_order = static_cast<cudf::index_type*>(_key_sorted_order->data);
+    auto d_key_sorted_order = static_cast<cudf::size_type*>(_key_sorted_order->data);
 
     thrust::sequence(rmm::exec_policy(_stream)->on(_stream), 
                      d_key_sorted_order,
@@ -263,7 +263,7 @@ helper::sort_values(gdf_column const& values) {
     "Size mismatch between keys and values.");
   auto values_sort_order = gdf_col_pointer(
     new gdf_column(
-      allocate_column(gdf_dtype_of<cudf::index_type>(),
+      allocate_column(gdf_dtype_of<cudf::size_type>(),
                       _keys.num_rows(),
                       false,
                       gdf_dtype_extra_info{},

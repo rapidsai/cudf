@@ -377,8 +377,8 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_SingleColumn)
 
   constexpr int64_t length = 100;
   cudf::test::column_wrapper<T> col0(length,
-                                     [](cudf::index_type i) { return i; },
-                                     [](cudf::index_type i) { return true; });
+                                     [](cudf::size_type i) { return i; },
+                                     [](cudf::size_type i) { return true; });
 
   gdf_column **columns = new gdf_column*[1];
   columns[0] = col0.get();
@@ -411,8 +411,8 @@ TYPED_TEST(DLPackTypedTest, ToDLPack_MultiColumn)
 
   for (int64_t c = 0; c < width; c++) {
     cols[c] = new cudf::test::column_wrapper<T>(length,
-                                                [c](cudf::index_type i) { return i*(c+1); },
-                                                [](cudf::index_type i) { return true; });
+                                                [c](cudf::size_type i) { return i*(c+1); },
+                                                [](cudf::size_type i) { return true; });
     columns[c] = cols[c]->get();
   }
 

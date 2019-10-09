@@ -23,20 +23,20 @@ namespace detail {
 
 struct column_range_factory {
   gdf_column column;
-  cudf::index_type begin;
+  cudf::size_type begin;
 
   template <typename T>
   struct column_range {
     T const * column_data;
     bit_mask_t const * bitmask;
-    cudf::index_type begin;
+    cudf::size_type begin;
 
     __device__
-    T data(cudf::index_type index) { 
+    T data(cudf::size_type index) { 
       return column_data[begin + index]; }
 
     __device__
-    bool valid(cudf::index_type index) {
+    bool valid(cudf::size_type index) {
       return bit_mask::is_valid(bitmask, begin + index);
     }
   };
@@ -54,8 +54,8 @@ struct column_range_factory {
 }; // namespace detail
 
 void copy_range(gdf_column *out_column, gdf_column const &in_column,
-                cudf::index_type out_begin, cudf::index_type out_end, 
-                cudf::index_type in_begin)
+                cudf::size_type out_begin, cudf::size_type out_end, 
+                cudf::size_type in_begin)
 {
   cudf::size_type num_elements = out_end - out_begin;
   if (num_elements != 0) { // otherwise no-op

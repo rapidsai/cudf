@@ -29,10 +29,10 @@ struct scalar_factory {
     bool is_valid;
 
     __device__
-    T data(cudf::index_type index) { return value; }
+    T data(cudf::size_type index) { return value; }
 
     __device__
-    bool valid(cudf::index_type index) { return is_valid; }
+    bool valid(cudf::size_type index) { return is_valid; }
   };
 
   template <typename T>
@@ -46,7 +46,7 @@ struct scalar_factory {
 }; // namespace detail
 
 void fill(gdf_column *column, gdf_scalar const& value, 
-          cudf::index_type begin, cudf::index_type end)
+          cudf::size_type begin, cudf::size_type end)
 { 
   if (end != begin) { // otherwise no-op   
     validate(column);

@@ -50,8 +50,8 @@ void BM_table(benchmark::State& state){
   {
     for (cudf::size_type i = 0; i < num_columns; i++) {
       cols.emplace_back(col_size,
-        [=](cudf::index_type row) { return random_int(0, 10); }
-        ,[=](cudf::index_type row) { return random_int(0, 10) < 90; }
+        [=](cudf::size_type row) { return random_int(0, 10); }
+        ,[=](cudf::size_type row) { return random_int(0, 10) < 90; }
       );
     }
 

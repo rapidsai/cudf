@@ -117,7 +117,7 @@ void gpu_rolling(cudf::size_type nrows,
     // TODO: We should explore using shared memory to avoid redundant loads.
     //       This might require separating the kernel into a special version
     //       for dynamic and static sizes.
-    for (cudf::index_type j = start_index; j < end_index; j++) {
+    for (cudf::size_type j = start_index; j < end_index; j++) {
       if (!is_nullable || is_valid(in_col_valid, j)) {
         val = op(in_col[j], val);
         count++;
@@ -129,7 +129,7 @@ void gpu_rolling(cudf::size_type nrows,
 
     // set the mask
     bit_mask_t const result_mask{__ballot_sync(active_threads, output_is_valid)};
-    cudf::index_type const out_mask_location = cudf::util::detail::bit_container_index<bit_mask_t, cudf::index_type>(i);
+    cudf::size_type const out_mask_location = cudf::util::detail::bit_container_index<bit_mask_t, cudf::size_type>(i);
 
     // only one thread writes the mask
     if (0 == threadIdx.x % warpSize)

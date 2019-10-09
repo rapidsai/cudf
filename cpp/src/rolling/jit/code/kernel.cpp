@@ -68,7 +68,7 @@ void gpu_rolling(cudf::size_type nrows,
 
     // set the mask
     const unsigned int result_mask = __ballot_sync(active_threads, output_is_valid);
-    const cudf::index_type out_mask_location = i / warp_size;
+    const cudf::size_type out_mask_location = i / warp_size;
 
     // only one thread writes the mask
     if (0 == threadIdx.x % warp_size){

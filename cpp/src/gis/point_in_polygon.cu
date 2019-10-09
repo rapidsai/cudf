@@ -133,15 +133,15 @@ __device__ T orientation( const T & p1_x, const T & p1_y,
                                           cudf::size_type points_size,
                                           cudf::bool8* const __restrict__ point_is_in_polygon )
 {
-    cudf::index_type start_idx = blockIdx.x * blockDim.x + threadIdx.x;
+    cudf::size_type start_idx = blockIdx.x * blockDim.x + threadIdx.x;
  
-    for(cudf::index_type idx = start_idx; idx < points_size; idx += blockDim.x * gridDim.x)
+    for(cudf::size_type idx = start_idx; idx < points_size; idx += blockDim.x * gridDim.x)
     {
         T point_lat = point_lats[idx];
         T point_lon = point_lons[idx];
         cudf::size_type count = 0;
  
-        for(cudf::index_type poly_side = 0; poly_side < poly_size - 1; poly_side++) 
+        for(cudf::size_type poly_side = 0; poly_side < poly_size - 1; poly_side++) 
         {
             if(poly_lons[poly_side] <= point_lon && point_lon < poly_lons[poly_side + 1])
             {

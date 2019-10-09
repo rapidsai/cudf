@@ -49,12 +49,12 @@ TEST(ScatterTest, ScatterNVString)
     print_gdf_column(right_column);
   }  
   
-  std::vector<cudf::index_type> scatter_map(rows_size);
+  std::vector<cudf::size_type> scatter_map(rows_size);
   for(int i = 0; i < rows_size; i++){
     scatter_map[i] = i * 2;
   }
   
-  rmm::device_vector<cudf::index_type> d_scatter_map = scatter_map;
+  rmm::device_vector<cudf::size_type> d_scatter_map = scatter_map;
 
   cudf::table source_table({left_column});
   cudf::table target_table({right_column});

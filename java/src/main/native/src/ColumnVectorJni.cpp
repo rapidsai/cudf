@@ -462,7 +462,7 @@ JNIEXPORT jlongArray JNICALL Java_ai_rapids_cudf_ColumnVector_cudfSlice(JNIEnv *
 
   try {
     std::vector<gdf_column *> result = cudf::slice(
-        *n_column, static_cast<cudf::index_type *>(n_slice_indices->data), n_slice_indices->size);
+        *n_column, static_cast<cudf::size_type *>(n_slice_indices->data), n_slice_indices->size);
     cudf::jni::native_jlongArray n_result(env, reinterpret_cast<jlong *>(result.data()),
                                           result.size());
     return n_result.get_jArray();
@@ -565,7 +565,7 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jclas
       std::vector<gdf_column *> out_vec{result_ptr};
       cudf::table output_table(out_vec);
 
-      gather(&tmp_table, static_cast<cudf::index_type *>(n_column->data), &output_table);
+      gather(&tmp_table, static_cast<cudf::size_type *>(n_column->data), &output_table);
       if (n_column->null_count > 0) {
         CUDA_TRY(cudaMemcpy(result_ptr->valid, n_column->valid,
                             gdf_num_bitmask_elements(n_column->size), cudaMemcpyDeviceToDevice));

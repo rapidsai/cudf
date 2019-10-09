@@ -34,7 +34,7 @@ namespace { // unnamed namespace
       const size_t& num_bins,
       void *col_data,
       const size_t& num_rows,
-      cudf::index_type *output)
+      cudf::size_type *output)
     {
       ColumnType const * const p_bins{static_cast<ColumnType*>(bins)};
       ColumnType const * const p_values{static_cast<ColumnType const*>(col_data)};
@@ -49,7 +49,7 @@ namespace { // unnamed namespace
 gdf_error gdf_digitize(gdf_column* col,
                        gdf_column* bins,   // same type as col
                        bool right,
-                       cudf::index_type out_indices[])
+                       cudf::size_type out_indices[])
 {
   GDF_REQUIRE(nullptr != col, GDF_DATASET_EMPTY);
   GDF_REQUIRE(nullptr != bins, GDF_DATASET_EMPTY);
