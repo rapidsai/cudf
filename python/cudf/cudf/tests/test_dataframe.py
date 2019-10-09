@@ -3698,33 +3698,43 @@ def test_df_astype_string_to_other(as_dtype):
 @pytest.mark.parametrize(
     "as_dtype",
     [
-        pytest.param(
-            "category",
-            marks=pytest.mark.xfail(
-                reason=".categories.name not reset when assigned"
-            ),
-        ),
-        "datetime64[s]",
+        'int64',
         "datetime64[ms]",
         "datetime64[us]",
         "datetime64[ns]",
         "str",
+        "category"
     ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
-    data = ["2001-01-01", "2002-02-02", "2001-01-05", None]
+    data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
 
     gdf = DataFrame()
-    gdf["foo"] = Series(data)
-    gdf["bar"] = Series(data)
-
+    gdf["foo"] = Series(data, dtype='datetime64[ms]')
+    gdf["bar"] = Series(data, dtype='datetime64[ms]')
+    
     expect = DataFrame()
-    if as_dtype == "str":  # normal constructor results in None -> 'None'
-        insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
+
+    if as_dtype == 'int64':
+        expect["foo"] = Series([690595200000, 1102118400000, 1473724800000, None], dtype='int64')
+        expect["bar"] = Series([690595200000, 1102118400000, 1473724800000, None], dtype='int64')
+    elif  as_dtype == 'str':
+        expect["foo"] = Series(data, dtype='str')
+        expect["bar"] = Series(data, dtype='str')
+    elif as_dtype == 'category':
+        expect['foo'] = Series(gdf['foo'], dtype='category')
+        expect['bar'] = Series(gdf['bar'], dtype='category')
     else:
-        insert_data = Series(data, dtype=as_dtype)
-    expect["foo"] = insert_data
-    expect["bar"] = insert_data
+        expect['foo'] = Series(data, dtype=as_dtype)
+        expect['bar'] = Series(data, dtype=as_dtype)
+
+    #expect = DataFrame()
+    #if as_dtype == "str":  # normal constructor results in None -> 'None'
+    #    insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
+    #else:
+    #    insert_data = Series(data, dtype=as_dtype)
+    #expect["foo"] = insert_data
+    #expect["bar"] = insert_data
 
     got = gdf.astype(as_dtype, format="%Y-%m-%d")
 
