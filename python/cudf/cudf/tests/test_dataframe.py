@@ -3626,33 +3626,49 @@ def test_tolist_mixed_nulls():
     for got, exp in zip(time_data_got, time_data_expect):  # deal with NaT
         assert (got == exp) or (pd.isnull(got) and pd.isnull(exp))
 
+
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "float32", "float64"]
 )
 @pytest.mark.parametrize(
-    "as_dtype", ["int8", "int16", "int32", "int64", "float32", "float64", "str", "category", "datetime64[s]", "datetime64[ms]","datetime64[us]", "datetime64[ns]"]
+    "as_dtype",
+    [
+        "int8",
+        "int16",
+        "int32",
+        "int64",
+        "float32",
+        "float64",
+        "str",
+        "category",
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+    ],
 )
 def test_df_astype_numeric_to_all(dtype, as_dtype):
-    if 'int' in dtype:
+    if "int" in dtype:
         data = [1, 2, None, 4]
-    elif 'float' in dtype:
+    elif "float" in dtype:
         data = [1.0, 2.0, None, 4.0]
 
     gdf = DataFrame()
-    gdf['foo'] = Series(data, dtype=dtype)
-    gdf['bar'] = Series(data, dtype=dtype)
+    gdf["foo"] = Series(data, dtype=dtype)
+    gdf["bar"] = Series(data, dtype=dtype)
 
     expect = DataFrame()
-    if as_dtype == 'str': # normal constructor results in None -> 'None'
+    if as_dtype == "str":  # normal constructor results in None -> 'None'
         insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
     else:
         insert_data = Series(data, dtype=as_dtype)
-    expect['foo'] = insert_data
-    expect['bar'] = insert_data
+    expect["foo"] = insert_data
+    expect["bar"] = insert_data
 
     got = gdf.astype(as_dtype)
 
     assert_eq(expect, got)
+
 
 @pytest.mark.parametrize(
     "as_dtype",
@@ -3674,39 +3690,46 @@ def test_df_astype_string_to_other(as_dtype):
     else:
         data = ["1", "2", "3"]
         kwargs = {}
-    pdf = pd.DataFrame(data, columns=['test'])
+    pdf = pd.DataFrame(data, columns=["test"])
     gdf = gd.from_pandas(pdf)
     assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
 
+
 @pytest.mark.parametrize(
-"as_dtype",
-[
-    pytest.param("category", marks=pytest.mark.xfail(reason='.categories.name not reset when assigned')),
-    "datetime64[s]",
-    "datetime64[ms]",
-    "datetime64[us]",
-    "datetime64[ns]",
-    "str",
-],
+    "as_dtype",
+    [
+        pytest.param(
+            "category",
+            marks=pytest.mark.xfail(
+                reason=".categories.name not reset when assigned"
+            ),
+        ),
+        "datetime64[s]",
+        "datetime64[ms]",
+        "datetime64[us]",
+        "datetime64[ns]",
+        "str",
+    ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
     data = ["2001-01-01", "2002-02-02", "2001-01-05", None]
 
     gdf = DataFrame()
-    gdf['foo'] = Series(data)
-    gdf['bar'] = Series(data)
+    gdf["foo"] = Series(data)
+    gdf["bar"] = Series(data)
 
     expect = DataFrame()
-    if as_dtype == 'str': # normal constructor results in None -> 'None'
+    if as_dtype == "str":  # normal constructor results in None -> 'None'
         insert_data = Series.from_pandas(pd.Series(data, dtype=as_dtype))
     else:
         insert_data = Series(data, dtype=as_dtype)
-    expect['foo'] = insert_data
-    expect['bar'] = insert_data
+    expect["foo"] = insert_data
+    expect["bar"] = insert_data
 
     got = gdf.astype(as_dtype, format="%Y-%m-%d")
- 
+
     assert_eq(expect, got, check_names=False)
+
 
 @pytest.mark.parametrize(
     "as_dtype",
@@ -3730,8 +3753,8 @@ def test_df_astype_categorical_to_other(as_dtype):
         kwargs = {}
     psr = pd.Series(data, dtype="category")
     pdf = pd.DataFrame()
-    pdf['foo'] = psr
-    pdf['bar'] = psr
+    pdf["foo"] = psr
+    pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
     assert_eq(pdf.astype(as_dtype), pdf.astype(as_dtype, **kwargs))
 
@@ -3740,8 +3763,8 @@ def test_df_astype_categorical_to_other(as_dtype):
 def test_df_astype_to_categorical_ordered(ordered):
     psr = pd.Series([1, 2, 3, 1], dtype="category")
     pdf = pd.DataFrame()
-    pdf['foo'] = psr
-    pdf['bar'] = psr
+    pdf["foo"] = psr
+    pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
 
     assert_eq(
