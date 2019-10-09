@@ -145,11 +145,18 @@ The preferred style for how inputs are passed in and outputs are returned is the
 		- `column_view`
 	- Tables:
 		- `table_view`
+    - Everything else:
+       - Trivial or inexpensively copied types
+          - Pass by value
+       - Non-trivial or expensive to copy types
+          - Pass by `const&`
 -   In/Outs  
 	- Columns:
 		- `mutable_column_view`
 	- Tables:
 		- `mutable_table_view`
+    - Everything else:
+        - Pass by via raw pointer
 -   Outputs 
 	- Outputs should be *returned*, i.e., no output parameters
 	- Columns:
@@ -162,8 +169,8 @@ The preferred style for how inputs are passed in and outputs are returned is the
 
 Sometimes it is necessary for functions to have multiple outputs. There are a few ways this can be done in C++ (including creating a  `struct`  for the output). One convenient way to do this is using  `std::tie`  and  `std::make_pair`.
 
-```
-auto return_two_outputs(void){
+```c++
+std::pair<table, table> return_two_tables(void){
   cudf::table out0;
   cudf::table out1;
   ...
@@ -173,11 +180,9 @@ auto return_two_outputs(void){
   return std::make_pair(out0, out1);
 }
 
-
 cudf::table out0;
 cudf::table out1;
 std::tie(out0, out1) = cudf::return_two_outputs();
-
 ```
 
 Note:  `std::tuple`  _could_  be used if not for the fact that Cython does not support  `std::tuple`. Therefore, libcudf APIs must use  `std::pair`, and are therefore limited to return only two objects of different types. Multiple objects of the same type may be returned via a  `std::vector<T>`.
