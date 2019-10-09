@@ -503,6 +503,7 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 |    `cudf::table *`   |     `cudf::mutable_table_view`    |                                                 |
 | `cudf::device_table` |     `cudf::table_device_view`     |                    Immutable                    |
 | `cudf::device_table` | `cudf::mutable_table_device_view` |                     Mutable                     |
+| `gdf_scalar`         | `cudf::scalar`                    |                     Not yet implemented         |
 
 ### Functions
 
