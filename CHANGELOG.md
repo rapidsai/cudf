@@ -60,6 +60,7 @@
 - PR #2872 Add Java pinned memory pool allocator
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
+- PR #2999 Add timestamp conversion support for string categories
 
 ## Improvements
 
@@ -171,6 +172,7 @@
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3007 Java: Remove unit test that frees RMM invalid pointer
 - PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
 
 
