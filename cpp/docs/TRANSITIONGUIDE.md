@@ -89,13 +89,21 @@ Trivially-copyable and should be passed by value.
 
 Owning class for a set of `cudf::column`s all with equal number of elements. This is the C++ corollary to a DataFrame. 
 
+Implicitly convertible to `cudf::table_view` and `cudf::mutable_table_view`
+
+Movable and copyable. A copy performs a deep copy of all columns, whereas a move moves all columns from one table to another.
+
 ### `cudf::table_view`
 
 An *immutable*, non-owning view of a table. 
 
+Trivially-copyable and should be passed by value. 
+
 ### `cudf::mutable_table_view`
 
 A *mutable*, non-owning view of a table. 
+
+Trivially-copyable and should be passed by value. 
 
 # libcudf++ API
 ### Old libcudf API
@@ -429,6 +437,7 @@ gdf_column  old_function(gdf_column const& input,
 2. Update paths to `old.hpp`, `old.cpp`, and `old_tests.cpp` 
     - `cudf/cpp/CMakeLists.txt` 
     - `cudf/cpp/tests/CMakeLists.txt`
+    - `cudf/conda/recipes/libcudf/meta.yaml`
     - Include paths
     - Cython include paths (see [Cython changes](#cython_changes))
 3. Update test names
@@ -520,9 +529,12 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 
 ## Strings Support<a name="string_support"></a>
 
-// TODO
+One of the more dramatic changes in `libcudf++` is the addition of native support for columns of strings. 
+Previously, string support in libcudf was accomplished via the `NVCategory` class.
+See the [NVCategory](#nvcategory_changes) section for more detail. 
 
-### NVCategory
+
+### NVCategory<a name="nvcategory_changes"></a>
 
 // TODO
 
