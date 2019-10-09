@@ -701,4 +701,99 @@ public class ColumnVectorTest {
               aggType(AggregateOp.SUM).build());
     }
   }
+
+  @Test
+  void testFindAndReplaceAll() {
+    try(ColumnVector vector = ColumnVector.fromInts(1, 4, 1, 5, 3, 3, 1, 2, 9, 8);
+        ColumnVector oldValues = ColumnVector.fromInts(1, 4, 7); // 7 doesn't exist, nothing to replace
+        ColumnVector replacedValues = ColumnVector.fromInts(7, 6, 1);
+        ColumnVector expectedVector = ColumnVector.fromInts(7, 6, 7, 5, 3, 3, 7, 2, 9, 8);
+        ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
+        assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllFloat() {
+    try(ColumnVector vector = ColumnVector.fromFloats(1.0f, 4.2f, 1.3f, 5.7f, 3f, 3f, 1.0f, 2.6f, 0.9f, 8.3f);
+        ColumnVector oldValues = ColumnVector.fromFloats(1.0f, 4.2f, 7); // 7 doesn't exist, nothing to replace
+        ColumnVector replacedValues = ColumnVector.fromFloats(7.3f, 6.7f, 1.0f);
+        ColumnVector expectedVector = ColumnVector.fromFloats(7.3f, 6.7f, 1.3f, 5.7f, 3f, 3f, 7.3f, 2.6f, 0.9f, 8.3f);
+        ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
+      assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllTimeUnits() {
+    try(ColumnVector vector = ColumnVector.timestampsFromLongs(TimeUnit.MICROSECONDS, 1l, 1l, 2l, 8l);
+        ColumnVector oldValues = ColumnVector.timestampsFromLongs(TimeUnit.MICROSECONDS, 1l, 2l, 7l); // 7 dosn't exist, nothing to replace
+        ColumnVector replacedValues = ColumnVector.timestampsFromLongs(TimeUnit.MICROSECONDS, 9l, 4l, 0l);
+        ColumnVector expectedVector = ColumnVector.timestampsFromLongs(TimeUnit.MICROSECONDS, 9l, 9l, 4l, 8l);
+        ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
+      assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllMixingTypes() {
+    try(ColumnVector vector = ColumnVector.fromInts(1, 4, 1, 5, 3, 3, 1, 2, 9, 8);
+        ColumnVector oldValues = ColumnVector.fromInts(1, 4, 7); // 7 doesn't exist, nothing to replace
+        ColumnVector replacedValues = ColumnVector.fromFloats(7.0f, 6, 1)) {
+      assertThrows(CudfException.class, () -> vector.findAndReplaceAll(oldValues, replacedValues));
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllStrings() {
+    try(ColumnVector vector = ColumnVector.fromStrings("spark", "scala", "spark", "hello", "code");
+        ColumnVector oldValues = ColumnVector.fromStrings("spark","code","hello");
+        ColumnVector replacedValues = ColumnVector.fromStrings("sparked", "codec", "hi")) {
+      assertThrows(CudfException.class, () -> vector.findAndReplaceAll(oldValues, replacedValues));
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllWithNull() {
+    try(ColumnVector vector = ColumnVector.fromBoxedInts(1, 4, 1, 5, 3, 3, 1, null, 9, 8);
+        ColumnVector oldValues = ColumnVector.fromBoxedInts(1, 4, 8);
+        ColumnVector replacedValues = ColumnVector.fromBoxedInts(7, 6, null);
+        ColumnVector expectedVector = ColumnVector.fromBoxedInts(7, 6, 7, 5, 3, 3, 7, null, 9, null);
+        ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
+      assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllNulllWithValue() {
+    // null values cannot be replaced using findAndReplaceAll();
+    try(ColumnVector vector = ColumnVector.fromBoxedInts(1, 4, 1, 5, 3, 3, 1, null, 9, 8);
+        ColumnVector oldValues = ColumnVector.fromBoxedInts(1, 4, null);
+        ColumnVector replacedValues = ColumnVector.fromBoxedInts(7, 6, 8)) {
+      assertThrows(CudfException.class, () -> vector.findAndReplaceAll(oldValues, replacedValues));
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllFloatNan() {
+    // Float.NaN != Float.NaN therefore it cannot be replaced
+    try(ColumnVector vector = ColumnVector.fromFloats(1.0f, 4.2f, 1.3f, 5.7f, 3f, 3f, 1.0f, 2.6f, Float.NaN, 8.3f);
+        ColumnVector oldValues = ColumnVector.fromFloats(1.0f, 4.2f, Float.NaN);
+        ColumnVector replacedValues = ColumnVector.fromFloats(7.3f, 6.7f, 0);
+        ColumnVector expectedVector = ColumnVector.fromFloats(7.3f, 6.7f, 1.3f, 5.7f, 3f, 3f, 7.3f, 2.6f, Float.NaN, 8.3f);
+        ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
+      assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
+
+  @Test
+  void testFindAndReplaceAllWithFloatNan() {
+    try(ColumnVector vector = ColumnVector.fromFloats(1.0f, 4.2f, 1.3f, 5.7f, 3f, 3f, 1.0f, 2.6f, Float.NaN, 8.3f);
+        ColumnVector oldValues = ColumnVector.fromFloats(1.0f, 4.2f, 8.3f);
+        ColumnVector replacedValues = ColumnVector.fromFloats(7.3f, Float.NaN, 0);
+        ColumnVector expectedVector = ColumnVector.fromFloats(7.3f, Float.NaN, 1.3f, 5.7f, 3f, 3f, 7.3f, 2.6f, Float.NaN, 0);
+        ColumnVector newVector = vector.findAndReplaceAll(oldValues, replacedValues)) {
+      assertColumnsAreEqual(expectedVector, newVector);
+    }
+  }
 }

@@ -269,6 +269,7 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
             if (blen <= 64)
             {
                 uint8_t b0, b1;
+                SYNCWARP();
                 // Copy
                 if (t < blen)
                 {
@@ -290,7 +291,6 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
                 {
                     out[32 + t] = b1;
                 }
-                SYNCWARP();
             }
             else
             {

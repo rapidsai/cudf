@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-#include "valid_vectors.h"
+#include <tests/utilities/legacy/valid_vectors.h>
 
 host_valid_pointer create_and_init_valid(size_t length, size_t null_count)
 {
