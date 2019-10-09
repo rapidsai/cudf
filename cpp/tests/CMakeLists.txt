@@ -458,13 +458,13 @@ set(GIS_TEST_SRC
 ConfigureTest(POINT_IN_POLYGON_TEST "${GIS_TEST_SRC}")
 
 ###################################################################################################
-# - filling test --------------------------------------------------------------------------
+# - legacy filling test ---------------------------------------------------------------------------
 
-set(FILLING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/filling_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/filling/repeating_tests.cu")
+set(LEGACY_FILLING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/filling_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/filling/legacy/repeating_tests.cu")
 
-ConfigureTest(FILLING_TEST "${FILLING_TEST_SRC}")
+ConfigureTest(LEGACY_FILLING_TEST "${LEGACY_FILLING_TEST_SRC}")
 
 ###################################################################################################
 # - search test -----------------------------------------------------------------------------------

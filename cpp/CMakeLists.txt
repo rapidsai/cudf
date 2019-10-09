@@ -420,8 +420,8 @@ add_library(cudf
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
             src/copying/copy_range.cu
-            src/filling/fill.cu
-            src/filling/repeat.cu
+            src/filling/legacy/fill.cu
+            src/filling/legacy/repeat.cu
             src/search/search.cu
             src/column/column.cu
             src/column/column_view.cpp
