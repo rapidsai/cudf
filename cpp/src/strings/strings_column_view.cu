@@ -61,8 +61,7 @@ void print( strings_column_view strings,
         end = count;
     if( start < 0 )
         start = 0;
-    if( start >= end )
-        throw std::invalid_argument("invalid parameter value");
+    CUDF_EXPECTS( ((start >= 0) && (start < end)), "invalid start parameter");
     count = end - start;
 
     // stick with the default stream for this odd/rare stdout function

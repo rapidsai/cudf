@@ -19,7 +19,7 @@
 #include <cudf/column/column.hpp>
 
 
-namespace cudf 
+namespace cudf
 {
 namespace strings
 {
@@ -33,8 +33,10 @@ namespace detail
  *
  * ```
  * s1 = ["a", "b", "c", "d", "e", "f"]
- * s2 = sublist( s1, 2 )
+ * s2 = slice( s1, 2 )
  * s2 is ["c", "d", "e", "f"]
+ * s3 = slice( s1, 1, 2 )
+ * s3 is ["b", "d", "f"]
  * ```
  *
  * @param strings Strings instance for this operation.
@@ -47,11 +49,11 @@ namespace detail
  * @param mr Resource for allocating device memory.
  * @return New strings column of size (end-start)/step.
  *---------------------------------------------------------------------------**/
-std::unique_ptr<cudf::column> sublist( strings_column_view strings,
-                                       size_type start, size_type end=-1,
-                                       size_type step=1,
-                                       cudaStream_t stream=0,
-                                       rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
+std::unique_ptr<cudf::column> slice( strings_column_view strings,
+                                     size_type start, size_type end=-1,
+                                     size_type step=1,
+                                     cudaStream_t stream=0,
+                                     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource() );
 
 /**---------------------------------------------------------------------------*
  * @brief Returns a new strings column using the specified indices to select
@@ -79,20 +81,20 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
 /**
  * @brief Returns new strings column by replacing specific strings elements
  * as indicated by the indices in the scatter_map.
- * 
+ *
  * The size of the `values` must match the size of the `scatter_map`.
- * 
+ *
  * If the same index appears more than once in `scatter_map` the result is undefined.
- * 
+ *
  * The operation is similar to cudf scatter but the output is pre-filled with the
  * `strings` elements first and then selected items are replaced by `values` at
  * the indices specified by `scatter_map`.
- * 
+ *
  * The output column will have null entries at the `scatter_map` indices if the
  * `values` element at the corresponding entry is null. Also, any values from the
  * original `strings` that are null and not included in the `scatter_map` will
  * remain null.
- * 
+ *
  *
  * ```
  * s1 = ["a", "b", "c", "d"]
@@ -121,12 +123,12 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
  * @brief Returns new strings column using the provided indices and a
  * single string. The `scatter_map` values specify where to place the string
  * in the output strings column.
- * 
+ *
  * If the same index appears more than once in `scatter_map` the result is undefined.
- * 
+ *
  * The `scatter_map` indices must be in the range [0,strings.size()).
  * No bounds checking is performed.
- * 
+ *
  * The output column will have null entries at the `scatter_map` indices if the
  * `value` parameter is null. Also, any values from the original `strings` that
  * are null and not included in the `scatter_map` will remain null.

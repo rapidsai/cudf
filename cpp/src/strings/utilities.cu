@@ -19,6 +19,7 @@
 #include <cudf/column/column_device_view.cuh>
 #include <utilities/error_utils.hpp>
 #include "./utilities.hpp"
+#include "./utilities.cuh"
 
 #include <rmm/rmm.h>
 #include <rmm/thrust_rmm_allocator.h>
@@ -79,25 +80,9 @@ std::unique_ptr<cudf::column> offsets_from_string_vector(
     const rmm::device_vector<string_view>& strings,
     cudaStream_t stream, rmm::mr::device_memory_resource* mr )
 {
-    size_type count = strings.size();
-    auto d_strings = strings.data().get();
-    auto execpol = rmm::exec_policy(stream);
-    // offsets elements is the number of strings + 1
-    auto offsets_column = make_numeric_column( data_type{INT32}, count+1,
-                                               mask_state::UNALLOCATED,
-                                               stream, mr );
-    auto offsets_view = offsets_column->mutable_view();
-    auto d_offsets = offsets_view.data<int32_t>();
-    // create new offsets vector -- last entry includes the total size
-    thrust::transform_inclusive_scan( execpol->on(stream),
-        thrust::make_counting_iterator<size_type>(0),
-        thrust::make_counting_iterator<size_type>(count),
-        d_offsets+1,
-        [d_strings] __device__ (size_type idx) { return d_strings[idx].size_bytes(); },
-        thrust::plus<int32_t>());
-    CUDA_TRY(cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream));
-    //
-    return offsets_column;
+    auto transformer = [] __device__(string_view v) { return v.size_bytes(); };
+    auto begin = thrust::make_transform_iterator(strings.begin(), transformer);
+    return make_offsets(begin, begin + strings.size(), mr, stream);
 }
 
 // build a strings chars column from an vector of string_views

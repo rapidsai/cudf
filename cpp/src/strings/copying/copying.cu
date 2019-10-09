@@ -21,6 +21,7 @@
 #include <cudf/strings/strings_column_view.hpp>
 #include <cudf/strings/string_view.cuh>
 #include "../utilities.hpp"
+#include "../utilities.cuh"
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <thrust/for_each.h>
@@ -36,18 +37,19 @@ namespace detail
 {
 
 // new strings column from subset of this strings instance
-std::unique_ptr<cudf::column> sublist( strings_column_view strings,
-                                       size_type start, size_type end,
-                                       size_type step, cudaStream_t stream,
-                                       rmm::mr::device_memory_resource* mr  )
+std::unique_ptr<cudf::column> slice( strings_column_view strings,
+                                     size_type start, size_type end,
+                                     size_type step, cudaStream_t stream,
+                                     rmm::mr::device_memory_resource* mr  )
 {
+    size_type num_strings = strings.size();
+    CUDF_EXPECTS( num_strings > 0, "Column has no strings.");
     if( step == 0 )
         step = 1;
-    CUDF_EXPECTS( step > 0, "step must be positive integer");
-    size_type num_strings = strings.size();
+    CUDF_EXPECTS( step > 0, "Parameter step must be positive integer.");
     if( end < 0 || end > num_strings )
         end = num_strings;
-    CUDF_EXPECTS( ((start >= 0) && (start < end)), "invalid start parameter");
+    CUDF_EXPECTS( ((start >= 0) && (start < end)), "Invalid start parameter value.");
     num_strings = cudf::util::round_up_safe<size_type>((end - start),step);
     //
     auto execpol = rmm::exec_policy(stream);
@@ -65,7 +67,8 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
                                       column_view gather_map, cudaStream_t stream,
                                       rmm::mr::device_memory_resource* mr  )
 {
-    size_type num_strings = gather_map.size();
+    CUDF_EXPECTS( strings.size() > 0, "Column has no strings.");
+    auto num_strings = gather_map.size();
     // TODO use index-normalizing iterator to allow any numeric type for gather_map
     CUDF_EXPECTS( gather_map.type().id()==cudf::INT32, "strings gather method only supports int32 indices right now");
     auto d_indices = gather_map.data<int32_t>();
@@ -76,23 +79,17 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
     auto d_offsets = strings.offsets().data<int32_t>();
 
     // build offsets column
-    auto offsets_column = make_numeric_column( data_type{INT32}, num_strings+1, mask_state::UNALLOCATED,
-                                               stream, mr );
-    auto offsets_view = offsets_column->mutable_view();
-    auto d_new_offsets = offsets_view.data<int32_t>();
-    // fill new offsets vector
-    // using inclusive-scan to compute last entry which is the total size
-    thrust::transform_inclusive_scan( execpol->on(stream),
-        d_indices, d_indices + num_strings,
-        d_new_offsets+1, // fills in entries [1,count]
-        [d_column, d_offsets] __device__ (size_type idx) {
+    auto offsets_transformer = [d_column, d_offsets] __device__ (size_type idx) {
             if( d_column.nullable() && d_column.is_null(idx) )
                 return 0;
             return d_offsets[idx+1] - d_offsets[idx];
-        },
-        thrust::plus<int32_t>());
-    // need to set the first entry to 0
-    CUDA_TRY(cudaMemsetAsync( d_new_offsets, 0, sizeof(*d_new_offsets), stream));
+        };
+    auto offsets_transformer_itr = thrust::make_transform_iterator( d_indices, offsets_transformer );
+    auto offsets_column = detail::make_offsets(offsets_transformer_itr,
+                                               offsets_transformer_itr+num_strings,
+                                               mr, stream);
+    auto offsets_view = offsets_column->mutable_view();
+    auto d_new_offsets = offsets_view.data<int32_t>();
 
     // build null mask
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
@@ -122,7 +119,7 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
             memcpy(d_chars + d_new_offsets[idx], d_str.data(), d_str.size_bytes() );
         });
 
-    return make_strings_column(num_strings, offsets_column, chars_column,
+    return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
 
@@ -140,9 +137,10 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
                                        cudaStream_t stream,
                                        rmm::mr::device_memory_resource* mr )
 {
+    size_type num_strings = strings.size();
+    CUDF_EXPECTS( num_strings > 0, "Column has no strings.");
     size_type elements = values.size();
     CUDF_EXPECTS( elements==scatter_map.size(), "number of values must match map size" );
-    size_type num_strings = strings.size();
     // TODO use index-normalizing iterator to allow any numeric type for gather_map
     CUDF_EXPECTS( scatter_map.type().id()==cudf::INT32, "strings scatter method only supports int32 indices right now");
     auto d_indices = scatter_map.data<int32_t>();
@@ -180,7 +178,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
         bytes = 1; // all entries are empty strings
     auto chars_column = detail::chars_from_string_vector(strings_vector,d_offsets,null_count,stream,mr);
 
-    return make_strings_column(num_strings, offsets_column, chars_column,
+    return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
 
@@ -197,6 +195,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
                                        rmm::mr::device_memory_resource* mr )
 {
     size_type num_strings = strings.size();
+    CUDF_EXPECTS( num_strings > 0, "Column has no strings.");
     size_type elements = scatter_map.size();
     auto execpol = rmm::exec_policy(0);
     // TODO use index-normalizing iterator to allow any numeric type for gather_map
@@ -237,7 +236,7 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
         bytes = 1; // all entries are empty strings
     auto chars_column = detail::chars_from_string_vector(strings_vector,d_offsets,null_count,stream,mr);
 
-    return make_strings_column(num_strings, offsets_column, chars_column,
+    return make_strings_column(num_strings, std::move(offsets_column), std::move(chars_column),
                                null_count, std::move(null_mask), stream, mr);
 }
 

@@ -26,7 +26,7 @@ namespace cudf {
  * @brief Construct column with sufficient uninitialized storage
  * to hold `size` elements of the specified numeric `data_type` with an optional
  * null mask.
- * 
+ *
  * @note `null_count()` is determined by the requested null mask `state`
  *
  * @throws std::bad_alloc if device memory allocation fails
@@ -47,7 +47,7 @@ std::unique_ptr<column> make_numeric_column(
     rmm::mr::device_memory_resource* mr = rmm::mr::get_default_resource());
 
 /**---------------------------------------------------------------------------*
- * @brief Construct STRING type column given an vector of pointer/size pairs.
+ * @brief Construct STRING type column given a vector of pointer/size pairs.
  * The total number of char bytes must not exceed the maximum size of size_type.
  * The string characters are expected to be UTF-8 encoded sequence of char bytes.
  * Use the strings_column_view class to perform strings operations on this type
@@ -130,8 +130,8 @@ std::unique_ptr<column> make_strings_column(
  *---------------------------------------------------------------------------**/
 std::unique_ptr<column> make_strings_column(
     size_type num_strings,
-    std::unique_ptr<column>& offsets,
-    std::unique_ptr<column>& chars,
+    std::unique_ptr<column> offsets,
+    std::unique_ptr<column> chars,
     size_type null_count,
     rmm::device_buffer&& null_mask,
     cudaStream_t stream = 0,

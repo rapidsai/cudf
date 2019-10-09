@@ -42,6 +42,7 @@
 - PR #2811 Start of cudf strings column work based on 2207
 - PR #2872 Add Java pinned memory pool allocator
 - PR #2971 Added initial gather and scatter methods for strings_column_view
+- PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 
 ## Improvements
@@ -154,6 +155,7 @@
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
 
 
 # cuDF 0.9.0 (21 Aug 2019)
