@@ -21,7 +21,7 @@
 #include <utilities/column_utils.hpp>
 #include <io/utilities/wrapper_utils.hpp>
 
-#include <cudf/search.hpp>
+#include <cudf/legacy/search.hpp>
 #include <cudf/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>

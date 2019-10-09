@@ -422,7 +422,7 @@ add_library(cudf
             src/copying/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
-            src/search/search.cu
+            src/search/legacy/search.cu
             src/column/column.cu
             src/column/column_view.cpp
             src/column/column_device_view.cu

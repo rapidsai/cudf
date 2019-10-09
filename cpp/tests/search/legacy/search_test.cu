@@ -17,7 +17,7 @@
 #include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
 #include <tests/utilities/legacy/scalar_wrapper.cuh>
-#include <cudf/search.hpp>
+#include <cudf/legacy/search.hpp>
 
 using cudf::test::column_wrapper;
 using cudf::test::scalar_wrapper;
