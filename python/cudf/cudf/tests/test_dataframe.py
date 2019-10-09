@@ -3772,7 +3772,9 @@ def test_df_astype_to_categorical_ordered(ordered):
         gdf.astype("int32", ordered=ordered),
     )
 
-@pytest.mark.parametrize("dtype",
+
+@pytest.mark.parametrize(
+    "dtype",
     [
         "int8",
         "int16",
@@ -3781,27 +3783,32 @@ def test_df_astype_to_categorical_ordered(ordered):
         "float32",
         "float64",
         "str",
-        "category",
+        pytest.param(
+            "category",
+            marks=pytest.mark.xfail(
+                reason=".categories.name not reset when assigned"
+            ),
+        ),
         "datetime64[s]",
         "datetime64[ms]",
         "datetime64[us]",
         "datetime64[ns]",
-    ], 
+    ],
 )
 def test_df_constructor_dtype(dtype):
-    if dtype in ['str', 'category']:
-        data = ['a', 'b', 'c', None]
-    elif 'datetime' in dtype:
-        data = ['1991-11-20', '2004-12-04', '2016-09-13', None]
+    if dtype in ["str", "category"]:
+        data = ["a", "b", "c", None]
+    elif "datetime" in dtype:
+        data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
     else:
         data = [1, 2, 3, None]
 
     sr = Series(data, dtype=dtype)
 
     expect = DataFrame()
-    expect['foo'] = sr
-    expect['bar'] = sr
+    expect["foo"] = sr
+    expect["bar"] = sr
 
-    got = DataFrame({'foo': data, 'bar':data}, dtype=dtype)
+    got = DataFrame({"foo": data, "bar": data}, dtype=dtype)
 
     assert_eq(expect, got)
