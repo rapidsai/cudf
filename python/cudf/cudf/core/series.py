@@ -2389,15 +2389,14 @@ class Series(object):
         if fill_value is not None:
             fill_value = self.dtype.type(fill_value)
 
-        print('fill ' + str(fill_value))
-
-        res = Series(
-            libcudf.copying.shift_column(self._column, periods, fill_value)
+        shifted_series = libcudf.copying.shift_column(
+            self._column,
+            periods,
+            fill_value,
         )
 
-        print(res)
+        return Series(shifted_series)
 
-        return res
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in

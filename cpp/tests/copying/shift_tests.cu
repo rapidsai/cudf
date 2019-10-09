@@ -79,8 +79,8 @@ column_wrapper<ColumnType> shift_cpu(
 
 template <typename ColumnType>
 struct ShiftTest : public testing::Test {
-  void test_shift(const int size, const int periods) {
-    auto fill_value = scalar_wrapper<ColumnType>(0, true);
+  void test_shift(const int size, const int periods, const bool is_valid = true) {
+    auto fill_value = scalar_wrapper<ColumnType>(0, false);
     auto source_column = create_random_column<ColumnType>(size);
     auto expect_column = shift_cpu(periods, source_column, fill_value);
     auto actual_column = shift(periods, source_column, fill_value);
@@ -123,6 +123,12 @@ TYPED_TEST(ShiftTest, Zero)
 {
   const int SIZE = 2^10;
   this->test_shift(SIZE, 0);
+}
+
+TYPED_TEST(ShiftTest, InvalidFillValue)
+{
+  const int SIZE = 2^10;
+  this->test_shift(SIZE, 1, false);
 }
 
 }
