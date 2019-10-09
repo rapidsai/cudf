@@ -67,7 +67,7 @@ rmm::device_vector<string_view> create_string_vector_from_column(
     thrust::for_each_n( execpol->on(stream),
         thrust::make_counting_iterator<size_type>(0), count,
         [d_column, d_strings] __device__ (size_type idx) {
-            if( d_column.nullable() && d_column.is_null(idx) )
+            if( d_column.is_null(idx) )
                 d_strings[idx] = string_view(nullptr,0);
             else
                 d_strings[idx] = d_column.element<string_view>(idx);
