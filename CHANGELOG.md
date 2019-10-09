@@ -154,6 +154,7 @@
 - PR #2928 CSV Reader: Fix using `byte_range` for large datasets
 - PR #2983 Fix sm_70+ race condition in gpu_unsnap
 - PR #2964 ORC Writer: Segfault when writing mixed numeric and string columns
+- PR #3007 Java: Remove unit test that frees RMM invalid pointer
 - PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
 
 
