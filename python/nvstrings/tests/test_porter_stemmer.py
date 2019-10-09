@@ -1,9 +1,9 @@
 # Copyright (c) 2018-2019, NVIDIA CORPORATION.
 
 import numpy as np
+import pytest
 
 import rmm
-import pytest
 
 import nvstrings
 import nvtext
