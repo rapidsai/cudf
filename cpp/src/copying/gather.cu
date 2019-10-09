@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 #include "gather.cuh"
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/cudf.h>
 #include <utilities/bit_util.cuh>
 #include <utilities/cudf_utils.h>

@@ -17,9 +17,9 @@
  */
 
 #include <gtest/gtest.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/copying/copying_test_helper.hpp>
+#include <tests/copying/legacy/copying_test_helper.hpp>
 #include <tests/utilities/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 

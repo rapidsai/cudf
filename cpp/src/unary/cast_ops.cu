@@ -22,7 +22,7 @@
 
 #include "unary_ops.cuh"
 #include <cudf/unary.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <rmm/thrust_rmm_allocator.h>
 #include <cudf/utilities/legacy/wrapper_types.hpp>

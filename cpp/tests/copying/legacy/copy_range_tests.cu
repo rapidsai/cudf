@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <tests/utilities/column_wrapper.cuh>
 #include <tests/utilities/column_wrapper_factory.hpp>
 #include <tests/utilities/scalar_wrapper.cuh>

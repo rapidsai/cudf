@@ -14,8 +14,7 @@
  * limitations under the License.
  */
 
-#ifndef COPYING_LEGACY_HPP
-#define COPYING_LEGACY_HPP
+#pragma once
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
@@ -500,5 +499,3 @@ std::vector<gdf_column*> split(gdf_column const &         input,
 std::vector<cudf::table>
 scatter_to_tables(cudf::table const& input, gdf_column const& scatter_map);
 }  // namespace cudf
-
-#endif  // COPYING_LEGACY_HPP

@@ -17,7 +17,7 @@
 #ifndef _COMMON_GROUPBY_TEST_HPP
 #define _COMMON_GROUPBY_TEST_HPP
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <tests/utilities/column_wrapper.cuh>

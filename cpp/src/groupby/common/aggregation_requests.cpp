@@ -17,7 +17,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/binaryop.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/groupby.hpp>
 #include <cudf/legacy/table.hpp>
 #include <utilities/column_utils.hpp>

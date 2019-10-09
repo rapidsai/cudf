@@ -15,7 +15,7 @@
  */
 #include "scatter.hpp"
 #include "gather.cuh"
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/filling.hpp>
 #include <cudf/cudf.h>
 #include <rmm/thrust_rmm_allocator.h>

@@ -15,7 +15,7 @@
  */
 
 #include "copy_range.cuh"
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 namespace cudf {
 

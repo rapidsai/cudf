@@ -23,7 +23,7 @@
 #include <utilities/column_utils.hpp>
 #include <utilities/cuda_utils.hpp>
 
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 
 #include <thrust/scan.h>
 #include <thrust/binary_search.h>
