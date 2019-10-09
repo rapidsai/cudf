@@ -75,12 +75,12 @@ cdef extern from "cudf/types.hpp" namespace "cudf" nogil:
 
 cdef extern from "cudf/cudf.h" nogil:
 
-    ctypedef char          gdf_bool8
-    ctypedef long          gdf_date64
-    ctypedef int           gdf_date32
-    ctypedef long          gdf_timestamp
-    ctypedef int           gdf_category
-    ctypedef int           gdf_nvstring_category
+    ctypedef int8_t        gdf_bool8
+    ctypedef int64_t       gdf_date64
+    ctypedef int32_t       gdf_date32
+    ctypedef int64_t       gdf_timestamp
+    ctypedef int32_t       gdf_category
+    ctypedef int32_t       gdf_nvstring_category
 
     ctypedef enum gdf_dtype:
         GDF_invalid=0,
@@ -201,13 +201,13 @@ cdef extern from "cudf/cudf.h" nogil:
         GDF_WINDOW_VA
 
     ctypedef union gdf_data:
-        signed char   si08
-        short         si16
-        int           si32
-        long          si64
+        int8_t        si08
+        int16_t       si16
+        int32_t       si32
+        int64_t       si64
         float         fp32
         double        fp64
-        char          b08
+        gdf_bool8      b08
         gdf_date32    dt32
         gdf_date64    dt64
         gdf_timestamp tmst
