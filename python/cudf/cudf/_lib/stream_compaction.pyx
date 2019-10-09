@@ -158,7 +158,7 @@ def drop_nulls(cols, how="any", subset=None, thresh=None):
 
     # default: "any" means threshold should be number of key columns
     cdef size_type c_keep_threshold = (len(cols) if subset is None
-                                           else len(subset))
+                                       else len(subset))
 
     # Use `thresh` if specified, otherwise set threshold based on `how`
     if thresh is not None:
