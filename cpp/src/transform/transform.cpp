@@ -15,7 +15,6 @@
  */
 
 #include <cudf/cudf.h>
-#include <jit/type.h>
 #include <nvstrings/NVCategory.h>
 #include <utilities/cudf_utils.h>
 #include <bitmask/legacy/bitmask_ops.hpp>
@@ -29,7 +28,7 @@
 #include <cudf/legacy/column.hpp>
 
 #include <jit/launcher.h>
-#include <jit/type.h>
+#include <jit/legacy/type.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 

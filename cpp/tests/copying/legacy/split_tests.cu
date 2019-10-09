@@ -18,9 +18,9 @@
 
 #include <gtest/gtest.h>
 #include <cudf/legacy/copying.hpp>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <tests/copying/legacy/copying_test_helper.hpp>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
 void call_split(gdf_column const*          input_column,

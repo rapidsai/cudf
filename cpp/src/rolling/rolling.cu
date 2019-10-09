@@ -33,7 +33,7 @@
 #include <io/utilities/wrapper_utils.hpp>
 
 #include <jit/launcher.h>
-#include <jit/type.h>
+#include <jit/legacy/type.h>
 #include <jit/parser.h>
 #include "jit/code/code.h"
 #include "jit/util/type.h"

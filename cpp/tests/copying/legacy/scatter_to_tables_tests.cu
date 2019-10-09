@@ -18,8 +18,8 @@
 #include<cudf/legacy/table.hpp>
 
 #include<gtest/gtest.h>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 #include<tests/copying/legacy/copying_test_helper.hpp>
 #include <bitmask/legacy/bit_mask.cuh>
 #include<random>
