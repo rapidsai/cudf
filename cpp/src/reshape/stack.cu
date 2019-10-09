@@ -117,8 +117,7 @@ gdf_column stack(const cudf::table &values, cudaStream_t stream = 0)
   if (dtype == GDF_STRING_CATEGORY)
   {
     output.dtype = GDF_STRING_CATEGORY;
-    output.dtype_info.category =
-      static_cast<NVCategory *>(temp_values[0]->dtype_info.category)->copy();
+    nvcategory_gather(&output, static_cast<NVCategory*>(temp_values[0]->dtype_info.category));
     std::for_each(temp_values.begin(), temp_values.end(),
       [] (gdf_column* c) { gdf_column_free(c); });
   }

@@ -83,11 +83,12 @@ def test_melt(nulls, num_id_vars, num_value_vars, num_rows, dtype):
         "float32",
         "float64",
         "datetime64[ms]",  # TODO: also test for string
+        "str",
     ],
 )
-@pytest.mark.parametrize("nulls", ["none", "some", "all"])
+@pytest.mark.parametrize("nulls", ["none", "some"])
 def test_df_stack(nulls, num_cols, num_rows, dtype):
-    if dtype not in ["float32", "float64"] and nulls in ["some", "all"]:
+    if dtype not in ["float32", "float64"] and nulls in ["some"]:
         pytest.skip(msg="nulls not supported in dtype: " + dtype)
 
     pdf = pd.DataFrame()
@@ -99,8 +100,6 @@ def test_df_stack(nulls, num_cols, num_rows, dtype):
                 num_rows, size=int(num_rows / 2), replace=False
             )
             data[idx] = np.nan
-        elif nulls == "all":
-            data[:] = np.nan
         pdf[colname] = data
 
     gdf = DataFrame.from_pandas(pdf)

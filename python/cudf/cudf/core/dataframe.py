@@ -3890,7 +3890,6 @@ class DataFrame(object):
         new_index = cudf.core.multiindex.MultiIndex.from_frame(index_df)
 
         # Collect datatypes and cast columns as that type
-        # homogenized_cols = self._columns
         common_type = np.result_type(*self.dtypes)
         homogenized_cols = [
             c.astype(common_type)
