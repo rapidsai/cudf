@@ -506,16 +506,16 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 
 ### Functions
 
-|              Old             |                    New                    |                                     Notes                                    |
-|:----------------------------:|:-----------------------------------------:|:----------------------------------------------------------------------------:|
-|       `gdf_is_valid()`       |     `*column_device_view::is_valid()`     |         Verifies existence of bitmask before  attempting to read it.         |
-|    `bit_mask::is_valid()`    | `*column_device_view::is_valid_nocheck()` | Does not verify the existence of the bitmask  before attempting to read it.  |
-| `gdf_vald_allocation_size()` |     `bitmask_allocation_size_bytes()`     |                                                                              |
-|        `is_nullable()`       |            `*view::nullable()`            |                                                                              |
-|         `has_nulls()`        |            `*view::has_nulls()`           |                                                                              |
-|        `cudf::copy()`        |          `column::column(const&)`         |                               Copy constructor                               |
-|    `cudf::allocate_like()`   |   `cudf::experimental::allocate_like()`   |                      This applies to both columns/tables                     |
-|     `cudf::empty_like()`     |     `cudf::experimental::empty_like()`    |                      This applies to both columns/tables                     |
+|              Old             |                       New                       |                                     Notes                                    |
+|:----------------------------:|:-----------------------------------------------:|:----------------------------------------------------------------------------:|
+|       `gdf_is_valid()`       |        `*column_device_view::is_valid()`        |         Verifies existence of bitmask before  attempting to read it.         |
+|    `bit_mask::is_valid()`    |    `*column_device_view::is_valid_nocheck()`    | Does not verify the existence of the bitmask  before attempting to read it.  |
+| `gdf_vald_allocation_size()` |        `bitmask_allocation_size_bytes()`        |                                                                              |
+|        `is_nullable()`       |               `*view::nullable()`               |                                                                              |
+|         `has_nulls()`        |               `*view::has_nulls()`              |                                                                              |
+|        `cudf::copy()`        | `column::column(const&)` `table::table(const&)` |                               Copy constructors                              |
+|    `cudf::allocate_like()`   |      `cudf::experimental::allocate_like()`      |                      This applies to both columns/tables                     |
+|     `cudf::empty_like()`     |        `cudf::experimental::empty_like()`       |                      This applies to both columns/tables                     |
 
 ## Strings Support<a name="string_support"></a>
 
