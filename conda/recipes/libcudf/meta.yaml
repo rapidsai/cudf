@@ -57,7 +57,7 @@ test:
     - test -f $PREFIX/include/cudf/copying.hpp
     - test -f $PREFIX/include/cudf/cudf.h
     - test -f $PREFIX/include/cudf/datetime.hpp
-    - test -f $PREFIX/include/cudf/filling.hpp
+    - test -f $PREFIX/include/cudf/legacy/filling.hpp
     - test -f $PREFIX/include/cudf/functions.h
     - test -f $PREFIX/include/cudf/gis.hpp
     - test -f $PREFIX/include/cudf/groupby.hpp
