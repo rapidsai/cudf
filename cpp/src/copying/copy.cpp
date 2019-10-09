@@ -15,11 +15,12 @@
  */
 
 #include <cudf/copying.hpp>
-#include <cudf/legacy/column.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/column/column.hpp>
 #include <utilities/column_utils.hpp>
 #include <utilities/error_utils.hpp>
 #include <cudf/cudf.h>
-#include <cudf/legacy/table.hpp>
+#include <cudf/table/table.hpp>
 #include <nvstrings/NVCategory.h>
 
 #include <cuda_runtime.h>
@@ -27,151 +28,135 @@
 
 namespace cudf
 {
+namespace exp
+{
 
 /*
- * Initializes and returns gdf_column of the same type as the input.
+ * Initializes and returns column of the same type as the input.
  */
-gdf_column empty_like(gdf_column const& input)
+std::unique_ptr<column> empty_like(column_view input)
 {
-  CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-  gdf_column output{};
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index; index < input.num_children(); index++) {
+      children.emplace_back(empty_like(input.child(index)));
+  }
 
-  gdf_dtype_extra_info info = input.dtype_info;
-  info.category = nullptr;
-
-  CUDF_EXPECTS(GDF_SUCCESS == 
-               gdf_column_view_augmented(&output, nullptr, nullptr, 0,
-                                         input.dtype, 0, info, input.col_name),
-               "Invalid column parameters");
-
-  return output;
+  return std::make_unique<column>(input.type(), 0, rmm::device_buffer {}, rmm::device_buffer {}, 0, std::move(children));
 }
-
-inline bool should_allocate_mask(mask_allocation_policy mask_alloc, bool mask_exists) {
-  return (mask_alloc == ALWAYS) || (mask_alloc == RETAIN && mask_exists);
-}
-
+#if 0
 /*
  * Allocates a new column of the same size and type as the input.
  * Does not copy data.
  */
-gdf_column allocate_like(gdf_column const& input, mask_allocation_policy mask_alloc, cudaStream_t stream)
+column allocate_like(column_view input,
+                     mask_state state,
+                     cudaStream_t stream,
+                     rmm::mr::device_memory_resource *mr)
 {
-  bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index; index < input.num_children(); index++) {
+      children.emplace_back(std::make_unique<column>(std::move(allocate_like(input.child(index), state, stream, mr))));
+  }
 
-  gdf_column output = empty_like(input);
-
-  output.size = input.size;
-
-  detail::allocate_column_fields(output, allocate_mask, stream);
-  
-  return output;
+  return column {input.type(),
+                 input.size(),
+                 rmm::device_buffer(input.size()*size_of(input.type()), stream, mr),
+                 create_null_mask(input.size(), state, stream, mr),
+                 state_null_count(state, input.size()),
+                 std::move(children)};
 }
 
 /*
  * Allocates a new column of specified size of the same type as the input.
  * Does not copy data.
  */
-gdf_column allocate_like(gdf_column const& input, gdf_size_type size,
-                         mask_allocation_policy mask_alloc, cudaStream_t stream)
+column allocate_like(column_view input, gdf_size_type size,
+                     mask_state state, cudaStream_t stream,
+                     rmm::mr::device_memory_resource *mr)
 {
-  bool allocate_mask = should_allocate_mask(mask_alloc, cudf::is_nullable(input));
-
-  gdf_column output = empty_like(input);
-  
-  output.size = size;
-  const auto byte_width = (input.dtype == GDF_STRING)
-                        ? sizeof(std::pair<const char *, size_t>)
-                        : cudf::size_of(input.dtype);
-  RMM_TRY(RMM_ALLOC(&output.data, size * byte_width, stream));
-  if (allocate_mask) {
-    size_t valid_size = gdf_valid_allocation_size(size);
-    RMM_TRY(RMM_ALLOC(&output.valid, valid_size, stream));
-  }
-  
-  return output;
-}
-
-/*
- * Creates a new column that is a copy of input
- */
-gdf_column copy(gdf_column const& input, cudaStream_t stream)
-{
-  CUDF_EXPECTS(input.size == 0 || input.data != 0, "Null input data");
-
-  gdf_column output = allocate_like(input, RETAIN, stream);
-  output.null_count = input.null_count;
-  if (input.size > 0) {
-    const auto byte_width = (input.dtype == GDF_STRING)
-                          ? sizeof(std::pair<const char *, size_t>)
-                          : cudf::size_of(input.dtype);
-    CUDA_TRY(cudaMemcpyAsync(output.data, input.data, input.size * byte_width,
-                             cudaMemcpyDefault, stream));
-    if (input.valid != nullptr) {
-      size_t valid_size = gdf_valid_allocation_size(input.size);
-      CUDA_TRY(cudaMemcpyAsync(output.valid, input.valid, valid_size,
-                               cudaMemcpyDefault, stream));
-    }
-
-    output.null_count = input.null_count;
+  std::vector<std::unique_ptr<column>> children {};
+  children.reserve(input.num_children());
+  for (size_type index; index < input.num_children(); index++) {
+      children.emplace_back(std::make_unique<column>(std::move(allocate_like(input.child(index), size, state, stream, mr))));
   }
 
-  if (input.dtype == GDF_STRING_CATEGORY) {
-    if (input.dtype_info.category != nullptr) {
-      NVCategory *cat = static_cast<NVCategory*>(input.dtype_info.category);
-      output.dtype_info.category = cat->copy();
-    }
-  }
-  return output;
+  return column {input.type(),
+                 size,
+                 rmm::device_buffer(size*size_of(input.type()), stream, mr),
+                 create_null_mask(size, state, stream, mr),
+                 state_null_count(state, input.size()),
+                 std::move(children)};
 }
 
-table empty_like(table const& t) {
-  std::vector<gdf_column*> columns(t.num_columns());
+table empty_like(table_view t) {
+  std::vector<std::unique_ptr<column>> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = empty_like(*in_col);
+    [](std::unique_ptr<column> out_col, std::unique_ptr<column> in_col) {
+      out_col = std::make_unique<column>(empty_like(*in_col));
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{std::move(columns)};
 }
 
-table allocate_like(table const& t, mask_allocation_policy mask_alloc, cudaStream_t stream) {
-  std::vector<gdf_column*> columns(t.num_columns());
+table allocate_like(table_view t,
+                    mask_state state,
+                    cudaStream_t stream,
+                    rmm::mr::device_memory_resource *mr){
+  std::vector<std::unique_ptr<column>> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [mask_alloc,stream](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = allocate_like(*in_col,mask_alloc,stream);
+    [&](std::unique_ptr<column> out_col, std::unique_ptr<column> in_col) {
+      out_col = std::make_unique<column>(allocate_like(*in_col,
+			                 state, stream, mr), stream, mr);
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{std::move(columns)};
 }
 
-table allocate_like(table const& t, gdf_size_type size, 
-                    mask_allocation_policy mask_alloc, cudaStream_t stream) {
-  std::vector<gdf_column*> columns(t.num_columns());
+table allocate_like(table_view t,
+		    gdf_size_type size,
+                    mask_state state,
+                    cudaStream_t stream,
+                    rmm::mr::device_memory_resource *mr){
+  std::vector<std::unique_ptr<column>> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [size,mask_alloc,stream](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = allocate_like(*in_col,size,mask_alloc,stream);
+    [&](std::unique_ptr<column> out_col, std::unique_ptr<column> in_col) {
+      out_col = std::make_unique<column>(allocate_like(*in_col, 
+			                  size, state, stream, mr), stream, mr);
       return out_col;
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{std::move(columns)};
 }
 
-table copy(table const& t, cudaStream_t stream) {
-  std::vector<gdf_column*> columns(t.num_columns());
+#endif
+
+#if 0
+table copy(table_view t) {
+  std::vector<std::unique_ptr<column>> columns(t.num_columns());
   std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
-    [stream](gdf_column* out_col, gdf_column const* in_col) {
-      out_col = new gdf_column{};
-      *out_col = copy(*in_col, stream);
-      return out_col;
+    [](std::unique_ptr<column>> out_col, std::unique_ptr<column>> in_col) {
+      out_col = std::make_unique<column>(std::move(*c));
+      return out_col
     });
 
-  return table{columns.data(), static_cast<gdf_size_type>(columns.size())};
+  return table{columns};
 }
 
+table copy(table_view t, cudaStream_t stream,
+           rmm::mr::device_memory_resource* mr) {
+  std::vector<std::unique_ptr<column>> columns(t.num_columns());
+  std::transform(columns.begin(), columns.end(), t.begin(), columns.begin(),
+    [](std::unique_ptr<column>> out_col, std::unique_ptr<column>> in_col) {
+      out_col = std::make_unique<column>(*c, stream, mr);
+      return out_col
+    });
+
+  return table{columns};
+}
+ #endif
+} // namespace ext
 } // namespace cudf

@@ -413,6 +413,7 @@ add_library(cudf
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
             src/copying/copy.cpp
+            src/copying/legacy/copy.cpp
             src/copying/gather.cu
             src/copying/scatter.cu
             src/copying/slice.cu
