@@ -2836,29 +2836,27 @@ class DataFrame(object):
         cols = [self[k]._column for k in columns]
         return Series(numerical.column_hash_values(*cols))
 
-    # def shift(self, periods=1, freq=None, axis=0, fill_value=None):
-    #     """Shift values of an input array by periods positions and store the
-    #     output in a new array.
 
-    #     Notes
-    #     -----
-    #     Shift currently only supports float and integer dtype columns with
-    #     no null values.
-    #     """
-    #     assert axis in (None, 0) and freq is None
+    def shift(self, periods=1, freq=None, axis=0, fill_value=None):
+        """Shift values of an input dataframe by periods positions and store the
+        output in a new dataframe.
 
-    #     if not np.issubdtype(self.dtype, np.number):
-    #         raise NotImplementedError(
-    #             "Shift currently only supports " "numeric dtypes"
-    #         )
+        Notes
+        -----
+        Shift currently only supports numerical dtype columns.
+        """
+        assert axis in (None, 0) and freq is None
 
-    #     if periods == 0:
-    #         return self
+        if periods == 0:
+            return self
 
-    #     if fill_value is not None:
-    #         fill_value = self.dtype.type(fill_value)
+        out = DataFrame()
 
-    #     return libcudf.copying.shift_table(self, periods, fill_value)
+        for k in self.columns:
+            out[k] = self[k].shift(periods, freq, axis, fill_value)
+
+        return out
+
 
     def partition_by_hash(self, columns, nparts):
         """Partition the dataframe by the hashed value of data in *columns*.

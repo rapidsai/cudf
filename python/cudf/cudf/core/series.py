@@ -2374,14 +2374,13 @@ class Series(object):
 
         Notes
         -----
-        Shift currently only supports float and integer dtype columns with
-        no null values.
+        Shift currently only supports float and integer dtype columns.
         """
         assert axis in (None, 0) and freq is None
 
         if not np.issubdtype(self.dtype, np.number):
             raise NotImplementedError(
-                "Shift currently only supports " "numeric dtypes"
+                "Shift currently only supports numeric dtypes"
             )
 
         if periods == 0:
@@ -2390,12 +2389,15 @@ class Series(object):
         if fill_value is not None:
             fill_value = self.dtype.type(fill_value)
 
-        return Series(
-            libcudf.copying.shift_column(self._column, periods, fill_value),
-            name=self.name,
-            index=self.index
+        print('fill ' + str(fill_value))
+
+        res = Series(
+            libcudf.copying.shift_column(self._column, periods, fill_value)
         )
 
+        print(res)
+
+        return res
 
     def diff(self, periods=1):
         """Calculate the difference between values at positions i and i - N in
