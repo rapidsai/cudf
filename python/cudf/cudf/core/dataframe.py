@@ -544,7 +544,7 @@ class DataFrame(object):
         return self.to_string()
 
     def astype(self, dtype, **kwargs):
-        return self._apply_support_method('astype', dtype, **kwargs)
+        return self._apply_support_method("astype", dtype, **kwargs)
 
     def get_renderable_dataframe(self):
         nrows = np.max([pd.options.display.max_rows, 1])
@@ -3650,7 +3650,8 @@ class DataFrame(object):
 
     def _apply_support_method(self, method, *args, **kwargs):
         result = [
-            getattr(self[col], method)(*args, **kwargs) for col in self._cols.keys()
+            getattr(self[col], method)(*args, **kwargs)
+            for col in self._cols.keys()
         ]
         if isinstance(result[0], Series):
             support_result = result
