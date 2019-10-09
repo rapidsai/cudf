@@ -109,7 +109,7 @@ ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
 # - timestamps tests ----------------------------------------------------------------------------------
 
 set(TIMESTAMPS_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/types/timestamps_test.cu")
+    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
 
 ConfigureTest(TIMESTAMPS_TEST "${TIMESTAMPS_TEST_SRC}")
 
