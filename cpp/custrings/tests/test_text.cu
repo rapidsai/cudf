@@ -210,7 +210,7 @@ TEST(TestText, VowelsAndConsonants)
     indices[hstrs.size()-1] = -1; // throw in a negative index too
     {
         NVText::is_letter(*strs, nullptr, nullptr, NVText::vowel, indices.data().get(), results.data().get());
-        bool expected[] = { true, false, false, true, false, false, false };
+        bool expected[] = { true, false, false, true, false, false, true };
         for( unsigned int idx=0; idx < hstrs.size(); ++idx )
             EXPECT_EQ(results[idx],expected[idx]);
     }
