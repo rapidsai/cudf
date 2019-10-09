@@ -3756,7 +3756,7 @@ def test_df_astype_categorical_to_other(as_dtype):
     pdf["foo"] = psr
     pdf["bar"] = psr
     gdf = DataFrame.from_pandas(pdf)
-    assert_eq(pdf.astype(as_dtype), pdf.astype(as_dtype, **kwargs))
+    assert_eq(pdf.astype(as_dtype), gdf.astype(as_dtype, **kwargs))
 
 
 @pytest.mark.parametrize("ordered", [True, False])
