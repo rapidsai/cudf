@@ -19,7 +19,7 @@
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
-#include <tests/utilities/typed_tests.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <rmm/mr/default_memory_resource.hpp>
 #include <rmm/mr/device_memory_resource.hpp>

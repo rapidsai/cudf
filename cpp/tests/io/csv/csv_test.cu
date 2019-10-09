@@ -27,7 +27,7 @@
 #include <gtest/gtest.h>
 #include <gmock/gmock.h>
 #include <tests/io/io_test_utils.hpp>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
 #include <arrow/io/api.h>
 

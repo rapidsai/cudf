@@ -16,10 +16,9 @@
 
 #pragma once
 
-#include <map>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 #include <cudf/cudf.h>
 
@@ -32,25 +31,18 @@ namespace cudf {
  */
 std::pair<gdf_dtype, gdf_dtype_extra_info> convertStringToDtype(const std::string &dtype);
 
-/**---------------------------------------------------------------------------*
- * @brief Infer the compression type from the compression parameter and
- * the input file extension.
+/*
+ * @brief Returns the compression type from the incoming compression parameter
+ * or inferring from the specified filename
  *
- * Returns "none" if the input is not compressed.
- * Throws if the input is not valid.
+ * @param[in] compression_arg User-supplied string specifying compression type
+ * @param[in] filename Name of the file to infer if necessary
+ * @param[in] ext_to_compression Mapping between file extensions and compression
  *
- * @param[in] compression_arg Input string that is potentially describing
- * the compression type. Can also be "none" or "infer".
- * @param[in] source_type Enum describing the type of the data source.
- * @param[in] source If source_type is FILE_PATH, contains the filepath.
- * If source_type is HOST_BUFFER, contains the input data.
- * @param[in] ext_to_compression Map between file extensions and
- * compression types.
- *
- * @return string representing the compression type.
- *---------------------------------------------------------------------------**/
-std::string inferCompressionType(const std::string &compression_arg, gdf_input_type source_type,
-                                 const std::string &source,
-                                 const std::map<std::string, std::string> &ext_to_compression);
+ * @return std::string Compression type
+ */
+std::string infer_compression_type(
+    const std::string &compression_arg, const std::string &filename,
+    const std::vector<std::pair<std::string, std::string>> &ext_to_comp_map);
 
-} // namespace cudf
+}  // namespace cudf

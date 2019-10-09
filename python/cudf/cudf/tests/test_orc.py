@@ -236,6 +236,22 @@ def test_orc_reader_uncompressed_block(datadir):
     assert_eq(expect, got, check_categorical=False)
 
 
+def test_orc_reader_nodata_block(datadir):
+    path = datadir / "nodata.orc"
+    try:
+        orcfile = pa.orc.ORCFile(path)
+    except Exception as excpr:
+        if type(excpr).__name__ == "ArrowIOError":
+            pytest.skip(".orc file is not found")
+        else:
+            print(type(excpr).__name__)
+
+    expect = orcfile.read().to_pandas()
+    got = cudf.read_orc(path, engine="cudf", num_rows=1)
+
+    assert_eq(expect, got, check_categorical=False)
+
+
 @pytest.mark.parametrize("compression", [None, "snappy"])
 @pytest.mark.parametrize(
     "reference_file, columns",

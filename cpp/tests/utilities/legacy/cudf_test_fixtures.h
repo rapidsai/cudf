@@ -24,7 +24,7 @@
 #include <rmm/rmm.h>
 
 #include <ftw.h>
-#include "cudf_test_utils.cuh"
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 // Base class fixture for GDF google tests that initializes / finalizes the
 // RAPIDS memory manager
