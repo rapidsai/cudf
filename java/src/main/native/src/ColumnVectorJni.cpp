@@ -218,6 +218,28 @@ NVStrings::timestamp_units translateTimestampUnit(gdf_time_unit time_unit) {
   throw std::logic_error("UNSUPPORTED COLUMN VECTOR TIMESTAMP UNIT");
 }
 
+// Resolve the mutated dictionary with the original index values
+// gathering column metadata from the most relevant sources
+cudf::jni::gdf_column_wrapper gather_mutated_category(gdf_column *dict_result, gdf_column *column) {
+  std::vector<gdf_column*> vec {dict_result};
+  cudf::table tmp_table(vec);
+
+  cudf::jni::gdf_column_wrapper result(column->size, dict_result->dtype, column->null_count != 0);
+  gdf_column * result_ptr = result.get();
+  std::vector<gdf_column*> out_vec {result_ptr};
+  cudf::table output_table(out_vec);
+
+  gather(&tmp_table, static_cast<gdf_index_type *>(column->data), &output_table);
+  if (column->null_count > 0) {
+    CUDA_TRY(cudaMemcpy(result_ptr->valid, column->valid,
+                        gdf_num_bitmask_elements(column->size), cudaMemcpyDeviceToDevice));
+    result_ptr->null_count = column->null_count;
+  }
+  result_ptr->dtype_info.time_unit = dict_result->dtype_info.time_unit;
+
+  return result;
+}
+
 JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimestamp(
     JNIEnv *env, jobject j_object, jlong handle, jint time_unit, jstring formatObj) {
   JNI_NULL_CHECK(env, handle, "column is null", 0);
@@ -253,6 +275,31 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_stringTimestampToTimest
         }
       }
       return reinterpret_cast<jlong>(output.release());
+    } else if (column->dtype == GDF_STRING_CATEGORY) {
+      if (column->size <= 0) {
+        // special case for empty column
+        cudf::jni::gdf_column_wrapper result(column->size, gdf_dtype::GDF_TIMESTAMP,
+                                             column->null_count != 0);
+        return reinterpret_cast<jlong>(result.release());
+      }
+
+      // Do the operation on the dictionary
+      NVCategory *cats = static_cast<NVCategory *>(column->dtype_info.category);
+      unique_nvstr_ptr keys (cats->get_keys(), &NVStrings::destroy);
+      unsigned int dict_size = keys->size();
+
+      cudf::jni::gdf_column_wrapper dict_result(dict_size, gdf_dtype::GDF_TIMESTAMP, false);
+      dict_result->dtype_info.time_unit = (gdf_time_unit)time_unit;
+      int err_val = keys->timestamp2long(format.get(),
+                                        translateTimestampUnit(dict_result->dtype_info.time_unit),
+                                        static_cast<unsigned long *>(dict_result->data));
+      if (err_val == -1) {
+         throw std::logic_error("timestamp2long returned with errors");
+      }
+
+      cudf::jni::gdf_column_wrapper res = gather_mutated_category(dict_result.get(), column);
+
+      return reinterpret_cast<jlong>(res.release());
     } else {
       throw std::logic_error("ONLY STRING TYPES ARE SUPPORTED...");
     }
@@ -556,21 +603,9 @@ JNIEXPORT jlong JNICALL Java_ai_rapids_cudf_ColumnVector_hash(JNIEnv *env, jclas
       keys->hash(static_cast<unsigned int *>(dict_result->data));
 
       // Now we need to gather the data to a final answer
-      std::vector<gdf_column *> vec{dict_result.get()};
-      cudf::table tmp_table(vec);
+      cudf::jni::gdf_column_wrapper result = gather_mutated_category(dict_result.get(), n_column);
+      
 
-      cudf::jni::gdf_column_wrapper result(n_column->size, gdf_dtype::GDF_INT32,
-                                           n_column->null_count > 0);
-      gdf_column *result_ptr = result.get();
-      std::vector<gdf_column *> out_vec{result_ptr};
-      cudf::table output_table(out_vec);
-
-      gather(&tmp_table, static_cast<gdf_index_type *>(n_column->data), &output_table);
-      if (n_column->null_count > 0) {
-        CUDA_TRY(cudaMemcpy(result_ptr->valid, n_column->valid,
-                            gdf_num_bitmask_elements(n_column->size), cudaMemcpyDeviceToDevice));
-        result_ptr->null_count = n_column->null_count;
-      }
       return reinterpret_cast<jlong>(result.release());
     } else { // all others
       cudf::jni::gdf_column_wrapper result(n_column->size, gdf_dtype::GDF_INT32,

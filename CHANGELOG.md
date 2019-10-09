@@ -43,6 +43,7 @@
 - PR #2872 Add Java pinned memory pool allocator
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
+- PR #2999 Add timestamp conversion support for string categories
 
 ## Improvements
 
