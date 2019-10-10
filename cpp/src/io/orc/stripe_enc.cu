@@ -1282,13 +1282,14 @@ extern "C" __global__ void __launch_bounds__(1024)
 gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in, gpu_inflate_status_s *comp_out, uint8_t *compressed_bfr, uint32_t comp_blk_size)
 {
     __shared__ __align__(16) StripeStream ss;
-    __shared__ uint8_t * volatile comp_src_g;
+    __shared__ const uint8_t * volatile comp_src_g;
     __shared__ uint32_t volatile comp_len_g;
 
     uint32_t strm_id = blockIdx.x;
     uint32_t t = threadIdx.x;
     uint32_t num_blocks, b, blk_size;
-    uint8_t *src, *dst;
+    const uint8_t *src;
+    uint8_t *dst;
 
     if (t < sizeof(StripeStream) / sizeof(uint32_t))
     {
@@ -1310,7 +1311,7 @@ gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in
             if (dst_len >= src_len)
             {
                 // Copy from uncompressed source
-                src = reinterpret_cast<uint8_t *>(blk_in->srcDevice);
+                src = reinterpret_cast<const uint8_t *>(blk_in->srcDevice);
                 blk_out->bytes_written = src_len;
                 dst_len = src_len;
                 blk_size24 = dst_len * 2 + 1;
@@ -1318,7 +1319,7 @@ gpuCompactCompressedBlocks(StripeStream *strm_desc, gpu_inflate_input_s *comp_in
             else
             {
                 // Compressed block
-                src = reinterpret_cast<uint8_t *>(blk_in->dstDevice);
+                src = reinterpret_cast<const uint8_t *>(blk_in->dstDevice);
                 blk_size24 = dst_len * 2 + 0;
             }
             dst[0] = static_cast<uint8_t>(blk_size24 >> 0);
