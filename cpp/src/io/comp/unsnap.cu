@@ -30,7 +30,7 @@ namespace io {
 #define LOG2_PREFETCH_SIZE  9
 #define PREFETCH_SIZE       (1 << LOG2_PREFETCH_SIZE)   // 512B, in 32B chunks
 
-#define LOG_CYCLECOUNT      1
+#define LOG_CYCLECOUNT      0
 
 struct unsnap_batch_s
 {
