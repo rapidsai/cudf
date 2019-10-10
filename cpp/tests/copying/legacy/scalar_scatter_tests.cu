@@ -15,7 +15,7 @@
  */
 
 #include <thrust/device_vector.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <gmock/gmock.h>
 #include <gtest/gtest.h>
 #include <tests/utilities/legacy/column_wrapper.cuh>
