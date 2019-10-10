@@ -34,30 +34,40 @@
 
 #include <tests/io/io_test_utils.hpp>
 #include <io/utilities/parsing_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 
-using std::string;
-using std::vector;
+#include <arrow/io/api.h>
 
-TempDirTestEnvironment *const temp_env =
-    static_cast<TempDirTestEnvironment *>(::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
-struct gdf_json_test : GdfTest {};
+#include <rmm/device_buffer.hpp>
+
+TempDirTestEnvironment* const temp_env = static_cast<TempDirTestEnvironment*>(
+    ::testing::AddGlobalTestEnvironment(new TempDirTestEnvironment));
+
+/**
+ * @brief Base test fixture for JSON reader tests
+ **/
+struct gdf_json_test : public GdfTest {};
 
 TEST_F(gdf_json_test, SquareBrackets) {
-  const string json_file("{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
-                         "\"index\":[\"row 1\",\"row 2\"] , "
-                         "\"data\":[[\"a\",1,1.0],[\"b\",2,2.0]]}");
+  const std::string json_file(
+      "{columns\":[\"col 1\",\"col 2\",\"col 3\"] , "
+      "\"index\":[\"row 1\",\"row 2\"] , "
+      "\"data\":[[\"a\",1,1.0],[\"b\",2,2.0]]}");
 
-  const gdf_size_type count = countAllFromSet(json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'});
+  const gdf_size_type count = countAllFromSet(
+      json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'});
   ASSERT_TRUE(count == 10);
 
-  device_buffer<uint64_t> d_pos(count);
-  findAllFromSet(json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'}, 0, d_pos.data());
+  rmm::device_buffer d_pos(count * sizeof(uint64_t));
+  findAllFromSet(json_file.c_str(), json_file.size() * sizeof(char), {'[', ']'},
+                 0, static_cast<uint64_t *>(d_pos.data()));
 
-  vector<uint64_t> h_pos(count);
-  cudaMemcpy(h_pos.data(), d_pos.data(), count * sizeof(uint64_t), cudaMemcpyDefault);
-  for (auto pos : h_pos)
+  std::vector<uint64_t> h_pos(count);
+  cudaMemcpy(h_pos.data(), d_pos.data(), count * sizeof(uint64_t),
+             cudaMemcpyDefault);
+  for (auto pos : h_pos) {
     ASSERT_TRUE(json_file[pos] == '[' || json_file[pos] == ']');
+  }
 }
 
 using pos_key_pair = thrust::pair<uint64_t, char>;
@@ -65,9 +75,9 @@ TEST_F(gdf_json_test, BracketsLevels) {
   // Generate square brackets consistent with 'split' json format
   const int rows = 1000000;
   const int file_size = rows * 4 + 1;
-  string json_mock("{\"columns\":[x],\"index\":[x],\"data\":[");
+  std::string json_mock("{\"columns\":[x],\"index\":[x],\"data\":[");
   const int header_size = json_mock.size();
-  json_mock += string(file_size, 'x');
+  json_mock += std::string(file_size, 'x');
   json_mock[json_mock.size() - 2] = ']';
   json_mock[json_mock.size() - 1] = '}';
   for (size_t i = header_size; i < json_mock.size() - 1; i += 4) {
@@ -75,19 +85,23 @@ TEST_F(gdf_json_test, BracketsLevels) {
     json_mock[i + 2] = ']';
   }
 
-  vector<int16_t> expected{1, 2, 2, 2, 2, 2};
+  std::vector<int16_t> expected{1, 2, 2, 2, 2, 2};
   fill_n(back_inserter(expected), rows * 2, 3);
   expected.push_back(2);
   expected.push_back(1);
 
-  const gdf_size_type count = countAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'});
-  device_buffer<pos_key_pair> d_pos(count);
-  findAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'}, 0, d_pos.data());
-  const auto d_lvls = getBracketLevels(d_pos.data(), count, string("[{"), string("]}"));
+  const gdf_size_type count = countAllFromSet(
+      json_mock.c_str(), json_mock.size() * sizeof(char), {'[', ']', '{', '}'});
+  rmm::device_buffer d_pos(count * sizeof(pos_key_pair));
+  findAllFromSet(json_mock.c_str(), json_mock.size() * sizeof(char),
+                 {'[', ']', '{', '}'}, 0,
+                 static_cast<pos_key_pair *>(d_pos.data()));
 
-  vector<int16_t> h_lvls(count);
-  cudaMemcpy(h_lvls.data(), d_lvls.data(), count * sizeof(int16_t), cudaMemcpyDefault);
-  EXPECT_THAT(h_lvls, ::testing::ContainerEq(expected));
+  thrust::host_vector<int16_t> h_lvls =
+      getBracketLevels(static_cast<pos_key_pair *>(d_pos.data()), count,
+                       std::string("[{"), std::string("]}"));
+
+  EXPECT_THAT(h_lvls, ::testing::ElementsAreArray(expected));
 }
 
 TEST_F(gdf_json_test, BasicJsonLines) {
@@ -257,4 +271,27 @@ TEST_F(gdf_json_test, JsonLinesObjectsStrings) {
   EXPECT_THAT(gdf_host_column<double>(df.get_column(1)).hostdata(), ::testing::ElementsAre(1.1, 2.2));
 
   checkStrColumn(df.get_column(2), {"aaa", "bbb"});
+}
+
+TEST_F(gdf_json_test, ArrowFileSource) {
+  const std::string fname = temp_env->get_temp_dir() + "ArrowFileSource.csv";
+
+  std::ofstream outfile(fname, std::ofstream::out);
+  outfile << "[9]\n[8]\n[7]\n[6]\n[5]\n[4]\n[3]\n[2]\n";
+  outfile.close();
+  ASSERT_TRUE(checkFile(fname));
+
+  std::shared_ptr<arrow::io::ReadableFile> infile;
+  ASSERT_TRUE(arrow::io::ReadableFile::Open(fname, &infile).ok());
+
+  cudf::json_read_arg args(cudf::source_info{infile});
+  args.lines = true;
+  args.dtype = {"int8"};
+  const auto df = cudf::read_json(args);
+
+  EXPECT_EQ(df.num_columns(), static_cast<gdf_size_type>(args.dtype.size()));
+  ASSERT_EQ(df.get_column(0)->dtype, GDF_INT8);
+
+  const auto col = gdf_host_column<int8_t>(df.get_column(0));
+  EXPECT_THAT(col.hostdata(), ::testing::ElementsAre(9, 8, 7, 6, 5, 4, 3, 2));
 }

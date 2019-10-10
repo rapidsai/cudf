@@ -1,4 +1,4 @@
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 #include <utilities/cudf_utils.h>
 #include <utilities/column_utils.hpp>

@@ -53,8 +53,9 @@ struct table;
 class column;
 class column_view;
 class mutable_column_view;
+class string_view;
 
-namespace exp {
+namespace experimental {
 class table;
 }
 class table_view;
@@ -109,9 +110,12 @@ enum type_id {
   FLOAT32,    ///< 4 byte floating point
   FLOAT64,    ///< 8 byte floating point
   BOOL8,      ///< Boolean using one byte per value, 0 == false, else true
-  DATE32,     ///< days since Unix Epoch in int32
-  TIMESTAMP,  ///< duration of specified resolution since Unix Epoch in int64
-  CATEGORY,   ///< Categorical/Dictionary type
+  TIMESTAMP_DAYS,     ///< days since Unix Epoch in int32
+  TIMESTAMP_SECONDS,  ///< duration of seconds since Unix Epoch in int64
+  TIMESTAMP_MILLISECONDS,  ///< duration of milliseconds since Unix Epoch in int64
+  TIMESTAMP_MICROSECONDS,  ///< duration of microseconds since Unix Epoch in int64
+  TIMESTAMP_NANOSECONDS,  ///< duration of nanoseconds since Unix Epoch in int64
+  CATEGORY,   ///< Categorial/Dictionary type
   STRING,     ///< String elements
   // `NUM_TYPE_IDS` must be last!
   NUM_TYPE_IDS  ///< Total number of type ids

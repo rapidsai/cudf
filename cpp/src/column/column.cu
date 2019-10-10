@@ -80,7 +80,7 @@ column_view column::view() const {
   return column_view{
       type(),       size(),
       _data.data(), static_cast<bitmask_type const *>(_null_mask.data()),
-      null_count(),  0,
+      null_count(), 0,
       child_views};
 }
 

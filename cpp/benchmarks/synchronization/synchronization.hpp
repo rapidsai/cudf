@@ -62,7 +62,7 @@
 // Google Benchmark library
 #include <benchmark/benchmark.h>
 
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 class cuda_event_timer {
  
