@@ -21,7 +21,6 @@
 #define GDF_BINARY_OPERATION_JIT_UTIL_TYPE_H
 
 #include <cudf/types.h>
-#include <jit/type.h>
 #include <string>
 
 namespace cudf {

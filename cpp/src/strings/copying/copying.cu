@@ -97,8 +97,8 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
             return !d_column.nullable() || !d_column.is_null(d_indices[idx]);
         },
         num_strings, stream );
-    rmm::device_buffer null_mask;
     auto null_count = valid_mask.second;
+    rmm::device_buffer null_mask;
     if( null_count > 0 )
         null_mask = rmm::device_buffer(valid_mask.first,
                                        gdf_valid_allocation_size(num_strings),

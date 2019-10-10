@@ -15,7 +15,7 @@
 #=============================================================================
 cmake_minimum_required(VERSION 3.12 FATAL_ERROR)
 
-project(CUDA_DATAFRAME VERSION 0.10.0 LANGUAGES C CXX CUDA)
+project(CUDA_DATAFRAME VERSION 0.11.0 LANGUAGES C CXX CUDA)
 
 if(NOT CMAKE_CUDA_COMPILER)
   message(SEND_ERROR "CMake cannot locate a CUDA compiler")
@@ -247,6 +247,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/src"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
                     "${ZLIB_INCLUDE_DIRS}"
@@ -345,7 +346,7 @@ add_library(cudf
             src/binaryop/jit/code/traits.cpp
             src/binaryop/jit/util/operator.cpp
             src/binaryop/jit/util/type.cpp
-            src/jit/type.cpp
+            src/jit/legacy/type.cpp
             src/jit/parser.cpp
             src/jit/cache.cpp
             src/jit/launcher.cpp
@@ -412,14 +413,14 @@ add_library(cudf
             src/utilities/column_utils.cpp
             src/utilities/error_utils.cpp
             src/utilities/nvtx/nvtx_utils.cpp
-            src/copying/copy.cpp
-            src/copying/gather.cu
-            src/copying/scatter.cu
-            src/copying/slice.cu
-            src/copying/split.cu
+            src/copying/legacy/copy.cpp
+            src/copying/legacy/gather.cu
+            src/copying/legacy/scatter.cu
+            src/copying/legacy/slice.cu
+            src/copying/legacy/split.cu
             src/bitmask/legacy/legacy_bitmask.cpp
             src/gis/point_in_polygon.cu
-            src/copying/copy_range.cu
+            src/copying/legacy/copy_range.cu
             src/filling/fill.cu
             src/filling/repeat.cu
             src/search/search.cu

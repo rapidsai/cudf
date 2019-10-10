@@ -18,8 +18,8 @@
 #include <cudf/utilities/type_dispatcher.hpp>
 #include <tests/utilities/base_fixture.hpp>
 #include <tests/utilities/cudf_gtest.hpp>
-#include <tests/utilities/type_list.hpp>
-#include <tests/utilities/typed_tests.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 
 #include <thrust/device_vector.h>
 
@@ -43,8 +43,8 @@ struct type_tester {
 }  // namespace
 
 TYPED_TEST(TypedDispatcherTest, TypeToId) {
-  EXPECT_TRUE(cudf::exp::type_dispatcher(
-      cudf::data_type{cudf::exp::type_to_id<TypeParam>()},
+  EXPECT_TRUE(cudf::experimental::type_dispatcher(
+      cudf::data_type{cudf::experimental::type_to_id<TypeParam>()},
       type_tester<TypeParam>{}));
 }
 
@@ -52,20 +52,20 @@ namespace {
 struct verify_dispatched_type {
   template <typename T>
   __host__ __device__ bool operator()(cudf::type_id id) {
-    return id == cudf::exp::type_to_id<T>();
+    return id == cudf::experimental::type_to_id<T>();
   }
 };
 
 __global__ void dispatch_test_kernel(cudf::type_id id, bool* d_result) {
   if (0 == threadIdx.x + blockIdx.x * blockDim.x)
-    *d_result = cudf::exp::type_dispatcher(cudf::data_type{id},
+    *d_result = cudf::experimental::type_dispatcher(cudf::data_type{id},
                                            verify_dispatched_type{}, id);
 }
 }  // namespace
 
 TYPED_TEST(TypedDispatcherTest, DeviceDispatch) {
   thrust::device_vector<bool> result(1, false);
-  dispatch_test_kernel<<<1, 1>>>(cudf::exp::type_to_id<TypeParam>(),
+  dispatch_test_kernel<<<1, 1>>>(cudf::experimental::type_to_id<TypeParam>(),
                                  result.data().get());
   cudaDeviceSynchronize();
   EXPECT_EQ(true, result[0]);
@@ -79,6 +79,6 @@ INSTANTIATE_TEST_CASE_P(TestAllIds, IdDispatcherTest,
 
 TEST_P(IdDispatcherTest, IdToType) {
   auto t = GetParam();
-  EXPECT_TRUE(cudf::exp::type_dispatcher(cudf::data_type{t},
+  EXPECT_TRUE(cudf::experimental::type_dispatcher(cudf::data_type{t},
                                          verify_dispatched_type{}, t));
 }

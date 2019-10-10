@@ -15,18 +15,10 @@
  */
 
 #include "gpuinflate.h"
+#include <io/utilities/block_utils.cuh>
 
-#if (__CUDACC_VER_MAJOR__ >= 9)
-#define SHFL0(v)    __shfl_sync(~0, v, 0)
-#define SHFL(v, t)  __shfl_sync(~0, v, t)
-#define SYNCWARP()  __syncwarp()
-#define BALLOT(v)   __ballot_sync(~0, v)
-#else
-#define SHFL0(v)    __shfl(v, 0)
-#define SHFL(v, t)  __shfl(v, t)
-#define SYNCWARP()
-#define BALLOT(v)   __ballot(v)
-#endif
+namespace cudf {
+namespace io {
 
 #define HASH_BITS       12
 
@@ -170,6 +162,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src
 {
     uint32_t len = s->src_len;
     uint32_t pos = pos0;
+    uint32_t maxpos = pos0 + MAX_LITERAL_LENGTH - 31;
     uint32_t match_mask, literal_cnt;
     if (t == 0)
     {
@@ -228,7 +221,7 @@ static __device__ uint32_t FindFourByteMatch(snap_state_s *s, const uint8_t *src
             s->hash_map[hash] = pos + t;
         }
         pos += literal_cnt;
-    } while (literal_cnt == 32 && pos < MAX_LITERAL_LENGTH - 31);
+    } while (literal_cnt == 32 && pos < maxpos);
     return min(pos, len) - pos0;
 }
 
@@ -262,7 +255,7 @@ snap_kernel(gpu_inflate_input_s *inputs, gpu_inflate_status_s *outputs, int coun
 
     if (!t)
     {
-        const uint8_t *src = reinterpret_cast<uint8_t *>(inputs[blockIdx.x].srcDevice);
+        const uint8_t *src = reinterpret_cast<const uint8_t *>(inputs[blockIdx.x].srcDevice);
         uint32_t src_len = static_cast<uint32_t>(inputs[blockIdx.x].srcSize);
         uint8_t *dst = reinterpret_cast<uint8_t *>(inputs[blockIdx.x].dstDevice);
         uint32_t dst_len = static_cast<uint32_t>(inputs[blockIdx.x].dstSize);
@@ -372,4 +365,8 @@ cudaError_t __host__ gpu_snap(gpu_inflate_input_s *inputs, gpu_inflate_status_s 
     }
     return cudaSuccess;
 }
+
+
+} // namespace io
+} // namespace cudf
 

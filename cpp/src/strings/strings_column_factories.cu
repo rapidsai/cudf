@@ -74,15 +74,15 @@ std::unique_ptr<column> make_strings_column(
     CUDA_TRY(cudaMemsetAsync( d_offsets, 0, sizeof(*d_offsets), stream));
 
     // create null mask
-    rmm::device_buffer null_mask;
     auto valid_mask = valid_if( static_cast<const bit_mask_t*>(nullptr),
         [d_strings] __device__ (size_type idx) { return d_strings[idx].first!=nullptr; },
         num_strings, stream );
     auto null_count = valid_mask.second;
+    rmm::device_buffer null_mask;
     if( null_count > 0 )
         null_mask = rmm::device_buffer(valid_mask.first,
                                        gdf_valid_allocation_size(num_strings),
-                                       stream, mr);
+                                       stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
     // if we have all nulls, a null chars column is allowed
     // if all non-null strings are empty strings, we need a non-null chars column

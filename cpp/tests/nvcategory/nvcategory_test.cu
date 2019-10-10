@@ -27,7 +27,7 @@
 
 #include <cudf/functions.h>
 #include <cudf/types.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <utilities/column_utils.hpp>
 #include <iostream>
 #include <random>
@@ -37,13 +37,13 @@
 
 #include <rmm/rmm.h>
 #include <cstring>
-#include <tests/utilities/cudf_test_utils.cuh>
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/nvcategory_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/nvcategory_utils.cuh>
 #include <bitmask/legacy/bit_mask.cuh>
 
 // See this header for all of the handling of valids' vectors 
-#include <tests/utilities/valid_vectors.h>
+#include <tests/utilities/legacy/valid_vectors.h>
 
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 

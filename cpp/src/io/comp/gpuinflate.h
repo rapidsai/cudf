@@ -17,13 +17,16 @@
 #ifndef _GPUINFLATE_H_
 #define _GPUINFLATE_H_
 
-#include <cstdint>
+#include <stdint.h>
+
+namespace cudf {
+namespace io {
 
 /**
  * @brief Input parameters for the decompression interface
  **/
 struct gpu_inflate_input_s {
-  void *srcDevice;
+  const void *srcDevice;
   uint64_t srcSize;
   void *dstDevice;
   uint64_t dstSize;
@@ -54,6 +57,17 @@ cudaError_t gpuinflate(gpu_inflate_input_s *inputs,
                        gpu_inflate_status_s *outputs, int count = 1,
                        int parse_hdr = 0,
                        cudaStream_t stream = (cudaStream_t)0);
+
+/**
+* @brief Interface for copying uncompressed byte blocks
+*
+* @param[in] inputs List of input argument structures
+* @param[in] count Number of input structures, default 1
+* @param[in] stream CUDA stream to use, default 0
+**/
+cudaError_t gpu_copy_uncompressed_blocks(gpu_inflate_input_s *inputs,
+    int count = 1,
+    cudaStream_t stream = (cudaStream_t)0);
 
 /**
  * @brief Interface for decompressing Snappy-compressed data
@@ -113,5 +127,8 @@ cudaError_t gpu_snap(gpu_inflate_input_s *inputs,
                      gpu_inflate_status_s *outputs, int count = 1,
                      cudaStream_t stream = (cudaStream_t)0);
 
+
+} // namespace io
+} // namespace cudf
 
 #endif  // _GPUINFLATE_H_
