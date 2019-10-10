@@ -3698,35 +3698,39 @@ def test_df_astype_string_to_other(as_dtype):
 @pytest.mark.parametrize(
     "as_dtype",
     [
-        'int64',
+        "int64",
         "datetime64[ms]",
         "datetime64[us]",
         "datetime64[ns]",
         "str",
-        "category"
+        "category",
     ],
 )
 def test_df_astype_datetime_to_other(as_dtype):
     data = ["1991-11-20", "2004-12-04", "2016-09-13", None]
 
     gdf = DataFrame()
-    gdf["foo"] = Series(data, dtype='datetime64[ms]')
-    gdf["bar"] = Series(data, dtype='datetime64[ms]')
-    
+    gdf["foo"] = Series(data, dtype="datetime64[ms]")
+    gdf["bar"] = Series(data, dtype="datetime64[ms]")
+
     expect = DataFrame()
 
-    if as_dtype == 'int64':
-        expect["foo"] = Series([690595200000, 1102118400000, 1473724800000, None], dtype='int64')
-        expect["bar"] = Series([690595200000, 1102118400000, 1473724800000, None], dtype='int64')
-    elif  as_dtype == 'str':
-        expect["foo"] = Series(data, dtype='str')
-        expect["bar"] = Series(data, dtype='str')
-    elif as_dtype == 'category':
-        expect['foo'] = Series(gdf['foo'], dtype='category')
-        expect['bar'] = Series(gdf['bar'], dtype='category')
+    if as_dtype == "int64":
+        expect["foo"] = Series(
+            [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
+        )
+        expect["bar"] = Series(
+            [690595200000, 1102118400000, 1473724800000, None], dtype="int64"
+        )
+    elif as_dtype == "str":
+        expect["foo"] = Series(data, dtype="str")
+        expect["bar"] = Series(data, dtype="str")
+    elif as_dtype == "category":
+        expect["foo"] = Series(gdf["foo"], dtype="category")
+        expect["bar"] = Series(gdf["bar"], dtype="category")
     else:
-        expect['foo'] = Series(data, dtype=as_dtype)
-        expect['bar'] = Series(data, dtype=as_dtype)
+        expect["foo"] = Series(data, dtype=as_dtype)
+        expect["bar"] = Series(data, dtype=as_dtype)
 
     got = gdf.astype(as_dtype, format="%Y-%m-%d")
 
@@ -3773,3 +3777,19 @@ def test_df_astype_to_categorical_ordered(ordered):
         gdf.astype("int32", ordered=ordered),
         gdf.astype("int32", ordered=ordered),
     )
+
+
+@pytest.mark.parametrize(
+    "errors",
+    [
+        pytest.param(
+            "raise", marks=pytest.mark.xfail(reason="should raise error here")
+        ),
+        pytest.param("other", marks=pytest.mark.xfail(raises=ValueError)),
+        "ignore",
+    ],
+)
+def test_series_astype_error_handling(errors):
+    sr = Series(["random", "words"])
+    got = sr.astype("datetime64", errors=errors)
+    assert_eq(sr, got)
