@@ -20,6 +20,8 @@
 
 ## Bug Fixes
 
+- PR #3048 Support for zero columned tables
+
 
 # cuDF 0.10.0 (Date TBD)
 
