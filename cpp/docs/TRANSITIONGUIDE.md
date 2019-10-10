@@ -106,6 +106,39 @@ A *mutable*, non-owning view of a table.
 Trivially-copyable and should be passed by value. 
 
 # libcudf++ API
+
+## Streams
+
+We do not yet expose CUDA streams in external libcudf APIs. 
+However, in order to ease the transition to future use of streams, all libcudf APIs that allocate device memory or execute a kernel should be implemented using asynchronous APIs on the default stream (e.g., stream 0). 
+
+The recommended pattern for doing this is to make the definition of the external API invoke an internal API in the `detail` namespace. The internal `detail` API will have all the same parameters, plus a `cudaStream_t` parameter at the end defaulted to `0`. 
+The implementation should be wholly contained in the `detail` API definition and use only asynchronous versions of CUDA APIs with the defaulted stream parameter. For example:
+
+```c++
+// header.hpp
+void external_function(...);
+
+// implementation.cpp
+namespace detail{
+    // defaulted stream parameter
+    void external_function(..., cudaStream_t stream = 0){
+        // implementation uses stream w/ async APIs
+        RMM_ALLOC(...,stream);
+        cudaMemcpyAsync(...,stream);
+        kernel<<<..., stream>>>(...);
+        cudaStreamSynchronize(stream);
+        RMM_FREE(...,stream);
+    }
+} // namespace detail
+
+void external_function(...){
+    detail::external_function(...);
+}
+```
+**Note:** `cudaDeviceSynchronize()` should *never* be used.
+ This limits the ability to do any multi-stream/multi-threaded work with libcudf APIs.
+
 ### Old libcudf API
 ```c++
 /**
@@ -237,6 +270,9 @@ void isolated_helper_function(...);
 ```
 
 [**Anonymous namespaces should *never* be used in a header file.**](https://wiki.sei.cmu.edu/confluence/display/cplusplus/DCL59-CPP.+Do+not+define+an+unnamed+namespace+in+a+header+file) 
+
+
+
 
 # Error Handling
 
