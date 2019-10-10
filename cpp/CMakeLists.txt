@@ -371,7 +371,7 @@ add_library(cudf
             src/reductions/mean.cu
             src/reductions/var.cu
             src/reductions/std.cu
-            src/replace/replace.cu
+            src/replace/legacy/replace.cu
             src/reductions/scan.cu
             src/transpose/transpose.cu
             src/merge/merge.cu
