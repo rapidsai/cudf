@@ -1,3 +1,25 @@
+# cuDF 0.11.0 (Date TBD)
+
+## New Features
+
+- PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
+
+## Improvements
+
+- PR #2904 Move gpu decompressors to cudf::io namespace
+- PR #2977 Moved old C++ test utilities to legacy directory.
+- PR #2965 Fix slow orc reader perf with large uncompressed blocks
+- PR #2995 Move JIT type utilities to legacy directory
+- PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
+- PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
+- PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3014 Snappy decompression optimizations
+- PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
+
+## Bug Fixes
+
+
 # cuDF 0.10.0 (Date TBD)
 
 ## New Features
@@ -45,6 +67,7 @@
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories
+- PR #2918 Add cudf::column timestamp wrapper types
 
 ## Improvements
 

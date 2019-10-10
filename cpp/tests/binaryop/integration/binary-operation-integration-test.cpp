@@ -18,7 +18,7 @@
  */
 
 #include <tests/binaryop/integration/assert-binops.h>
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/binaryop.hpp>
 
 namespace cudf {

@@ -22,7 +22,7 @@
 #include <vector>
 
 namespace cudf {
-namespace exp {
+namespace experimental {
 
 class table {
  public:
@@ -104,5 +104,5 @@ class table {
   std::vector<std::unique_ptr<column>> _columns{};
   size_type _num_rows{};
 };
-}  // namespace exp
+}  // namespace experimental
 }  // namespace cudf

@@ -16,18 +16,16 @@
 
 #pragma once
 
+#include <cudf/cudf.h>
+
 #include <memory>
 #include <string>
 #include <vector>
 
-#include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
 #include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
 #include <io/utilities/wrapper_utils.hpp>
-
-#include "orc.h"
-#include "orc_gpu.h"
 
 namespace cudf {
 namespace io {
@@ -98,11 +96,11 @@ class reader::Impl {
    * @param[in] row_groups List of row index descriptors
    * @param[in] row_index_stride Distance between each row index
    *
-   * @return device_buffer<uint8_t> Device buffer to decompressed page data
+   * @return rmm::device_buffer Device buffer to decompressed page data
    **/
-  device_buffer<uint8_t> decompress_stripe_data(
+  rmm::device_buffer decompress_stripe_data(
       const hostdevice_vector<orc::gpu::ColumnDesc> &chunks,
-      const std::vector<device_buffer<uint8_t>> &stripe_data,
+      const std::vector<rmm::device_buffer> &stripe_data,
       const orc::OrcDecompressor *decompressor,
       std::vector<OrcStreamInfo> &stream_info, size_t num_stripes,
       rmm::device_vector<orc::gpu::RowGroup> &row_groups,
@@ -147,6 +145,6 @@ class reader::Impl {
   gdf_time_unit timestamp_unit_ = TIME_UNIT_NONE;
 };
 
-} // namespace orc
-} // namespace io
-} // namespace cudf
+}  // namespace orc
+}  // namespace io
+}  // namespace cudf
