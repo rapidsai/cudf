@@ -23,37 +23,15 @@
 #include "csv_gpu.h"
 #include "csv_reader_impl.hpp"
 
-#include <cuda_runtime.h>
-
 #include <algorithm>
 #include <iostream>
 #include <numeric>
-#include <string>
-#include <vector>
 #include <tuple>
-#include <utility>
-#include <iterator>
-#include <memory>
 #include <unordered_map>
-#include <cstring>
-
-#include <stdio.h>
-#include <stdlib.h>
-
-#include <unistd.h>
-#include <fcntl.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <sys/mman.h>
-
-#include <thrust/device_ptr.h>
-#include <thrust/execution_policy.h>
-#include <thrust/host_vector.h>
 
 #include "type_conversion.cuh"
 #include "datetime_parser.cuh"
 
-#include <cudf/cudf.h>
 #include <cudf/unary.hpp>
 #include <utilities/error_utils.hpp>
 #include <utilities/trie.cuh>
@@ -62,12 +40,8 @@
 
 #include <nvstrings/NVStrings.h>
 
-#include <rmm/rmm.h>
-#include <rmm/thrust_rmm_allocator.h>
 #include <io/comp/io_uncomp.h>
-
 #include <io/cuio_common.hpp>
-#include <io/utilities/datasource.hpp>
 #include <io/utilities/parsing_utils.cuh>
 
 using std::vector;
@@ -77,43 +51,6 @@ namespace cudf {
 namespace io {
 namespace csv {
 
-/**
- * @brief Returns the compression type based upon the user-specified parameter
- * or from the filename extension.
- *
- * @param[in] compression_arg User-supplied string specifying compression type
- * @param[in] filename Name of the file to infer if necessary
- *
- * @return Compression type
- **/
-std::string infer_compression_type(const std::string &compression_arg,
-                                   const std::string &filename) {
-  std::unordered_map<std::string, std::string> ext_to_compression = {
-      {"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}};
-
-  auto str_tolower = [](const auto &begin, const auto &end) {
-    std::string out;
-    std::transform(begin, end, std::back_inserter(out), ::tolower);
-    return out;
-  };
-
-  // Attempt to infer from user-supplied argument
-  const auto arg = str_tolower(compression_arg.begin(), compression_arg.end());
-  if (arg != "infer") {
-    return arg;
-  }
-
-  // Attempt to infer from the file extension
-  const auto pos = filename.find_last_of('.');
-  if (pos != std::string::npos) {
-    const auto ext = str_tolower(filename.begin() + pos + 1, filename.end());
-    if (ext_to_compression.find(ext) != ext_to_compression.end()) {
-      return ext_to_compression.find(ext)->second;
-    }
-  }
-
-  return "none";
-}
 
 /**---------------------------------------------------------------------------*
  * @brief Estimates the maximum expected length or a row, based on the number 
@@ -310,9 +247,7 @@ table reader::Impl::read(size_t range_offset, size_t range_size,
     CUDF_EXPECTS(data_size <= h_uncomp_size, "Row range exceeds data size");
 
     num_bits = (data_size + 63) / 64;
-    data = device_buffer<char>(data_size);
-    CUDA_TRY(cudaMemcpyAsync(data.data(), h_uncomp_data + row_range.first,
-                             data_size, cudaMemcpyHostToDevice));
+    data_ = rmm::device_buffer(h_uncomp_data + row_range.first, data_size);
   }
 
   // Check if the user gave us a list of column names
@@ -621,8 +556,9 @@ reader::Impl::gather_column_dtypes() {
       CUDA_TRY(cudaMemsetAsync(column_stats.device_ptr(), 0,
                                column_stats.memory_size()));
       CUDA_TRY(gpu::DetectCsvDataTypes(
-          data.data(), row_offsets.data().get(), num_records, num_actual_cols,
-          opts, d_column_flags.data().get(), column_stats.device_ptr()));
+          static_cast<const char *>(data_.data()), row_offsets.data().get(),
+          num_records, num_actual_cols, opts, d_column_flags.data().get(),
+          column_stats.device_ptr()));
       CUDA_TRY(
           cudaMemcpyAsync(column_stats.host_ptr(), column_stats.device_ptr(),
                           column_stats.memory_size(), cudaMemcpyDeviceToHost));
@@ -738,9 +674,10 @@ void reader::Impl::decode_data(const std::vector<gdf_column_wrapper> &columns) {
   d_column_flags = h_column_flags;
 
   CUDA_TRY(gpu::DecodeCsvColumnData(
-      data.data(), row_offsets.data().get(), num_records, num_actual_cols, opts,
-      d_column_flags.data().get(), d_dtypes.data().get(), d_data.data().get(),
-      d_valid.data().get(), d_valid_counts.data().get()));
+      static_cast<const char *>(data_.data()), row_offsets.data().get(),
+      num_records, num_actual_cols, opts, d_column_flags.data().get(),
+      d_dtypes.data().get(), d_data.data().get(), d_valid.data().get(),
+      d_valid_counts.data().get()));
   CUDA_TRY(cudaStreamSynchronize(0));
 
   thrust::host_vector<gdf_size_type> h_valid_counts = d_valid_counts;
@@ -782,7 +719,9 @@ reader::Impl::Impl(std::unique_ptr<datasource> source,
   CUDF_EXPECTS(opts.thousands != opts.delimiter,
                "Thousands separator cannot be the same as the delimiter");
 
-  compression_type_ = infer_compression_type(args_.compression, filepath);
+  compression_type_ = infer_compression_type(
+      args_.compression, filepath,
+      {{"gz", "gzip"}, {"zip", "zip"}, {"bz2", "bz2"}, {"xz", "xz"}});
 
   // Handle user-defined booleans, whereby field data are substituted with
   // true/false values; for numeric dtypes, they are mapped to 1/0 respectively

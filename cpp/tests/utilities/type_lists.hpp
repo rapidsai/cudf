@@ -18,17 +18,18 @@
 
 #include <cudf/types.hpp>
 #include <cudf/utilities/type_dispatcher.hpp>
-#include <tests/utilities/type_list.hpp>
+#include <cudf/wrappers/timestamps.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
 
 #include <array>
 #include <tuple>
 
 /**---------------------------------------------------------------------------*
- * @filename typed_tests.hpp
- * @brief Provides centralized abstractions for use in Google Test
+ * @filename type_lists.hpp
+ * @brief Provides centralized type lists for use in Google Test
  * type-parameterized tests.
  *
- * These abstractions should be used for consistency across tests as well as
+ * These lists should be used for consistency across tests as well as
  * future-proofing against the addition of any new types in the future.
  *---------------------------------------------------------------------------**/
 namespace cudf {
@@ -38,7 +39,7 @@ namespace detail {
 template <typename TYPES, std::size_t... Indices>
 constexpr std::array<cudf::type_id, sizeof...(Indices)> types_to_ids_impl(
     std::index_sequence<Indices...>) {
-  return {{cudf::exp::type_to_id<GetType<TYPES, Indices>>()...}};
+  return {{cudf::experimental::type_to_id<GetType<TYPES, Indices>>()...}};
 }
 
 /**---------------------------------------------------------------------------*
@@ -68,11 +69,24 @@ constexpr auto types_to_ids() {
  * Example:
  * ```
  * // Invokes all typed fixture tests for all numeric types in libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::NumericTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::NumericTypes);
  * ```
  *---------------------------------------------------------------------------**/
 using NumericTypes =
     cudf::test::Types<int8_t, int16_t, int32_t, int64_t, float, double>;
+
+/**---------------------------------------------------------------------------*
+ * @brief Provides a list of all timestamp types supported in libcudf for use
+ * in a GTest typed test.
+ *
+ * Example:
+ * ```
+ * // Invokes all typed fixture tests for all timestamp types in libcudf
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::TimestampTypes);
+ * ```
+ *---------------------------------------------------------------------------**/
+using TimestampTypes =
+    cudf::test::Types<timestamp_D, timestamp_s, timestamp_ms, timestamp_us, timestamp_ns>;
 
 /**---------------------------------------------------------------------------*
  * @brief Provides a list of all types supported in libcudf for use in a GTest
@@ -84,13 +98,13 @@ using NumericTypes =
  * Example:
  * ```
  * // Invokes all typed fixture tests for all types supported by libcudf
- * TYPED_TEST_CAST(MyTypedFixture, cudf::test::AllTypes);
+ * TYPED_TEST_CASE(MyTypedFixture, cudf::test::AllTypes);
  * ```
  *---------------------------------------------------------------------------**/
-using AllTypes = Concat<NumericTypes>;
+using AllTypes = Concat<NumericTypes, TimestampTypes>;
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all `cudf::type_id`s
+ * @brief `std::array` of all `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
@@ -98,7 +112,7 @@ using AllTypes = Concat<NumericTypes>;
 static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all numeric `cudf::type_id`s
+ * @brief `std::array` of all numeric `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
@@ -106,17 +120,30 @@ static constexpr auto all_type_ids{detail::types_to_ids<AllTypes>()};
 static constexpr auto numeric_type_ids{detail::types_to_ids<NumericTypes>()};
 
 /**---------------------------------------------------------------------------*
- * @brief `std::array` of of all non-numeric `cudf::type_id`s
+ * @brief `std::array` of all timestamp `cudf::type_id`s
  *
  * This can be used for iterating over `type_id`s for custom testing, or used in
  * GTest value-parameterized tests.
  *---------------------------------------------------------------------------**/
-static constexpr std::array<cudf::type_id, 6> non_numeric_type_ids{
-    cudf::EMPTY,     cudf::BOOL8,    cudf::DATE32,
-    cudf::TIMESTAMP, cudf::CATEGORY, cudf::STRING};
+static constexpr std::array<cudf::type_id, 5> timestamp_type_ids{ detail::types_to_ids<TimestampTypes>() };
 
-//static_assert(cudf::type_id::NUM_TYPE_IDS == all_type_ids.size(),
-//              "Mismatch in number of types");
+/**---------------------------------------------------------------------------*
+ * @brief `std::array` of all non-numeric `cudf::type_id`s
+ *
+ * This can be used for iterating over `type_id`s for custom testing, or used in
+ * GTest value-parameterized tests.
+ *---------------------------------------------------------------------------**/
+static constexpr std::array<cudf::type_id, 9> non_numeric_type_ids{
+    cudf::EMPTY,
+    cudf::BOOL8,
+    cudf::TIMESTAMP_DAYS,
+    cudf::TIMESTAMP_SECONDS,
+    cudf::TIMESTAMP_MILLISECONDS,
+    cudf::TIMESTAMP_MICROSECONDS,
+    cudf::TIMESTAMP_NANOSECONDS,
+    cudf::CATEGORY,
+    cudf::STRING
+};
 
 }  // namespace test
 }  // namespace cudf

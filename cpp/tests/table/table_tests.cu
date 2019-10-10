@@ -13,23 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package ai.rapids.cudf;
 
-import org.junit.jupiter.api.Test;
+#include <cudf/column/column.hpp>
+#include <cudf/column/column_view.hpp>
+#include <cudf/null_mask.hpp>
+#include <cudf/types.hpp>
+#include <cudf/utilities/type_dispatcher.hpp>
+#include <tests/utilities/base_fixture.hpp>
+#include <tests/utilities/column_utilities.cuh>
+#include <tests/utilities/cudf_gtest.hpp>
+#include <tests/utilities/type_list_utilities.hpp>
+#include <tests/utilities/type_lists.hpp>
 
-import static org.junit.jupiter.api.Assertions.*;
-import static org.junit.jupiter.api.Assumptions.*;
+#include <thrust/sequence.h>
+#include <random>
 
-public class TestExceptions {
-  @Test
-  public void testCudaCausedRmmException() {
-    assumeTrue(Cuda.isEnvCompatibleForTesting());
-    try {
-      Rmm.free(100, 0);
-      fail("An exception should have been thrown!!!");
-    } catch (RmmException rmme) {
-      Throwable cause = rmme.getCause();
-      assertTrue(cause instanceof CudaException);
-    }
-  }
-}
+#include <gmock/gmock.h>

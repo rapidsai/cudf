@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 
-#include <tests/utilities/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
 #include <cudf/copying.hpp>
 #include <cudf/legacy/table.hpp>
-#include <tests/utilities/column_wrapper.cuh>
+#include <tests/utilities/legacy/column_wrapper.cuh>
 
 struct CopyErrorTest : GdfTest {};
 

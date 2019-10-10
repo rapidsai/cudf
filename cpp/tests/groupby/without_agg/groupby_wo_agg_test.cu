@@ -31,8 +31,8 @@
 
 #include <utilities/cudf_utils.h>
 
-#include <tests/utilities/cudf_test_fixtures.h>
-#include <tests/utilities/cudf_test_utils.cuh>
+#include <tests/utilities/legacy/cudf_test_fixtures.h>
+#include <tests/utilities/legacy/cudf_test_utils.cuh>
 
 // See this header for all of the recursive handling of tuples of vectors
 #include "test_parameters_wo.cuh"
