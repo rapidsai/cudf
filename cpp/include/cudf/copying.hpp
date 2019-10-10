@@ -18,10 +18,6 @@
 
 #include "cudf.h"
 #include "types.hpp"
-#include <vector>
-
-// Forward declaration
-typedef struct CUstream_st* cudaStream_t;
 
 namespace cudf {
 namespace experimental {
@@ -36,20 +32,21 @@ enum mask_allocation_policy {
 };
 
 /*
- * Initializes and returns column of the same type as the `input`.
+ * Initializes and returns an empty column of the same type as the `input`.
  *
  * @param input Immutable view of input column to emulate
- * @return std::unique_ptr<column> An unallocated column of same type as `input`
+ * @return std::unique_ptr<column> An empty column of same type as `input`
  */
 std::unique_ptr<column> empty_like(column_view input);
 
 /**
- * @brief Allocates a new column of the same size and type as the `input`.
+ * @brief Creates an uninitialized new column of the same size and type as the `input`.
+ * Supports only fixed-width types.
  *
  * @param input Immutable view of input column to emulate
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<column> An allocated column of same size and type of `input`
+ * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the same number of elements as `input` of the same type as `input.type()`
  */
 std::unique_ptr<column> allocate_like(column_view input,
 		                      mask_allocation_policy mask_alloc = RETAIN,
@@ -57,15 +54,16 @@ std::unique_ptr<column> allocate_like(column_view input,
 				          rmm::mr::get_default_resource());
 
 /**
- * @brief Allocates a new column of the specified size and same type as the `input`.
+ * @brief Creates an uninitialized new column of the specified size and same type as the `input`.
+ * Supports only fixed-width types.
  *
  * @param input Immutable view of input column to emulate
- * @param size The size of the column to allocate in rows
+ * @param size The desired number of elements that the new column should have capacity for
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<column> An allocated column of same size and type of `input`
+ * @return std::unique_ptr<column> A column with sufficient uninitialized capacity to hold the specified number of elements as `input` of the same type as `input.type()`
  */
-std::unique_ptr<column> allocate_like(column_view input, gdf_size_type size,
+std::unique_ptr<column> allocate_like(column_view input, size_type size,
                                       mask_allocation_policy mask_alloc = RETAIN,
                                       rmm::mr::device_memory_resource *mr =
 				          rmm::mr::get_default_resource());
@@ -77,13 +75,13 @@ std::unique_ptr<column> allocate_like(column_view input, gdf_size_type size,
  * memory for the column's data or bitmask.
  *
  * @param input_table Immutable view of input table to emulate
- * @return std::unique_ptr<table> A table of empty columns of same type as `input_table`
+ * @return std::unique_ptr<table> A table of empty columns with the same types as the columns in `input_table`
  */
 std::unique_ptr<table> empty_like(table_view input_table);
 
 /**
- * @brief Creates a table of columns with the same type and allocation size as
- * the `input_table`.
+ * @brief Creates a table of columns with the same type and sufficient uninitialized capacity for
+ * the number of rows in `input_table`. Supports only table consisting of columns of fixed-width types.
  *
  * Creates the `cudf::column` objects, and allocates underlying device memory for
  * each column matching the input columns
@@ -91,7 +89,7 @@ std::unique_ptr<table> empty_like(table_view input_table);
  * @param input_table Immutable view of input table to emulate
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<table> A table of columns with same type and allocation size as `input_table`
+ * @return std::unique_ptr<table> A table of columns with same types as the columns in `input_table` and with sufficient uninitialized capacity to hold the same number of elements as the number of rows in `input_table`.
  */
 std::unique_ptr<table> allocate_like(table_view input_table,
                                      mask_allocation_policy mask_alloc = RETAIN,
@@ -99,20 +97,20 @@ std::unique_ptr<table> allocate_like(table_view input_table,
 				         rmm::mr::get_default_resource());
 
 /**
- * @brief Creates a table of columns with the specified size and same type as
- * the `input_table`.
+ * @brief Creates a table of columns with same types as the columns in `input_table` and sufficient
+ * uninitialized capacity for the specified size. Supports only table consisting of columns of fixed-width types.
  *
  * Creates the `cudf::column` objects, and allocates underlying device memory for
  * each column matching the input columns
  *
  * @param input_table Immutable view of input table to emulate
- * @param size The size of the columns to allocate
+ * @param size The desired number of elements that the new column in the table should have capacity for
  * @param mask_alloc Optional, Policy for allocating null mask. Defaults to RETAIN.
  * @param mr Optional, The resource to use for all allocations
- * @return std::unique_ptr<table> A table of columns with same type as `input_table` and of specified size
+ * @return std::unique_ptr<table> A table of columns with same types as the columns in `input_table` and of with sufficient uninitialized capacity to hold the specified number of elements.
  */
 std::unique_ptr<table> allocate_like(table_view input_table,
-                                     gdf_size_type size,
+                                     size_type size,
                                      mask_allocation_policy mask_alloc = RETAIN,
                                      rmm::mr::device_memory_resource *mr =
 				         rmm::mr::get_default_resource());

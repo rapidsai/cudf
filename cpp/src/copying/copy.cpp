@@ -19,6 +19,7 @@
 #include <cudf/null_mask.hpp>
 #include <cudf/column/column.hpp>
 #include <cudf/table/table.hpp>
+#include <cudf/utilities/traits.hpp>
 
 #include <algorithm>
 
@@ -38,7 +39,7 @@ inline mask_state should_allocate_mask(mask_allocation_policy mask_alloc, bool m
 }
 
 /*
- * Initializes and returns column of the same type as the input.
+ * Initializes and returns an empty column of the same type as the `input`.
  */
 std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
 {
@@ -53,14 +54,15 @@ std::unique_ptr<column> empty_like(column_view input, cudaStream_t stream)
 }
 
 /*
- * Allocates a new column of the same size and type as the input.
- * Does not copy data.
+ * Creates an uninitialized new column of the same size and type as the `input`.
+ * Supports only fixed-width types.
  */
 std::unique_ptr<column> allocate_like(column_view input,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr,
 				      cudaStream_t stream)
 {
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
   std::vector<std::unique_ptr<column>> children {};
@@ -78,15 +80,16 @@ std::unique_ptr<column> allocate_like(column_view input,
 }
 
 /*
- * Allocates a new column of specified size of the same type as the input.
- * Does not copy data.
+ * Creates an uninitialized new column of the specified size and same type as the `input`.
+ * Supports only fixed-width types.
  */
 std::unique_ptr<column> allocate_like(column_view input,
-		                      gdf_size_type size,
+		                      size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr,
 				      cudaStream_t stream)
 {
+  CUDF_EXPECTS(is_fixed_width(input.type()), "Expects only fixed-width type column");
   mask_state allocate_mask = should_allocate_mask(mask_alloc, input.nullable());
 
   std::vector<std::unique_ptr<column>> children {};
@@ -104,7 +107,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 }
 
 /*
- * Returns an empty table similar to `input_table` with zero sized columns
+ * Creates a table of empty columns with the same types as the `input_table`
  */
 std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream){
   std::vector<std::unique_ptr<column>> columns(input_table.num_columns());
@@ -117,8 +120,8 @@ std::unique_ptr<table> empty_like(table_view input_table, cudaStream_t stream){
 }
 
 /*
- * Allocates a new table of the same size and type of columns
- * Does not copy data.
+ * Creates a table of columns with the same type and sufficient uninitialized capacity for
+ * the number of rows in `input_table`. Supports only table consisting of columns of fixed-width types.
  */
 std::unique_ptr<table> allocate_like(table_view input_table,
                                      mask_allocation_policy mask_alloc,
@@ -134,11 +137,11 @@ std::unique_ptr<table> allocate_like(table_view input_table,
 }
 
 /*
- * Allocates a new table of the proposed size and same type of columns
- * Does not copy data.
+ * Creates a table of columns with same types as the columns in `input_table` and sufficient
+ * uninitialized capacity for the specified size. Supports only table consisting of columns of fixed-width types.
  */
 std::unique_ptr<table> allocate_like(table_view input_table,
-		                     gdf_size_type size,
+		                     size_type size,
                                      mask_allocation_policy mask_alloc,
                                      rmm::mr::device_memory_resource *mr,
 				     cudaStream_t stream){
@@ -163,7 +166,7 @@ std::unique_ptr<column> allocate_like(column_view input,
 }
 
 std::unique_ptr<column> allocate_like(column_view input,
-		                      gdf_size_type size,
+		                      size_type size,
                                       mask_allocation_policy mask_alloc,
                                       rmm::mr::device_memory_resource *mr){
   return detail::allocate_like(input, size, mask_alloc, mr, 0);
@@ -180,7 +183,7 @@ std::unique_ptr<table> allocate_like(table_view input_table,
 }
 
 std::unique_ptr<table> allocate_like(table_view input_table,
-		                     gdf_size_type size,
+		                     size_type size,
                                      mask_allocation_policy mask_alloc,
                                      rmm::mr::device_memory_resource *mr){
   return detail::allocate_like(input_table, size, mask_alloc, mr, 0);
