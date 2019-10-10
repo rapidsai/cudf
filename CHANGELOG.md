@@ -19,7 +19,7 @@
 
 ## Bug Fixes
 
-- PR #3040 Fixed exp to experimental namespace name change issue
+- PR #3041 Fixed exp to experimental namespace name change issue
 
 
 # cuDF 0.10.0 (Date TBD)
