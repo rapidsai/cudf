@@ -529,9 +529,16 @@ cdef extern from "cudf/legacy/copying.hpp" namespace "cudf" nogil:
 
 ## Strings Support<a name="string_support"></a>
 
-One of the more dramatic changes in `libcudf++` is the addition of native support for columns of strings. 
+One of the more significant changes in `libcudf++` is the addition of native support for columns of strings. 
 Previously, string support in libcudf was accomplished via the `NVCategory` class.
 See the [NVCategory](#nvcategory_changes) section for more detail. 
+This class will no longer exist in `libcudf++`, but a replacement "dictionary" column type is planned for the future to replace the functionality of NVCategory.
+
+Instead, all libcudf functions will now need to be able to operate on a column of string elements directly. 
+This poses a set of unique challenges, as unlike all previous libcudf types, the elements in a string column are variable width. 
+In order to represent variable width strings, libcudf uses the following layout:
+
+![strings](strings.png)
 
 
 ### NVCategory<a name="nvcategory_changes"></a>
