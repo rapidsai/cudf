@@ -98,8 +98,11 @@ std::unique_ptr<cudf::column> gather( strings_column_view strings,
         },
         num_strings, stream );
     auto null_count = valid_mask.second;
-    auto null_size = gdf_valid_allocation_size(num_strings);
-    rmm::device_buffer null_mask(valid_mask.first,null_size,stream,mr); // does deep copy
+    rmm::device_buffer null_mask;
+    if( null_count > 0 )
+        null_mask = rmm::device_buffer(valid_mask.first,
+                                       gdf_valid_allocation_size(num_strings),
+                                       stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build chars column
@@ -163,8 +166,11 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
         [d_strings] __device__ (size_type idx) { return !d_strings[idx].is_null(); },
         num_strings, stream );
     auto null_count = valid_mask.second;
-    auto null_size = gdf_valid_allocation_size(num_strings);
-    rmm::device_buffer null_mask(valid_mask.first,null_size,stream,mr); // does deep copy
+    rmm::device_buffer null_mask;
+    if( null_count > 0 )
+        null_mask = rmm::device_buffer(valid_mask.first,
+                                       gdf_valid_allocation_size(num_strings),
+                                       stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build offsets column
@@ -221,8 +227,11 @@ std::unique_ptr<cudf::column> scatter( strings_column_view strings,
         [d_strings] __device__ (size_type idx) { return !d_strings[idx].is_null(); },
         num_strings, stream );
     auto null_count = valid_mask.second;
-    auto null_size = gdf_valid_allocation_size(num_strings);
-    rmm::device_buffer null_mask(valid_mask.first,null_size,stream,mr);
+    rmm::device_buffer null_mask;
+    if( null_count > 0 )
+        null_mask = rmm::device_buffer(valid_mask.first,
+                                       gdf_valid_allocation_size(num_strings),
+                                       stream,mr); // does deep copy
     RMM_TRY( RMM_FREE(valid_mask.first,stream) ); // TODO valid_if to return device_buffer in future
 
     // build offsets column
