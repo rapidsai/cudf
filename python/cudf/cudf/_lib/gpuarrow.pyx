@@ -32,7 +32,7 @@ cdef class CudaRecordBatchStreamReader(_CRecordBatchReader):
 
         with nogil:
             message_reader = CCudaMessageReader.Open(data_, schema_)
-            check_status(CCudaRecordBatchStreamReader.Open(
+            check_status(CRecordBatchStreamReader.Open2(
                 unique_ptr[CMessageReader](message_reader.release()),
                 &self.reader
             ))
