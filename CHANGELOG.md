@@ -17,6 +17,7 @@
 
 ## Bug Fixes
 
+- PR #3030 Fix snappy decoding regression in PR #3014
 
 # cuDF 0.10.0 (Date TBD)
 
