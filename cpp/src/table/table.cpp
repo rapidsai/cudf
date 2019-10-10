@@ -34,10 +34,11 @@ table::table(table const& other) : _num_rows{other.num_rows()} {
 table::table(std::vector<std::unique_ptr<column>>&& columns)
     : _columns{std::move(columns)} {
   if(_columns.size() != 0) {
-    _num_rows = _columns[0]->size();
     for (auto const& c : _columns) {
+      CUDF_EXPECTS(c, "Unexpected null column");
       CUDF_EXPECTS(c->size() == num_rows(), "Column size mismatch.");
     }
+    _num_rows = _columns[0]->size();
   } else {
     _num_rows = 0;
   }
