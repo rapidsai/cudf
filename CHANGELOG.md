@@ -12,8 +12,11 @@
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 - PR #2995 Move JIT type utilities to legacy directory
 - PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
+- PR #3005 Renames `cudf::exp` namespace to `cudf::experimental`
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
 - PR #3026 Moved the old C++ fill and repeat related files to the legacy directories.
+- PR #3014 Snappy decompression optimizations
+- PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 
 ## Bug Fixes
 

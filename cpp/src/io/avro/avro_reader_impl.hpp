@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 
+#pragma once
+
+#include <cudf/cudf.h>
+
 #include <memory>
 #include <string>
 #include <utility>
 #include <vector>
 
-#include <cudf/cudf.h>
 #include <cudf/legacy/table.hpp>
 #include <utilities/integer_utils.hpp>
 #include <io/utilities/datasource.hpp>
@@ -60,10 +63,9 @@ class reader::Impl {
    *
    * @param[in] comp_block_data Compressed block data
    *
-   * @return device_buffer<uint8_t> Device buffer to decompressed block data
+   * @return rmm::device_buffer Device buffer to decompressed block data
    **/
-  device_buffer<uint8_t> decompress_data(
-      const device_buffer<uint8_t> &comp_block_data);
+  rmm::device_buffer decompress_data(const rmm::device_buffer &comp_block_data);
 
   /**
    * @brief Convert the avro row-based block data and outputs to gdf_columns
@@ -74,7 +76,7 @@ class reader::Impl {
    * @param[in] total_dictionary_entries Number of dictionary entries
    * @param[in, out] columns List of gdf_columns
    **/
-  void decode_data(const device_buffer<uint8_t> &block_data,
+  void decode_data(const rmm::device_buffer &block_data,
                    const std::vector<std::pair<uint32_t, uint32_t>> &dict,
                    const hostdevice_vector<uint8_t> &global_dictionary,
                    size_t total_dictionary_entries,
