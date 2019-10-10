@@ -24,7 +24,7 @@
 #include "hash/hash_functions.cuh"
 #include <utilities/int_fastdiv.h>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <copying/scatter.hpp>
+#include <copying/legacy/scatter.hpp>
 #include <cudf/types.hpp>
 
 constexpr int BLOCK_SIZE = 256;
