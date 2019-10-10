@@ -179,10 +179,6 @@ def array_to_series(array):
         return Series._concat(
             [array_to_series(chunk) for chunk in array.chunks]
         )
-    if isinstance(array, pa.Column):
-        return Series._concat(
-            [array_to_series(chunk) for chunk in array.data.chunks]
-        )
 
     array_len = len(array)
     null_count = array.null_count
