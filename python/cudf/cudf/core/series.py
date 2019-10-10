@@ -1421,7 +1421,7 @@ class Series(object):
         """
         return cudautils.compact_mask_bytes(self.to_gpu_array())
 
-    def astype(self, dtype, **kwargs):
+    def astype(self, dtype, errors="raise", **kwargs):
         """
         Cast the Series to the given dtype
 
@@ -1437,10 +1437,23 @@ class Series(object):
             Copy of ``self`` cast to the given dtype. Returns
             ``self`` if ``dtype`` is the same as ``self.dtype``.
         """
+        if errors not in ("ignore", "raise"):
+            raise ValueError("invalid error value specified")
+
         if pd.api.types.is_dtype_equal(dtype, self.dtype):
             return self
-
-        return self._copy_construct(data=self._column.astype(dtype, **kwargs))
+        try:
+            return self._copy_construct(
+                data=self._column.astype(dtype, **kwargs)
+            )
+        except Exception as e:
+            if errors == "raise":
+                raise e
+            elif errors == "ignore":
+                warnings.warn(
+                    " cant cast '{}' to '{}' ".format(self.dtype, dtype)
+                )
+            return self
 
     def argsort(self, ascending=True, na_position="last"):
         """Returns a Series of int64 index that will sort the series.
