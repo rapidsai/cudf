@@ -16,7 +16,7 @@
 
 #include <cudf/cudf.h>
 #include <utilities/nvtx/nvtx_utils.h>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/types.hpp>
 #include <cudf/utilities/legacy/nvcategory_util.hpp>
 #include <table/legacy/device_table.cuh>

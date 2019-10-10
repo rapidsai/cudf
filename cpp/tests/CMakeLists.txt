@@ -66,6 +66,7 @@ include_directories("${CMAKE_BINARY_DIR}/include"
                     "${CMAKE_SOURCE_DIR}/thirdparty/cub"
                     "${CMAKE_SOURCE_DIR}/thirdparty/jitify"
                     "${CMAKE_SOURCE_DIR}/thirdparty/dlpack/include"
+                    "${CMAKE_SOURCE_DIR}/thirdparty/libcudacxx/include"
                     "${GTEST_INCLUDE_DIR}"
                     "${ARROW_INCLUDE_DIR}"
                     "${FLATBUFFERS_INCLUDE_DIR}"
@@ -103,6 +104,14 @@ set(COLUMN_TEST_SRC
     "${CMAKE_CURRENT_SOURCE_DIR}/column/column_view_test.cpp")
 
 ConfigureTest(COLUMN_TEST "${COLUMN_TEST_SRC}")
+
+###################################################################################################
+# - timestamps tests ----------------------------------------------------------------------------------
+
+set(TIMESTAMPS_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/wrappers/timestamps_test.cu")
+
+ConfigureTest(TIMESTAMPS_TEST "${TIMESTAMPS_TEST_SRC}")
 
 ###################################################################################################
 # - cudf tests ------------------------------------------------------------------------------------
@@ -355,25 +364,25 @@ ConfigureTest(DLPACK_TEST "${DLPACK_TEST_SRC}")
 ###################################################################################################
 # - copying tests ---------------------------------------------------------------------------------
 
-set(COPYING_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/copy_range_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/gather_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scalar_scatter_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/scatter_to_tables_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/slice_tests.cu"
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/split_tests.cu")
+set(LEGACY_COPYING_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/copy_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/copy_range_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/gather_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scalar_scatter_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/scatter_to_tables_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/slice_tests.cu"
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/split_tests.cu")
 
-ConfigureTest(COPYING_TEST "${COPYING_TEST_SRC}")
+ConfigureTest(LEGACY_COPYING_TEST "${LEGACY_COPYING_TEST_SRC}")
 
 ###################################################################################################
 # - nvstring scatter tests ------------------------------------------------------------------------
 
-set(NVSTRING_SCATTER_TEST_SRC
-    "${CMAKE_CURRENT_SOURCE_DIR}/copying/nvstring_scatter_tests.cu")
+set(LEGACY_NVSTRING_SCATTER_TEST_SRC
+    "${CMAKE_CURRENT_SOURCE_DIR}/copying/legacy/nvstring_scatter_tests.cu")
 
-  ConfigureTest(NVSTRING_SCATTER_TEST "${NVSTRING_SCATTER_TEST_SRC}")
+  ConfigureTest(LEGACY_NVSTRING_SCATTER_TEST "${LEGACY_NVSTRING_SCATTER_TEST_SRC}")
 
 ###################################################################################################
 # - utilities tests -------------------------------------------------------------------------------
