@@ -30,7 +30,7 @@ namespace io {
 #define LOG2_PREFETCH_SIZE  9
 #define PREFETCH_SIZE       (1 << LOG2_PREFETCH_SIZE)   // 512B, in 32B chunks
 
-#define LOG_CYCLECOUNT      0
+#define LOG_CYCLECOUNT      1
 
 struct unsnap_batch_s
 {
@@ -488,12 +488,21 @@ __device__ void snappy_process_symbols(unsnap_state_s *s, int t)
                 int32_t dist2 = b[1].offset;
                 if ((uint32_t)dist2 >= (uint32_t)(blen + blen2))
                 {
+                    int32_t d;
                     SYNCWARP();
-                    int32_t d = (t >= blen) ? (dist2 < 0) ? dist2 + blen : dist2 : dist;
+                    if (t < blen)
+                    {
+                        d = dist;
+                    }
+                    else
+                    {
+                        dist = dist2;
+                        d = (dist2 <= 0) ? dist2 + blen : dist2;
+                    }
                     blen += blen2;
                     if (t < blen)
                     {
-                        const uint8_t *src = (d > 0) ? (out - d) : (literal_base - d);
+                        const uint8_t *src = (dist > 0) ? (out - d) : (literal_base - d);
                         out[t] = src[t];
                     }
                     out += blen;
