@@ -14,7 +14,7 @@
 
 #include <cudf/cudf.h>
 #include <cudf/types.hpp>
-#include <cudf/copying.hpp>
+#include <cudf/legacy/copying.hpp>
 #include <cudf/legacy/table.hpp>
 #include <table/legacy/device_table.cuh>
 #include <table/legacy/device_table_row_operators.cuh>
