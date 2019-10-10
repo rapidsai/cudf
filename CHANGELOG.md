@@ -66,6 +66,7 @@
 - PR #2969 Add findAndReplaceAll to ColumnVector
 - PR #2814 Add Datetimeindex.weekday
 - PR #2999 Add timestamp conversion support for string categories
+- PR #2918 Add cudf::column timestamp wrapper types
 
 ## Improvements
 

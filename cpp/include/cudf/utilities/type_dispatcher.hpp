@@ -20,6 +20,7 @@
 #include <cudf/utilities/cuda.cuh>
 #include <utilities/error_utils.hpp>
 #include <utilities/release_assert.cuh>
+#include <cudf/wrappers/timestamps.hpp>
 
 /**---------------------------------------------------------------------------*
  * @file type_dispatcher.hpp
@@ -93,6 +94,11 @@ CUDF_TYPE_MAPPING(int64_t, type_id::INT64);
 CUDF_TYPE_MAPPING(float, type_id::FLOAT32);
 CUDF_TYPE_MAPPING(double, type_id::FLOAT64);
 CUDF_TYPE_MAPPING(cudf::string_view, type_id::STRING);
+CUDF_TYPE_MAPPING(timestamp_D, type_id::TIMESTAMP_DAYS);
+CUDF_TYPE_MAPPING(timestamp_s, type_id::TIMESTAMP_SECONDS);
+CUDF_TYPE_MAPPING(timestamp_ms, type_id::TIMESTAMP_MILLISECONDS);
+CUDF_TYPE_MAPPING(timestamp_us, type_id::TIMESTAMP_MICROSECONDS);
+CUDF_TYPE_MAPPING(timestamp_ns, type_id::TIMESTAMP_NANOSECONDS);
 
 /**---------------------------------------------------------------------------*
  * @brief Invokes an `operator()` template with the type instantiation based on
@@ -214,6 +220,21 @@ CUDA_HOST_DEVICE_CALLABLE constexpr decltype(auto) type_dispatcher(
           std::forward<Ts>(args)...);
     case STRING:
       return f.template operator()<typename IdTypeMap<STRING>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_DAYS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_DAYS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_SECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_SECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_MILLISECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_MILLISECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_MICROSECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_MICROSECONDS>::type>(
+          std::forward<Ts>(args)...);
+    case TIMESTAMP_NANOSECONDS:
+      return f.template operator()<typename IdTypeMap<TIMESTAMP_NANOSECONDS>::type>(
           std::forward<Ts>(args)...);
     default: {
 #ifndef __CUDA_ARCH__
