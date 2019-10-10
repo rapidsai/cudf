@@ -3,6 +3,7 @@
 ## New Features
 
 - PR #2930 JSON Reader: Support ARROW_RANDOM_FILE input
+- PR #2987 Add `inplace` arg to `DataFrame.reset_index` and `Series`
 
 ## Improvements
 
@@ -10,7 +11,9 @@
 - PR #2977 Moved old C++ test utilities to legacy directory.
 - PR #2965 Fix slow orc reader perf with large uncompressed blocks
 - PR #2995 Move JIT type utilities to legacy directory
+- PR #2927 Add ``Table`` and ``TableView`` extension classes that wrap legacy cudf::table
 - PR #3008 Make safe versions of `is_null` and `is_valid` in `column_device_view`
+- PR #3014 Snappy decompression optimizations
 - PR #2996 IO Readers: Replace `cuio::device_buffer` with `rmm::device_buffer`
 
 ## Bug Fixes
@@ -96,6 +99,7 @@
 - PR #2833 Parquet reader: align page data allocation sizes to 4-bytes to satisfy cuda-memcheck
 - PR #2832 Using the new Python bindings for UCX
 - PR #2856 Update group_split_cudf to use scatter_by_map
+- PR #2890 Optionally keep serialized table data on the host.
 - PR #2778 Doc: Updated and fixed some docstrings that were formatted incorrectly.
 - PR #2830 Use YYMMDD tag in custreamz nightly build
 - PR #2875 Java: Remove synchronized from register methods in MemoryCleaner
