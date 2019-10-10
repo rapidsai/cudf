@@ -131,6 +131,15 @@ TEST_F(SnappyDecompressTest, HelloWorld) {
   EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
 }
 
+TEST_F(SnappyDecompressTest, ShortLiteralAfterLongCopyAtStartup) {
+  constexpr char uncompressed[] = "Aaaaaaaaaaaah!";
+  constexpr uint8_t compressed[] = {14, 0x0, 'A', 0x0, 'a', (10-4)*4+1, 1, 0x4, 'h', '!'};
+
+  std::vector<uint8_t> output(sizeof(uncompressed));
+  Decompress(&output, compressed, sizeof(compressed));
+  EXPECT_STREQ(reinterpret_cast<char*>(output.data()), uncompressed);
+}
+
 TEST_F(BrotliDecompressTest, HelloWorld) {
   constexpr char uncompressed[] = "hello world";
   constexpr uint8_t compressed[] = {0xb,  0x5,  0x80, 0x68, 0x65,
