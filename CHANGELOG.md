@@ -159,7 +159,7 @@
 - PR #3007 Java: Remove unit test that frees RMM invalid pointer
 - PR #3009 Fix orc reader RLEv2 patch position regression from PR #2507
 - PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
-
+- PR #3035 Update update-version.sh for new docs locations
 
 # cuDF 0.9.0 (21 Aug 2019)
 
