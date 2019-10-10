@@ -2,7 +2,7 @@
 
 ## New Features
 
-- PR #2962 Adding support for isNULL and isNotNULL
+- PR #2962 Add isnull(), notnull() and related functions
 
 ## Improvements
 
