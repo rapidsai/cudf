@@ -127,7 +127,7 @@ struct is_timestamp_impl {
  * @return false `type` is not a timestamp
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_timestamp(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_timestamp_impl{});
+  return cudf::experimental::type_dispatcher(type, is_timestamp_impl{});
 }
 
 /**---------------------------------------------------------------------------*
