@@ -574,6 +574,14 @@ Therefore, most operations that produce a new output column of strings use a two
 In scatter, the first phase consists of using the `scatter_map` to determine if string `i` in the output will come from `destination` or from `scatter_values` and use the corresponding size(s) to materialize the offsets column and determine the size of the output. Then, in the second phase, sufficient storage is allocated for the output's characters, and then the characters are filled with the corresponding strings from either `destination` or `scatter_values`.
 
 
+### UTF8 
+
+// TODO
+
+### `cudf::string_view`
+
+// TODO
+
 
 
 
