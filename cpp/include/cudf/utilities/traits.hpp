@@ -89,7 +89,7 @@ struct is_numeric_impl {
  * @return false `type` is not numeric
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_numeric(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_numeric_impl{});
+  return cudf::experimental::type_dispatcher(type, is_numeric_impl{});
 }
 
 /**---------------------------------------------------------------------------*
@@ -125,7 +125,7 @@ struct is_fixed_width_impl {
  * @return false  `type` is variable-width
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_fixed_width(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_fixed_width_impl{});
+  return cudf::experimental::type_dispatcher(type, is_fixed_width_impl{});
 }
 
 /**---------------------------------------------------------------------------*
@@ -165,7 +165,7 @@ struct is_compound_impl {
  * @return false `type` is a simple type
  *---------------------------------------------------------------------------**/
 constexpr inline bool is_compound(data_type type) {
-  return cudf::exp::type_dispatcher(type, is_compound_impl{});
+  return cudf::experimental::type_dispatcher(type, is_compound_impl{});
 }
 
 /**---------------------------------------------------------------------------*

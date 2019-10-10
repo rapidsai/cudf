@@ -363,6 +363,8 @@ cdef extern from "cudf/legacy/table.hpp" namespace "cudf" nogil:
 
         cudf_table() except +
 
+        cudf_table(const cudf_table) except +
+
         gdf_column** begin() except +
 
         gdf_column** end() except +
