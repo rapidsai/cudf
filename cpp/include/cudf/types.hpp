@@ -55,7 +55,7 @@ class column_view;
 class mutable_column_view;
 class string_view;
 
-namespace exp {
+namespace experimental {
 class table;
 }
 class table_view;
