@@ -250,17 +250,17 @@ set(REDUCTION_TEST_SRC
 ConfigureTest(REDUCTION_TEST "${REDUCTION_TEST_SRC}")
 
 ###################################################################################################
-# - replace tests ---------------------------------------------------------------------------------
+# - legacy replace tests ---------------------------------------------------------------------------------
 
-set(REPLACE_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace_tests.cu")
+set(LEGACY_REPLACE_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/legacy/replace_tests.cu")
 
-ConfigureTest(REPLACE_TEST "${REPLACE_TEST_SRC}")
+ConfigureTest(LEGACY_REPLACE_TEST "${LEGACY_REPLACE_TEST_SRC}")
 
-set(REPLACE_NULLS_TEST_SRC 
-    "${CMAKE_CURRENT_SOURCE_DIR}/replace/replace-nulls_tests.cu")
+set(LEGACY_REPLACE_NULLS_TEST_SRC 
+    "${CMAKE_CURRENT_SOURCE_DIR}/replace/legacy/replace-nulls_tests.cu")
 
-ConfigureTest(REPLACE_NULLS_TEST "${REPLACE_NULLS_TEST_SRC}")
+ConfigureTest(LEGACY_REPLACE_NULLS_TEST "${LEGACY_REPLACE_NULLS_TEST_SRC}")
 
 ###################################################################################################
 # - unary tests -----------------------------------------------------------------------------------
