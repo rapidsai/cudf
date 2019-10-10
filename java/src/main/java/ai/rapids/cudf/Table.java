@@ -43,7 +43,7 @@ public final class Table implements AutoCloseable {
    */
   public Table(ColumnVector... columns) {
     assert columns != null : "ColumnVectors can't be null";
-    rows = columns[0].getRowCount();
+    rows = columns.length > 0 ? columns[0].getRowCount() : 0;
 
     for (ColumnVector columnVector : columns) {
       assert (null != columnVector) : "ColumnVectors can't be null";
