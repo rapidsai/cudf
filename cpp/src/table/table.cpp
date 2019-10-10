@@ -33,7 +33,8 @@ table::table(table const& other) : _num_rows{other.num_rows()} {
 // Move the contents of a vector `unique_ptr<column>`
 table::table(std::vector<std::unique_ptr<column>>&& columns)
     : _columns{std::move(columns)} {
-  if(_columns.size() != 0) {
+  if(num_columns() > 0) {
+    _num_rows = _columns[0]->size();
     for (auto const& c : _columns) {
       CUDF_EXPECTS(c, "Unexpected null column");
       CUDF_EXPECTS(c->size() == num_rows(), "Column size mismatch.");
