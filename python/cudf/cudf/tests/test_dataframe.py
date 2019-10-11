@@ -3687,38 +3687,37 @@ def test_df_astype_string_to_other(as_dtype):
     if "datetime64" in as_dtype:
         data = ["2001-01-01", "2002-02-02", "2000-01-05", None]
         kwargs = {"format": "%Y-%m-%d"}
-    elif as_dtype is 'int32':
-        data = [1, 2, 3, None] 
+    elif as_dtype == "int32":
+        data = [1, 2, 3, None]
         kwargs = {}
-    elif as_dtype is 'category':
-        data = ['1', '2', '3', None]
+    elif as_dtype == "category":
+        data = ["1", "2", "3", None]
         kwargs = {}
-    elif 'float' in as_dtype:
+    elif "float" in as_dtype:
         data = [1.0, 2.0, 3.0, None]
         kwargs = {}
 
-    insert_data = Series.from_pandas(pd.Series(data, dtype='str'))
+    insert_data = Series.from_pandas(pd.Series(data, dtype="str"))
     expect_data = Series(data, dtype=as_dtype)
 
     gdf = DataFrame()
     expect = DataFrame()
 
-    gdf['foo'] = insert_data
-    gdf['bar'] = insert_data
+    gdf["foo"] = insert_data
+    gdf["bar"] = insert_data
 
-    expect['foo'] = expect_data
-    expect['bar'] = expect_data
+    expect["foo"] = expect_data
+    expect["bar"] = expect_data
 
-    got = gdf.astype(as_dtype), 
-    assert_eq(expect, gdf.astype(as_dtype, **kwargs))
-
+    got = gdf.astype(as_dtype, **kwargs)
+    assert_eq(expect, got)
 
 
 @pytest.mark.parametrize(
     "as_dtype",
     [
         "int64",
-        "datetime64[ms]",
+        "datetime64[s]",
         "datetime64[us]",
         "datetime64[ns]",
         "str",
