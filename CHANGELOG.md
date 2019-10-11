@@ -161,6 +161,7 @@
 - PR #3002 Fix CUDA invalid configuration errors reported after loading an ORC file without data
 - PR #3035 Update update-version.sh for new docs locations
 - PR #3038 Fix uninitialized stream parameter in device_table deleter
+- PR #3058 Fix UDF doc markdown formatting
 
 # cuDF 0.9.0 (21 Aug 2019)
 
